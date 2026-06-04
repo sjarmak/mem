@@ -80,6 +80,9 @@ export const WorkRecordSchema = z.object({
   labels: z.array(z.string()).default([]),
   metadata: z.record(z.string(), z.unknown()).default({}),
   priority: z.number().int().optional(),
+  // The bead's `external_ref` (e.g. "gh-1873"). Captured in the P1.2 spine so
+  // P1.4 can resolve it to a PR/commit `outcome`; absent until a bead sets one.
+  external_ref: z.string().optional(),
   lifecycle: LifecycleSchema,
   agents: z.array(AgentRefSchema).default([]),
   trace: TraceRefSchema.optional(),
