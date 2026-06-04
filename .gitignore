@@ -1,0 +1,7 @@
+# Gas City
+.beads/*
+!.beads/identity.toml
+
+# Node
+node_modules/
+dist/
