@@ -34,12 +34,18 @@ a real, verifiable label (closed/merged/CI), not a synthetic one.
    logs). Output: raw WorkRecords. Pure IO.
 2. `parse/` — deterministic extractor (tool exit states + file:line errors,
    ported from engram `capture.ts`/`reflect.ts`) + a model-backed semantic
-   extractor (approach, decisions). **ZFC: mechanical in code, judgment via model.**
+   extractor (root-cause + resolution approach) run **batched at ingest, once
+   per WorkRecord, append-only** (Decision 9). **ZFC: mechanical in code,
+   judgment via model.**
 3. `store/` — the WorkRecord graph + extracted signal. (See Decision 2.)
-4. `retrieve/` — query: given a task/context, return relevant prior WorkRecords.
-   (See Decision 3.)
+4. `retrieve/` — **failure-triggered** query (Decision 8): when an agent hits a
+   build/test/lint error, key on the engram deterministic failure signature
+   (normalized `file:line` + error-class) and return distilled prior resolutions
+   (Decision 9). (See Decisions 6–9.)
 5. `bench/` — the eval harness: run an agent *with vs without* retrieved memory
-   on held-out tasks, measure outcome lift. Mirrors codeprobe/enterprisebench.
+   on held-out tasks, measure outcome lift under the Decision-6/7 contract
+   (temporal leave-one-out, dual-track) with the Decision-10 precision guard.
+   Mirrors codeprobe/enterprisebench.
 
 ## What we port from engram (already reviewed)
 
@@ -67,6 +73,81 @@ a real, verifiable label (closed/merged/CI), not a synthetic one.
    (and would need an embedding lane — mind the scix no-paid-API constraint).
 5. **Eval task source = replay closed historical beads first** (outcomes already
    known = an instant labeled set); live-shadow new beads later.
+
+## Decisions — eval & retrieval contract (resolved 2026-06-04, grill-me r2)
+
+These resolve the load-bearing branches under Decisions 1/3/4/5 — the part that
+makes the "outcome lift" number real. Grounded in the literature pass (see
+*Literature grounding* below).
+
+6. **Eval contract = temporal leave-one-out + duplicate audit.** When evaluating
+   bead B, the retrievable set = only WorkRecords for beads **closed strictly
+   before `B.started`** ("memory as it existed when the work began" — realistic
+   *and* structurally excludes B and any future leak). Also explicitly exclude
+   B's **convoy siblings, supersedes-chain, and any bead sharing B's PR/branch**
+   (same work, dodges the timestamp filter). **Duplicate audit:** flag held-out
+   B whose top retrieved neighbor is a near-duplicate (same `file:line` fix
+   signature) and report lift with *and* without that slice. The original merged
+   PR/CI is the **oracle** for the fresh replay's outcome, never a label the
+   agent sees.
+7. **Dual-track, report both.** *Strict/headline* = **cross-rig retrieval only**
+   (leak-proof; measures cross-project transfer). *Realistic/secondary* =
+   **same-rig temporal-LOO + the duplicate audit** (how memory is actually used;
+   where lift should be largest). `bench/` carries a `retrieval_scope:
+   cross_rig | same_rig_temporal` knob. Same-rig ≫ cross-rig lift is a *finding*,
+   not a flaw.
+8. **Retrieval trigger v1 = failure-triggered spine.** Memory fires when the
+   agent hits a build/test/lint error, keyed on the engram deterministic failure
+   signature (rig-agnostic by construction → works cross-rig; the one ZFC-clean
+   mechanism we trust). Structured fields (tool, language, severity) filter;
+   keyword on message is a weak tiebreaker. The honest v1 claim: **cuts
+   iterations-to-green + raises eventual pass rate**, does not prevent the first
+   failure. Task-start *semantic* retrieval deferred to Phase 2 (needs embeddings
+   per Decision 4's gate + the scix no-paid-API constraint).
+9. **Retrieval payload = distilled structured lesson, not literal diff.** Default
+   payload = a model-extracted **root-cause + resolution approach + dep links**
+   (the `signal.semantic` field) **+ a citation** (`bead_id` + `commit_sha`) so
+   it's auditable and the agent can recover full detail. Extracted **once at
+   ingest, append-only, never iteratively rewritten** (continuous LLM rewriting
+   degrades consolidated memory — see lit). On the **same-rig track only**,
+   additionally attach the literal `file:line` + commit ref (may apply directly),
+   still leading with the distilled note. **Never** inject the raw prior trace.
+   Keep the lesson reasoning-preserving, not an atomic one-liner.
+10. **Precision guard on every lift run.** Returning the whole store gets recall
+    1.0 and can pass answer-quality evals, so outcome-lift alone is gameable by
+    over-injection. The bench **measures injected-context volume + retrieval
+    precision as a first-class guard on each lift run** (not an optional side
+    metric). This upgrades Decision 1's "retrieval precision = intermediate" into
+    a *required* guard and composes with the Decision-6 duplicate audit.
+
+## Literature grounding (`~/lit_explorers`, agentic-memory pass 2026-06-04)
+
+The eval/retrieval contract above is backed by the memory-systems literature
+(explorer source: `~/lit_explorers/build_memory_design_explorer.py`):
+
+- **Distilled-over-literal payload (Decision 9):** Atlas / *"Compiled Memory:
+  More Precise Instructions, Not More Information"* (Rhodes & Kang); Slack's
+  production system moved to *"distilled truth"* over chat logs (De Simone).
+  *Caution* — *"Beyond Atomic Facts"* (Sun et al.): don't over-compress to atomic
+  facts; keep the lesson reasoning-preserving.
+- **Extract once, never rewrite (Decision 9):** *"Useful Memories Become Faulty
+  When Continuously Updated by LLMs"* (Zhang et al.) — iterative LLM rewriting
+  degrades consolidated memory; *"Agentic Context Engineering"* names brevity
+  bias + context collapse. The citation guards against brevity bias.
+- **Batched ingest extraction (parse stage):** RecMem (Dai et al.) — eager
+  per-interaction LLM consolidation is the main token-cost driver; batch/defer.
+- **Failure-triggered, not retrieve-always (Decision 8):** *"To Retrieve or To
+  Think?"* (Chen et al.) — RAG-at-every-step wastes compute and can degrade
+  performance.
+- **Precision guard (Decision 10):** *"Structured Belief State & the First
+  Precision-Aware Benchmark"* (Flynt) — returning the entire store yields recall
+  1.0 and passes answer-quality evals, so answer-correctness can't validate
+  retrieval. Production threads (*"What are people actually using…"*; Wolff &
+  Bennati, Mem0-vs-Graphiti) confirm semantic-closeness-only pulls stale context
+  and "the same mistakes recur" — exactly the failure-recurrence thesis.
+- **SQLite+FTS prior for the P1.5 sidecar substrate:** *"What I Learned Building
+  a Memory System for My Coding Agent"* — SQLite + FTS5 covers a lot, no vector
+  DB needed. (Informs but does not pre-decide P1.5.)
 
 ## Phase 1 — work-audit graph builder (the backlog, beads `mem-*`)
 
