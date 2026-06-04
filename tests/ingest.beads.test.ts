@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  assertIdentifier,
   beadToWorkRecord,
   groupLabels,
   listRigs,
@@ -56,6 +57,25 @@ describe('parseMetadata', () => {
 
   it('throws on malformed JSON rather than swallowing it', () => {
     expect(() => parseMetadata('{not json')).toThrow();
+  });
+
+  it('throws on valid JSON that is not an object', () => {
+    expect(() => parseMetadata('[1,2]')).toThrow(/not a JSON object/);
+    expect(() => parseMetadata('"a string"')).toThrow(/not a JSON object/);
+  });
+});
+
+describe('assertIdentifier', () => {
+  it('accepts real rig db names (alphanumeric, underscore, hyphen)', () => {
+    expect(() => assertIdentifier('gascity_dashboard')).not.toThrow();
+    expect(() => assertIdentifier('code-intel-digest')).not.toThrow();
+    expect(() => assertIdentifier('information_schema')).not.toThrow();
+  });
+
+  it('rejects names that could break out of backtick quoting', () => {
+    expect(() => assertIdentifier('bad`name')).toThrow(/Unsafe SQL identifier/);
+    expect(() => assertIdentifier('a; drop table issues')).toThrow(/Unsafe SQL identifier/);
+    expect(() => assertIdentifier('')).toThrow(/Unsafe SQL identifier/);
   });
 });
 

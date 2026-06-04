@@ -69,10 +69,14 @@ export function parseDoltRows(stdout: string): DoltRow[] {
   return DoltResultSchema.parse(JSON.parse(trimmed) as unknown).rows ?? [];
 }
 
-const IDENTIFIER_RE = /^[A-Za-z0-9_]+$/;
+// Rig db names are backtick-quoted in SQL, so the only character that could
+// break out is a backtick (and backslash). Allow the full set dolt permits in
+// an unquoted-friendly name — alphanumerics, underscore, hyphen — which covers
+// every real rig (`gascity_dashboard`, `code-intel-digest`, …).
+const IDENTIFIER_RE = /^[A-Za-z0-9_-]+$/;
 
 /** Database names are interpolated into SQL, so they must be safe identifiers. */
-function assertIdentifier(name: string): void {
+export function assertIdentifier(name: string): void {
   if (!IDENTIFIER_RE.test(name)) {
     throw new Error(`Unsafe SQL identifier: ${JSON.stringify(name)}`);
   }
@@ -132,13 +136,18 @@ export function parseAssignee(raw: string): AgentRef | null {
   return { agent_id: assignee };
 }
 
-/** The bead `metadata` column is a JSON-encoded string; decode it (empty → {}).
- * A malformed value throws — that is a real producer bug, not silently absent. */
-export function parseMetadata(raw: string | undefined): unknown {
+/** The bead `metadata` column is a JSON-encoded object; decode it (empty → {}).
+ * Malformed JSON or a non-object payload throws — both are real producer bugs,
+ * surfaced here with an actionable message rather than as a deep Zod path. */
+export function parseMetadata(raw: string | undefined): Record<string, unknown> {
   if (raw === undefined || raw === '') {
     return {};
   }
-  return JSON.parse(raw) as unknown;
+  const parsed = JSON.parse(raw) as unknown;
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`bead metadata is not a JSON object: ${raw}`);
+  }
+  return parsed as Record<string, unknown>;
 }
 
 /** Group `(issue_id, label)` rows into a label list per issue. */
