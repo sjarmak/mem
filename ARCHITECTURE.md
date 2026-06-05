@@ -120,6 +120,93 @@ makes the "outcome lift" number real. Grounded in the literature pass (see
     metric). This upgrades Decision 1's "retrieval precision = intermediate" into
     a *required* guard and composes with the Decision-6 duplicate audit.
 
+## Decisions — competitive arms + 5-axis controller telemetry (reconciled 2026-06-05 to the eval-harness spec)
+
+> **Authoritative eval-harness spec.** `.gc/memory-eval-harness-spec.md` (the
+> 17-section *Agentic Memory Evaluation Harness* spec, Stephanie 2026-06-05) is now
+> the **authoritative** spec for the eval work. Decisions 1–10 remain the locked
+> retrieval/eval contract, reconciled to the spec via `docs/phase-2.5-plan.md` §A
+> (concept map + divergence register); where they conflict, the spec governs.
+> Decisions 11–16 below were reconciled to the spec and resolved by Stephanie
+> (§A.5, 2026-06-05).
+
+11. **Competitive-arm contract.** External memory systems run as arms behind one
+    uniform `ingest`/`retrieve` interface, on identical replay tasks / oracle /
+    `retrieval_scope` / precision-guard / telemetry. The harness owns the
+    **LOO-bounded ingest set** (validity constraint V1: each arm ingests only
+    WorkRecords closed strictly before `B.started`, with convoy siblings /
+    supersedes-chain / shared-PR beads excluded); arms never read the store.
+    OSS / self-hosted only (Decision 4) — an arm that can't run without a paid API
+    is dropped and the drop is documented (per the sourcing pass: none dropped).
+    Per-arm token + latency overhead is **reported, not hidden** (V4). Reconciled
+    to the spec (§A): arms map to the spec's **conditions**
+    (`no_memory` / `oracle` / `memory_enabled`) + `memory_systems/` entries
+    (DIV-6); the new **`oracle`** condition is the task-validity gate
+    (`oracle ≈ no_memory ⇒ reject task`, DIV-3); **Harbor** is the execution
+    substrate, with our harness logic as adapters + scorers (DIV-7).
+12. **Versioned 5-axis telemetry schema.** One durable, versioned telemetry record
+    per replay run and per live-shadow event, measuring all five controller axes
+    (task-perf, token-budget, latency, privacy, interruption) from the first lift
+    run — including privacy and interruption, which v1 **measures but does not act
+    on**. Reconciled to the spec (§A, DIV-4): the canonical schema is the spec's
+    `memory_event` + `trace` + `metrics` (task / efficiency / retrieval / retention
+    / synthesis / action_impact), **serialized as OpenTelemetry GenAI spans
+    (primary) + ATIF derived** (interop, no single-vendor lock-in), **extended**
+    with additive `privacy_metrics` + `interruption_metrics` groups (the two
+    north-star axes the spec §12 omits). The record also logs the per-stage
+    controller decisions and the full **`rerank_features`** vector (relevance /
+    recency / importance / trust / task-fit + procedural / relational), plus
+    `agent_type` and `storage_tier` (G1–G4 vocabulary, naming only), as measurable
+    features — the learned controller's inputs, captured from run one.
+13. **Memory taxonomy — SUPERSEDED by the spec's two-level model.** DIV-5: the flat
+    four-type list (semantic / episodic / preference / reflection) drafted pre-spec
+    is **superseded** by the spec's two-level taxonomy — **representation**
+    {filesystem / vector / kg} × **`candidate_memory.type`** {episodic / semantic /
+    procedural / preference / entity / relationship / failure_pattern}. The store
+    represents these distinctly (representation is itself a lever); retrieval is
+    multi-type and `memory_types_retrieved` is logged. The pre-spec "reflection"
+    folds into procedural + episodic; "preference" stays. Each external arm's type
+    coverage (§1a) is part of the comparison, confirmed empirically during adapter
+    build.
+14. **Controller-loop framing + write/reflect interface + agent-type conditioning.**
+    The controller is a **6-stage loop** (need-classification → query-formation →
+    multi-type retrieval → reranking → minimal-useful injection → post-task write
+    decision); v1 fills each learnable stage with a heuristic / LLM-judge and logs
+    its decision. The controller is **exposed as an MCP server**
+    (`retrieve` / `write` / `reflect` tools) so it drops into any agent loop
+    unchanged. The post-task write/reflect interface (§1b) is designed now:
+    **append-only** (Decision 9 — never iteratively rewrites); replay writes go to a
+    **per-run scratch store**, never the LOO-bounded corpus. `agent_type` is a
+    conditioning variable and an eval-breakdown dimension; city traces are a
+    coding/orchestration workflow and results are reported as such, with PA /
+    research generalization treated as a distinct future axis.
+15. **NVIDIA-stack posture (consume OSS / contribute / avoid).** **Adopt** the
+    verified self-hostable pieces (§1c): NAT as a bake-off arm + optional harness
+    (local LLM via `_type: openai`; **Redis / custom local memory backend only** —
+    its Mem0/Zep-cloud defaults are NOT no-paid-API-clean and are not our route to
+    the mem0/graphiti arms); OTel-primary + ATIF-derived telemetry (Decision 12);
+    the G1–G4 storage-tier vocabulary on the latency axis; the controller exposed as
+    an MCP server (Decision 14); **Nemotron-3 Nano** as a self-hosted local judge
+    candidate (NVIDIA Open Model License, not OSI-OSS); eval legibility via
+    **NeMo-Evaluator** / **lm-evaluation-harness** with **RULER** as the
+    long-context yardstick; trace-curation filters pre-ingest. **Avoid** all GPU /
+    NIM / paid-gated NVIDIA components (vocabulary/reference only). **Contribute**
+    our differentiation: the multi-agent-orchestration memory benchmark, the
+    **privacy + interruption** axes NVIDIA's published material doesn't evaluate,
+    and beyond-lexical procedural/relational graph rerank.
+16. **No-paid-API scope + eval object + roadmap re-baseline (§A.5 resolutions).**
+    **DIV-1:** `no-paid-API` (Decision 4) is scoped to the **memory stack only**
+    (backends / embeddings / extractor / judge = OSS / self-hosted); the
+    **agent-under-test** (Claude Code / Opus / Sonnet / Haiku) runs on **our Claude
+    account via the OAuth subscription** — the only mandatory cost (Harbor itself is
+    Apache-2.0 and adds none). **DIV-2:** the eval object is **multi-session
+    sequences** (Step1→…→Goal, fresh context per step, memory persists); bead replay
+    becomes **one source** feeding sequence construction, with the Decision-6
+    temporal-LOO / no-leak discipline preserved as the per-step context reset.
+    **DIV-10:** the roadmap is **re-baselined onto the spec's 5 phases** (skeleton →
+    real dataset → metrics/diagnostics → synthetic generator → research loop);
+    retrieval-v1 (`mem-di8`) is the first `ours` memory_system under that frame.
+
 ## Literature grounding (`~/lit_explorers`, agentic-memory pass 2026-06-04)
 
 The eval/retrieval contract above is backed by the memory-systems literature
