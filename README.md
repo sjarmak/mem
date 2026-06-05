@@ -1,64 +1,107 @@
-# mem — agentic memory, benchmarked on Gas City orchestration traces
+# mem — agentic memory, benchmarked on multi-agent orchestration traces
 
-**One line:** build and *benchmark* agentic memory using Gas City's own
-multi-agent orchestration traces — across every rig — as the evaluation corpus.
+**One line:** build and *benchmark* agentic memory using a multi-agent
+orchestrator's own work traces, across every project, as the evaluation corpus.
 
 ## The bet
 
-Most agentic-memory work learns from a single agent's session prose. Gas City
-already produces something richer and more structured: a continuous stream of
-**real multi-agent work**, where every unit of work has a verifiable outcome
-(bead closed, PR merged, CI green/red) and a full trace of how it got there.
-That is a near-ideal substrate for studying memory — the labels are real, not
-synthetic.
+Most agentic-memory work learns from a single agent's session prose. A
+multi-agent orchestrator produces something richer: a continuous stream of real
+work where every unit has a verifiable outcome (work item closed, PR merged, CI
+green or red) and a full trace of how it got there. That makes a good substrate
+for studying memory, because the labels are real rather than synthetic.
 
-`mem` turns that exhaust into a benchmark: *does retained, parsed, retrieved
-memory measurably improve future agent work* (success rate, iterations, cost),
-and *which retention/retrieval strategies win*?
+`mem` turns that exhaust into a benchmark. Does retained, parsed, retrieved
+memory measurably improve future agent work (success rate, iterations, cost),
+and which retention and retrieval strategies win?
 
-## What we collect (already exists in the city)
+## What we collect (already exists)
 
-The data is the city's own audit. Nothing needs to be generated:
+The data is the orchestrator's own audit. Nothing needs to be generated:
 
 | Source | What it gives | Where |
 |---|---|---|
-| **Bead store** (dolt, all rigs) | the work spine: `id`, title, status, **assignee (embeds the agent/session id)**, notes, `external-ref`, labels, metadata, timestamps | shared dolt server |
-| **Session traces** (JSONL) | full agent transcripts — tool calls, tool outputs, decisions, errors | `~/.claude-homes/account*/.claude/projects/<proj>/<session>.jsonl` |
-| **Audit / scanner logs** | dispatch, reaper, supervisor events | `.gc/*.log`, supervisor log |
-| **Convoy / wisp / workflow** | how work fanned out + composed | `gc convoy` / `gc workflow` |
-| **PRs / commits** | the external outcome | `gh` (via bead `external-ref` / branch) |
+| **Work-item store** (all projects) | the work spine: `id`, title, status, **assignee (embeds the agent/session id)**, notes, external ref, labels, metadata, timestamps | shared store |
+| **Session traces** (JSONL) | full agent transcripts: tool calls, tool outputs, decisions, errors | per-session JSONL files |
+| **Audit / scanner logs** | dispatch, reaper, supervisor events | orchestrator logs |
+| **Convoy / workflow records** | how work fanned out and composed | orchestrator state |
+| **PRs / commits** | the external outcome | GitHub, via the work item's external ref or branch |
 
 ## The work-audit graph (the core mapping)
 
-Everything keys off a **work id** and joins outward. This graph IS the dataset:
+Everything keys off a **work id** and joins outward. This graph is the dataset:
 
 ```
             ┌──────────── deps / convoy ───────────┐
             ▼                                       │
-   Bead (work_id) ──assignee──▶ Agent/Session (agent_id) ──▶ Trace (jsonl)
-   gc-1920          polecat-gc-335825                tool calls, errors,
-   labels,                │                          decisions, outputs
-   metadata               │
+   Work item (work_id) ─assignee─▶ Agent/Session ───▶ Trace (jsonl)
+   labels,                  │      (agent_id)         tool calls, errors,
+   metadata                 │                         decisions, outputs
             └─external-ref/branch─▶ PR / Commit ──▶ Outcome
-                                    #1858            merged | closed | CI pass/fail
+                                                    merged | closed | CI pass/fail
 ```
 
-- **Work id** = bead id (`gc-1920`, `gascity-dashboard-tnqw`). The anchor.
-- **Agent id** = the live session embedded in `bead.assignee`
-  (`polecat-gc-335825` → session `gc-335825`) → resolves to the trace JSONL.
-- **Outcome** = the verifiable label (bead status, PR merged/closed, CI result) —
-  this is what makes it a *benchmark*, not just a log.
+- **Work id** = the work-item id. The anchor.
+- **Agent id** = the session embedded in the item's `assignee`, which resolves
+  to that session's trace JSONL.
+- **Outcome** = the verifiable label (item status, PR merged or closed, CI
+  result). This is what makes it a *benchmark*, not just a log.
 
-## Pipeline (engram-informed; see `ARCHITECTURE.md`)
+## Pipeline
 
-1. **Ingest** — harvest bead audit + trace JSONLs + PR/outcome data into a store, keyed by work id.
-2. **Parse / extract** — *deterministic* signal from tool output (build/test/lint exit states, file:line errors — engram's one proven mechanism) + *semantic* signal (approach, decisions) via a model. ZFC boundary: mechanical in code, judgment in the model.
-3. **Retain** — the work-audit graph + extracted signal in a queryable store.
-4. **Retrieve** — given a new task/context, surface relevant prior work/memory.
-5. **Benchmark** — A/B the agent *with vs without* retrieved memory; measure outcome lift (success, iterations, cost). This mirrors how `codeprobe` / `enterprisebench` already run evals in the city.
+The pipeline mirrors a small set of stages, each a module under `src/`. The
+extraction split follows a strict boundary: mechanical signal is read in code,
+semantic signal is read by a model.
+
+1. **Ingest** — harvest the work-item audit, trace JSONLs, and PR/outcome data
+   into a store, keyed by work id. Pure IO.
+2. **Parse / extract** — *deterministic* signal from tool output (build, test,
+   and lint exit states, plus `file:line` errors). *Semantic* signal (approach,
+   decisions) from a model, run once per record at ingest, append-only. The
+   deterministic capture is ported from a prior failure-capture tool; it is the
+   one mechanism we trust to be free of hidden judgment.
+3. **Retain** — the work-audit graph plus extracted signal in a queryable store.
+4. **Retrieve** — given a new task, surface relevant prior work. Retrieval v1
+   fires on failure: when an agent hits a build, test, or lint error, key on the
+   deterministic failure signature (normalized `file:line` plus error class) and
+   return distilled prior resolutions, not raw traces.
+5. **Benchmark** — run the agent *with and without* retrieved memory and measure
+   outcome lift (success, iterations, cost), with retrieval precision and
+   injected-context volume as a first-class guard so over-injection can't fake a
+   win.
+
+## Data model
+
+The atomic unit is a **WorkRecord**, keyed by a work-item id, joining the whole
+audit:
+
+```
+WorkRecord {
+  work_id:    work-item id (anchor)
+  project:    source project
+  title, labels, metadata, priority
+  lifecycle:  { created, started, closed, status, status_history[] }
+  agents:     [ { agent_id, account, trace_ref } ]   # from assignee → JSONL path
+  trace:      { jsonl_path, n_turns, tool_calls[], tool_outcomes[],
+                errors[ {tool, file, line, message, severity} ] }
+  outcome:    { pr, merged|closed, commit_sha, ci: pass|fail }
+  signal:     { deterministic: {...}, semantic: {...} }   # the learned bit
+  links:      { deps[], convoy_id, supersedes[] }
+}
+```
+
+The **outcome** field is what makes this a benchmark substrate: every record
+carries a real, verifiable label (closed, merged, CI), never a synthetic one.
+
+When the benchmark evaluates a record, the retrievable set is bounded in time:
+only records for work closed strictly before the target started, with the
+target's convoy siblings, supersedes-chain, and any item sharing its PR or
+branch excluded. That keeps "memory as it existed when the work began" honest
+and structurally blocks future leakage.
 
 ## Status
 
-Greenfield. Rig scaffold only. See `ARCHITECTURE.md` for the data model and the
-open design decisions that need to land before Phase 1 (the work-audit graph
-builder) is built.
+Greenfield. The TypeScript work-audit graph builder under `src/`
+(ingest / parse / store / retrieve / bench) is scaffolded with tests under
+`tests/`. The Python evaluation harness lives in `memory-bench/` (see its
+README). Retrieval and the full replay eval harness are the next phase.
