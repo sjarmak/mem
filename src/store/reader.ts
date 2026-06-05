@@ -104,6 +104,27 @@ export function lessonsFor(db: StoreDatabase, workId: string): StoredLesson[] {
   }));
 }
 
+/** Every work id reachable from `workId` over `supersedes` links, traversed as
+ * undirected edges (ancestors AND descendants — both are "the same work" for the
+ * Decision-6 leave-one-out exclusion), sorted; `workId` itself is excluded
+ * (self-exclusion is the caller's own rule). Multi-hop via a recursive CTE over
+ * `record_links` — a read over the existing spine, no new substrate. */
+export function supersedesClosure(db: StoreDatabase, workId: string): string[] {
+  const rows = db
+    .prepare(
+      `WITH RECURSIVE closure(id) AS (
+         SELECT ?
+         UNION
+         SELECT CASE WHEN l.work_id = c.id THEN l.target_id ELSE l.work_id END
+         FROM record_links l JOIN closure c ON c.id IN (l.work_id, l.target_id)
+         WHERE l.kind = 'supersedes'
+       )
+       SELECT id FROM closure WHERE id <> ? ORDER BY id`
+    )
+    .all(workId, workId) as { id: string }[];
+  return rows.map(row => row.id);
+}
+
 /** Distinct bead ids whose traces exhibit a failure signature (the Decision-8
  * retrieval key, from `failureSignature` in parse/recurrence), sorted. */
 export function workIdsBySignature(db: StoreDatabase, signature: string): string[] {

@@ -14,6 +14,7 @@ export {
   lessonsFor,
   queryRecords,
   searchErrorMessages,
+  supersedesClosure,
   workIdsBySignature,
 } from './reader.js';
 export { renderProjection, renderRecurrence, replaceBetweenMarkers } from './render.js';

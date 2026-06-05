@@ -10,6 +10,7 @@ import {
   openStore,
   queryRecords,
   searchErrorMessages,
+  supersedesClosure,
   workIdsBySignature,
   writeRecords,
 } from '../src/store/index.js';
@@ -268,6 +269,37 @@ describe('queryRecords', () => {
       'demo-1a2b',
       'other-9z9z',
     ]);
+  });
+});
+
+describe('supersedesClosure (D6 same-work chain)', () => {
+  const chainRecord = (workId: string, supersedes: string[] = []): WorkRecord =>
+    WorkRecordSchema.parse({
+      work_id: workId,
+      rig: 'demo',
+      title: workId,
+      lifecycle: { created: '2026-06-01T00:00:00Z', status: 'closed', status_history: [] },
+      links: { deps: [], supersedes },
+    });
+
+  it('returns the multi-hop chain in both directions, excluding the anchor', () => {
+    const db = openStore(':memory:');
+    // old0 <- old1 <- b -> (superseded by) new ;  free is unrelated.
+    writeRecords(db, [
+      chainRecord('b', ['old1']),
+      chainRecord('old1', ['old0']),
+      chainRecord('old0'),
+      chainRecord('new', ['b']),
+      chainRecord('free'),
+    ]);
+
+    expect(supersedesClosure(db, 'b')).toEqual(['new', 'old0', 'old1']);
+  });
+
+  it('returns an empty chain for a record with no supersedes links', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [chainRecord('solo')]);
+    expect(supersedesClosure(db, 'solo')).toEqual([]);
   });
 });
 

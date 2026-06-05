@@ -6,6 +6,7 @@ import { queryCommand } from './cli/commands/query.js';
 import { lessonsCommand } from './cli/commands/lessons.js';
 import { signatureCommand } from './cli/commands/signature.js';
 import { searchErrorsCommand } from './cli/commands/search-errors.js';
+import { retrieveCommand } from './cli/commands/retrieve.js';
 
 /** Registers all commands and runs the CLI. The bin entrypoint calls this. */
 export function main(argv: string[]): Promise<void> {
@@ -16,6 +17,7 @@ export function main(argv: string[]): Promise<void> {
   registerCommand('lessons', lessonsCommand);
   registerCommand('signature', signatureCommand);
   registerCommand('search-errors', searchErrorsCommand);
+  registerCommand('retrieve', retrieveCommand);
 
   return runCli(argv);
 }
