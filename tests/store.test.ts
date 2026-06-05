@@ -1,0 +1,355 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import {
+  appendLesson,
+  getRecord,
+  lessonsFor,
+  openStore,
+  queryRecords,
+  searchErrorMessages,
+  workIdsBySignature,
+  writeRecords,
+} from '../src/store/index.js';
+import { failureSignature } from '../src/parse/index.js';
+import type { TraceError } from '../src/schemas/trace.js';
+import { WorkRecordSchema, type WorkRecord } from '../src/schemas/workrecord.js';
+
+const tsError = (overrides: Partial<TraceError> = {}): TraceError => ({
+  tool: 'tsc',
+  severity: 'error',
+  message: 'TS2345: bad argument',
+  file: 'src/a.ts',
+  line: 12,
+  column: 5,
+  ...overrides,
+});
+
+/** A maximal record: every nested field populated, so round-trip tests cover
+ * the JSON column's payload, not just the promoted scalar columns. */
+const fullRecord = (overrides: Partial<WorkRecord> = {}): WorkRecord =>
+  WorkRecordSchema.parse({
+    work_id: 'demo-1a2b',
+    rig: 'demo',
+    title: 'Fix the build',
+    labels: ['phase1', 'bug'],
+    metadata: { 'gc.kind': 'task', nested: { depth: 2, list: [1, 2] } },
+    priority: 1,
+    external_ref: 'polecat/demo-1a2b',
+    lifecycle: {
+      created: '2026-06-01T00:00:00Z',
+      started: '2026-06-01T01:00:00Z',
+      closed: '2026-06-02T00:00:00Z',
+      status: 'closed',
+      status_history: [{ status: 'open', at: '2026-06-01T00:00:00Z' }],
+    },
+    agents: [
+      { agent_id: 'gc-1001', role: 'polecat', account: 'a1', trace_ref: '/traces/x.jsonl' },
+      { agent_id: 'gc-1002', role: 'refinery' },
+    ],
+    trace: {
+      jsonl_path: '/traces/x.jsonl',
+      n_turns: 42,
+      tool_outcomes: [
+        { runner: 'tsc', command: 'npm run typecheck', status: 'fail', errors: [tsError()] },
+      ],
+      errors: [tsError(), tsError({ tool: 'eslint', message: 'Unexpected any (no-explicit-any)' })],
+    },
+    outcome: { pr: '#63', pr_state: 'merged', commit_sha: 'abc123', ci: 'pass' },
+    signal: { deterministic: { recurrences: 2 }, semantic: { root_cause: 'missing flag' } },
+    links: { deps: ['demo-0f0f'], convoy_id: 'convoy-7', supersedes: ['demo-dead'] },
+    ...overrides,
+  });
+
+describe('openStore', () => {
+  let dir: string | undefined;
+
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+    dir = undefined;
+  });
+
+  it('initializes a fresh database and reopens it', () => {
+    dir = mkdtempSync(join(tmpdir(), 'mem-store-'));
+    const path = join(dir, 'mem.db');
+
+    const db = openStore(path);
+    writeRecords(db, [fullRecord()]);
+    db.close();
+
+    const reopened = openStore(path);
+    expect(getRecord(reopened, 'demo-1a2b')).not.toBeNull();
+    reopened.close();
+  });
+
+  it('fails loudly on a schema version mismatch', () => {
+    dir = mkdtempSync(join(tmpdir(), 'mem-store-'));
+    const path = join(dir, 'mem.db');
+
+    const db = openStore(path);
+    db.pragma('user_version = 99');
+    db.close();
+
+    expect(() => openStore(path)).toThrow(/schema version/i);
+  });
+});
+
+describe('writeRecords / getRecord round-trip', () => {
+  it('round-trips a maximal record exactly (nested metadata, signal, links)', () => {
+    const db = openStore(':memory:');
+    const record = fullRecord();
+
+    writeRecords(db, [record]);
+
+    expect(getRecord(db, record.work_id)).toEqual(record);
+  });
+
+  it('round-trips a minimal spine record (absent optionals stay absent)', () => {
+    const db = openStore(':memory:');
+    const record = WorkRecordSchema.parse({
+      work_id: 'demo-min1',
+      rig: 'demo',
+      title: 'Bare spine',
+      lifecycle: { created: '2026-06-01T00:00:00Z', status: 'open' },
+    });
+
+    writeRecords(db, [record]);
+    const read = getRecord(db, 'demo-min1');
+
+    expect(read).toEqual(record);
+    expect(read?.trace).toBeUndefined();
+    expect(read?.outcome).toBeUndefined();
+  });
+
+  it('returns null for an unknown work_id', () => {
+    const db = openStore(':memory:');
+    expect(getRecord(db, 'nope-0000')).toBeNull();
+  });
+
+  it('re-ingest replaces the record and its children without duplication', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [fullRecord()]);
+    const updated = fullRecord({
+      labels: ['phase1'],
+      trace: {
+        jsonl_path: '/traces/x.jsonl',
+        errors: [tsError({ message: 'TS2551: renamed symbol', line: 99 })],
+      },
+    });
+
+    writeRecords(db, [updated]);
+
+    expect(getRecord(db, updated.work_id)).toEqual(updated);
+    // Old child rows are gone: the original error signature no longer resolves.
+    expect(workIdsBySignature(db, failureSignature(tsError()))).toEqual([]);
+    expect(
+      workIdsBySignature(
+        db,
+        failureSignature(tsError({ message: 'TS2551: renamed symbol', line: 99 }))
+      )
+    ).toEqual([updated.work_id]);
+  });
+});
+
+describe('lessons (append-only, D9)', () => {
+  it('appends lessons with a snapshotted citation and lists them in insertion order', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [fullRecord()]);
+
+    appendLesson(db, {
+      work_id: 'demo-1a2b',
+      extracted_at: '2026-06-03T00:00:00Z',
+      commit_sha: 'abc123',
+      payload: { root_cause: 'missing flag', resolution: 'add --no-tls' },
+    });
+    appendLesson(db, {
+      work_id: 'demo-1a2b',
+      extracted_at: '2026-06-04T00:00:00Z',
+      payload: { root_cause: 'second pass' },
+    });
+
+    const lessons = lessonsFor(db, 'demo-1a2b');
+    expect(lessons).toHaveLength(2);
+    expect(lessons[0].commit_sha).toBe('abc123');
+    expect(lessons[0].payload).toEqual({ root_cause: 'missing flag', resolution: 'add --no-tls' });
+    expect(lessons[1].commit_sha).toBeUndefined();
+    expect(lessons[0].id).toBeLessThan(lessons[1].id);
+  });
+
+  it('lessons survive a re-ingest of their record', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [fullRecord()]);
+    appendLesson(db, {
+      work_id: 'demo-1a2b',
+      extracted_at: '2026-06-03T00:00:00Z',
+      payload: { root_cause: 'x' },
+    });
+
+    writeRecords(db, [fullRecord({ title: 'Fix the build (retry)' })]);
+
+    expect(lessonsFor(db, 'demo-1a2b')).toHaveLength(1);
+  });
+});
+
+describe('queryRecords', () => {
+  const seed = (db: ReturnType<typeof openStore>) => {
+    writeRecords(db, [
+      fullRecord(),
+      fullRecord({
+        work_id: 'demo-2b3c',
+        lifecycle: {
+          created: '2026-06-02T00:00:00Z',
+          started: '2026-06-02T01:00:00Z',
+          status: 'in_progress',
+          status_history: [],
+        },
+        agents: [{ agent_id: 'gc-2002' }],
+        outcome: { pr: '#64', ci: 'fail' },
+      }),
+      fullRecord({
+        work_id: 'other-9z9z',
+        rig: 'other',
+        lifecycle: {
+          created: '2026-06-01T00:00:00Z',
+          started: '2026-06-01T02:00:00Z',
+          closed: '2026-06-03T00:00:00Z',
+          status: 'closed',
+          status_history: [],
+        },
+      }),
+    ]);
+  };
+
+  it('filters by rig and status', () => {
+    const db = openStore(':memory:');
+    seed(db);
+
+    expect(queryRecords(db, { rig: 'demo' }).map(r => r.work_id)).toEqual([
+      'demo-1a2b',
+      'demo-2b3c',
+    ]);
+    expect(queryRecords(db, { status: 'closed' }).map(r => r.work_id)).toEqual([
+      'demo-1a2b',
+      'other-9z9z',
+    ]);
+  });
+
+  it('filters by outcome fields', () => {
+    const db = openStore(':memory:');
+    seed(db);
+
+    expect(queryRecords(db, { ci: 'fail' }).map(r => r.work_id)).toEqual(['demo-2b3c']);
+    expect(queryRecords(db, { pr_state: 'merged' }).map(r => r.work_id)).toEqual([
+      'demo-1a2b',
+      'other-9z9z',
+    ]);
+  });
+
+  it('filters by agent', () => {
+    const db = openStore(':memory:');
+    seed(db);
+
+    expect(queryRecords(db, { agent: 'gc-2002' }).map(r => r.work_id)).toEqual(['demo-2b3c']);
+  });
+
+  it('closedBefore is strict — the temporal leave-one-out boundary (D6)', () => {
+    const db = openStore(':memory:');
+    seed(db);
+
+    // demo-1a2b closed exactly at the boundary: excluded (strictly before).
+    expect(queryRecords(db, { closedBefore: '2026-06-02T00:00:00Z' })).toEqual([]);
+    expect(queryRecords(db, { closedBefore: '2026-06-02T00:00:01Z' }).map(r => r.work_id)).toEqual([
+      'demo-1a2b',
+    ]);
+    // Never-closed records are never retrievable.
+    expect(queryRecords(db, { closedBefore: '2099-01-01T00:00:00Z' }).map(r => r.work_id)).toEqual([
+      'demo-1a2b',
+      'other-9z9z',
+    ]);
+  });
+});
+
+describe('failure-signature retrieval keys (D8)', () => {
+  it('finds work ids by exact failure signature', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [
+      fullRecord(),
+      fullRecord({
+        work_id: 'demo-2b3c',
+        trace: { jsonl_path: '/t/y.jsonl', errors: [tsError()] },
+      }),
+    ]);
+
+    expect(workIdsBySignature(db, failureSignature(tsError()))).toEqual(['demo-1a2b', 'demo-2b3c']);
+    expect(workIdsBySignature(db, 'tsc:src/zzz.ts:1:TS9999')).toEqual([]);
+  });
+
+  it('searches error messages via FTS as the weak tiebreaker', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [fullRecord()]);
+
+    const hits = searchErrorMessages(db, 'argument');
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({
+      work_id: 'demo-1a2b',
+      message: 'TS2345: bad argument',
+      signature: failureSignature(tsError()),
+    });
+    expect(searchErrorMessages(db, 'nonexistentword')).toEqual([]);
+  });
+
+  it('FTS index stays in sync across re-ingest (stale messages unfindable)', () => {
+    const db = openStore(':memory:');
+    // A second record keeps its own error rows across the re-ingest, so a
+    // stale index entry could not hide behind a dangling JOIN — this covers
+    // the rowid-not-reused path as well as the simple one.
+    writeRecords(db, [
+      fullRecord(),
+      fullRecord({
+        work_id: 'demo-2b3c',
+        trace: { jsonl_path: '/t/y.jsonl', errors: [tsError()] },
+      }),
+    ]);
+    writeRecords(db, [
+      fullRecord({
+        trace: {
+          jsonl_path: '/traces/x.jsonl',
+          errors: [tsError({ message: 'TS2551: fresh wording' })],
+        },
+      }),
+      fullRecord({ work_id: 'demo-2b3c', trace: { jsonl_path: '/t/y.jsonl', errors: [] } }),
+    ]);
+
+    expect(searchErrorMessages(db, 'argument')).toEqual([]);
+    expect(searchErrorMessages(db, 'fresh')).toHaveLength(1);
+    // Verify the index itself, not just the JOIN-masked view: the rank=1
+    // form of FTS5's integrity-check compares the index against the external
+    // content table and throws if they disagree (i.e. if a sync trigger ever
+    // stopped firing). The plain form only checks internal index structure.
+    expect(() =>
+      db.exec("INSERT INTO trace_errors_fts(trace_errors_fts, rank) VALUES ('integrity-check', 1)")
+    ).not.toThrow();
+  });
+
+  it('throws on malformed FTS5 query syntax (caller owns query construction)', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [fullRecord()]);
+
+    expect(() => searchErrorMessages(db, '"unclosed quote')).toThrow();
+  });
+
+  it('respects the result limit', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [
+      fullRecord(),
+      fullRecord({
+        work_id: 'demo-2b3c',
+        trace: { jsonl_path: '/t/y.jsonl', errors: [tsError()] },
+      }),
+    ]);
+
+    expect(searchErrorMessages(db, 'argument', 1)).toHaveLength(1);
+  });
+});
