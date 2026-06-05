@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "membench"
+version = "0.1.0"
+description = "Agentic Memory Evaluation Harness — Spec Phase-1 skeleton (Harbor 3-condition substrate)"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.0",
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "toml>=0.10",
+]
+
+# Harbor (harbor-framework/harbor, Apache-2.0) is the execution substrate for real
+# `harbor run` invocations. The skeleton + its tests do NOT require Harbor at import
+# time — task dirs are emitted in Harbor's real format and validated against
+# harbor.TaskConfig only when the package is present (see tests/test_harbor_adapter.py).
+[project.optional-dependencies]
+harbor = ["harbor>=0.3"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+membench = "membench.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["membench*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

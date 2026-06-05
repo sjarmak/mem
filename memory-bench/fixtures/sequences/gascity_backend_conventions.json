@@ -1,0 +1,91 @@
+{
+  "sequence_id": "gascity-backend-conventions",
+  "title": "Gas City dashboard — backend conventions across sessions",
+  "domain": "coding/orchestration",
+  "goal": "Implement a new backend endpoint that honors project conventions established in earlier sessions.",
+  "steps": [
+    {
+      "step_id": "s1-establish-binding",
+      "user_request": "Set up the dashboard backend dev server and document how it must bind.",
+      "available_tools": ["shell", "git"],
+      "environment_state": {"repo": "gascity-dashboard"},
+      "expected_memory_writes": {
+        "conv-bind-loopback": "Backend must bind to 127.0.0.1 only (never 0.0.0.0) — security invariant for the dashboard."
+      },
+      "expected_memory_reads": [],
+      "outcome_checks": [
+        {
+          "check_id": "convention-documented",
+          "description": "The loopback-binding convention is recorded.",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p1-binding-written",
+          "expected_memory_id": "conv-bind-loopback",
+          "description": "Binding convention should be persisted for later sessions."
+        }
+      ]
+    },
+    {
+      "step_id": "s2-establish-types",
+      "user_request": "Define the shared wire-shape types used by backend and frontend.",
+      "available_tools": ["shell", "editor"],
+      "environment_state": {"repo": "gascity-dashboard"},
+      "expected_memory_writes": {
+        "conv-shared-types": "Wire shapes live in shared/ and are the SSOT; backend and frontend both import from there."
+      },
+      "expected_memory_reads": [],
+      "outcome_checks": [
+        {
+          "check_id": "types-defined",
+          "description": "Shared types SSOT is recorded.",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p2-types-written",
+          "expected_memory_id": "conv-shared-types",
+          "description": "Shared-types convention should be persisted."
+        }
+      ]
+    },
+    {
+      "step_id": "s3-add-endpoint",
+      "user_request": "Add a new /api/fleet endpoint. Apply the project's binding and shared-type conventions.",
+      "available_tools": ["shell", "editor", "git"],
+      "environment_state": {"repo": "gascity-dashboard"},
+      "expected_memory_writes": {},
+      "expected_memory_reads": ["conv-bind-loopback", "conv-shared-types"],
+      "outcome_checks": [
+        {
+          "check_id": "endpoint-created",
+          "description": "The endpoint exists (stateless, doable without memory).",
+          "requires_memory": []
+        },
+        {
+          "check_id": "applies-loopback-binding",
+          "description": "Endpoint honors the 127.0.0.1 binding convention from s1.",
+          "requires_memory": ["conv-bind-loopback"]
+        },
+        {
+          "check_id": "uses-shared-types",
+          "description": "Endpoint imports wire shapes from shared/ per s2.",
+          "requires_memory": ["conv-shared-types"]
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p3-synthesis",
+          "expected_memory_id": "conv-bind-loopback",
+          "description": "Cross-session synthesis: both prior conventions must be retrieved."
+        }
+      ]
+    }
+  ],
+  "final_goal_check": {
+    "description": "New endpoint created honoring both prior-session conventions."
+  }
+}
