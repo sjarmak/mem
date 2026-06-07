@@ -6,7 +6,7 @@ task-validity gate: if `oracle ≈ no_memory`, the task does not discriminate me
 benefit and is rejected (plan §A, DIV-3).
 """
 
-from membench.memory_systems.base import MemorySystem, RetrieveResult
+from membench.memory_systems.base import MemorySystem, RetrievalRequest, RetrieveResult
 from membench.runtime import StepContext
 from membench.schemas.memory_event import MemoryBackend, MemoryEvent, MemoryOperation
 
@@ -28,9 +28,8 @@ class OracleMemory(MemorySystem):
         # (they are ground truth for the whole sequence, not trial-accumulated).
         return None
 
-    def retrieve(
-        self, query: str | None, requested_ids: list[str], ctx: StepContext
-    ) -> RetrieveResult:
+    def retrieve(self, request: RetrievalRequest, ctx: StepContext) -> RetrieveResult:
+        requested_ids = request.requested_ids
         payloads = {
             mid: self._store[mid] for mid in requested_ids if mid in self._store
         }
@@ -43,7 +42,7 @@ class OracleMemory(MemorySystem):
             concrete_tool="oracle_inject",
             normalized_operation=MemoryOperation.READ,
             backend=self.backend,
-            query=query,
+            query=request.query_text,
             target_ids=list(requested_ids),
             retrieved_ids=list(payloads),
             latency_ms=ctx.clock.latency_ms(),

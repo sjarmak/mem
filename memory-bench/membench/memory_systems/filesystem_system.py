@@ -9,7 +9,7 @@ graphiti, …), not of this reference baseline.
 
 from pathlib import Path
 
-from membench.memory_systems.base import MemorySystem, RetrieveResult
+from membench.memory_systems.base import MemorySystem, RetrievalRequest, RetrieveResult
 from membench.runtime import StepContext
 from membench.schemas.memory_event import MemoryBackend, MemoryEvent, MemoryOperation
 
@@ -50,9 +50,9 @@ class FilesystemMemory(MemorySystem):
             }
         return dict(self._store)
 
-    def retrieve(
-        self, query: str | None, requested_ids: list[str], ctx: StepContext
-    ) -> RetrieveResult:
+    def retrieve(self, request: RetrievalRequest, ctx: StepContext) -> RetrieveResult:
+        query = request.query_text
+        requested_ids = request.requested_ids
         available = self._read_all()
         payloads = {mid: available[mid] for mid in requested_ids if mid in available}
         event = MemoryEvent(

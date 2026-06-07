@@ -74,11 +74,34 @@ phases.
 | op mapper | `membench/mapper/memory_op_mapper.py` (concrete tool → canonical op) |
 | trace | `membench/schemas/trace.py` |
 | metrics | `membench/schemas/metrics.py` (task / efficiency / retrieval / retention; privacy + interruption stubbed) |
-| memory systems | `membench/memory_systems/` (reference set: none / oracle / filesystem) |
+| memory systems | `membench/memory_systems/` (arms: none / oracle / filesystem / **ours**; `builtin` → mem-whi, competitive → mem-lvp) |
+| LOO guard | `membench/validity.py` (V1 leakage guard — harness-owned D6 boundary) |
 | runner | `membench/runner/` (run one sequence under 3 conditions) |
+| replay | `membench/replay.py` (failure-triggered arms over the work-audit graph, LOO-bounded) |
 | telemetry | `membench/telemetry/` (OTel GenAI spans, primary; ATIF, derived) |
 | Harbor adapter | `membench/harbor/adapter.py` |
-| report | `membench/report/comparison.py` (3-condition interpretation table) |
+| report | `membench/report/comparison.py` (3-condition table) + `report/arm_vector.py` (per-arm raw 5-axis) |
+
+### Two eval modes
+
+The harness carries two complementary eval objects, each with its own runner:
+
+- **Convention sequence** (`runner/conditions.py`) — a multi-session sequence
+  with id-based memory, run under the three conditions (none / oracle /
+  filesystem). Continuity is the persistent store; leak-safety is structural
+  (a step reads only what earlier steps wrote).
+- **Replay bead** (`replay.py`) — a closed historical bead `B` (Decision 5). The
+  `ours` arm = retrieval-v1 (mem-di8) over the work-audit graph, **failure-
+  triggered** (Decision 8), under the harness-owned **LOO guard** (`validity.py`,
+  Decision 6/11): the retrievable corpus is bounded to records closed strictly
+  before `B.started`, minus `B`'s self / convoy / supersedes-chain / shared-PR
+  records. No arm picks the boundary, and every arm's output is re-checked against
+  the LOO set (`assert_no_leak`). Both Decision-7 tracks (cross-rig, same-rig) are
+  reported. The 5-axis report is **raw, never a weighted composite** (fork 2).
+
+`ours` consumes retrieval-v1 through the `mem retrieve --json` CLI — the single
+substrate, consuming the append-only `lessons` payload (D9), never re-distilling
+and never adding a second store.
 
 ## Run
 
@@ -90,6 +113,10 @@ python3 -m membench.cli run-sequence \
 # Emit Harbor task dirs for a real `harbor run` (paid Claude path):
 python3 -m membench.cli gen-tasks \
   fixtures/sequences/gascity_backend_conventions.json --out tasks/
+
+# The `ours` arm runs against the real retrieval-v1 CLI, so its integration test
+# needs the TS build at the repo root first (it skips gracefully if absent):
+( cd .. && npm run build )
 
 pytest -q
 ```

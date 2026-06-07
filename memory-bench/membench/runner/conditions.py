@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from membench.memory_systems import build_memory_system
-from membench.memory_systems.base import MemorySystem, RetrieveResult
+from membench.memory_systems.base import MemorySystem, RetrievalRequest, RetrieveResult
 from membench.memory_systems.oracle_system import OracleMemory
 from membench.runner.agent import Agent, ScriptedAgent
 from membench.runner.metrics import compute_metrics
@@ -110,7 +110,11 @@ def run_sequence(
             # a retrieve with no requested ids would emit a phantom event and inflate
             # memory_tool_calls for establishing steps.
             if reads_enabled and step.expected_memory_reads:
-                retrieve = system.retrieve(step.user_request, step.expected_memory_reads, ctx)
+                request = RetrievalRequest(
+                    query_text=step.user_request,
+                    requested_ids=step.expected_memory_reads,
+                )
+                retrieve = system.retrieve(request, ctx)
                 memory_events.append(retrieve.event)
             available_memory = retrieve.payloads if retrieve is not None else {}
 

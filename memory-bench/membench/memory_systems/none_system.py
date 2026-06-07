@@ -5,7 +5,7 @@ memory under the no_memory condition; this system exists so the interface is
 uniform and a `none` config is still expressible.
 """
 
-from membench.memory_systems.base import MemorySystem, RetrieveResult
+from membench.memory_systems.base import MemorySystem, RetrievalRequest, RetrieveResult
 from membench.runtime import StepContext
 from membench.schemas.memory_event import MemoryBackend, MemoryEvent, MemoryOperation
 
@@ -18,9 +18,7 @@ class NoneMemory(MemorySystem):
     def reset(self, trial_id: str) -> None:  # noqa: D401 - no state
         return None
 
-    def retrieve(
-        self, query: str | None, requested_ids: list[str], ctx: StepContext
-    ) -> RetrieveResult:
+    def retrieve(self, request: RetrievalRequest, ctx: StepContext) -> RetrieveResult:
         event = MemoryEvent(
             event_id=ctx.clock.event_id(),
             trial_id=ctx.trial_id,
@@ -30,7 +28,7 @@ class NoneMemory(MemorySystem):
             concrete_tool="none",
             normalized_operation=MemoryOperation.SEARCH,
             backend=self.backend,
-            query=query,
+            query=request.query_text,
             success=True,
         )
         return RetrieveResult(payloads={}, event=event)

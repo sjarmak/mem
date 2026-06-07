@@ -1,9 +1,21 @@
-"""The uniform memory-system interface.
+"""The uniform memory-system (arm) interface.
 
-The harness drives every system identically: it owns the record set, the scope, and
-telemetry; the system only implements `retrieve` and `write` and reports each as a
-normalized `MemoryEvent` (§6.2). This is the same uniform-arm contract promoted as
-ARCHITECTURE.md Decision 11.
+The harness drives every system identically: it owns the record set, the scope,
+the LOO boundary, and telemetry; the system only implements `retrieve` and
+`write` and reports each as a normalized `MemoryEvent` (§6.2). This is the same
+uniform-arm contract promoted as ARCHITECTURE.md Decision 11, and the seam the
+competitive arms (a-mem / mem0 / graphiti / nat, mem-lvp) plug into later without
+re-touching it.
+
+`retrieve` takes a single `RetrievalRequest` so one signature serves both arm
+families:
+
+- **id-based reference arms** (`oracle`, `filesystem`) use `query_text` +
+  `requested_ids` — exact-by-id recovery over what earlier steps wrote.
+- **failure-triggered arms** (`ours`, and the competitive arms) use `query_work`
+  + `scope` — retrieval over the work-audit graph under the harness-owned LOO
+  boundary (Decision 6/8). The harness, not the arm, fixes the boundary; the
+  arm's output is re-checked against it (`validity.assert_no_leak`).
 """
 
 from abc import ABC, abstractmethod
@@ -11,33 +23,62 @@ from dataclasses import dataclass, field
 
 from membench.runtime import StepContext
 from membench.schemas.memory_event import MemoryBackend, MemoryEvent
+from membench.validity import QueryWork
+
+# The Decision-7 retrieval track, named identically to the retrieval-v1 surface.
+RetrievalScope = str  # "cross_rig" | "same_rig_temporal"
+
+
+@dataclass(frozen=True)
+class RetrievalRequest:
+    """What the harness hands an arm to retrieve (one shape for both families).
+
+    `requested_ids` is also the *relevant set* the harness scores against, so an
+    id-based arm returning a superset (distractors) or subset (misses) is what
+    makes precision/recall meaningful.
+    """
+
+    query_text: str | None = None
+    requested_ids: list[str] = field(default_factory=list)
+    # Failure-triggered / replay context (Decision 6/8). None on the id path.
+    query_work: QueryWork | None = None
+    scope: RetrievalScope | None = None
 
 
 @dataclass
 class RetrieveResult:
-    """What a retrieve call returns: the recovered payloads + the normalized event."""
+    """What a retrieve call returns: the recovered payloads + the normalized event.
 
-    payloads: dict[str, str]  # memory_id → content
+    `total_matched` / `near_duplicate_top` carry the retrieval-v1 precision-guard
+    signal (Decision 10) through to the report; they stay at their defaults for
+    arms that don't rank (oracle/filesystem return exactly what was asked)."""
+
+    payloads: dict[str, str]  # memory_id → content (id arms) / work_id → lesson (ours)
     event: MemoryEvent
     distractor_ids: list[str] = field(default_factory=list)
+    total_matched: int = 0
+    near_duplicate_top: bool = False
 
 
 class MemorySystem(ABC):
-    """Uniform interface implemented by every reference / competitive system."""
+    """Uniform interface implemented by every reference / competitive arm."""
 
     name: str
     backend: MemoryBackend
     supports_write: bool = True
+    # Whether retrieval depends on the Decision-7 track (cross_rig vs
+    # same_rig_temporal). Failure-triggered arms set this; the replay runner then
+    # evaluates them under both tracks (D7 dual-track). Id-based arms leave it
+    # False and run once.
+    uses_scope: bool = False
 
     @abstractmethod
     def reset(self, trial_id: str) -> None:
         """Clear all state for a fresh trial (per condition run)."""
 
     @abstractmethod
-    def retrieve(
-        self, query: str | None, requested_ids: list[str], ctx: StepContext
-    ) -> RetrieveResult:
-        """Return payloads for `requested_ids` that the store can recover."""
+    def retrieve(self, request: RetrievalRequest, ctx: StepContext) -> RetrieveResult:
+        """Return the payloads this arm can recover for `request`."""
 
     @abstractmethod
     def write(self, memory_id: str, content: str, ctx: StepContext) -> MemoryEvent:
