@@ -105,15 +105,18 @@ The P1.5 sidecar is a generated artifact (gitignored at `.mem/store.db`). Build
 it from the bead spine, then query / retrieve / replay against it:
 
 ```bash
-mem build-store [--rig <name>] [--store .mem/store.db]   # dolt spine → sidecar
+mem build-store [--rig <name>] [--with-traces] [--store .mem/store.db]
 mem query   --store .mem/store.db [--rig R] [--json]      # read the graph
 mem retrieve <work_id> --store .mem/store.db --scope cross-rig|same-rig --json
 ```
 
 `build-store` reuses the ingest readers and the store writer — it adds no
 substrate, only the wiring that lands real WorkRecords in the store the
-retrieval/eval path reads. The Python harness loads it through `mem query`
-(`memory-bench/`).
+retrieval/eval path reads. With `--with-traces` it additionally resolves each
+record's transcript (P1.3) and parses its deterministic build/test/lint failure
+signatures (P1.6) into the store, so the failure-triggered `ours` arm fires; the
+spine-only default stays fast (no `gc`/transcript IO). The Python harness loads
+the store through `mem query` (`memory-bench/`).
 
 ## Status
 

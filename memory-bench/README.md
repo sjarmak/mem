@@ -116,8 +116,9 @@ python3 -m membench.cli gen-tasks \
   fixtures/sequences/gascity_backend_conventions.json --out tasks/
 
 # Replay arms over the REAL P1.5 store under the LOO guard (the caller names the
-# query work — the harness never curates the eval target):
-( cd .. && npm run build && node bin/mem build-store --store .mem/store.db )
+# query work — the harness never curates the eval target). `--with-traces`
+# attaches P1.6 failure signatures so the `ours` arm fires:
+( cd .. && npm run build && node bin/mem build-store --with-traces --store .mem/store.db )
 python3 -m membench.cli replay \
   --store ../.mem/store.db --work-id <work_id> --arms none,ours --out reports/
 
@@ -130,10 +131,10 @@ pytest -q
 ```
 
 `membench replay` emits the per-arm raw 5-axis report (`replay_report.{json,md}`)
-+ OTel GenAI spans (`replay_spans.json`). On the bead-spine smoke corpus, `ours`
-is trigger-empty (no trace errors attached yet) — the run proves the pipeline and
-that the LOO guard bounds the corpus under real data; **lift** (and the held-out
-set it needs) is a later, eval-design step, deliberately not made here.
++ OTel GenAI spans (`replay_spans.json`). On a store built `--with-traces`, the
+`ours` arm fires (failure-triggered, D8) and the report shows a real ours-vs-none
+retrieval delta on the trace-carrying beads. **Lift** itself (and the held-out set
+it needs) is a later, eval-design step, deliberately not made here.
 
 ## Boundaries
 
