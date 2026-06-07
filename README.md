@@ -99,9 +99,26 @@ target's convoy siblings, supersedes-chain, and any item sharing its PR or
 branch excluded. That keeps "memory as it existed when the work began" honest
 and structurally blocks future leakage.
 
+## Building the store
+
+The P1.5 sidecar is a generated artifact (gitignored at `.mem/store.db`). Build
+it from the bead spine, then query / retrieve / replay against it:
+
+```bash
+mem build-store [--rig <name>] [--store .mem/store.db]   # dolt spine → sidecar
+mem query   --store .mem/store.db [--rig R] [--json]      # read the graph
+mem retrieve <work_id> --store .mem/store.db --scope cross-rig|same-rig --json
+```
+
+`build-store` reuses the ingest readers and the store writer — it adds no
+substrate, only the wiring that lands real WorkRecords in the store the
+retrieval/eval path reads. The Python harness loads it through `mem query`
+(`memory-bench/`).
+
 ## Status
 
 Greenfield. The TypeScript work-audit graph builder under `src/`
 (ingest / parse / store / retrieve / bench) is scaffolded with tests under
 `tests/`. The Python evaluation harness lives in `memory-bench/` (see its
-README). Retrieval and the full replay eval harness are the next phase.
+README); it runs end-to-end on the real store via `membench replay`. Curating
+the held-out eval set and the first lift read are the next phase.

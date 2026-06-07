@@ -76,8 +76,9 @@ phases.
 | metrics | `membench/schemas/metrics.py` (task / efficiency / retrieval / retention; privacy + interruption stubbed) |
 | memory systems | `membench/memory_systems/` (arms: none / oracle / filesystem / **ours**; `builtin` → mem-whi, competitive → mem-lvp) |
 | LOO guard | `membench/validity.py` (V1 leakage guard — harness-owned D6 boundary) |
+| corpus loader | `membench/corpus.py` (real P1.5 store → `WorkRef` corpus via `mem query --json`) |
 | runner | `membench/runner/` (run one sequence under 3 conditions) |
-| replay | `membench/replay.py` (failure-triggered arms over the work-audit graph, LOO-bounded) |
+| replay | `membench/replay.py` + `membench replay` CLI (failure-triggered arms over the work-audit graph, LOO-bounded) |
 | telemetry | `membench/telemetry/` (OTel GenAI spans, primary; ATIF, derived) |
 | Harbor adapter | `membench/harbor/adapter.py` |
 | report | `membench/report/comparison.py` (3-condition table) + `report/arm_vector.py` (per-arm raw 5-axis) |
@@ -114,12 +115,25 @@ python3 -m membench.cli run-sequence \
 python3 -m membench.cli gen-tasks \
   fixtures/sequences/gascity_backend_conventions.json --out tasks/
 
-# The `ours` arm runs against the real retrieval-v1 CLI, so its integration test
-# needs the TS build at the repo root first (it skips gracefully if absent):
+# Replay arms over the REAL P1.5 store under the LOO guard (the caller names the
+# query work — the harness never curates the eval target):
+( cd .. && npm run build && node bin/mem build-store --store .mem/store.db )
+python3 -m membench.cli replay \
+  --store ../.mem/store.db --work-id <work_id> --arms none,ours --out reports/
+
+# The `ours` arm and the replay CLI run against the real retrieval-v1 CLI, so
+# their integration tests need the TS build at the repo root first (they skip
+# gracefully if absent):
 ( cd .. && npm run build )
 
 pytest -q
 ```
+
+`membench replay` emits the per-arm raw 5-axis report (`replay_report.{json,md}`)
++ OTel GenAI spans (`replay_spans.json`). On the bead-spine smoke corpus, `ours`
+is trigger-empty (no trace errors attached yet) — the run proves the pipeline and
+that the LOO guard bounds the corpus under real data; **lift** (and the held-out
+set it needs) is a later, eval-design step, deliberately not made here.
 
 ## Boundaries
 

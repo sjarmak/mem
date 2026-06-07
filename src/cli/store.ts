@@ -9,10 +9,11 @@ import type { CliOptions } from './index.js';
  */
 
 /** Default sidecar location, relative to the working directory. */
-const DEFAULT_STORE_PATH = '.mem/store.db';
+export const DEFAULT_STORE_PATH = '.mem/store.db';
 
-/** The `--store <path>` override, or {@link DEFAULT_STORE_PATH}. */
-function storePath(options: CliOptions): string {
+/** The `--store <path>` override, or {@link DEFAULT_STORE_PATH}. Shared by the
+ * read commands and `build-store` so they resolve the same default location. */
+export function storePath(options: CliOptions): string {
   return typeof options.store === 'string' ? options.store : DEFAULT_STORE_PATH;
 }
 

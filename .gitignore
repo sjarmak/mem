@@ -5,3 +5,6 @@
 # Node
 node_modules/
 dist/
+
+# P1.5 work-audit store (generated artifact; built via `mem build-store`)
+.mem/
