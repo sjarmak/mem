@@ -1,0 +1,68 @@
+"""Outcome-label leak guard — the task-construction mirror of `validity.assert_no_leak`.
+
+D6 (`validity`) guards what an arm may ingest at *retrieval* time. It does not
+cover the *task-construction* path, where an outcome label can reach the agent
+through `instruction.md` or verifier markers (`harbor/adapter.py`). This guard
+closes that path mechanically: given the files an agent can read and a task's
+outcome-label values, assert none of the labels appears in agent-readable text
+(architect finding C1).
+
+Only high-entropy *identifiers* (pr, commit_sha) are scanned. The low-entropy enum
+states (pr_state / ci) are excluded by design: a task instruction may legitimately
+contain the word "pass" or "merged", so substring-scanning them would be false
+positives. Enum leakage is prevented structurally by the design/task manifest
+split, not by this scan.
+"""
+
+from collections.abc import Iterable, Mapping
+from typing import Any
+
+_IDENTIFYING_KEYS = ("pr", "commit_sha")
+
+
+class OutcomeLeakError(AssertionError):
+    """Raised when an outcome label appears in agent-readable text — a validity bug
+    that must fail the run, never be silently stripped."""
+
+    def __init__(self, offenders: list[tuple[str, str]]) -> None:
+        # Each offender is (where, label): `where` is the filename (or "<text>"),
+        # `label` is the leaked outcome value found in it.
+        self.offenders = offenders
+        detail = ", ".join(f"{label!r} in {where}" for where, label in offenders)
+        super().__init__(f"outcome label leaked into agent-readable text: {detail}")
+
+
+def outcome_labels(record: Mapping[str, Any]) -> tuple[str, ...]:
+    """The high-entropy outcome identifiers of `record` — the values that must not
+    appear in any agent-readable file. Missing/empty values are skipped."""
+    outcome = record.get("outcome") or {}
+    return tuple(str(outcome[key]) for key in _IDENTIFYING_KEYS if outcome.get(key))
+
+
+def assert_no_outcome_leak(
+    agent_readable: str | Mapping[str, str], labels: Iterable[str]
+) -> None:
+    """Assert no value in `labels` appears in `agent_readable` (a string, or a
+    filename->content mapping). The match is case-insensitive and blank labels are
+    ignored so they cannot match every document. Errs toward over-catching — the
+    safe direction for a validity guard: a false positive fails the run loudly,
+    a false negative lets a leak through. Raises `OutcomeLeakError` listing every
+    (where, label) offender."""
+    # Dedupe while preserving order so a caller passing repeated labels does not
+    # produce duplicate offenders.
+    scan = list(dict.fromkeys(label for label in labels if label.strip()))
+    if not scan:
+        return
+    docs = (
+        list(agent_readable.items())
+        if isinstance(agent_readable, Mapping)
+        else [("<text>", agent_readable)]
+    )
+    offenders = [
+        (where, label)
+        for where, content in docs
+        for label in scan
+        if label.lower() in content.lower()
+    ]
+    if offenders:
+        raise OutcomeLeakError(offenders)
