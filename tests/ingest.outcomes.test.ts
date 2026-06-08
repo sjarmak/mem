@@ -63,69 +63,103 @@ describe('mapCiRollup', () => {
 });
 
 describe('mapPullRequestToOutcome', () => {
-  it('maps a merged PR to its merge commit', () => {
-    const outcome = mapPullRequestToOutcome({
-      number: 63,
-      state: 'MERGED',
-      mergeCommit: { oid: 'merge000sha' },
-      headRefOid: 'branchtipsha',
-      statusCheckRollup: [{ status: 'COMPLETED', conclusion: 'SUCCESS' }],
-    });
+  it('maps a merged PR to its merge commit, persisting repo and base commit', () => {
+    const outcome = mapPullRequestToOutcome(
+      {
+        number: 63,
+        state: 'MERGED',
+        mergeCommit: { oid: 'merge000sha' },
+        headRefOid: 'branchtipsha',
+        baseRefOid: 'base0000sha',
+        statusCheckRollup: [{ status: 'COMPLETED', conclusion: 'SUCCESS' }],
+      },
+      'owner/repo'
+    );
     expect(outcome).toEqual({
       pr: '#63',
+      repo: 'owner/repo',
       pr_state: 'merged',
       commit_sha: 'merge000sha',
+      base_commit: 'base0000sha',
       ci: 'pass',
     });
   });
 
   it('falls back to the branch tip when a merged PR lacks a merge commit', () => {
-    const outcome = mapPullRequestToOutcome({
-      number: 7,
-      state: 'MERGED',
-      mergeCommit: null,
-      headRefOid: 'branchtipsha',
-      statusCheckRollup: [],
-    });
+    const outcome = mapPullRequestToOutcome(
+      {
+        number: 7,
+        state: 'MERGED',
+        mergeCommit: null,
+        headRefOid: 'branchtipsha',
+        statusCheckRollup: [],
+      },
+      'owner/repo'
+    );
     expect(outcome.commit_sha).toBe('branchtipsha');
     expect(outcome.pr_state).toBe('merged');
   });
 
   it('maps a closed (unmerged) PR to the branch tip with no CI when unknown', () => {
-    const outcome = mapPullRequestToOutcome({
-      number: 12,
-      state: 'CLOSED',
-      headRefOid: 'closedtipsha',
-      statusCheckRollup: [{ status: 'COMPLETED', conclusion: 'FAILURE' }],
-    });
+    const outcome = mapPullRequestToOutcome(
+      {
+        number: 12,
+        state: 'CLOSED',
+        headRefOid: 'closedtipsha',
+        statusCheckRollup: [{ status: 'COMPLETED', conclusion: 'FAILURE' }],
+      },
+      'owner/repo'
+    );
     expect(outcome).toEqual({
       pr: '#12',
+      repo: 'owner/repo',
       pr_state: 'closed',
       commit_sha: 'closedtipsha',
       ci: 'fail',
     });
   });
 
+  it('omits base_commit when gh reports no baseRefOid', () => {
+    const outcome = mapPullRequestToOutcome(
+      {
+        number: 5,
+        state: 'OPEN',
+        headRefOid: 'opentipsha',
+        statusCheckRollup: [],
+      },
+      'owner/repo'
+    );
+    expect(outcome.base_commit).toBeUndefined();
+    expect(outcome.repo).toBe('owner/repo');
+  });
+
   it('omits pr_state for an open PR but keeps commit and CI signal', () => {
-    const outcome = mapPullRequestToOutcome({
-      number: 99,
-      state: 'OPEN',
-      headRefOid: 'opentipsha',
-      statusCheckRollup: [{ status: 'IN_PROGRESS' }],
-    });
-    expect(outcome).toEqual({ pr: '#99', commit_sha: 'opentipsha' });
+    const outcome = mapPullRequestToOutcome(
+      {
+        number: 99,
+        state: 'OPEN',
+        headRefOid: 'opentipsha',
+        statusCheckRollup: [{ status: 'IN_PROGRESS' }],
+      },
+      'owner/repo'
+    );
+    expect(outcome).toEqual({ pr: '#99', repo: 'owner/repo', commit_sha: 'opentipsha' });
     expect(outcome.pr_state).toBeUndefined();
     expect(outcome.ci).toBeUndefined();
   });
 
   it('produces a schema-valid Outcome', () => {
-    const outcome = mapPullRequestToOutcome({
-      number: 1,
-      state: 'MERGED',
-      mergeCommit: { oid: 'sha' },
-      headRefOid: 'tip',
-      statusCheckRollup: [],
-    });
+    const outcome = mapPullRequestToOutcome(
+      {
+        number: 1,
+        state: 'MERGED',
+        mergeCommit: { oid: 'sha' },
+        headRefOid: 'tip',
+        baseRefOid: 'base',
+        statusCheckRollup: [],
+      },
+      'owner/repo'
+    );
     expect(() => OutcomeSchema.parse(outcome)).not.toThrow();
   });
 });
@@ -159,7 +193,7 @@ describe('resolveBranchOutcome', () => {
     ]);
   });
 
-  it('resolves the first PR returned by gh', async () => {
+  it('resolves the first PR returned by gh, tagging it with the queried repo', async () => {
     const runner: GhRunner = () =>
       Promise.resolve(
         JSON.stringify([
@@ -168,14 +202,17 @@ describe('resolveBranchOutcome', () => {
             state: 'MERGED',
             mergeCommit: { oid: 'abc1234' },
             headRefOid: 'def5678',
+            baseRefOid: 'base9012',
             statusCheckRollup: [{ status: 'COMPLETED', conclusion: 'SUCCESS' }],
           },
         ])
       );
     expect(await resolveBranchOutcome('owner/repo', 'branch', runner)).toEqual({
       pr: '#63',
+      repo: 'owner/repo',
       pr_state: 'merged',
       commit_sha: 'abc1234',
+      base_commit: 'base9012',
       ci: 'pass',
     });
   });

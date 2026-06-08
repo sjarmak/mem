@@ -6,7 +6,8 @@ import { OutcomeSchema, type Outcome } from '../schemas/workrecord.js';
 /**
  * ingest/outcomes (P1.4) — resolve a bead's external ref (its worktree branch)
  * to the verifiable GitHub outcome that labels the WorkRecord: merged|closed,
- * the commit sha, and CI pass|fail.
+ * the commit sha, CI pass|fail, plus the `repo` and `base_commit` env-recon
+ * anchors needed to replay the record against the right baseline.
  *
  * The gh-JSON → Outcome translation is a pure mapper (`mapPullRequestToOutcome`,
  * `mapCiRollup`) so it is testable without a network or a checked-out repo. The
@@ -16,8 +17,10 @@ import { OutcomeSchema, type Outcome } from '../schemas/workrecord.js';
  * map it through deterministic rules onto the Outcome schema.
  */
 
-/** The `gh pr list --json` fields we read. */
-export const GH_OUTCOME_FIELDS = 'number,state,mergeCommit,headRefOid,statusCheckRollup';
+/** The `gh pr list --json` fields we read. `baseRefOid` is the base-branch tip
+ * the PR was opened against — persisted as `base_commit` so the WorkRecord can be
+ * replayed at the right baseline. */
+export const GH_OUTCOME_FIELDS = 'number,state,mergeCommit,headRefOid,baseRefOid,statusCheckRollup';
 
 /** Runs `gh` with the given args and resolves to its stdout. Injected so the
  * resolver can be unit-tested with a fake. */
@@ -42,6 +45,7 @@ const GhPullRequestSchema = z.object({
   state: z.enum(['OPEN', 'MERGED', 'CLOSED']),
   mergeCommit: z.object({ oid: z.string() }).nullish(),
   headRefOid: z.string().nullish(),
+  baseRefOid: z.string().nullish(),
   statusCheckRollup: z.array(GhStatusCheckSchema).nullish(),
 });
 
@@ -108,16 +112,23 @@ export function mapCiRollup(checks: readonly GhStatusCheck[]): 'pass' | 'fail' |
  * Map a resolved PR onto an Outcome. Merged PRs carry the merge commit; closed
  * and still-open PRs carry the branch tip. An open PR has no terminal
  * `pr_state` but still yields its number, commit, and CI signal.
+ *
+ * `repo` (`owner/name`) is threaded in from the resolver — it is known at ingest
+ * but not on the PR JSON — and persisted so env reconstruction has the repo in
+ * the record. `base_commit` (the PR's base-branch tip) is derived from the PR's
+ * `baseRefOid` when gh reports one.
  */
-export function mapPullRequestToOutcome(pr: GhPullRequest): Outcome {
+export function mapPullRequestToOutcome(pr: GhPullRequest, repo: string): Outcome {
   const ci = mapCiRollup(pr.statusCheckRollup ?? []);
   const prState = pr.state === 'MERGED' ? 'merged' : pr.state === 'CLOSED' ? 'closed' : undefined;
   const commitSha = pr.state === 'MERGED' ? (pr.mergeCommit?.oid ?? pr.headRefOid) : pr.headRefOid;
 
   return OutcomeSchema.parse({
     pr: `#${pr.number}`,
+    repo,
     ...(prState ? { pr_state: prState } : {}),
     ...(commitSha ? { commit_sha: commitSha } : {}),
+    ...(pr.baseRefOid ? { base_commit: pr.baseRefOid } : {}),
     ...(ci ? { ci } : {}),
   });
 }
@@ -169,5 +180,5 @@ export async function resolveBranchOutcome(
   const prs = z.array(GhPullRequestSchema).parse(JSON.parse(stdout));
   if (prs.length === 0) return null;
 
-  return mapPullRequestToOutcome(prs[0]);
+  return mapPullRequestToOutcome(prs[0], repo);
 }

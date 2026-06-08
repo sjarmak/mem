@@ -46,11 +46,17 @@ export const TraceRefSchema = z.object({
 
 export type TraceRef = z.infer<typeof TraceRefSchema>;
 
-/** The verifiable outcome label — what makes this a benchmark, not a log. */
+/** The verifiable outcome label — what makes this a benchmark, not a log.
+ * `repo` (`owner/name`) and `base_commit` (the PR's base-branch tip) are the
+ * env-reconstruction anchors: they let a held-out WorkRecord be replayed against
+ * the right repository at the right baseline without an out-of-band rig→repo map
+ * (see memory-bench config/rigs.py, the interim workaround this field retires). */
 export const OutcomeSchema = z.object({
   pr: z.string().optional(),
+  repo: z.string().optional(),
   pr_state: z.enum(['merged', 'closed']).optional(),
   commit_sha: z.string().optional(),
+  base_commit: z.string().optional(),
   ci: z.enum(['pass', 'fail']).optional(),
 });
 
