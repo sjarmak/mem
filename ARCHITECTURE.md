@@ -212,6 +212,23 @@ makes the "outcome lift" number real. Grounded in the literature pass (see
     **DIV-10:** the roadmap is **re-baselined onto the spec's 5 phases** (skeleton →
     real dataset → metrics/diagnostics → synthetic generator → research loop);
     retrieval-v1 (`mem-di8`) is the first `ours` memory_system under that frame.
+17. **mem-apg headline is ABLATION-based, not merged-PR/CI outcome-lift (Stephanie,
+    2026-06-08).** First-principles data finding (bead `mem-apg.5`): the work-audit
+    corpus does **not** carry the bead→PR→repo→commit linkage the merged-PR/CI oracle
+    needs. Across 5977 closed records only ~14 have a PR number, ~7 a commit_sha, ~1–2
+    a repo, and exactly **1** an `external_ref`. So the locked outcome-success-rate
+    headline (Decision 5/`mem-6sl`) is **structurally uncomputable for this corpus at
+    scale** — this is the mem-ml9 wall diagnosed at the data layer, not a wiring gap
+    (`mem-bme` wired the schema + mapper, but the inputs were never recorded).
+    Therefore the **mem-apg headline is the ablation score-vs-information curve**
+    (saturation point + minimum-useful information combination), which is
+    env/label-independent — the agent is its own control across an information ladder,
+    so it needs neither a reconstructed env nor a ground-truth outcome label. The
+    **merged-diff oracle is opportunistic validation** on the ~handful of beads that do
+    carry PR/commit metadata, never the headline. Outcome-ingest wiring (`mem-apg.5`)
+    stays **deferred** — do not re-attempt the gh re-ingest; the source data is absent,
+    not unwired. The ablation *scoring function* (how each rung is scored without an
+    outcome oracle) is the open design question this decision opens.
 
 ## Literature grounding (`~/lit_explorers`, agentic-memory pass 2026-06-04)
 
