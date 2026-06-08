@@ -227,8 +227,16 @@ makes the "outcome lift" number real. Grounded in the literature pass (see
     **merged-diff oracle is opportunistic validation** on the ~handful of beads that do
     carry PR/commit metadata, never the headline. Outcome-ingest wiring (`mem-apg.5`)
     stays **deferred** — do not re-attempt the gh re-ingest; the source data is absent,
-    not unwired. The ablation *scoring function* (how each rung is scored without an
-    outcome oracle) is the open design question this decision opens.
+    not unwired. **Ablation scoring (resolved 2026-06-08):** per-rung `reward` is a
+    *deterministic* check on data the corpus actually has — did the agent's run
+    avoid/resolve the held-out task's known `trace_error` (the signal the held-out set
+    is defined by) — **plus** an OSS/self-hosted, calibrated LLM-judge `rubric_score`
+    for semantic completion quality (spec §12.1: deterministic-where-possible, OSS
+    judge for semantic only — no-paid-API applies to the judge). The headline curve is
+    reward-vs-information-rung; saturation point + minimum-useful information
+    combination are read off it. Scores use data the corpus *has* (trace errors), not
+    data it *lacks* (PR outcomes); ZFC-clean (deterministic signature match +
+    delegated semantic judgment).
 
 ## Literature grounding (`~/lit_explorers`, agentic-memory pass 2026-06-04)
 
