@@ -195,11 +195,17 @@ makes the "outcome lift" number real. Grounded in the literature pass (see
     **privacy + interruption** axes NVIDIA's published material doesn't evaluate,
     and beyond-lexical procedural/relational graph rerank.
 16. **No-paid-API scope + eval object + roadmap re-baseline (§A.5 resolutions).**
-    **DIV-1:** `no-paid-API` (Decision 4) is scoped to the **memory stack only**
-    (backends / embeddings / extractor / judge = OSS / self-hosted); the
-    **agent-under-test** (Claude Code / Opus / Sonnet / Haiku) runs on **our Claude
-    account via the OAuth subscription** — the only mandatory cost (Harbor itself is
-    Apache-2.0 and adds none). **DIV-2:** the eval object is **multi-session
+    **DIV-1 (RESOLVED — Stephanie, 2026-06-08):** `no-paid-API` (Decision 4) is
+    scoped to the **memory stack only** (backends / embeddings / extractor / judge =
+    OSS / self-hosted). It does **NOT** cover the **agent-under-test**, Harbor, or
+    Docker. Harbor (Apache-2.0) and Docker are free. The agent-under-test (Claude
+    Code / Opus / Sonnet / Haiku) runs on our Claude **OAuth subscription**, which is
+    flat-rate and already paid — it is **not** a metered paid API and carries **no
+    per-run marginal cost**. Therefore running Claude agents through Harbor/Docker for
+    the eval is **not a "paid" action, not a cost/defensibility fork, and not a
+    wake-me / escalation trigger**. Do not re-litigate this: building the
+    closed-bead→Harbor execution + verifier path and running the conditions across the
+    held-out set is in-scope mechanism work, not a paid-infra ask. **DIV-2:** the eval object is **multi-session
     sequences** (Step1→…→Goal, fresh context per step, memory persists); bead replay
     becomes **one source** feeding sequence construction, with the Decision-6
     temporal-LOO / no-leak discipline preserved as the per-step context reset.
