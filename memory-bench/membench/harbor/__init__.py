@@ -8,5 +8,6 @@ task_adapter.py/dataset_adapter.py/scorer.py names — plan §A, DIV-7.)
 """
 
 from membench.harbor.adapter import REWARD_TEXT_PATH, SequenceAdapter
+from membench.harbor.workrecord_adapter import WorkRecordLadderAdapter
 
-__all__ = ["REWARD_TEXT_PATH", "SequenceAdapter"]
+__all__ = ["REWARD_TEXT_PATH", "SequenceAdapter", "WorkRecordLadderAdapter"]

@@ -37,6 +37,12 @@ def test_outcome_labels_skips_missing_outcome():
     assert set(outcome_labels(_record(commit_sha="deadbeefcafe"))) == {"deadbeefcafe"}
 
 
+def test_outcome_labels_includes_base_commit():
+    # base_commit (mem-bme schema field) is an env-recon anchor and must not leak.
+    labels = set(outcome_labels(_record(commit_sha="aaa111bbb222", base_commit="ccc333ddd444")))
+    assert labels == {"aaa111bbb222", "ccc333ddd444"}
+
+
 def test_no_leak_passes_when_labels_absent():
     # Returns None (no raise) when the content is clean.
     assert assert_no_outcome_leak("fix the parser bug in src/parse.py", ["abc123def456"]) is None

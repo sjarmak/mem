@@ -7,17 +7,21 @@ closes that path mechanically: given the files an agent can read and a task's
 outcome-label values, assert none of the labels appears in agent-readable text
 (architect finding C1).
 
-Only high-entropy *identifiers* (pr, commit_sha) are scanned. The low-entropy enum
-states (pr_state / ci) are excluded by design: a task instruction may legitimately
-contain the word "pass" or "merged", so substring-scanning them would be false
-positives. Enum leakage is prevented structurally by the design/task manifest
-split, not by this scan.
+Only high-entropy *identifiers* (pr, commit_sha, base_commit) are scanned — the
+answer-revealing values a held-out bead must not expose. The low-entropy enum states
+(pr_state / ci) are excluded by design: a task instruction may legitimately contain
+the word "pass" or "merged", so substring-scanning them would be false positives.
+`repo` (owner/name) is also excluded deliberately: it is legitimate task *context*
+(the agent needs to know where the work lives), not an answer-revealing outcome, and
+scanning it would false-positive on any task that names its own repository. Enum and
+context leakage are prevented structurally by the design/task manifest split, not by
+this scan.
 """
 
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-_IDENTIFYING_KEYS = ("pr", "commit_sha")
+_IDENTIFYING_KEYS = ("pr", "commit_sha", "base_commit")
 
 
 class OutcomeLeakError(AssertionError):
