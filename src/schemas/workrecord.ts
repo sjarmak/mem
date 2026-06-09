@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ExecutionSchema, TraceErrorSchema } from './trace.js';
+import { ExecutionSchema, TraceErrorSchema, TraceRunSchema } from './trace.js';
 
 /**
  * WorkRecord — the atomic unit of the work-audit graph (ARCHITECTURE.md,
@@ -42,6 +42,9 @@ export const TraceRefSchema = z.object({
   n_turns: z.number().int().optional(),
   tool_outcomes: z.array(ExecutionSchema).optional(),
   errors: z.array(TraceErrorSchema).optional(),
+  // Run-level metadata (tokens, model, harness, tool-call shape). Absent until
+  // the transcript is parsed, like the sibling parsed fields above.
+  run: TraceRunSchema.optional(),
 });
 
 export type TraceRef = z.infer<typeof TraceRefSchema>;

@@ -4,7 +4,7 @@
  * plus a model-backed semantic extractor. ZFC: mechanical in code, judgment
  * via model. These are the shapes it consumes/produces.
  */
-export type { Execution, TraceError } from '../schemas/trace.js';
+export type { Execution, TraceError, TraceRun } from '../schemas/trace.js';
 
 export { type ErrorExtractor, extractErrors } from './error-extractors.js';
 export {

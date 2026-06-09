@@ -380,6 +380,145 @@ describe('parseTranscript', () => {
   });
 });
 
+/** Build an assistant entry with explicit usage/model/version/stop_reason and
+ * an arbitrary set of tool_use blocks (by name). */
+function assistantEntry(opts: {
+  model?: string;
+  version?: string;
+  sessionId?: string;
+  timestamp?: string;
+  stop_reason?: string;
+  usage?: Record<string, number>;
+  tools?: string[];
+}): string {
+  const content = (opts.tools ?? []).map((name, i) => ({
+    type: 'tool_use',
+    id: `tu-${name}-${i}`,
+    name,
+    input: {},
+  }));
+  return JSON.stringify({
+    type: 'assistant',
+    sessionId: opts.sessionId,
+    version: opts.version,
+    timestamp: opts.timestamp,
+    message: {
+      model: opts.model,
+      stop_reason: opts.stop_reason,
+      usage: opts.usage,
+      content,
+    },
+  });
+}
+
+/** A bare user turn carrying a session id + timestamp (no tool result). */
+function userTurn(opts: { sessionId?: string; timestamp?: string }): string {
+  return JSON.stringify({
+    type: 'user',
+    sessionId: opts.sessionId,
+    timestamp: opts.timestamp,
+    message: { content: [{ type: 'text', text: 'hi' }] },
+  });
+}
+
+describe('parseTranscript — run metadata', () => {
+  it('sums usage tokens, counts tool calls by type, turns, and time span', () => {
+    const text = transcript(
+      userTurn({ sessionId: 'sess-1', timestamp: '2026-06-01T00:00:00Z' }),
+      assistantEntry({
+        sessionId: 'sess-1',
+        version: '2.1.100',
+        model: 'claude-opus-4-8',
+        timestamp: '2026-06-01T00:00:01Z',
+        stop_reason: 'tool_use',
+        usage: {
+          input_tokens: 10,
+          output_tokens: 20,
+          cache_creation_input_tokens: 100,
+          cache_read_input_tokens: 200,
+        },
+        tools: ['Bash', 'Read'],
+      }),
+      assistantEntry({
+        sessionId: 'sess-1',
+        version: '2.1.101',
+        model: 'claude-sonnet-4-6',
+        timestamp: '2026-06-01T00:00:02Z',
+        stop_reason: 'end_turn',
+        usage: {
+          input_tokens: 5,
+          output_tokens: 7,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 50,
+        },
+        tools: ['Bash'],
+      })
+    );
+
+    const { run } = parseTranscript(text);
+    expect(run).toBeDefined();
+    expect(run).toMatchObject({
+      session_uuid: 'sess-1',
+      input_tokens: 15,
+      output_tokens: 27,
+      cache_creation_tokens: 100,
+      cache_read_tokens: 250,
+      n_tool_calls: 3,
+      tool_calls_by_type: { Bash: 2, Read: 1 },
+      n_turns: 3, // one user + two assistant
+      started_at: '2026-06-01T00:00:00Z',
+      ended_at: '2026-06-01T00:00:02Z',
+    });
+    // model / harness / outcome are the LAST assistant message's values.
+    expect(run?.model).toBe('claude-sonnet-4-6');
+    expect(run?.harness_version).toBe('2.1.101');
+    expect(run?.outcome).toBe('end_turn');
+  });
+
+  it('returns no run for a transcript with no user/assistant entries', () => {
+    const text = transcript(JSON.stringify({ type: 'system', subtype: 'init' }));
+    expect(parseTranscript(text).run).toBeUndefined();
+  });
+
+  it('returns no run when turns exist but no entry carries a sessionId', () => {
+    const text = transcript(
+      userTurn({ timestamp: '2026-06-01T00:00:00Z' }),
+      assistantEntry({ stop_reason: 'end_turn', usage: { input_tokens: 1 } })
+    );
+    expect(parseTranscript(text).run).toBeUndefined();
+  });
+
+  it('truncates a non-integer usage value so the sum stays store-safe', () => {
+    const text = transcript(
+      assistantEntry({ sessionId: 'sess-3', usage: { input_tokens: 10.7, output_tokens: 4 } })
+    );
+    const { run } = parseTranscript(text);
+    expect(run?.input_tokens).toBe(10);
+    expect(Number.isInteger(run?.input_tokens)).toBe(true);
+  });
+
+  it('leaves optional fields absent when the transcript omits them', () => {
+    const text = transcript(
+      assistantEntry({ sessionId: 'sess-2', usage: { input_tokens: 3, output_tokens: 4 } })
+    );
+    const { run } = parseTranscript(text);
+    expect(run).toMatchObject({
+      session_uuid: 'sess-2',
+      input_tokens: 3,
+      output_tokens: 4,
+      cache_creation_tokens: 0,
+      cache_read_tokens: 0,
+      n_tool_calls: 0,
+      tool_calls_by_type: {},
+      n_turns: 1,
+    });
+    expect(run?.model).toBeUndefined();
+    expect(run?.harness_version).toBeUndefined();
+    expect(run?.started_at).toBeUndefined();
+    expect(run?.outcome).toBeUndefined();
+  });
+});
+
 describe('parseRecordTrace', () => {
   const record = (overrides: Partial<WorkRecord> = {}): WorkRecord =>
     WorkRecordSchema.parse({
@@ -401,6 +540,25 @@ describe('parseRecordTrace', () => {
     expect(out.trace?.errors).toHaveLength(1);
     expect(input.trace?.tool_outcomes).toBeUndefined();
     expect(out).not.toBe(input);
+  });
+
+  it('attaches run-level metadata to trace.run', () => {
+    const input = record({ trace: { jsonl_path: '/t.jsonl' } });
+    const text = transcript(
+      assistantEntry({
+        sessionId: 'sess-9',
+        model: 'claude-opus-4-8',
+        usage: { input_tokens: 1, output_tokens: 2 },
+        tools: ['Bash'],
+      })
+    );
+    const out = parseRecordTrace(input, () => text);
+    expect(out.trace?.run).toMatchObject({
+      session_uuid: 'sess-9',
+      model: 'claude-opus-4-8',
+      n_tool_calls: 1,
+    });
+    expect(input.trace?.run).toBeUndefined();
   });
 
   it('returns the record unchanged when it has no resolved trace', () => {
