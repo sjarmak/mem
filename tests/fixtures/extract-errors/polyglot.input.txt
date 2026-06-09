@@ -1,0 +1,6 @@
+src/a.ts(12,5): error TS2345: Argument of type X.
+./pkg/svc.go:42:6: undefined: helper
+app.py:12: error: Name "os" is not defined  [name-defined]
+/repo/src/x.ts
+  3:10  error    Unexpected console statement  no-console
+FAILED tests/test_app.py::test_foo - AssertionError: assert 1 == 2

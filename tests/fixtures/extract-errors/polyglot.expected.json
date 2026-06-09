@@ -1,0 +1,52 @@
+[
+  {
+    "tool": "tsc",
+    "severity": "error",
+    "file": "src/a.ts",
+    "line": 12,
+    "column": 5,
+    "error_class": "TS2345",
+    "message": "TS2345: Argument of type X.",
+    "signature": "tsc:src/a.ts:12:TS2345"
+  },
+  {
+    "tool": "eslint",
+    "severity": "error",
+    "file": "/repo/src/x.ts",
+    "line": 3,
+    "column": 10,
+    "error_class": "no-console",
+    "message": "Unexpected console statement (no-console)",
+    "signature": "eslint:/repo/src/x.ts:3:no-console"
+  },
+  {
+    "tool": "go",
+    "severity": "error",
+    "file": "pkg/svc.go",
+    "line": 42,
+    "column": 6,
+    "error_class": "undefined: helper",
+    "message": "undefined: helper",
+    "signature": "go:pkg/svc.go:42:undefined: helper"
+  },
+  {
+    "tool": "mypy",
+    "severity": "error",
+    "file": "app.py",
+    "line": 12,
+    "column": null,
+    "error_class": "name-defined",
+    "message": "Name \"os\" is not defined  [name-defined]",
+    "signature": "mypy:app.py:12:name-defined"
+  },
+  {
+    "tool": "pytest",
+    "severity": "error",
+    "file": "tests/test_app.py",
+    "line": 0,
+    "column": null,
+    "error_class": "AssertionError",
+    "message": "AssertionError: assert 1 == 2",
+    "signature": "pytest:tests/test_app.py:0:AssertionError"
+  }
+]
