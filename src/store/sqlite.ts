@@ -16,8 +16,9 @@ export type StoreDatabase = Database.Database;
 /**
  * Open (and on first use, initialize) the sidecar store at `path`.
  * `:memory:` is supported for tests. A database whose `user_version` is
- * neither 0 (fresh) nor {@link SCHEMA_VERSION} fails loudly — there is no
- * migration framework until a second schema version actually exists.
+ * neither 0 (fresh) nor {@link SCHEMA_VERSION} fails loudly: there is no
+ * in-place migration framework — a version bump (the store is a rebuildable
+ * projection of the dolt spine) is handled by re-ingesting into a fresh store.
  */
 export function openStore(path: string): StoreDatabase {
   if (path !== ':memory:') {

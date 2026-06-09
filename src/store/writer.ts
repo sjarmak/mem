@@ -18,11 +18,13 @@ const UPSERT_RECORD = `
 INSERT INTO work_records (
   work_id, rig, title, status, priority, external_ref,
   created_at, started_at, closed_at, convoy_id,
-  pr, pr_state, commit_sha, ci, trace_path, n_turns, record
+  pr, pr_state, commit_sha, ci, trace_path, n_turns,
+  repo, base_commit, commit_state, record
 ) VALUES (
   @work_id, @rig, @title, @status, @priority, @external_ref,
   @created_at, @started_at, @closed_at, @convoy_id,
-  @pr, @pr_state, @commit_sha, @ci, @trace_path, @n_turns, @record
+  @pr, @pr_state, @commit_sha, @ci, @trace_path, @n_turns,
+  @repo, @base_commit, @commit_state, @record
 )
 ON CONFLICT(work_id) DO UPDATE SET
   rig = excluded.rig, title = excluded.title, status = excluded.status,
@@ -32,7 +34,8 @@ ON CONFLICT(work_id) DO UPDATE SET
   pr = excluded.pr, pr_state = excluded.pr_state,
   commit_sha = excluded.commit_sha, ci = excluded.ci,
   trace_path = excluded.trace_path, n_turns = excluded.n_turns,
-  record = excluded.record
+  repo = excluded.repo, base_commit = excluded.base_commit,
+  commit_state = excluded.commit_state, record = excluded.record
 `;
 
 const CHILD_TABLES = ['record_agents', 'record_labels', 'record_links', 'trace_errors'] as const;
@@ -56,6 +59,9 @@ function toRow(record: WorkRecord): Record<string, string | number | null> {
     ci: record.outcome?.ci ?? null,
     trace_path: record.trace?.jsonl_path ?? null,
     n_turns: record.trace?.n_turns ?? null,
+    repo: record.provenance?.repo ?? null,
+    base_commit: record.provenance?.base_commit ?? null,
+    commit_state: record.provenance?.history_state ?? null,
     record: JSON.stringify(record),
   };
 }

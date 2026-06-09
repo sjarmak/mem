@@ -6,6 +6,7 @@ import { storePath } from '../store.js';
 import { openStore, writeRecords } from '../../store/index.js';
 import { defaultConnection, doltRunner, readAllRigs, readRig } from '../../ingest/beads.js';
 import { type SessionResolver, attachTraceRefs } from '../../ingest/trace-resolve.js';
+import { attachProvenance } from '../../ingest/provenance.js';
 import { type TraceReader, parseRecordTrace } from '../../parse/trace-parse.js';
 import type { WorkRecord } from '../../schemas/workrecord.js';
 
@@ -16,6 +17,12 @@ export interface BuildStoreResult {
   /** Records carrying ≥1 deterministic trace error after the P1.6 parse (0 when
    * `--with-traces` is off). The D8 failure signatures the `ours` arm fires on. */
   records_with_errors: number;
+  /** Records carrying a work_dir, so a git baseline was attempted (0 when
+   * `--with-provenance` is off). */
+  records_with_provenance: number;
+  /** Subset of the above whose session-start commit resolved by date — the
+   * git-checkout anchors a future real-exec replay can use. */
+  records_with_commit: number;
 }
 
 /** Options for {@link attachAndParse} — injectable so the P1.3→P1.6 wiring is
@@ -67,24 +74,44 @@ export function buildStoreFromRecords(path: string, records: WorkRecord[]): numb
  * With `--with-traces`, each record's transcript is resolved (P1.3) and parsed
  * for deterministic build/test/lint failure signatures (P1.6) before the write,
  * so the store carries the D8 signals the failure-triggered `ours` arm fires on.
- * Without it, the store is the bead spine only (fast, no `gc`/transcript IO).
+ * With `--with-provenance`, each record's git baseline (repo + session-start
+ * commit by date) is attached so it can be replayed as a git-checkout
+ * environment. Without either flag, the store is the bead spine only (fast, no
+ * `gc`/transcript/git IO).
  */
 export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStoreResult> {
   const rig = typeof ctx.options.rig === 'string' ? ctx.options.rig : null;
   const path = storePath(ctx.options);
   const withTraces = ctx.options['with-traces'] === true;
+  const withProvenance = ctx.options['with-provenance'] === true;
 
   const run = doltRunner(defaultConnection());
   const spine = rig === null ? await readAllRigs(run) : await readRig(run, rig);
-  const records = withTraces ? attachAndParse(spine) : spine;
+  const traced = withTraces ? attachAndParse(spine) : spine;
+  const records = withProvenance ? attachProvenance(traced) : traced;
   const count = buildStoreFromRecords(path, records);
+
   const recordsWithErrors = records.filter(r => (r.trace?.errors?.length ?? 0) > 0).length;
+  const recordsWithProvenance = records.filter(r => r.provenance !== undefined).length;
+  const recordsWithCommit = records.filter(
+    r => r.provenance?.history_state === 'commit-by-date'
+  ).length;
 
   if (!ctx.options.json) {
     const scope = rig === null ? 'all rigs' : rig;
     const traceNote = withTraces ? `; ${recordsWithErrors} carry trace errors` : '';
-    console.error(`built ${count} work records from ${scope} into ${path}${traceNote}`);
+    const provNote = withProvenance
+      ? `; ${recordsWithProvenance} carry a work_dir, ${recordsWithCommit} resolved a base commit`
+      : '';
+    console.error(`built ${count} work records from ${scope} into ${path}${traceNote}${provNote}`);
   }
 
-  return { store: path, rig, count, records_with_errors: recordsWithErrors };
+  return {
+    store: path,
+    rig,
+    count,
+    records_with_errors: recordsWithErrors,
+    records_with_provenance: recordsWithProvenance,
+    records_with_commit: recordsWithCommit,
+  };
 }

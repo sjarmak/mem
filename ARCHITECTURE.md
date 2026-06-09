@@ -20,6 +20,8 @@ WorkRecord {
   trace:      { jsonl_path, n_turns, tool_calls[], tool_outcomes[],# parsed signal
                 errors[ {tool, file, line, message, severity} ] }  # engram-style
   outcome:    { pr: "#63", merged|closed, commit_sha, ci: pass|fail }
+  provenance: { work_dir, repo, base_branch,                        # env baseline
+                base_commit, history_state: commit-by-date|unresolved }
   signal:     { deterministic: {...}, semantic: {...} }            # the learned bit
   links:      { deps[], convoy_id, supersedes[] }
 }
@@ -27,6 +29,17 @@ WorkRecord {
 
 The **outcome** field is what makes this a benchmark substrate: every record has
 a real, verifiable label (closed/merged/CI), not a synthetic one.
+
+The **provenance** field is the *environment baseline* (distinct from outcome):
+the repo + commit a session started from, so a record can be replayed as a
+CodeScaleBench-style git-checkout environment. gc records the work dir and
+sometimes the base branch but **never the exact base SHA**, so `base_commit` is
+an APPROXIMATION — the newest commit on `base_branch` at or before `started_at`
+(`git rev-list -1 --before=<started_at> <base_branch>`), flagged
+`history_state: commit-by-date`. It is resolved **only** when a base branch was
+recorded; resolving against the work_dir's HEAD would walk the agent's own
+feature branch (a train/test leak), so an absent base branch is terminal
+`unresolved`, never guessed.
 
 ## Pipeline stages → modules
 
@@ -277,6 +290,9 @@ The eval/retrieval contract above is backed by the memory-systems literature
   every trace file; attach `trace_ref` to its WorkRecord.
 - **P1.4 ingest/outcomes** — `external-ref`/branch → gh PR/commit → outcome
   (merged|closed, commit_sha, CI pass|fail).
+- **ingest/provenance** — `gc.work_dir`/`gc.var.base_branch` metadata → repo +
+  session-start `base_commit` (commit-by-date), the git-checkout env baseline.
+  Wired into `build-store --with-provenance`.
 - **P1.5 store** — the WorkRecord graph + sidecar schema + writer; marker-bounded
   deterministic render (store is truth). Decide sidecar substrate here.
 - **P1.6 parse/deterministic** — port engram capture/reflect: tool-call outcomes
