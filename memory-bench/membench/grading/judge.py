@@ -38,6 +38,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Protocol
 from urllib.error import URLError
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 # Documented default OSS judge (ARCHITECTURE D4/D16): a self-hosted, OpenAI-
@@ -48,12 +49,20 @@ DEFAULT_JUDGE_MODEL = "nvidia/nemotron-3-nano"
 ENV_BASE_URL = "MEMBENCH_JUDGE_BASE_URL"
 ENV_MODEL = "MEMBENCH_JUDGE_MODEL"
 
-# Hosts that are paid managed APIs, not self-hosted — the no-paid-API fence (D4/D16).
-_PAID_HOST_MARKERS = ("api.openai.com", "api.anthropic.com")
+# Registrable domains of paid managed APIs, not self-hosted — the no-paid-API fence
+# (D4/D16). Matched on the parsed hostname (exact or a subdomain suffix), so
+# `api.openai.com`, `openai.com`, and any `*.openai.com` are all rejected — a bare
+# substring blocklist missed `openai.com` and was defeated by host trickery.
+_PAID_HOST_MARKERS = ("openai.com", "anthropic.com")
+
+
+def _is_paid_host(base_url: str) -> bool:
+    host = (urlparse(base_url).hostname or "").lower()
+    return any(host == m or host.endswith("." + m) for m in _PAID_HOST_MARKERS)
 
 
 def _require_unit(name: str, value: float) -> None:
-    """Fail loud unless `value` is a real number in [0, 1] (NaN included)."""
+    """Fail loud if `value` is NaN or outside [0, 1]."""
     if math.isnan(value) or not 0.0 <= value <= 1.0:
         raise ValueError(f"{name} must be in [0, 1], got {value}")
 
@@ -81,10 +90,11 @@ class Rubric:
     criteria: tuple[RubricCriterion, ...]
 
     def __post_init__(self) -> None:
+        # Each RubricCriterion already rejects weight <= 0 at construction, so a
+        # non-empty tuple necessarily has a positive weight sum — only emptiness
+        # needs guarding here (a redundant sum check would be validation theater).
         if not self.criteria:
             raise ValueError("rubric needs at least one criterion")
-        if sum(c.weight for c in self.criteria) <= 0:
-            raise ValueError("rubric criterion weights must sum to > 0")
 
     def as_prompt_block(self) -> str:
         """The rubric rendered for the judge prompt: one line per criterion with its
@@ -167,11 +177,15 @@ class StubJudge:
     def score(self, task: str, run_output: str, rubric: Rubric) -> float:
         if self.fn is not None:
             return self.fn(task, run_output, rubric)
-        assert self.fixed is not None  # narrowed by __post_init__
+        if self.fixed is None:  # unreachable — __post_init__ guarantees one is set
+            raise AssertionError("StubJudge has neither fixed nor fn")
         return self.fixed
 
 
-_SCORE_RE = re.compile(r'"score"\s*:\s*(-?\d+(?:\.\d+)?)')
+# Captures an optionally-scientific-notation float so a model reply of
+# `{"score": 1e-3}` parses as 0.001, not 1.0 (a bare `\d+(\.\d+)?` matched the "1"
+# mantissa and silently inflated near-zero scores — corrupting the curve).
+_SCORE_RE = re.compile(r'"score"\s*:\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)')
 
 _PROMPT_TEMPLATE = """\
 You are grading how completely an agent did a task. Score ONLY semantic completion
@@ -189,24 +203,29 @@ RUBRIC (score the run output against these criteria):
 Return only the JSON object."""
 
 
-@dataclass
+@dataclass(frozen=True)
 class OssLlmJudge:
     """A judge backed by a self-hosted / OSS, OpenAI-compatible LOCAL endpoint.
 
     Defaults to a loopback vLLM endpoint and a documented OSS model, both overridable
     via `MEMBENCH_JUDGE_BASE_URL` / `MEMBENCH_JUDGE_MODEL`. It refuses a paid managed
-    host (D4/D16) at construction. Prompt assembly and score parsing are pure and
-    unit-tested; `score` makes the actual HTTP call and is never exercised in tests."""
+    host (D4/D16) at construction. `frozen=True` so the fenced `base_url` cannot be
+    reassigned to a paid host after construction. Prompt assembly and score parsing
+    are pure and unit-tested; `score` makes the actual HTTP call, never run in tests."""
 
     base_url: str = ""
     model: str = ""
     timeout_s: float = 60.0
 
     def __post_init__(self) -> None:
-        self.base_url = self.base_url or os.environ.get(ENV_BASE_URL, DEFAULT_JUDGE_BASE_URL)
-        self.model = self.model or os.environ.get(ENV_MODEL, DEFAULT_JUDGE_MODEL)
-        lowered = self.base_url.lower()
-        if any(marker in lowered for marker in _PAID_HOST_MARKERS):
+        # frozen → resolve the env/default sentinels via object.__setattr__.
+        object.__setattr__(
+            self, "base_url", self.base_url or os.environ.get(ENV_BASE_URL, DEFAULT_JUDGE_BASE_URL)
+        )
+        object.__setattr__(
+            self, "model", self.model or os.environ.get(ENV_MODEL, DEFAULT_JUDGE_MODEL)
+        )
+        if _is_paid_host(self.base_url):
             raise ValueError(
                 f"judge base_url {self.base_url!r} is a paid managed host; the judge "
                 "must be OSS/self-hosted (D4/D16) — point it at a local endpoint"
@@ -258,7 +277,14 @@ class OssLlmJudge:
                 body = json.loads(response.read().decode())
         except (URLError, TimeoutError) as exc:
             raise RuntimeError(f"judge endpoint {self.base_url!r} call failed: {exc}") from exc
-        content = body["choices"][0]["message"]["content"]
+        try:
+            content = body["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            # A 200 with an unexpected body (e.g. a vLLM error envelope) must surface
+            # with context, not a bare KeyError.
+            raise RuntimeError(
+                f"judge endpoint {self.base_url!r} returned an unexpected body: {body!r}"
+            ) from exc
         return self.parse_score(content)
 
 

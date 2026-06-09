@@ -124,7 +124,15 @@ def _default_exec(task_dir: Path) -> RunTranscript:
             f"harbor run {task_dir} failed (exit {completed.returncode}): "
             f"{completed.stderr.strip() or completed.stdout.strip()}"
         )
-    transcript: dict[str, Any] = json.loads(completed.stdout)
+    try:
+        transcript: dict[str, Any] = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        # Exit 0 but non-JSON stdout (a banner before the JSON, a warning line) is a
+        # harvest failure, not a clean trace — surface it with context.
+        raise RuntimeError(
+            f"harbor run {task_dir} exited 0 but stdout is not valid JSON: "
+            f"{completed.stdout[:200]!r}"
+        ) from exc
     return transcript
 
 
@@ -173,7 +181,16 @@ def run_grid(
 
     `builtin` / `ours+builtin` rungs are SKIPPED (owned by mem-whi); requesting
     them is not an error. `held_errors` must be non-empty -- the held-out set is
-    'beads with >=1 trace_error', and the scorer rejects an empty held set."""
+    'beads with >=1 trace_error', and the scorer rejects an empty held set.
+
+    Two caller preconditions (this driver does not enforce them):
+    - `ours_payloads` MUST already be bounded to the task's D6 LOO boundary by the
+      caller (e.g. via `validity.loo_bounded`); `run_grid` injects them verbatim and
+      does not re-filter by `loo_boundary`.
+    - the returned `RewardComponents.rubric_score` is always `None` -- the judge
+      (mem-apg.3b) is a separate post-harvest step; a caller wanting the combined
+      semantic reward must run the judge over each rung's run output and set
+      `rubric_score` before calling `combined_reward`."""
     held = list(held_errors)
     if not held:
         raise ValueError("run_grid needs at least one held error to score against")

@@ -152,11 +152,33 @@ def test_oss_judge_reads_env_overrides(monkeypatch):
         "https://api.openai.com/v1",
         "https://api.anthropic.com",
         "http://api.openai.com/v1",
+        # hostname-based fence: the bare registrable domain and subdomains other than
+        # `api.` must also be rejected (a substring blocklist on "api.openai.com"
+        # missed these).
+        "https://openai.com/v1",
+        "https://gateway.openai.com/v1",
+        "https://anthropic.com/v1",
     ],
 )
 def test_oss_judge_rejects_paid_host(paid):
     with pytest.raises(ValueError, match=r"paid|self-hosted|OSS"):
         OssLlmJudge(base_url=paid)
+
+
+def test_oss_judge_is_frozen_so_fence_cannot_be_mutated_off():
+    # The paid-host fence is a construction invariant; a frozen dataclass stops a
+    # caller reassigning base_url to a paid host after the check has passed.
+    judge = OssLlmJudge()
+    with pytest.raises(Exception):  # noqa: B017 - dataclass FrozenInstanceError
+        judge.base_url = "https://api.openai.com/v1"
+
+
+def test_oss_judge_parses_scientific_notation_score():
+    # A model emitting `1e-3` must parse as 0.001, NOT 1.0 — a bare mantissa match
+    # would silently inflate a near-zero score and corrupt the curve.
+    judge = OssLlmJudge()
+    assert judge.parse_score('{"score": 1e-3}') == pytest.approx(0.001)
+    assert judge.parse_score('{"score": 2.5e-1}') == pytest.approx(0.25)
 
 
 def test_oss_judge_builds_rubric_grounded_prompt():
