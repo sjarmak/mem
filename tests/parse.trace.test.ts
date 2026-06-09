@@ -114,6 +114,182 @@ describe('extractErrors', () => {
   });
 });
 
+describe('extractErrors — non-TS toolchains', () => {
+  it('parses go build/vet diagnostics, with and without a column', () => {
+    const output = ['./pkg/svc.go:42:6: undefined: helper', './main.go:10: missing return'].join(
+      '\n'
+    );
+    const errors = extractErrors(output);
+    expect(errors).toHaveLength(2);
+    expect(errors[0]).toMatchObject({
+      tool: 'go',
+      severity: 'error',
+      file: './pkg/svc.go',
+      line: 42,
+      column: 6,
+      message: 'undefined: helper',
+    });
+    expect(errors[1]).toMatchObject({ tool: 'go', file: './main.go', line: 10 });
+    expect(errors[1].column).toBeUndefined();
+  });
+
+  it('skips go panic stack frames (no `: message` after the line)', () => {
+    expect(extractErrors('\tmain.go:12 +0x1d')).toHaveLength(0);
+  });
+
+  it('parses mypy diagnostics and keeps the [code] for the error class', () => {
+    const output = [
+      'app.py:12: error: Name "os" is not defined  [name-defined]',
+      'app.py:20:5: error: Incompatible return value type  [return-value]',
+      'app.py:20: note: Revealed type is "builtins.int"',
+    ].join('\n');
+    const errors = extractErrors(output);
+    expect(errors).toHaveLength(2); // the note: line is dropped
+    expect(errors[0]).toMatchObject({
+      tool: 'mypy',
+      severity: 'error',
+      file: 'app.py',
+      line: 12,
+      message: 'Name "os" is not defined  [name-defined]',
+    });
+    expect(errors[0].column).toBeUndefined();
+    expect(errors[1]).toMatchObject({ tool: 'mypy', line: 20, column: 5 });
+  });
+
+  it('parses ruff diagnostics, preserving the rule code (with or without [*])', () => {
+    const output = [
+      'app.py:12:5: F401 [*] `os` imported but unused',
+      'app.py:30:1: E501 Line too long',
+    ].join('\n');
+    const errors = extractErrors(output);
+    expect(errors).toHaveLength(2);
+    expect(errors[0]).toMatchObject({
+      tool: 'ruff',
+      file: 'app.py',
+      line: 12,
+      column: 5,
+      message: 'F401 `os` imported but unused',
+    });
+    expect(errors[1].message).toBe('E501 Line too long');
+  });
+
+  it('parses cargo/rustc two-line diagnostics, lifting the E-code into the message', () => {
+    const output = [
+      'error[E0382]: borrow of moved value: `x`',
+      '  --> src/main.rs:12:9',
+      '',
+      'warning: unused variable: `y`',
+      '  --> src/lib.rs:3:5',
+    ].join('\n');
+    const errors = extractErrors(output);
+    expect(errors).toHaveLength(2);
+    expect(errors[0]).toMatchObject({
+      tool: 'cargo',
+      severity: 'error',
+      file: 'src/main.rs',
+      line: 12,
+      column: 9,
+      message: 'E0382: borrow of moved value: `x`',
+    });
+    expect(errors[1]).toMatchObject({ tool: 'cargo', severity: 'warning', file: 'src/lib.rs' });
+  });
+
+  it('drops a cargo header with no following .rs location', () => {
+    const output = ['error: could not compile `mycrate` due to 2 previous errors'].join('\n');
+    expect(extractErrors(output)).toHaveLength(0);
+  });
+
+  it('does not pair a stray error: header with a later cargo location across a gap', () => {
+    // A foreign `error:` summary (e.g. from make/npm) must not reach forward
+    // across intervening output to attach itself to a real cargo `.rs` location.
+    const output = [
+      'error: make target `check` failed',
+      '   Compiling foo v0.1.0',
+      '   Compiling bar v0.2.0',
+      '  --> src/main.rs:5:1',
+    ].join('\n');
+    expect(extractErrors(output)).toHaveLength(0);
+  });
+
+  it('strips ANSI color before matching cargo output', () => {
+    const ESC = String.fromCharCode(27);
+    const output = [
+      `${ESC}[1m${ESC}[31merror[E0277]${ESC}[0m: the trait bound is not satisfied`,
+      `  ${ESC}[34m-->${ESC}[0m src/main.rs:5:1`,
+    ].join('\n');
+    const errors = extractErrors(output);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ tool: 'cargo', file: 'src/main.rs', line: 5, column: 1 });
+  });
+
+  it('parses pytest FAILED/ERROR summary lines (line 0 by design)', () => {
+    const output = [
+      'FAILED tests/test_app.py::test_foo - AssertionError: assert 1 == 2',
+      'ERROR tests/conftest.py::fixture - ValueError: bad fixture',
+      'FAILED tests/test_app.py::test_no_reason',
+    ].join('\n');
+    const errors = extractErrors(output);
+    expect(errors).toHaveLength(2); // the reason-less FAILED carries no class and is skipped
+    expect(errors[0]).toMatchObject({
+      tool: 'pytest',
+      severity: 'error',
+      file: 'tests/test_app.py',
+      line: 0,
+      message: 'AssertionError: assert 1 == 2',
+    });
+    expect(errors[1]).toMatchObject({ tool: 'pytest', file: 'tests/conftest.py' });
+  });
+
+  it('parses gradle javac and kotlinc diagnostics', () => {
+    const output = [
+      '/work/src/main/java/com/x/Foo.java:12: error: cannot find symbol',
+      'e: /work/src/Bar.kt:7:3: unresolved reference: baz',
+      'w: /work/src/Bar.kt:9:1: parameter is never used',
+    ].join('\n');
+    const errors = extractErrors(output);
+    expect(errors).toHaveLength(3);
+    expect(errors).toContainEqual(
+      expect.objectContaining({
+        tool: 'gradle',
+        severity: 'error',
+        file: '/work/src/main/java/com/x/Foo.java',
+        line: 12,
+        message: 'cannot find symbol',
+      })
+    );
+    expect(errors).toContainEqual(
+      expect.objectContaining({
+        tool: 'gradle',
+        severity: 'error',
+        file: '/work/src/Bar.kt',
+        line: 7,
+        column: 3,
+      })
+    );
+    expect(errors).toContainEqual(
+      expect.objectContaining({ tool: 'gradle', severity: 'warning', line: 9 })
+    );
+  });
+
+  it('attributes each line of interleaved polyglot output to exactly one tool', () => {
+    const output = [
+      'src/a.ts(1,1): error TS1005: ; expected.',
+      './pkg/svc.go:42:6: undefined: helper',
+      'app.py:12: error: Name "os" is not defined  [name-defined]',
+      'app.py:30:1: E501 Line too long',
+      'error[E0382]: borrow of moved value: `x`',
+      '  --> src/main.rs:12:9',
+      'FAILED tests/test_app.py::test_foo - AssertionError: boom',
+      '/work/Foo.java:5: error: cannot find symbol',
+      'e: /work/Bar.kt:7:3: unresolved reference: baz',
+    ].join('\n');
+    const byTool = extractErrors(output)
+      .map(e => e.tool)
+      .sort();
+    expect(byTool).toEqual(['cargo', 'go', 'gradle', 'gradle', 'mypy', 'pytest', 'ruff', 'tsc']);
+  });
+});
+
 describe('parseTranscript', () => {
   it('captures a failing tsc execution with its errors', () => {
     const text = transcript(

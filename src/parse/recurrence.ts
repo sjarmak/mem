@@ -49,22 +49,46 @@ export interface RecurrenceOptions {
   minConfidence?: number;
 }
 
-/** The error-class half of a failure signature: an explicit diagnostic code
- * when present (`TS2345`), else an appended ESLint rule id (`rule/name`), else a
- * digit-normalized, length-capped message prefix. The fallback is a deliberate
+/** Per-tool extractor for the explicit diagnostic-code half of a signature, each
+ * lifting the stable class token from that tool's native message position: a tsc
+ * code (`TS2345`), an ESLint rule id (`(no-console)`), a mypy `[name-defined]`, a
+ * leading ruff code (`F401`), a cargo/rustc `E0382`, or a pytest exception type
+ * (`AssertionError`). Tool-gating is deliberate, not incidental: a tool-blind
+ * `(...)$` rule wrongly lifted `int` from a go message like `…want (int))`, and a
+ * tool-blind `TS\d+` rule fired on any tool whose message merely contained that
+ * token. A tool with no entry (go, gradle) — or whose message lacks its code —
+ * falls through to {@link classFallback}. `Partial` is load-bearing: it makes the
+ * absent-tool case (`go`, `gradle`) an honest `RegExp | undefined`, so the
+ * optional chain in {@link errorClass} is type-checked rather than an unverified
+ * runtime guard. */
+const CLASS_BY_TOOL: Readonly<Partial<Record<string, RegExp>>> = {
+  tsc: /\b(TS\d+)\b/,
+  eslint: /\(([^)]+)\)\s*$/,
+  mypy: /\[([a-z][\w-]*)\]\s*$/,
+  ruff: /^([A-Z]+\d+)\b/,
+  cargo: /\b(E\d{3,})\b/,
+  pytest: /\b(\w*(?:Error|Exception|Failed))\b/,
+};
+
+/** The fallback class for a tool with no code entry, or a message that didn't
+ * carry its code: a digit-normalized, length-capped message prefix. A deliberate
  * *similarity-merge* threshold (the ZFC calibrated-threshold exception, not a
- * semantic judgment): it only fires for tools without a code or rule, collapsing
- * messages that agree once digits are masked. Today's extractors (tsc, eslint)
- * always hit the code/rule branches; the fallback keeps the function total for
- * future extractors and externally-built errors. */
+ * semantic judgment) — it collapses messages that agree once digits are masked.
+ * For codeless toolchains (go, gradle/javac) this is the intended degraded mode:
+ * identifier-free messages (`undefined: helper`) recur well; identifier-bearing
+ * ones recur only when the embedded names happen to match. */
+function classFallback(message: string): string {
+  return message.toLowerCase().replace(/\d+/g, '#').replace(/\s+/g, ' ').trim().slice(0, 80);
+}
+
+/** The error-class half of a failure signature — see {@link CLASS_BY_TOOL} for
+ * the per-tool code lift and {@link classFallback} for the codeless default. */
 export function errorClass(error: TraceError): string {
-  const code = /\b(TS\d+)\b/.exec(error.message);
-  if (code) return code[1];
-
-  const rule = /\(([^)]+)\)\s*$/.exec(error.message);
-  if (rule) return rule[1];
-
-  return error.message.toLowerCase().replace(/\d+/g, '#').replace(/\s+/g, ' ').trim().slice(0, 80);
+  const match = CLASS_BY_TOOL[error.tool]?.exec(error.message);
+  // Cap the lifted code the same way classFallback caps its prefix, so a
+  // pathologically long token (e.g. a fully-qualified pytest exception path)
+  // can't bloat the persisted signature.
+  return match ? match[1].slice(0, 80) : classFallback(error.message);
 }
 
 /** Normalize a file path for cross-trace comparison: forward slashes, no leading

@@ -36,6 +36,35 @@ describe('errorClass', () => {
     const b = errorClass(tsError({ message: 'Process exited with code 99' }));
     expect(a).toBe(b); // digits collapsed to '#', so different exit codes share a class
   });
+
+  it('lifts each non-TS toolchain code from its native message position', () => {
+    expect(
+      errorClass(tsError({ tool: 'mypy', message: 'Incompatible return value [return-value]' }))
+    ).toBe('return-value');
+    expect(errorClass(tsError({ tool: 'ruff', message: 'F401 `os` imported but unused' }))).toBe(
+      'F401'
+    );
+    expect(
+      errorClass(tsError({ tool: 'cargo', message: 'E0382: borrow of moved value: `x`' }))
+    ).toBe('E0382');
+    expect(errorClass(tsError({ tool: 'pytest', message: 'AssertionError: assert 1 == 2' }))).toBe(
+      'AssertionError'
+    );
+  });
+
+  it('is tool-gated: a codeless tool never lifts an incidental trailing paren', () => {
+    // The go message ends in `)`; a tool-blind `(...)$` rule would wrongly key on
+    // `int`. go has no code entry, so it must fall back to the normalized message.
+    expect(
+      errorClass(tsError({ tool: 'go', message: 'not enough arguments (have (), want (int))' }))
+    ).toBe('not enough arguments (have (), want (int))');
+  });
+
+  it('is tool-gated: a TS-shaped token in another tool does not read as a tsc code', () => {
+    expect(errorClass(tsError({ tool: 'go', message: 'cannot find TS2345 in scope' }))).not.toBe(
+      'TS2345'
+    );
+  });
 });
 
 describe('failureSignature', () => {
@@ -45,6 +74,27 @@ describe('failureSignature', () => {
 
   it('separates different lines and tools', () => {
     expect(failureSignature(tsError({ line: 1 }))).not.toBe(failureSignature(tsError({ line: 2 })));
+  });
+
+  it('builds a canonical signature for each non-TS toolchain', () => {
+    expect(
+      failureSignature({
+        tool: 'go',
+        severity: 'error',
+        message: 'undefined: helper',
+        file: './pkg/svc.go',
+        line: 42,
+      })
+    ).toBe('go:pkg/svc.go:42:undefined: helper');
+    expect(
+      failureSignature({
+        tool: 'pytest',
+        severity: 'error',
+        message: 'AssertionError: assert 1 == 2',
+        file: 'tests/test_app.py',
+        line: 0,
+      })
+    ).toBe('pytest:tests/test_app.py:0:AssertionError');
   });
 });
 
