@@ -30,7 +30,8 @@ export interface ParsedTrace {
   /** The de-duplicated union of every file:line error across all executions. */
   errors: TraceError[];
   /** Run-level metadata (tokens, model, harness, tool-call shape, turns, span).
-   * Absent for a transcript with no user/assistant entries. */
+   * Absent when the transcript has no user/assistant entries, or when no entry
+   * carries a `sessionId` (the run's required natural key). */
   run?: TraceRun;
 }
 
@@ -145,9 +146,11 @@ function newRunAccumulator(): RunAccumulator {
 }
 
 /** A non-negative integer, or 0 — usage fields are summed, so a missing or
- * malformed value contributes nothing rather than poisoning the total. */
+ * malformed value contributes nothing rather than poisoning the total. A
+ * non-integer (e.g. a malformed `10.5`) is truncated so the parser's output is
+ * always store-safe against the schema's `int()` token columns. */
 function asCount(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
 }
 
 /** Fold one parsed entry into the run accumulator (mutates `acc` in place — it
@@ -187,7 +190,8 @@ function foldRunEntry(acc: RunAccumulator, entry: TranscriptEntry): void {
 }
 
 /** Project the accumulator into a {@link TraceRun}, or `undefined` when the
- * transcript held no user/assistant turn (nothing to attribute a run to). */
+ * transcript held no user/assistant turn, or carried no `sessionId` to key the
+ * run on (the `NOT NULL` session_uuid column has nowhere to store such a run). */
 function finalizeRun(acc: RunAccumulator): TraceRun | undefined {
   if (!acc.seen || acc.session_uuid === undefined) return undefined;
   return {
@@ -199,7 +203,7 @@ function finalizeRun(acc: RunAccumulator): TraceRun | undefined {
     cache_creation_tokens: acc.cache_creation_tokens,
     cache_read_tokens: acc.cache_read_tokens,
     n_tool_calls: acc.n_tool_calls,
-    tool_calls_by_type: acc.tool_calls_by_type,
+    tool_calls_by_type: { ...acc.tool_calls_by_type },
     n_turns: acc.n_turns,
     ...(acc.started_at !== undefined && { started_at: acc.started_at }),
     ...(acc.ended_at !== undefined && { ended_at: acc.ended_at }),

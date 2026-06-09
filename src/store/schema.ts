@@ -139,7 +139,11 @@ CREATE TABLE trace_runs (
   n_turns               INTEGER NOT NULL,
   started_at            TEXT,
   ended_at              TEXT,
-  outcome               TEXT
+  outcome               TEXT,
+  -- Enforce the natural key in SQL, not just the writer's delete-then-insert:
+  -- a future write path that skips the delete turns a duplicate into a loud
+  -- failure here rather than a silent double row that runsFor would return.
+  UNIQUE(work_id, session_uuid)
 );
 CREATE INDEX idx_runs_work    ON trace_runs(work_id);
 CREATE INDEX idx_runs_session ON trace_runs(session_uuid);

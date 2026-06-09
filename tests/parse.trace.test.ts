@@ -480,6 +480,23 @@ describe('parseTranscript — run metadata', () => {
     expect(parseTranscript(text).run).toBeUndefined();
   });
 
+  it('returns no run when turns exist but no entry carries a sessionId', () => {
+    const text = transcript(
+      userTurn({ timestamp: '2026-06-01T00:00:00Z' }),
+      assistantEntry({ stop_reason: 'end_turn', usage: { input_tokens: 1 } })
+    );
+    expect(parseTranscript(text).run).toBeUndefined();
+  });
+
+  it('truncates a non-integer usage value so the sum stays store-safe', () => {
+    const text = transcript(
+      assistantEntry({ sessionId: 'sess-3', usage: { input_tokens: 10.7, output_tokens: 4 } })
+    );
+    const { run } = parseTranscript(text);
+    expect(run?.input_tokens).toBe(10);
+    expect(Number.isInteger(run?.input_tokens)).toBe(true);
+  });
+
   it('leaves optional fields absent when the transcript omits them', () => {
     const text = transcript(
       assistantEntry({ sessionId: 'sess-2', usage: { input_tokens: 3, output_tokens: 4 } })

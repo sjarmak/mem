@@ -430,6 +430,25 @@ describe('trace_runs projection (run-level metadata)', () => {
     expect(runsFor(db, 'demo-1a2b')).toEqual([]);
   });
 
+  it('attributes to the first agent when no agent owns the transcript', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [
+      withRun({
+        agents: [
+          { agent_id: 'gc-2001', role: 'polecat', trace_ref: '/traces/other.jsonl' },
+          { agent_id: 'gc-2002', role: 'refinery' },
+        ],
+      }),
+    ]);
+    expect(runsFor(db, 'demo-1a2b')[0].agent_id).toBe('gc-2001');
+  });
+
+  it('attributes to null when the record carries no agents', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [withRun({ agents: [] })]);
+    expect(runsFor(db, 'demo-1a2b')[0].agent_id).toBeNull();
+  });
+
   it('rebuilds the run row on re-ingest — never drifts, never duplicates', () => {
     const db = openStore(':memory:');
     writeRecords(db, [withRun()]);
