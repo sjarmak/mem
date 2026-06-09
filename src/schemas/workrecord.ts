@@ -62,6 +62,40 @@ export const OutcomeSchema = z.object({
 
 export type Outcome = z.infer<typeof OutcomeSchema>;
 
+/** Locally-derived environment baseline (git-provenance ingest). Distinct from
+ * `outcome`: `outcome` is the *verifiable* GitHub label (PR/CI) and its
+ * `base_commit` is the PR's authoritative base-branch tip; `provenance` is the
+ * repo + commit a session STARTED from, reconstructed from `gc.work_dir` and the
+ * bead's start time when no PR or base SHA was ever recorded. It exists to make a
+ * WorkRecord replayable as a CodeScaleBench-style git-checkout environment.
+ *
+ * `base_commit` is an APPROXIMATION: gc records the base *branch* but never the
+ * exact base SHA, so the commit is derived by date — the newest commit on
+ * `base_branch` at or before `started_at`
+ * (`git rev-list -1 --before=<started_at> <base_branch>`), NOT a guaranteed-exact
+ * base. It is resolved ONLY when a `base_branch` is recorded: resolving against
+ * the work_dir's HEAD would walk the agent's own feature branch (whose history
+ * may contain the solution) — a train/test leak — so an absent base_branch is
+ * terminal `unresolved`, never guessed. `history_state` is self-describing:
+ * `commit-by-date` when a commit resolved, `unresolved` when the work_dir is not
+ * a reachable local repo, no base_branch was recorded, or no commit predates
+ * `started_at`. */
+export const ProvenanceSchema = z.object({
+  work_dir: z.string().min(1),
+  repo: z.string().min(1),
+  base_branch: z.string().min(1).optional(),
+  // A full 40-hex commit SHA (what `git rev-list -1` emits). The format guard is
+  // the boundary contract: any other construction path (or git output corrupted
+  // by argument injection) fails the parse rather than storing a bad anchor.
+  base_commit: z
+    .string()
+    .regex(/^[0-9a-f]{40}$/)
+    .optional(),
+  history_state: z.enum(['commit-by-date', 'unresolved']),
+});
+
+export type Provenance = z.infer<typeof ProvenanceSchema>;
+
 /** Extracted memory signal. Shapes are open until P1.6+/Phase 2 settle them. */
 export const SignalSchema = z.object({
   deterministic: z.record(z.string(), z.unknown()).default({}),
@@ -93,6 +127,7 @@ export const WorkRecordSchema = z.object({
   agents: z.array(AgentRefSchema).default([]),
   trace: TraceRefSchema.optional(),
   outcome: OutcomeSchema.optional(),
+  provenance: ProvenanceSchema.optional(),
   signal: SignalSchema.optional(),
   // Factory form: a literal default would share one array instance across
   // every parsed record (zod does not deep-clone nested defaults).

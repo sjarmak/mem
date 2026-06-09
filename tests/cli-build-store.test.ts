@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { attachAndParse, buildStoreFromRecords } from '../src/cli/commands/build-store.js';
+import { attachProvenance } from '../src/ingest/provenance.js';
 import { openStore, queryRecords, workIdsBySignature } from '../src/store/index.js';
 import { failureSignature } from '../src/parse/recurrence.js';
 import { WorkRecordSchema, type WorkRecord } from '../src/schemas/workrecord.js';
@@ -123,5 +124,57 @@ describe('attachAndParse (P1.3 resolve → P1.6 parse)', () => {
     });
     const parsed = attachAndParse([rec], { resolve: () => null, read: () => '' });
     expect(parsed[0].trace).toBeUndefined();
+  });
+});
+
+describe('build-store provenance projection', () => {
+  it('promotes repo / base_commit / commit_state into queryable columns', () => {
+    const rec = WorkRecordSchema.parse({
+      work_id: 'w-prov',
+      rig: 'mem',
+      title: 'work with a git baseline',
+      metadata: { 'gc.work_dir': '/home/ds/projects/mem', 'gc.var.base_branch': 'main' },
+      lifecycle: {
+        created: '2026-06-01T00:00:00Z',
+        started: '2026-06-05 03:24:03',
+        status: 'closed',
+      },
+    });
+    const sha = '0123456789abcdef0123456789abcdef01234567';
+    const withProv = attachProvenance([rec], { run: () => `${sha}\n` });
+
+    const path = join(dir, 'store.db');
+    buildStoreFromRecords(path, withProv);
+    const db = openStore(path);
+    try {
+      const row = db
+        .prepare('SELECT repo, base_commit, commit_state FROM work_records WHERE work_id = ?')
+        .get('w-prov') as { repo: string; base_commit: string; commit_state: string };
+      expect(row).toEqual({ repo: 'mem', base_commit: sha, commit_state: 'commit-by-date' });
+
+      // Round-trips through the JSON blob as well.
+      expect(queryRecords(db, { rig: 'mem' })[0].provenance?.base_commit).toBe(sha);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('leaves the provenance columns NULL for a record without a work_dir', () => {
+    const rec = record('w-noprov', 'mem');
+    const path = join(dir, 'store.db');
+    buildStoreFromRecords(path, [rec]);
+    const db = openStore(path);
+    try {
+      const row = db
+        .prepare('SELECT repo, base_commit, commit_state FROM work_records WHERE work_id = ?')
+        .get('w-noprov') as {
+        repo: string | null;
+        base_commit: string | null;
+        commit_state: string | null;
+      };
+      expect(row).toEqual({ repo: null, base_commit: null, commit_state: null });
+    } finally {
+      db.close();
+    }
   });
 });

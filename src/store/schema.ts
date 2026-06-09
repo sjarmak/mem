@@ -17,7 +17,7 @@
  * yet populate convoy/supersedes, so those columns carry data only when
  * upstream provides it.
  */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const SCHEMA_DDL = `
 CREATE TABLE work_records (
@@ -37,6 +37,14 @@ CREATE TABLE work_records (
   ci           TEXT,
   trace_path   TEXT,
   n_turns      INTEGER,
+  -- Git-provenance projection (locally-derived env baseline; see workrecord.ts
+  -- ProvenanceSchema). repo + base_commit are the git-checkout anchors for a
+  -- future real-exec replay; commit_state records whether base_commit is a
+  -- commit-by-date approximation ('commit-by-date') or absent ('unresolved').
+  -- Distinct from commit_sha above, which is the verifiable GitHub outcome SHA.
+  repo         TEXT,
+  base_commit  TEXT,
+  commit_state TEXT,
   record       TEXT NOT NULL
 );
 CREATE INDEX idx_records_rig          ON work_records(rig);
@@ -45,6 +53,7 @@ CREATE INDEX idx_records_started      ON work_records(started_at);
 CREATE INDEX idx_records_closed       ON work_records(closed_at);
 CREATE INDEX idx_records_pr           ON work_records(pr);
 CREATE INDEX idx_records_external_ref ON work_records(external_ref);
+CREATE INDEX idx_records_repo         ON work_records(repo);
 
 CREATE TABLE record_agents (
   work_id   TEXT NOT NULL REFERENCES work_records(work_id),
