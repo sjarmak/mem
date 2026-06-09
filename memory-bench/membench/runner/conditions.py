@@ -25,7 +25,7 @@ from membench.schemas.trace import Trace
 
 @dataclass
 class StepTrial:
-    """One (step × condition) trial — mirrors §14 harbor_trial_output + telemetry."""
+    """One (step x condition) trial — mirrors §14 harbor_trial_output + telemetry."""
 
     trial_id: str
     sequence_id: str

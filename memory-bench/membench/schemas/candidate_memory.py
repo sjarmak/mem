@@ -5,12 +5,12 @@ phase; this module defines only the schema so traces and reference systems can b
 typed against it now.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class MemoryType(str, Enum):
+class MemoryType(StrEnum):
     """`candidate_memory.type` — the two-level taxonomy's type axis (§8).
 
     Reconciliation (plan §A, DIV-5): this supersedes the pre-spec flat 4-type list.
@@ -26,7 +26,7 @@ class MemoryType(str, Enum):
     FAILURE_PATTERN = "failure_pattern"
 
 
-class RetentionPolicy(str, Enum):
+class RetentionPolicy(StrEnum):
     KEEP = "keep"
     DISCARD = "discard"
     TTL = "ttl"

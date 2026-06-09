@@ -43,9 +43,7 @@ def outcome_labels(record: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple(str(outcome[key]) for key in _IDENTIFYING_KEYS if outcome.get(key))
 
 
-def assert_no_outcome_leak(
-    agent_readable: str | Mapping[str, str], labels: Iterable[str]
-) -> None:
+def assert_no_outcome_leak(agent_readable: str | Mapping[str, str], labels: Iterable[str]) -> None:
     """Assert no value in `labels` appears in `agent_readable` (a string, or a
     filename->content mapping). The match is case-insensitive and blank labels are
     ignored so they cannot match every document. Errs toward over-catching — the

@@ -72,7 +72,7 @@ def test_replay_emits_otel_spans():
     spans = replay_to_spans(run)
 
     roots = [s for s in spans if s["name"] == "memory_eval.replay"]
-    # one root per (arm, track): none ×1 + ours ×2 tracks.
+    # one root per (arm, track): none x1 + ours x2 tracks.
     assert len(roots) == 3
     ours_cross = next(
         s

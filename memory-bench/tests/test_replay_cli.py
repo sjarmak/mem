@@ -42,11 +42,16 @@ def test_replay_cli_end_to_end(tmp_path):
     rc = cli.main(
         [
             "replay",
-            "--store", str(db),
-            "--work-id", "B",
-            "--arms", "none,ours",
-            "--mem-bin", str(MEM_BIN),
-            "--out", str(out),
+            "--store",
+            str(db),
+            "--work-id",
+            "B",
+            "--arms",
+            "none,ours",
+            "--mem-bin",
+            str(MEM_BIN),
+            "--out",
+            str(out),
         ]
     )
     assert rc == 0
@@ -71,6 +76,17 @@ def test_replay_cli_unknown_arm_surfaces_pointer(tmp_path):
     # `builtin` must fail loudly with its mem-whi pointer, not silently skip.
     with pytest.raises(ValueError, match="mem-whi"):
         cli.main(
-            ["replay", "--store", str(db), "--work-id", "B", "--arms", "builtin",
-             "--mem-bin", str(MEM_BIN), "--out", str(tmp_path / "r")]
+            [
+                "replay",
+                "--store",
+                str(db),
+                "--work-id",
+                "B",
+                "--arms",
+                "builtin",
+                "--mem-bin",
+                str(MEM_BIN),
+                "--out",
+                str(tmp_path / "r"),
+            ]
         )

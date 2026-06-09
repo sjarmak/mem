@@ -42,7 +42,7 @@ class MemoryConfig(BaseModel):
 
 
 class ExperimentConfig(BaseModel):
-    """A full experiment: an agent × a memory system × a dataset, run under the
+    """A full experiment: an agent x a memory system x a dataset, run under the
     requested conditions (§3 / §4)."""
 
     experiment_id: str

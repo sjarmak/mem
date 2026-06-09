@@ -1,9 +1,9 @@
 """§4 — the three required evaluation conditions."""
 
-from enum import Enum
+from enum import StrEnum
 
 
-class Condition(str, Enum):
+class Condition(StrEnum):
     """The three conditions every benchmark sequence must support (§4)."""
 
     NO_MEMORY = "no_memory"

@@ -30,9 +30,7 @@ class OracleMemory(MemorySystem):
 
     def retrieve(self, request: RetrievalRequest, ctx: StepContext) -> RetrieveResult:
         requested_ids = request.requested_ids
-        payloads = {
-            mid: self._store[mid] for mid in requested_ids if mid in self._store
-        }
+        payloads = {mid: self._store[mid] for mid in requested_ids if mid in self._store}
         event = MemoryEvent(
             event_id=ctx.clock.event_id(),
             trial_id=ctx.trial_id,

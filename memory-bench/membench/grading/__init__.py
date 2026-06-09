@@ -8,7 +8,7 @@ or paid run. Named `grading` (not `oracle`) to avoid colliding with the existing
 `OracleMemory` memory-ceiling condition (architect finding H3).
 """
 
-from membench.grading.ablation import AblationDesign, AblationSource, DEFAULT_RUNGS
+from membench.grading.ablation import DEFAULT_RUNGS, AblationDesign, AblationSource
 from membench.grading.base import Feasibility, OutcomeSource
 from membench.grading.coverage import (
     CoverageSummary,

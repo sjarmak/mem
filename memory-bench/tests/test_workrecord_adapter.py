@@ -13,7 +13,13 @@ from membench.grading import AblationSource, OutcomeLeakError
 from membench.harbor.workrecord_adapter import WorkRecordLadderAdapter
 
 
-def _record(work_id="w1", rig="mem", title="Fix the broken parser", started="2026-01-10T00:00:00Z", **outcome):
+def _record(
+    work_id="w1",
+    rig="mem",
+    title="Fix the broken parser",
+    started="2026-01-10T00:00:00Z",
+    **outcome,
+):
     rec = {
         "work_id": work_id,
         "rig": rig,

@@ -7,6 +7,7 @@ relationship is also the task-validity gate (plan §A, DIV-3).
 """
 
 from dataclasses import asdict, dataclass, field
+from typing import Any
 
 from membench.runner.conditions import SequenceRun, StepTrial
 from membench.schemas.conditions import Condition
@@ -29,7 +30,10 @@ class ConditionSummary:
 
 def _summarize(condition: Condition, trials: list[StepTrial]) -> ConditionSummary:
     n = len(trials)
-    mean = lambda xs: sum(xs) / n if n else 0.0
+
+    def mean(xs: list[float]) -> float:
+        return sum(xs) / n if n else 0.0
+
     return ConditionSummary(
         condition=condition.value,
         n_steps=n,
@@ -51,7 +55,9 @@ def _interpret(summaries: dict[str, ConditionSummary]) -> str:
         return "incomplete: all three conditions required for interpretation"
 
     n, o, m = none.mean_reward, oracle.mean_reward, mem.mean_reward
-    approx = lambda a, b: abs(a - b) <= EPSILON
+
+    def approx(a: float, b: float) -> bool:
+        return abs(a - b) <= EPSILON
 
     if approx(o, n):
         return "oracle ≈ no_memory: task is not discriminating — redesign it (DIV-3 gate fails)"
@@ -62,7 +68,10 @@ def _interpret(summaries: dict[str, ConditionSummary]) -> str:
     if approx(m, o):
         return "memory ≈ oracle > no_memory: memory system is performing well on this task class"
     if o > m > n:
-        return "oracle > memory > no_memory: memory helps, but retrieval/ranking/synthesis limits gains"
+        return (
+            "oracle > memory > no_memory: memory helps,"
+            " but retrieval/ranking/synthesis limits gains"
+        )
     return "mixed: inspect per-step metrics"
 
 
@@ -73,7 +82,7 @@ class ComparisonReport:
     summaries: dict[str, ConditionSummary] = field(default_factory=dict)
     interpretation: str = ""
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "sequence_id": self.sequence_id,
             "experiment_id": self.experiment_id,
@@ -90,7 +99,10 @@ class ComparisonReport:
         lines = [
             f"# Comparison — {self.sequence_id} ({self.experiment_id})",
             "",
-            "| condition | steps | mean_reward | pass_rate | tokens | mem_calls | precision@k | recall@k | write_hit |",
+            (
+                "| condition | steps | mean_reward | pass_rate | tokens"
+                " | mem_calls | precision@k | recall@k | write_hit |"
+            ),
             "|---|---|---|---|---|---|---|---|---|",
         ]
         for c in order:

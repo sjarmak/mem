@@ -22,6 +22,7 @@ result is never mistaken for an empty corpus.
 """
 
 from dataclasses import asdict, dataclass
+from typing import Any
 
 from membench.replay import ReplayRun
 
@@ -74,7 +75,7 @@ def build_arm_vectors(run: ReplayRun) -> list[ArmAxisVector]:
     ]
 
 
-def to_dict(run: ReplayRun) -> dict:
+def to_dict(run: ReplayRun) -> dict[str, Any]:
     return {
         "work_id": run.work_id,
         "rig": run.rig,
@@ -90,9 +91,15 @@ def _fmt(value: float | None) -> str:
 def to_markdown(run: ReplayRun) -> str:
     lines = [
         f"# Replay 5-axis (raw) — {run.work_id} ({run.rig})",
-        f"_LOO-eligible corpus: {run.eligible_count} record(s). Axes are raw — no composite (fork 2)._",
+        (
+            f"_LOO-eligible corpus: {run.eligible_count} record(s)."
+            " Axes are raw — no composite (fork 2)._"
+        ),
         "",
-        "| arm | track | task_perf | token_budget (chars) | latency_ms | privacy | interruption | retrieved | matched | near_dup |",
+        (
+            "| arm | track | task_perf | token_budget (chars) | latency_ms"
+            " | privacy | interruption | retrieved | matched | near_dup |"
+        ),
         "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for v in build_arm_vectors(run):

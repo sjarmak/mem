@@ -75,9 +75,9 @@ def compute_metrics(
         expected_memory_written=bool(expected_writes)
         and set(expected_writes).issubset(set(written)),
         write_hit_rate=_ratio(len(written_expected), len(expected_writes)),
-        write_miss_rate=1.0 - _ratio(len(written_expected), len(expected_writes))
-        if expected_writes
-        else 0.0,
+        write_miss_rate=(
+            1.0 - _ratio(len(written_expected), len(expected_writes)) if expected_writes else 0.0
+        ),
         noise_write_rate=_ratio(len(written) - len(written_expected), len(written)),
     )
 

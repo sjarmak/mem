@@ -1,4 +1,4 @@
-"""Emit a benchmark sequence as Harbor tasks, one task per (step × condition).
+"""Emit a benchmark sequence as Harbor tasks, one task per (step x condition).
 
 The condition is materialized into the task the way a real agent would experience
 it:
@@ -27,14 +27,15 @@ RUN mkdir -p /root/memory
 """
 
 
+def _safe(s: str) -> str:
+    return "".join(c if c.isalnum() or c in "-" else "-" for c in s.lower())
+
+
 def _task_name(seq_id: str, condition: Condition, step_id: str) -> str:
-    safe = lambda s: "".join(c if c.isalnum() or c in "-" else "-" for c in s.lower())
-    return f"membench/{safe(seq_id)}-{condition.value.replace('_', '-')}-{safe(step_id)}"
+    return f"membench/{_safe(seq_id)}-{condition.value.replace('_', '-')}-{_safe(step_id)}"
 
 
-def _instruction_md(
-    step: SequenceStep, condition: Condition, oracle_pool: dict[str, str]
-) -> str:
+def _instruction_md(step: SequenceStep, condition: Condition, oracle_pool: dict[str, str]) -> str:
     parts = [f"# {step.step_id}", "", step.user_request, ""]
     if condition is Condition.ORACLE_MEMORY and step.expected_memory_reads:
         parts += ["## Provided context (oracle memory)", ""]
@@ -157,14 +158,8 @@ class SequenceAdapter:
                 (task_dir / "instruction.md").write_text(
                     _instruction_md(step, condition, oracle_pool), encoding="utf-8"
                 )
-                (task_dir / "environment" / "Dockerfile").write_text(
-                    _DOCKERFILE, encoding="utf-8"
-                )
-                (task_dir / "tests" / "test.sh").write_text(
-                    _test_sh(step), encoding="utf-8"
-                )
-                (task_dir / "solution" / "solve.sh").write_text(
-                    _solve_sh(step), encoding="utf-8"
-                )
+                (task_dir / "environment" / "Dockerfile").write_text(_DOCKERFILE, encoding="utf-8")
+                (task_dir / "tests" / "test.sh").write_text(_test_sh(step), encoding="utf-8")
+                (task_dir / "solution" / "solve.sh").write_text(_solve_sh(step), encoding="utf-8")
                 created.append(task_dir)
         return created

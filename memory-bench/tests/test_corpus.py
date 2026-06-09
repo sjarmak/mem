@@ -6,7 +6,9 @@ from membench.corpus import load_corpus, load_query_work
 from membench.validity import WorkRef
 
 
-def _record(work_id, rig="rigA", closed="2026-01-05T00:00:00Z", started="2026-01-02T00:00:00Z", **kw):
+def _record(
+    work_id, rig="rigA", closed="2026-01-05T00:00:00Z", started="2026-01-02T00:00:00Z", **kw
+):
     return {
         "work_id": work_id,
         "rig": rig,

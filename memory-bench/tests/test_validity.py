@@ -24,7 +24,9 @@ def _ref(work_id, closed=None, **kw):
 
 
 def _query(started="2026-01-10T00:00:00Z", **kw):
-    return QueryWork(work_id=kw.pop("work_id", "B"), rig=kw.pop("rig", "rigA"), started=started, **kw)
+    return QueryWork(
+        work_id=kw.pop("work_id", "B"), rig=kw.pop("rig", "rigA"), started=started, **kw
+    )
 
 
 def test_strict_temporal_cut_excludes_boundary_equal():

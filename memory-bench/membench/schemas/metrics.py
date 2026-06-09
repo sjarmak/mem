@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 class TaskMetrics(BaseModel):
     """§12.1 — task outcome."""
 
-    reward: float = 0.0  # 0–1
+    reward: float = 0.0  # 0-1
     pass_: bool = Field(default=False, alias="pass")
     final_goal_success: bool = False
     verifier_errors: list[str] = Field(default_factory=list)

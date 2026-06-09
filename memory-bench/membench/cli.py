@@ -13,6 +13,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import cast
 
 from membench.corpus import load_corpus, load_query_work
 from membench.dataset import load_sequence
@@ -136,9 +137,13 @@ def main(argv: list[str] | None = None) -> int:
     p_replay.add_argument(
         "--work-id", required=True, dest="work_id", help="the query work to replay (caller-chosen)"
     )
-    p_replay.add_argument("--arms", default="none,ours", help="comma-separated arms (default: none,ours)")
+    p_replay.add_argument(
+        "--arms", default="none,ours", help="comma-separated arms (default: none,ours)"
+    )
     p_replay.add_argument("--mem-bin", default=None, dest="mem_bin", help="path to the mem CLI")
-    p_replay.add_argument("--limit", type=int, default=None, help="max items the `ours` arm returns")
+    p_replay.add_argument(
+        "--limit", type=int, default=None, help="max items the `ours` arm returns"
+    )
     p_replay.add_argument("--out", default="reports", help="output dir (default: reports/)")
     p_replay.set_defaults(func=_cmd_replay)
 
@@ -149,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
     p_gen.set_defaults(func=_cmd_gen_tasks)
 
     args = parser.parse_args(argv)
-    return args.func(args)
+    return cast(int, args.func(args))
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ dependencies = [
 # harbor.TaskConfig only when the package is present (see tests/test_harbor_adapter.py).
 [project.optional-dependencies]
 harbor = ["harbor>=0.3"]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.11", "black>=24.0"]
 
 [project.scripts]
 membench = "membench.cli:main"
@@ -30,3 +30,29 @@ include = ["membench*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# black is the sole formatter (also invoked by the editor's black-on-save hook,
+# which reads this block) — ruff lints but does NOT format, so the two never fight.
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# PEP8 (E) + pyflakes (F) + isort (I) + pyupgrade (UP) + bugbear (B) +
+# simplify (SIM) + comprehensions (C4) + ruff (RUF) + pep8-naming (N).
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF", "N"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+# OpenTelemetry ships no type information for some call sites; allow untyped calls
+# into it without relaxing strictness for our own code.
+[[tool.mypy.overrides]]
+module = ["opentelemetry.*"]
+ignore_missing_imports = true
+disallow_untyped_calls = false

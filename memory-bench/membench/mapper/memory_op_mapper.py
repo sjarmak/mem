@@ -58,9 +58,7 @@ def _tool_verb(concrete_tool: str) -> str:
     return head.split()[0].lower() if head else ""
 
 
-def normalize_operation(
-    concrete_tool: str, backend: MemoryBackend
-) -> MemoryOperation:
+def normalize_operation(concrete_tool: str, backend: MemoryBackend) -> MemoryOperation:
     """Map a concrete tool invocation to its canonical `MemoryOperation`."""
     backend_map = _MAPPING.get(backend)
     if backend_map is None:

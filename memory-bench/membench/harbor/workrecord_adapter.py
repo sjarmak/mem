@@ -110,15 +110,11 @@ class WorkRecordLadderAdapter:
             slug = f"{_safe(self.record['work_id'])}-{_safe(rung)}"
             task_dir = self.output_dir / slug
             if task_dir.exists() and not self.overwrite:
-                raise FileExistsError(
-                    f"Task dir already exists: {task_dir} (pass overwrite=True)"
-                )
+                raise FileExistsError(f"Task dir already exists: {task_dir} (pass overwrite=True)")
             instruction = _instruction_md(self.record, rung)
             task_toml = self._task_toml(f"membench-wr/{slug}", rung, loo_boundary)
             # Mechanical leak guard over every agent-readable file BEFORE any write.
-            assert_no_outcome_leak(
-                {"instruction.md": instruction, "task.toml": task_toml}, labels
-            )
+            assert_no_outcome_leak({"instruction.md": instruction, "task.toml": task_toml}, labels)
             planned.append((task_dir, instruction, task_toml))
 
         created: list[Path] = []

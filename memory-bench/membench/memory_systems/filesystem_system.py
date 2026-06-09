@@ -44,10 +44,7 @@ class FilesystemMemory(MemorySystem):
 
     def _read_all(self) -> dict[str, str]:
         if self._trial_dir is not None:
-            return {
-                md.stem: md.read_text(encoding="utf-8")
-                for md in self._trial_dir.glob("*.md")
-            }
+            return {md.stem: md.read_text(encoding="utf-8") for md in self._trial_dir.glob("*.md")}
         return dict(self._store)
 
     def retrieve(self, request: RetrievalRequest, ctx: StepContext) -> RetrieveResult:
@@ -82,9 +79,7 @@ class FilesystemMemory(MemorySystem):
                 "(use only alphanumerics, '-', '_', '.')"
             )
         if self._trial_dir is not None:
-            (self._trial_dir / f"{_safe_name(memory_id)}.md").write_text(
-                content, encoding="utf-8"
-            )
+            (self._trial_dir / f"{_safe_name(memory_id)}.md").write_text(content, encoding="utf-8")
         else:
             self._store[memory_id] = content
         return MemoryEvent(

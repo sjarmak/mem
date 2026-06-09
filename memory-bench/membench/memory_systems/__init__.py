@@ -14,6 +14,8 @@ The competitive systems (a-mem / mem0 / graphiti / nat) plug in LATER (mem-lvp)
 behind this same `MemorySystem` contract.
 """
 
+from typing import Any
+
 from membench.memory_systems.base import (
     MemorySystem,
     RetrievalRequest,
@@ -47,11 +49,11 @@ _DEFERRED = {
 }
 
 
-def build_memory_system(name: str, **kwargs) -> MemorySystem:
+def build_memory_system(name: str, **kwargs: Any) -> MemorySystem:
     """Factory over the wired arm set. Raises on unknown or deferred names rather
     than silently substituting a default (an unknown memory system is a config
     error, and a deferred one must not masquerade as wired)."""
-    systems = {
+    systems: dict[str, type[MemorySystem]] = {
         "none": NoneMemory,
         "oracle": OracleMemory,
         "filesystem": FilesystemMemory,

@@ -18,7 +18,7 @@ def _experiment():
 def test_runs_all_three_conditions_for_every_step(tmp_path):
     seq = load_sequence(FIXTURE)
     run = run_sequence(seq, _experiment(), fs_base_dir=tmp_path)
-    # 3 steps × 3 conditions = 9 trials.
+    # 3 steps x 3 conditions = 9 trials.
     assert len(run.trials) == 9
     by_cond = run.by_condition()
     assert set(by_cond) == set(Condition)
@@ -45,16 +45,12 @@ def test_memory_enabled_retrieval_and_retention_metrics(tmp_path):
     seq = load_sequence(FIXTURE)
     run = run_sequence(seq, _experiment(), fs_base_dir=tmp_path)
     by_cond = run.by_condition()
-    s3 = next(
-        t for t in by_cond[Condition.MEMORY_ENABLED] if t.step_id == "s3-add-endpoint"
-    )
+    s3 = next(t for t in by_cond[Condition.MEMORY_ENABLED] if t.step_id == "s3-add-endpoint")
     assert s3.metrics.retrieval.recall_at_k == 1.0
     assert s3.metrics.retrieval.relevant_memory_retrieved is True
     assert s3.metrics.retrieval.missed_required_memory_count == 0
 
-    s1 = next(
-        t for t in by_cond[Condition.MEMORY_ENABLED] if t.step_id == "s1-establish-binding"
-    )
+    s1 = next(t for t in by_cond[Condition.MEMORY_ENABLED] if t.step_id == "s1-establish-binding")
     assert s1.metrics.retention.expected_memory_written is True
     assert s1.metrics.retention.write_hit_rate == 1.0
 
@@ -94,6 +90,4 @@ def test_establishing_steps_emit_no_phantom_retrieve(tmp_path):
         t for t in by_cond[Condition.MEMORY_ENABLED] if t.step_id == "s1-establish-binding"
     )
     assert mem_s1.metrics.efficiency.memory_tool_calls == 1
-    assert all(
-        e.normalized_operation.value == "write" for e in mem_s1.trace.memory_events
-    )
+    assert all(e.normalized_operation.value == "write" for e in mem_s1.trace.memory_events)

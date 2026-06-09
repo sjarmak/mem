@@ -24,7 +24,7 @@ GEN_AI_SYSTEM = "anthropic"
 
 
 def _span_to_dict(span: ReadableSpan) -> dict[str, Any]:
-    ctx = span.get_span_context()
+    ctx = span.get_span_context()  # type: ignore[no-untyped-call]  # OTel ships no stubs here
     parent = span.parent
     return {
         "name": span.name,
@@ -103,7 +103,9 @@ def replay_to_spans(run: "ReplayRun") -> list[dict[str, Any]]:
             root.set_attribute("membench.storage_tier", result.event.backend.value)
             root.set_attribute("membench.retrieval.total_matched", result.total_matched)
             root.set_attribute("membench.retrieval.near_duplicate_top", result.near_duplicate_top)
-            root.set_attribute("membench.retrieval.injected_context_chars", result.injected_context_chars)
+            root.set_attribute(
+                "membench.retrieval.injected_context_chars", result.injected_context_chars
+            )
             root.set_attribute("membench.retrieval.eligible_count", result.eligible_count)
 
             ev = result.event

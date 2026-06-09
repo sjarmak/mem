@@ -9,7 +9,7 @@ from tests.paths import FIXTURE
 def test_emits_real_harbor_task_shape(tmp_path):
     seq = load_sequence(FIXTURE)
     created = SequenceAdapter(seq, tmp_path).run()
-    # 3 steps × 3 conditions.
+    # 3 steps x 3 conditions.
     assert len(created) == 9
     for task_dir in created:
         assert (task_dir / "task.toml").is_file()
@@ -29,9 +29,7 @@ def test_verifier_writes_canonical_reward_path(tmp_path):
 
 def test_oracle_condition_injects_memory_into_instruction(tmp_path):
     seq = load_sequence(FIXTURE)
-    created = SequenceAdapter(
-        seq, tmp_path, conditions=[Condition.ORACLE_MEMORY]
-    ).run()
+    created = SequenceAdapter(seq, tmp_path, conditions=[Condition.ORACLE_MEMORY]).run()
     s3 = next(d for d in created if d.name.endswith("s3-add-endpoint"))
     instruction = (s3 / "instruction.md").read_text()
     assert "Provided context (oracle memory)" in instruction
@@ -51,9 +49,7 @@ def test_generated_verifier_scores_reward_correctly(tmp_path):
     import subprocess
 
     seq = load_sequence(FIXTURE)
-    created = SequenceAdapter(
-        seq, tmp_path / "tasks", conditions=[Condition.MEMORY_ENABLED]
-    ).run()
+    created = SequenceAdapter(seq, tmp_path / "tasks", conditions=[Condition.MEMORY_ENABLED]).run()
     s3 = next(d for d in created if d.name.endswith("s3-add-endpoint"))
 
     reward_file = tmp_path / "reward.txt"
@@ -77,9 +73,7 @@ def test_generated_verifier_scores_reward_correctly(tmp_path):
     assert abs(float(reward_file.read_text()) - 1 / 3) < 1e-3
 
     # All three check markers present → reward 1.
-    answer_file.write_text(
-        "endpoint-created\napplies-loopback-binding\nuses-shared-types\n"
-    )
+    answer_file.write_text("endpoint-created\napplies-loopback-binding\nuses-shared-types\n")
     subprocess.run(["bash", str(runnable)], check=True)
     assert float(reward_file.read_text()) == 1.0
 
@@ -87,9 +81,7 @@ def test_generated_verifier_scores_reward_correctly(tmp_path):
 def test_task_toml_parses_with_harbor_if_available(tmp_path):
     harbor_config = pytest.importorskip("harbor.models.task.config")
     seq = load_sequence(FIXTURE)
-    created = SequenceAdapter(
-        seq, tmp_path, conditions=[Condition.MEMORY_ENABLED]
-    ).run()
+    created = SequenceAdapter(seq, tmp_path, conditions=[Condition.MEMORY_ENABLED]).run()
     toml_text = (created[0] / "task.toml").read_text()
     cfg = harbor_config.TaskConfig.model_validate_toml(toml_text)
     assert cfg.task.name.startswith("membench/")

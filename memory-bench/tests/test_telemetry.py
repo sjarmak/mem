@@ -15,11 +15,7 @@ def _trace_for(condition, tmp_path):
         dataset_id="d",
     )
     run = run_sequence(seq, exp, fs_base_dir=tmp_path)
-    return next(
-        t.trace
-        for t in run.by_condition()[condition]
-        if t.step_id == "s3-add-endpoint"
-    )
+    return next(t.trace for t in run.by_condition()[condition] if t.step_id == "s3-add-endpoint")
 
 
 def test_otel_spans_have_genai_root_and_memory_children(tmp_path):

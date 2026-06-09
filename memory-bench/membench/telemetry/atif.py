@@ -39,7 +39,5 @@ def trace_to_atif(trace: Trace) -> dict[str, Any]:
         "memory_config_id": trace.memory_config_id,
         "actions": actions,
         "final_answer": trace.final_answer,
-        "reward": float(trace.verifier_result.get("reward", 0.0))
-        if trace.verifier_result
-        else 0.0,
+        "reward": float(trace.verifier_result.get("reward", 0.0)) if trace.verifier_result else 0.0,
     }

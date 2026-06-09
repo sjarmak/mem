@@ -80,9 +80,7 @@ def summarize(table: Sequence[SourceCoverage]) -> CoverageSummary:
     names = dict.fromkeys(name for row in table for name in row.feasibilities)
     per_source = {
         name: SourceCount(
-            feasible=sum(
-                1 for row in table if (f := row.feasibilities.get(name)) and f.feasible
-            ),
+            feasible=sum(1 for row in table if (f := row.feasibilities.get(name)) and f.feasible),
             infeasible=sum(
                 1
                 for row in table
@@ -109,6 +107,4 @@ def recommend_source(row: SourceCoverage) -> str:
         feas = row.feasibilities.get(name)
         if feas is not None and feas.feasible:
             return name
-    raise ValueError(
-        f"no feasible source for {row.work_id!r}; ablation must always be probed"
-    )
+    raise ValueError(f"no feasible source for {row.work_id!r}; ablation must always be probed")

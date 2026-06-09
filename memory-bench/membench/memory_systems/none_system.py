@@ -15,7 +15,7 @@ class NoneMemory(MemorySystem):
     backend = MemoryBackend.FILESYSTEM
     supports_write = False
 
-    def reset(self, trial_id: str) -> None:  # noqa: D401 - no state
+    def reset(self, trial_id: str) -> None:
         return None
 
     def retrieve(self, request: RetrievalRequest, ctx: StepContext) -> RetrieveResult:

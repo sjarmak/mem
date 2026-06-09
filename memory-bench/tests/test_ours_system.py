@@ -20,7 +20,9 @@ def _ctx():
 
 
 def _req(scope="cross_rig"):
-    return RetrievalRequest(query_work=QueryWork(work_id="B", rig="rigA", started="2026-01-10T00:00:00Z"), scope=scope)
+    return RetrievalRequest(
+        query_work=QueryWork(work_id="B", rig="rigA", started="2026-01-10T00:00:00Z"), scope=scope
+    )
 
 
 # A canned retrieval-v1 `data` payload (two items, lessons consumed verbatim).

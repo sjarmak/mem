@@ -1,7 +1,7 @@
 """`ours` — retrieval-v1 (mem-di8) as a harness arm (integrated condition C).
 
 This arm does not reimplement retrieval. It delegates to the retrieval-v1 surface
-already shipped in TypeScript (`src/retrieve`, contract D6–D10) through the
+already shipped in TypeScript (`src/retrieve`, contract D6-D10) through the
 `mem retrieve --json` CLI — the single substrate (no second store), consuming the
 append-only `lessons` payload (D9, never re-distilled). The boundary and the store
 handle are supplied by the harness; the arm has no discretion over them, and the
@@ -20,6 +20,7 @@ import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 from membench.memory_systems.base import (
     MemorySystem,
@@ -47,10 +48,10 @@ class OursQuery:
 
 # A runner returns retrieval-v1's `RetrievalResult` (the CLI `--json` envelope's
 # `data`). Injectable so the arm is testable without a built CLI or a real store.
-RetrieveRunner = Callable[[OursQuery], dict]
+RetrieveRunner = Callable[[OursQuery], dict[str, Any]]
 
 
-def _render_payload(item: dict) -> str:
+def _render_payload(item: dict[str, Any]) -> str:
     """Render one retrieved item as the injected memory text: the citation plus
     the consumed (not rewritten) lesson payloads, canonically serialized so the
     injected-context volume (Decision-10 precision guard) is deterministic."""
@@ -68,7 +69,7 @@ def _default_runner(mem_bin: str) -> RetrieveRunner:
     parsing the success envelope. A non-zero exit or an error envelope raises —
     a failed retrieval is never silently treated as "no memory"."""
 
-    def run(query: OursQuery) -> dict:
+    def run(query: OursQuery) -> dict[str, Any]:
         cli_scope = _CLI_SCOPE[query.scope]
         argv = [
             mem_bin,
@@ -82,18 +83,16 @@ def _default_runner(mem_bin: str) -> RetrieveRunner:
         ]
         if query.limit is not None:
             argv += ["--limit", str(query.limit)]
-        completed = subprocess.run(  # noqa: S603 - argv is fully constructed, no shell
-            argv, capture_output=True, text=True, check=False
-        )
+        completed = subprocess.run(argv, capture_output=True, text=True, check=False)
         if completed.returncode != 0:
             raise RuntimeError(
                 f"mem retrieve failed (exit {completed.returncode}): "
                 f"{completed.stderr.strip() or completed.stdout.strip()}"
             )
-        envelope = json.loads(completed.stdout)
+        envelope: dict[str, Any] = json.loads(completed.stdout)
         if not envelope.get("ok", False):
             raise RuntimeError(f"mem retrieve error: {envelope.get('errors')}")
-        return envelope["data"]
+        return cast(dict[str, Any], envelope["data"])
 
     return run
 
@@ -122,7 +121,7 @@ class OursMemory(MemorySystem):
         self._runner = runner
         self._mem_bin = mem_bin
 
-    def reset(self, trial_id: str) -> None:  # noqa: D401 - stateless over the bounded store
+    def reset(self, trial_id: str) -> None:
         return None
 
     def _resolve_runner(self) -> RetrieveRunner:

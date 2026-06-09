@@ -1,11 +1,11 @@
 """§6.2 — normalized memory operations + the memory_event record."""
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class MemoryOperation(str, Enum):
+class MemoryOperation(StrEnum):
     """The canonical operation set every concrete memory tool maps into (§6.2)."""
 
     READ = "read"
@@ -20,7 +20,7 @@ class MemoryOperation(str, Enum):
     DISCARD = "discard"
 
 
-class MemoryBackend(str, Enum):
+class MemoryBackend(StrEnum):
     """Backend representation a memory event acted on (§6.2 / §7)."""
 
     FILESYSTEM = "filesystem"

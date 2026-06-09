@@ -14,6 +14,7 @@ own `started` — never a value the harness picks.
 import json
 import subprocess
 from collections.abc import Callable
+from typing import Any, cast
 
 from membench.validity import (
     QueryWork,
@@ -24,24 +25,22 @@ from membench.validity import (
 
 # A runner takes the `mem` argv (without `--json`) and returns the success
 # envelope's `data`. Injectable so the loader is testable without a built CLI.
-CorpusRunner = Callable[[list[str]], dict]
+CorpusRunner = Callable[[list[str]], dict[str, Any]]
 
 
 def _default_runner(mem_bin: str) -> CorpusRunner:
-    def run(args: list[str]) -> dict:
+    def run(args: list[str]) -> dict[str, Any]:
         argv = [mem_bin, *args, "--json"]
-        completed = subprocess.run(  # noqa: S603 - argv fully constructed, no shell
-            argv, capture_output=True, text=True, check=False
-        )
+        completed = subprocess.run(argv, capture_output=True, text=True, check=False)
         if completed.returncode != 0:
             raise RuntimeError(
                 f"mem {' '.join(args)} failed (exit {completed.returncode}): "
                 f"{completed.stderr.strip() or completed.stdout.strip()}"
             )
-        envelope = json.loads(completed.stdout)
+        envelope: dict[str, Any] = json.loads(completed.stdout)
         if not envelope.get("ok", False):
             raise RuntimeError(f"mem {' '.join(args)} error: {envelope.get('errors')}")
-        return envelope["data"]
+        return cast(dict[str, Any], envelope["data"])
 
     return run
 

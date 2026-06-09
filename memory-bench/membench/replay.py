@@ -115,9 +115,7 @@ def run_replay(
     boundary itself is malformed, before any arm runs."""
     eligible = loo_bounded(corpus, query)
     results = [
-        replay_arm(arm, query, corpus, scope=scope)
-        for arm in arms
-        for scope in _scopes_for(arm)
+        replay_arm(arm, query, corpus, scope=scope) for arm in arms for scope in _scopes_for(arm)
     ]
     return ReplayRun(
         work_id=query.work_id,
