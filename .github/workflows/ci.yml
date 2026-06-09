@@ -1,0 +1,40 @@
+name: CI
+
+# Code-quality gate for both languages (mem-5r1). Python: ruff (broad select) +
+# black --check + mypy --strict + pytest. TypeScript: tsc --noEmit + eslint
+# (type-checked) + prettier --check + vitest, via `npm run check`.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    name: python (ruff + black + mypy --strict + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: memory-bench
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev]"
+      - run: ruff check membench tests
+      - run: black --check membench tests
+      - run: mypy --strict membench
+      - run: pytest -q
+
+  typescript:
+    name: typescript (tsc + eslint + prettier + vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run check

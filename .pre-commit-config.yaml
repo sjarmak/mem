@@ -1,0 +1,37 @@
+# Local pre-push gate mirroring CI (mem-5r1). Install once with `pre-commit install`.
+# Local hooks (not pinned-repo hooks) because the Python package lives in
+# memory-bench/ and the TS project at the root — each hook runs the project's own
+# gate command so the rules live in exactly one place (pyproject / package.json).
+repos:
+  - repo: local
+    hooks:
+      - id: py-black
+        name: black --check (memory-bench)
+        entry: bash -c 'cd memory-bench && black --check membench tests'
+        language: system
+        types: [python]
+        files: ^memory-bench/
+        pass_filenames: false
+
+      - id: py-ruff
+        name: ruff check (memory-bench)
+        entry: bash -c 'cd memory-bench && ruff check membench tests'
+        language: system
+        types: [python]
+        files: ^memory-bench/
+        pass_filenames: false
+
+      - id: py-mypy
+        name: mypy --strict (membench)
+        entry: bash -c 'cd memory-bench && mypy --strict membench'
+        language: system
+        types: [python]
+        files: ^memory-bench/membench/
+        pass_filenames: false
+
+      - id: ts-check
+        name: tsc --noEmit + eslint + prettier --check
+        entry: bash -c 'npm run typecheck && npm run lint && npm run format:check'
+        language: system
+        types_or: [ts, tsx]
+        pass_filenames: false
