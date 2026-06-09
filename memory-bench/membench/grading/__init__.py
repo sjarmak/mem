@@ -24,6 +24,17 @@ from membench.grading.leak_guard import (
     outcome_labels,
 )
 from membench.grading.merged_diff import MergedDiffSource
+from membench.grading.trace_score import (
+    RewardComponents,
+    RewardRecord,
+    RunTrace,
+    TraceErrorRef,
+    combined_reward,
+    deterministic_term,
+    exact_recurrence,
+    relaxed_signature,
+    score_run,
+)
 
 __all__ = [
     "DEFAULT_RUNGS",
@@ -34,11 +45,20 @@ __all__ = [
     "MergedDiffSource",
     "OutcomeLeakError",
     "OutcomeSource",
+    "RewardComponents",
+    "RewardRecord",
+    "RunTrace",
     "SourceCount",
     "SourceCoverage",
+    "TraceErrorRef",
     "assert_no_outcome_leak",
+    "combined_reward",
     "coverage_table",
+    "deterministic_term",
+    "exact_recurrence",
     "outcome_labels",
     "recommend_source",
+    "relaxed_signature",
+    "score_run",
     "summarize",
 ]
