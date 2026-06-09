@@ -9,6 +9,7 @@ import {
   lessonsFor,
   openStore,
   queryRecords,
+  runsFor,
   searchErrorMessages,
   supersedesClosure,
   workIdsBySignature,
@@ -383,5 +384,68 @@ describe('failure-signature retrieval keys (D8)', () => {
     ]);
 
     expect(searchErrorMessages(db, 'argument', 1)).toHaveLength(1);
+  });
+});
+
+describe('trace_runs projection (run-level metadata)', () => {
+  const run = {
+    session_uuid: 'sess-aaaa',
+    model: 'claude-opus-4-8',
+    harness_version: '2.1.138',
+    input_tokens: 100,
+    output_tokens: 200,
+    cache_creation_tokens: 300,
+    cache_read_tokens: 400,
+    n_tool_calls: 5,
+    tool_calls_by_type: { Bash: 3, Read: 2 },
+    n_turns: 12,
+    started_at: '2026-06-01T00:00:00Z',
+    ended_at: '2026-06-01T01:00:00Z',
+    outcome: 'end_turn',
+  };
+
+  const withRun = (overrides: Partial<WorkRecord> = {}): WorkRecord =>
+    fullRecord({
+      trace: { jsonl_path: '/traces/x.jsonl', run },
+      ...overrides,
+    });
+
+  it('projects the run row keyed by (work_id, agent_id, session_uuid)', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [withRun()]);
+
+    const rows = runsFor(db, 'demo-1a2b');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      work_id: 'demo-1a2b',
+      // gc-1001 is the agent whose trace_ref matches the trace's jsonl_path.
+      agent_id: 'gc-1001',
+      ...run,
+    });
+  });
+
+  it('omits the run row entirely when the trace has no parsed run', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [fullRecord()]); // fullRecord's trace carries no `run`
+    expect(runsFor(db, 'demo-1a2b')).toEqual([]);
+  });
+
+  it('rebuilds the run row on re-ingest — never drifts, never duplicates', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [withRun()]);
+    writeRecords(db, [
+      withRun({
+        trace: {
+          jsonl_path: '/traces/x.jsonl',
+          run: { ...run, input_tokens: 999, n_tool_calls: 1, tool_calls_by_type: { Bash: 1 } },
+        },
+      }),
+    ]);
+
+    const rows = runsFor(db, 'demo-1a2b');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].input_tokens).toBe(999);
+    expect(rows[0].n_tool_calls).toBe(1);
+    expect(rows[0].tool_calls_by_type).toEqual({ Bash: 1 });
   });
 });

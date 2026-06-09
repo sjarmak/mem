@@ -1,3 +1,4 @@
+import type { TraceRun } from '../schemas/trace.js';
 import { WorkRecordSchema, type WorkRecord } from '../schemas/workrecord.js';
 import type { StoreDatabase } from './sqlite.js';
 import type { LessonInput } from './writer.js';
@@ -162,4 +163,57 @@ export function searchErrorMessages(
        LIMIT ?`
     )
     .all(query, limit) as ErrorSearchHit[];
+}
+
+/** A projected run row: the parsed {@link TraceRun} plus the natural-key prefix
+ * (`work_id`, `agent_id`) it is attributed to in the store. */
+export interface StoredRun extends TraceRun {
+  work_id: string;
+  agent_id: string | null;
+}
+
+interface RunRow {
+  work_id: string;
+  agent_id: string | null;
+  session_uuid: string;
+  model: string | null;
+  harness_version: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_tokens: number;
+  cache_read_tokens: number;
+  n_tool_calls: number;
+  tool_calls_by_type: string;
+  n_turns: number;
+  started_at: string | null;
+  ended_at: string | null;
+  outcome: string | null;
+}
+
+/** Run-level metadata rows for a bead, ordered by session uuid. Each row is the
+ * stored projection of `record.trace.run`; `tool_calls_by_type` is parsed back
+ * from its JSON column, and absent optionals stay absent (mirroring the schema's
+ * "parsed, found nothing" contract) rather than surfacing as null. */
+export function runsFor(db: StoreDatabase, workId: string): StoredRun[] {
+  const rows = db
+    .prepare('SELECT * FROM trace_runs WHERE work_id = ? ORDER BY session_uuid')
+    .all(workId) as RunRow[];
+
+  return rows.map(row => ({
+    work_id: row.work_id,
+    agent_id: row.agent_id,
+    session_uuid: row.session_uuid,
+    ...(row.model !== null && { model: row.model }),
+    ...(row.harness_version !== null && { harness_version: row.harness_version }),
+    input_tokens: row.input_tokens,
+    output_tokens: row.output_tokens,
+    cache_creation_tokens: row.cache_creation_tokens,
+    cache_read_tokens: row.cache_read_tokens,
+    n_tool_calls: row.n_tool_calls,
+    tool_calls_by_type: JSON.parse(row.tool_calls_by_type) as Record<string, number>,
+    n_turns: row.n_turns,
+    ...(row.started_at !== null && { started_at: row.started_at }),
+    ...(row.ended_at !== null && { ended_at: row.ended_at }),
+    ...(row.outcome !== null && { outcome: row.outcome }),
+  }));
 }

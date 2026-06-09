@@ -17,7 +17,7 @@
  * yet populate convoy/supersedes, so those columns carry data only when
  * upstream provides it.
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const SCHEMA_DDL = `
 CREATE TABLE work_records (
@@ -116,6 +116,34 @@ CREATE TRIGGER trace_errors_au AFTER UPDATE ON trace_errors BEGIN
   VALUES ('delete', old.id, old.message);
   INSERT INTO trace_errors_fts(rowid, message) VALUES (new.id, new.message);
 END;
+
+-- Run-level metadata projection (one row per session transcript), rebuilt on
+-- upsert from record.trace.run like the other child tables. Keyed by the
+-- natural (work_id, agent_id, session_uuid): a record may carry several agents,
+-- but the run row is attributed to the agent whose trace_ref is this transcript.
+-- tool_calls_by_type is the parsed {name: count} map stored as JSON — a small
+-- per-run shape, not a queryable index, so it stays inline rather than fanning
+-- out to its own table.
+CREATE TABLE trace_runs (
+  work_id               TEXT NOT NULL REFERENCES work_records(work_id),
+  agent_id              TEXT,
+  session_uuid          TEXT NOT NULL,
+  model                 TEXT,
+  harness_version       TEXT,
+  input_tokens          INTEGER NOT NULL,
+  output_tokens         INTEGER NOT NULL,
+  cache_creation_tokens INTEGER NOT NULL,
+  cache_read_tokens     INTEGER NOT NULL,
+  n_tool_calls          INTEGER NOT NULL,
+  tool_calls_by_type    TEXT NOT NULL,
+  n_turns               INTEGER NOT NULL,
+  started_at            TEXT,
+  ended_at              TEXT,
+  outcome               TEXT
+);
+CREATE INDEX idx_runs_work    ON trace_runs(work_id);
+CREATE INDEX idx_runs_session ON trace_runs(session_uuid);
+CREATE INDEX idx_runs_model   ON trace_runs(model);
 
 -- Append-only distilled lessons (Decision 9). Deliberately NO foreign key to
 -- work_records: a lesson must survive its record's delete/re-ingest, and may

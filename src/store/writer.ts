@@ -38,7 +38,22 @@ ON CONFLICT(work_id) DO UPDATE SET
   commit_state = excluded.commit_state, record = excluded.record
 `;
 
-const CHILD_TABLES = ['record_agents', 'record_labels', 'record_links', 'trace_errors'] as const;
+const CHILD_TABLES = [
+  'record_agents',
+  'record_labels',
+  'record_links',
+  'trace_errors',
+  'trace_runs',
+] as const;
+
+/** The agent this transcript is attributed to: the one whose `trace_ref` is the
+ * parsed transcript, else the record's first agent, else null (a trace can be
+ * resolved without a matching agent row). */
+function runAgentId(record: WorkRecord): string | null {
+  const path = record.trace?.jsonl_path;
+  const owner = record.agents.find(a => a.trace_ref === path);
+  return (owner ?? record.agents[0])?.agent_id ?? null;
+}
 
 /** Promote the queryable columns out of a validated record. */
 function toRow(record: WorkRecord): Record<string, string | number | null> {
@@ -69,9 +84,9 @@ function toRow(record: WorkRecord): Record<string, string | number | null> {
 /**
  * Upsert WorkRecords in a single transaction. Idempotent: re-ingesting the
  * same records leaves the store byte-identical; child rows (agents, labels,
- * links, trace errors + their FTS index) are deleted and rebuilt per record,
- * never accumulated. Lessons are untouched — they live outside the re-ingest
- * cycle by design (see schema.ts).
+ * links, trace errors + their FTS index, run metadata) are deleted and rebuilt
+ * per record, never accumulated. Lessons are untouched — they live outside the
+ * re-ingest cycle by design (see schema.ts).
  */
 export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
   const upsert = db.prepare(UPSERT_RECORD);
@@ -88,6 +103,12 @@ export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
   const insertError = db.prepare(
     'INSERT INTO trace_errors (work_id, signature, tool, severity, file, line, col, error_class, message) ' +
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  );
+  const insertRun = db.prepare(
+    'INSERT INTO trace_runs (work_id, agent_id, session_uuid, model, harness_version, ' +
+      'input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, ' +
+      'n_tool_calls, tool_calls_by_type, n_turns, started_at, ended_at, outcome) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
 
   db.transaction(() => {
@@ -124,6 +145,26 @@ export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
           error.column ?? null,
           errorClass(error),
           error.message
+        );
+      }
+      const run = record.trace?.run;
+      if (run) {
+        insertRun.run(
+          record.work_id,
+          runAgentId(record),
+          run.session_uuid,
+          run.model ?? null,
+          run.harness_version ?? null,
+          run.input_tokens,
+          run.output_tokens,
+          run.cache_creation_tokens,
+          run.cache_read_tokens,
+          run.n_tool_calls,
+          JSON.stringify(run.tool_calls_by_type),
+          run.n_turns,
+          run.started_at ?? null,
+          run.ended_at ?? null,
+          run.outcome ?? null
         );
       }
     }
