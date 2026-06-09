@@ -10,6 +10,13 @@ or paid run. Named `grading` (not `oracle`) to avoid colliding with the existing
 
 from membench.grading.ablation import DEFAULT_RUNGS, AblationDesign, AblationSource
 from membench.grading.base import Feasibility, OutcomeSource
+from membench.grading.base_rate import (
+    DEFAULT_MIN_APPLICABLE,
+    DEFAULT_MIN_RECURRENCE_LB,
+    GateDecision,
+    GateVerdict,
+    base_rate_gate,
+)
 from membench.grading.coverage import (
     CoverageSummary,
     SourceCount,
@@ -17,6 +24,15 @@ from membench.grading.coverage import (
     coverage_table,
     recommend_source,
     summarize,
+)
+from membench.grading.curve import (
+    DEFAULT_SATURATION_TOL,
+    InsufficientLadderError,
+    RungReward,
+    ScoreInformationCurve,
+    build_curve,
+    min_useful_combo,
+    saturation_point,
 )
 from membench.grading.judge import (
     Calibration,
@@ -48,13 +64,19 @@ from membench.grading.trace_score import (
 )
 
 __all__ = [
+    "DEFAULT_MIN_APPLICABLE",
+    "DEFAULT_MIN_RECURRENCE_LB",
     "DEFAULT_RUNGS",
+    "DEFAULT_SATURATION_TOL",
     "AblationDesign",
     "AblationSource",
     "Calibration",
     "CalibrationReport",
     "CoverageSummary",
     "Feasibility",
+    "GateDecision",
+    "GateVerdict",
+    "InsufficientLadderError",
     "Judge",
     "MergedDiffSource",
     "OssLlmJudge",
@@ -65,19 +87,25 @@ __all__ = [
     "Rubric",
     "RubricCriterion",
     "RunTrace",
+    "RungReward",
+    "ScoreInformationCurve",
     "SourceCount",
     "SourceCoverage",
     "StubJudge",
     "TraceErrorRef",
     "assert_no_outcome_leak",
+    "base_rate_gate",
+    "build_curve",
     "combined_reward",
     "completion_rubric",
     "coverage_table",
     "deterministic_term",
     "exact_recurrence",
+    "min_useful_combo",
     "outcome_labels",
     "recommend_source",
     "relaxed_signature",
+    "saturation_point",
     "score_completion",
     "score_run",
     "summarize",
