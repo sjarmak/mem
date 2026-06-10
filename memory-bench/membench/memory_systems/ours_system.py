@@ -16,12 +16,12 @@ sequence runner is a configuration error and raises.
 """
 
 import json
-import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
+from membench.mem_cli import run_mem_json
 from membench.memory_systems.base import (
     MemorySystem,
     RetrievalRequest,
@@ -65,34 +65,24 @@ def _render_payload(item: dict[str, Any]) -> str:
 
 
 def _default_runner(mem_bin: str) -> RetrieveRunner:
-    """Shell out to `mem retrieve <work_id> --scope ... --store ... --json`,
-    parsing the success envelope. A non-zero exit or an error envelope raises —
-    a failed retrieval is never silently treated as "no memory"."""
+    """Shell out to `mem retrieve <work_id> --scope ... --store ...` through the
+    shared seam (`mem_cli.run_mem_json`: timeout, missing-binary and
+    malformed-envelope context). A failed retrieval always raises — it is never
+    silently treated as "no memory"."""
 
     def run(query: OursQuery) -> dict[str, Any]:
-        cli_scope = _CLI_SCOPE[query.scope]
         argv = [
             mem_bin,
             "retrieve",
             query.work_id,
             "--scope",
-            cli_scope,
+            _CLI_SCOPE[query.scope],
             "--store",
             query.store_path,
-            "--json",
         ]
         if query.limit is not None:
             argv += ["--limit", str(query.limit)]
-        completed = subprocess.run(argv, capture_output=True, text=True, check=False)
-        if completed.returncode != 0:
-            raise RuntimeError(
-                f"mem retrieve failed (exit {completed.returncode}): "
-                f"{completed.stderr.strip() or completed.stdout.strip()}"
-            )
-        envelope: dict[str, Any] = json.loads(completed.stdout)
-        if not envelope.get("ok", False):
-            raise RuntimeError(f"mem retrieve error: {envelope.get('errors')}")
-        return cast(dict[str, Any], envelope["data"])
+        return run_mem_json(argv)
 
     return run
 
@@ -178,6 +168,7 @@ class OursMemory(MemorySystem):
             event=event,
             total_matched=int(result.get("total_matched", len(items))),
             near_duplicate_top=bool(result.get("near_duplicate_top", False)),
+            fts_truncated=bool(result.get("fts_truncated", False)),
         )
 
     def write(self, memory_id: str, content: str, ctx: StepContext) -> MemoryEvent:

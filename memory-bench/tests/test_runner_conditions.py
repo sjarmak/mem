@@ -91,3 +91,44 @@ def test_establishing_steps_emit_no_phantom_retrieve(tmp_path):
     )
     assert mem_s1.metrics.efficiency.memory_tool_calls == 1
     assert all(e.normalized_operation.value == "write" for e in mem_s1.trace.memory_events)
+
+
+def _two_step_sequence(writes_s1, writes_s2):
+    from membench.schemas.sequence import BenchmarkSequence, SequenceStep
+
+    return BenchmarkSequence(
+        sequence_id="seq-conflict",
+        title="t",
+        steps=[
+            SequenceStep(step_id="s1", user_request="a", expected_memory_writes=writes_s1),
+            SequenceStep(step_id="s2", user_request="b", expected_memory_writes=writes_s2),
+        ],
+    )
+
+
+def test_oracle_pool_conflicting_duplicate_memory_id_raises(tmp_path):
+    import pytest
+
+    seq = _two_step_sequence({"conv": "use snake_case"}, {"conv": "use camelCase"})
+    with pytest.raises(ValueError, match=r"oracle pool conflict.*'conv'.*'s1'.*'s2'"):
+        run_sequence(seq, _experiment(), fs_base_dir=tmp_path)
+
+
+def test_oracle_pool_identical_rewrite_is_allowed(tmp_path):
+    seq = _two_step_sequence({"conv": "use snake_case"}, {"conv": "use snake_case"})
+    run = run_sequence(seq, _experiment(), fs_base_dir=tmp_path)
+    assert len(run.trials) == 6  # 2 steps x 3 conditions, no crash
+
+
+def test_agent_crash_fails_loud_with_trial_context(tmp_path):
+    import pytest
+
+    class CrashingAgent:
+        agent_config_id = "crash-ref"
+
+        def run_step(self, step, available_memory, ctx):
+            raise KeyError("boom")
+
+    seq = load_sequence(FIXTURE)
+    with pytest.raises(RuntimeError, match=r"condition 'no_memory'.*step 's1-"):
+        run_sequence(seq, _experiment(), agent=CrashingAgent(), fs_base_dir=tmp_path)

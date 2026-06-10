@@ -41,6 +41,7 @@ class ArmAxisVector:
     retrieved: int
     total_matched: int
     near_duplicate_top: bool
+    fts_truncated: bool
     eligible_count: int
 
     @property
@@ -69,6 +70,7 @@ def build_arm_vectors(run: ReplayRun) -> list[ArmAxisVector]:
             retrieved=len(r.retrieved_ids),
             total_matched=r.total_matched,
             near_duplicate_top=r.near_duplicate_top,
+            fts_truncated=r.fts_truncated,
             eligible_count=r.eligible_count,
         )
         for r in run.results
@@ -98,14 +100,15 @@ def to_markdown(run: ReplayRun) -> str:
         "",
         (
             "| arm | track | task_perf | token_budget (chars) | latency_ms"
-            " | privacy | interruption | retrieved | matched | near_dup |"
+            " | privacy | interruption | retrieved | matched | near_dup | fts_trunc |"
         ),
-        "|---|---|---|---|---|---|---|---|---|---|",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for v in build_arm_vectors(run):
         lines.append(
             f"| {v.arm} | {v.scope or '—'} | {_fmt(v.task_perf)} | {v.token_budget_chars} | "
             f"{v.latency_ms:.3f} | {_fmt(v.privacy)} | {_fmt(v.interruption)} | "
-            f"{v.retrieved} | {v.total_matched} | {'yes' if v.near_duplicate_top else 'no'} |"
+            f"{v.retrieved} | {v.total_matched} | {'yes' if v.near_duplicate_top else 'no'} | "
+            f"{'yes' if v.fts_truncated else 'no'} |"
         )
     return "\n".join(lines)

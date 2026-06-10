@@ -234,6 +234,25 @@ def test_run_grid_skips_deferred_rungs(tmp_path):
     assert {r.rung for r in records} == {"none"}
 
 
+def test_run_grid_unknown_rung_fails_before_any_execution(tmp_path):
+    held = [_err()]
+
+    class ExplodingRunner:
+        def run(self, task_dir):  # pragma: no cover - must never be reached
+            raise AssertionError("runner must not be invoked for an invalid ladder")
+
+    with pytest.raises(ValueError, match="unknown ablation rung"):
+        run_grid(
+            _record(),
+            tmp_path,
+            held_errors=held,
+            runner=ExplodingRunner(),
+            rungs=("none", "oarcle"),  # typo'd rung
+        )
+    # Validation fired before the adapter: no task dirs were emitted.
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_run_grid_repeat_idx_keys_records(tmp_path):
     held = [_err(file="src/a.ts")]
     runner = StubRunner({"none": RunTrace(errors=(), files_touched=frozenset({"src/a.ts"}))})

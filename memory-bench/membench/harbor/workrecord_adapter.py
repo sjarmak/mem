@@ -61,6 +61,7 @@ class WorkRecordLadderAdapter:
         *,
         source: AblationSource | None = None,
         overwrite: bool = False,
+        allow_internet: bool = False,
     ) -> None:
         # Snapshot so a caller mutating its dict between construction and run()
         # cannot change what the leak guard sees vs what gets written. Shallow is
@@ -70,6 +71,12 @@ class WorkRecordLadderAdapter:
         self.output_dir = Path(output_dir)
         self.source = source or AblationSource()
         self.overwrite = overwrite
+        # Offline by default (deterministic, leak-safe scoring). The real-exec spike
+        # must set this True: Harbor's installed `claude-code` agent fetches its CLI
+        # over the network (native installer on Debian) and most rigs' build/test step
+        # needs to resolve dependencies. The held task text carries no outcome, so
+        # enabling the network does not by itself leak the answer.
+        self.allow_internet = allow_internet
 
     def _task_toml(self, name: str, rung: str, loo_boundary: str) -> str:
         config = {
@@ -87,7 +94,7 @@ class WorkRecordLadderAdapter:
                 "loo_boundary": loo_boundary,
                 "source": "workrecord",
             },
-            "environment": {"allow_internet": False},
+            "environment": {"allow_internet": self.allow_internet},
             "verifier": {"timeout_sec": 300.0},
             "agent": {"timeout_sec": 600.0},
         }

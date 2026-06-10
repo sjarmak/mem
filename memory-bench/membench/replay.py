@@ -43,6 +43,9 @@ class ArmReplayResult:
     retrieved_ids: list[str]
     total_matched: int
     near_duplicate_top: bool
+    # The substrate's FTS candidate scan hit its cap — the message-tier ranking
+    # may be incomplete. Surfaced per Decision 10: truncation is never silent.
+    fts_truncated: bool
     # Decision-10 precision guard: the volume of injected memory text. Outcome
     # lift alone is gameable by over-injection, so this is reported, not optional.
     injected_context_chars: int
@@ -98,6 +101,7 @@ def replay_arm(
         retrieved_ids=list(result.payloads),
         total_matched=result.total_matched,
         near_duplicate_top=result.near_duplicate_top,
+        fts_truncated=result.fts_truncated,
         injected_context_chars=sum(len(v) for v in result.payloads.values()),
         latency_ms=result.event.latency_ms,
         event=result.event,

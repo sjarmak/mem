@@ -26,8 +26,6 @@ DEFERRED to a child of mem-apg.3 (not built here): real harbor exec at scale, th
 C1.3 base-rate go/no-go run over the held-out beads.
 """
 
-import json
-import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Protocol
@@ -41,9 +39,11 @@ from membench.grading import (
     TraceErrorRef,
     score_run,
 )
+from membench.harbor.harbor_exec import harbor_exec
 from membench.harbor.memory_inject import (
     DeferredRungError,
     inject_rung_memory,
+    validate_rungs,
 )
 from membench.harbor.workrecord_adapter import WorkRecordLadderAdapter
 
@@ -105,35 +105,14 @@ class StubRunner:
 
 
 def _default_exec(task_dir: Path) -> RunTranscript:
-    """Shell `harbor run <task_dir>` and return its JSON transcript.
+    """Run the task through real Harbor and project its ATIF trajectory.
 
     The real exec path -- NOT exercised in CI (HarborRunner is tested with an
-    injected `exec_task`). Documented here so the production wiring is explicit:
-    Harbor runs the agent on the Claude OAuth subscription (D16, not a paid-API
-    cost fork) and emits a transcript with `output` / `files_read` /
-    `files_written`. A non-zero exit raises -- a failed run is never silently a
-    clean trace."""
-    completed = subprocess.run(
-        ["harbor", "run", str(task_dir)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if completed.returncode != 0:
-        raise RuntimeError(
-            f"harbor run {task_dir} failed (exit {completed.returncode}): "
-            f"{completed.stderr.strip() or completed.stdout.strip()}"
-        )
-    try:
-        transcript: dict[str, Any] = json.loads(completed.stdout)
-    except json.JSONDecodeError as exc:
-        # Exit 0 but non-JSON stdout (a banner before the JSON, a warning line) is a
-        # harvest failure, not a clean trace — surface it with context.
-        raise RuntimeError(
-            f"harbor run {task_dir} exited 0 but stdout is not valid JSON: "
-            f"{completed.stdout[:200]!r}"
-        ) from exc
-    return transcript
+    injected `exec_task`). Delegates to `harbor_exec`: `harbor run --config` on the
+    Claude OAuth subscription (D16, not a paid-API cost fork) -> ATIF trajectory ->
+    `{output, files_read, files_written}` transcript. A non-zero exit, missing task
+    dir, or absent trajectory raises -- a failed run is never silently a clean trace."""
+    return harbor_exec(task_dir)
 
 
 class HarborRunner:
@@ -171,6 +150,8 @@ def run_grid(
     outcome_labels: Sequence[str] = (),
     repeat_idx: int = 0,
     overwrite: bool = False,
+    env_reconstructor: Callable[[Path], object] | None = None,
+    allow_internet: bool = False,
 ) -> list[RewardRecord]:
     """Run the ablation grid for one held-out WorkRecord and score every rung.
 
@@ -190,17 +171,30 @@ def run_grid(
     - the returned `RewardComponents.rubric_score` is always `None` -- the judge
       (mem-apg.3b) is a separate post-harvest step; a caller wanting the combined
       semantic reward must run the judge over each rung's run output and set
-      `rubric_score` before calling `combined_reward`."""
+      `rubric_score` before calling `combined_reward`.
+
+    `env_reconstructor`, when given, is called once per emitted task dir (after the
+    adapter writes it, before any agent run) to bake in the task's environment --
+    e.g. `env_recon.reconstruct_env_for_record` partial-applied to this record. It
+    is optional so the StubRunner pipeline (and CI) need no Docker or git checkout."""
     held = list(held_errors)
     if not held:
         raise ValueError("run_grid needs at least one held error to score against")
+    # A typo'd rung must fail HERE, before any task dir is emitted or agent run
+    # spent -- not mid-sweep when the loop first reaches it.
+    validate_rungs(rungs)
 
     source = AblationSource(rungs=rungs)
-    adapter = WorkRecordLadderAdapter(record, output_dir, source=source, overwrite=overwrite)
+    adapter = WorkRecordLadderAdapter(
+        record, output_dir, source=source, overwrite=overwrite, allow_internet=allow_internet
+    )
     # The adapter returns the task dirs in rung order, so the driver locates them
     # by the adapter's own naming rather than re-deriving the slug (no coupling to
     # its private `_safe`).
     task_dirs = adapter.run()
+    if env_reconstructor is not None:
+        for task_dir in task_dirs:
+            env_reconstructor(task_dir)
 
     work_id = str(record["work_id"])
     records: list[RewardRecord] = []

@@ -24,11 +24,7 @@ from membench.grading import (
 
 # repo_root/memory-bench/tests/this_file -> parents[2] == repo root
 _GOLDEN = (
-    Path(__file__).parents[2]
-    / "tests"
-    / "fixtures"
-    / "extract-errors"
-    / "polyglot.expected.json"
+    Path(__file__).parents[2] / "tests" / "fixtures" / "extract-errors" / "polyglot.expected.json"
 )
 
 

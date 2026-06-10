@@ -40,7 +40,28 @@ MEMORY_FILENAME = "memory/MEMORY.md"
 
 # Rungs whose memory is the agent's opaque built-in store -- owned by mem-whi's
 # paid Harbor path, not constructible here.
-_DEFERRED_RUNGS = ("builtin", "ours+builtin")
+DEFERRED_RUNGS = ("builtin", "ours+builtin")
+
+# Rungs this module can inject today (the runnable subset of the ladder).
+RUNNABLE_RUNGS = ("none", "ours", "oracle")
+
+# The full ladder vocabulary (grading/ablation.py's DEFAULT_RUNGS draws from it).
+KNOWN_RUNGS = RUNNABLE_RUNGS + DEFERRED_RUNGS
+
+
+def validate_rungs(rungs: Sequence[str]) -> tuple[str, ...]:
+    """Validate a rung list against the ladder vocabulary BEFORE any execution.
+
+    Raises ValueError naming every unknown rung -- a typo'd ladder must fail at
+    config/load time, not mid-sweep after earlier rungs have already burned agent
+    runs. Returns the deferred subset (in ladder order) so the caller can surface
+    what will be skipped instead of discovering it from a thinner result."""
+    unknown = [rung for rung in rungs if rung not in KNOWN_RUNGS]
+    if unknown:
+        raise ValueError(
+            f"unknown ablation rung(s) {unknown!r}; known rungs: {list(KNOWN_RUNGS)!r}"
+        )
+    return tuple(rung for rung in rungs if rung in DEFERRED_RUNGS)
 
 
 class DeferredRungError(ValueError):
@@ -144,7 +165,7 @@ def inject_rung_memory(
         assert_no_outcome_leak(text, labels)
         return _write(task_path, text)
 
-    if rung in _DEFERRED_RUNGS:
+    if rung in DEFERRED_RUNGS:
         raise DeferredRungError(
             f"rung {rung!r} depends on the agent's built-in memory (paid Harbor path, "
             "mem-whi) and is not injected here"

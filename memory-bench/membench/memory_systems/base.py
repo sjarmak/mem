@@ -49,15 +49,19 @@ class RetrievalRequest:
 class RetrieveResult:
     """What a retrieve call returns: the recovered payloads + the normalized event.
 
-    `total_matched` / `near_duplicate_top` carry the retrieval-v1 precision-guard
-    signal (Decision 10) through to the report; they stay at their defaults for
-    arms that don't rank (oracle/filesystem return exactly what was asked)."""
+    `total_matched` / `near_duplicate_top` / `fts_truncated` carry the
+    retrieval-v1 precision-guard signal (Decision 10) through to the report; they
+    stay at their defaults for arms that don't rank (oracle/filesystem return
+    exactly what was asked). `fts_truncated` means the substrate's FTS candidate
+    scan hit its cap, so the message-tier ranking may be incomplete — silent
+    truncation is exactly what the guard exists to surface."""
 
     payloads: dict[str, str]  # memory_id → content (id arms) / work_id → lesson (ours)
     event: MemoryEvent
     distractor_ids: list[str] = field(default_factory=list)
     total_matched: int = 0
     near_duplicate_top: bool = False
+    fts_truncated: bool = False
 
 
 class MemorySystem(ABC):

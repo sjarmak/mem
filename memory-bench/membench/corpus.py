@@ -11,11 +11,10 @@ The query work is loaded the same way (`mem query <work_id> --json` →
 own `started` — never a value the harness picks.
 """
 
-import json
-import subprocess
 from collections.abc import Callable
-from typing import Any, cast
+from typing import Any
 
+from membench.mem_cli import run_mem_json
 from membench.validity import (
     QueryWork,
     WorkRef,
@@ -29,18 +28,11 @@ CorpusRunner = Callable[[list[str]], dict[str, Any]]
 
 
 def _default_runner(mem_bin: str) -> CorpusRunner:
+    """Shell to the `mem` CLI through the shared seam (`mem_cli.run_mem_json`:
+    timeout, missing-binary and malformed-envelope context, fail-loud)."""
+
     def run(args: list[str]) -> dict[str, Any]:
-        argv = [mem_bin, *args, "--json"]
-        completed = subprocess.run(argv, capture_output=True, text=True, check=False)
-        if completed.returncode != 0:
-            raise RuntimeError(
-                f"mem {' '.join(args)} failed (exit {completed.returncode}): "
-                f"{completed.stderr.strip() or completed.stdout.strip()}"
-            )
-        envelope: dict[str, Any] = json.loads(completed.stdout)
-        if not envelope.get("ok", False):
-            raise RuntimeError(f"mem {' '.join(args)} error: {envelope.get('errors')}")
-        return cast(dict[str, Any], envelope["data"])
+        return run_mem_json([mem_bin, *args])
 
     return run
 

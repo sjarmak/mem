@@ -52,10 +52,26 @@ class SequenceRun:
 
 
 def _oracle_pool(seq: BenchmarkSequence) -> dict[str, str]:
-    """Ground-truth memory = every memory any step establishes."""
+    """Ground-truth memory = every memory any step establishes.
+
+    A memory_id written by two steps with DIFFERENT content is ambiguous: the
+    pool is loaded once per condition, so last-write-wins would silently hand
+    early steps the later content (a within-sequence future leak). Until the
+    oracle is supersession-aware, that is a sequence-design error and raises.
+    Identical re-writes are harmless and allowed."""
     pool: dict[str, str] = {}
+    writers: dict[str, str] = {}
     for step in seq.steps:
-        pool.update(step.expected_memory_writes)
+        for memory_id, content in step.expected_memory_writes.items():
+            existing = pool.get(memory_id)
+            if existing is not None and existing != content:
+                raise ValueError(
+                    f"oracle pool conflict: memory_id {memory_id!r} is written with "
+                    f"different content by steps {writers[memory_id]!r} and "
+                    f"{step.step_id!r}; use distinct ids (or identical content)"
+                )
+            pool[memory_id] = content
+            writers.setdefault(memory_id, step.step_id)
     return pool
 
 
@@ -118,7 +134,17 @@ def run_sequence(
                 memory_events.append(retrieve.event)
             available_memory = retrieve.payloads if retrieve is not None else {}
 
-            agent_result = agent.run_step(step, available_memory, ctx)
+            # Fail fast WITH context. A crashed step is deliberately not captured
+            # as trial data: a partially-run sequence yields incomparable
+            # condition gaps, and a silent partial result is worse than a loud
+            # abort. The wrap names the trial so the failure is actionable.
+            try:
+                agent_result = agent.run_step(step, available_memory, ctx)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"agent failed at condition {condition.value!r}, "
+                    f"step {step.step_id!r} (trial {trial_id})"
+                ) from exc
 
             write_events: list[MemoryEvent] = []
             if condition is Condition.MEMORY_ENABLED and system.supports_write:

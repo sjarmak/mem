@@ -15,6 +15,7 @@ def _run():
         runner=lambda q: {
             "total_matched": 1,
             "near_duplicate_top": True,
+            "fts_truncated": True,
             "items": [{"work_id": "prior-1", "citation": {"work_id": "prior-1"}, "lessons": []}],
         },
     )
@@ -53,3 +54,7 @@ def test_to_dict_and_markdown_render():
     assert "Replay 5-axis (raw)" in md
     assert "no composite (fork 2)" in md
     assert "ours" in md and "none" in md
+    # The FTS-cap truncation signal is a visible report column (Decision 10).
+    assert "fts_trunc" in md
+    ours_vec = next(v for v in build_arm_vectors(run) if v.arm == "ours")
+    assert ours_vec.fts_truncated is True

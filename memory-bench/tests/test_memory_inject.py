@@ -183,3 +183,31 @@ def test_empty_held_errors_is_caller_error(tmp_path):
     # oracle guard has nothing to protect -- fail loud rather than write blind.
     with pytest.raises(ValueError):
         inject_rung_memory(tmp_path, "oracle", held_errors=[], oracle_payload="x")
+
+
+# --- validate_rungs: ladder vocabulary checked before any execution ------------
+
+
+def test_validate_rungs_accepts_known_and_returns_deferred_subset():
+    from membench.harbor.memory_inject import validate_rungs
+
+    assert validate_rungs(("none", "ours", "oracle")) == ()
+    assert validate_rungs(("none", "ours", "builtin", "ours+builtin", "oracle")) == (
+        "builtin",
+        "ours+builtin",
+    )
+
+
+def test_validate_rungs_names_every_unknown_rung():
+    from membench.harbor.memory_inject import validate_rungs
+
+    with pytest.raises(ValueError, match=r"unknown ablation rung.*'oarcle'.*'bogus'"):
+        validate_rungs(("none", "oarcle", "bogus"))
+
+
+def test_validate_rungs_accepts_default_ladder():
+    from membench.grading.ablation import DEFAULT_RUNGS
+    from membench.harbor.memory_inject import validate_rungs
+
+    # The published default ladder must always be a valid config.
+    assert validate_rungs(DEFAULT_RUNGS) == ("builtin", "ours+builtin")

@@ -53,6 +53,15 @@ def test_task_toml_carries_rung_workid_rig_and_loo_boundary(tmp_path):
     assert md["source"] == "workrecord"
 
 
+def test_allow_internet_defaults_offline_and_is_opt_in(tmp_path):
+    # Offline by default (deterministic scoring); the real-exec spike opts in because
+    # Harbor's installed claude-code agent fetches its CLI + deps over the network.
+    offline = WorkRecordLadderAdapter(_record(), tmp_path / "off").run()
+    assert toml.load(offline[0] / "task.toml")["environment"]["allow_internet"] is False
+    online = WorkRecordLadderAdapter(_record(), tmp_path / "on", allow_internet=True).run()
+    assert toml.load(online[0] / "task.toml")["environment"]["allow_internet"] is True
+
+
 def test_each_dir_carries_its_own_rung(tmp_path):
     # Guards against the loop writing the same rung tag into every task.toml: each
     # dir's recorded rung must match its slug suffix, and all rungs are distinct.

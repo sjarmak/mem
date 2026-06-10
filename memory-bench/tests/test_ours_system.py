@@ -77,6 +77,7 @@ def test_retrieve_maps_items_to_payloads_and_event():
     # Precision-guard signal passes through.
     assert result.total_matched == 5
     assert result.near_duplicate_top is True
+    assert result.fts_truncated is False
 
     # The normalized event mirrors §6.2 for a graph search.
     assert result.event.backend is MemoryBackend.KG
@@ -87,6 +88,16 @@ def test_retrieve_maps_items_to_payloads_and_event():
     assert captured["query"].scope == "same_rig_temporal"
     assert captured["query"].work_id == "B"
     assert captured["query"].store_path == "/tmp/store.db"
+
+
+def test_retrieve_surfaces_fts_truncation():
+    def runner(query):
+        return {**_DATA, "fts_truncated": True}
+
+    arm = OursMemory(store_path="/tmp/store.db", runner=runner)
+    result = arm.retrieve(_req(), _ctx())
+    # The substrate's FTS cap fired — never silently dropped (Decision 10).
+    assert result.fts_truncated is True
 
 
 def test_retrieve_requires_query_work_and_scope():
