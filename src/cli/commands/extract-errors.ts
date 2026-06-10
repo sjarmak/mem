@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { CommandContext } from '../index.js';
+import { readStdin } from '../io.js';
 import { extractErrors } from '../../parse/error-extractors.js';
 import { errorClass, failureSignature, normalizePath } from '../../parse/recurrence.js';
 
@@ -45,17 +46,6 @@ export function extractErrorRows(output: string): ExtractedError[] {
     message: error.message,
     signature: failureSignature(error),
   }));
-}
-
-async function readStdin(): Promise<string> {
-  // A TTY never yields EOF on its own, so the `for await` would hang silently.
-  // Fail loud instead — the consumer always pipes input or uses --file.
-  if (process.stdin.isTTY) {
-    throw new Error('no input: pipe build/test/lint output to stdin, or use --file PATH');
-  }
-  const chunks: Uint8Array[] = [];
-  for await (const chunk of process.stdin) chunks.push(chunk as Uint8Array);
-  return Buffer.concat(chunks).toString('utf8');
 }
 
 /**

@@ -195,3 +195,44 @@ export function appendLesson(db: StoreDatabase, lesson: LessonInput): number {
   // number for every id this table can realistically reach.
   return Number(result.lastInsertRowid);
 }
+
+/** Outcome of {@link importLessons}: how many rows were appended vs already
+ * present (matched on full content identity). */
+export interface ImportLessonsResult {
+  appended: number;
+  skipped: number;
+}
+
+/**
+ * Append exported lessons into this store — the import side of the schema-bump
+ * migration path (export from the old store, rebuild, import here). Still
+ * INSERT-only: a lesson whose full content (work_id, extracted_at, commit_sha,
+ * payload) already exists is skipped, which makes the import idempotent without
+ * ever updating a row. Identity is byte equality of the stored fields — a
+ * mechanical comparison, not a semantic merge.
+ */
+export function importLessons(db: StoreDatabase, lessons: LessonInput[]): ImportLessonsResult {
+  const exists = db.prepare(
+    'SELECT 1 FROM lessons WHERE work_id = ? AND extracted_at = ? AND commit_sha IS ? AND payload = ? LIMIT 1'
+  );
+  let appended = 0;
+  let skipped = 0;
+  db.transaction(() => {
+    for (const lesson of lessons) {
+      const payload = JSON.stringify(lesson.payload);
+      const present = exists.get(
+        lesson.work_id,
+        lesson.extracted_at,
+        lesson.commit_sha ?? null,
+        payload
+      );
+      if (present !== undefined) {
+        skipped += 1;
+        continue;
+      }
+      appendLesson(db, lesson);
+      appended += 1;
+    }
+  })();
+  return { appended, skipped };
+}

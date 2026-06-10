@@ -42,3 +42,12 @@ export function withReadStore<T>(options: CliOptions, fn: (db: StoreDatabase) =>
     db.close();
   }
 }
+
+/**
+ * Open the resolved store for a write (e.g. `import-lessons`). Same existence
+ * rule as the read path: a missing store is a user error, never silently
+ * materialized — writes that belong in a fresh store go through `build-store`.
+ */
+export function withWriteStore<T>(options: CliOptions, fn: (db: StoreDatabase) => T): T {
+  return withReadStore(options, fn);
+}

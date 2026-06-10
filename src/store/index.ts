@@ -5,12 +5,19 @@
  */
 export { SCHEMA_VERSION } from './schema.js';
 export { type StoreDatabase, openStore } from './sqlite.js';
-export { type LessonInput, appendLesson, writeRecords } from './writer.js';
+export {
+  type ImportLessonsResult,
+  type LessonInput,
+  appendLesson,
+  importLessons,
+  writeRecords,
+} from './writer.js';
 export {
   type ErrorSearchHit,
   type RecordFilter,
   type StoredLesson,
   type StoredRun,
+  allLessons,
   getRecord,
   lessonsFor,
   queryRecords,

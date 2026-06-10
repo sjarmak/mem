@@ -4,8 +4,10 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  allLessons,
   appendLesson,
   getRecord,
+  importLessons,
   lessonsFor,
   openStore,
   queryRecords,
@@ -192,6 +194,52 @@ describe('lessons (append-only, D9)', () => {
     writeRecords(db, [fullRecord({ title: 'Fix the build (retry)' })]);
 
     expect(lessonsFor(db, 'demo-1a2b')).toHaveLength(1);
+  });
+
+  it('allLessons lists every lesson across beads in append order', () => {
+    const db = openStore(':memory:');
+    appendLesson(db, {
+      work_id: 'demo-1a2b',
+      extracted_at: '2026-06-03T00:00:00Z',
+      payload: { root_cause: 'a' },
+    });
+    appendLesson(db, {
+      work_id: 'demo-2b3c',
+      extracted_at: '2026-06-04T00:00:00Z',
+      commit_sha: 'def456',
+      payload: { root_cause: 'b' },
+    });
+
+    const lessons = allLessons(db);
+    expect(lessons.map(l => l.work_id)).toEqual(['demo-1a2b', 'demo-2b3c']);
+    expect(lessons[1].commit_sha).toBe('def456');
+  });
+
+  it('importLessons appends exported lessons and skips full-content duplicates', () => {
+    const source = openStore(':memory:');
+    appendLesson(source, {
+      work_id: 'demo-1a2b',
+      extracted_at: '2026-06-03T00:00:00Z',
+      commit_sha: 'abc123',
+      payload: { root_cause: 'a' },
+    });
+    appendLesson(source, {
+      work_id: 'demo-1a2b',
+      extracted_at: '2026-06-04T00:00:00Z',
+      payload: { root_cause: 'b' },
+    });
+    const exported = allLessons(source);
+
+    const dest = openStore(':memory:');
+    expect(importLessons(dest, exported)).toEqual({ appended: 2, skipped: 0 });
+    // Re-import is idempotent: identical content is skipped, never doubled.
+    expect(importLessons(dest, exported)).toEqual({ appended: 0, skipped: 2 });
+
+    const imported = allLessons(dest);
+    expect(imported).toHaveLength(2);
+    expect(imported[0].payload).toEqual({ root_cause: 'a' });
+    expect(imported[0].commit_sha).toBe('abc123');
+    expect(imported[1].commit_sha).toBeUndefined();
   });
 });
 

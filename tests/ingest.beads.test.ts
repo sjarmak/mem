@@ -163,6 +163,27 @@ describe('beadToWorkRecord', () => {
       beadToWorkRecord({ title: 't', status: 'open', created_at: 'x' }, 'mem', [])
     ).toThrow();
   });
+
+  it('degrades malformed metadata to {} with a warning instead of throwing', () => {
+    const warnings: string[] = [];
+    const record = beadToWorkRecord({ ...fullRow, metadata: '{not json' }, 'gascity', [], message =>
+      warnings.push(message)
+    );
+    expect(record.work_id).toBe('gc-05qle');
+    expect(record.metadata).toEqual({});
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/gascity\/gc-05qle/);
+    expect(warnings[0]).toMatch(/malformed bead metadata/);
+  });
+
+  it('degrades non-object metadata to {} with a warning', () => {
+    const warnings: string[] = [];
+    const record = beadToWorkRecord({ ...fullRow, metadata: '[1,2]' }, 'gascity', [], message =>
+      warnings.push(message)
+    );
+    expect(record.metadata).toEqual({});
+    expect(warnings).toHaveLength(1);
+  });
 });
 
 // A fake SQL runner backed by an in-memory fixture, keyed by `database::sql`.
@@ -193,6 +214,28 @@ describe('readRig', () => {
     expect(records).toHaveLength(2);
     expect(records[0].labels).toEqual(['phase1', 'epic']);
     expect(records[1].labels).toEqual([]);
+  });
+
+  it('survives a single bead with malformed metadata (warns, keeps the rest)', async () => {
+    const run = fakeRunner({
+      'gascity::issues': [
+        { id: 'gc-1', title: 'a', status: 'open', priority: '2', created_at: '2026-06-01' },
+        {
+          id: 'gc-2',
+          title: 'b',
+          status: 'open',
+          priority: '1',
+          created_at: '2026-06-02',
+          metadata: '{broken',
+        },
+      ],
+    });
+    const warnings: string[] = [];
+    const records = await readRig(run, 'gascity', message => warnings.push(message));
+    expect(records.map(r => r.work_id)).toEqual(['gc-1', 'gc-2']);
+    expect(records[1].metadata).toEqual({});
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/gc-2/);
   });
 });
 

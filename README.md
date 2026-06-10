@@ -110,6 +110,16 @@ mem query   --store .mem/store.db [--rig R] [--json]      # read the graph
 mem retrieve <work_id> --store .mem/store.db --scope cross-rig|same-rig --json
 ```
 
+The store has no in-place schema migration: a version bump means rebuilding from
+the bead spine. The append-only `lessons` table is the one thing a rebuild
+cannot regenerate, so it is carried across explicitly:
+
+```bash
+mem export-lessons --store .mem/store.db --out lessons.ndjson
+mem build-store --store .mem/store.db            # fresh schema
+mem import-lessons --file lessons.ndjson --store .mem/store.db   # idempotent
+```
+
 `build-store` reuses the ingest readers and the store writer — it adds no
 substrate, only the wiring that lands real WorkRecords in the store the
 retrieval/eval path reads. With `--with-traces` it additionally resolves each

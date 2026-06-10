@@ -136,9 +136,18 @@ export function parseAssignee(raw: string): AgentRef | null {
   return { agent_id: assignee };
 }
 
+/** Sink for non-fatal ingest anomalies. Defaults to stderr so a degraded read
+ * is always visible; tests inject a collector. */
+export type WarnFn = (message: string) => void;
+
+const stderrWarn: WarnFn = message => console.error(message);
+
 /** The bead `metadata` column is a JSON-encoded object; decode it (empty → {}).
  * Malformed JSON or a non-object payload throws — both are real producer bugs,
- * surfaced here with an actionable message rather than as a deep Zod path. */
+ * surfaced here with an actionable message rather than as a deep Zod path.
+ * (The mapping layer catches this per bead — see {@link beadToWorkRecord} — so
+ * one bad producer row degrades that record to `{}` instead of aborting the
+ * whole rig read.) */
 export function parseMetadata(raw: string | undefined): Record<string, unknown> {
   if (raw === undefined || raw === '') {
     return {};
@@ -167,15 +176,31 @@ export function groupLabels(rows: DoltRow[]): Map<string, string[]> {
   return byIssue;
 }
 
-/** Map one issues row + its labels to a validated WorkRecord spine. */
-export function beadToWorkRecord(row: DoltRow, rig: string, labels: string[]): WorkRecord {
+/** Map one issues row + its labels to a validated WorkRecord spine.
+ * Malformed metadata is external producer data we don't control, so it degrades
+ * to `{}` with a warning rather than aborting the rig read; every other shape
+ * violation still throws (a broken spine is not ingestible). */
+export function beadToWorkRecord(
+  row: DoltRow,
+  rig: string,
+  labels: string[],
+  warn: WarnFn = stderrWarn
+): WorkRecord {
   const agent = row.assignee ? parseAssignee(row.assignee) : null;
+  let metadata: Record<string, unknown>;
+  try {
+    metadata = parseMetadata(row.metadata);
+  } catch (error: unknown) {
+    const detail = error instanceof Error ? error.message : String(error);
+    warn(`warning: ${rig}/${row.id ?? '<no id>'}: malformed bead metadata ignored (${detail})`);
+    metadata = {};
+  }
   const candidate = {
     work_id: row.id,
     rig,
     title: row.title ?? '',
     labels,
-    metadata: parseMetadata(row.metadata),
+    metadata,
     priority: row.priority === undefined ? undefined : Number(row.priority),
     external_ref: row.external_ref,
     lifecycle: {
@@ -211,20 +236,27 @@ export async function listRigs(run: SqlRunner): Promise<string[]> {
 }
 
 /** Read all WorkRecord spines for a single rig. */
-export async function readRig(run: SqlRunner, rig: string): Promise<WorkRecord[]> {
+export async function readRig(
+  run: SqlRunner,
+  rig: string,
+  warn: WarnFn = stderrWarn
+): Promise<WorkRecord[]> {
   const [issues, labels] = await Promise.all([run(rig, ISSUES_SQL), run(rig, LABELS_SQL)]);
   const labelsByIssue = groupLabels(labels);
   return issues
     .filter((row): row is DoltRow & { id: string } => row.id !== undefined)
-    .map(row => beadToWorkRecord(row, rig, labelsByIssue.get(row.id) ?? []));
+    .map(row => beadToWorkRecord(row, rig, labelsByIssue.get(row.id) ?? [], warn));
 }
 
 /** Read WorkRecord spines across every rig on the server. */
-export async function readAllRigs(run: SqlRunner): Promise<WorkRecord[]> {
+export async function readAllRigs(
+  run: SqlRunner,
+  warn: WarnFn = stderrWarn
+): Promise<WorkRecord[]> {
   const rigs = await listRigs(run);
   const all: WorkRecord[] = [];
   for (const rig of rigs) {
-    all.push(...(await readRig(run, rig)));
+    all.push(...(await readRig(run, rig, warn)));
   }
   return all;
 }

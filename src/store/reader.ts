@@ -105,6 +105,30 @@ export function lessonsFor(db: StoreDatabase, workId: string): StoredLesson[] {
   }));
 }
 
+/** Every lesson in the store, in append (id) order — the export side of the
+ * schema-bump migration path. Lessons are the one table a store rebuild cannot
+ * regenerate (append-only, extracted once per Decision 9), so they must be
+ * carriable across rebuilds. */
+export function allLessons(db: StoreDatabase): StoredLesson[] {
+  const rows = db
+    .prepare('SELECT id, work_id, extracted_at, commit_sha, payload FROM lessons ORDER BY id')
+    .all() as {
+    id: number;
+    work_id: string;
+    extracted_at: string;
+    commit_sha: string | null;
+    payload: string;
+  }[];
+
+  return rows.map(row => ({
+    id: row.id,
+    work_id: row.work_id,
+    extracted_at: row.extracted_at,
+    ...(row.commit_sha !== null && { commit_sha: row.commit_sha }),
+    payload: JSON.parse(row.payload) as Record<string, unknown>,
+  }));
+}
+
 /** Every work id reachable from `workId` over `supersedes` links, traversed as
  * undirected edges (ancestors AND descendants — both are "the same work" for the
  * Decision-6 leave-one-out exclusion), sorted; `workId` itself is excluded
