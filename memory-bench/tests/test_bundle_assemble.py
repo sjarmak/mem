@@ -289,6 +289,16 @@ def test_loo_excluded_ids_cover_self_and_siblings():
     assert excluded == ("mem-0.9", "mem-1.1", "mem-2.2", "mem-3.3")
 
 
+def test_loo_includes_own_supersedes_links_when_record_absent_from_corpus():
+    # Regression: the record's own links.supersedes edges must seed the closure
+    # even when the corpus omits the record (the default corpus=()).
+    query = make_record(links={"deps": [], "supersedes": ["mem-0.9"]})
+    assert loo_excluded_ids(query, ()) == ("mem-0.9", "mem-1.1")
+    # And transitively through corpus edges hanging off the record's own link.
+    corpus = [_corpus_record("mem-0.8", links={"deps": [], "supersedes": ["mem-0.9"]})]
+    assert loo_excluded_ids(query, corpus) == ("mem-0.8", "mem-0.9", "mem-1.1")
+
+
 def test_bundle_carries_the_loo_exclusion_ids():
     query = make_record(links={"deps": [], "convoy_id": "convoy-7", "supersedes": []})
     sibling = _corpus_record(

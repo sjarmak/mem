@@ -168,9 +168,13 @@ def loo_excluded_ids(
     """The bundle-level LOO exclusion set: the record itself + its undirected
     supersedes closure + its convoy/pr/branch siblings over ``corpus``, sorted.
     Exactly the `validity` same-work semantics, materialized as ids so any grid
-    run can enforce the boundary without re-deriving it."""
+    run can enforce the boundary without re-deriving it.
+
+    The record's own ref is always part of the adjacency input: its
+    ``links.supersedes`` edges must seed the closure even when ``corpus`` omits
+    the record itself (the default ``corpus=()``)."""
     query = query_from_record(record)
-    refs = [work_ref_from_record(r) for r in corpus]
+    refs = [work_ref_from_record(record)] + [work_ref_from_record(r) for r in corpus]
     excluded = {query.work_id}
     excluded |= supersedes_closure(refs, query.work_id)
     excluded |= {ref.work_id for ref in refs if is_sibling(ref, query)}
