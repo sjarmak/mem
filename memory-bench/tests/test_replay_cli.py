@@ -6,26 +6,19 @@ emitted 5-axis report + OTel spans. Skips when node / the TS build is absent.
 """
 
 import json
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
 from membench import cli
+from tests.paths import DIST_STORE, MEM_BIN, REPO, require_mem_cli
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-MEM_BIN = REPO_ROOT / "bin" / "mem"
-DIST = REPO_ROOT / "dist" / "store" / "index.js"
-BUILDER = REPO_ROOT / "memory-bench" / "fixtures" / "build_replay_store.mjs"
+BUILDER = REPO / "fixtures" / "build_replay_store.mjs"
 
 
 def _build_store(tmp_path: Path) -> Path:
-    node = shutil.which("node")
-    if node is None:
-        pytest.skip("node not available")
-    if not DIST.exists():
-        pytest.skip("TS build missing (run `npm run build`)")
+    node = require_mem_cli(DIST_STORE)
     db = tmp_path / "store.db"
     proc = subprocess.run(
         [node, str(BUILDER), str(db)], capture_output=True, text=True, check=False

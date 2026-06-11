@@ -1,0 +1,24 @@
+#!/usr/bin/env node
+// Stub `gc` for the pipeline e2e test — answers `gc session logs <id> --json`
+// (the exact invocation ingest/trace-resolve.ts gcSessionResolver makes) from
+// the committed ../sessions.json map, resolving each transcript to an absolute
+// path. An unknown session exits non-zero, mirroring real `gc` (the resolver
+// treats that as "unresolved", not an error). Any other subcommand exits 2.
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const [, , command, sub, sessionId, jsonFlag] = process.argv;
+if (command !== 'session' || sub !== 'logs' || !sessionId || jsonFlag !== '--json') {
+  console.error('gc stub: only `gc session logs <id> --json` is supported');
+  process.exit(2);
+}
+
+const here = dirname(fileURLToPath(import.meta.url));
+const { sessions } = JSON.parse(readFileSync(resolve(here, '../sessions.json'), 'utf8'));
+const rel = sessions[sessionId];
+if (rel === undefined) {
+  console.error(`gc stub: unknown session ${sessionId}`);
+  process.exit(1);
+}
+process.stdout.write(JSON.stringify({ ok: true, transcript_path: resolve(here, '..', rel) }));

@@ -1,0 +1,10 @@
+{
+  "comment": "Session-id -> transcript path (relative to this dir), served by bin/gc as `gc session logs <id> --json`. One session per fixture assignee; all share the one failing-build transcript so every record carries the planted signature.",
+  "sessions": {
+    "gc-101": "transcripts/failing_build.jsonl",
+    "gc-102": "transcripts/failing_build.jsonl",
+    "gc-103": "transcripts/failing_build.jsonl",
+    "gc-104": "transcripts/failing_build.jsonl",
+    "gc-105": "transcripts/failing_build.jsonl"
+  }
+}

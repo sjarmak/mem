@@ -6,7 +6,6 @@ gracefully when the TS build, node, or the native sqlite module is unavailable,
 so the hermetic unit suite still runs everywhere.
 """
 
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -15,23 +14,13 @@ import pytest
 from membench.memory_systems.ours_system import OursMemory
 from membench.replay import replay_arm
 from membench.validity import QueryWork, WorkRef
+from tests.paths import DIST_STORE, MEM_BIN, REPO, require_mem_cli
 
-# memory-bench/tests -> memory-bench -> repo root.
-REPO_ROOT = Path(__file__).resolve().parents[2]
-MEM_BIN = REPO_ROOT / "bin" / "mem"
-DIST = REPO_ROOT / "dist" / "store" / "index.js"
-BUILDER = REPO_ROOT / "memory-bench" / "fixtures" / "build_replay_store.mjs"
+BUILDER = REPO / "fixtures" / "build_replay_store.mjs"
 
 
 def _require_cli() -> str:
-    node = shutil.which("node")
-    if node is None:
-        pytest.skip("node not available")
-    if not DIST.exists():
-        pytest.skip("TS build missing (run `npm run build`)")
-    if not MEM_BIN.exists():
-        pytest.skip("mem CLI bin missing")
-    return node
+    return require_mem_cli(DIST_STORE)
 
 
 def _build_store(node: str, db_path: Path) -> None:

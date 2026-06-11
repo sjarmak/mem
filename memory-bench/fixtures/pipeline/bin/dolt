@@ -1,0 +1,46 @@
+#!/usr/bin/env node
+// Stub `dolt` for the pipeline e2e test — impersonates `dolt ... sql -r json -q
+// "use \`<db>\`; <sql>"` (the exact invocation ingest/beads.ts doltRunner makes)
+// by serving the committed rows in ../dolt_rows.json. Output mirrors the real
+// renderer: a `{"rows": [...]}` JSON document, every value a string, NULL
+// columns omitted. The SQL is matched EXACTLY against the strings pinned in the
+// fixture's `queries` block — any ingest-side query change exits non-zero and
+// costs a deliberate fixture bump, never silently serves shape-valid-but-wrong
+// rows (dolt omits NULL columns, so a missing column would go unnoticed).
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const fixture = JSON.parse(readFileSync(resolve(here, '../dolt_rows.json'), 'utf8'));
+
+const qIndex = process.argv.indexOf('-q');
+const query = qIndex === -1 ? undefined : process.argv[qIndex + 1];
+if (query === undefined) {
+  console.error('dolt stub: expected `sql -r json -q <query>`');
+  process.exit(2);
+}
+
+const useMatch = /^use `([^`]+)`;\s*([\s\S]*)$/.exec(query);
+if (!useMatch) {
+  console.error(`dolt stub: unexpected query shape: ${query}`);
+  process.exit(2);
+}
+const [, database, sql] = useMatch;
+
+function rowsFor() {
+  const trimmed = sql.trim();
+  if (database === 'information_schema' && trimmed === fixture.queries.rigs) {
+    return fixture.rigs.map(rig => ({ rig }));
+  }
+  if (trimmed === fixture.queries.issues) return fixture.issues[database] ?? [];
+  if (trimmed === fixture.queries.labels) return fixture.labels[database] ?? [];
+  return null;
+}
+
+const rows = rowsFor();
+if (rows === null) {
+  console.error(`dolt stub: unhandled query against ${database}: ${sql}`);
+  process.exit(2);
+}
+process.stdout.write(JSON.stringify({ rows }));
