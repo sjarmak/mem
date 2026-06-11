@@ -34,7 +34,7 @@ calls. The pass/fail status this module keys on was produced upstream by the
 deterministic trace parse (``parse/trace-parse.ts``), not judged here.
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -105,7 +105,7 @@ def _unresolved_tail_failures(trace: Mapping[str, Any]) -> list[str]:
     for execution in outcomes:
         if not isinstance(execution, Mapping):
             raise ValueError(f"malformed trace execution (not a mapping): {execution!r}")
-        final_by_runner[str(execution.get("runner"))] = execution
+        final_by_runner[str(execution.get("runner") or "<unknown>")] = execution
     return sorted(
         runner
         for runner, execution in final_by_runner.items()
@@ -163,7 +163,7 @@ def _env_from_record(record: Mapping[str, Any], base_images: Mapping[str, str]) 
 
 
 def loo_excluded_ids(
-    record: Mapping[str, Any], corpus: Iterable[Mapping[str, Any]]
+    record: Mapping[str, Any], corpus: Sequence[Mapping[str, Any]]
 ) -> tuple[str, ...]:
     """The bundle-level LOO exclusion set: the record itself + its undirected
     supersedes closure + its convoy/pr/branch siblings over ``corpus``, sorted.
@@ -185,7 +185,7 @@ def assemble_bundle(
     record: Mapping[str, Any],
     replay: ReplayResult,
     *,
-    corpus: Iterable[Mapping[str, Any]] = (),
+    corpus: Sequence[Mapping[str, Any]] = (),
     base_images: Mapping[str, str] = DEFAULT_BASE_IMAGES,
 ) -> TaskBundle | Rejection:
     """Admit + assemble one record into a `TaskBundle`, or return the typed
@@ -223,7 +223,7 @@ def assemble_bundle(
         rig=str(record["rig"]),
         issue_title=issue_title,
         issue_body=issue_body,
-        trace_ref=str(_mapping(record, "trace")["jsonl_path"]),
+        trace_ref=_text(_mapping(record, "trace"), "jsonl_path"),
         output=replay,
         env=env,
         loo_excluded_work_ids=loo_excluded_ids(record, corpus),

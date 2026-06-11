@@ -25,9 +25,14 @@ All models are frozen value objects (membench schema idiom). This module depends
 imports this module, keeping the import graph acyclic.
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from membench.bundle.replay import ReplayResult
+
+# Plan §9.5's scoring-policy vocabulary; "direct" is the current probe-grade leg.
+ScoringPolicy = Literal["direct", "min", "mean", "weighted"]
 
 
 class CuratedOracle(BaseModel):
@@ -54,7 +59,7 @@ class BundleVerification(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    scoring_policy: str = "direct"
+    scoring_policy: ScoringPolicy = "direct"
     weight_direct: float = 0.5
     weight_artifact: float = 0.5
     score_direct: float | None = Field(default=None, ge=0.0, le=1.0)

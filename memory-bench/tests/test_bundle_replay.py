@@ -130,7 +130,7 @@ def test_clean_edit_applies(checkout: Path):
     assert (checkout / "src" / "app.py").read_text(encoding="utf-8") == APP.replace(
         "return 1", "return 2"
     )
-    assert "+    return 2" in result.file_diffs["src/app.py"]
+    assert "+    return 2" in result.diff_by_file()["src/app.py"]
 
 
 def test_write_creates_new_file_and_appears_in_diff(checkout: Path):
@@ -139,7 +139,7 @@ def test_write_creates_new_file_and_appears_in_diff(checkout: Path):
     assert result.calls[0].outcome is ReplayOutcome.APPLIED
     assert (checkout / "docs" / "new.md").read_text(encoding="utf-8") == "# hi\n"
     # `git add -N` makes the brand-new file visible to `git diff`.
-    assert "+# hi" in result.file_diffs["docs/new.md"]
+    assert "+# hi" in result.diff_by_file()["docs/new.md"]
 
 
 def test_multiedit_applies_sequentially_in_order(checkout: Path):
@@ -177,7 +177,7 @@ def test_multiedit_is_atomic_on_mid_sequence_failure(checkout: Path):
     assert "edit 1" in result.calls[0].detail
     # All-or-nothing: the first op must NOT have been written.
     assert (checkout / "src" / "app.py").read_text(encoding="utf-8") == APP
-    assert result.file_diffs == {}
+    assert result.file_diffs == ()
 
 
 def test_old_string_drift_is_detected_and_classified(checkout: Path):
@@ -238,8 +238,8 @@ def test_gold_diff_contains_new_and_modified_files(checkout: Path):
         _event(_write(f"{WORK}/docs/new.md", "# hi\n")),
     )
     result = replay_transcript(stream, checkout_dir=checkout, work_dir=WORK)
-    assert set(result.file_diffs) == {"src/app.py", "docs/new.md"}
-    assert all(diff.startswith("diff --git") for diff in result.file_diffs.values())
+    assert set(result.diff_by_file()) == {"src/app.py", "docs/new.md"}
+    assert all(diff.startswith("diff --git") for _, diff in result.file_diffs)
     assert result.replay_success_rate == 1.0
 
 
@@ -257,6 +257,24 @@ def test_success_rate_is_applied_over_total(checkout: Path):
 def test_empty_transcript_yields_zero_rate_and_empty_diff(checkout: Path):
     result = replay_transcript("", checkout_dir=checkout, work_dir=WORK)
     assert result == ReplayResult(calls=(), file_diffs={}, replay_success_rate=0.0)
+
+
+def test_file_diffs_is_immutable(checkout: Path):
+    """Regression (review pass): file_diffs must be a real value, not a mutable dict
+    hiding inside a frozen model -- in-place mutation raises, and the mapping view
+    returned by diff_by_file() is a detached copy."""
+    stream = _stream(_event(_edit(f"{WORK}/src/app.py", "return 1", "return 2")))
+    result = replay_transcript(stream, checkout_dir=checkout, work_dir=WORK)
+    with pytest.raises(TypeError):
+        result.file_diffs[0] = ("evil.py", "diff")  # type: ignore[index]
+    view = result.diff_by_file()
+    view.clear()
+    assert result.diff_by_file() != {}
+    # A mapping passed at construction is converted to sorted pairs, not aliased.
+    source = {"b.py": "diff b", "a.py": "diff a"}
+    model = ReplayResult(calls=(), file_diffs=source, replay_success_rate=0.0)
+    source["c.py"] = "diff c"
+    assert model.file_diffs == (("a.py", "diff a"), ("b.py", "diff b"))
 
 
 def test_gold_diff_git_failure_raises_loud(tmp_path: Path):

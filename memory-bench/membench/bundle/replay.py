@@ -51,7 +51,7 @@ from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
 
 from membench.harbor.harbor_exec import _FILE_TOOLS
 
@@ -124,6 +124,11 @@ class ReplayResult(BaseModel):
     """The structured replay product: per-call outcomes, the per-file gold diff (paths
     as git reports them, relative to the checkout root), and the fidelity rate.
 
+    ``file_diffs`` is stored as sorted ``(path, diff)`` pairs, not a dict: a dict field
+    inside a frozen pydantic model is still mutable in place, which would break the
+    frozen-value-object contract. A mapping passed at construction (what `gold_diff`
+    produces) is converted; use `diff_by_file` for mapping-shaped access.
+
     ``replay_success_rate`` for an empty call list is 0.0 by definition: a transcript
     with no file mutations yields no gold diff, and 0.0 marks it non-admittable rather
     than vacuously perfect."""
@@ -131,8 +136,19 @@ class ReplayResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     calls: tuple[CallReplay, ...]
-    file_diffs: dict[str, str]
+    file_diffs: tuple[tuple[str, str], ...]
     replay_success_rate: float
+
+    @field_validator("file_diffs", mode="before")
+    @classmethod
+    def _file_diffs_as_pairs(cls, value: object) -> object:
+        if isinstance(value, Mapping):
+            return tuple(sorted(value.items()))
+        return value
+
+    def diff_by_file(self) -> dict[str, str]:
+        """The per-file diffs as a FRESH mapping -- mutating it never touches the model."""
+        return dict(self.file_diffs)
 
 
 def _mutation_call_from_block(name: MutationTool, args: Mapping[str, Any]) -> MutationCall:
@@ -237,7 +253,8 @@ def replay_call(call: MutationCall, index: int, *, checkout_dir: Path, work_dir:
             detail=f"path does not normalize to inside work_dir {work_dir!r}",
         )
     if call.tool == "Write":
-        assert call.content is not None  # guaranteed by MutationCall._payload_matches_tool
+        if call.content is None:  # _payload_matches_tool forbids this; keep the failure loud
+            raise ValueError(f"Write call {index} for {call.path!r} carries no content")
         rebased.parent.mkdir(parents=True, exist_ok=True)
         rebased.write_text(call.content, encoding="utf-8")
         outcome, detail = ReplayOutcome.APPLIED, ""
@@ -308,6 +325,6 @@ def replay_transcript(
     applied = sum(1 for r in replays if r.outcome is ReplayOutcome.APPLIED)
     return ReplayResult(
         calls=replays,
-        file_diffs=gold_diff(checkout_dir, runner=runner),
+        file_diffs=tuple(sorted(gold_diff(checkout_dir, runner=runner).items())),
         replay_success_rate=applied / len(replays) if replays else 0.0,
     )

@@ -72,7 +72,7 @@ def test_disjoint_file_sets_score_zero() -> None:
     assert score.file_precision == 0.0
     assert score.file_recall == 0.0
     assert score.file_f1 == 0.0
-    assert score.per_file_overlap == {}
+    assert score.per_file_overlap == ()
     assert score.hunk_overlap == 0.0
     assert score.combined == 0.0
 
@@ -86,7 +86,7 @@ def test_partial_file_overlap_f1() -> None:
     assert score.file_recall == pytest.approx(0.5)
     assert score.file_f1 == pytest.approx(0.5)
     # The single overlapping file matches exactly.
-    assert score.per_file_overlap == {"b.py": 1.0}
+    assert score.per_file_overlap == (("b.py", 1.0),)
     assert score.hunk_overlap == pytest.approx(1.0)
     assert score.combined == pytest.approx(0.5)
 
@@ -112,7 +112,7 @@ def test_hunk_overlap_is_changed_line_jaccard() -> None:
     gold = {"f.py": _diff("f.py", "+y", "+z")}
     score = score_probe_direct(candidate, gold)
     # Changed-line sets {+x,+y} vs {+y,+z}: |inter|=1, |union|=3.
-    assert score.per_file_overlap == {"f.py": pytest.approx(1 / 3)}
+    assert dict(score.per_file_overlap) == {"f.py": pytest.approx(1 / 3)}
     assert score.hunk_overlap == pytest.approx(1 / 3)
     assert score.file_f1 == pytest.approx(1.0)
     assert score.combined == pytest.approx(1 / 3)
@@ -132,7 +132,7 @@ def test_both_empty_changed_line_sets_overlap_one() -> None:
     candidate = {"f.py": _diff("f.py", " ctx")}
     gold = {"f.py": _diff("f.py", " ctx")}
     score = score_probe_direct(candidate, gold)
-    assert score.per_file_overlap == {"f.py": 1.0}
+    assert score.per_file_overlap == (("f.py", 1.0),)
     assert score.combined == 1.0
 
 
@@ -148,6 +148,27 @@ def test_hunk_overlap_averaged_across_overlapping_files() -> None:
     score = score_probe_direct(candidate, gold)
     assert score.hunk_overlap == pytest.approx(0.5)
     assert score.combined == pytest.approx(0.5)  # f1 = 1.0
+
+
+def test_per_file_overlap_is_immutable() -> None:
+    """Regression (review pass): per_file_overlap must be a real value, not a mutable
+    dict hiding inside a frozen model -- in-place mutation raises, and a mapping passed
+    at construction is converted to sorted pairs, not aliased."""
+    gold = {"a.py": _diff("a.py", "+x")}
+    score = score_probe_direct(gold, gold)
+    with pytest.raises(TypeError):
+        score.per_file_overlap[0] = ("evil.py", 0.0)  # type: ignore[index]
+    source = {"b.py": 0.5, "a.py": 1.0}
+    built = ProbeDirectScore(
+        file_precision=1.0,
+        file_recall=1.0,
+        file_f1=1.0,
+        per_file_overlap=source,
+        hunk_overlap=0.75,
+        combined=0.75,
+    )
+    source["c.py"] = 0.0
+    assert built.per_file_overlap == (("a.py", 1.0), ("b.py", 0.5))
 
 
 # --- extract_efficiency: synthetic stream-json transcripts ------------------------

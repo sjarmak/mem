@@ -57,7 +57,7 @@ import json
 from collections.abc import Mapping
 from statistics import fmean
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from membench.schemas.bundle import TaskBundle
 
@@ -65,7 +65,9 @@ from membench.schemas.bundle import TaskBundle
 class ProbeDirectScore(BaseModel):
     """The probe's direct-leg score for one candidate-vs-gold diff pair.
 
-    ``per_file_overlap`` covers exactly the overlapping files (candidate ∩ gold);
+    ``per_file_overlap`` covers exactly the overlapping files (candidate ∩ gold),
+    stored as sorted ``(path, jaccard)`` pairs (a dict field inside a frozen model is
+    still mutable in place; a mapping passed at construction is converted);
     ``hunk_overlap`` is its unweighted mean (0.0 when no files overlap);
     ``combined = file_f1 * hunk_overlap`` (rule documented in the module docstring)."""
 
@@ -74,9 +76,16 @@ class ProbeDirectScore(BaseModel):
     file_precision: float = Field(ge=0.0, le=1.0)
     file_recall: float = Field(ge=0.0, le=1.0)
     file_f1: float = Field(ge=0.0, le=1.0)
-    per_file_overlap: dict[str, float]
+    per_file_overlap: tuple[tuple[str, float], ...]
     hunk_overlap: float = Field(ge=0.0, le=1.0)
     combined: float = Field(ge=0.0, le=1.0)
+
+    @field_validator("per_file_overlap", mode="before")
+    @classmethod
+    def _per_file_overlap_as_pairs(cls, value: object) -> object:
+        if isinstance(value, Mapping):
+            return tuple(sorted(value.items()))
+        return value
 
 
 class ProbeEfficiency(BaseModel):
@@ -142,7 +151,7 @@ def score_probe_direct(
         file_precision=precision,
         file_recall=recall,
         file_f1=f1,
-        per_file_overlap=per_file_overlap,
+        per_file_overlap=tuple(per_file_overlap.items()),  # built over sorted(overlap_files)
         hunk_overlap=hunk_overlap,
         combined=f1 * hunk_overlap,
     )
@@ -200,4 +209,4 @@ def gold_file_list(bundle: TaskBundle) -> tuple[str, ...]:
     This is the gate's poor-man oracle rung (plan §9.2) -- the upper-bound condition
     injects "the files the gold change touched" with no curation. Paths are
     checkout-relative, exactly as `bundle.replay.gold_diff` recorded them."""
-    return tuple(sorted(bundle.output.file_diffs))
+    return tuple(sorted(path for path, _ in bundle.output.file_diffs))

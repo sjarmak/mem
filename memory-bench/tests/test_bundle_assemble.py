@@ -110,7 +110,7 @@ def test_clean_closed_record_assembles_a_bundle():
     assert "flakes under parallel runs" in bundle.issue_body
     assert bundle.trace_ref == "/traces/mem-1.1.jsonl"
     assert bundle.output.replay_success_rate == 1.0
-    assert "src/store/writer.ts" in bundle.output.file_diffs
+    assert "src/store/writer.ts" in bundle.output.diff_by_file()
 
 
 def test_env_fields_populated_from_record():
@@ -341,6 +341,14 @@ def test_bundle_with_oracle_context_round_trips():
     assert restored == enriched
     assert restored.oracle_context is not None
     assert restored.oracle_context.oracle_answer == ("src/store/writer.ts",)
+
+
+def test_scoring_policy_vocabulary_is_constrained():
+    # Plan §9.5 vocabulary (+ the current "direct" probe leg); a typo fails loudly.
+    for policy in ("direct", "min", "mean", "weighted"):
+        assert BundleVerification(scoring_policy=policy).scoring_policy == policy
+    with pytest.raises(ValidationError):
+        BundleVerification(scoring_policy="wieghted")
 
 
 def test_bundle_models_are_frozen():
