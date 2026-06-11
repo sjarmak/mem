@@ -118,6 +118,14 @@ mem query   --store .mem/store.db [--rig R] [--json]      # read the graph
 mem retrieve <work_id> --store .mem/store.db --scope cross-rig|same-rig --json
 ```
 
+`mem retrieve` also speaks the engram progressive-disclosure layers via
+`--format`: `index` lists each ranked item with its citation URI
+(`mem://lesson/<work_id>[/<commit_sha>]`) and the estimated token cost of
+hydrating it; `details --pick a,b` hydrates only the chosen items; the
+default `full` is the original flat payload. Retrieval is deterministic, so
+an index call and the details call that follows it see the same ranking —
+the agent, not the pipeline, chooses how many tokens to spend.
+
 Two invocation traps, both of which fail silently with exit 0: the CLI
 entrypoint is `./bin/mem` (`node dist/main.js` only defines the function and
 does nothing), and `--with-traces` resolves sessions through `gc session

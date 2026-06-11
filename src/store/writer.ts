@@ -1,4 +1,5 @@
 import { errorClass, failureSignature, normalizePath } from '../parse/recurrence.js';
+import { LessonPayloadSchema } from '../schemas/lesson.js';
 import { WorkRecordSchema, type WorkRecord } from '../schemas/workrecord.js';
 import type { StoreDatabase } from './sqlite.js';
 
@@ -187,7 +188,10 @@ export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
 
 /** A distilled lesson to append (Decision 9). `commit_sha` is the citation
  * snapshot taken at extraction time — pass the outcome's sha as it existed
- * when the lesson was distilled, not a value to be resolved later. */
+ * when the lesson was distilled, not a value to be resolved later. The
+ * payload is freeform, but its well-known progressive-disclosure fields
+ * (subtitle/facts/narrative/concepts — see schemas/lesson) must be
+ * well-formed when present. */
 export interface LessonInput {
   work_id: string;
   extracted_at: string;
@@ -195,8 +199,9 @@ export interface LessonInput {
   payload: Record<string, unknown>;
 }
 
-/** Append one lesson and return its id. INSERT only — see module docs. */
-export function appendLesson(db: StoreDatabase, lesson: LessonInput): number {
+/** The raw INSERT, shared by the validated append path and the migration
+ * import path (which must carry pre-convention payloads byte-identically). */
+function insertLesson(db: StoreDatabase, lesson: LessonInput): number {
   const result = db
     .prepare('INSERT INTO lessons (work_id, extracted_at, commit_sha, payload) VALUES (?, ?, ?, ?)')
     .run(
@@ -208,6 +213,15 @@ export function appendLesson(db: StoreDatabase, lesson: LessonInput): number {
   // lastInsertRowid is number | bigint; without .safeIntegers() it is a
   // number for every id this table can realistically reach.
   return Number(result.lastInsertRowid);
+}
+
+/** Append one newly distilled lesson and return its id. INSERT only — see
+ * module docs. The payload's disclosure convention is validated, but the
+ * *original* object is stored: zod re-serialization could reorder keys, and
+ * {@link importLessons} identity is byte equality of the stored JSON. */
+export function appendLesson(db: StoreDatabase, lesson: LessonInput): number {
+  LessonPayloadSchema.parse(lesson.payload);
+  return insertLesson(db, lesson);
 }
 
 /** Outcome of {@link importLessons}: how many rows were appended vs already
@@ -223,7 +237,10 @@ export interface ImportLessonsResult {
  * INSERT-only: a lesson whose full content (work_id, extracted_at, commit_sha,
  * payload) already exists is skipped, which makes the import idempotent without
  * ever updating a row. Identity is byte equality of the stored fields — a
- * mechanical comparison, not a semantic merge.
+ * mechanical comparison, not a semantic merge. Deliberately NOT gated on the
+ * disclosure convention ({@link appendLesson} is): historical lessons predate
+ * it, and a migration that hard-fails on one legacy payload would brick the
+ * one store table a rebuild cannot regenerate.
  */
 export function importLessons(db: StoreDatabase, lessons: LessonInput[]): ImportLessonsResult {
   const exists = db.prepare(
@@ -244,7 +261,7 @@ export function importLessons(db: StoreDatabase, lessons: LessonInput[]): Import
         skipped += 1;
         continue;
       }
-      appendLesson(db, lesson);
+      insertLesson(db, lesson);
       appended += 1;
     }
   })();

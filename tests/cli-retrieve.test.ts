@@ -86,7 +86,7 @@ describe('retrieveCommand — replay mode', () => {
     );
 
     expect(result.items).toEqual([]);
-    expect(result.total_matched).toBe(1);
+    expect(result).toMatchObject({ total_matched: 1 });
   });
 
   it('throws on an unknown work_id', () => {
@@ -119,6 +119,68 @@ describe('retrieveCommand — query-file mode', () => {
     expect(() =>
       retrieveCommand(ctx(storePath, [], { scope: 'cross-rig', query: queryPath }))
     ).toThrow();
+  });
+});
+
+describe('retrieveCommand — progressive disclosure (--format)', () => {
+  it('--format index returns L1 rows with URIs and token costs, no lessons', () => {
+    const result = retrieveCommand(
+      ctx(storePath, ['rigA-query'], { scope: 'cross-rig', format: 'index' })
+    );
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      uri: 'mem://lesson/rigB-prior',
+      source_uri: 'mem://record/rigB-prior',
+      work_id: 'rigB-prior',
+      lesson_count: 0,
+    });
+    expect(result.items[0]).not.toHaveProperty('lessons');
+    expect(result).toHaveProperty('token_cost_total');
+  });
+
+  it('--format details hydrates the picked work_ids', () => {
+    const result = retrieveCommand(
+      ctx(storePath, ['rigA-query'], { scope: 'cross-rig', format: 'details', pick: 'rigB-prior' })
+    );
+
+    expect(result.items.map(i => i.work_id)).toEqual(['rigB-prior']);
+    expect(result.items[0]).toMatchObject({
+      uri: 'mem://lesson/rigB-prior',
+      lessons: [],
+      matched_signatures: [expect.any(String)],
+    });
+  });
+
+  it('rejects a --pick id missing from the result', () => {
+    expect(() =>
+      retrieveCommand(
+        ctx(storePath, ['rigA-query'], { scope: 'cross-rig', format: 'details', pick: 'nope-1' })
+      )
+    ).toThrow(/nope-1/);
+  });
+
+  it('rejects --pick without --format details', () => {
+    expect(() =>
+      retrieveCommand(ctx(storePath, ['rigA-query'], { scope: 'cross-rig', pick: 'rigB-prior' }))
+    ).toThrow(/--format details/);
+  });
+
+  it('rejects an unknown --format', () => {
+    expect(() =>
+      retrieveCommand(ctx(storePath, ['rigA-query'], { scope: 'cross-rig', format: 'huge' }))
+    ).toThrow(/--format/);
+  });
+
+  it('default format is the unchanged flat result (membench contract)', () => {
+    const result = retrieveCommand(ctx(storePath, ['rigA-query'], { scope: 'cross-rig' }));
+
+    expect(result.items[0]).toMatchObject({
+      work_id: 'rigB-prior',
+      citation: { work_id: 'rigB-prior' },
+      lessons: [],
+    });
+    expect(result.items[0]).not.toHaveProperty('uri');
   });
 });
 

@@ -203,6 +203,45 @@ describe('lessons (append-only, D9)', () => {
     expect(lessons[0].id).toBeLessThan(lessons[1].id);
   });
 
+  it('validates the disclosure convention: a malformed concept tag is rejected', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [fullRecord()]);
+
+    expect(() =>
+      appendLesson(db, {
+        work_id: 'demo-1a2b',
+        extracted_at: '2026-06-03T00:00:00Z',
+        payload: { subtitle: 'x', concepts: ['not-a-real-tag'] },
+      })
+    ).toThrow();
+
+    const ok = appendLesson(db, {
+      work_id: 'demo-1a2b',
+      extracted_at: '2026-06-03T00:00:00Z',
+      payload: { subtitle: 'x', concepts: ['gotcha', 'trade-off'], extra: { kept: true } },
+    });
+    expect(lessonsFor(db, 'demo-1a2b')[0].id).toBe(ok);
+    // Freeform keys outside the convention pass through untouched.
+    expect(lessonsFor(db, 'demo-1a2b')[0].payload).toMatchObject({ extra: { kept: true } });
+  });
+
+  it('importLessons carries pre-convention payloads the append gate would reject', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [fullRecord()]);
+    // A historical payload that happens to use a reserved key with another
+    // shape — the migration path must not brick on it.
+    const legacy = {
+      work_id: 'demo-1a2b',
+      extracted_at: '2026-01-01T00:00:00Z',
+      payload: { facts: 'a single string, not a list' },
+    };
+
+    expect(() => appendLesson(db, legacy)).toThrow();
+    expect(importLessons(db, [legacy])).toEqual({ appended: 1, skipped: 0 });
+    expect(importLessons(db, [legacy])).toEqual({ appended: 0, skipped: 1 });
+    expect(lessonsFor(db, 'demo-1a2b')[0].payload).toEqual(legacy.payload);
+  });
+
   it('lessons survive a re-ingest of their record', () => {
     const db = openStore(':memory:');
     writeRecords(db, [fullRecord()]);
