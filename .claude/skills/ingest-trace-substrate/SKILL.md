@@ -39,6 +39,28 @@ Then pass it to the ingest with `--session-join`. The artifact pre-resolves
 each session's transcript (via the events stream's `session_key` map), so the
 slow per-session `gc session logs` shelling only runs for the residue.
 
+## Task typing (mem-75t.11)
+
+`work_records.task_type` + `task_type_source` classify every bead, with
+provenance always explicit:
+
+- `formula` — molecule beads (title = formula name) and step beads
+  (`gc.step_ref` = `<formula>.<step>`), mechanical, derived at ingest.
+- `structural` — machine-generated title grammars (rollup, convoy,
+  pr-review-iterate, review-checkpoint, sling-dispatch), mechanical.
+- `model` — free-form beads classified by headless `claude -p` (Haiku) into a
+  closed 13-label taxonomy. Built incrementally by:
+
+```bash
+cd /home/ds/projects/mem/memory-bench
+uv run python scripts/classify_task_types.py   # writes .mem/task-types.json
+```
+
+Pass it with `--task-types /home/ds/projects/mem/.mem/task-types.json`.
+Mechanical rules always win over the artifact; beads neither covers stay
+untyped (NULL), never defaulted. `molecule_id` groups a formula run's steps
+with its root bead.
+
 ## The city-dir requirement (READ THIS FIRST)
 
 Two traps, both of which **fail silently with exit 0** if you get them wrong:

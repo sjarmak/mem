@@ -9,6 +9,7 @@ import {
 } from '../../ingest/trace-resolve.js';
 import { attachProvenance } from '../../ingest/provenance.js';
 import { type SessionJoin, attachSessionJoin, loadSessionJoin } from '../../ingest/session-merge.js';
+import { type TaskTypeArtifact, attachTaskTypes, loadTaskTypes } from '../../ingest/task-type.js';
 import { type TraceReader, parseRecordTrace } from '../../parse/trace-parse.js';
 import type { WorkRecord } from '../../schemas/workrecord.js';
 
@@ -98,6 +99,13 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     ? ctx.options['session-join']
     : null;
   const join: SessionJoin | null = joinPath === null ? null : loadSessionJoin(joinPath);
+  const taskTypesPath = typeof ctx.options['task-types'] === 'string'
+    ? ctx.options['task-types']
+    : null;
+  // Mechanical typing (formula/structural) always runs; the artifact only
+  // supplies the model-classified residue.
+  const taskTypes: TaskTypeArtifact =
+    taskTypesPath === null ? new Map() : loadTaskTypes(taskTypesPath);
   // The artifact's session->path map resolves most residue sessions without
   // shelling `gc session logs` (~11 s/session); gc remains the fallback for
   // sessions the events stream never keyed.
@@ -119,7 +127,8 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     const spine = await readRig(run, name);
     // The merged join attaches first: it pre-resolves each session's
     // transcript, so P1.3 only shells `gc` for the residue.
-    const joined = join === null ? spine : attachSessionJoin(spine, join);
+    const typed = attachTaskTypes(spine, taskTypes);
+    const joined = join === null ? typed : attachSessionJoin(typed, join);
     const traced = withTraces ? attachAndParse(joined, resolve ? { resolve } : {}) : joined;
     const records = withProvenance ? attachProvenance(traced) : traced;
 

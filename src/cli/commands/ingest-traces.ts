@@ -30,6 +30,7 @@ const ZERO_COVERAGE: CoverageReport = {
   with_base_commit: 0,
   with_commit_sha: 0,
   multi_session: 0,
+  with_task_type: 0,
 };
 
 /** Read store coverage without materializing a store that does not exist yet
@@ -57,6 +58,7 @@ export function coverageDelta(before: CoverageReport, after: CoverageReport): Co
     with_base_commit: after.with_base_commit - before.with_base_commit,
     with_commit_sha: after.with_commit_sha - before.with_commit_sha,
     multi_session: after.multi_session - before.multi_session,
+    with_task_type: after.with_task_type - before.with_task_type,
   };
 }
 

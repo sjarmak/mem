@@ -25,6 +25,7 @@ STORE="${MEM_STORE:-$MEM_REPO/.mem/store.db}"
 MEM_BIN="${MEM_BIN:-$MEM_REPO/bin/mem}"
 LOG="${INGEST_LOG:-$MEM_REPO/.mem/ingest-trace-substrate.log}"
 JOIN="${MEM_SESSION_JOIN:-$MEM_REPO/.mem/merged-session-bead-join.json}"
+TASK_TYPES="${MEM_TASK_TYPES:-$MEM_REPO/.mem/task-types.json}"
 
 SCRATCH_DIR="$(mktemp -d)"
 SCRATCH="$SCRATCH_DIR/store.db"
@@ -38,12 +39,19 @@ uv run python scripts/build_merged_join.py --store "$STORE" --out "$JOIN"
 JOIN_MULTI=$(jq -r '.stats.multi_session_beads' "$JOIN")
 ARCHIVED=$(jq -cr '.archive // empty' "$JOIN")
 
+# --- 1b. model task-type classification (incremental: new beads only) --------
+# Failure here must not block the ingest — types just stay absent for a night.
+uv run python scripts/classify_task_types.py --store "$STORE" --out "$TASK_TYPES" \
+  || echo "classify_task_types failed; continuing without fresh model types" >&2
+
 # --- 2. store rebuild with the merged join ------------------------------------
 cd "$GC_CITY"
 
 # --json so we can read the coverage report back deterministically instead of
 # scraping the human lines.
-RESULT=$("$MEM_BIN" ingest-traces --store "$SCRATCH" --session-join "$JOIN" --json)
+TT_FLAG=()
+[ -f "$TASK_TYPES" ] && TT_FLAG=(--task-types "$TASK_TYPES")
+RESULT=$("$MEM_BIN" ingest-traces --store "$SCRATCH" --session-join "$JOIN" "${TT_FLAG[@]}" --json)
 
 # Pull the after-coverage out of the success envelope.
 read -r WITH_TRACE TRACE_ERRORS WITH_BASE RECORDS MULTI <<EOF

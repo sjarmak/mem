@@ -56,6 +56,7 @@ describe('coverageReport', () => {
       with_base_commit: 0,
       with_commit_sha: 0,
       multi_session: 0,
+      with_task_type: 0,
     });
     db.close();
   });
@@ -72,6 +73,7 @@ describe('coverageReport', () => {
       with_base_commit: 1,
       with_commit_sha: 1,
       multi_session: 0,
+      with_task_type: 0,
     });
     db.close();
   });

@@ -20,12 +20,14 @@ INSERT INTO work_records (
   work_id, rig, title, status, priority, external_ref,
   created_at, started_at, closed_at, convoy_id,
   pr, pr_state, commit_sha, ci, trace_path, n_turns,
-  repo, base_commit, commit_state, record
+  repo, base_commit, commit_state,
+  task_type, task_type_source, molecule_id, record
 ) VALUES (
   @work_id, @rig, @title, @status, @priority, @external_ref,
   @created_at, @started_at, @closed_at, @convoy_id,
   @pr, @pr_state, @commit_sha, @ci, @trace_path, @n_turns,
-  @repo, @base_commit, @commit_state, @record
+  @repo, @base_commit, @commit_state,
+  @task_type, @task_type_source, @molecule_id, @record
 )
 ON CONFLICT(work_id) DO UPDATE SET
   rig = excluded.rig, title = excluded.title, status = excluded.status,
@@ -36,7 +38,9 @@ ON CONFLICT(work_id) DO UPDATE SET
   commit_sha = excluded.commit_sha, ci = excluded.ci,
   trace_path = excluded.trace_path, n_turns = excluded.n_turns,
   repo = excluded.repo, base_commit = excluded.base_commit,
-  commit_state = excluded.commit_state, record = excluded.record
+  commit_state = excluded.commit_state,
+  task_type = excluded.task_type, task_type_source = excluded.task_type_source,
+  molecule_id = excluded.molecule_id, record = excluded.record
 `;
 
 const CHILD_TABLES = [
@@ -89,8 +93,21 @@ function toRow(record: WorkRecord): Record<string, string | number | null> {
     repo: record.provenance?.repo ?? null,
     base_commit: record.provenance?.base_commit ?? null,
     commit_state: record.provenance?.history_state ?? null,
+    task_type: record.task_type ?? null,
+    task_type_source: record.task_type_source ?? null,
+    molecule_id: moleculeId(record),
     record: JSON.stringify(record),
   };
+}
+
+/** The molecule grouping id, projected from generator metadata: gc molecules
+ * write `molecule_id`, older workflow runs `workflow_id`. */
+function moleculeId(record: WorkRecord): string | null {
+  for (const key of ['molecule_id', 'workflow_id']) {
+    const value = record.metadata[key];
+    if (typeof value === 'string' && value.length > 0) return value;
+  }
+  return null;
 }
 
 /**

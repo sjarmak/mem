@@ -264,6 +264,8 @@ export interface CoverageReport {
   with_commit_sha: number;
   /** Records with ≥2 non-suspect session iterations (mem-75t.4 merged join). */
   multi_session: number;
+  /** Records with a task_type (formula/structural/model — mem-75t.11). */
+  with_task_type: number;
 }
 
 /** Count the populated rows behind each coverage axis — one small aggregate
@@ -283,5 +285,6 @@ export function coverageReport(db: StoreDatabase): CoverageReport {
       'SELECT COUNT(*) AS n FROM (SELECT work_id FROM record_agents WHERE suspect = 0 ' +
         'GROUP BY work_id HAVING COUNT(*) >= 2)'
     ),
+    with_task_type: count('SELECT COUNT(*) AS n FROM work_records WHERE task_type IS NOT NULL'),
   };
 }

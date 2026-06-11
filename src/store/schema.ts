@@ -17,7 +17,7 @@
  * yet populate convoy/supersedes, so those columns carry data only when
  * upstream provides it.
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const SCHEMA_DDL = `
 CREATE TABLE work_records (
@@ -45,8 +45,18 @@ CREATE TABLE work_records (
   repo         TEXT,
   base_commit  TEXT,
   commit_state TEXT,
+  -- Task typing (mem-75t.11). task_type_source says HOW the type was
+  -- assigned: 'formula' (molecule/step beads, mechanical), 'structural'
+  -- (machine-generated title grammars, mechanical), 'model' (classified by a
+  -- model via the --task-types artifact, which records model id + timestamp).
+  -- molecule_id groups a formula run's step beads with their root.
+  task_type        TEXT,
+  task_type_source TEXT CHECK (task_type_source IN ('formula', 'structural', 'model')),
+  molecule_id      TEXT,
   record       TEXT NOT NULL
 );
+CREATE INDEX idx_records_task_type ON work_records(task_type);
+CREATE INDEX idx_records_molecule  ON work_records(molecule_id);
 CREATE INDEX idx_records_rig          ON work_records(rig);
 CREATE INDEX idx_records_status       ON work_records(status);
 CREATE INDEX idx_records_started      ON work_records(started_at);

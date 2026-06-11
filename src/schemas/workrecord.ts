@@ -129,6 +129,13 @@ export const WorkRecordSchema = z.object({
   work_id: z.string().min(1),
   rig: z.string().min(1),
   title: z.string(),
+  /** Task type plus how it was assigned (mem-75t.11). Sources: `formula`
+   * (molecule/step beads carry their formula name mechanically), `structural`
+   * (machine-generated title grammars), `model` (free-form beads classified
+   * by a model — the artifact records which model and when). Absent until
+   * typing runs; never silently defaulted. */
+  task_type: z.string().optional(),
+  task_type_source: z.enum(['formula', 'structural', 'model']).optional(),
   labels: z.array(z.string()).default([]),
   metadata: z.record(z.string(), z.unknown()).default({}),
   priority: z.number().int().optional(),

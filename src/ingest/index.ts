@@ -24,3 +24,11 @@ export {
   attachSessionJoin,
   loadSessionJoin,
 } from './session-merge.js';
+export {
+  type TaskTypeArtifact,
+  type TaskTypeEntry,
+  MODEL_TASK_TAXONOMY,
+  attachTaskTypes,
+  deriveMechanicalType,
+  loadTaskTypes,
+} from './task-type.js';
