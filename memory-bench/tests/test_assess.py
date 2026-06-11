@@ -18,6 +18,7 @@ from membench.assess import (
     CriterionScore,
     RepoSignals,
     assess_candidate,
+    default_mutation_count_provider,
     gather_pool_signals,
     rank_candidates,
 )
@@ -86,10 +87,25 @@ def env_rig_map(tmp_path: Path) -> dict[str, Path]:
     return {"rigA": repo}
 
 
+def counts(n: int):
+    """A file-free mutation-count provider returning a constant count."""
+
+    def provider(work_id: str, trace_path: str) -> int:
+        return n
+
+    return provider
+
+
 def assess(record: dict, pool: list[dict] | None = None, **kw) -> CandidateAssessment:
     records = pool if pool is not None else [record]
     signals = gather_pool_signals(records)
+    kw.setdefault("mutation_count_provider", counts(12))
     return assess_candidate(record, pool_signals=signals, **kw)
+
+
+def rank(pool: list[dict], **kw) -> list[CandidateAssessment]:
+    kw.setdefault("mutation_count_provider", counts(12))
+    return rank_candidates(pool, **kw)
 
 
 def score_of(assessment: CandidateAssessment, name: str) -> float:
@@ -218,9 +234,7 @@ class TestRepoActivity:
         assert signals["rigB"] == RepoSignals(rig="rigB", bead_count=1, commit_count=0)
 
     def test_rich_rig_outscores_singleton_rig(self):
-        rich_pool = [
-            make_record(f"w-{i}", outcome={"commit_sha": f"{i:040d}"}) for i in range(60)
-        ]
+        rich_pool = [make_record(f"w-{i}", outcome={"commit_sha": f"{i:040d}"}) for i in range(60)]
         lone = make_record("lone", rig="rigB")
         pool = [*rich_pool, lone]
         rich = assess(rich_pool[0], pool=pool)
@@ -291,6 +305,112 @@ class TestEnvReconstructable:
 
 
 # ---------------------------------------------------------------------------
+# mutation_signal — injectable mutation-call count, tiered on structural volume
+# ---------------------------------------------------------------------------
+
+
+class TestMutationSignal:
+    def test_no_trace_scores_zero_without_calling_provider(self):
+        def exploding(work_id: str, trace_path: str) -> int:
+            raise AssertionError("provider must not be called when there is no trace")
+
+        a = assess(make_record(), mutation_count_provider=exploding)
+        assert score_of(a, "mutation_signal") == pytest.approx(0.0)
+        assert a.replayable is False
+        assert a.mutation_calls == 0
+
+    def test_zero_mutation_calls_is_the_hard_gate_zero(self):
+        a = assess(make_record(trace=rich_trace()), mutation_count_provider=counts(0))
+        assert score_of(a, "mutation_signal") == pytest.approx(0.0)
+        assert a.replayable is False
+
+    @pytest.mark.parametrize(
+        ("count", "expected"),
+        [(1, 0.4), (2, 0.4), (3, 0.7), (9, 0.7), (10, 1.0), (57, 1.0)],
+    )
+    def test_volume_tiers(self, count, expected):
+        a = assess(make_record(trace=rich_trace()), mutation_count_provider=counts(count))
+        assert score_of(a, "mutation_signal") == pytest.approx(expected)
+        assert a.replayable is True
+        assert a.mutation_calls == count
+
+    def test_provider_receives_work_id_and_trace_path(self):
+        seen: list[tuple[str, str]] = []
+
+        def provider(work_id: str, trace_path: str) -> int:
+            seen.append((work_id, trace_path))
+            return 5
+
+        assess(make_record("w-9", trace=rich_trace()), mutation_count_provider=provider)
+        assert seen == [("w-9", "/traces/x.jsonl")]
+
+    def test_negative_count_fails_loud(self):
+        with pytest.raises(ValueError, match="mutation"):
+            assess(make_record(trace=rich_trace()), mutation_count_provider=counts(-1))
+
+    def test_default_provider_counts_via_parse_mutation_calls(self, tmp_path):
+        def event(name: str, args: dict) -> str:
+            import json
+
+            return json.dumps(
+                {"message": {"content": [{"type": "tool_use", "name": name, "input": args}]}}
+            )
+
+        transcript = tmp_path / "t.jsonl"
+        transcript.write_text(
+            "\n".join(
+                [
+                    event("Edit", {"file_path": "/w/a.py", "old_string": "x", "new_string": "y"}),
+                    event("Bash", {"command": "ls"}),
+                    event("Write", {"file_path": "/w/b.py", "content": "print()\n"}),
+                ]
+            ),
+            encoding="utf-8",
+        )
+        assert default_mutation_count_provider("w-1", str(transcript)) == 2
+
+    def test_default_provider_fails_loud_on_missing_transcript(self, tmp_path):
+        with pytest.raises(OSError):
+            default_mutation_count_provider("w-1", str(tmp_path / "absent.jsonl"))
+
+
+class TestMutationGateRanking:
+    def test_zero_mutation_gate_dominates_overall(self, tmp_path):
+        strong_but_shell_only = full_candidate("shell-only")
+        weak_but_replayable = make_record("replayable", title="fix", trace=rich_trace(2))
+        per_bead = {"shell-only": 0, "replayable": 4}
+        ranked = rank(
+            [strong_but_shell_only, weak_but_replayable],
+            rig_repos=env_rig_map(tmp_path),
+            mutation_count_provider=lambda work_id, trace_path: per_bead[work_id],
+        )
+        assert [a.work_id for a in ranked] == ["replayable", "shell-only"]
+
+    def test_env_gate_outranks_mutation_gate(self, tmp_path):
+        env_dead = full_candidate("env-dead", rig="ghost")  # unmapped rig, has mutations
+        shell_only = full_candidate("shell-only")  # runnable env, zero mutations
+        per_bead = {"env-dead": 12, "shell-only": 0}
+        ranked = rank(
+            [env_dead, shell_only],
+            rig_repos=env_rig_map(tmp_path),
+            mutation_count_provider=lambda work_id, trace_path: per_bead[work_id],
+        )
+        assert [a.work_id for a in ranked] == ["shell-only", "env-dead"]
+
+    def test_mutation_count_breaks_ties_before_trace_turns(self, tmp_path):
+        # Same tier (both 1.0), same turns: the raw count is the finer volume signal.
+        a = full_candidate("aa")
+        b = full_candidate("bb")
+        per_bead = {"aa": 10, "bb": 60}
+        ranked = rank(
+            [a, b],
+            rig_repos=env_rig_map(tmp_path),
+            mutation_count_provider=lambda work_id, trace_path: per_bead[work_id],
+        )
+        assert [r.work_id for r in ranked] == ["bb", "aa"]
+
+
+# ---------------------------------------------------------------------------
 # Ranking — gate, tiebreakers, determinism, top-N self-containment
 # ---------------------------------------------------------------------------
 
@@ -310,27 +430,25 @@ class TestRanking:
     def test_env_gate_dominates_other_scores(self, tmp_path):
         strong_but_dead = full_candidate("dead", rig="ghost")  # unmapped rig
         weak_but_runnable = make_record("runnable", title="fix")
-        ranked = rank_candidates(
-            [strong_but_dead, weak_but_runnable], rig_repos=env_rig_map(tmp_path)
-        )
+        ranked = rank([strong_but_dead, weak_but_runnable], rig_repos=env_rig_map(tmp_path))
         assert [a.work_id for a in ranked] == ["runnable", "dead"]
 
     def test_higher_overall_ranks_first_within_gate(self, tmp_path):
         strong = full_candidate("strong")
         weak = make_record("weak", title="fix", status="open", closed=None)
-        ranked = rank_candidates([weak, strong], rig_repos=env_rig_map(tmp_path))
+        ranked = rank([weak, strong], rig_repos=env_rig_map(tmp_path))
         assert [a.work_id for a in ranked] == ["strong", "weak"]
 
     def test_tiebreak_on_trace_turns_then_work_id(self, tmp_path):
         # Both saturate the trace tier (equal overall); more turns wins.
         a = full_candidate("aa", n_turns=40)
         b = full_candidate("bb", n_turns=400)
-        ranked = rank_candidates([a, b], rig_repos=env_rig_map(tmp_path))
+        ranked = rank([a, b], rig_repos=env_rig_map(tmp_path))
         assert [r.work_id for r in ranked] == ["bb", "aa"]
         # Fully identical signals: work_id ascending is the total-order anchor.
         c = full_candidate("cc")
         d = full_candidate("dd")
-        ranked = rank_candidates([d, c], rig_repos=env_rig_map(tmp_path))
+        ranked = rank([d, c], rig_repos=env_rig_map(tmp_path))
         assert [r.work_id for r in ranked] == ["cc", "dd"]
 
     def test_ranking_is_input_order_independent(self, tmp_path):
@@ -341,8 +459,8 @@ class TestRanking:
             full_candidate("p-4", rig="ghost"),
         ]
         rig_repos = env_rig_map(tmp_path)
-        forward = [a.work_id for a in rank_candidates(pool, rig_repos=rig_repos)]
-        backward = [a.work_id for a in rank_candidates(pool[::-1], rig_repos=rig_repos)]
+        forward = [a.work_id for a in rank(pool, rig_repos=rig_repos)]
+        backward = [a.work_id for a in rank(pool[::-1], rig_repos=rig_repos)]
         assert forward == backward
 
     def test_top_n_of_mixed_pool_is_the_self_contained_subset(self, tmp_path):
@@ -353,15 +471,13 @@ class TestRanking:
             full_candidate("unmapped-rig", rig="ghost"),
             make_record("tiny-trace", title="fix", trace=rich_trace(2)),
         ]
-        ranked = rank_candidates(
-            self_contained + dead_weight, rig_repos=env_rig_map(tmp_path), top_n=3
-        )
+        ranked = rank(self_contained + dead_weight, rig_repos=env_rig_map(tmp_path), top_n=3)
         assert len(ranked) == 3
         assert {a.work_id for a in ranked} == {"good-0", "good-1", "good-2"}
 
     def test_top_n_none_returns_everything(self, tmp_path):
         pool = [full_candidate("x"), make_record("y")]
-        assert len(rank_candidates(pool, rig_repos=env_rig_map(tmp_path))) == 2
+        assert len(rank(pool, rig_repos=env_rig_map(tmp_path))) == 2
 
 
 # ---------------------------------------------------------------------------
