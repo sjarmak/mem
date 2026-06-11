@@ -19,9 +19,18 @@ replacement (ambiguous or missing ``old_string`` fails unless ``replace_all``);
 ``Write`` is a full-file overwrite that creates the file (and parents); ``MultiEdit``
 is a SEQUENTIAL edit list on one file, applied all-or-nothing. Transcript paths are
 absolute in the ORIGINAL session's tree, so they are rebased onto the checkout via the
-record's ``work_dir`` prefix; a path that does not normalize to inside ``work_dir``
+``work_dir`` prefix; a path that does not normalize to inside ``work_dir``
 (including ``..`` escapes) is the classified skip `OUTSIDE_WORK_DIR`, never a write
 outside the checkout.
+
+The rebase prefix itself is UNRELIABLE on the record (mem-75t.7.1 validation,
+docs/mem-75t.7.1-replay-validation.md): ``record.work_dir`` is the clone root while
+sessions ran in nested (``.claude/worktrees/<name>``) or sibling (``<clone>-wt-<id>``)
+git worktrees, and per-event ``cwd`` reports the clone root even when edits target a
+sibling worktree. `infer_work_dir` is the prescribed majority-prefix inference over
+the mutation paths themselves; `effective_work_dir` is the assembler-side contract
+that selects the rebase prefix from the majority-prefix chain (record-anchored, the
+recovery that lifted 3/8 validation beads from a 0.00 replay rate).
 
 Mutation classes the transcript CANNOT carry (inherent fidelity bounds, surfaced as
 drift on any later edit that touches their output rather than hidden):
@@ -46,12 +55,20 @@ against real temp repos without monkeypatching.
 import json
 import posixpath
 import subprocess
-from collections.abc import Callable, Mapping
+from collections import Counter
+from collections.abc import Callable, Mapping, Sequence
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    ValidationError,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 from membench.harbor.harbor_exec import _FILE_TOOLS
 
@@ -131,7 +148,21 @@ class ReplayResult(BaseModel):
 
     ``replay_success_rate`` for an empty call list is 0.0 by definition: a transcript
     with no file mutations yields no gold diff, and 0.0 marks it non-admittable rather
-    than vacuously perfect."""
+    than vacuously perfect.
+
+    Two admission signals are DERIVED from ``calls`` (computed, so they can never
+    drift from the per-call evidence, and they serialize with the result):
+
+    - ``adjusted_replay_success_rate`` -- APPLIED / (total - OUTSIDE_WORK_DIR).
+      OUTSIDE_WORK_DIR calls (dominantly auto-memory writes under a ``.claude*`` home,
+      e.g. ``/home/ds/.claude-homes/...``) are out-of-repo BY CONSTRUCTION: they never
+      rebase into the checkout, so they cannot affect the gold diff and must not
+      deflate fidelity. 0.0 when no in-repo calls remain.
+    - ``base_predates_tree`` -- True when some file's FIRST mutation hit `FILE_ABSENT`.
+      Only Edit/MultiEdit can yield FILE_ABSENT (Write creates), so a first-touch
+      absence means the session's tree already had the file while the
+      timestamp-approximate ``base_commit`` does not: the base predates the tree
+      (mem-75t.7.1: zg4da/041jz)."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -145,6 +176,33 @@ class ReplayResult(BaseModel):
         if isinstance(value, Mapping):
             return tuple(sorted(value.items()))
         return value
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def adjusted_replay_success_rate(self) -> float:
+        applied = sum(1 for c in self.calls if c.outcome is ReplayOutcome.APPLIED)
+        in_repo = sum(1 for c in self.calls if c.outcome is not ReplayOutcome.OUTSIDE_WORK_DIR)
+        return applied / in_repo if in_repo else 0.0
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def base_predates_tree(self) -> bool:
+        return bool(self.first_edit_absent_paths())
+
+    def first_edit_absent_paths(self) -> tuple[str, ...]:
+        """The (normalized, transcript-order) paths whose FIRST mutation call came back
+        `FILE_ABSENT` -- the per-file evidence behind ``base_predates_tree``. ``calls``
+        is in transcript order, so the first sighting of a path IS its first mutation."""
+        seen: set[str] = set()
+        absent: list[str] = []
+        for call in self.calls:
+            norm = posixpath.normpath(call.path)
+            if norm in seen:
+                continue
+            seen.add(norm)
+            if call.outcome is ReplayOutcome.FILE_ABSENT:
+                absent.append(norm)
+        return tuple(absent)
 
     def diff_by_file(self) -> dict[str, str]:
         """The per-file diffs as a FRESH mapping -- mutating it never touches the model."""
@@ -207,6 +265,116 @@ def parse_mutation_calls(stream: str) -> tuple[MutationCall, ...]:
                 raise ValueError(f"malformed {name} tool call: input is not a mapping")
             calls.append(_mutation_call_from_block(name, args))
     return tuple(calls)
+
+
+def infer_work_dir(calls: Sequence[MutationCall]) -> str | None:
+    """The session's work dir inferred from the mutation paths themselves -- the
+    mechanical recovery the mem-75t.7.1 validation proved (3/8 beads recovered from a
+    0.00 replay rate; ``record.work_dir`` is the clone root, per-event ``cwd`` lies
+    under EnterWorktree).
+
+    Exact rule (pure path arithmetic over the set of DISTINCT absolute mutation
+    paths -- a hot file edited many times counts once): starting at the filesystem
+    root, repeatedly descend into the child directory that contains a STRICT majority
+    (count * 2 > total) of the paths; stop when no child qualifies. The result is the
+    deepest directory prefix shared by a strict majority of the paths.
+
+    Tiebreaker: two sibling directories cannot both hold a strict majority, so the
+    descent chain is unique; an exact split (e.g. 50/50) is not a majority, the
+    descent stops, and the shared PARENT wins.
+
+    Returns None when inference has nothing to say: no absolute paths at all, or no
+    shared prefix beyond the filesystem root (a caller must then fall back to the
+    record's work_dir rather than rebase everything against ``/``).
+
+    Known approximation: when a strict majority of paths sits in one subtree, the
+    inferred prefix can be DEEPER than the true session root (observed on the real
+    validation traces: mem-us6j infers ``<repo>/src``, 2nbe9 infers
+    ``<worktree>/frontend/src``). `effective_work_dir` therefore selects FROM the
+    majority chain instead of taking this deepest element blindly; a wrong rebase
+    always surfaces as classified drift (FILE_ABSENT) and the admission threshold
+    rejects the bundle -- fail-closed, never a silently wrong gold diff."""
+    chain = _majority_prefix_chain(_distinct_absolute_paths(calls))
+    return str(chain[-1]) if chain else None
+
+
+def _distinct_absolute_paths(calls: Sequence[MutationCall]) -> tuple[PurePosixPath, ...]:
+    paths = {PurePosixPath(posixpath.normpath(call.path)) for call in calls}
+    return tuple(p for p in paths if p.is_absolute())
+
+
+def _majority_prefix_chain(paths: Sequence[PurePosixPath]) -> tuple[PurePosixPath, ...]:
+    """Every directory prefix that covers a strict majority of ``paths``, shallowest
+    first, excluding the filesystem root. Strict-majority prefixes always form a
+    single root-to-leaf chain (two of them must share a covered path, so one contains
+    the other), which is what makes "the deepest" well-defined."""
+    if not paths:
+        return ()
+    total = len(paths)
+    prefix = PurePosixPath("/")
+    chain: list[PurePosixPath] = []
+    while True:
+        children = Counter(
+            path.relative_to(prefix).parts[0]
+            for path in paths
+            # >= 2 parts: a directory component below prefix, then at least the file.
+            if path.is_relative_to(prefix) and len(path.relative_to(prefix).parts) >= 2
+        )
+        if not children:
+            break
+        child, count = children.most_common(1)[0]
+        if count * 2 <= total:
+            break
+        prefix = prefix / child
+        chain.append(prefix)
+    return tuple(chain)
+
+
+# The Claude Code NESTED-worktree layout (validation shape: the 4bol-health session
+# rooted at <clone>/.claude/worktrees/<name>). A harness-layout convention like
+# harbor_exec's _FILE_TOOLS tool names -- structural, not a semantic guess.
+_NESTED_WORKTREE_SEGMENTS: tuple[str, str] = (".claude", "worktrees")
+
+
+def effective_work_dir(record_work_dir: str, calls: Sequence[MutationCall]) -> str:
+    """The rebase prefix the bundle assembler's replay must use -- the mem-75t.7.1
+    recovery, formalized. ``record.work_dir`` zeroed out 3/8 validation beads (the
+    sessions ran in git worktrees, not the clone root the record names), and the
+    recovered roots all sit ON the majority-prefix chain; this selects the chain
+    element the validation picked, with ``record_work_dir`` as the structural anchor:
+
+    1. No chain (no absolute mutation paths / no shared prefix beyond ``/``):
+       ``record_work_dir`` -- inference has nothing to say.
+    2. Record COVERS a strict majority of the paths (it lies on the chain, i.e. it is
+       consistent with the trace): keep ``record_work_dir``; any deeper chain element
+       is subtree concentration, not a different root (mem-us6j: a perfect 1.00
+       replay that a blind deepest-prefix rebase would destroy). One exception -- the
+       chain continuing through ``<record>/.claude/worktrees/<name>`` is Claude
+       Code's NESTED-worktree root (usu9f shape, recovered 0.00 -> 0.69): use it.
+    3. Record covers NO majority (the validated 0.00 failure mode): the session ran
+       somewhere else entirely. Use the chain element at the record's own depth --
+       the SIBLING-worktree shape (``<clone>-wt-<id>`` lives at the clone's
+       filesystem level; recovered 2nbe9/52kv3 from 0.00 to 0.63-0.76) -- else the
+       deepest majority prefix.
+
+    Inference wins over the record exactly when the record is inconsistent with the
+    trace's own paths; a wrongly-deep choice is still caught downstream by the
+    admission threshold (see `infer_work_dir`)."""
+    chain = _majority_prefix_chain(_distinct_absolute_paths(calls))
+    if not chain:
+        return record_work_dir
+    record = PurePosixPath(posixpath.normpath(record_work_dir))
+    if record in chain:
+        nested_len = len(record.parts) + len(_NESTED_WORKTREE_SEGMENTS) + 1
+        for element in chain:
+            inside = element.is_relative_to(record) and len(element.parts) == nested_len
+            if inside and element.relative_to(record).parts[:-1] == _NESTED_WORKTREE_SEGMENTS:
+                return str(element)
+        return record_work_dir
+    for element in chain:
+        if len(element.parts) == len(record.parts):
+            return str(element)
+    return str(chain[-1])
 
 
 def _rebase_path(path: str, work_dir: str, checkout_dir: Path) -> Path | None:

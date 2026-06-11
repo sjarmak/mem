@@ -17,7 +17,9 @@ from membench.bundle import (
     MutationCall,
     ReplayOutcome,
     ReplayResult,
+    effective_work_dir,
     gold_diff,
+    infer_work_dir,
     parse_mutation_calls,
     replay_transcript,
 )
@@ -275,6 +277,198 @@ def test_file_diffs_is_immutable(checkout: Path):
     model = ReplayResult(calls=(), file_diffs=source, replay_success_rate=0.0)
     source["c.py"] = "diff c"
     assert model.file_diffs == (("a.py", "diff a"), ("b.py", "diff b"))
+
+
+# --- infer_work_dir / effective_work_dir (mem-75t.7.2 revision 1) -------------------
+#
+# Shapes mirror docs/mem-75t.7.1-replay-validation.md: record.work_dir is the clone
+# root while sessions ran in nested (.claude/worktrees/<name>) or sibling
+# (<clone>-wt-<id>) git worktrees; majority-prefix inference over the mutation paths
+# recovered 3/8 validation beads from a 0.00 replay rate.
+
+
+def _mut(path: str) -> MutationCall:
+    return MutationCall(tool="Edit", path=path, edits=(EditOp(old_string="a", new_string="b"),))
+
+
+def test_infer_work_dir_sibling_worktree_majority_beats_memory_writes():
+    # 2nbe9/52kv3 shape: edits in a SIBLING worktree of the clone root, plus one
+    # auto-memory write under a .claude home -- outvoted by the worktree majority.
+    calls = (
+        _mut("/home/ds/gascity-dashboard-wt-aqje/backend/src/app.ts"),
+        _mut("/home/ds/gascity-dashboard-wt-aqje/frontend/src/ui.tsx"),
+        _mut("/home/ds/gascity-dashboard-wt-aqje/shared/types.ts"),
+        _mut("/home/ds/.claude-homes/account4/.claude/memory/MEMORY.md"),
+    )
+    assert infer_work_dir(calls) == "/home/ds/gascity-dashboard-wt-aqje"
+
+
+def test_infer_work_dir_nested_worktree():
+    # usu9f shape: session root NESTED inside the clone (.claude/worktrees/<name>).
+    root = "/home/ds/gascity-dashboard/.claude/worktrees/4bol-health"
+    calls = (_mut(f"{root}/backend/a.ts"), _mut(f"{root}/frontend/b.tsx"), _mut(f"{root}/c.ts"))
+    assert infer_work_dir(calls) == root
+
+
+def test_infer_work_dir_tie_stops_at_shared_parent():
+    # An exact 50/50 split below /repo is NOT a strict majority: descent stops and
+    # the shared parent wins (the documented tiebreaker).
+    calls = (
+        _mut("/repo/a/x.py"),
+        _mut("/repo/a/y.py"),
+        _mut("/repo/b/x.py"),
+        _mut("/repo/b/y.py"),
+    )
+    assert infer_work_dir(calls) == "/repo"
+
+
+def test_infer_work_dir_majority_is_over_distinct_paths_not_calls():
+    # One hot file edited 5x must not dominate: majority counts DISTINCT paths.
+    calls = (
+        *(_mut("/homes/acct/memory/MEMORY.md") for _ in range(5)),
+        _mut("/work/repo/src/a.py"),
+        _mut("/work/repo/b.py"),
+    )
+    assert infer_work_dir(calls) == "/work/repo"
+
+
+def test_infer_work_dir_picks_deepest_majority_prefix():
+    # The exact rule: 2/3 paths under /work/src outvote the root-level straggler,
+    # so the DEEPEST strict-majority prefix wins -- even past the true session root.
+    # The over-deepening approximation is caught downstream by the admission
+    # threshold (Edit-class drift surfaces as FILE_ABSENT under a wrong prefix).
+    calls = (_mut("/work/readme.md"), _mut("/work/src/a.py"), _mut("/work/src/b.py"))
+    assert infer_work_dir(calls) == "/work/src"
+
+
+def test_infer_work_dir_none_when_no_prefix_beyond_filesystem_root():
+    calls = (_mut("/etc/passwd"), _mut("/home/x/y.txt"))
+    assert infer_work_dir(calls) is None
+
+
+def test_infer_work_dir_none_without_absolute_paths():
+    assert infer_work_dir(()) is None
+    assert infer_work_dir((_mut("relative/path.py"),)) is None
+
+
+def test_effective_work_dir_recovers_sibling_worktree():
+    # 2nbe9/52kv3 shape: the record's clone root covers NO mutation path (the
+    # validated 0.00 failure mode) -- the chain element at the record's own depth is
+    # the sibling worktree the session really ran in.
+    calls = (_mut("/home/ds/clone-wt-1/src/a.py"), _mut("/home/ds/clone-wt-1/tests/b.py"))
+    assert effective_work_dir("/home/ds/clone", calls) == "/home/ds/clone-wt-1"
+
+
+def test_effective_work_dir_recovers_nested_worktree():
+    # usu9f shape: the record covers every path (the clone root is an ancestor of
+    # the nested worktree), but the chain continues through the Claude Code
+    # .claude/worktrees/<name> layout -- that nested root wins.
+    root = "/home/ds/clone/.claude/worktrees/4bol-health"
+    calls = (_mut(f"{root}/src/a.py"), _mut(f"{root}/tests/b.py"))
+    assert effective_work_dir("/home/ds/clone", calls) == root
+
+
+def test_effective_work_dir_keeps_consistent_record_over_deeper_inference():
+    # mem-us6j shape: the record work_dir covers a majority of the paths, so it is
+    # consistent with the trace; the deeper inferred prefix (/repo/src here) is
+    # subtree concentration, not a different session root. A blind
+    # prefer-the-inferred rule would destroy a perfect 1.00 replay.
+    calls = (_mut("/repo/src/a.py"), _mut("/repo/src/b.py"), _mut("/repo/tests/c.py"))
+    assert infer_work_dir(calls) == "/repo/src"
+    assert effective_work_dir("/repo", calls) == "/repo"
+
+
+def test_effective_work_dir_uses_deepest_prefix_when_no_same_depth_element():
+    # Inconsistent record deeper than the whole chain: nothing at its depth to pick,
+    # so the deepest majority prefix is the best mechanical guess.
+    calls = (_mut("/wt/src/a.py"), _mut("/wt/tests/b.py"))
+    assert effective_work_dir("/home/ds/clone", calls) == "/wt"
+
+
+def test_effective_work_dir_falls_back_to_record_when_inference_fails():
+    assert effective_work_dir("/home/ds/clone", ()) == "/home/ds/clone"
+
+
+# --- adjusted success rate (mem-75t.7.2 revision 2) ----------------------------------
+
+
+def test_adjusted_rate_excludes_outside_work_dir_from_denominator(checkout: Path):
+    # The auto-memory write is OUTSIDE_WORK_DIR: out-of-repo by construction, so it
+    # can never affect the gold diff and must not deflate fidelity.
+    stream = _stream(
+        _event(_edit(f"{WORK}/src/app.py", "return 1", "return 2")),  # APPLIED
+        _event(_edit(f"{WORK}/src/app.py", "NOPE", "x")),  # OLD_STRING_MISSING
+        _event(_write("/home/ds/.claude-homes/account4/memory/MEMORY.md", "m\n")),  # OWD
+    )
+    result = replay_transcript(stream, checkout_dir=checkout, work_dir=WORK)
+    assert result.replay_success_rate == pytest.approx(1 / 3)
+    assert result.adjusted_replay_success_rate == pytest.approx(0.5)
+
+
+def test_adjusted_rate_zero_when_every_call_is_outside(checkout: Path):
+    stream = _stream(_event(_write("/home/ds/.claude-homes/account4/memory/m.md", "x\n")))
+    result = replay_transcript(stream, checkout_dir=checkout, work_dir=WORK)
+    assert result.adjusted_replay_success_rate == 0.0
+
+
+def test_adjusted_rate_zero_for_empty_transcript(checkout: Path):
+    result = replay_transcript("", checkout_dir=checkout, work_dir=WORK)
+    assert result.adjusted_replay_success_rate == 0.0
+
+
+def test_derived_fields_serialize_with_the_result(checkout: Path):
+    stream = _stream(_event(_edit(f"{WORK}/src/app.py", "return 1", "return 2")))
+    dumped = replay_transcript(stream, checkout_dir=checkout, work_dir=WORK).model_dump()
+    assert dumped["adjusted_replay_success_rate"] == 1.0
+    assert dumped["base_predates_tree"] is False
+
+
+# --- base-predates-tree detection (mem-75t.7.2 revision 5) ---------------------------
+
+
+def test_first_edit_on_absent_file_flags_base_predates_tree(checkout: Path):
+    # zg4da/041jz shape: the bead's FIRST mutation of a file is an Edit and the file
+    # is absent at the checkout -- the timestamp-approximate base_commit predates
+    # the session tree.
+    stream = _stream(
+        _event(_edit(f"{WORK}/backend/src/routes/allowlist.ts", "a", "b")),
+        _event(_edit(f"{WORK}/src/app.py", "return 1", "return 2")),
+    )
+    result = replay_transcript(stream, checkout_dir=checkout, work_dir=WORK)
+    assert result.base_predates_tree is True
+    assert result.first_edit_absent_paths() == (f"{WORK}/backend/src/routes/allowlist.ts",)
+
+
+def test_repeat_edits_of_one_absent_file_flag_it_once(checkout: Path):
+    stream = _stream(
+        _event(_edit(f"{WORK}/missing.py", "a", "b")),
+        _event(_multi_edit(f"{WORK}/missing.py", [{"old_string": "a", "new_string": "b"}])),
+    )
+    result = replay_transcript(stream, checkout_dir=checkout, work_dir=WORK)
+    assert result.first_edit_absent_paths() == (f"{WORK}/missing.py",)
+
+
+def test_write_then_edit_of_new_file_does_not_flag_base_predates_tree(checkout: Path):
+    # The first mutation being a Write means the session CREATED the file; a later
+    # Edit of it is not evidence about the base tree.
+    stream = _stream(
+        _event(_write(f"{WORK}/docs/new.md", "# hi\n")),
+        _event(_edit(f"{WORK}/docs/new.md", "hi", "yo")),
+    )
+    result = replay_transcript(stream, checkout_dir=checkout, work_dir=WORK)
+    assert result.base_predates_tree is False
+
+
+def test_old_string_drift_does_not_flag_base_predates_tree(checkout: Path):
+    stream = _stream(_event(_edit(f"{WORK}/src/app.py", "return 99", "x")))
+    result = replay_transcript(stream, checkout_dir=checkout, work_dir=WORK)
+    assert result.base_predates_tree is False
+
+
+def test_outside_work_dir_calls_do_not_flag_base_predates_tree(checkout: Path):
+    stream = _stream(_event(_edit("/etc/passwd", "root", "boot")))
+    result = replay_transcript(stream, checkout_dir=checkout, work_dir=WORK)
+    assert result.base_predates_tree is False
 
 
 def test_gold_diff_git_failure_raises_loud(tmp_path: Path):

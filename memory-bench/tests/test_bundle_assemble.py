@@ -10,6 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from membench.bundle.assemble import (
+    MIN_ADJUSTED_REPLAY_SUCCESS_RATE,
     RejectionReason,
     assemble_bundle,
     loo_excluded_ids,
@@ -237,6 +238,95 @@ def test_empty_gold_diff_rejected():
     rejection = assemble_bundle(make_record(), replay)
     assert not isinstance(rejection, TaskBundle)
     assert rejection.reason is RejectionReason.EMPTY_OUTPUT
+
+
+# --- validation-derived admission gates (mem-75t.7.2 revisions 4-6) ---------------
+# Shapes from docs/mem-75t.7.1-replay-validation.md.
+
+
+def _call(index: int, outcome: ReplayOutcome, path: str | None = None) -> CallReplay:
+    resolved = path or f"/orig/work/src/f{index}.ts"
+    outside = outcome is ReplayOutcome.OUTSIDE_WORK_DIR
+    return CallReplay(
+        index=index,
+        tool="Edit",
+        path=resolved,
+        rebased_path=None if outside else f"/tmp/checkout/src/f{index}.ts",
+        outcome=outcome,
+    )
+
+
+def _calls(applied: int, missing: int = 0, outside: int = 0) -> tuple[CallReplay, ...]:
+    outcomes = (
+        [ReplayOutcome.APPLIED] * applied
+        + [ReplayOutcome.OLD_STRING_MISSING] * missing
+        + [ReplayOutcome.OUTSIDE_WORK_DIR] * outside
+    )
+    return tuple(_call(i, outcome) for i, outcome in enumerate(outcomes))
+
+
+def test_adjusted_rate_at_threshold_admits():
+    # Boundary: adjusted rate exactly MIN_ADJUSTED_REPLAY_SUCCESS_RATE (9/10) admits.
+    replay = make_replay(calls=_calls(applied=9, missing=1), replay_success_rate=0.9)
+    assert replay.adjusted_replay_success_rate == MIN_ADJUSTED_REPLAY_SUCCESS_RATE
+    assert isinstance(assemble_bundle(make_record(), replay), TaskBundle)
+
+
+def test_below_threshold_rejected_as_low_replay_fidelity():
+    # 8/10 adjusted: a partial replay is a gold diff with MISSING hunks -- a
+    # corrupted oracle, worse than no bundle.
+    replay = make_replay(calls=_calls(applied=8, missing=2), replay_success_rate=0.8)
+    rejection = assemble_bundle(make_record(), replay)
+    assert not isinstance(rejection, TaskBundle)
+    assert rejection.reason is RejectionReason.LOW_REPLAY_FIDELITY
+    assert "0.80" in rejection.detail
+    assert "0.9" in rejection.detail
+
+
+def test_outside_work_dir_calls_do_not_count_against_admission():
+    # Raw rate 9/15 = 0.6 but adjusted 9/10 = 0.9: the 5 auto-memory writes are
+    # out-of-repo by construction and excluded from the admission denominator.
+    replay = make_replay(calls=_calls(applied=9, missing=1, outside=5), replay_success_rate=0.6)
+    assert isinstance(assemble_bundle(make_record(), replay), TaskBundle)
+
+
+def test_first_edit_absent_rejected_as_base_predates_tree():
+    # zg4da shape: every gate downstream would also fire (empty diff, 0.0 rate) but
+    # the DIAGNOSTIC reason -- base_commit predates the session tree -- must win.
+    calls = (
+        _call(0, ReplayOutcome.FILE_ABSENT, path="/orig/work/backend/routes/allowlist.ts"),
+        _call(1, ReplayOutcome.OLD_STRING_MISSING),
+    )
+    replay = make_replay(calls=calls, file_diffs={}, replay_success_rate=0.0)
+    rejection = assemble_bundle(make_record(), replay)
+    assert not isinstance(rejection, TaskBundle)
+    assert rejection.reason is RejectionReason.BASE_PREDATES_TREE
+    assert "allowlist.ts" in rejection.detail
+
+
+def test_shared_trace_rejected_with_sharing_work_ids():
+    # Mega-session shape: one transcript mapped to several work_records (the mem
+    # trio); replaying the full stream against one bead's base mixes edit streams.
+    # Per-bead segmentation is deferred -- rejection only.
+    record = make_record()
+    shared_trace = {"jsonl_path": "/traces/mem-1.1.jsonl"}
+    corpus = [
+        record,  # the record itself never counts as a sharer
+        _corpus_record("mem-9.2", trace=dict(shared_trace)),
+        _corpus_record("mem-9.1", trace=dict(shared_trace)),
+        _corpus_record("mem-9.3", trace={"jsonl_path": "/traces/other.jsonl"}),
+    ]
+    rejection = assemble_bundle(record, make_replay(), corpus=corpus)
+    assert not isinstance(rejection, TaskBundle)
+    assert rejection.reason is RejectionReason.SHARED_TRACE
+    assert "mem-9.1, mem-9.2" in rejection.detail
+    assert "mem-9.3" not in rejection.detail
+
+
+def test_own_record_in_corpus_is_not_a_shared_trace():
+    record = make_record()
+    bundle = assemble_bundle(record, make_replay(), corpus=[record])
+    assert isinstance(bundle, TaskBundle)
 
 
 # --- leak guard ------------------------------------------------------------------
