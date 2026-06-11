@@ -1,0 +1,506 @@
+"""Dynamic-range probe runner mechanism (mem-75t.7.6, plan §9.2).
+
+The gate runs each admitted `TaskBundle` under two conditions and measures the gap:
+
+- ``none``  -- the stateless floor: the bundle's issue statement, nothing else.
+- ``oracle`` -- the cheap upper-bound rung: the SAME issue statement plus
+  `gold_file_list(bundle)` injected as "files likely relevant to this task" through
+  the `memory_inject` mechanism (`inject_context`). No curated oracle needed.
+
+Execution MIRRORS the base-rate spike's proven path (`base_rate_spike` 2026-06-10):
+a Harbor task dir (``task.toml`` + ``instruction.md`` + ``environment/``), the repo
+snapshot baked in via `env_recon.reconstruct_env` -- here at the bundle's EXACT
+``env.base_commit``, not a timestamp approximation -- and the run shelled through
+``harbor run`` on the Claude OAuth subscription (D16, free path) via
+`harbor_exec.run_harbor_job`, harvesting the Claude Code stream-json transcript
+(``claude-code.txt``) from the ATIF jobs dir.
+
+The candidate diff is SYMMETRIC with the gold diff: the fresh run's
+``Edit``/``Write``/``MultiEdit`` calls are parsed from its transcript
+(`bundle.replay.parse_mutation_calls`) and replayed against a fresh detached
+checkout of ``repo@base_commit`` (`replay_calls`), rebasing container paths from
+``/app`` (the `env_recon` Dockerfile WORKDIR) onto the checkout -- so candidate and
+gold per-file diffs share one coordinate space (checkout-relative git paths), which
+is exactly what `score_probe_direct` requires. Checkouts are created and removed
+per harvest (try/finally); `stale_probe_worktrees` is the CLI's exit-sweep hook.
+
+Leak discipline: the prompt and the injected context must NEVER carry the answer.
+`probe_leak_labels` feeds `assert_no_outcome_leak` with the bundle's
+``base_commit``, every gold per-file diff text, and the serialized replay-stat /
+verification field markers -- so a bundle JSON pasted into a prompt, a planted gold
+hunk, or a leaked score field all fail loudly before anything reaches disk.
+
+ZFC: pure mechanism -- IO, subprocess, structural validation, set/percentile
+arithmetic. The GO/NO-GO verdict is authored by the orchestrator over this module's
+DATA (`summarize_pairs` emits a mechanical ``gap_positive_majority`` flag only).
+Everything subprocess- or Harbor-shaped is injectable for tests (no Docker, no
+network): the ``Runner`` seam (env_recon's pattern) and the ``StreamExec`` seam.
+"""
+
+import shutil
+import subprocess
+import uuid
+from collections.abc import Callable, Mapping, Sequence
+from pathlib import Path
+from statistics import fmean, median
+from typing import Any
+
+import toml
+from pydantic import BaseModel, ConfigDict, Field
+
+from membench.bundle.replay import ReplayOutcome, ReplayResult, parse_mutation_calls, replay_calls
+from membench.grading import assert_no_outcome_leak
+from membench.grading.probe_direct import (
+    ProbeDirectScore,
+    ProbeEfficiency,
+    extract_efficiency,
+    gold_file_list,
+    score_probe_direct,
+)
+from membench.harbor.env_recon import DEFAULT_RIG_REPOS, reconstruct_env
+from membench.harbor.harbor_exec import _locate_one, run_harbor_job
+from membench.harbor.memory_inject import inject_context
+from membench.schemas.bundle import TaskBundle
+
+# The gate's two conditions (plan §9.2): the stateless floor and the cheap ceiling.
+CONDITIONS: tuple[str, ...] = ("none", "oracle")
+
+# Where the env_recon Dockerfile lands the repo snapshot (its WORKDIR) -- the rebase
+# prefix for candidate replay AND the repo location the fixed instruction names.
+CONTAINER_WORKDIR = "/app"
+
+# Where the oracle condition's context file lands in the container. OUTSIDE /app on
+# purpose: an agent write to it would rebase outside the checkout (classified
+# OUTSIDE_WORK_DIR) instead of polluting the candidate diff.
+ORACLE_MEMORY_CONTAINER_PATH = "/memory/MEMORY.md"
+
+# Serialized bundle replay-stat / verification field markers that must never reach
+# agent-readable text -- their presence means bundle internals leaked into a prompt.
+_FORBIDDEN_BUNDLE_MARKERS: tuple[str, ...] = (
+    "replay_success_rate",
+    "adjusted_replay_success_rate",
+    "base_predates_tree",
+    "score_direct",
+    "score_artifact",
+)
+
+# The fixed instruction appended to every probe prompt -- BYTE-IDENTICAL across
+# conditions (the oracle condition differs only by the injected file's presence).
+_FIXED_INSTRUCTION = (
+    f"Implement the change described above in the repository at {CONTAINER_WORKDIR}. "
+    "Edit the files in place; do not commit. "
+    f"If {ORACLE_MEMORY_CONTAINER_PATH} exists, it contains notes from prior sessions "
+    "that may be relevant to this task."
+)
+
+# Real probe runs are multi-file feature changes (gold diffs up to ~800 lines), so
+# the agent budget is wider than the workrecord adapter's 600s spike default.
+AGENT_TIMEOUT_SEC = 2400.0
+
+_WORKTREE_PREFIX = "probe-cand-"
+
+# A subprocess.run-shaped callable, injectable for tests (env_recon's pattern).
+Runner = Callable[..., "subprocess.CompletedProcess[str]"]
+
+# Executes one prepared task dir and returns the run's RAW Claude Code stream-json
+# transcript text -- the source both `harvest_candidate` (mutation calls) and
+# `extract_efficiency` (tokens/turns) parse. Injectable; production = `harbor_stream_exec`.
+StreamExec = Callable[[Path], str]
+
+
+# --- leak guard --------------------------------------------------------------------
+
+
+def probe_leak_labels(bundle: TaskBundle) -> tuple[str, ...]:
+    """Every label that must not appear in the probe's agent-readable text: the
+    env anchor (``base_commit`` -- the same identifier class `leak_guard` scans on
+    records), every non-blank gold per-file diff text (the answer itself), and the
+    serialized replay-stat / verification markers (bundle-internals leakage)."""
+    labels = [bundle.env.base_commit]
+    labels += [diff for _, diff in bundle.output.file_diffs if diff.strip()]
+    labels += list(_FORBIDDEN_BUNDLE_MARKERS)
+    return tuple(labels)
+
+
+def assert_probe_task_clean(agent_readable: Mapping[str, str], bundle: TaskBundle) -> None:
+    """The probe's explicit task-construction guard: no gold diff, no replay stats,
+    no verification fields, no base_commit in anything the agent can read. Raises
+    `OutcomeLeakError` (via `assert_no_outcome_leak`) listing every offender."""
+    assert_no_outcome_leak(dict(agent_readable), probe_leak_labels(bundle))
+
+
+# --- task construction ---------------------------------------------------------------
+
+
+def probe_instruction(bundle: TaskBundle) -> str:
+    """The probe prompt: the bundle's issue statement + the fixed instruction.
+
+    Takes no ``condition`` argument BY CONSTRUCTION -- the prompt is byte-identical
+    across conditions; only the injected context file differs."""
+    parts = [f"# {bundle.work_id}", "", "## Task", "", bundle.issue_title, ""]
+    if bundle.issue_body.strip():
+        parts += [bundle.issue_body, ""]
+    parts += ["## Instructions", "", _FIXED_INSTRUCTION, ""]
+    return "\n".join(parts)
+
+
+def oracle_context_payload(bundle: TaskBundle) -> str:
+    """The cheap oracle-rung context: `gold_file_list` presented as "files likely
+    relevant" -- file PATHS only, never diff content (plan §9.2's poor-man oracle)."""
+    listing = "\n".join(f"- {path}" for path in gold_file_list(bundle))
+    return f"Files likely relevant to this task:\n\n{listing}\n"
+
+
+def _task_toml(bundle: TaskBundle, condition: str) -> str:
+    config = {
+        "schema_version": "1.1",
+        "task": {
+            "name": f"membench-probe/{bundle.work_id}-{condition}",
+            "description": f"{bundle.issue_title} [{condition}]",
+        },
+        "metadata": {
+            "work_id": bundle.work_id,
+            "rig": bundle.rig,
+            "condition": condition,
+            "source": "task-bundle",
+        },
+        # Real runs need the network: the installed claude-code agent fetches its
+        # CLI + the rig's deps (the spike's allow_internet=True precedent).
+        "environment": {"allow_internet": True},
+        "verifier": {"timeout_sec": 300.0},
+        "agent": {"timeout_sec": AGENT_TIMEOUT_SEC},
+    }
+    return toml.dumps(config)
+
+
+def _bake_memory_into_env(task_dir: Path, memory_file: Path) -> None:
+    """Land the injected memory file in the image at `ORACLE_MEMORY_CONTAINER_PATH`.
+
+    `inject_context` writes ``<task_dir>/memory/MEMORY.md``, but Harbor's Docker
+    build context is ``environment/`` only -- without this COPY the injected
+    context would never reach the agent."""
+    env_dir = task_dir / "environment"
+    shutil.copyfile(memory_file, env_dir / "MEMORY.md")
+    dockerfile = env_dir / "Dockerfile"
+    dockerfile.write_text(
+        dockerfile.read_text(encoding="utf-8") + f"COPY MEMORY.md {ORACLE_MEMORY_CONTAINER_PATH}\n",
+        encoding="utf-8",
+    )
+
+
+def build_probe_task(
+    bundle: TaskBundle,
+    condition: str,
+    task_dir: Path,
+    *,
+    rig_repos: Mapping[str, Path] = DEFAULT_RIG_REPOS,
+    runner: Runner = subprocess.run,
+) -> Path:
+    """Write one (bundle, condition) Harbor task dir; return it.
+
+    Environment = the rig clone snapshot at the bundle's EXACT ``env.base_commit``
+    with ``env.base_image`` (via `env_recon.reconstruct_env` -- the bundle carries
+    the exact anchor, so no timestamp approximation). The prompt is identical for
+    both conditions; ``oracle`` additionally injects `oracle_context_payload`
+    through `memory_inject.inject_context` and bakes it into the image. Every
+    agent-readable text is leak-checked BEFORE any write."""
+    if condition not in CONDITIONS:
+        raise ValueError(f"unknown probe condition {condition!r}; known: {list(CONDITIONS)}")
+    clone = rig_repos.get(bundle.rig)
+    if clone is None:
+        raise RuntimeError(
+            f"no local clone mapped for rig {bundle.rig!r} (known rigs: {sorted(rig_repos)})"
+        )
+
+    instruction = probe_instruction(bundle)
+    task_toml = _task_toml(bundle, condition)
+    agent_readable = {"instruction.md": instruction, "task.toml": task_toml}
+    if condition == "oracle":
+        agent_readable["memory/MEMORY.md"] = oracle_context_payload(bundle)
+    assert_probe_task_clean(agent_readable, bundle)
+
+    task_dir.mkdir(parents=True, exist_ok=True)
+    (task_dir / "task.toml").write_text(task_toml, encoding="utf-8")
+    (task_dir / "instruction.md").write_text(instruction, encoding="utf-8")
+    reconstruct_env(
+        task_dir,
+        repo=clone,
+        commit=bundle.env.base_commit,
+        base_image=bundle.env.base_image,
+        runner=runner,
+    )
+    if condition == "oracle":
+        memory_file = inject_context(
+            task_dir,
+            {"oracle-files": oracle_context_payload(bundle)},
+            outcome_labels=probe_leak_labels(bundle),
+        )
+        _bake_memory_into_env(task_dir, memory_file)
+    return task_dir
+
+
+# --- execution (mirrors base_rate_spike's harbor path) -------------------------------
+
+
+def load_stream(job_dir: Path) -> str:
+    """The run's raw Claude Code stream-json transcript from a finished job dir.
+
+    The probe needs the RAW stream (mutation calls + usage events), not
+    `harvest_job_dir`'s projected transcript -- so it reads ``claude-code.txt``
+    directly (the reliable source: Harbor skips the ATIF conversion on a normal
+    completed run, see `harbor_exec.harvest_job_dir`)."""
+    stream = _locate_one(job_dir, "*/agent/claude-code.txt")
+    if stream is None:
+        raise RuntimeError(
+            f"no */agent/claude-code.txt under {job_dir} -- the run left no stream transcript"
+        )
+    return stream.read_text(encoding="utf-8")
+
+
+def harbor_stream_exec(
+    task_dir: Path,
+    *,
+    jobs_dir: Path | None = None,
+    job_name: str | None = None,
+    model: str | None = None,
+    harbor_bin: str = "harbor",
+    timeout_sec: float | None = None,
+) -> str:
+    """Production `StreamExec`: ``harbor run`` one task (the spike's exact invocation
+    path -- OAuth token from the Harbor process env, jobs-dir layout, ``-q -y``),
+    then return the raw stream transcript. Requires Docker + the subscription."""
+    jobs_dir = jobs_dir or (task_dir.parent / "_harbor_jobs")
+    job_name = job_name or task_dir.name
+    job_dir = run_harbor_job(
+        task_dir,
+        jobs_dir=jobs_dir,
+        job_name=job_name,
+        model=model,
+        harbor_bin=harbor_bin,
+        timeout_sec=timeout_sec,
+    )
+    return load_stream(job_dir)
+
+
+# --- candidate harvest ----------------------------------------------------------------
+
+
+def _run_git(
+    clone: Path, args: Sequence[str], runner: Runner
+) -> "subprocess.CompletedProcess[str]":
+    return runner(["git", "-C", str(clone), *args], capture_output=True, text=True, check=False)
+
+
+def _add_worktree(clone: Path, commit: str, dest: Path, runner: Runner) -> None:
+    completed = _run_git(clone, ["worktree", "add", "--detach", str(dest), commit], runner)
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"git worktree add {commit[:12]} in {clone} failed "
+            f"(exit {completed.returncode}): {completed.stderr.strip()}"
+        )
+
+
+def _remove_worktree(clone: Path, dest: Path, runner: Runner) -> None:
+    """Force-remove + prune, with an rmtree backstop for a dir git no longer tracks
+    (the assemble_batch cleanup pattern)."""
+    _run_git(clone, ["worktree", "remove", "--force", str(dest)], runner)
+    if dest.exists():
+        shutil.rmtree(dest, ignore_errors=True)
+    _run_git(clone, ["worktree", "prune"], runner)
+
+
+def stale_probe_worktrees(clone: Path, *, runner: Runner = subprocess.run) -> tuple[str, ...]:
+    """Any ``probe-cand-`` worktree paths the clone still lists -- the CLI's
+    exit-sweep input (must be empty after a run)."""
+    completed = _run_git(clone, ["worktree", "list", "--porcelain"], runner)
+    if completed.returncode != 0:
+        raise RuntimeError(f"git worktree list in {clone} failed: {completed.stderr.strip()}")
+    return tuple(
+        line.removeprefix("worktree ")
+        for line in completed.stdout.splitlines()
+        if line.startswith("worktree ") and _WORKTREE_PREFIX in line
+    )
+
+
+def sweep_probe_worktrees(clone: Path, *, runner: Runner = subprocess.run) -> None:
+    """Remove every leftover probe worktree in ``clone``; raise if any survives."""
+    for stale in stale_probe_worktrees(clone, runner=runner):
+        _remove_worktree(clone, Path(stale), runner)
+    remaining = stale_probe_worktrees(clone, runner=runner)
+    if remaining:
+        raise RuntimeError(f"probe worktrees left in {clone} after sweep: {remaining}")
+
+
+def harvest_candidate(
+    run_transcript: str,
+    bundle: TaskBundle,
+    *,
+    clone: Path,
+    runner: Runner = subprocess.run,
+    worktree_root: Path = Path("/tmp"),
+) -> ReplayResult:
+    """The fresh run's candidate diff, in the gold diff's coordinate space.
+
+    Parses the run's mutation calls and replays them against a FRESH detached
+    checkout of ``repo@base_commit`` (the same machinery as the gold diff),
+    rebasing from the container workspace root (`CONTAINER_WORKDIR`) onto the
+    checkout. The checkout is created and removed per call (try/finally) -- no
+    path leaves it behind. Returns the full `ReplayResult` (per-file diffs + the
+    classified replay outcome stats)."""
+    calls = parse_mutation_calls(run_transcript)
+    worktree = worktree_root / f"{_WORKTREE_PREFIX}{bundle.work_id}-{uuid.uuid4().hex[:8]}"
+    _add_worktree(clone, bundle.env.base_commit, worktree, runner)
+    try:
+        return replay_calls(calls, checkout_dir=worktree, work_dir=CONTAINER_WORKDIR, runner=runner)
+    finally:
+        _remove_worktree(clone, worktree, runner)
+
+
+# --- scoring ---------------------------------------------------------------------------
+
+
+class ProbeConditionResult(BaseModel):
+    """One (bundle, condition) run's full readout: the direct score vs gold, the
+    efficiency axis, and the candidate-replay outcome stats."""
+
+    model_config = ConfigDict(frozen=True)
+
+    work_id: str
+    condition: str
+    score: ProbeDirectScore
+    efficiency: ProbeEfficiency
+    candidate_files: tuple[str, ...]
+    replay_applied: int = Field(ge=0)
+    replay_total: int = Field(ge=0)
+    replay_outside_work_dir: int = Field(ge=0)
+
+    def metrics(self) -> dict[str, float | None]:
+        """The gate's per-condition metric vector (summary + gap arithmetic input).
+        Token metrics are None when the transcript carried no usage data."""
+        return {
+            "combined": self.score.combined,
+            "file_f1": self.score.file_f1,
+            "hunk_overlap": self.score.hunk_overlap,
+            "input_tokens": (
+                None
+                if self.efficiency.input_tokens is None
+                else float(self.efficiency.input_tokens)
+            ),
+            "output_tokens": (
+                None
+                if self.efficiency.output_tokens is None
+                else float(self.efficiency.output_tokens)
+            ),
+            "turns": float(self.efficiency.turns),
+            "tool_calls": float(self.efficiency.tool_calls),
+        }
+
+
+class ProbePair(BaseModel):
+    """One bundle's paired readout. ``deltas`` is oracle - none per metric (sorted
+    pairs; a metric absent from either side is omitted, never imputed as 0)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    work_id: str
+    none: ProbeConditionResult
+    oracle: ProbeConditionResult
+    deltas: tuple[tuple[str, float], ...]
+
+
+def score_condition(
+    bundle: TaskBundle, condition: str, candidate: ReplayResult, run_transcript: str
+) -> ProbeConditionResult:
+    """Score one condition's harvested candidate against the bundle's gold diff,
+    plus the transcript's efficiency axis."""
+    return ProbeConditionResult(
+        work_id=bundle.work_id,
+        condition=condition,
+        score=score_probe_direct(candidate.diff_by_file(), bundle.output.diff_by_file()),
+        efficiency=extract_efficiency(run_transcript),
+        candidate_files=tuple(sorted(candidate.diff_by_file())),
+        replay_applied=sum(1 for c in candidate.calls if c.outcome is ReplayOutcome.APPLIED),
+        replay_total=len(candidate.calls),
+        replay_outside_work_dir=sum(
+            1 for c in candidate.calls if c.outcome is ReplayOutcome.OUTSIDE_WORK_DIR
+        ),
+    )
+
+
+def score_pair(none: ProbeConditionResult, oracle: ProbeConditionResult) -> ProbePair:
+    """Pair one bundle's two condition results and compute the per-metric deltas
+    (oracle - none). Mismatched work_ids or conditions are caller bugs -- raise."""
+    if none.work_id != oracle.work_id:
+        raise ValueError(f"work_id mismatch: {none.work_id!r} vs {oracle.work_id!r}")
+    if none.condition != "none" or oracle.condition != "oracle":
+        raise ValueError(
+            f"score_pair needs (none, oracle), got ({none.condition!r}, {oracle.condition!r})"
+        )
+    none_metrics, oracle_metrics = none.metrics(), oracle.metrics()
+    deltas: list[tuple[str, float]] = []
+    for metric, none_value in sorted(none_metrics.items()):
+        oracle_value = oracle_metrics[metric]
+        if none_value is None or oracle_value is None:
+            continue
+        deltas.append((metric, oracle_value - none_value))
+    return ProbePair(work_id=none.work_id, none=none, oracle=oracle, deltas=tuple(deltas))
+
+
+def run_probe(
+    bundle: TaskBundle,
+    condition: str,
+    task_dir: Path,
+    *,
+    clone: Path,
+    exec_stream: StreamExec = harbor_stream_exec,
+    runner: Runner = subprocess.run,
+    worktree_root: Path = Path("/tmp"),
+) -> ProbeConditionResult:
+    """Execute ONE prepared (bundle, condition) task and score it: run the agent
+    (`exec_stream` -- production `harbor_stream_exec`, injectable for tests),
+    harvest the candidate diff symmetrically with the gold, score the pair leg."""
+    stream = exec_stream(task_dir)
+    candidate = harvest_candidate(
+        stream, bundle, clone=clone, runner=runner, worktree_root=worktree_root
+    )
+    return score_condition(bundle, condition, candidate, stream)
+
+
+# --- summary / gap arithmetic ------------------------------------------------------------
+
+
+def summarize_pairs(pairs: Sequence[ProbePair]) -> dict[str, Any]:
+    """The gate's DATA product: per-bundle paired scores + per-metric gap stats
+    (deltas, mean/median, count where oracle > none) and the mechanical
+    ``gap_positive_majority`` provisional flag (strict majority of bundles with a
+    positive ``combined`` delta). The authored GO/NO-GO verdict is the
+    orchestrator's, written elsewhere -- never computed here."""
+    if not pairs:
+        raise ValueError("summarize_pairs needs at least one (none, oracle) pair")
+    per_bundle = [
+        {
+            "work_id": pair.work_id,
+            "none": pair.none.metrics(),
+            "oracle": pair.oracle.metrics(),
+            "deltas": dict(pair.deltas),
+        }
+        for pair in pairs
+    ]
+    metric_names = sorted({metric for pair in pairs for metric, _ in pair.deltas})
+    gaps: dict[str, Any] = {}
+    for metric in metric_names:
+        deltas = [dict(pair.deltas)[metric] for pair in pairs if metric in dict(pair.deltas)]
+        gaps[metric] = {
+            "deltas": deltas,
+            "mean_delta": fmean(deltas),
+            "median_delta": median(deltas),
+            "n_oracle_gt_none": sum(1 for d in deltas if d > 0),
+            "n_pairs": len(deltas),
+        }
+    combined_positive = sum(1 for pair in pairs if dict(pair.deltas).get("combined", 0.0) > 0)
+    return {
+        "n_pairs": len(pairs),
+        "per_bundle": per_bundle,
+        "gaps": gaps,
+        "gap_positive_majority": combined_positive * 2 > len(pairs),
+    }

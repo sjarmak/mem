@@ -122,6 +122,24 @@ def _write(task_dir: Path, text: str) -> Path:
     return target
 
 
+def inject_context(
+    task_dir: str | Path,
+    payloads: dict[str, str],
+    *,
+    outcome_labels: Iterable[str] = (),
+) -> Path:
+    """Render + leak-check + write context payloads as the task's memory file.
+
+    The injection MECHANISM shared by `inject_rung_memory`'s content-bearing rungs
+    and the mem-75t.7.6 probe gate (`harbor.probe_gate`), which injects the cheap
+    oracle-rung context (the gold-diff file list) through the same render + guard +
+    write path. The leak guard runs over the RENDERED text, so a label smuggled in
+    via a payload key fails just like one in a payload body."""
+    text = _render(payloads)
+    assert_no_outcome_leak(text, list(outcome_labels))
+    return _write(Path(task_dir), text)
+
+
 def inject_rung_memory(
     task_dir: str | Path,
     rung: str,
@@ -153,17 +171,13 @@ def inject_rung_memory(
         return None
 
     if rung == "ours":
-        text = _render(ours_payloads or {})
-        assert_no_outcome_leak(text, labels)
-        return _write(task_path, text)
+        return inject_context(task_path, ours_payloads or {}, outcome_labels=labels)
 
     if rung == "oracle":
         if oracle_payload is None:
             raise ValueError("oracle rung needs an oracle_payload")
         _assert_no_oracle_self_leak(oracle_payload, held)
-        text = _render({"oracle": oracle_payload})
-        assert_no_outcome_leak(text, labels)
-        return _write(task_path, text)
+        return inject_context(task_path, {"oracle": oracle_payload}, outcome_labels=labels)
 
     if rung in DEFERRED_RUNGS:
         raise DeferredRungError(
