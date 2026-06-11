@@ -329,6 +329,112 @@ def test_own_record_in_corpus_is_not_a_shared_trace():
     assert isinstance(bundle, TaskBundle)
 
 
+# --- issue-leg resolution (gc.var.issue workflow records) --------------------------
+
+
+def _workflow_record(**overrides):
+    """A mol-focus-review-shaped workflow record: the stored title is the formula
+    name; the real task statement lives on the bead named by metadata['gc.var.issue']."""
+    record = make_record(
+        title="mol-focus-review",
+        description="",
+        metadata={
+            "gc.var.issue": "mem-issue-7",
+            "gc.input_convoy_id": "mem-convoy-3",
+            "gc.var.convoy_id": "mem-convoy-3",
+        },
+    )
+    return {**record, **overrides}
+
+
+def _issue_bead(**overrides):
+    record = _corpus_record(
+        "mem-issue-7",
+        title="Fix the parallel-run flake in the store writer",
+        description="## Spec\nWriter test flakes when two runs share a tmpdir.",
+    )
+    record.update(overrides)
+    return record
+
+
+def test_issue_leg_resolved_from_referenced_bead():
+    record = _workflow_record()
+    bundle = assemble_bundle(record, make_replay(), corpus=[record, _issue_bead()])
+    assert isinstance(bundle, TaskBundle)
+    # The issue leg is the REFERENCED bead's text, not the workflow formula name.
+    assert bundle.issue_title == "Fix the parallel-run flake in the store writer"
+    assert "share a tmpdir" in bundle.issue_body
+    # The original work_id stays the bundle anchor; the referenced bead is provenance.
+    assert bundle.work_id == "mem-1.1"
+    assert bundle.issue_work_id == "mem-issue-7"
+
+
+def test_record_without_issue_ref_keeps_own_text_and_no_issue_provenance():
+    bundle = assemble_bundle(make_record(), make_replay())
+    assert isinstance(bundle, TaskBundle)
+    assert bundle.issue_title == "Fix the flaky store writer test"
+    assert bundle.issue_work_id is None
+
+
+def test_unresolved_issue_ref_rejected():
+    # Without the referenced bead the issue leg would be the formula name --
+    # meaningless as an agent-facing task statement. Typed rejection, never a
+    # silent fall-back to the workflow title.
+    record = _workflow_record()
+    rejection = assemble_bundle(record, make_replay(), corpus=[record])
+    assert not isinstance(rejection, TaskBundle)
+    assert rejection.reason is RejectionReason.ISSUE_REF_UNRESOLVED
+    assert "mem-issue-7" in rejection.detail
+
+
+def test_referenced_issue_text_passes_the_same_leak_guard():
+    record = _workflow_record()
+    leaky_issue = _issue_bead(title=f"Land the fix from {COMMIT_SHA}")
+    with pytest.raises(OutcomeLeakError):
+        assemble_bundle(record, make_replay(), corpus=[record, leaky_issue])
+
+
+def test_referenced_issue_own_outcome_labels_also_guarded():
+    issue_sha = "feedface9876feedface9876feedface9876feed"
+    record = _workflow_record()
+    leaky_issue = _issue_bead(
+        title=f"Cherry-pick {issue_sha} cleanly",
+        outcome={"commit_sha": issue_sha},
+    )
+    with pytest.raises(OutcomeLeakError):
+        assemble_bundle(record, make_replay(), corpus=[record, leaky_issue])
+
+
+def test_issue_bead_in_loo_excluded_work_ids():
+    record = _workflow_record()
+    bundle = assemble_bundle(record, make_replay(), corpus=[record, _issue_bead()])
+    assert isinstance(bundle, TaskBundle)
+    assert "mem-issue-7" in bundle.loo_excluded_work_ids
+
+
+def test_issue_bead_sharing_the_transcript_is_not_a_shared_trace():
+    # tkhkg shape: the workflow bead and its OWN issue bead point at the same
+    # transcript -- one unit of work recorded on two beads, not a mega-session.
+    record = _workflow_record()
+    issue = _issue_bead(trace={"jsonl_path": "/traces/mem-1.1.jsonl"})
+    bundle = assemble_bundle(record, make_replay(), corpus=[record, issue])
+    assert isinstance(bundle, TaskBundle)
+    assert bundle.issue_work_id == "mem-issue-7"
+
+
+def test_foreign_record_sharing_the_transcript_still_rejects():
+    record = _workflow_record()
+    corpus = [
+        record,
+        _issue_bead(),
+        _corpus_record("mem-9.9", trace={"jsonl_path": "/traces/mem-1.1.jsonl"}),
+    ]
+    rejection = assemble_bundle(record, make_replay(), corpus=corpus)
+    assert not isinstance(rejection, TaskBundle)
+    assert rejection.reason is RejectionReason.SHARED_TRACE
+    assert "mem-9.9" in rejection.detail
+
+
 # --- leak guard ------------------------------------------------------------------
 
 
@@ -403,6 +509,39 @@ def test_own_work_id_always_excluded_even_with_empty_corpus():
     bundle = assemble_bundle(make_record(), make_replay())
     assert isinstance(bundle, TaskBundle)
     assert bundle.loo_excluded_work_ids == ("mem-1.1",)
+
+
+def test_loo_excluded_keys_on_gc_metadata_link_fields():
+    # These records carry convoy/issue links in gc.* METADATA, not links.convoy_id
+    # (the store shape: links.convoy_id is null on every workflow record). Sibling
+    # detection must group on the same values mechanically.
+    query = _workflow_record()
+    corpus = [
+        query,
+        # The convoy bead itself (its work_id IS the metadata convoy value).
+        _corpus_record("mem-convoy-3", title="input convoy for mem-issue-7"),
+        # The issue bead (its work_id IS the gc.var.issue value).
+        _issue_bead(),
+        # Another session on the SAME issue (the e29gw/usu9f shape).
+        _corpus_record("mem-8.8", metadata={"gc.var.issue": "mem-issue-7"}),
+        # Another record in the SAME convoy.
+        _corpus_record("mem-7.7", metadata={"gc.input_convoy_id": "mem-convoy-3"}),
+        # Unrelated -- must NOT be excluded.
+        _corpus_record("mem-4.4", metadata={"gc.var.issue": "mem-other-issue"}),
+    ]
+    excluded = loo_excluded_ids(query, corpus)
+    assert "mem-convoy-3" in excluded
+    assert "mem-issue-7" in excluded
+    assert "mem-8.8" in excluded
+    assert "mem-7.7" in excluded
+    assert "mem-4.4" not in excluded
+
+
+def test_loo_excluded_includes_gc_link_values_even_with_empty_corpus():
+    # The referenced bead ids are work refs by the gc contract: they belong in
+    # the exclusion set even when the assembly corpus happens to omit them.
+    excluded = loo_excluded_ids(_workflow_record(), ())
+    assert set(excluded) == {"mem-1.1", "mem-convoy-3", "mem-issue-7"}
 
 
 # --- schema: round-trip + immutability --------------------------------------------

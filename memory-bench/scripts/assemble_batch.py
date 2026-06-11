@@ -6,10 +6,12 @@ candidates with a non-zero mutation signal from the SELECT artifact
 (``.mem/select-ranking.json``, mem-75t.7.4), checks out each candidate's
 ``repo@base_commit`` as a detached git worktree (``/tmp/bundle-asm-<work_id>``),
 replays the transcript against it with the mem-75t.7.1 work-dir inference contract
-(`effective_work_dir` over the trace's own mutation paths), and runs the admission
-filter (`assemble_bundle`) with the FULL bundle-eligible pool as corpus -- so the
-LOO sibling/supersedes exclusion and the SHARED_TRACE mega-session detection see
-every record, not just the batch.
+(`effective_work_dir` over the trace's own mutation paths, parsed ONCE and replayed
+via `replay_calls`), and runs the admission filter (`assemble_bundle`) with ALL
+store records as corpus -- so the LOO sibling/supersedes exclusion, the
+SHARED_TRACE mega-session detection, and the gc.var.issue issue-leg resolution see
+every record (the referenced issue beads have no trace/base_commit and are NOT in
+the bundle-eligible pool). Candidates still come from the eligible pool only.
 
 Products:
 
@@ -47,7 +49,7 @@ from pathlib import Path
 from typing import Any
 
 from membench.bundle.assemble import Rejection, assemble_bundle
-from membench.bundle.replay import effective_work_dir, parse_mutation_calls, replay_transcript
+from membench.bundle.replay import effective_work_dir, parse_mutation_calls, replay_calls
 from membench.harbor.env_recon import DEFAULT_RIG_REPOS
 from membench.schemas.bundle import TaskBundle
 
@@ -71,14 +73,20 @@ CHECKOUT_FAILED = "checkout_failed"
 NO_RIG_CLONE = "no_rig_clone"
 NO_BASE_COMMIT = "no_base_commit"
 NO_TRACE = "no_trace"
+STALE_RANKING = "stale_ranking"
 
 # Bundle-eligible pool -- the same predicate as the mem-75t.7.1 validation and the
-# mem-75t.7.4 SELECT run, so corpus-wide checks (SHARED_TRACE, LOO) see the whole pool.
+# mem-75t.7.4 SELECT run; candidates are drawn from here.
 ELIGIBLE_SQL = """
 SELECT record FROM work_records
 WHERE trace_path IS NOT NULL AND base_commit IS NOT NULL AND status = 'closed'
 ORDER BY work_id
 """
+
+# Assembly corpus -- EVERY store record, not just the bundle-eligible pool: the
+# gc.var.issue issue beads and the input-convoy beads carry no trace/base_commit,
+# yet issue-leg resolution and the LOO sibling group must see them.
+CORPUS_SQL = "SELECT record FROM work_records ORDER BY work_id"
 
 
 @dataclass(frozen=True)
@@ -109,14 +117,23 @@ class CheckoutFailedError(RuntimeError):
     local clone (timestamp-approximate provenance vs a pruned/foreign commit)."""
 
 
-def load_pool(store: Path) -> list[dict[str, Any]]:
-    """The full bundle-eligible WorkRecord pool, read-only (uri mode=ro)."""
+def _load_records(store: Path, sql: str) -> list[dict[str, Any]]:
     conn = sqlite3.connect(f"file:{store}?mode=ro", uri=True)
     try:
-        rows = conn.execute(ELIGIBLE_SQL).fetchall()
+        rows = conn.execute(sql).fetchall()
     finally:
         conn.close()
     return [json.loads(row[0]) for row in rows]
+
+
+def load_pool(store: Path) -> list[dict[str, Any]]:
+    """The bundle-eligible WorkRecord pool (candidate source), read-only."""
+    return _load_records(store, ELIGIBLE_SQL)
+
+
+def load_corpus(store: Path) -> list[dict[str, Any]]:
+    """EVERY WorkRecord in the store (assembly corpus), read-only (uri mode=ro)."""
+    return _load_records(store, CORPUS_SQL)
 
 
 def top_candidates(
@@ -224,15 +241,15 @@ def stale_bundle_worktrees(clone: Path, *, runner: Runner = subprocess.run) -> t
 def process_candidate(
     record: Mapping[str, Any],
     *,
-    pool: Sequence[Mapping[str, Any]],
+    corpus: Sequence[Mapping[str, Any]],
     rig_repos: Mapping[str, Path] = DEFAULT_RIG_REPOS,
     bundles_dir: Path,
     worktree_root: Path = DEFAULT_WORKTREE_ROOT,
     runner: Runner = subprocess.run,
 ) -> Admission | BatchRejection:
     """Checkout -> replay -> admission for ONE candidate. The worktree is removed in
-    ``finally`` -- no path leaves it behind. ``pool`` is the FULL eligible corpus so
-    SHARED_TRACE and the LOO exclusion set are computed against everything."""
+    ``finally`` -- no path leaves it behind. ``corpus`` is ALL store records so
+    SHARED_TRACE, the LOO exclusion set, and issue-leg resolution see everything."""
     work_id = str(record["work_id"])
     rig = str(record["rig"])
     clone = rig_repos.get(rig)
@@ -264,13 +281,18 @@ def process_candidate(
     try:
         add_worktree(clone, base_commit, worktree, runner=runner)
     except CheckoutFailedError as exc:
+        # A failed `worktree add` can leave a partly-created dest dir git never
+        # registered -- invisible to the worktree-list sweep, so clear it here.
+        if worktree.exists():
+            remove_worktree(clone, worktree, runner=runner)
         return BatchRejection(work_id=work_id, rig=rig, reason=CHECKOUT_FAILED, detail=str(exc))
     try:
         stream = Path(str(trace_path)).read_text(encoding="utf-8")
+        # Parse ONCE: the same calls feed work-dir inference and the replay.
         calls = parse_mutation_calls(stream)
         work_dir = effective_work_dir(record_work_dir(record, str(clone)), calls)
-        replay = replay_transcript(stream, checkout_dir=worktree, work_dir=work_dir, runner=runner)
-        result = assemble_bundle(record, replay, corpus=pool)
+        replay = replay_calls(calls, checkout_dir=worktree, work_dir=work_dir, runner=runner)
+        result = assemble_bundle(record, replay, corpus=corpus)
     finally:
         remove_worktree(clone, worktree, runner=runner)
 
@@ -304,6 +326,7 @@ def render_report(
     admissions: Sequence[Admission],
     rejections: Sequence[BatchRejection],
     pool_size: int,
+    corpus_size: int | None = None,
 ) -> str:
     """The batch report markdown: methodology, admitted facts table, rejection
     histogram + per-candidate details, and the mem-75t.7.6 gate-readiness line."""
@@ -316,10 +339,15 @@ def render_report(
         f"Generated by `memory-bench/scripts/assemble_batch.py` on {today}.",
         "",
         f"- **Candidates**: top {len(candidates)} of the SELECT ranking"
-        f" (`{ranking_path}`) with a non-zero mutation signal.",
-        f"- **Corpus for admission**: the FULL {pool_size}-record bundle-eligible pool"
-        f" from `{store}` (read-only) — SHARED_TRACE detection and the LOO exclusion"
-        " set see the whole pool.",
+        f" (`{ranking_path}`) with a non-zero mutation signal, drawn from the"
+        f" {pool_size}-record bundle-eligible pool.",
+        f"- **Corpus for admission**: ALL {corpus_size if corpus_size is not None else pool_size}"
+        f" store records from `{store}` (read-only) — SHARED_TRACE detection, the LOO"
+        " exclusion set, and issue-leg resolution see the whole store.",
+        "- **Issue leg**: workflow-formula records (`metadata['gc.var.issue']`) source"
+        " `issue_title`/`issue_body` from the referenced issue bead (recorded as"
+        " `issue_work_id`); an unresolvable ref is a typed `ISSUE_REF_UNRESOLVED`"
+        " rejection.",
         "- **Checkout**: detached git worktree of the rig clone at the record's"
         " `base_commit`; a missing commit is a recorded `CHECKOUT_FAILED` skip.",
         "- **Replay work_dir**: `effective_work_dir` (majority-prefix inference over"
@@ -382,7 +410,9 @@ def run_batch(
     after the sweep raises."""
     ranking = json.loads(ranking_path.read_text(encoding="utf-8"))["ranking"]
     candidates = top_candidates(ranking, limit)
+    rig_by_ranked_id = {str(e["work_id"]): str(e.get("rig", "<unknown>")) for e in ranking}
     pool = load_pool(store)
+    corpus = load_corpus(store)
     by_id = {str(r["work_id"]): r for r in pool}
 
     admissions: list[Admission] = []
@@ -390,13 +420,29 @@ def run_batch(
     used_clones: set[Path] = set()
     try:
         for work_id in candidates:
-            record = by_id[work_id]
+            record = by_id.get(work_id)
+            if record is None:
+                # The ranking artifact predates the current store build -- a ranked
+                # work_id outside today's eligible pool is a recorded skip.
+                rejections.append(
+                    BatchRejection(
+                        work_id=work_id,
+                        rig=rig_by_ranked_id.get(work_id, "<unknown>"),
+                        reason=STALE_RANKING,
+                        detail=(
+                            "ranked work_id absent from the current bundle-eligible "
+                            "pool (stale select-ranking.json vs rebuilt store)"
+                        ),
+                    )
+                )
+                print(f"REJECT {work_id}  {STALE_RANKING}")
+                continue
             clone = rig_repos.get(str(record["rig"]))
             if clone is not None:
                 used_clones.add(clone)
             outcome = process_candidate(
                 record,
-                pool=pool,
+                corpus=corpus,
                 rig_repos=rig_repos,
                 bundles_dir=bundles_dir,
                 worktree_root=worktree_root,
@@ -427,6 +473,7 @@ def run_batch(
             admissions=admissions,
             rejections=rejections,
             pool_size=len(pool),
+            corpus_size=len(corpus),
         ),
         encoding="utf-8",
     )

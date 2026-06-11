@@ -473,6 +473,30 @@ def gold_diff(checkout_dir: Path, *, runner: Runner = subprocess.run) -> dict[st
     }
 
 
+def replay_calls(
+    calls: Sequence[MutationCall],
+    *,
+    checkout_dir: Path,
+    work_dir: str,
+    runner: Runner = subprocess.run,
+) -> ReplayResult:
+    """Replay PRE-PARSED mutation calls in transcript order, then diff -- the P0 core.
+
+    Split out of `replay_transcript` for callers that already hold the parsed calls
+    (the batch assembler parses once to feed `effective_work_dir`, then replays the
+    same calls) -- a multi-MB transcript must not be parsed twice."""
+    replays = tuple(
+        replay_call(call, index, checkout_dir=checkout_dir, work_dir=work_dir)
+        for index, call in enumerate(calls)
+    )
+    applied = sum(1 for r in replays if r.outcome is ReplayOutcome.APPLIED)
+    return ReplayResult(
+        calls=replays,
+        file_diffs=tuple(sorted(gold_diff(checkout_dir, runner=runner).items())),
+        replay_success_rate=applied / len(replays) if replays else 0.0,
+    )
+
+
 def replay_transcript(
     stream: str,
     *,
@@ -485,14 +509,9 @@ def replay_transcript(
     ``stream`` is the resolved transcript text (.jsonl); ``checkout_dir`` is the repo
     already checked out at ``base_commit``; ``work_dir`` is the original record's
     working directory (the rebase prefix)."""
-    calls = parse_mutation_calls(stream)
-    replays = tuple(
-        replay_call(call, index, checkout_dir=checkout_dir, work_dir=work_dir)
-        for index, call in enumerate(calls)
-    )
-    applied = sum(1 for r in replays if r.outcome is ReplayOutcome.APPLIED)
-    return ReplayResult(
-        calls=replays,
-        file_diffs=tuple(sorted(gold_diff(checkout_dir, runner=runner).items())),
-        replay_success_rate=applied / len(replays) if replays else 0.0,
+    return replay_calls(
+        parse_mutation_calls(stream),
+        checkout_dir=checkout_dir,
+        work_dir=work_dir,
+        runner=runner,
     )

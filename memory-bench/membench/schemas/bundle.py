@@ -4,7 +4,9 @@ Mirrors codeprobe ``models/task.py`` (``Task``/``TaskMetadata``/``TaskVerificati
 re-shaped for a bead-sourced, PR-less corpus:
 
 - the **issue** leg is the bead's title/body (leak-guarded at assembly, never here --
-  a schema cannot know which strings are outcome labels);
+  a schema cannot know which strings are outcome labels); for workflow-formula
+  records it is sourced from the bead named by ``metadata["gc.var.issue"]``, with
+  ``issue_work_id`` as the provenance pointer;
 - the **output** leg embeds the P0 `ReplayResult` verbatim (per-file gold diffs +
   classified replay outcomes + ``replay_success_rate``) rather than re-projecting it:
   the replay types ARE the output contract, and re-stating them would let the two
@@ -89,6 +91,14 @@ class TaskBundle(BaseModel):
     # carries only the title (see assess._body_text's forward-shaped read).
     issue_title: str
     issue_body: str = ""
+    # Issue-leg provenance: the work_id of the REFERENCED bead whose title/body
+    # supplied the issue leg, when it is not the record itself. Workflow-formula
+    # records (gc.kind=workflow) store the formula name in their own title and
+    # name the real task statement via metadata["gc.var.issue"] -- the assembler
+    # resolves that bead and records it here. None means the record's own text IS
+    # the issue leg. When set, the id is always in ``loo_excluded_work_ids`` (the
+    # issue bead is the same work).
+    issue_work_id: str | None = None
     # The resolved transcript path (record.trace.jsonl_path) -- the mined source.
     trace_ref: str = Field(min_length=1)
     # The P0 replay product, embedded whole: gold diffs + outcomes + fidelity rate.

@@ -13,6 +13,7 @@ from membench.bundle.replay import (
     infer_work_dir,
     parse_mutation_calls,
     replay_call,
+    replay_calls,
     replay_transcript,
 )
 
@@ -28,5 +29,6 @@ __all__ = [
     "infer_work_dir",
     "parse_mutation_calls",
     "replay_call",
+    "replay_calls",
     "replay_transcript",
 ]

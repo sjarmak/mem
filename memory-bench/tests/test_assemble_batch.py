@@ -225,7 +225,7 @@ def test_process_candidate_admits_and_cleans_worktree(tmp_path):
 
     outcome = batch.process_candidate(
         record,
-        pool=[record],
+        corpus=[record],
         rig_repos={"demo": clone},
         bundles_dir=bundles_dir,
         worktree_root=worktree_root,
@@ -243,6 +243,33 @@ def test_process_candidate_admits_and_cleans_worktree(tmp_path):
     assert batch.stale_bundle_worktrees(clone) == ()
 
 
+def test_process_candidate_parses_the_transcript_once(tmp_path, monkeypatch):
+    # The parsed calls feed BOTH effective_work_dir and the replay -- a second
+    # parse of a multi-MB transcript is pure waste.
+    clone, base_commit = _make_clone(tmp_path)
+    record = _make_record(base_commit, _write_transcript(tmp_path))
+    worktree_root = tmp_path / "wt"
+    worktree_root.mkdir()
+
+    calls = {"n": 0}
+    real_parse = batch.parse_mutation_calls
+
+    def counting_parse(stream):
+        calls["n"] += 1
+        return real_parse(stream)
+
+    monkeypatch.setattr(batch, "parse_mutation_calls", counting_parse)
+    outcome = batch.process_candidate(
+        record,
+        corpus=[record],
+        rig_repos={"demo": clone},
+        bundles_dir=tmp_path / "bundles",
+        worktree_root=worktree_root,
+    )
+    assert isinstance(outcome, batch.Admission)
+    assert calls["n"] == 1
+
+
 def test_process_candidate_missing_commit_is_checkout_failed_skip(tmp_path):
     clone, _ = _make_clone(tmp_path)
     record = _make_record("0" * 40, _write_transcript(tmp_path))
@@ -251,7 +278,7 @@ def test_process_candidate_missing_commit_is_checkout_failed_skip(tmp_path):
 
     outcome = batch.process_candidate(
         record,
-        pool=[record],
+        corpus=[record],
         rig_repos={"demo": clone},
         bundles_dir=tmp_path / "bundles",
         worktree_root=worktree_root,
@@ -263,14 +290,111 @@ def test_process_candidate_missing_commit_is_checkout_failed_skip(tmp_path):
     assert batch.stale_bundle_worktrees(clone) == ()
 
 
+def test_checkout_failure_cleans_partly_created_worktree_dir(tmp_path):
+    # `git worktree add` can fail AFTER creating the dest dir without registering
+    # it -- such a dir is invisible to the worktree-list sweep, so the except
+    # path itself must clear it.
+    clone, base_commit = _make_clone(tmp_path)
+    record = _make_record(base_commit, _write_transcript(tmp_path))
+    worktree_root = tmp_path / "wt"
+    worktree_root.mkdir()
+    dest = worktree_root / "bundle-asm-t-asm-1"
+
+    def partial_add_runner(cmd, **kwargs):
+        if "add" in cmd and "worktree" in cmd:
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / ".git").write_text("gitdir: nowhere\n", encoding="utf-8")
+            return subprocess.CompletedProcess(cmd, 128, stdout="", stderr="boom")
+        return subprocess.run(cmd, **kwargs)
+
+    outcome = batch.process_candidate(
+        record,
+        corpus=[record],
+        rig_repos={"demo": clone},
+        bundles_dir=tmp_path / "bundles",
+        worktree_root=worktree_root,
+        runner=partial_add_runner,
+    )
+
+    assert isinstance(outcome, batch.BatchRejection)
+    assert outcome.reason == batch.CHECKOUT_FAILED
+    assert not dest.exists()
+
+
 def test_process_candidate_unmapped_rig_is_no_rig_clone(tmp_path):
     record = _make_record("a" * 40, _write_transcript(tmp_path))
     outcome = batch.process_candidate(
         record,
-        pool=[record],
+        corpus=[record],
         rig_repos={},
         bundles_dir=tmp_path / "bundles",
         worktree_root=tmp_path,
     )
     assert isinstance(outcome, batch.BatchRejection)
     assert outcome.reason == batch.NO_RIG_CLONE
+
+
+# --- run_batch: stale ranking entries -------------------------------------------
+
+
+def _make_store(tmp_path: Path, records: list[dict]) -> Path:
+    import sqlite3
+
+    store = tmp_path / "store.db"
+    conn = sqlite3.connect(store)
+    conn.execute(
+        "CREATE TABLE work_records (work_id TEXT PRIMARY KEY, rig TEXT, status TEXT,"
+        " trace_path TEXT, base_commit TEXT, record TEXT NOT NULL)"
+    )
+    for record in records:
+        conn.execute(
+            "INSERT INTO work_records VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                record["work_id"],
+                record["rig"],
+                record["lifecycle"]["status"],
+                record.get("trace", {}).get("jsonl_path"),
+                (record.get("provenance") or {}).get("base_commit"),
+                json.dumps(record),
+            ),
+        )
+    conn.commit()
+    conn.close()
+    return store
+
+
+def test_run_batch_records_stale_ranking_id_as_typed_skip(tmp_path):
+    # A select-ranking.json built against an older store can rank a work_id the
+    # rebuilt eligible pool no longer contains -- a recorded skip, never a KeyError.
+    clone, base_commit = _make_clone(tmp_path)
+    record = _make_record(base_commit, _write_transcript(tmp_path))
+    store = _make_store(tmp_path, [record])
+    ranking = tmp_path / "ranking.json"
+    ranking.write_text(
+        json.dumps(
+            {
+                "ranking": [
+                    {"rank": 1, "work_id": "t-gone-9", "rig": "demo", "mutation_calls": 3},
+                    {"rank": 2, "work_id": "t-asm-1", "rig": "demo", "mutation_calls": 1},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    worktree_root = tmp_path / "wt"
+    worktree_root.mkdir()
+
+    admissions, rejections = batch.run_batch(
+        store=store,
+        ranking_path=ranking,
+        bundles_dir=tmp_path / "bundles",
+        report_out=tmp_path / "report.md",
+        limit=25,
+        rig_repos={"demo": clone},
+        worktree_root=worktree_root,
+    )
+
+    assert [a.work_id for a in admissions] == ["t-asm-1"]
+    stale = [r for r in rejections if r.reason == batch.STALE_RANKING]
+    assert [r.work_id for r in stale] == ["t-gone-9"]
+    assert "STALE_RANKING x1" in (tmp_path / "report.md").read_text(encoding="utf-8")

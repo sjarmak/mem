@@ -34,16 +34,31 @@ invariants are enforced here, mechanically:
    Every rejection is a typed `Rejection` with a `RejectionReason` -- never a
    silent drop, so batch admission stats are computable from the rejections.
 
-2. **Leak guard.** The issue leg (title/body) is agent-readable text; the record's
+2. **Issue-leg resolution.** Workflow-formula records (gc.kind=workflow) store the
+   formula name (e.g. "mol-focus-review") in ``title``; the agent-facing task
+   statement lives on the bead named by ``metadata["gc.var.issue"]``. The assembler
+   resolves that bead from ``corpus`` and uses ITS title/body for the issue leg,
+   keeping the record's work_id as the bundle anchor and recording the referenced
+   id in ``issue_work_id``. This lives HERE, not in the batch script's record
+   projection: the issue leg is a bundle invariant (leak-guarded, LOO-relevant,
+   rejection-typed), and the batch layer is pure plumbing -- any other caller of
+   `assemble_bundle` must get the same issue semantics for free. An unresolvable
+   ref is the typed `ISSUE_REF_UNRESOLVED` rejection (the leg would otherwise be
+   the formula name -- meaningless), never a silent fall-back.
+
+3. **Leak guard.** The issue leg (title/body) is agent-readable text; the record's
    high-entropy outcome labels must not appear in it. Reuses
    `grading.leak_guard.assert_no_outcome_leak`, which RAISES -- a planted outcome
-   label is a validity bug that must fail the run, not a rejection to tally.
+   label is a validity bug that must fail the run, not a rejection to tally. A
+   resolved issue bead's text is scanned against BOTH records' outcome labels.
 
-3. **LOO invariant (plan §9.3).** The bundle stores the work_ids any grid run must
+4. **LOO invariant (plan §9.3).** The bundle stores the work_ids any grid run must
    withhold from memory arms: the record itself, its undirected supersedes closure,
-   and its convoy/pr/branch siblings -- the exact `validity` exclusion semantics
-   (same `query_from_record` boundary), frozen INTO the bundle so enforcement is
-   mechanical rather than a per-run convention.
+   its convoy/pr/branch siblings -- the exact `validity` exclusion semantics
+   (same `query_from_record` boundary) -- PLUS the gc-metadata link group
+   (convoy/issue beads and records sharing those refs; see `loo_excluded_ids`),
+   frozen INTO the bundle so enforcement is mechanical rather than a per-run
+   convention.
 
 ZFC: pure mechanism -- structural field reads, set arithmetic, no IO, no model
 calls. The pass/fail status this module keys on was produced upstream by the
@@ -86,6 +101,7 @@ class RejectionReason(StrEnum):
     NO_TRACE = "no_trace"
     DIRTY_TRACE_TAIL = "dirty_trace_tail"
     SHARED_TRACE = "shared_trace"
+    ISSUE_REF_UNRESOLVED = "issue_ref_unresolved"
     MISSING_ENV = "missing_env"
     BASE_PREDATES_TREE = "base_predates_tree"
     EMPTY_OUTPUT = "empty_output"
@@ -100,6 +116,20 @@ class Rejection:
     work_id: str
     reason: RejectionReason
     detail: str = ""
+
+
+# The gc workflow-metadata key naming the bead that carries the REAL task statement.
+# Workflow-formula records (gc.kind=workflow) store the formula name (e.g.
+# "mol-focus-review") in their own ``title``; the agent-facing issue leg must come
+# from the referenced bead instead.
+ISSUE_REF_KEY = "gc.var.issue"
+
+# The gc metadata link fields whose values are work-id refs to "the same work":
+# the input-convoy bead and the underlying issue bead. The store's workflow records
+# carry these in ``metadata`` -- ``links.convoy_id`` is null on every one of them --
+# so the LOO sibling detection must key on the same values (mechanical same-value
+# grouping, mirroring `validity.is_sibling`'s one-hop semantics).
+_GC_LINK_KEYS: tuple[str, ...] = ("gc.input_convoy_id", "gc.var.convoy_id", ISSUE_REF_KEY)
 
 
 def _mapping(record: Mapping[str, Any], key: str) -> Mapping[str, Any]:
@@ -174,14 +204,71 @@ def admit_record(record: Mapping[str, Any]) -> Rejection | None:
     return None
 
 
+def _gc_link_ids(record: Mapping[str, Any]) -> frozenset[str]:
+    """The work-id refs the record's gc metadata link fields carry (convoy bead,
+    issue bead). Empty/non-string values are skipped."""
+    metadata = _mapping(record, "metadata")
+    return frozenset(
+        value.strip()
+        for key in _GC_LINK_KEYS
+        if isinstance((value := metadata.get(key)), str) and value.strip()
+    )
+
+
+def _same_work_ids(record: Mapping[str, Any], corpus: Sequence[Mapping[str, Any]]) -> set[str]:
+    """The corpus work_ids in ``record``'s gc-metadata same-work group: records
+    whose key set ({work_id} + gc link ids) intersects the record's own. One-hop,
+    undirected, pure same-value grouping -- this catches the convoy/issue beads
+    themselves (their work_id IS the link value) and other sessions carrying the
+    same convoy/issue refs, with no semantic judgment."""
+    own_keys = _gc_link_ids(record) | {str(record.get("work_id"))}
+    related: set[str] = set()
+    for other in corpus:
+        other_id = str(other.get("work_id"))
+        if other_id in own_keys or _gc_link_ids(other) & own_keys:
+            related.add(other_id)
+    related.discard(str(record.get("work_id")))
+    return related
+
+
+def _resolve_issue_record(
+    record: Mapping[str, Any], corpus: Sequence[Mapping[str, Any]]
+) -> Mapping[str, Any] | Rejection | None:
+    """The bead carrying the record's REAL task statement, when the record is a
+    workflow-formula bead (``metadata["gc.var.issue"]``): the referenced record from
+    ``corpus``, a typed `Rejection` when the corpus cannot resolve it (the issue leg
+    would otherwise be the formula name -- meaningless to an agent), or None when the
+    record carries no issue ref (its own title/body ARE the issue leg)."""
+    metadata = _mapping(record, "metadata")
+    raw = metadata.get(ISSUE_REF_KEY)
+    issue_ref = raw.strip() if isinstance(raw, str) else ""
+    if not issue_ref or issue_ref == str(record.get("work_id")):
+        return None
+    for other in corpus:
+        if str(other.get("work_id")) == issue_ref:
+            return other
+    return Rejection(
+        work_id=str(record.get("work_id")),
+        reason=RejectionReason.ISSUE_REF_UNRESOLVED,
+        detail=(
+            f"metadata[{ISSUE_REF_KEY!r}] names {issue_ref!r}, which is not in the "
+            "assembly corpus -- the issue leg would carry the workflow formula name "
+            "instead of the task statement"
+        ),
+    )
+
+
 def _shared_trace_work_ids(
     record: Mapping[str, Any], corpus: Sequence[Mapping[str, Any]]
 ) -> tuple[str, ...]:
     """The OTHER work_ids in ``corpus`` whose record points at this record's
     transcript -- non-empty means a multi-bead mega-session (mem-75t.7.1 found one
     transcript the store maps to 9 work_records). The record itself (same work_id)
-    never counts as a sharer."""
+    never counts as a sharer, and neither does its gc-metadata same-work group:
+    a workflow bead and its OWN issue bead pointing at one transcript (the tkhkg
+    shape) is one unit of work recorded on two beads, not a mixed edit stream."""
     own_id = str(record.get("work_id"))
+    same_work = _same_work_ids(record, corpus)
     trace_ref = _text(_mapping(record, "trace"), "jsonl_path")
     return tuple(
         sorted(
@@ -189,6 +276,7 @@ def _shared_trace_work_ids(
                 str(other.get("work_id"))
                 for other in corpus
                 if str(other.get("work_id")) != own_id
+                and str(other.get("work_id")) not in same_work
                 and _text(_mapping(other, "trace"), "jsonl_path") == trace_ref
             }
         )
@@ -223,12 +311,24 @@ def loo_excluded_ids(
 
     The record's own ref is always part of the adjacency input: its
     ``links.supersedes`` edges must seed the closure even when ``corpus`` omits
-    the record itself (the default ``corpus=()``)."""
+    the record itself (the default ``corpus=()``).
+
+    Extended beyond the `validity` projection with the gc METADATA link group
+    (`_GC_LINK_KEYS`): the store's workflow records carry their convoy/issue refs
+    in ``metadata``, never ``links.convoy_id``, so `work_ref_from_record` alone
+    sees no siblings there. The extension lives HERE rather than in `validity`
+    because that module deliberately mirrors the TS retrieval surface
+    (`retrieve/exclusions.ts`) -- the bundle invariant may be wider, never the
+    mirror. The link VALUES themselves are included unconditionally: they are
+    work-id refs by the gc contract (the issue/convoy beads), and the set must
+    name them even when the corpus omits them."""
     query = query_from_record(record)
     refs = [work_ref_from_record(record)] + [work_ref_from_record(r) for r in corpus]
     excluded = {query.work_id}
     excluded |= supersedes_closure(refs, query.work_id)
     excluded |= {ref.work_id for ref in refs if is_sibling(ref, query)}
+    excluded |= _gc_link_ids(record)
+    excluded |= _same_work_ids(record, corpus)
     return tuple(sorted(excluded))
 
 
@@ -259,6 +359,9 @@ def assemble_bundle(
                 "base mixes edit streams; per-bead segmentation deferred"
             ),
         )
+    issue_record = _resolve_issue_record(record, corpus)
+    if isinstance(issue_record, Rejection):
+        return issue_record
     env = _env_from_record(record, base_images)
     if env is None:
         return Rejection(
@@ -293,11 +396,16 @@ def assemble_bundle(
             ),
         )
 
-    issue_title = _text(record, "title")
-    issue_body = _issue_body(record)
+    # The issue leg: the referenced issue bead's text for workflow-formula records
+    # (the record's own title is the formula name), the record's own otherwise. The
+    # referenced text passes the SAME leak guard, against both records' outcome
+    # labels -- the issue bead is the same work, so its identifiers leak too.
+    issue_source = issue_record if issue_record is not None else record
+    issue_title = _text(issue_source, "title")
+    issue_body = _issue_body(issue_source)
     assert_no_outcome_leak(
         {"issue_title": issue_title, "issue_body": issue_body},
-        outcome_labels(record),
+        outcome_labels(record) + outcome_labels(issue_source),
     )
 
     return TaskBundle(
@@ -305,6 +413,7 @@ def assemble_bundle(
         rig=str(record["rig"]),
         issue_title=issue_title,
         issue_body=issue_body,
+        issue_work_id=(str(issue_record["work_id"]) if issue_record is not None else None),
         trace_ref=_text(_mapping(record, "trace"), "jsonl_path"),
         output=replay,
         env=env,

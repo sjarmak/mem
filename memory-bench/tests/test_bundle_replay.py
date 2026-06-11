@@ -21,6 +21,7 @@ from membench.bundle import (
     gold_diff,
     infer_work_dir,
     parse_mutation_calls,
+    replay_calls,
     replay_transcript,
 )
 
@@ -122,6 +123,18 @@ def test_parse_malformed_mutation_call_raises_loud():
 
 
 # --- replay: per-call outcomes -----------------------------------------------------
+
+
+def test_replay_calls_accepts_pre_parsed_calls(checkout: Path):
+    # The batch assembler parses once (for work-dir inference) and replays the
+    # SAME parsed calls -- replay_calls is that single-parse entry point, and
+    # replay_transcript(stream) must be exactly replay_calls(parse(stream)).
+    stream = _stream(_event(_edit(f"{WORK}/src/app.py", "return 1", "return 2")))
+    calls = parse_mutation_calls(stream)
+    result = replay_calls(calls, checkout_dir=checkout, work_dir=WORK)
+    assert [c.outcome for c in result.calls] == [ReplayOutcome.APPLIED]
+    assert result.replay_success_rate == 1.0
+    assert "+    return 2" in result.diff_by_file()["src/app.py"]
 
 
 def test_clean_edit_applies(checkout: Path):
