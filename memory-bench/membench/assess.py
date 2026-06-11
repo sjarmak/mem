@@ -12,6 +12,19 @@ merge-history signal is replaced with what the WorkRecords actually carry:
                               parsed volume (``trace.n_turns``): the trace is the
                               gold-diff source (plan §1 Option A), so no trace means
                               nothing to mine.
+  - ``mutation_signal``     — the transcript's Edit/Write/MultiEdit call count, the
+                              replayable volume the gold diff is mined from
+                              (mem-75t.7.1 validation: 39/111 eligible beads are
+                              shell-only with ZERO mutation calls, and replay needs
+                              >=3 calls to matter). The count arrives via an
+                              injectable provider so scoring stays file-free in
+                              tests; the default provider reads the transcript and
+                              counts via ``bundle.replay.parse_mutation_calls`` —
+                              the exact parse the replay reconstructor uses, so the
+                              signal and the gold-diff source can never disagree.
+                              Zero calls is a hard ranking gate like
+                              ``env_reconstructable``: nothing to replay means no
+                              gold diff, dead weight regardless of other scores.
   - ``closed``              — lifecycle agreement (``status == "closed"`` AND a
                               ``closed`` timestamp); P1's admission filter requires
                               closed, so open work is pre-discounted here.
@@ -48,6 +61,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from membench.bundle.replay import parse_mutation_calls
 from membench.harbor.env_recon import DEFAULT_RIG_REPOS
 
 # ---------------------------------------------------------------------------
@@ -57,18 +71,21 @@ from membench.harbor.env_recon import DEFAULT_RIG_REPOS
 RUBRIC_V1: tuple[str, ...] = (
     "spec_quality",
     "trace_signal",
+    "mutation_signal",
     "closed",
     "repo_activity",
     "env_reconstructable",
 )
 
-# trace_signal and env_reconstructable carry the most weight: the trace is the
-# gold-diff source and an unrunnable bundle is dead weight (plan §9.4).
+# mutation_signal and env_reconstructable carry the most weight: the mutation
+# calls are the replayable gold-diff source, and an unrunnable bundle is dead
+# weight (plan §9.4) — both also act as hard ranking gates at zero.
 WEIGHTS: Mapping[str, float] = {
-    "spec_quality": 0.20,
-    "trace_signal": 0.25,
-    "closed": 0.15,
-    "repo_activity": 0.15,
+    "spec_quality": 0.15,
+    "trace_signal": 0.15,
+    "mutation_signal": 0.25,
+    "closed": 0.10,
+    "repo_activity": 0.10,
     "env_reconstructable": 0.25,
 }
 
@@ -78,6 +95,11 @@ _TITLE_MIN_CHARS = 10  # below this a title is a label, not a task statement
 _BODY_SECTIONED_MIN_CHARS = 120  # a sectioned body must also have real content
 _TRACE_RICH_TURNS = 20  # enough activity to mine a non-trivial diff
 _TRACE_MIN_TURNS = 5  # below this the transcript is a stub
+# Mutation-call tiers grade STRUCTURAL VOLUME (how many replayable calls the
+# transcript carries), not the meaning of the edits. 3 is the replay-validation
+# floor (mem-75t.7.1: replay needs >=3 calls to matter); 10+ saturates the tier.
+_MUTATION_HIGH_CALLS = 10
+_MUTATION_MIN_CALLS = 3
 _BEADS_RICH, _BEADS_MODERATE, _BEADS_FEW = 50, 20, 5
 _COMMITS_RICH, _COMMITS_MODERATE = 20, 5
 
@@ -89,6 +111,22 @@ CheckoutProbe = Callable[[Path], bool]
 
 def _default_checkout_probe(repo: Path) -> bool:
     return repo.is_dir()
+
+
+# Injectable mutation-call counter: (work_id, trace_path) -> count. Unit tests
+# inject a file-free stub; the default reads the resolved transcript. This is the
+# module's second sanctioned IO probe (alongside the checkout probe) — everything
+# else stays pure arithmetic over already-loaded fields.
+MutationCountProvider = Callable[[str, str], int]
+
+
+def default_mutation_count_provider(work_id: str, trace_path: str) -> int:
+    """Count the transcript's Edit/Write/MultiEdit calls by reading the resolved
+    transcript file with ``bundle.replay.parse_mutation_calls`` — the identical
+    parse the gold-diff replay uses. Fails loud on an unreadable transcript: a
+    record pointing at a missing trace file is a provenance bug, not a zero."""
+    stream = Path(trace_path).read_text(encoding="utf-8")
+    return len(parse_mutation_calls(stream))
 
 
 # ---------------------------------------------------------------------------
@@ -127,7 +165,9 @@ class CandidateAssessment:
     rig: str
     overall: float
     env_reconstructable: bool
+    replayable: bool
     trace_turns: int
+    mutation_calls: int
     scores: tuple[CriterionScore, ...]
 
     def criterion(self, name: str) -> CriterionScore:
@@ -234,6 +274,35 @@ def _score_trace_signal(record: Mapping[str, Any]) -> CriterionScore:
     return CriterionScore(name="trace_signal", score=score, reasoning=reason)
 
 
+def _score_mutation_signal(
+    record: Mapping[str, Any], provider: MutationCountProvider
+) -> tuple[CriterionScore, int]:
+    """Score the replayable mutation volume; returns ``(score, count)`` so the
+    assessment can carry the raw count for the tiebreaker and the artifact."""
+    name = "mutation_signal"
+    trace_path = _mapping(record, "trace").get("jsonl_path")
+    if not trace_path:
+        return CriterionScore(name, 0.0, "no trace — nothing to replay"), 0
+    count = provider(str(record["work_id"]), str(trace_path))
+    if count < 0:
+        raise ValueError(
+            f"mutation-count provider returned {count} for {record.get('work_id')!r} "
+            "— counts must be non-negative"
+        )
+    if count == 0:
+        score, reason = 0.0, "0 mutation calls — shell-only session, no gold diff to replay"
+    elif count >= _MUTATION_HIGH_CALLS:
+        score, reason = 1.0, f"{count} mutation calls — high replay volume"
+    elif count >= _MUTATION_MIN_CALLS:
+        score, reason = 0.7, f"{count} mutation calls — moderate replay volume"
+    else:
+        score, reason = (
+            0.4,
+            f"{count} mutation calls — below the >={_MUTATION_MIN_CALLS}-call replay floor",
+        )
+    return CriterionScore(name=name, score=score, reasoning=reason), count
+
+
 def _score_closed(record: Mapping[str, Any]) -> CriterionScore:
     lifecycle = _mapping(record, "lifecycle")
     status_closed = lifecycle.get("status") == "closed"
@@ -317,15 +386,18 @@ def assess_candidate(
     pool_signals: Mapping[str, RepoSignals],
     rig_repos: Mapping[str, Path] = DEFAULT_RIG_REPOS,
     checkout_probe: CheckoutProbe = _default_checkout_probe,
+    mutation_count_provider: MutationCountProvider = default_mutation_count_provider,
 ) -> CandidateAssessment:
     """Score one candidate against ``RUBRIC_V1``; pure arithmetic, no IO beyond
-    the injected checkout probe."""
+    the injected checkout probe and mutation-count provider."""
     rig = str(record["rig"])
     signals = pool_signals.get(rig, RepoSignals(rig=rig, bead_count=0, commit_count=0))
     env = _score_env_reconstructable(record, rig_repos, checkout_probe)
+    mutation, mutation_calls = _score_mutation_signal(record, mutation_count_provider)
     scores = (
         _score_spec_quality(record),
         _score_trace_signal(record),
+        mutation,
         _score_closed(record),
         _score_repo_activity(signals),
         env,
@@ -336,25 +408,32 @@ def assess_candidate(
         rig=rig,
         overall=overall,
         env_reconstructable=env.score > 0.0,
+        replayable=mutation.score > 0.0,
         trace_turns=_trace_turns(record),
+        mutation_calls=mutation_calls,
         scores=scores,
     )
 
 
-def _rank_key(assessment: CandidateAssessment) -> tuple[int, float, float, int, str]:
+def _rank_key(assessment: CandidateAssessment) -> tuple[int, int, float, float, int, int, str]:
     """Explicit, total tiebreaker order (documented contract):
 
     1. env-reconstructable gate — runnable candidates rank above every
        unrunnable one regardless of other scores (plan §9.4: dead weight);
-    2. weighted overall, descending;
-    3. env_reconstructable sub-score, descending (exact anchor beats approximate);
-    4. trace turn count, descending (more transcript to mine);
-    5. work_id, ascending — the deterministic total-order anchor.
+    2. replayable gate — zero mutation calls means no gold diff to mine
+       (mem-75t.7.1: shell-only sessions are not bundle-able from trace replay);
+    3. weighted overall, descending;
+    4. env_reconstructable sub-score, descending (exact anchor beats approximate);
+    5. mutation-call count, descending (more replayable volume to mine);
+    6. trace turn count, descending (more transcript to mine);
+    7. work_id, ascending — the deterministic total-order anchor.
     """
     return (
         0 if assessment.env_reconstructable else 1,
+        0 if assessment.replayable else 1,
         -assessment.overall,
         -assessment.criterion("env_reconstructable").score,
+        -assessment.mutation_calls,
         -assessment.trace_turns,
         assessment.work_id,
     )
@@ -365,6 +444,7 @@ def rank_candidates(
     *,
     rig_repos: Mapping[str, Path] = DEFAULT_RIG_REPOS,
     checkout_probe: CheckoutProbe = _default_checkout_probe,
+    mutation_count_provider: MutationCountProvider = default_mutation_count_provider,
     top_n: int | None = None,
 ) -> list[CandidateAssessment]:
     """Rank a pool of WorkRecords by benchmarking potential.
@@ -383,6 +463,7 @@ def rank_candidates(
                 pool_signals=signals,
                 rig_repos=rig_repos,
                 checkout_probe=checkout_probe,
+                mutation_count_provider=mutation_count_provider,
             )
             for record in pool
         ),
@@ -397,8 +478,10 @@ __all__ = [
     "CandidateAssessment",
     "CheckoutProbe",
     "CriterionScore",
+    "MutationCountProvider",
     "RepoSignals",
     "assess_candidate",
+    "default_mutation_count_provider",
     "gather_pool_signals",
     "rank_candidates",
 ]
