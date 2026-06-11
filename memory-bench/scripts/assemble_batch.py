@@ -17,7 +17,7 @@ Products:
 
 - one ``<bundles_dir>/<work_id>.json`` per ADMITTED `TaskBundle` (pydantic JSON,
   indent=2; the dir lives under the gitignored ``.mem/``), and
-- the batch report ``docs/mem-75t.7.2-first-batch.md``: admitted facts table,
+- the batch report ``.gc/docs/mem-75t.7.2-first-batch.md``: admitted facts table,
   typed-rejection histogram, and the mem-75t.7.6 gate-readiness line.
 
 Failure containment: a base_commit missing from the local clone is a recorded
@@ -58,7 +58,7 @@ Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 DEFAULT_STORE = Path("/home/ds/projects/mem/.mem/store.db")
 DEFAULT_RANKING = Path("/home/ds/projects/mem/.mem/select-ranking.json")
 DEFAULT_BUNDLES_DIR = Path("/home/ds/projects/mem/.mem/bundles")
-DEFAULT_REPORT_OUT = Path(__file__).resolve().parents[2] / "docs/mem-75t.7.2-first-batch.md"
+DEFAULT_REPORT_OUT = Path(__file__).resolve().parents[2] / ".gc/docs/mem-75t.7.2-first-batch.md"
 DEFAULT_LIMIT = 25
 DEFAULT_WORKTREE_ROOT = Path("/tmp")
 

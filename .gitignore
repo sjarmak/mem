@@ -8,3 +8,6 @@ dist/
 
 # P1.5 work-audit store (generated artifact; built via `mem build-store`)
 .mem/
+
+# Internal working notes + Gas City project context (not public)
+.gc/

@@ -138,7 +138,7 @@ makes the "outcome lift" number real. Grounded in the literature pass (see
 > **Authoritative eval-harness spec.** `.gc/memory-eval-harness-spec.md` (the
 > 17-section *Agentic Memory Evaluation Harness* spec, Stephanie 2026-06-05) is now
 > the **authoritative** spec for the eval work. Decisions 1–10 remain the locked
-> retrieval/eval contract, reconciled to the spec via `docs/phase-2.5-plan.md` §A
+> retrieval/eval contract, reconciled to the spec via `.gc/docs/phase-2.5-plan.md` §A
 > (concept map + divergence register); where they conflict, the spec governs.
 > Decisions 11–16 below were reconciled to the spec and resolved by Stephanie
 > (§A.5, 2026-06-05).

@@ -5,7 +5,7 @@ Assembles a `TaskBundle` from a Mapping-shaped WorkRecord (the same JSON shape
 invariants are enforced here, mechanically:
 
 1. **Admission (plan §9.3 + the mem-75t.7.1 validation-derived gates,
-   docs/mem-75t.7.1-replay-validation.md).** The trace-derived gold diff is "what
+   .gc/docs/mem-75t.7.1-replay-validation.md).** The trace-derived gold diff is "what
    the agent did", not "the correct fix" -- this corpus has no merged-PR/CI outcome
    linkage to vouch for it. The only structural evidence the work ended well is the
    record's own lifecycle + trace: admit ONLY a bead that is closed (status AND
@@ -81,7 +81,7 @@ from membench.validity import (
     work_ref_from_record,
 )
 
-# Validation-derived admission threshold (docs/mem-75t.7.1-replay-validation.md):
+# Validation-derived admission threshold (.gc/docs/mem-75t.7.1-replay-validation.md):
 # a partial replay means a gold diff with MISSING hunks -- a corrupted oracle, worse
 # than no bundle. On the validation sample, >= 0.9 ADJUSTED admitted 3/8 beads at
 # oracle grade; the 0.6-0.9 band stays context-only (trace-as-context rungs don't

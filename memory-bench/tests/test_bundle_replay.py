@@ -294,7 +294,7 @@ def test_file_diffs_is_immutable(checkout: Path):
 
 # --- infer_work_dir / effective_work_dir (mem-75t.7.2 revision 1) -------------------
 #
-# Shapes mirror docs/mem-75t.7.1-replay-validation.md: record.work_dir is the clone
+# Shapes mirror .gc/docs/mem-75t.7.1-replay-validation.md: record.work_dir is the clone
 # root while sessions ran in nested (.claude/worktrees/<name>) or sibling
 # (<clone>-wt-<id>) git worktrees; majority-prefix inference over the mutation paths
 # recovered 3/8 validation beads from a 0.00 replay rate.

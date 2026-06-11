@@ -179,7 +179,7 @@ the task-bundle builder (`mem-75t.7`) mines: the Python harness under
 oracle context) by replaying a transcript's edit calls against a checkout of
 the record's base commit, a design validated on 8 real beads (134/199 calls
 replayed cleanly, 6/8 beads yielding applyable multi-file diffs; see
-`docs/mem-75t.7.1-replay-validation.md`). The next gate before the full
+`.gc/docs/mem-75t.7.1-replay-validation.md`). The next gate before the full
 oracle-curation and dual-verifier ports is a dynamic-range probe: run a
 zero-memory agent against a cheap oracle-context rung on the first bundle
 batch and confirm the eval has headroom before investing further.

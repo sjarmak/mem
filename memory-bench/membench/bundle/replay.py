@@ -24,7 +24,7 @@ absolute in the ORIGINAL session's tree, so they are rebased onto the checkout v
 outside the checkout.
 
 The rebase prefix itself is UNRELIABLE on the record (mem-75t.7.1 validation,
-docs/mem-75t.7.1-replay-validation.md): ``record.work_dir`` is the clone root while
+.gc/docs/mem-75t.7.1-replay-validation.md): ``record.work_dir`` is the clone root while
 sessions ran in nested (``.claude/worktrees/<name>``) or sibling (``<clone>-wt-<id>``)
 git worktrees, and per-event ``cwd`` reports the clone root even when edits target a
 sibling worktree. `infer_work_dir` is the prescribed majority-prefix inference over

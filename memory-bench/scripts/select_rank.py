@@ -39,7 +39,7 @@ from membench.assess import (
 
 DEFAULT_STORE = Path("/home/ds/projects/mem/.mem/store.db")
 DEFAULT_JSON_OUT = Path("/home/ds/projects/mem/.mem/select-ranking.json")
-DEFAULT_REPORT_OUT = Path(__file__).resolve().parents[2] / "docs/mem-75t.7.4-select-ranking.md"
+DEFAULT_REPORT_OUT = Path(__file__).resolve().parents[2] / ".gc/docs/mem-75t.7.4-select-ranking.md"
 
 # Bundle-eligible pool (same predicate as the mem-75t.7.1 validation run).
 ELIGIBLE_SQL = """

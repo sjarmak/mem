@@ -241,7 +241,7 @@ def test_empty_gold_diff_rejected():
 
 
 # --- validation-derived admission gates (mem-75t.7.2 revisions 4-6) ---------------
-# Shapes from docs/mem-75t.7.1-replay-validation.md.
+# Shapes from .gc/docs/mem-75t.7.1-replay-validation.md.
 
 
 def _call(index: int, outcome: ReplayOutcome, path: str | None = None) -> CallReplay:
