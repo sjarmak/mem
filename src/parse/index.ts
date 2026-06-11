@@ -12,6 +12,7 @@ export {
   type TraceReader,
   parseTranscript,
   parseRecordTrace,
+  readLines,
 } from './trace-parse.js';
 export {
   type FailureTrace,

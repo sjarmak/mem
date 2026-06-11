@@ -1,10 +1,7 @@
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
-
 import { CommandContext } from '../index.js';
 import { storePath } from '../store.js';
 import { openStore, writeRecords } from '../../store/index.js';
-import { defaultConnection, doltRunner, readAllRigs, readRig } from '../../ingest/beads.js';
+import { defaultConnection, doltRunner, listRigs, readRig } from '../../ingest/beads.js';
 import { type SessionResolver, attachTraceRefs } from '../../ingest/trace-resolve.js';
 import { attachProvenance } from '../../ingest/provenance.js';
 import { type TraceReader, parseRecordTrace } from '../../parse/trace-parse.js';
@@ -51,12 +48,12 @@ export function attachAndParse(records: WorkRecord[], deps: AttachParseDeps = {}
  * readers and {@link writeRecords}; it adds no new substrate, only the wiring
  * that puts real WorkRecords into the store the retrieval/eval path reads.
  *
- * The parent dir is created (a fresh checkout has no `.mem/`); {@link openStore}
- * initializes the schema on a new file. Extracted so the persistence half is
- * testable without a live dolt connection.
+ * {@link openStore} creates the parent dir (a fresh checkout has no `.mem/`)
+ * and initializes the schema on a new file. The single write lifecycle for
+ * both the per-rig command loop and tests, so the persistence half is
+ * exercised without a live dolt connection.
  */
 export function buildStoreFromRecords(path: string, records: WorkRecord[]): number {
-  mkdirSync(dirname(path), { recursive: true });
   const db = openStore(path);
   try {
     writeRecords(db, records);
@@ -78,6 +75,11 @@ export function buildStoreFromRecords(path: string, records: WorkRecord[]): numb
  * commit by date) is attached so it can be replayed as a git-checkout
  * environment. Without either flag, the store is the bead spine only (fast, no
  * `gc`/transcript/git IO).
+ *
+ * Rigs stream through the writer one at a time (read → attach → write per
+ * rig), so peak memory is one rig's records, not the whole corpus. Each rig is
+ * its own transaction; a failure mid-build aborts loudly and leaves a partial
+ * store — fine for a rebuildable projection (re-run to rebuild).
  */
 export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStoreResult> {
   const rig = typeof ctx.options.rig === 'string' ? ctx.options.rig : null;
@@ -86,16 +88,25 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
   const withProvenance = ctx.options['with-provenance'] === true;
 
   const run = doltRunner(defaultConnection());
-  const spine = rig === null ? await readAllRigs(run) : await readRig(run, rig);
-  const traced = withTraces ? attachAndParse(spine) : spine;
-  const records = withProvenance ? attachProvenance(traced) : traced;
-  const count = buildStoreFromRecords(path, records);
+  const rigs = rig === null ? await listRigs(run) : [rig];
 
-  const recordsWithErrors = records.filter(r => (r.trace?.errors?.length ?? 0) > 0).length;
-  const recordsWithProvenance = records.filter(r => r.provenance !== undefined).length;
-  const recordsWithCommit = records.filter(
-    r => r.provenance?.history_state === 'commit-by-date'
-  ).length;
+  let count = 0;
+  let recordsWithErrors = 0;
+  let recordsWithProvenance = 0;
+  let recordsWithCommit = 0;
+
+  for (const name of rigs) {
+    const spine = await readRig(run, name);
+    const traced = withTraces ? attachAndParse(spine) : spine;
+    const records = withProvenance ? attachProvenance(traced) : traced;
+
+    count += buildStoreFromRecords(path, records);
+    recordsWithErrors += records.filter(r => (r.trace?.errors?.length ?? 0) > 0).length;
+    recordsWithProvenance += records.filter(r => r.provenance !== undefined).length;
+    recordsWithCommit += records.filter(
+      r => r.provenance?.history_state === 'commit-by-date'
+    ).length;
+  }
 
   if (!ctx.options.json) {
     const scope = rig === null ? 'all rigs' : rig;

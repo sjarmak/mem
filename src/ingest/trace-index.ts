@@ -1,6 +1,8 @@
-import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { readdirSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
+
+import { readLines } from '../parse/trace-parse.js';
 
 /**
  * Trace index (P1.3) — a catalog of every Claude Code session transcript on
@@ -44,15 +46,17 @@ interface TranscriptEntry {
   gitBranch?: string | null;
 }
 
-/** Derive an index entry's content fields from a transcript's JSONL text.
+/** Derive an index entry's content fields from a transcript's JSONL lines.
  * Transcripts are append-only logs whose final line may be a partial write;
  * unparseable lines are skipped rather than failing the whole file. */
-function readTraceContent(text: string): Pick<TraceIndexEntry, 'cwd' | 'git_branch' | 'n_turns'> {
+function readTraceContent(
+  lines: Iterable<string>
+): Pick<TraceIndexEntry, 'cwd' | 'git_branch' | 'n_turns'> {
   let cwd: string | undefined;
   let gitBranch: string | undefined;
   let nTurns = 0;
 
-  for (const line of text.split('\n')) {
+  for (const line of lines) {
     if (line.trim() === '') continue;
 
     let entry: TranscriptEntry;
@@ -72,7 +76,7 @@ function readTraceContent(text: string): Pick<TraceIndexEntry, 'cwd' | 'git_bran
 
 /** Build the index entry for a single transcript file. */
 function indexTraceFile(jsonlPath: string): TraceIndexEntry {
-  const content = readTraceContent(readFileSync(jsonlPath, 'utf8'));
+  const content = readTraceContent(readLines(jsonlPath));
   return {
     jsonl_path: jsonlPath,
     session_uuid: basename(jsonlPath, '.jsonl'),

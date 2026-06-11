@@ -46,6 +46,17 @@ const CHILD_TABLES = [
   'trace_runs',
 ] as const;
 
+/** Clear every child row for the given work_ids — one DELETE per table for the
+ * whole batch, replacing a DELETE per record per table. The ids are bound as a
+ * single JSON array (`json_each`), so there is no bound-variable limit to
+ * chunk around. */
+function clearChildRows(db: StoreDatabase, workIds: string[]): void {
+  const ids = JSON.stringify(workIds);
+  for (const table of CHILD_TABLES) {
+    db.prepare(`DELETE FROM ${table} WHERE work_id IN (SELECT value FROM json_each(?))`).run(ids);
+  }
+}
+
 /** The agent this transcript is attributed to: the one whose `trace_ref` is the
  * parsed transcript, else the record's first agent, else null (a trace can be
  * resolved without a matching agent row). */
@@ -84,15 +95,12 @@ function toRow(record: WorkRecord): Record<string, string | number | null> {
 /**
  * Upsert WorkRecords in a single transaction. Idempotent: re-ingesting the
  * same records leaves the store byte-identical; child rows (agents, labels,
- * links, trace errors + their FTS index, run metadata) are deleted and rebuilt
- * per record, never accumulated. Lessons are untouched — they live outside the
+ * links, trace errors + their FTS index, run metadata) are deleted (batched
+ * per table) and rebuilt, never accumulated. Lessons are untouched — they live outside the
  * re-ingest cycle by design (see schema.ts).
  */
 export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
   const upsert = db.prepare(UPSERT_RECORD);
-  const clearChild = CHILD_TABLES.map(table =>
-    db.prepare(`DELETE FROM ${table} WHERE work_id = ?`)
-  );
   const insertAgent = db.prepare(
     'INSERT INTO record_agents (work_id, agent_id, role, account, trace_ref) VALUES (?, ?, ?, ?, ?)'
   );
@@ -112,13 +120,19 @@ export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
   );
 
   db.transaction(() => {
+    // Old child rows are cleared for the whole batch up front, then rebuilt
+    // per record below. A validation failure mid-loop rolls the clear back
+    // with everything else.
+    clearChildRows(
+      db,
+      records.map(record => record.work_id)
+    );
     for (const candidate of records) {
       // Validate at the boundary: the store only ever holds schema-conformant
       // JSON, so readers can parse it back without defensive handling.
       const record = WorkRecordSchema.parse(candidate);
 
       upsert.run(toRow(record));
-      for (const clear of clearChild) clear.run(record.work_id);
 
       for (const agent of record.agents) {
         insertAgent.run(

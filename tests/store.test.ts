@@ -155,6 +155,27 @@ describe('writeRecords / getRecord round-trip', () => {
       )
     ).toEqual([updated.work_id]);
   });
+
+  it('bulk re-ingest stays duplicate-free (batched child-row clear)', () => {
+    const records = Array.from({ length: 1201 }, (_, i) =>
+      WorkRecordSchema.parse({
+        work_id: `bulk-${i}`,
+        rig: 'demo',
+        title: `bulk ${i}`,
+        labels: ['bulk'],
+        lifecycle: { created: '2026-06-01T00:00:00Z', status: 'closed' },
+      })
+    );
+    const db = openStore(':memory:');
+    writeRecords(db, records);
+    writeRecords(db, records);
+
+    expect(queryRecords(db, { rig: 'demo' })).toHaveLength(1201);
+    const labelRows = db
+      .prepare("SELECT COUNT(*) AS n FROM record_labels WHERE label = 'bulk'")
+      .get() as { n: number };
+    expect(labelRows.n).toBe(1201);
+  });
 });
 
 describe('lessons (append-only, D9)', () => {

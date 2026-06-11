@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { extractErrors, parseTranscript, parseRecordTrace } from '../src/parse/index.js';
 import { matchRunner } from '../src/parse/runners.js';
@@ -304,6 +308,17 @@ describe('parseTranscript', () => {
     expect(errors[0].file).toBe('src/a.ts');
   });
 
+  it('accepts a line iterable and parses it identically to the joined text', () => {
+    const lines = [
+      bashCall('t1', 'tsc --noEmit'),
+      bashResult('t1', { stdout: 'src/a.ts(2,3): error TS2345: bad.', is_error: true }),
+    ];
+    function* lineStream(): Generator<string> {
+      yield* lines;
+    }
+    expect(parseTranscript(lineStream())).toEqual(parseTranscript(transcript(...lines)));
+  });
+
   it('marks a clean run as pass with no errors', () => {
     const text = transcript(
       bashCall('t1', 'npm test'),
@@ -581,5 +596,36 @@ describe('parseRecordTrace', () => {
       throw Object.assign(new Error('denied'), { code: 'EACCES' });
     };
     expect(() => parseRecordTrace(input, reader)).toThrow('denied');
+  });
+
+  describe('default reader (streaming)', () => {
+    let dir: string;
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'mem-trace-'));
+    });
+    afterEach(() => {
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('parses a real transcript file line-by-line, multibyte text intact', () => {
+      const path = join(dir, 't.jsonl');
+      // 'naïve—✓' exercises multi-byte UTF-8 sequences through the chunked decoder.
+      writeFileSync(
+        path,
+        transcript(
+          bashCall('t1', 'tsc --noEmit'),
+          bashResult('t1', { stdout: 'src/naïve—✓.ts(2,3): error TS2345: bad.', is_error: true })
+        )
+      );
+      const out = parseRecordTrace(record({ trace: { jsonl_path: path } }));
+      expect(out.trace?.tool_outcomes).toHaveLength(1);
+      expect(out.trace?.errors?.[0]?.file).toBe('src/naïve—✓.ts');
+    });
+
+    it('treats a missing file as a reaped transcript (ENOENT contract)', () => {
+      const input = record({ trace: { jsonl_path: join(dir, 'gone.jsonl') } });
+      const out = parseRecordTrace(input);
+      expect(out.trace?.tool_outcomes).toBeUndefined();
+    });
   });
 });

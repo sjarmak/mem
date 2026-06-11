@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { closeSync, openSync, readSync } from 'node:fs';
+import { StringDecoder } from 'node:string_decoder';
 
 import type { Execution, TraceError, TraceRun } from '../schemas/trace.js';
 import type { WorkRecord } from '../schemas/workrecord.js';
@@ -212,7 +213,8 @@ function finalizeRun(acc: RunAccumulator): TraceRun | undefined {
 }
 
 /**
- * Parse a transcript's JSONL text into deterministic build/test/lint signal.
+ * Parse a transcript's JSONL — full text or a line iterable (the streaming
+ * default reader) — into deterministic build/test/lint signal.
  *
  * `status` is `fail` when the runner exited non-zero (`tool_result.is_error`)
  * **or** when its output contains parseable errors. The second clause is load-
@@ -224,13 +226,14 @@ function finalizeRun(acc: RunAccumulator): TraceRun | undefined {
  * unparseable is indistinguishable from success by deterministic means; that is
  * an accepted limit, not something to paper over with keyword sniffing.)
  */
-export function parseTranscript(text: string): ParsedTrace {
+export function parseTranscript(input: string | Iterable<string>): ParsedTrace {
+  const lines = typeof input === 'string' ? input.split('\n') : input;
   const pending = new Map<string, PendingCall>();
   const tool_outcomes: Execution[] = [];
   const allErrors: TraceError[] = [];
   const run = newRunAccumulator();
 
-  for (const line of text.split('\n')) {
+  for (const line of lines) {
     if (line.trim() === '') continue;
 
     let entry: TranscriptEntry;
@@ -275,11 +278,54 @@ export function parseTranscript(text: string): ParsedTrace {
   };
 }
 
-/** Reads a transcript file's text. Injectable so {@link parseRecordTrace} is
- * unit-testable without touching the filesystem. */
-export type TraceReader = (path: string) => string;
+/** Reads a transcript as full text or as a line iterable. Injectable so
+ * {@link parseRecordTrace} is unit-testable without touching the filesystem.
+ * A reader must surface "file missing" errors at the call itself, not lazily
+ * on first iteration — parseRecordTrace's ENOENT handling relies on that. */
+export type TraceReader = (path: string) => string | Iterable<string>;
 
-const defaultReader: TraceReader = path => readFileSync(path, 'utf8');
+/** Read chunk for the streaming line reader — large enough to amortize
+ * syscalls. `allocUnsafe` is safe here: only `subarray(0, bytes)` is read. */
+const READ_CHUNK = 1 << 20;
+
+/** Yield the lines of an already-open fd, decoding UTF-8 across chunk
+ * boundaries. The fd is closed when iteration finishes or is abandoned
+ * (generator `finally` runs on early `return`/`throw` too). */
+function* readLinesFromFd(fd: number): Generator<string> {
+  try {
+    const buf = Buffer.allocUnsafe(READ_CHUNK);
+    const decoder = new StringDecoder('utf8');
+    let carry = '';
+    let bytes: number;
+    while ((bytes = readSync(fd, buf, 0, buf.length, null)) > 0) {
+      // Split the decoded chunk alone and graft the carry onto its first
+      // line — concatenating carry onto the whole chunk would copy ~1 MiB
+      // per iteration just to run the split.
+      const parts = decoder.write(buf.subarray(0, bytes)).split('\n');
+      parts[0] = carry + parts[0];
+      carry = parts.pop() ?? '';
+      yield* parts;
+    }
+    carry += decoder.end();
+    if (carry !== '') yield carry;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
+ * Stream a file's lines without loading it into memory — the line source for
+ * multi-GB transcript JSONL. The open is eager, so a missing file throws at
+ * the call (the {@link TraceReader} contract); only the reads are lazy. The
+ * fd closes in the generator's `finally`, so callers must exhaust the
+ * iterator or drive it through `for…of` (whose early exit calls `return()`);
+ * an abandoned, never-iterated generator leaks the fd.
+ */
+export function readLines(path: string): Generator<string> {
+  return readLinesFromFd(openSync(path, 'r'));
+}
+
+const defaultReader: TraceReader = readLines;
 
 /** True for a "file not found" error — a reaped transcript, an expected
  * outcome, not a misconfiguration. */
@@ -304,15 +350,15 @@ export function parseRecordTrace(
   const path = record.trace?.jsonl_path;
   if (!path) return record;
 
-  let text: string;
+  let lines: string | Iterable<string>;
   try {
-    text = read(path);
+    lines = read(path);
   } catch (err) {
     if (isFileNotFound(err)) return record;
     throw err;
   }
 
-  const { tool_outcomes, errors, run } = parseTranscript(text);
+  const { tool_outcomes, errors, run } = parseTranscript(lines);
   return {
     ...record,
     trace: { ...record.trace, jsonl_path: path, tool_outcomes, errors, ...(run && { run }) },
