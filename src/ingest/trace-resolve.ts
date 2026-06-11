@@ -81,12 +81,15 @@ export interface AttachTraceOptions {
   index?: TraceIndexEntry[];
 }
 
-/** Resolve one agent's transcript and return the agent with `trace_ref` set. */
+/** Resolve one agent's transcript and return the agent with `trace_ref` set.
+ * An agent that already carries a `trace_ref` (attached by the merged
+ * session-join artifact) is returned as-is — no `gc` shelling. */
 function resolveAgent(
   agent: WorkRecord['agents'][number],
   resolve: SessionResolver,
   cache: Map<string, string | null>
 ): { agent: WorkRecord['agents'][number]; path: string | null } {
+  if (agent.trace_ref !== undefined) return { agent, path: agent.trace_ref };
   const sessionId = parseSessionId(agent.agent_id);
   if (sessionId === null) return { agent, path: null };
 
@@ -119,12 +122,19 @@ export function attachTraceRefs(
 
   return records.map(record => {
     const agents = record.agents.map(agent => resolveAgent(agent, resolve, cache));
-    const primary = agents.find(a => a.path !== null);
+    // A pre-set trace pointer (merged session-join: the last non-suspect
+    // session) wins over the first-resolved-agent default.
+    const presetPath = record.trace?.jsonl_path;
+    const primaryPath = presetPath ?? agents.find(a => a.path !== null)?.path ?? null;
 
     const next: WorkRecord = { ...record, agents: agents.map(a => a.agent) };
-    if (primary && primary.path !== null) {
-      const n_turns = byPath?.get(primary.path)?.n_turns;
-      next.trace = { jsonl_path: primary.path, ...(n_turns !== undefined && { n_turns }) };
+    if (primaryPath !== null) {
+      const n_turns = record.trace?.n_turns ?? byPath?.get(primaryPath)?.n_turns;
+      next.trace = {
+        ...record.trace,
+        jsonl_path: primaryPath,
+        ...(n_turns !== undefined && { n_turns }),
+      };
     }
     return next;
   });

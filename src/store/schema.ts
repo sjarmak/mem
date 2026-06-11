@@ -17,7 +17,7 @@
  * yet populate convoy/supersedes, so those columns carry data only when
  * upstream provides it.
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const SCHEMA_DDL = `
 CREATE TABLE work_records (
@@ -55,12 +55,23 @@ CREATE INDEX idx_records_pr           ON work_records(pr);
 CREATE INDEX idx_records_external_ref ON work_records(external_ref);
 CREATE INDEX idx_records_repo         ON work_records(repo);
 
+-- Genuinely multi-row per work_id since v4 (mem-75t.9 phase 2 / mem-75t.4):
+-- one row per session iteration, ordered by sequence, tagged with the join
+-- sources that established the link (events|dolt-history|content-scan|
+-- assignee, '+'-joined when several agree). suspect=1 marks an assignee-only
+-- link whose transcript content contradicts it (wrong-conversation
+-- resolution) — kept for audit, excluded from analysis populations.
 CREATE TABLE record_agents (
-  work_id   TEXT NOT NULL REFERENCES work_records(work_id),
-  agent_id  TEXT NOT NULL,
-  role      TEXT,
-  account   TEXT,
-  trace_ref TEXT
+  work_id    TEXT NOT NULL REFERENCES work_records(work_id),
+  agent_id   TEXT NOT NULL,
+  role       TEXT,
+  account    TEXT,
+  trace_ref  TEXT,
+  sequence   INTEGER,
+  started_at TEXT,
+  ended_at   TEXT,
+  sources    TEXT,
+  suspect    INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX idx_agents_work  ON record_agents(work_id);
 CREATE INDEX idx_agents_agent ON record_agents(agent_id);

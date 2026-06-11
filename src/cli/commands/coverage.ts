@@ -11,6 +11,7 @@ export const COVERAGE_AXES: readonly (keyof CoverageReport)[] = [
   'trace_runs',
   'with_base_commit',
   'with_commit_sha',
+  'multi_session',
 ];
 
 /** Axes counted per-record, so they print against a `/records` denominator.
@@ -20,6 +21,7 @@ const PER_RECORD_AXES = new Set<keyof CoverageReport>([
   'with_trace',
   'with_base_commit',
   'with_commit_sha',
+  'multi_session',
 ]);
 
 /** Human-readable line per axis: `with_trace  42/1214` against the record total

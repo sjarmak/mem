@@ -23,12 +23,21 @@ export const LifecycleSchema = z.object({
 
 export type Lifecycle = z.infer<typeof LifecycleSchema>;
 
-/** An agent/session that worked the bead, resolved from `bead.assignee`. */
+/** An agent/session that worked the bead. Originally resolved from
+ * `bead.assignee` (one per record); since the mem-75t.4 merged join a record
+ * carries one entry per session iteration, ordered by `sequence` and tagged
+ * with the join `sources` that established the link. `suspect` marks an
+ * assignee-only link whose transcript content contradicts it. */
 export const AgentRefSchema = z.object({
   agent_id: z.string().min(1),
   role: z.string().optional(),
   account: z.string().optional(),
   trace_ref: z.string().optional(),
+  sequence: z.number().int().positive().optional(),
+  started_at: z.string().optional(),
+  ended_at: z.string().optional(),
+  sources: z.array(z.string()).optional(),
+  suspect: z.boolean().optional(),
 });
 
 export type AgentRef = z.infer<typeof AgentRefSchema>;

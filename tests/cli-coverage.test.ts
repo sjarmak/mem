@@ -62,6 +62,7 @@ describe('formatCoverage', () => {
       trace_runs: 3,
       with_base_commit: 2,
       with_commit_sha: 1,
+      multi_session: 2,
     };
     const lines = formatCoverage(report);
     expect(lines.some(l => l.includes('with_trace') && l.includes('4/10'))).toBe(true);
@@ -78,6 +79,7 @@ describe('coverageDelta', () => {
       trace_runs: 0,
       with_base_commit: 0,
       with_commit_sha: 0,
+      multi_session: 0,
     };
     const after: CoverageReport = {
       records: 5,
@@ -86,6 +88,7 @@ describe('coverageDelta', () => {
       trace_runs: 3,
       with_base_commit: 2,
       with_commit_sha: 1,
+      multi_session: 1,
     };
     expect(coverageDelta(before, after)).toEqual({
       records: 0,
@@ -94,6 +97,7 @@ describe('coverageDelta', () => {
       trace_runs: 3,
       with_base_commit: 2,
       with_commit_sha: 1,
+      multi_session: 1,
     });
   });
 });

@@ -15,8 +15,10 @@ from membench.session_join import (
     SessionScan,
     WorkIdLink,
     assignee_sessions,
+    classify_gc_command,
     derive_prefixes,
     extract_bd_mentions,
+    extract_gc_output_ids,
     parse_assignee,
     scan_transcript_lines,
     work_id_pattern,
@@ -227,6 +229,145 @@ def test_scan_ignores_bd_outside_tool_use() -> None:
         }
     )
     assert scan_transcript_lines([line], PATTERN).links == ()
+
+
+# --- gc dispatch channel (mem-75t.4 extension) --------------------------------
+
+
+def test_classify_gc_prime_and_hook() -> None:
+    assert classify_gc_command("gc prime") == "gc-prime"
+    assert classify_gc_command("gc hook --claim --drain-ack --json") == "gc-hook-claim"
+    assert classify_gc_command('echo "=== gc hook ==="; gc hook 2>&1 | head -40') == "gc-hook"
+    assert classify_gc_command("gc mail send mayor -s hi") is None
+    assert classify_gc_command("bd show mem-1") is None
+
+
+def test_classify_gc_strongest_channel_wins() -> None:
+    assert classify_gc_command("gc hook; gc hook --claim") == "gc-hook-claim"
+
+
+def test_gc_output_ids_from_work_bead_header() -> None:
+    text = "=== gc hook ===\n=== work bead gc-j551 ===\nTITLE: x\nsee also mem-75t.9\n"
+    # only the header id — description mentions of other beads are NOT links
+    assert extract_gc_output_ids(text, PATTERN) == ("gc-j551",)
+
+
+def test_gc_output_ids_from_json_array() -> None:
+    text = json.dumps([{"id": "gc-j551", "description": "relates to mem-75t.9"}])
+    assert extract_gc_output_ids(text, PATTERN) == ("gc-j551",)
+
+
+def test_gc_output_ids_from_json_object_bead_id() -> None:
+    text = json.dumps({"action": "work", "bead_id": "mem-2"})
+    assert extract_gc_output_ids(text, PATTERN) == ("mem-2",)
+
+
+def test_gc_output_ids_skips_exit_code_prefix() -> None:
+    text = "Exit code 5\n" + json.dumps([{"id": "gc-j551"}])
+    assert extract_gc_output_ids(text, PATTERN) == ("gc-j551",)
+
+
+def test_gc_output_ids_free_text_is_never_scanned() -> None:
+    assert extract_gc_output_ids("# Mayor\nwork mem-75t.9 today", PATTERN) == ()
+
+
+def _gc_use_event(ts: str, command: str, tool_id: str) -> str:
+    return json.dumps(
+        {
+            "type": "assistant",
+            "timestamp": ts,
+            "sessionId": "sess-1",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": tool_id,
+                        "name": "Bash",
+                        "input": {"command": command},
+                    },
+                ]
+            },
+        }
+    )
+
+
+def _gc_result_event(ts: str, tool_id: str, text: str) -> str:
+    return json.dumps(
+        {
+            "type": "user",
+            "timestamp": ts,
+            "sessionId": "sess-1",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_id,
+                        "content": [{"type": "text", "text": text}],
+                    },
+                ]
+            },
+        }
+    )
+
+
+def test_scan_links_bead_from_gc_claim_output() -> None:
+    # The polecat never types its bead id — it arrives in the claim output.
+    lines = [
+        _gc_use_event("2026-06-01T10:00:00.000Z", "gc hook --claim 2>&1", "toolu_1"),
+        _gc_result_event(
+            "2026-06-01T10:00:05.000Z", "toolu_1", "=== work bead gc-j551 ===\nTITLE: x"
+        ),
+    ]
+    (link,) = scan_transcript_lines(lines, PATTERN).links
+    assert link == WorkIdLink(
+        work_id="gc-j551",
+        strength="strong",
+        t_first="2026-06-01T10:00:05.000Z",
+        t_last="2026-06-01T10:00:05.000Z",
+        n_strong=1,
+        n_weak=0,
+        n_gc=1,
+    )
+
+
+def test_scan_bare_hook_listing_is_weak() -> None:
+    lines = [
+        _gc_use_event("2026-06-01T10:00:00.000Z", "gc hook 2>&1 | head -40", "toolu_1"),
+        _gc_result_event("2026-06-01T10:00:05.000Z", "toolu_1", json.dumps([{"id": "mem-2"}])),
+    ]
+    (link,) = scan_transcript_lines(lines, PATTERN).links
+    assert link.strength == "weak"
+    assert link.n_gc == 1
+
+
+def test_scan_raw_string_tool_result_content() -> None:
+    line_use = _gc_use_event("2026-06-01T10:00:00.000Z", "gc prime", "toolu_9")
+    line_result = json.dumps(
+        {
+            "type": "user",
+            "timestamp": "2026-06-01T10:00:02.000Z",
+            "sessionId": "sess-1",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_9",
+                        "content": "=== work bead mem-2 ===",
+                    },
+                ]
+            },
+        }
+    )
+    (link,) = scan_transcript_lines([line_use, line_result], PATTERN).links
+    assert link.work_id == "mem-2"
+    assert link.strength == "strong"
+
+
+def test_scan_unrelated_tool_result_is_ignored() -> None:
+    lines = [
+        _gc_result_event("2026-06-01T10:00:05.000Z", "toolu_404", "=== work bead mem-2 ==="),
+    ]
+    assert scan_transcript_lines(lines, PATTERN).links == ()
 
 
 # --- dolt-history assignee parsing (source b) --------------------------------

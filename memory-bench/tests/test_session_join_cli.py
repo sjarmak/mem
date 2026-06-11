@@ -122,3 +122,75 @@ def test_select_population_dedupes_session_ids_by_strong_mentions() -> None:
     population = compute_cross_session.select_population(rows, min_sessions=2)
     (s1_row,) = [r for r in population["mem-1"] if r["session_id"] == "s1"]
     assert s1_row["transcript_path"] == "/t/b.jsonl"
+
+
+def test_select_merged_population_filters_suspect_and_dedupes() -> None:
+    beads = {
+        "mem-1": [
+            {
+                "sequence": 1,
+                "gc_session_id": "gc-100",
+                "session_key": "uuid-a",
+                "transcript_path": "/t/a.jsonl",
+                "t_first": "2026-06-01T10:00:00+00:00",
+                "t_last": "2026-06-01T11:00:00+00:00",
+                "suspect": False,
+            },
+            # same transcript via a respawned seat: deduped
+            {
+                "sequence": 2,
+                "gc_session_id": "gc-101",
+                "session_key": "uuid-a",
+                "transcript_path": "/t/a.jsonl",
+                "t_first": None,
+                "t_last": None,
+                "suspect": False,
+            },
+            {
+                "sequence": 3,
+                "gc_session_id": "gc-200",
+                "session_key": None,
+                "transcript_path": "/t/b.jsonl",
+                "t_first": None,
+                "t_last": None,
+                "suspect": False,
+            },
+            # suspect assignee entry: excluded
+            {
+                "sequence": 4,
+                "gc_session_id": None,
+                "session_key": None,
+                "transcript_path": "/t/wrong.jsonl",
+                "t_first": None,
+                "t_last": None,
+                "suspect": True,
+            },
+            # unresolved entry: excluded
+            {
+                "sequence": 5,
+                "gc_session_id": "gc-300",
+                "session_key": None,
+                "transcript_path": None,
+                "t_first": None,
+                "t_last": None,
+                "suspect": False,
+            },
+        ],
+        "mem-2": [
+            {
+                "sequence": 1,
+                "gc_session_id": "gc-400",
+                "session_key": None,
+                "transcript_path": "/t/c.jsonl",
+                "t_first": None,
+                "t_last": None,
+                "suspect": False,
+            }
+        ],
+    }
+    population = compute_cross_session.select_merged_population(beads, min_sessions=2)
+    assert set(population) == {"mem-1"}
+    rows = population["mem-1"]
+    assert [r["transcript_path"] for r in rows] == ["/t/a.jsonl", "/t/b.jsonl"]
+    assert rows[0]["session_id"] == "gc-100"
+    assert rows[0]["session_start"] == "2026-06-01T10:00:00+00:00"

@@ -55,6 +55,7 @@ describe('coverageReport', () => {
       trace_runs: 0,
       with_base_commit: 0,
       with_commit_sha: 0,
+      multi_session: 0,
     });
     db.close();
   });
@@ -70,6 +71,7 @@ describe('coverageReport', () => {
       trace_runs: 1,
       with_base_commit: 1,
       with_commit_sha: 1,
+      multi_session: 0,
     });
     db.close();
   });

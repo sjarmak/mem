@@ -6,6 +6,15 @@ calls (claim/update/close/show) whose command strings carry work_ids — this
 module extracts those mentions mechanically from a transcript's `tool_use`
 blocks and emits per-(session, work_id) link rows with timestamps.
 
+The gc dispatch channel (mem-75t.4 extension): polecats never type their bead
+id — it arrives in the OUTPUT of `gc prime` / `gc hook [--claim]`. The scanner
+therefore also pairs gc tool_use blocks with their tool_result and extracts
+bead ids that sit STRUCTURALLY in the result (JSON `id`/`bead_id` fields and
+`=== work bead <id> ===` headers) — never from free text, because hook output
+embeds full bead descriptions which quote OTHER beads' ids. `gc prime` and
+`gc hook --claim` results are strong links (the dispatch/claim protocol); a
+bare `gc hook` merely LISTS routed work (weak).
+
 ZFC boundary: everything here is id-GRAMMAR extraction and structural parsing —
 no semantic judgment. The legal work-id prefix set is DERIVED from the store's
 distinct work_ids (read-only), never hardcoded. Mention strength is a mechanical
@@ -49,6 +58,17 @@ _FLAGS_WITH_VALUE = frozenset(
 # Shell segment boundaries: compound commands, pipes, subshells, backticks.
 _SEGMENT_SPLIT = re.compile(r"[;\n|`]|&&|\|\||\$\(")
 _BD_INVOCATION = re.compile(r"(?:^|\s)bd\s+(\S.*)$")
+_GC_INVOCATION = re.compile(r"(?:^|\s)gc\s+(\S.*)$")
+
+# The gc dispatch channel: which gc invocations carry a bead id in their
+# OUTPUT, and how strongly. prime/hook --claim run the dispatch/claim protocol
+# (strong); a bare hook only lists routed work (weak).
+GcChannel = Literal["gc-prime", "gc-hook-claim", "gc-hook"]
+_GC_STRONG_CHANNELS = frozenset({"gc-prime", "gc-hook-claim"})
+
+# Structural bead-id carriers in gc output: the `=== work bead <id> ===`
+# header of hook's text format. JSON output is handled by full-parse instead.
+_WORK_BEAD_HEADER = re.compile(r"^=+\s*work bead\s+(\S+?)\s*=+\s*$", re.MULTILINE)
 
 # Cheap per-line probes used by the streaming scan (full JSON parse only on
 # candidate lines — the corpus is ~19k transcripts / multiple GB).
@@ -143,9 +163,80 @@ def extract_bd_mentions(command: str, pattern: re.Pattern[str]) -> tuple[BdMenti
     )
 
 
+def classify_gc_command(command: str) -> GcChannel | None:
+    """The gc dispatch channel of a shell command, segment-aware, or None.
+
+    Only `prime` and `hook` are dispatch-channel subcommands; everything else
+    (`gc mail`, `gc session`, ...) carries no routed bead in its output. When a
+    compound command holds several gc invocations the strongest channel wins."""
+    best: GcChannel | None = None
+    for segment in _SEGMENT_SPLIT.split(command):
+        invocation = _GC_INVOCATION.search(segment)
+        if invocation is None:
+            continue
+        try:
+            tokens = shlex.split(invocation.group(1))
+        except ValueError:
+            tokens = invocation.group(1).split()
+        subcommand = next((t for t in tokens if not t.startswith("-")), None)
+        if subcommand == "prime":
+            return "gc-prime"
+        if subcommand == "hook":
+            channel: GcChannel = "gc-hook-claim" if "--claim" in tokens else "gc-hook"
+            if channel == "gc-hook-claim":
+                return channel
+            best = best or channel
+    return best
+
+
+def _json_bead_ids(payload: Any, pattern: re.Pattern[str]) -> Iterable[str]:
+    """`id`/`bead_id` values of top-level JSON objects that satisfy the work-id
+    grammar. Top-level only — nested objects (dependencies, comments) reference
+    other beads."""
+    objects = payload if isinstance(payload, list) else [payload]
+    for obj in objects:
+        if not isinstance(obj, Mapping):
+            continue
+        for key in ("id", "bead_id"):
+            value = obj.get(key)
+            if isinstance(value, str) and pattern.fullmatch(value):
+                yield value
+
+
+def extract_gc_output_ids(text: str, pattern: re.Pattern[str]) -> tuple[str, ...]:
+    """Work ids carried STRUCTURALLY in gc prime/hook output.
+
+    Two carriers: a JSON body (array of bead objects, or an object with
+    `id`/`bead_id`) and `=== work bead <id> ===` text headers. Free text is
+    never scanned — hook output embeds full bead descriptions, which quote
+    other beads' ids."""
+    ids: list[str] = []
+    body = text.strip()
+    # The harness prefixes non-zero exits with an `Exit code N` line.
+    if body.startswith("Exit code"):
+        body = body.split("\n", 1)[1] if "\n" in body else ""
+        body = body.strip()
+    if body[:1] in "[{":
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError:
+            payload = None
+        if payload is not None:
+            ids.extend(_json_bead_ids(payload, pattern))
+    for match in _WORK_BEAD_HEADER.finditer(text):
+        token = match.group(1)
+        if pattern.fullmatch(token):
+            ids.append(token)
+    return tuple(dict.fromkeys(ids))
+
+
 @dataclass(frozen=True)
 class WorkIdLink:
-    """One (session, work_id) link: strength plus mention/timestamp evidence."""
+    """One (session, work_id) link: strength plus mention/timestamp evidence.
+
+    `n_gc` counts mentions that arrived via the gc dispatch channel (prime/
+    hook output) — a subset of `n_strong + n_weak`, kept for source-agreement
+    reporting in the merged join."""
 
     work_id: str
     strength: Strength
@@ -153,6 +244,7 @@ class WorkIdLink:
     t_last: str | None
     n_strong: int
     n_weak: int
+    n_gc: int = 0
 
 
 @dataclass(frozen=True)
@@ -169,11 +261,12 @@ class SessionScan:
 class _LinkAcc:
     n_strong: int = 0
     n_weak: int = 0
+    n_gc: int = 0
     timestamps: list[str] = field(default_factory=list)
 
 
-def _command_strings(event: Mapping[str, Any]) -> Iterable[str]:
-    """The `command` inputs of every tool_use block in one transcript event."""
+def _content_blocks(event: Mapping[str, Any]) -> Iterable[Mapping[str, Any]]:
+    """The content blocks of one transcript event (empty for non-block shapes)."""
     message = event.get("message")
     if not isinstance(message, Mapping):
         return
@@ -181,7 +274,14 @@ def _command_strings(event: Mapping[str, Any]) -> Iterable[str]:
     if not isinstance(content, list):
         return
     for block in content:
-        if not isinstance(block, Mapping) or block.get("type") != "tool_use":
+        if isinstance(block, Mapping):
+            yield block
+
+
+def _command_strings(event: Mapping[str, Any]) -> Iterable[str]:
+    """The `command` inputs of every tool_use block in one transcript event."""
+    for block in _content_blocks(event):
+        if block.get("type") != "tool_use":
             continue
         block_input = block.get("input")
         command = block_input.get("command") if isinstance(block_input, Mapping) else None
@@ -189,16 +289,48 @@ def _command_strings(event: Mapping[str, Any]) -> Iterable[str]:
             yield command
 
 
+def _tool_result_text(block: Mapping[str, Any]) -> str:
+    """The text of a tool_result block — raw string or joined text sub-blocks."""
+    content = block.get("content")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(
+            sub.get("text", "")
+            for sub in content
+            if isinstance(sub, Mapping) and sub.get("type") == "text"
+        )
+    return ""
+
+
+def _record_mention(
+    acc: dict[str, _LinkAcc], work_id: str, strength: Strength, ts: Any, *, via_gc: bool = False
+) -> None:
+    link = acc.setdefault(work_id, _LinkAcc())
+    if strength == "strong":
+        link.n_strong += 1
+    else:
+        link.n_weak += 1
+    if via_gc:
+        link.n_gc += 1
+    if isinstance(ts, str):
+        link.timestamps.append(ts)
+
+
 def scan_transcript_lines(lines: Iterable[str], pattern: re.Pattern[str]) -> SessionScan:
     """Stream one transcript (jsonl lines) and extract its bead links.
 
     Cheap regex probes establish session id and time bounds on every line; full
-    JSON decoding happens only on lines that can carry a bd tool_use. Malformed
-    lines are skipped (transcripts are external data, truncation happens)."""
+    JSON decoding happens only on lines that can carry a bd/gc tool_use, or a
+    tool_result we are waiting on (a prior gc prime/hook call). Malformed lines
+    are skipped (transcripts are external data, truncation happens)."""
     session_id: str | None = None
     start: str | None = None
     end: str | None = None
     acc: dict[str, _LinkAcc] = {}
+    # tool_use id -> gc channel, for gc invocations whose RESULT carries the
+    # bead id. Bounded: ids are popped when their result arrives.
+    pending_gc: dict[str, GcChannel] = {}
 
     for line in lines:
         if not line or line.isspace():
@@ -214,7 +346,14 @@ def scan_transcript_lines(lines: Iterable[str], pattern: re.Pattern[str]) -> Ses
             sid_match = _SID_RE.search(line)
             if sid_match:
                 session_id = sid_match.group(1)
-        if '"tool_use"' not in line or "bd" not in line:
+
+        is_use_line = '"tool_use"' in line and ("bd" in line or "gc" in line)
+        is_result_line = (
+            '"tool_result"' in line
+            and bool(pending_gc)
+            and any(tool_id in line for tool_id in pending_gc)
+        )
+        if not is_use_line and not is_result_line:
             continue
         try:
             event = json.loads(line)
@@ -223,15 +362,27 @@ def scan_transcript_lines(lines: Iterable[str], pattern: re.Pattern[str]) -> Ses
         if not isinstance(event, Mapping):
             continue
         event_ts = event.get("timestamp")
-        for command in _command_strings(event):
-            for mention in extract_bd_mentions(command, pattern):
-                link = acc.setdefault(mention.work_id, _LinkAcc())
-                if mention.strength == "strong":
-                    link.n_strong += 1
-                else:
-                    link.n_weak += 1
-                if isinstance(event_ts, str):
-                    link.timestamps.append(event_ts)
+
+        for block in _content_blocks(event):
+            block_type = block.get("type")
+            if block_type == "tool_use":
+                block_input = block.get("input")
+                command = block_input.get("command") if isinstance(block_input, Mapping) else None
+                if not isinstance(command, str) or not command:
+                    continue
+                for mention in extract_bd_mentions(command, pattern):
+                    _record_mention(acc, mention.work_id, mention.strength, event_ts)
+                channel = classify_gc_command(command)
+                tool_id = block.get("id")
+                if channel is not None and isinstance(tool_id, str):
+                    pending_gc[tool_id] = channel
+            elif block_type == "tool_result":
+                channel = pending_gc.pop(str(block.get("tool_use_id")), None)
+                if channel is None:
+                    continue
+                strength: Strength = "strong" if channel in _GC_STRONG_CHANNELS else "weak"
+                for work_id in extract_gc_output_ids(_tool_result_text(block), pattern):
+                    _record_mention(acc, work_id, strength, event_ts, via_gc=True)
 
     links = tuple(
         WorkIdLink(
@@ -241,6 +392,7 @@ def scan_transcript_lines(lines: Iterable[str], pattern: re.Pattern[str]) -> Ses
             t_last=max(link.timestamps) if link.timestamps else None,
             n_strong=link.n_strong,
             n_weak=link.n_weak,
+            n_gc=link.n_gc,
         )
         for work_id, link in sorted(acc.items())
     )

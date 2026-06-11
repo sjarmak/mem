@@ -262,6 +262,8 @@ export interface CoverageReport {
   with_base_commit: number;
   /** Records with a verifiable GitHub outcome SHA (spine `outcome.commit_sha`). */
   with_commit_sha: number;
+  /** Records with ≥2 non-suspect session iterations (mem-75t.4 merged join). */
+  multi_session: number;
 }
 
 /** Count the populated rows behind each coverage axis — one small aggregate
@@ -277,5 +279,9 @@ export function coverageReport(db: StoreDatabase): CoverageReport {
     trace_runs: count('SELECT COUNT(*) AS n FROM trace_runs'),
     with_base_commit: count('SELECT COUNT(*) AS n FROM work_records WHERE base_commit IS NOT NULL'),
     with_commit_sha: count('SELECT COUNT(*) AS n FROM work_records WHERE commit_sha IS NOT NULL'),
+    multi_session: count(
+      'SELECT COUNT(*) AS n FROM (SELECT work_id FROM record_agents WHERE suspect = 0 ' +
+        'GROUP BY work_id HAVING COUNT(*) >= 2)'
+    ),
   };
 }

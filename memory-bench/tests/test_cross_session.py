@@ -13,6 +13,7 @@ from membench.cross_session import (
     PairMetrics,
     SessionView,
     aggregate_metrics,
+    baseline_signatures,
     bead_cross_session,
     build_session_view,
     pair_metrics,
@@ -159,6 +160,43 @@ def test_pair_recurrence_false_when_next_clean() -> None:
     pair = pair_metrics(_view("s1", relaxed=frozenset({"tsc:a.ts:TS2345"})), _view("s2"))
     assert pair.recurrence is False
     assert pair.recurred_signatures == ()
+
+
+def test_pair_recurrence_excludes_baseline_signatures() -> None:
+    baseline = frozenset({"misspell:hooks.go:misspell"})
+    prev = _view("s1", relaxed=baseline | {"tsc:a.ts:TS2345"})
+    nxt = _view("s2", relaxed=baseline | {"tsc:a.ts:TS2345"})
+    pair = pair_metrics(prev, nxt, exclude=baseline)
+    assert pair.recurrence is True
+    assert pair.recurred_signatures == ("tsc:a.ts:TS2345",)
+    # when ONLY the baseline signature recurs, the pair stops being eligible
+    only_noise = pair_metrics(
+        _view("s1", relaxed=baseline), _view("s2", relaxed=baseline), exclude=baseline
+    )
+    assert only_noise.recurrence is None
+
+
+def test_pair_gap_seconds() -> None:
+    prev = _view("s1", "2026-06-01T10:00:00Z")
+    nxt = _view("s2", "2026-06-01T11:30:00Z")
+    pair = pair_metrics(prev, nxt)
+    assert pair.gap_seconds == 5400.0
+    # unknown bound -> typed absence
+    assert pair_metrics(_view("s1"), nxt).gap_seconds is None
+
+
+def test_baseline_signatures_threshold() -> None:
+    def bead(work_id: str, sig: str) -> BeadCrossSession:
+        return bead_cross_session(work_id, [_view("a", relaxed=frozenset({sig}))])
+
+    beads = [
+        bead("mem-1", "misspell:hooks.go:misspell"),
+        bead("mem-2", "misspell:hooks.go:misspell"),
+        bead("mem-3", "misspell:hooks.go:misspell"),
+        bead("mem-4", "tsc:a.ts:TS2345"),
+    ]
+    assert baseline_signatures(beads, min_beads=3) == frozenset({"misspell:hooks.go:misspell"})
+    assert baseline_signatures(beads, min_beads=5) == frozenset()
 
 
 def test_pair_recurrence_none_when_prev_had_no_errors() -> None:

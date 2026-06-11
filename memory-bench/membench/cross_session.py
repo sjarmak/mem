@@ -23,8 +23,9 @@ is reused from trace_score, not re-derived.
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from itertools import pairwise
-from statistics import fmean
+from statistics import fmean, median
 from typing import Any
 
 from membench.grading import TraceErrorRef, relaxed_signature
@@ -90,6 +91,23 @@ def build_session_view(
     )
 
 
+def _parse_ts(raw: str | None) -> datetime | None:
+    """ISO timestamp -> aware datetime, tolerant of `Z` and long fractions."""
+    if not raw:
+        return None
+    text = raw.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    if "." in text:
+        head, _, tail = text.partition(".")
+        frac = tail[: next((i for i, c in enumerate(tail) if not c.isdigit()), len(tail))]
+        text = f"{head}.{frac[:6]}{tail[len(frac):]}"
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
 @dataclass(frozen=True)
 class PairMetrics:
     """Consecutive-session (N -> N+1) readout.
@@ -97,7 +115,9 @@ class PairMetrics:
     `redundant_read_fraction` is None when session N+1 read nothing (the axis
     does not apply). `recurrence` is None when session N surfaced no failure
     signatures (nothing that COULD recur) — a tri-state, mirroring the
-    deterministic term's typed absence in trace_score."""
+    deterministic term's typed absence in trace_score. `gap_seconds` is the
+    wall-clock gap between session N's end and session N+1's start (None when
+    either bound is unknown; negative when the sessions overlapped)."""
 
     prev_session_id: str
     next_session_id: str
@@ -106,20 +126,38 @@ class PairMetrics:
     redundant_read_fraction: float | None
     recurrence: bool | None
     recurred_signatures: tuple[str, ...]
+    gap_seconds: float | None = None
 
 
-def pair_metrics(prev: SessionView, nxt: SessionView) -> PairMetrics:
-    """The redundant-read and recurrence readout for one consecutive pair."""
+def pair_metrics(
+    prev: SessionView, nxt: SessionView, *, exclude: frozenset[str] = frozenset()
+) -> PairMetrics:
+    """The redundant-read and recurrence readout for one consecutive pair.
+
+    `exclude` removes repo-baseline signatures (present across unrelated beads)
+    from BOTH sides of the recurrence test: a pair is eligible only when
+    session N surfaced a non-baseline signature, and recurs only when a
+    non-baseline signature reappears — so the term measures the agent's own
+    failure persistence, not ambient lint."""
     redundant = prev.files_read & nxt.files_read
-    recurred = prev.relaxed_signatures & nxt.relaxed_signatures
+    prev_signatures = prev.relaxed_signatures - exclude
+    recurred = (prev_signatures & nxt.relaxed_signatures) - exclude
+    prev_end = _parse_ts(prev.end)
+    next_start = _parse_ts(nxt.start)
+    gap = (
+        (next_start - prev_end).total_seconds()
+        if prev_end is not None and next_start is not None
+        else None
+    )
     return PairMetrics(
         prev_session_id=prev.session_id,
         next_session_id=nxt.session_id,
         redundant_reads=len(redundant),
         next_reads=len(nxt.files_read),
         redundant_read_fraction=(len(redundant) / len(nxt.files_read) if nxt.files_read else None),
-        recurrence=bool(recurred) if prev.relaxed_signatures else None,
+        recurrence=bool(recurred) if prev_signatures else None,
         recurred_signatures=tuple(sorted(recurred)),
+        gap_seconds=gap,
     )
 
 
@@ -146,11 +184,13 @@ class BeadCrossSession:
         return len(self.sessions)
 
 
-def bead_cross_session(work_id: str, views: Iterable[SessionView]) -> BeadCrossSession:
+def bead_cross_session(
+    work_id: str, views: Iterable[SessionView], *, exclude: frozenset[str] = frozenset()
+) -> BeadCrossSession:
     """Order a bead's sessions by start time (unknown starts last, then by id
     for determinism) and compute pair + cost metrics."""
     ordered = tuple(sorted(views, key=lambda v: (v.start is None, v.start or "", v.session_id)))
-    pairs = tuple(pair_metrics(a, b) for a, b in pairwise(ordered))
+    pairs = tuple(pair_metrics(a, b, exclude=exclude) for a, b in pairwise(ordered))
     return BeadCrossSession(
         work_id=work_id,
         sessions=ordered,
@@ -160,6 +200,20 @@ def bead_cross_session(work_id: str, views: Iterable[SessionView]) -> BeadCrossS
         total_input_tokens=_sum_optional(v.input_tokens for v in ordered),
         total_output_tokens=_sum_optional(v.output_tokens for v in ordered),
     )
+
+
+def baseline_signatures(beads: Sequence[BeadCrossSession], *, min_beads: int = 3) -> frozenset[str]:
+    """Repo-baseline failure signatures: those surfacing in sessions of at
+    least `min_beads` DISTINCT beads (e.g. the gascity `misspell` lint cluster
+    that recurs in every run touching `hooks.go`). Mechanical frequency
+    threshold with an explicit, documented cut — the calibrated-duplicate-
+    detection ZFC exception, not a semantic judgment."""
+    seen_in: dict[str, set[str]] = {}
+    for bead in beads:
+        for view in bead.sessions:
+            for signature in view.relaxed_signatures:
+                seen_in.setdefault(signature, set()).add(bead.work_id)
+    return frozenset(sig for sig, works in seen_in.items() if len(works) >= min_beads)
 
 
 def aggregate_metrics(beads: Sequence[BeadCrossSession]) -> dict[str, Any]:
@@ -174,6 +228,7 @@ def aggregate_metrics(beads: Sequence[BeadCrossSession]) -> dict[str, Any]:
     ]
     eligible = [p for p in all_pairs if p.recurrence is not None]
     recurrent = [p for p in eligible if p.recurrence]
+    gaps = [p.gap_seconds for p in all_pairs if p.gap_seconds is not None]
 
     beads_with_eligible = [b for b in beads if any(p.recurrence is not None for p in b.pairs)]
     beads_with_recurrence = [b for b in beads if any(p.recurrence for p in b.pairs)]
@@ -197,6 +252,9 @@ def aggregate_metrics(beads: Sequence[BeadCrossSession]) -> dict[str, Any]:
         "bead_recurrence_rate": (
             len(beads_with_recurrence) / len(beads_with_eligible) if beads_with_eligible else None
         ),
+        "pairs_with_gap": len(gaps),
+        "mean_gap_seconds": fmean(gaps) if gaps else None,
+        "median_gap_seconds": median(gaps) if gaps else None,
         "total_turns": sum(b.total_turns for b in beads),
         "total_tool_calls": sum(b.total_tool_calls for b in beads),
         "total_input_tokens": _sum_optional(b.total_input_tokens for b in beads),

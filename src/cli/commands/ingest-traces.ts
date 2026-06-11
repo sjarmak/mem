@@ -29,6 +29,7 @@ const ZERO_COVERAGE: CoverageReport = {
   trace_runs: 0,
   with_base_commit: 0,
   with_commit_sha: 0,
+  multi_session: 0,
 };
 
 /** Read store coverage without materializing a store that does not exist yet
@@ -55,15 +56,20 @@ export function coverageDelta(before: CoverageReport, after: CoverageReport): Co
     trace_runs: after.trace_runs - before.trace_runs,
     with_base_commit: after.with_base_commit - before.with_base_commit,
     with_commit_sha: after.with_commit_sha - before.with_commit_sha,
+    multi_session: after.multi_session - before.multi_session,
   };
 }
 
 /**
- * `mem ingest-traces [--rig <name>] [--store PATH]` — the packaged, idempotent
- * trace-substrate ingest (mem-75t.4). It is `build-store` with `--with-traces`
- * and `--with-provenance` always on (resolve transcript → parse errors +
- * run-metadata → attach git baseline), wrapped in a before/after coverage diff
- * so a run reports exactly which axes it lifted off zero.
+ * `mem ingest-traces [--rig <name>] [--store PATH] [--session-join FILE]` —
+ * the packaged, idempotent trace-substrate ingest (mem-75t.4). It is
+ * `build-store` with `--with-traces` and `--with-provenance` always on
+ * (resolve transcript → parse errors + run-metadata → attach git baseline),
+ * wrapped in a before/after coverage diff so a run reports exactly which axes
+ * it lifted off zero. `--session-join` (passed through to build-store)
+ * attaches the merged multi-session join artifact, which both populates the
+ * multi-row `record_agents` and pre-resolves transcripts so `gc session logs`
+ * shelling only runs for the residue.
  *
  * Idempotent because the writer upserts records and rebuilds child rows
  * (errors/runs/agents) on every write — re-running converges instead of

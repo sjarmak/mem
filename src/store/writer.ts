@@ -103,7 +103,9 @@ function toRow(record: WorkRecord): Record<string, string | number | null> {
 export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
   const upsert = db.prepare(UPSERT_RECORD);
   const insertAgent = db.prepare(
-    'INSERT INTO record_agents (work_id, agent_id, role, account, trace_ref) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO record_agents (work_id, agent_id, role, account, trace_ref, ' +
+      'sequence, started_at, ended_at, sources, suspect) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
   const insertLabel = db.prepare('INSERT INTO record_labels (work_id, label) VALUES (?, ?)');
   const insertLink = db.prepare(
@@ -141,7 +143,12 @@ export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
           agent.agent_id,
           agent.role ?? null,
           agent.account ?? null,
-          agent.trace_ref ?? null
+          agent.trace_ref ?? null,
+          agent.sequence ?? null,
+          agent.started_at ?? null,
+          agent.ended_at ?? null,
+          agent.sources && agent.sources.length > 0 ? agent.sources.join('+') : null,
+          agent.suspect === true ? 1 : 0
         );
       }
       for (const label of record.labels) insertLabel.run(record.work_id, label);

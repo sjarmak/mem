@@ -2,8 +2,13 @@ import { CommandContext } from '../index.js';
 import { storePath } from '../store.js';
 import { openStore, writeRecords } from '../../store/index.js';
 import { defaultConnection, doltRunner, listRigs, readRig } from '../../ingest/beads.js';
-import { type SessionResolver, attachTraceRefs } from '../../ingest/trace-resolve.js';
+import {
+  type SessionResolver,
+  attachTraceRefs,
+  gcSessionResolver,
+} from '../../ingest/trace-resolve.js';
 import { attachProvenance } from '../../ingest/provenance.js';
+import { type SessionJoin, attachSessionJoin, loadSessionJoin } from '../../ingest/session-merge.js';
 import { type TraceReader, parseRecordTrace } from '../../parse/trace-parse.js';
 import type { WorkRecord } from '../../schemas/workrecord.js';
 
@@ -20,6 +25,9 @@ export interface BuildStoreResult {
   /** Subset of the above whose session-start commit resolved by date — the
    * git-checkout anchors a future real-exec replay can use. */
   records_with_commit: number;
+  /** Records that received ≥2 session iterations from the merged session-join
+   * artifact (0 when `--session-join` is off). */
+  records_multi_session: number;
 }
 
 /** Options for {@link attachAndParse} — injectable so the P1.3→P1.6 wiring is
@@ -86,6 +94,17 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
   const path = storePath(ctx.options);
   const withTraces = ctx.options['with-traces'] === true;
   const withProvenance = ctx.options['with-provenance'] === true;
+  const joinPath = typeof ctx.options['session-join'] === 'string'
+    ? ctx.options['session-join']
+    : null;
+  const join: SessionJoin | null = joinPath === null ? null : loadSessionJoin(joinPath);
+  // The artifact's session->path map resolves most residue sessions without
+  // shelling `gc session logs` (~11 s/session); gc remains the fallback for
+  // sessions the events stream never keyed.
+  const resolve: SessionResolver | undefined =
+    join !== null && join.sessionPaths.size > 0
+      ? id => join.sessionPaths.get(id) ?? gcSessionResolver(id)
+      : undefined;
 
   const run = doltRunner(defaultConnection());
   const rigs = rig === null ? await listRigs(run) : [rig];
@@ -94,10 +113,14 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
   let recordsWithErrors = 0;
   let recordsWithProvenance = 0;
   let recordsWithCommit = 0;
+  let recordsMultiSession = 0;
 
   for (const name of rigs) {
     const spine = await readRig(run, name);
-    const traced = withTraces ? attachAndParse(spine) : spine;
+    // The merged join attaches first: it pre-resolves each session's
+    // transcript, so P1.3 only shells `gc` for the residue.
+    const joined = join === null ? spine : attachSessionJoin(spine, join);
+    const traced = withTraces ? attachAndParse(joined, resolve ? { resolve } : {}) : joined;
     const records = withProvenance ? attachProvenance(traced) : traced;
 
     count += buildStoreFromRecords(path, records);
@@ -105,6 +128,9 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     recordsWithProvenance += records.filter(r => r.provenance !== undefined).length;
     recordsWithCommit += records.filter(
       r => r.provenance?.history_state === 'commit-by-date'
+    ).length;
+    recordsMultiSession += records.filter(
+      r => r.agents.filter(a => a.suspect !== true).length >= 2
     ).length;
   }
 
@@ -114,7 +140,10 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     const provNote = withProvenance
       ? `; ${recordsWithProvenance} carry a work_dir, ${recordsWithCommit} resolved a base commit`
       : '';
-    console.error(`built ${count} work records from ${scope} into ${path}${traceNote}${provNote}`);
+    const joinNote = join !== null ? `; ${recordsMultiSession} are multi-session` : '';
+    console.error(
+      `built ${count} work records from ${scope} into ${path}${traceNote}${provNote}${joinNote}`
+    );
   }
 
   return {
@@ -124,5 +153,6 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     records_with_errors: recordsWithErrors,
     records_with_provenance: recordsWithProvenance,
     records_with_commit: recordsWithCommit,
+    records_multi_session: recordsMultiSession,
   };
 }

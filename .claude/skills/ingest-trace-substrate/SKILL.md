@@ -6,7 +6,7 @@ description: Run the durable trace-substrate ingest (mem-75t) — resolve transc
 # Ingest the trace substrate
 
 `mem ingest-traces` is the packaged, idempotent rebuild of the trace substrate
-(epic mem-75t): it takes the bead spine and lifts the four coverage axes the
+(epic mem-75t): it takes the bead spine and lifts the five coverage axes the
 eval depends on off zero —
 
 | axis | source step | what it unlocks |
@@ -15,10 +15,29 @@ eval depends on off zero —
 | `trace_errors` | P1.6 parse build/test/lint output | the D8 failure signatures the `ours` arm fires on |
 | `trace_runs` | P1.2 parse run metadata | tokens / model / harness / tool-calls / turns |
 | `with_base_commit` | P1.3 git provenance | the git-checkout anchor for real-exec replay |
+| `multi_session` | mem-75t.4 merged session join | iteration N+1 of the same task — the canonical memory consumer |
 
 It is `build-store --with-traces --with-provenance` plus a before/after coverage
 diff. The writer upserts records and rebuilds child rows on every write, so the
 command is safe to re-run — re-running converges, it never double-counts.
+
+## The merged session join (run FIRST)
+
+The store's multi-row `record_agents` (schema v4) comes from the merged
+session<->bead join artifact, built by the Python driver from three sources —
+gc events (PRIMARY), dolt assignee history, content scan — with transcript
+archival as a side effect (the corpus is a ~6-week rolling window; archival is
+the step racing data loss):
+
+```bash
+cd /home/ds/projects/mem/memory-bench
+uv run python scripts/build_merged_join.py
+# writes .mem/merged-session-bead-join.json + archives to .mem/transcript-archive/
+```
+
+Then pass it to the ingest with `--session-join`. The artifact pre-resolves
+each session's transcript (via the events stream's `session_key` map), so the
+slow per-session `gc session logs` shelling only runs for the residue.
 
 ## The city-dir requirement (READ THIS FIRST)
 
@@ -38,11 +57,14 @@ mem repo's sidecar, run from the city dir:
 
 ```bash
 cd /home/ds/gas-city
-mem ingest-traces --store /home/ds/projects/mem/.mem/store.db
+mem ingest-traces --store /home/ds/projects/mem/.mem/store.db \
+  --session-join /home/ds/projects/mem/.mem/merged-session-bead-join.json
 ```
 
 Scope to one rig with `--rig <name>` (e.g. `--rig mem`) for a fast incremental
-pass; omit it to cover all rigs.
+pass; omit it to cover all rigs. Omitting `--session-join` builds a
+single-session store (assignee links only) — fine for a quick spine refresh,
+wrong for anything consuming multi-session history.
 
 ## Reading the coverage report
 

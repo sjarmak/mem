@@ -18,3 +18,9 @@ export {
   parseSessionId,
   parseTranscriptPath,
 } from './trace-resolve.js';
+export {
+  type JoinSessionEntry,
+  type SessionJoin,
+  attachSessionJoin,
+  loadSessionJoin,
+} from './session-merge.js';

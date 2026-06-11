@@ -46,12 +46,13 @@ from membench.cross_session import (
     BeadCrossSession,
     SessionView,
     aggregate_metrics,
+    baseline_signatures,
     bead_cross_session,
     build_session_view,
 )
 from membench.harbor.base_rate_spike import make_cli_extractor
 
-DEFAULT_JOIN = "/home/ds/projects/mem/.mem/session-bead-join.json"
+DEFAULT_JOIN = "/home/ds/projects/mem/.mem/merged-session-bead-join.json"
 DEFAULT_STORE = "/home/ds/projects/mem/.mem/store.db"
 DEFAULT_OUT = "/home/ds/projects/mem/.mem/cross-session-metrics.json"
 DEFAULT_MEM_BIN = "/home/ds/projects/mem/bin/mem"
@@ -86,6 +87,34 @@ def select_population(
         for work_id, sessions in by_bead.items()
         if len(sessions) >= min_sessions
     }
+
+
+def select_merged_population(
+    beads: Mapping[str, Sequence[Mapping[str, Any]]], *, min_sessions: int
+) -> dict[str, list[Mapping[str, Any]]]:
+    """Population selector for the MERGED join artifact (mem-75t.4): per bead,
+    its non-suspect entries with a resolved transcript, deduplicated by
+    transcript path (respawned seats resume one Claude conversation — two
+    entries on the same transcript are one session for metric purposes).
+    Rows are normalized to the legacy row shape the view builder consumes."""
+    population: dict[str, list[Mapping[str, Any]]] = {}
+    for work_id, entries in beads.items():
+        rows: dict[str, Mapping[str, Any]] = {}
+        for entry in entries:
+            path = entry.get("transcript_path")
+            if entry.get("suspect") or not path:
+                continue
+            if path in rows:
+                continue
+            rows[str(path)] = {
+                "session_id": entry.get("gc_session_id") or entry.get("session_key") or path,
+                "transcript_path": path,
+                "session_start": entry.get("t_first"),
+                "session_end": entry.get("t_last"),
+            }
+        if len(rows) >= min_sessions:
+            population[work_id] = list(rows.values())
+    return population
 
 
 def coverage_by_rig(
@@ -134,11 +163,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--out", default=DEFAULT_OUT)
     parser.add_argument("--min-sessions", type=int, default=2)
     parser.add_argument("--limit-beads", type=int, default=None)
+    parser.add_argument(
+        "--baseline-min-beads",
+        type=int,
+        default=3,
+        help="signatures seen across >= N distinct beads are repo-baseline noise",
+    )
     args = parser.parse_args(argv)
 
     join = json.loads(Path(args.join).read_text(encoding="utf-8"))
     rigs = load_rigs(args.store)
-    population = select_population(join["rows"], min_sessions=args.min_sessions)
+    if "beads" in join:
+        population = select_merged_population(join["beads"], min_sessions=args.min_sessions)
+    else:
+        population = select_population(join["rows"], min_sessions=args.min_sessions)
     if args.limit_beads is not None:
         population = dict(sorted(population.items())[: args.limit_beads])
     coverage = coverage_by_rig(population, rigs)
@@ -179,9 +217,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"  {i + 1}/{len(population)} beads ({time.monotonic() - t0:.0f}s)")
 
     summary = aggregate_metrics(beads)
+
+    # Noise-filtered readout: subtract repo-baseline signatures (recurring
+    # across unrelated beads) and recompute the recurrence axes.
+    baseline = baseline_signatures(beads, min_beads=args.baseline_min_beads)
+    filtered_beads = [bead_cross_session(b.work_id, b.sessions, exclude=baseline) for b in beads]
+    summary_filtered = aggregate_metrics(filtered_beads)
+
     elapsed = time.monotonic() - t0
     print(f"metrics over {len(beads)} beads in {elapsed:.0f}s")
     print(json.dumps({k: v for k, v in summary.items() if k != "iterations_histogram"}, indent=2))
+    print(
+        f"baseline filter: {len(baseline)} signatures across >= {args.baseline_min_beads} beads; "
+        f"filtered pair recurrence "
+        f"{summary_filtered['recurrent_pairs']}/{summary_filtered['recurrence_eligible_pairs']}"
+    )
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -194,6 +244,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "compute_seconds": round(elapsed, 1),
                 "coverage_by_rig": coverage,
                 "summary": summary,
+                "baseline_filter": {
+                    "min_beads": args.baseline_min_beads,
+                    "n_signatures": len(baseline),
+                    "signatures": sorted(baseline),
+                },
+                "summary_baseline_filtered": summary_filtered,
                 "n_skipped": len(skipped),
                 "skipped_sample": dict(list(skipped.items())[:25]),
                 "beads": [bead_summary(b) for b in beads],
