@@ -14,10 +14,12 @@ export {
 } from './writer.js';
 export {
   type ErrorSearchHit,
+  type CoverageReport,
   type RecordFilter,
   type StoredLesson,
   type StoredRun,
   allLessons,
+  coverageReport,
   getRecord,
   lessonsFor,
   queryRecords,

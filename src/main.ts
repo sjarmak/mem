@@ -3,6 +3,8 @@ import { helpCommand } from './cli/commands/help.js';
 import { versionCommand } from './cli/commands/version.js';
 import { ingestBeadsCommand } from './cli/commands/ingest-beads.js';
 import { buildStoreCommand } from './cli/commands/build-store.js';
+import { ingestTracesCommand } from './cli/commands/ingest-traces.js';
+import { coverageCommand } from './cli/commands/coverage.js';
 import { queryCommand } from './cli/commands/query.js';
 import { lessonsCommand } from './cli/commands/lessons.js';
 import { exportLessonsCommand } from './cli/commands/export-lessons.js';
@@ -18,6 +20,8 @@ export function main(argv: string[]): Promise<void> {
   registerCommand('version', versionCommand);
   registerCommand('ingest-beads', ingestBeadsCommand);
   registerCommand('build-store', buildStoreCommand);
+  registerCommand('ingest-traces', ingestTracesCommand);
+  registerCommand('coverage', coverageCommand);
   registerCommand('query', queryCommand);
   registerCommand('lessons', lessonsCommand);
   registerCommand('export-lessons', exportLessonsCommand);

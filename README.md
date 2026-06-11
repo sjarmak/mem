@@ -154,6 +154,20 @@ session-start commit, resolved by date). The spine-only default stays fast (no
 `gc`/transcript/git IO). The Python harness loads the store through `mem query`
 (`memory-bench/`).
 
+`mem ingest-traces` is the packaged, idempotent form for the recurring rebuild:
+it is `build-store` with `--with-traces --with-provenance` always on, wrapped in
+a before/after coverage diff so a run reports exactly which axes it lifted off
+zero. `mem coverage` prints that same report for the live store without
+rebuilding. The `/ingest-trace-substrate` skill documents the city-dir
+requirement and the verify-before-swap workflow, and `.gc/cron/` ships the
+nightly cadence.
+
+```bash
+cd /home/ds/gas-city   # --with-traces resolves transcripts from the city cwd
+mem ingest-traces --store /home/ds/projects/mem/.mem/store.db   # rebuild + delta
+mem coverage       --store /home/ds/projects/mem/.mem/store.db   # read-only report
+```
+
 ## Status
 
 The store is at schema v3 and populated: 6,691 work records, 874 resolved

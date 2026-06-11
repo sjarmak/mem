@@ -241,3 +241,41 @@ export function runsFor(db: StoreDatabase, workId: string): StoredRun[] {
     ...(row.outcome !== null && { outcome: row.outcome }),
   }));
 }
+
+/**
+ * Store-wide coverage of the trace substrate (mem-75t). Each field is a count
+ * the ingest is meant to lift off zero: the epic's headline diagnostic was
+ * `trace_path`/`trace_errors`/`base_commit`/`commit_sha` all empty across the
+ * spine-only store. Reading these back is how `mem coverage` and the nightly
+ * `ingest-traces` delta know whether a run actually populated the projection.
+ */
+export interface CoverageReport {
+  /** Total work_records — the spine the other counts are coverage *of*. */
+  records: number;
+  /** Records whose transcript resolved to a JSONL path (P1.3 trace-resolve). */
+  with_trace: number;
+  /** Deterministic build/test/lint failure signatures parsed (P1.6). */
+  trace_errors: number;
+  /** Run-metadata rows: tokens/model/harness/tool-calls/turns (P1.2). */
+  trace_runs: number;
+  /** Records with a git base_commit anchor (P1.3 provenance). */
+  with_base_commit: number;
+  /** Records with a verifiable GitHub outcome SHA (spine `outcome.commit_sha`). */
+  with_commit_sha: number;
+}
+
+/** Count the populated rows behind each coverage axis — one small aggregate
+ * query per axis (the axes hit different tables/predicates, so they don't
+ * collapse into one scan). Read-only; safe to call on a store mid-build or
+ * empty. */
+export function coverageReport(db: StoreDatabase): CoverageReport {
+  const count = (sql: string): number => (db.prepare(sql).get() as { n: number }).n;
+  return {
+    records: count('SELECT COUNT(*) AS n FROM work_records'),
+    with_trace: count('SELECT COUNT(*) AS n FROM work_records WHERE trace_path IS NOT NULL'),
+    trace_errors: count('SELECT COUNT(*) AS n FROM trace_errors'),
+    trace_runs: count('SELECT COUNT(*) AS n FROM trace_runs'),
+    with_base_commit: count('SELECT COUNT(*) AS n FROM work_records WHERE base_commit IS NOT NULL'),
+    with_commit_sha: count('SELECT COUNT(*) AS n FROM work_records WHERE commit_sha IS NOT NULL'),
+  };
+}
