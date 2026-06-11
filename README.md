@@ -1,23 +1,27 @@
 # mem — agentic memory, benchmarked on multi-agent orchestration traces
 
-**One line:** build and *benchmark* agentic memory using a multi-agent
-orchestrator's own work traces, across every project, as the evaluation corpus.
+A multi-agent orchestrator running across eighteen project rigs leaves behind
+6,691 work items, 874 resolved session transcripts, and the build/test/lint
+failures inside them. `mem` builds agentic memory from that record and
+benchmarks it on the same record: does retained, parsed, retrieved memory
+measurably improve future agent work (success rate, iterations, cost), and
+which retention and retrieval strategies win?
 
-## The bet
+## Work records beat session prose as a memory corpus
 
 Most agentic-memory work learns from a single agent's session prose. A
-multi-agent orchestrator produces something richer: a continuous stream of real
-work where every unit has a verifiable outcome (work item closed, PR merged, CI
-green or red) and a full trace of how it got there. That makes a good substrate
-for studying memory, because the labels are real rather than synthetic.
+multi-agent orchestrator produces something richer: a continuous stream of
+real work where every unit carries a lifecycle label (created, started,
+closed) and a full trace of how it got there, so the labels come from work
+that actually happened rather than from synthetic tasks. One honest caveat
+shapes the whole evaluation design: external outcome linkage is sparse in
+practice (roughly 1 in 6,000 records carries a PR reference), so the
+benchmark's oracles rest on the lifecycle labels, the traces themselves, and
+trace-derived gold diffs, not on a merged-PR or CI signal.
 
-`mem` turns that exhaust into a benchmark. Does retained, parsed, retrieved
-memory measurably improve future agent work (success rate, iterations, cost),
-and which retention and retrieval strategies win?
+## The data already exists
 
-## What we collect (already exists)
-
-The data is the orchestrator's own audit. Nothing needs to be generated:
+It is the orchestrator's own audit; nothing needs to be generated:
 
 | Source | What it gives | Where |
 |---|---|---|
@@ -25,7 +29,8 @@ The data is the orchestrator's own audit. Nothing needs to be generated:
 | **Session traces** (JSONL) | full agent transcripts: tool calls, tool outputs, decisions, errors | per-session JSONL files |
 | **Audit / scanner logs** | dispatch, reaper, supervisor events | orchestrator logs |
 | **Convoy / workflow records** | how work fanned out and composed | orchestrator state |
-| **PRs / commits** | the external outcome | GitHub, via the work item's external ref or branch |
+| **PRs / commits** | the external outcome, where a linkage exists (rare; see above) | GitHub, via the work item's external ref or branch |
+| **Git provenance** | `repo` + session-start `base_commit` per record, so a run can be replayed as a checkout | resolved at ingest (`--with-provenance`) |
 
 ## The work-audit graph (the core mapping)
 
@@ -44,8 +49,10 @@ Everything keys off a **work id** and joins outward. This graph is the dataset:
 - **Work id** = the work-item id. The anchor.
 - **Agent id** = the session embedded in the item's `assignee`, which resolves
   to that session's trace JSONL.
-- **Outcome** = the verifiable label (item status, PR merged or closed, CI
-  result). This is what makes it a *benchmark*, not just a log.
+- **Outcome** = the verifiable label. In practice this is the item's
+  lifecycle status plus the deterministic failure record in its trace; PR/CI
+  labels exist in the schema but are rarely populated. This is what makes it
+  a *benchmark*, not just a log.
 
 ## Pipeline
 
@@ -91,7 +98,8 @@ WorkRecord {
 ```
 
 The **outcome** field is what makes this a benchmark substrate: every record
-carries a real, verifiable label (closed, merged, CI), never a synthetic one.
+carries a real label from work that happened (lifecycle status, deterministic
+trace failures), never a synthetic one.
 
 When the benchmark evaluates a record, the retrievable set is bounded in time:
 only records for work closed strictly before the target started, with the
@@ -105,10 +113,18 @@ The P1.5 sidecar is a generated artifact (gitignored at `.mem/store.db`). Build
 it from the bead spine, then query / retrieve / replay against it:
 
 ```bash
-mem build-store [--rig <name>] [--with-traces] [--store .mem/store.db]
+mem build-store [--rig <name>] [--with-traces] [--with-provenance] [--store .mem/store.db]
 mem query   --store .mem/store.db [--rig R] [--json]      # read the graph
 mem retrieve <work_id> --store .mem/store.db --scope cross-rig|same-rig --json
 ```
+
+Two invocation traps, both of which fail silently with exit 0: the CLI
+entrypoint is `./bin/mem` (`node dist/main.js` only defines the function and
+does nothing), and `--with-traces` resolves sessions through `gc session
+logs`, which loads `city.toml` from the working directory, so a build run
+from this repo resolves zero traces. Run the full rebuild from the gas-city
+checkout with an absolute `--store` path, then verify the `trace_path`,
+`repo`, and `base_commit` counts before swapping the store into place.
 
 The store has no in-place schema migration: a version bump means rebuilding from
 the bead spine. The append-only `lessons` table is the one thing a rebuild
@@ -120,18 +136,28 @@ mem build-store --store .mem/store.db            # fresh schema
 mem import-lessons --file lessons.ndjson --store .mem/store.db   # idempotent
 ```
 
-`build-store` reuses the ingest readers and the store writer — it adds no
+`build-store` reuses the ingest readers and the store writer; it adds no
 substrate, only the wiring that lands real WorkRecords in the store the
 retrieval/eval path reads. With `--with-traces` it additionally resolves each
 record's transcript (P1.3) and parses its deterministic build/test/lint failure
-signatures (P1.6) into the store, so the failure-triggered `ours` arm fires; the
-spine-only default stays fast (no `gc`/transcript IO). The Python harness loads
-the store through `mem query` (`memory-bench/`).
+signatures (P1.6) into the store, so the failure-triggered `ours` arm fires;
+with `--with-provenance` it attaches each record's git baseline (repo plus
+session-start commit, resolved by date). The spine-only default stays fast (no
+`gc`/transcript/git IO). The Python harness loads the store through `mem query`
+(`memory-bench/`).
 
 ## Status
 
-Greenfield. The TypeScript work-audit graph builder under `src/`
-(ingest / parse / store / retrieve / bench) is scaffolded with tests under
-`tests/`. The Python evaluation harness lives in `memory-bench/` (see its
-README); it runs end-to-end on the real store via `membench replay`. Curating
-the held-out eval set and the first lift read are the next phase.
+The store is at schema v3 and populated: 6,691 work records, 874 resolved
+transcripts (with per-run metadata in `trace_runs`), 321 deterministic trace
+errors across 77 records, and git provenance on 482 records, 113 of which
+carry both a trace and a checkoutable base commit. That last set is the pool
+the task-bundle builder (`mem-75t.7`) mines: the Python harness under
+`memory-bench/` now assembles evaluable bundles (issue → trace → gold diff →
+oracle context) by replaying a transcript's edit calls against a checkout of
+the record's base commit, a design validated on 8 real beads (134/199 calls
+replayed cleanly, 6/8 beads yielding applyable multi-file diffs; see
+`docs/mem-75t.7.1-replay-validation.md`). The next gate before the full
+oracle-curation and dual-verifier ports is a dynamic-range probe: run a
+zero-memory agent against a cheap oracle-context rung on the first bundle
+batch and confirm the eval has headroom before investing further.

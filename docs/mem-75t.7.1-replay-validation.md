@@ -120,15 +120,14 @@ Aggregates (true-wd pass, 199 calls total):
    diff. They should be excluded from the success-rate denominator, not counted
    as drift.
 
-## Verdict on plan §9.1's bet
+## Trace replay is a workable gold-diff source
 
-**VIABLE.** The replay framing does what the review revision promised: 6/8 beads
-yield real, applyable, non-empty git diffs, and — the stronger result — *every*
-failure was mechanically detected and classified, with the classifications
-pointing at concrete, fixable provenance gaps rather than at the replay
-machinery (zero crashes, zero unclassified calls, exhaustive outcome coverage).
-The acceptance criterion (≥5 real beads, classified mismatches, non-empty hunks)
-is met.
+The replay design (plan §9.1) holds up on real data: 6/8 beads yield real,
+applyable, non-empty git diffs, and every failure was mechanically detected
+and classified, with the classifications pointing at concrete, fixable
+provenance gaps rather than at the replay machinery itself (zero crashes,
+zero unclassified calls, exhaustive outcome coverage). The acceptance
+criterion (≥5 real beads, classified mismatches, non-empty hunks) is met.
 
 ### Implications for the P1 admission filter (mem-75t.7.2)
 
