@@ -31,6 +31,7 @@ from typing import Any
 from membench.grading import TraceErrorRef, relaxed_signature
 from membench.grading.probe_direct import extract_efficiency
 from membench.harbor.harbor_exec import project_claude_stream
+from membench.session_join import session_uuid
 
 # Same seam as the base-rate spike: stdout/observation text in, canonical
 # trace_error rows out. Production wires `make_cli_extractor(mem_bin)`.
@@ -184,12 +185,29 @@ class BeadCrossSession:
         return len(self.sessions)
 
 
+def _dedupe_alias_views(views: Iterable[SessionView]) -> list[SessionView]:
+    """Drop alias self-pairs (mem-75t.10): two SessionViews on the same Claude
+    session reached via different transcript paths share a UUID stem. Pairing a
+    session with its own alias GUARANTEES signature recurrence — a false
+    positive the recurrence axis must never count. Identity is the transcript
+    stem (falling back to session_id); the first view per UUID is kept since
+    aliases carry identical content."""
+    seen: dict[str, SessionView] = {}
+    for view in views:
+        uuid = session_uuid(view.transcript_path) or view.session_id
+        if uuid not in seen:
+            seen[uuid] = view
+    return list(seen.values())
+
+
 def bead_cross_session(
     work_id: str, views: Iterable[SessionView], *, exclude: frozenset[str] = frozenset()
 ) -> BeadCrossSession:
     """Order a bead's sessions by start time (unknown starts last, then by id
-    for determinism) and compute pair + cost metrics."""
-    ordered = tuple(sorted(views, key=lambda v: (v.start is None, v.start or "", v.session_id)))
+    for determinism) and compute pair + cost metrics. Alias views (same session,
+    two paths) are collapsed first so no session is paired with itself."""
+    deduped = _dedupe_alias_views(views)
+    ordered = tuple(sorted(deduped, key=lambda v: (v.start is None, v.start or "", v.session_id)))
     pairs = tuple(pair_metrics(a, b, exclude=exclude) for a, b in pairwise(ordered))
     return BeadCrossSession(
         work_id=work_id,

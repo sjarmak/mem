@@ -51,6 +51,7 @@ from membench.cross_session import (
     build_session_view,
 )
 from membench.harbor.base_rate_spike import make_cli_extractor
+from membench.session_join import session_uuid
 
 DEFAULT_JOIN = "/home/ds/projects/mem/.mem/merged-session-bead-join.json"
 DEFAULT_STORE = "/home/ds/projects/mem/.mem/store.db"
@@ -93,10 +94,11 @@ def select_merged_population(
     beads: Mapping[str, Sequence[Mapping[str, Any]]], *, min_sessions: int
 ) -> dict[str, list[Mapping[str, Any]]]:
     """Population selector for the MERGED join artifact (mem-75t.4): per bead,
-    its non-suspect entries with a resolved transcript, deduplicated by
-    transcript path (respawned seats resume one Claude conversation — two
-    entries on the same transcript are one session for metric purposes).
-    Rows are normalized to the legacy row shape the view builder consumes."""
+    its non-suspect entries with a resolved transcript, deduplicated by session
+    UUID (mem-75t.10 — NOT transcript path: one Claude conversation is reachable
+    through two namespace paths, and keying on path counts it twice, which seeds
+    a guaranteed alias self-pair in the recurrence axis). Rows are normalized to
+    the legacy row shape the view builder consumes."""
     population: dict[str, list[Mapping[str, Any]]] = {}
     for work_id, entries in beads.items():
         rows: dict[str, Mapping[str, Any]] = {}
@@ -104,9 +106,10 @@ def select_merged_population(
             path = entry.get("transcript_path")
             if entry.get("suspect") or not path:
                 continue
-            if path in rows:
+            uuid = entry.get("session_key") or session_uuid(str(path)) or str(path)
+            if uuid in rows:
                 continue
-            rows[str(path)] = {
+            rows[uuid] = {
                 "session_id": entry.get("gc_session_id") or entry.get("session_key") or path,
                 "transcript_path": path,
                 "session_start": entry.get("t_first"),

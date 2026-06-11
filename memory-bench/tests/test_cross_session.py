@@ -225,6 +225,53 @@ def test_bead_cross_session_unknown_start_sorts_last() -> None:
     assert [s.session_id for s in bead.sessions] == ["s1", "s2"]
 
 
+def _alias_view(uuid: str, namespace: str, *, relaxed: frozenset[str]) -> SessionView:
+    """Same Claude session (`uuid`) seen through one filesystem namespace."""
+    return SessionView(
+        session_id=f"gc-{namespace}",
+        transcript_path=f"/home/ds/{namespace}/.claude/projects/p/{uuid}.jsonl",
+        start="2026-06-01T00:00:00Z",
+        end="2026-06-01T01:00:00Z",
+        turns=1,
+        tool_calls=0,
+        input_tokens=None,
+        output_tokens=None,
+        files_read=frozenset(),
+        relaxed_signatures=relaxed,
+        exact_signatures=relaxed,
+    )
+
+
+def test_alias_self_pair_is_dropped_not_counted_as_recurrence() -> None:
+    # The SAME session reached via two namespace paths (same uuid stem) must NOT
+    # be paired with itself — that would guarantee a false recurrence hit.
+    sig = frozenset({"E:boom"})
+    bead = bead_cross_session(
+        "mem-1",
+        [
+            _alias_view("sess-uuid", ".claude-homes/acct", relaxed=sig),
+            _alias_view("sess-uuid", "", relaxed=sig),
+        ],
+    )
+    assert bead.iterations == 1  # collapsed to one session
+    assert bead.pairs == ()  # no self-pair, so no recurrence to count
+
+
+def test_distinct_uuids_still_pair_and_recur() -> None:
+    # Two genuinely different sessions on the bead still form a real pair.
+    sig = frozenset({"E:boom"})
+    bead = bead_cross_session(
+        "mem-1",
+        [
+            _alias_view("uuid-1", ".claude-homes/acct", relaxed=sig),
+            _alias_view("uuid-2", ".claude-homes/acct", relaxed=sig),
+        ],
+    )
+    assert bead.iterations == 2
+    assert len(bead.pairs) == 1
+    assert bead.pairs[0].recurrence is True
+
+
 # --- aggregation -------------------------------------------------------------
 
 

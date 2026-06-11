@@ -44,6 +44,25 @@ from typing import Any, Literal
 
 Strength = Literal["strong", "weak"]
 
+
+def session_uuid(transcript_path: str | None) -> str | None:
+    """The Claude session UUID = transcript filename stem, namespace-independent.
+
+    The SAME conversation is reachable through more than one path: the events
+    join resolves `/home/ds/.claude-homes/<acct>/.claude/projects/.../<uuid>.jsonl`
+    while a store assignee link carries `/home/ds/.claude/projects/.../<uuid>.jsonl`.
+    Session identity is the stem, never the path — deduping by path counts one
+    session twice (mem-75t.10). Returns None for an empty path."""
+    if not transcript_path:
+        return None
+    name = transcript_path.rsplit("/", 1)[-1]
+    for suffix in (".jsonl.gz", ".jsonl", ".gz"):
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+            break
+    return name or None
+
+
 # Subcommands that MUTATE the bead — the session demonstrably worked it.
 # Everything else (show/list/ready/dep/...) is a read: weak linkage.
 STRONG_SUBCOMMANDS = frozenset({"claim", "update", "close", "comment", "reopen"})

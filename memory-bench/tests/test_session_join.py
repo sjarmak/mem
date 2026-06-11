@@ -21,6 +21,7 @@ from membench.session_join import (
     extract_gc_output_ids,
     parse_assignee,
     scan_transcript_lines,
+    session_uuid,
     work_id_pattern,
 )
 
@@ -394,3 +395,25 @@ def test_assignee_sessions_counts_distinct_session_agents() -> None:
     ]
     sessions = assignee_sessions(rows)
     assert sessions == {"mem-1": ("gc-100", "gc-200"), "mem-2": ("gc-100",)}
+
+
+# --- session_uuid identity (mem-75t.10) --------------------------------------
+
+
+def test_session_uuid_is_namespace_independent() -> None:
+    homes = "/home/ds/.claude-homes/acct/.claude/projects/p/abc-123.jsonl"
+    bare = "/home/ds/.claude/projects/p/abc-123.jsonl"
+    assert session_uuid(homes) == "abc-123"
+    assert session_uuid(bare) == "abc-123"
+    assert session_uuid(homes) == session_uuid(bare)
+
+
+def test_session_uuid_strips_known_suffixes() -> None:
+    assert session_uuid("/x/abc-123.jsonl.gz") == "abc-123"
+    assert session_uuid("/x/abc-123.gz") == "abc-123"
+    assert session_uuid("abc-123") == "abc-123"
+
+
+def test_session_uuid_empty_is_none() -> None:
+    assert session_uuid(None) is None
+    assert session_uuid("") is None

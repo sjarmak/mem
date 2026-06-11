@@ -224,6 +224,55 @@ def test_unscanned_assignee_transcript_is_kept_not_suspect() -> None:
     assert not entry.suspect
 
 
+# --- alias collapse (mem-75t.10) -----------------------------------------------
+
+
+def test_same_uuid_via_two_namespaces_collapses_to_one_entry() -> None:
+    # Events resolved the homes-namespace path; the store assignee link carries
+    # the bare path. Same uuid stem => ONE session, not two record_agents rows.
+    homes = "/home/ds/.claude-homes/acct/.claude/projects/p/sess-uuid.jsonl"
+    bare = "/home/ds/.claude/projects/p/sess-uuid.jsonl"
+    merged = _merge(
+        event_pairs=[
+            EventPair(
+                "mem-1", "gc-100", "2026-06-01T10:00:00.0+00:00", "2026-06-01T11:00:00.0+00:00", 4
+            )
+        ],
+        session_keys={"gc-100": "sess-uuid"},
+        uuid_to_path={"sess-uuid": homes},
+        assignee_links={"mem-1": bare},
+    )
+    (entry,) = merged["mem-1"].entries
+    assert sorted(entry.sources) == ["assignee", "events"]
+    assert entry.session_key == "sess-uuid"
+    assert entry.n_events == 4
+    # the surviving entry adopts the on-disk corpus path, not the stale alias
+    assert entry.transcript_path == homes
+    assert not entry.suspect
+
+
+def test_alias_clears_spurious_suspect_when_events_confirm_same_uuid() -> None:
+    # The assignee path looks contradicted on its own (the scan strongly tied
+    # that transcript to gpk-9), but events (PRIMARY) place the same uuid on
+    # mem-1 — collapse clears the spurious suspect flag.
+    homes = "/home/ds/.claude-homes/acct/.claude/projects/p/sess-uuid.jsonl"
+    bare = "/home/ds/.claude/projects/p/sess-uuid.jsonl"
+    merged = _merge(
+        event_pairs=[
+            EventPair(
+                "mem-1", "gc-100", "2026-06-01T10:00:00.0+00:00", "2026-06-01T11:00:00.0+00:00", 2
+            )
+        ],
+        session_keys={"gc-100": "sess-uuid"},
+        uuid_to_path={"sess-uuid": homes},
+        content_rows=[_content_row("other-uuid", "gpk-9", bare)],
+        assignee_links={"mem-1": bare},
+    )
+    (entry,) = merged["mem-1"].entries
+    assert sorted(entry.sources) == ["assignee", "events"]
+    assert not entry.suspect
+
+
 # --- stats ----------------------------------------------------------------------
 
 

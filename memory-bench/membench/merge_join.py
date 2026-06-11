@@ -35,6 +35,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from membench.session_join import session_uuid
+
 Source = str  # "events" | "dolt-history" | "content-scan" | "assignee"
 
 _FRACTION_TRIM = re.compile(r"\.(\d{6})\d+")
@@ -138,6 +140,56 @@ def _sort_key(entry: SessionEntry) -> tuple[int, str, str]:
         return (0, entry.t_first, entry.gc_session_id or entry.session_key or "")
     priority = "0" if "dolt-history" in entry.sources else "1"
     return (1, priority, entry.gc_session_id or entry.session_key or entry.transcript_path or "")
+
+
+def _fold_alias(keep: SessionEntry, other: SessionEntry) -> None:
+    """Fold `other` into `keep` — they are the same Claude session reached via
+    two filesystem namespaces. Union sources, widen the span, keep the richest
+    ids. A session confirmed by any non-suspect source is not suspect: an
+    assignee-path alias that looked contradicted on its own is cleared when the
+    events stream (PRIMARY) places the same uuid on the bead."""
+    for source in other.sources:
+        keep.add_source(source)
+    keep.widen(other.t_first, other.t_last)
+    if keep.gc_session_id is None:
+        keep.gc_session_id = other.gc_session_id
+    if keep.session_key is None:
+        keep.session_key = other.session_key
+    keep.n_events = max(keep.n_events, other.n_events)
+    if other.strength == "strong":
+        keep.strength = "strong"
+    keep.suspect = keep.suspect and other.suspect
+
+
+def _collapse_aliases(
+    entries: Iterable[SessionEntry], uuid_to_path: Mapping[str, str]
+) -> list[SessionEntry]:
+    """Collapse entries that are one Claude session reached through different
+    namespaces (same UUID stem), guaranteeing one entry per (bead, session
+    UUID) — the mem-75t.10 fix. Entries with no derivable UUID (a gc-only seat
+    with no resolved transcript) pass through untouched: distinct gc ids are
+    distinct sessions. The surviving entry adopts the on-disk corpus path
+    (`uuid_to_path`, built from transcripts that exist) so downstream trace
+    resolution points at a path that resolves rather than the stale alias."""
+    by_uuid: dict[str, SessionEntry] = {}
+    passthrough: list[SessionEntry] = []
+    for entry in entries:
+        uuid = entry.session_key or session_uuid(entry.transcript_path)
+        if uuid is None:
+            passthrough.append(entry)
+            continue
+        kept = by_uuid.get(uuid)
+        if kept is None:
+            by_uuid[uuid] = entry
+        else:
+            _fold_alias(kept, entry)
+    for uuid, entry in by_uuid.items():
+        if entry.session_key is None:
+            entry.session_key = uuid
+        corpus_path = uuid_to_path.get(uuid)
+        if corpus_path:
+            entry.transcript_path = corpus_path
+    return list(by_uuid.values()) + passthrough
 
 
 def merge_bead_sessions(
@@ -275,7 +327,8 @@ def merge_bead_sessions(
 
     merged: dict[str, MergedBead] = {}
     for work_id, entries in beads.items():
-        ordered = tuple(sorted(entries.values(), key=_sort_key))
+        collapsed = _collapse_aliases(entries.values(), uuid_to_path)
+        ordered = tuple(sorted(collapsed, key=_sort_key))
         if ordered:
             merged[work_id] = MergedBead(work_id=work_id, entries=ordered)
     return merged
