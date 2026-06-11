@@ -44,6 +44,7 @@ from pathlib import Path
 from membench.harbor.env_recon import DEFAULT_RIG_REPOS
 from membench.harbor.probe_gate import (
     CONDITIONS,
+    EmptyRunError,
     ProbeConditionResult,
     ProbePair,
     Runner,
@@ -99,7 +100,13 @@ def run_probe_batch(
     """The resumable bundle x condition loop. Each scored result persists to
     ``<probe_dir>/<work_id>.<condition>.json`` IMMEDIATELY; existing result files
     are skipped. Returns the ``{"executed": n, "skipped": n, "planned": n}`` tally.
-    Used clones are exit-swept for leftover probe worktrees (leftovers raise)."""
+    Used clones are exit-swept for leftover probe worktrees (leftovers raise).
+
+    A dead run (`EmptyRunError` -- auth/usage-limit failure or zero-output transcript)
+    is FATAL: no result file is written (so a rerun re-executes it) and the batch
+    aborts loudly, because such failures cascade to every subsequent run in the same
+    session -- persisting them as 0.0 silently corrupted the gate (mem-75t.7.6
+    incident). Results already on disk survive; rerun with a fresh token to resume."""
     probe_dir.mkdir(parents=True, exist_ok=True)
     executed = skipped = planned = 0
     used_clones: set[Path] = set()
@@ -125,15 +132,25 @@ def run_probe_batch(
                     print(_dry_run_row(bundle, condition, task_dir))
                     continue
                 used_clones.add(clone)
-                result = run_probe(
-                    bundle,
-                    condition,
-                    task_dir,
-                    clone=clone,
-                    exec_stream=exec_stream,
-                    runner=runner,
-                    worktree_root=worktree_root,
-                )
+                try:
+                    result = run_probe(
+                        bundle,
+                        condition,
+                        task_dir,
+                        clone=clone,
+                        exec_stream=exec_stream,
+                        runner=runner,
+                        worktree_root=worktree_root,
+                    )
+                except EmptyRunError as exc:
+                    print(
+                        f"\n*** EMPTY RUN -- {exc}\n"
+                        f"*** No result file written ({out}); the run will re-execute on resume.\n"
+                        f"*** Aborting batch: this failure cascades to every subsequent run "
+                        f"(check the OAuth token / usage limit, then rerun the same command).",
+                        file=sys.stderr,
+                    )
+                    raise
                 out.write_text(result.model_dump_json(indent=2) + "\n", encoding="utf-8")
                 executed += 1
                 print(

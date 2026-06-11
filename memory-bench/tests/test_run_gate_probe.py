@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from membench.bundle.replay import CallReplay, ReplayOutcome, ReplayResult
+from membench.harbor.probe_gate import EmptyRunError
 from membench.schemas.bundle import BundleEnv, TaskBundle
 
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "run_gate_probe.py"
@@ -237,3 +238,37 @@ def test_write_summary_none_when_unpaired(bundles_dir: Path, clone: Path, tmp_pa
     )
     assert probe_cli.write_summary(probe_dir, bundles) is None
     assert not (probe_dir / "summary.json").exists()
+
+
+def test_dead_run_aborts_batch_and_writes_no_result(
+    bundles_dir: Path, clone: Path, tmp_path: Path
+) -> None:
+    """A 401/empty run must NOT persist as a 0.0 (the mem-75t.7.6 incident): the batch
+    raises, writes no result file, and leaves no probe worktree behind."""
+    bundles = probe_cli.load_bundles(bundles_dir)
+    probe_dir = tmp_path / "probe"
+    dead = json.dumps(
+        {
+            "type": "result",
+            "is_error": True,
+            "api_error_status": 401,
+            "num_turns": 1,
+            "result": "Failed to authenticate.",
+        }
+    )
+
+    with pytest.raises(EmptyRunError, match="api_error_status=401"):
+        probe_cli.run_probe_batch(
+            bundles,
+            ("none", "oracle"),
+            probe_dir=probe_dir,
+            tasks_dir=probe_dir / "tasks",
+            rig_repos={"demo": clone},
+            exec_stream=lambda _td: dead,
+            worktree_root=tmp_path / "wt",
+        )
+
+    # Nothing scored to disk, so a resume re-runs from scratch -- never a silent 0.
+    assert list(probe_dir.glob("*.json")) == []
+    # The exit-sweep still ran (finally): no leftover candidate worktree.
+    assert probe_cli.sweep_probe_worktrees(clone) is None

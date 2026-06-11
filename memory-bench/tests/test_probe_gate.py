@@ -18,9 +18,11 @@ from membench.grading.probe_direct import ProbeDirectScore, ProbeEfficiency
 from membench.harbor.probe_gate import (
     CONDITIONS,
     ORACLE_MEMORY_CONTAINER_PATH,
+    EmptyRunError,
     ProbeConditionResult,
     assert_probe_task_clean,
     build_probe_task,
+    detect_run_failure,
     harvest_candidate,
     oracle_context_payload,
     probe_instruction,
@@ -277,6 +279,66 @@ def test_run_probe_scores_candidate_against_gold(clone: Path, tmp_path: Path) ->
     assert result.efficiency.input_tokens == 100
     assert result.replay_applied == 1
     assert result.replay_total == 1
+
+
+# --- empty-run detection (mem-75t.7.6 run incident) --------------------------------------
+
+# The actual 401 transcript shape from the 2026-06-11 incident: a synthetic assistant
+# event with all-zero usage, then an is_error result event carrying api_error_status.
+_DEAD_RUN_401 = "\n".join(
+    json.dumps(e)
+    for e in (
+        {"type": "system", "subtype": "init", "session_id": "x"},
+        {"type": "system", "subtype": "api_retry", "attempt": 1, "error_status": 401},
+        {
+            "type": "assistant",
+            "message": {
+                "model": "<synthetic>",
+                "content": [{"type": "text", "text": "Failed to authenticate. API Error: 401"}],
+                "usage": {"input_tokens": 0, "output_tokens": 0},
+            },
+        },
+        {
+            "type": "result",
+            "subtype": "success",
+            "is_error": True,
+            "api_error_status": 401,
+            "num_turns": 1,
+            "result": "Failed to authenticate. API Error: 401 Invalid authentication credentials",
+        },
+    )
+)
+
+
+def test_detect_run_failure_flags_error_result_event() -> None:
+    reason = detect_run_failure(_DEAD_RUN_401)
+    assert reason is not None
+    assert "api_error_status=401" in reason
+
+
+def test_detect_run_failure_flags_zero_output_tokens() -> None:
+    # No result event at all, but the agent billed zero output -> nothing ran.
+    stream = json.dumps(
+        {"type": "assistant", "message": {"content": [], "usage": {"input_tokens": 5}}}
+    )
+    reason = detect_run_failure(stream)
+    assert reason is not None
+    assert "zero output tokens" in reason
+
+
+def test_detect_run_failure_passes_a_billed_single_turn_run() -> None:
+    # A real one-turn run (the gold-reproducing stub) bills output -> NOT a dead run.
+    live = _stream(_edit_block("/app/src/app.ts", "const value = 1", "const value = 2"))
+    assert detect_run_failure(live) is None
+
+
+def test_run_probe_raises_empty_run_error_on_dead_transcript(clone: Path, tmp_path: Path) -> None:
+    bundle = _bundle(clone)
+    task_dir = build_probe_task(bundle, "none", tmp_path / "t", rig_repos={"demo": clone})
+    with pytest.raises(EmptyRunError, match=r"demo-1 \[none\].*api_error_status=401"):
+        run_probe(bundle, "none", task_dir, clone=clone, exec_stream=lambda _td: _DEAD_RUN_401)
+    # The guard fires BEFORE the candidate harvest -> no probe worktree was created.
+    assert stale_probe_worktrees(clone) == ()
 
 
 # --- pair scoring + summary/gap arithmetic ------------------------------------------------

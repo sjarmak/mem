@@ -37,6 +37,7 @@ Everything subprocess- or Harbor-shaped is injectable for tests (no Docker, no
 network): the ``Runner`` seam (env_recon's pattern) and the ``StreamExec`` seam.
 """
 
+import json
 import shutil
 import subprocess
 import uuid
@@ -257,6 +258,48 @@ def load_stream(job_dir: Path) -> str:
     return stream.read_text(encoding="utf-8")
 
 
+class EmptyRunError(RuntimeError):
+    """A probe run that never did real work. An auth / usage-limit failure returns a
+    one-turn transcript with all-zero usage (and an ``is_error`` result event), which
+    `score_probe_direct` would otherwise persist as a legitimate ``0.0`` -- silently,
+    and resumability would then skip it forever. The gate must treat it as a FAILURE:
+    write NO result file (so a rerun re-executes it) and log loudly, never a score of
+    zero (mem-75t.7.6 run incident, 2026-06-11)."""
+
+
+def detect_run_failure(stream: str) -> str | None:
+    """Return a human-readable reason when ``stream`` is a dead run, else ``None``.
+
+    Two independent marks, either sufficient (the 2026-06-11 incident carried both):
+    the terminal ``result`` event flags ``is_error`` / carries an ``api_error_status``
+    (the agent never reached the model -- e.g. a 401 on an expired OAuth token), or the
+    transcript bills ZERO output tokens (a genuine run always bills output for its
+    attempt; zero means nothing ran). Turn count alone is NOT the test -- a short but
+    real run can be a single turn -- so a billed one-turn run is never falsely failed."""
+    for line in stream.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, Mapping) or event.get("type") != "result":
+            continue
+        if event.get("is_error"):
+            status = event.get("api_error_status")
+            detail = f" (api_error_status={status})" if status else ""
+            reason = str(event.get("result") or "agent reported is_error").strip()
+            return f"agent run errored{detail}: {reason[:200]}"
+    efficiency = extract_efficiency(stream)
+    if (efficiency.output_tokens or 0) == 0:
+        return (
+            f"agent run billed zero output tokens (turns={efficiency.turns}, "
+            f"input_tokens={efficiency.input_tokens}) -- no work performed"
+        )
+    return None
+
+
 def harbor_stream_exec(
     task_dir: Path,
     *,
@@ -458,8 +501,15 @@ def run_probe(
 ) -> ProbeConditionResult:
     """Execute ONE prepared (bundle, condition) task and score it: run the agent
     (`exec_stream` -- production `harbor_stream_exec`, injectable for tests),
-    harvest the candidate diff symmetrically with the gold, score the pair leg."""
+    harvest the candidate diff symmetrically with the gold, score the pair leg.
+
+    A dead run (`detect_run_failure` -- auth/limit error or zero-output transcript)
+    raises `EmptyRunError` BEFORE the candidate harvest, so the caller writes no
+    result file and the run re-executes on resume rather than scoring a silent 0."""
     stream = exec_stream(task_dir)
+    failure = detect_run_failure(stream)
+    if failure is not None:
+        raise EmptyRunError(f"{bundle.work_id} [{condition}]: {failure}")
     candidate = harvest_candidate(
         stream, bundle, clone=clone, runner=runner, worktree_root=worktree_root
     )
