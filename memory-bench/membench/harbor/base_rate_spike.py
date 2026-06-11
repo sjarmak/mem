@@ -196,9 +196,7 @@ def run_base_rate_spike(
         )
 
     verdict = base_rate_gate(records, rung=rung)
-    return SpikeResult(
-        outcomes=tuple(outcomes), records=tuple(records), verdict=verdict
-    )
+    return SpikeResult(outcomes=tuple(outcomes), records=tuple(records), verdict=verdict)
 
 
 def run_real_spike(

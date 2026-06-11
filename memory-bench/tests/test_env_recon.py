@@ -130,9 +130,7 @@ def test_reconstruct_env_writes_both_artifacts(repo: Path, tmp_path: Path):
     task_dir = tmp_path / "task"
     task_dir.mkdir()
     commit = resolve_base_commit(repo, "2026-02-01T00:00:00")
-    env_dir = reconstruct_env(
-        task_dir, repo=repo, commit=commit, base_image="ubuntu:24.04"
-    )
+    env_dir = reconstruct_env(task_dir, repo=repo, commit=commit, base_image="ubuntu:24.04")
     assert (env_dir / "Dockerfile").exists()
     assert (env_dir / "repo.tar").exists()
     assert env_dir == task_dir / "environment"
@@ -166,9 +164,7 @@ def test_for_record_unknown_rig_raises(tmp_path: Path):
         "lifecycle": {"started": "2026-02-01T00:00:00"},
     }
     with pytest.raises(RuntimeError, match="no local repo mapped"):
-        reconstruct_env_for_record(
-            task_dir, record, rig_repos={}, base_images={}, base_ref="HEAD"
-        )
+        reconstruct_env_for_record(task_dir, record, rig_repos={}, base_images={}, base_ref="HEAD")
 
 
 def test_for_record_missing_timestamp_raises(repo: Path, tmp_path: Path):
@@ -176,6 +172,4 @@ def test_for_record_missing_timestamp_raises(repo: Path, tmp_path: Path):
     task_dir.mkdir()
     record = {"work_id": "x-1", "rig": "myrig"}
     with pytest.raises(RuntimeError, match=r"no lifecycle\.started"):
-        reconstruct_env_for_record(
-            task_dir, record, rig_repos={"myrig": repo}, base_ref="HEAD"
-        )
+        reconstruct_env_for_record(task_dir, record, rig_repos={"myrig": repo}, base_ref="HEAD")

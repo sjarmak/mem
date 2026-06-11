@@ -174,6 +174,4 @@ def reconstruct_env_for_record(
         )
     commit = resolve_base_commit(repo, str(started_at), base_ref=base_ref, runner=runner)
     base_image = base_images.get(rig, DEFAULT_BASE_IMAGE)
-    return reconstruct_env(
-        task_dir, repo=repo, commit=commit, base_image=base_image, runner=runner
-    )
+    return reconstruct_env(task_dir, repo=repo, commit=commit, base_image=base_image, runner=runner)

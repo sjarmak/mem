@@ -105,9 +105,7 @@ def collect_output(trajectory: Mapping[str, Any]) -> str:
     return "\n".join(chunks)
 
 
-def _accumulate_file(
-    tool_name: Any, args: Any, read: set[str], written: set[str]
-) -> None:
+def _accumulate_file(tool_name: Any, args: Any, read: set[str], written: set[str]) -> None:
     """Bucket one file-tool call into read/written by `_FILE_TOOLS`. Shared by the ATIF
     and Claude-stream projections so the tool->bucket policy lives in one place."""
     spec = _FILE_TOOLS.get(tool_name if isinstance(tool_name, str) else "")
@@ -275,9 +273,7 @@ def run_harbor_job(
     (the OAuth token) that would otherwise block on stdin; ``-q`` suppresses the live
     UI. A non-zero exit raises -- a failed run is never silently a clean trace."""
     jobs_dir.mkdir(parents=True, exist_ok=True)
-    config = build_job_config(
-        task_dir, job_name=job_name, jobs_dir=jobs_dir, model=model
-    )
+    config = build_job_config(task_dir, job_name=job_name, jobs_dir=jobs_dir, model=model)
     config_path = jobs_dir / f"{job_name}.job.json"
     config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
 
