@@ -265,3 +265,32 @@ def test_dead_run_aborts_batch_and_writes_no_result(
     assert list(probe_dir.glob("*.json")) == []
     # The exit-sweep still ran (finally): no leftover candidate worktree.
     assert probe_cli.sweep_probe_worktrees(clone) is None
+
+
+def test_batch_clean_room_conditions_with_payload_seam(
+    bundles_dir: Path, clone: Path, tmp_path: Path
+) -> None:
+    """mem-p3w: the batch builds clean-room tasks and routes per-bundle retrieval
+    payloads into the ``ours`` condition through `ours_payloads_for`."""
+    bundles = probe_cli.load_bundles(bundles_dir)
+    probe_dir = tmp_path / "probe"
+    payload = json.dumps({"citation": {"work_id": "gc-prior-1"}, "lessons": [{"f": "x"}]})
+
+    tally = probe_cli.run_probe_batch(
+        bundles,
+        ("none-clean", "ours"),
+        probe_dir=probe_dir,
+        tasks_dir=probe_dir / "tasks",
+        rig_repos={"demo": clone},
+        exec_stream=_exec_stream_stub([]),
+        worktree_root=tmp_path / "wt",
+        ours_payloads_for=lambda b: {"gc-prior-1": payload},
+    )
+    assert tally == {"executed": 4, "skipped": 0, "planned": 0}
+    for work_id in ("demo-a", "demo-b"):
+        clean_df = (probe_dir / "tasks" / f"{work_id}.none-clean" / "environment" / "Dockerfile")
+        assert "rm -rf" in clean_df.read_text(encoding="utf-8")
+        memory = probe_dir / "tasks" / f"{work_id}.ours" / "memory" / "MEMORY.md"
+        assert "gc-prior-1" in memory.read_text(encoding="utf-8")
+        for condition in ("none-clean", "ours"):
+            assert (probe_dir / f"{work_id}.{condition}.json").is_file()

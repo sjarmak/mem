@@ -267,6 +267,162 @@ def summarize_grid(
     }
 
 
+# --- 3-arm pilot (mem-p3w: none-clean / ours / builtin) ----------------------------------
+
+# The pilot's arms, baseline first. ``none-clean`` and ``ours`` are fresh clean-room
+# runs (native project memory stripped from the image); ``builtin`` is the cached
+# gate-probe ``none`` run relabeled -- the repo-shipped CLAUDE.md/.claude/AGENTS.md
+# WERE present in those containers, which is exactly "native memory ON, ours OFF".
+THREE_ARM_CONDITIONS: tuple[str, ...] = ("none-clean", "ours", "builtin")
+
+ARM_PROVENANCE: dict[str, str] = {
+    "none-clean": (
+        "fresh clean-room agent runs: native project memory stripped from the image "
+        "(CLAUDE.md, AGENTS.md, .claude, .agents); no injected memory"
+    ),
+    "ours": (
+        "fresh clean-room agent runs + retrieval-v1 citation+lessons injected (D9, "
+        "D6 LOO-bounded); bundles whose retrieval is EMPTY reuse the none-clean run "
+        "(the task would be byte-identical, so the delta is 0 by construction and a "
+        "fresh run would only measure sampling noise)"
+    ),
+    "builtin": (
+        "cached gate-probe `none` runs (2026-06-11 Docker/OAuth executions): the "
+        "repo-shipped native project memory (CLAUDE.md, AGENTS.md, .claude, .agents) "
+        "was present in the image -- native memory ON, no injected memory"
+    ),
+}
+
+
+class ThreeArmRow(BaseModel):
+    """One bundle's 3-arm readout. Deltas are arm - none-clean (the clean-room
+    baseline) per metric; a metric absent on either side is omitted, never
+    imputed. ``ours_retrieval_empty`` marks the reuse case: retrieval returned no
+    payload, so the ours leg IS the none-clean run (deltas exactly 0)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    work_id: str
+    none_clean: GridConditionResult
+    ours: GridConditionResult
+    builtin: GridConditionResult
+    ours_retrieval_empty: bool
+    deltas_ours: tuple[tuple[str, float], ...]
+    deltas_builtin: tuple[tuple[str, float], ...]
+    # ours - builtin: the bead's headline comparison -- does our system beat the
+    # agent's NATIVE memory, not just the clean-room floor.
+    deltas_ours_vs_builtin: tuple[tuple[str, float], ...]
+
+
+def as_condition(result: GridConditionResult, condition: str) -> GridConditionResult:
+    """The same scored readout relabeled as another arm -- the builtin relabel
+    (cached ``none`` run -> ``builtin``) and the empty-retrieval ours reuse
+    (``none-clean`` run -> ``ours``). Frozen model: returns a new instance."""
+    return result.model_copy(update={"condition": condition})
+
+
+def three_arm_row(
+    none_clean: GridConditionResult,
+    ours: GridConditionResult,
+    builtin: GridConditionResult,
+    *,
+    ours_retrieval_empty: bool,
+) -> ThreeArmRow:
+    """Assemble one bundle's 3-arm row (arm - none-clean deltas). Mismatched
+    work_ids or mislabeled conditions are caller bugs -- raise."""
+    arms = (none_clean, ours, builtin)
+    got = tuple(arm.condition for arm in arms)
+    if got != THREE_ARM_CONDITIONS:
+        raise ValueError(f"three_arm_row needs conditions {THREE_ARM_CONDITIONS}, got {got}")
+    work_ids = {arm.work_id for arm in arms}
+    if len(work_ids) != 1:
+        raise ValueError(f"work_id mismatch across arms: {sorted(work_ids)}")
+    baseline = none_clean.metrics()
+    return ThreeArmRow(
+        work_id=none_clean.work_id,
+        none_clean=none_clean,
+        ours=ours,
+        builtin=builtin,
+        ours_retrieval_empty=ours_retrieval_empty,
+        deltas_ours=paired_deltas(baseline, ours.metrics()),
+        deltas_builtin=paired_deltas(baseline, builtin.metrics()),
+        deltas_ours_vs_builtin=paired_deltas(builtin.metrics(), ours.metrics()),
+    )
+
+
+def _arm_gap_stats(delta_maps: Sequence[dict[str, float]]) -> dict[str, Any]:
+    """`metric_gap_stats` with its pair-era count key renamed: the 3-arm summary
+    compares an arm against the clean-room baseline, not oracle against none."""
+    gaps = metric_gap_stats(delta_maps)
+    for stats in gaps.values():
+        stats["n_arm_gt_baseline"] = stats.pop("n_oracle_gt_none")
+    return gaps
+
+
+def summarize_grid_3arm(
+    rows: Sequence[ThreeArmRow],
+    ours_evidence: Sequence[OursRungEvidence],
+) -> dict[str, Any]:
+    """The 3-arm pilot's DATA product: per-bundle metrics + paired deltas vs the
+    clean-room baseline (never pooled means alone), per-comparison gap stats, the
+    quality-guard pass counts per arm, retrieval coverage, and each arm's
+    provenance. Verdict prose is the orchestrator's, never computed here."""
+    if not rows:
+        raise ValueError("summarize_grid_3arm needs at least one three-arm row")
+    per_bundle = [
+        {
+            "work_id": row.work_id,
+            "none-clean": row.none_clean.metrics(),
+            "ours": row.ours.metrics(),
+            "builtin": row.builtin.metrics(),
+            "deltas": {
+                "ours": dict(row.deltas_ours),
+                "builtin": dict(row.deltas_builtin),
+                "ours_vs_builtin": dict(row.deltas_ours_vs_builtin),
+            },
+            "ours_retrieval_empty": row.ours_retrieval_empty,
+            "direct_mode": {
+                "none-clean": row.none_clean.direct_mode,
+                "ours": row.ours.direct_mode,
+                "builtin": row.builtin.direct_mode,
+            },
+        }
+        for row in rows
+    ]
+    return {
+        "n_bundles": len(rows),
+        "conditions": list(THREE_ARM_CONDITIONS),
+        "per_bundle": per_bundle,
+        "gaps": {
+            "ours_vs_none_clean": _arm_gap_stats([dict(row.deltas_ours) for row in rows]),
+            "builtin_vs_none_clean": _arm_gap_stats([dict(row.deltas_builtin) for row in rows]),
+            "ours_vs_builtin": _arm_gap_stats(
+                [dict(row.deltas_ours_vs_builtin) for row in rows]
+            ),
+        },
+        "quality_guard": {
+            "repro_scored_rows": sum(
+                1
+                for row in rows
+                if row.none_clean.repro_passed is not None
+                and row.ours.repro_passed is not None
+                and row.builtin.repro_passed is not None
+            ),
+            "repro_passed": {
+                "none-clean": sum(1 for row in rows if row.none_clean.repro_passed),
+                "ours": sum(1 for row in rows if row.ours.repro_passed),
+                "builtin": sum(1 for row in rows if row.builtin.repro_passed),
+            },
+        },
+        "retrieval_coverage": {
+            "n_bundles": len(rows),
+            "n_with_payload": sum(1 for row in rows if not row.ours_retrieval_empty),
+            "evidence": [e.model_dump() for e in ours_evidence],
+        },
+        "arm_provenance": dict(ARM_PROVENANCE),
+    }
+
+
 def load_grid_ready_work_ids(manifest_path: Path) -> tuple[str, ...]:
     """The admitted work_ids from the fanout-guard manifest
     (``.mem/grid-ready-pool.json``, mem-75t.7.7). Rejected bundles never enter the

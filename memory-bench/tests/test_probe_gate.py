@@ -16,10 +16,14 @@ from membench.grading import OutcomeLeakError
 from membench.grading.probe_direct import ProbeDirectScore, ProbeEfficiency
 from membench.harbor.probe_gate import (
     CONDITIONS,
+    NATIVE_MEMORY_PATHS,
     ORACLE_MEMORY_CONTAINER_PATH,
     EmptyRunError,
+    PinMismatchError,
     ProbeConditionResult,
     assert_probe_task_clean,
+    assert_run_pins,
+    assert_strip_disjoint_from_gold,
     build_probe_task,
     detect_run_failure,
     harvest_candidate,
@@ -446,3 +450,179 @@ def test_score_condition_empty_candidate_scores_zero(clone: Path) -> None:
     result = score_condition(bundle, "none", empty, _stream())
     assert result.score.combined == 0.0
     assert result.candidate_files == ()
+
+
+# --- clean-room conditions (mem-p3w: none-clean / ours) ----------------------------------
+
+
+OURS_PAYLOAD = json.dumps(
+    {
+        "citation": {"work_id": "gc-prior-1", "rig": "demo"},
+        "lessons": [{"subtitle": "warm bd before gc hook", "facts": ["bd cold-start is slow"]}],
+    },
+    sort_keys=True,
+)
+
+
+def test_build_probe_task_none_clean_strips_native_memory(clone: Path, tmp_path: Path) -> None:
+    bundle = _bundle_via_json_roundtrip(clone, tmp_path)
+    rig_repos = {"demo": clone}
+    none_dir = build_probe_task(bundle, "none", tmp_path / "t-none", rig_repos=rig_repos)
+    clean_dir = build_probe_task(
+        bundle, "none-clean", tmp_path / "t-none-clean", rig_repos=rig_repos
+    )
+
+    dockerfile = (clean_dir / "environment" / "Dockerfile").read_text(encoding="utf-8")
+    for native in NATIVE_MEMORY_PATHS:
+        assert f"/app/{native}" in dockerfile
+    assert "rm -rf" in dockerfile
+    # The strip runs AFTER the repo snapshot lands at /app.
+    assert dockerfile.index("tar -xf") < dockerfile.index("rm -rf")
+
+    # The legacy (native-memory-present) condition is untouched by construction.
+    assert "rm -rf" not in (none_dir / "environment" / "Dockerfile").read_text(encoding="utf-8")
+
+    # Same prompt, no injected memory: the ONLY variable vs `none` is the strip.
+    assert (clean_dir / "instruction.md").read_bytes() == (none_dir / "instruction.md").read_bytes()
+    assert not (clean_dir / "memory").exists()
+    assert not (clean_dir / "environment" / "MEMORY.md").exists()
+
+
+def test_build_probe_task_ours_injects_lessons_and_strips(clone: Path, tmp_path: Path) -> None:
+    bundle = _bundle_via_json_roundtrip(clone, tmp_path)
+    rig_repos = {"demo": clone}
+    none_dir = build_probe_task(bundle, "none", tmp_path / "t-none", rig_repos=rig_repos)
+    ours_dir = build_probe_task(
+        bundle,
+        "ours",
+        tmp_path / "t-ours",
+        rig_repos=rig_repos,
+        ours_payloads={"gc-prior-1": OURS_PAYLOAD},
+    )
+
+    # Clean room + the retrieved payload baked into the image at the oracle's path.
+    dockerfile = (ours_dir / "environment" / "Dockerfile").read_text(encoding="utf-8")
+    assert "rm -rf" in dockerfile
+    assert f"COPY MEMORY.md {ORACLE_MEMORY_CONTAINER_PATH}" in dockerfile
+    memory = (ours_dir / "memory" / "MEMORY.md").read_text(encoding="utf-8")
+    assert "gc-prior-1" in memory
+    assert "warm bd before gc hook" in memory
+    assert (ours_dir / "environment" / "MEMORY.md").is_file()
+
+    # The prompt stays byte-identical -- only the injected file differs.
+    assert (ours_dir / "instruction.md").read_bytes() == (none_dir / "instruction.md").read_bytes()
+
+
+def test_build_probe_task_ours_requires_payloads(clone: Path, tmp_path: Path) -> None:
+    bundle = _bundle(clone)
+    for empty in (None, {}):
+        with pytest.raises(ValueError, match=r"ours.*payload"):
+            build_probe_task(
+                bundle, "ours", tmp_path / "t", rig_repos={"demo": clone}, ours_payloads=empty
+            )
+
+
+def test_non_ours_conditions_reject_payloads(clone: Path, tmp_path: Path) -> None:
+    bundle = _bundle(clone)
+    with pytest.raises(ValueError, match="payload"):
+        build_probe_task(
+            bundle,
+            "none-clean",
+            tmp_path / "t",
+            rig_repos={"demo": clone},
+            ours_payloads={"gc-prior-1": OURS_PAYLOAD},
+        )
+
+
+def test_leak_guard_fires_on_planted_gold_in_ours_payload(clone: Path, tmp_path: Path) -> None:
+    bundle = _bundle(clone)
+    with pytest.raises(OutcomeLeakError):
+        build_probe_task(
+            bundle,
+            "ours",
+            tmp_path / "t",
+            rig_repos={"demo": clone},
+            ours_payloads={"gc-prior-1": f"prior diff: {GOLD_DIFF}"},
+        )
+    assert not (tmp_path / "t").exists()
+
+
+def test_strip_disjoint_guard_rejects_gold_touching_memory_surface(clone: Path) -> None:
+    """A bundle whose gold diff touches a stripped path cannot run clean-room: the
+    stripped image and the (unstripped) scoring checkout would diverge."""
+    bundle = _bundle(clone)
+    assert_strip_disjoint_from_gold(bundle)  # src/app.ts only: fine
+
+    bad_output = ReplayResult(
+        calls=(),
+        file_diffs=(("CLAUDE.md", "diff --git a/CLAUDE.md b/CLAUDE.md\n+x\n"),),
+        replay_success_rate=1.0,
+    )
+    bad = bundle.model_copy(update={"output": bad_output})
+    with pytest.raises(ValueError, match="clean-room strip"):
+        assert_strip_disjoint_from_gold(bad)
+
+
+# --- run-pin assertion (mem-p3w: instrument parity with the cached builtin arm) ---------
+
+
+def _pinned_stream(model: str = "claude-sonnet-4-6", version: str = "2.1.173") -> str:
+    # A non-init system event precedes the init (the thinking_tokens shape) -- the
+    # assertion must skip it rather than read absent model fields as drift.
+    decoy = {"type": "system", "subtype": "thinking_tokens"}
+    init = {
+        "type": "system",
+        "subtype": "init",
+        "model": model,
+        "claude_code_version": version,
+    }
+    return "\n".join(
+        json.dumps(event) for event in (decoy, init, {"type": "result", "is_error": False})
+    ) + "\n"
+
+
+def test_assert_run_pins_accepts_matching_stream() -> None:
+    assert_run_pins(_pinned_stream(), model="claude-sonnet-4-6", cli_version="2.1.173")
+
+
+def test_assert_run_pins_rejects_model_and_version_drift() -> None:
+    with pytest.raises(PinMismatchError, match="model"):
+        assert_run_pins(
+            _pinned_stream(model="claude-haiku-4-5"),
+            model="claude-sonnet-4-6",
+            cli_version="2.1.173",
+        )
+    with pytest.raises(PinMismatchError, match="version"):
+        assert_run_pins(
+            _pinned_stream(version="2.2.0"), model="claude-sonnet-4-6", cli_version="2.1.173"
+        )
+
+
+def test_assert_run_pins_rejects_stream_without_init_event() -> None:
+    for stream in (
+        json.dumps({"type": "result"}) + "\n",
+        # A system event that is NOT the init must not satisfy the check.
+        json.dumps({"type": "system", "subtype": "thinking_tokens"}) + "\n",
+    ):
+        with pytest.raises(PinMismatchError, match="no system init"):
+            assert_run_pins(stream, model="claude-sonnet-4-6", cli_version="2.1.173")
+
+
+def test_touches_native_memory_is_root_anchored(clone: Path) -> None:
+    """The strip removes only /app/<name>, so nested copies neither conflict with
+    the strip nor count as native-memory surface."""
+    from membench.harbor.probe_gate import touches_native_memory
+
+    assert touches_native_memory("CLAUDE.md")
+    assert touches_native_memory(".claude/skills/.gitkeep")
+    assert touches_native_memory(".agents/migration/originals/CLAUDE.md")
+    assert not touches_native_memory("src/CLAUDE.md")
+    assert not touches_native_memory("docs/AGENTS.md")
+
+    nested_output = ReplayResult(
+        calls=(),
+        file_diffs=(("src/CLAUDE.md", "diff --git a/src/CLAUDE.md b/src/CLAUDE.md\n+x\n"),),
+        replay_success_rate=1.0,
+    )
+    nested = _bundle(clone).model_copy(update={"output": nested_output})
+    assert_strip_disjoint_from_gold(nested)  # nested copy: no conflict

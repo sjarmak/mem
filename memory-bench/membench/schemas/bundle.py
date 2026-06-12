@@ -85,7 +85,11 @@ class TaskBundle(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    work_id: str = Field(min_length=1)
+    # work_id flows into filesystem paths (probe/grid result files, job dirs --
+    # including rmtree targets in the 3-arm driver's scrub), so the charset is
+    # locked down at the schema boundary: bead-id shaped (dots allowed for
+    # hierarchy, e.g. mem-75t.9), never a path separator or a leading dot.
+    work_id: str = Field(min_length=1, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
     rig: str = Field(min_length=1)
     # The bead-sourced issue leg. Body may legitimately be empty: current ingest
     # carries only the title (see assess._body_text's forward-shaped read).

@@ -16,11 +16,14 @@ from membench.grading.probe_direct import ProbeEfficiency
 from membench.harbor.bundle_grid import (
     GridConditionResult,
     OursRungEvidence,
+    as_condition,
     load_grid_ready_work_ids,
     ours_rung_evidence,
     pair_grid,
     score_grid_condition,
     summarize_grid,
+    summarize_grid_3arm,
+    three_arm_row,
 )
 from membench.memory_systems.ours_system import OursQuery
 from membench.schemas.bundle import BundleEnv, CuratedOracle, TaskBundle
@@ -273,6 +276,107 @@ def test_summarize_grid_rejects_empty() -> None:
         summarize_grid([], [])
 
 
+# --- 3-arm pilot (mem-p3w: none-clean / ours / builtin) ----------------------------------
+
+
+def test_as_condition_relabels_without_mutating() -> None:
+    original = _condition("none")
+    relabeled = as_condition(original, "builtin")
+    assert relabeled.condition == "builtin"
+    assert original.condition == "none"
+    assert relabeled.metrics() == original.metrics()
+
+
+def test_three_arm_row_deltas_are_arm_minus_clean_baseline() -> None:
+    row = three_arm_row(
+        _condition("none-clean", score_direct=0.0, repro_passed=False, turns=20),
+        _condition("ours", score_direct=1.0, repro_passed=True, turns=12),
+        _condition("builtin", score_direct=0.0, repro_passed=False, turns=25),
+        ours_retrieval_empty=False,
+    )
+    assert dict(row.deltas_ours)["turns"] == -8.0
+    assert dict(row.deltas_ours)["repro_passed"] == 1.0
+    assert dict(row.deltas_builtin)["turns"] == 5.0
+    assert dict(row.deltas_builtin)["repro_passed"] == 0.0
+    # ours - builtin: the bead's headline comparison (beats native memory?).
+    assert dict(row.deltas_ours_vs_builtin)["turns"] == -13.0
+    assert dict(row.deltas_ours_vs_builtin)["repro_passed"] == 1.0
+
+
+def test_three_arm_row_rejects_mismatches() -> None:
+    with pytest.raises(ValueError, match="conditions"):
+        three_arm_row(
+            _condition("none"),
+            _condition("ours"),
+            _condition("builtin"),
+            ours_retrieval_empty=False,
+        )
+    other = _condition("ours").model_copy(update={"work_id": "demo-2"})
+    with pytest.raises(ValueError, match="work_id mismatch"):
+        three_arm_row(
+            _condition("none-clean"), other, _condition("builtin"), ours_retrieval_empty=False
+        )
+
+
+def test_summarize_grid_3arm_shape() -> None:
+    rows = [
+        three_arm_row(
+            _condition("none-clean", score_direct=0.0, repro_passed=False, turns=20),
+            _condition("ours", score_direct=1.0, repro_passed=True, turns=12),
+            _condition("builtin", score_direct=0.0, repro_passed=False, turns=25),
+            ours_retrieval_empty=False,
+        ),
+        three_arm_row(
+            _condition("none-clean", repro_passed=True, turns=10),
+            as_condition(_condition("none-clean", repro_passed=True, turns=10), "ours"),
+            _condition("builtin", repro_passed=True, turns=10),
+            ours_retrieval_empty=True,
+        ),
+    ]
+    evidence = [
+        OursRungEvidence(work_id="demo-1", items=10, items_with_lessons=10, total_matched=118),
+        OursRungEvidence(work_id="demo-1", items=0, items_with_lessons=0, total_matched=0),
+    ]
+    summary = summarize_grid_3arm(rows, evidence)
+
+    assert summary["n_bundles"] == 2
+    assert summary["conditions"] == ["none-clean", "ours", "builtin"]
+    bundle_row = summary["per_bundle"][0]
+    assert bundle_row["deltas"]["ours"]["turns"] == -8.0
+    assert bundle_row["deltas"]["builtin"]["turns"] == 5.0
+    assert bundle_row["deltas"]["ours_vs_builtin"]["turns"] == -13.0
+    assert bundle_row["ours_retrieval_empty"] is False
+    assert summary["per_bundle"][1]["ours_retrieval_empty"] is True
+    # The reused empty-retrieval row contributes an exact-zero ours delta.
+    assert summary["per_bundle"][1]["deltas"]["ours"]["turns"] == 0.0
+
+    gaps_ours = summary["gaps"]["ours_vs_none_clean"]["turns"]
+    assert gaps_ours["deltas"] == [-8.0, 0.0]
+    assert gaps_ours["n_arm_gt_baseline"] == 0
+    assert "n_oracle_gt_none" not in gaps_ours
+    assert summary["gaps"]["builtin_vs_none_clean"]["turns"]["deltas"] == [5.0, 0.0]
+    assert summary["gaps"]["ours_vs_builtin"]["turns"]["deltas"] == [-13.0, 0.0]
+
+    guard = summary["quality_guard"]
+    assert guard["repro_scored_rows"] == 2
+    assert guard["repro_passed"] == {"none-clean": 1, "ours": 2, "builtin": 1}
+
+    coverage = summary["retrieval_coverage"]
+    assert coverage["n_bundles"] == 2
+    assert coverage["n_with_payload"] == 1
+    assert len(coverage["evidence"]) == 2
+
+    provenance = summary["arm_provenance"]
+    assert "stripped" in provenance["none-clean"]
+    assert "reuse" in provenance["ours"]
+    assert "cached" in provenance["builtin"]
+
+
+def test_summarize_grid_3arm_rejects_empty() -> None:
+    with pytest.raises(ValueError, match="at least one"):
+        summarize_grid_3arm([], [])
+
+
 def test_load_grid_ready_work_ids(tmp_path: Path) -> None:
     manifest = tmp_path / "pool.json"
     manifest.write_text(json.dumps({"admitted": ["a", "b"]}), encoding="utf-8")
@@ -280,3 +384,17 @@ def test_load_grid_ready_work_ids(tmp_path: Path) -> None:
     manifest.write_text(json.dumps({"admitted": []}), encoding="utf-8")
     with pytest.raises(ValueError, match="no admitted work_ids"):
         load_grid_ready_work_ids(manifest)
+
+
+def test_work_id_schema_rejects_path_separators() -> None:
+    """work_id reaches rmtree targets via the 3-arm scrub -- the schema is the
+    trust boundary that keeps traversal out of every downstream path join."""
+    import pytest as _pytest
+    from pydantic import ValidationError
+
+    base = _bundle_for_evidence().model_dump()
+    for bad in ("../escape", "a/b", "/abs", ".hidden"):
+        with _pytest.raises(ValidationError):
+            TaskBundle.model_validate({**base, "work_id": bad})
+    for good in ("mem-75t.9", "gascity-dashboard-4lf62", "a_b-c.d"):
+        assert TaskBundle.model_validate({**base, "work_id": good}).work_id == good

@@ -66,6 +66,19 @@ from membench.schemas.bundle import TaskBundle
 # The gate's two conditions (plan §9.2): the stateless floor and the cheap ceiling.
 CONDITIONS: tuple[str, ...] = ("none", "oracle")
 
+# Clean-room conditions (mem-p3w): the SAME task with the agent's native project
+# memory removed from the image, so the only memory variable is the injected one.
+# ``none-clean`` is the clean-room floor; ``ours`` additionally injects retrieval-v1's
+# citation+lessons payload (D9) through the same `memory_inject` path as the oracle.
+CLEAN_CONDITIONS: tuple[str, ...] = ("none-clean", "ours")
+ALL_CONDITIONS: tuple[str, ...] = CONDITIONS + CLEAN_CONDITIONS
+
+# Repo-shipped paths Claude Code auto-loads as project memory (CLAUDE.md/AGENTS.md
+# instruction files, the .claude project dir, the .agents migration dir carrying
+# copies of both). Removed from /app for clean-room conditions. The user-level
+# ~/.claude memory needs no strip: every run is a fresh container, so it is empty.
+NATIVE_MEMORY_PATHS: tuple[str, ...] = ("CLAUDE.md", "AGENTS.md", ".claude", ".agents")
+
 # Where the env_recon Dockerfile lands the repo snapshot (its WORKDIR) -- the rebase
 # prefix for candidate replay AND the repo location the fixed instruction names.
 CONTAINER_WORKDIR = "/app"
@@ -189,6 +202,43 @@ def _bake_memory_into_env(task_dir: Path, memory_file: Path) -> None:
     )
 
 
+def touches_native_memory(path: str) -> bool:
+    """True when ``path`` is under a repo-ROOT `NATIVE_MEMORY_PATHS` entry -- the
+    membership test shared by the strip-disjoint guard and the 3-arm driver's
+    builtin-surface evidence. Root-anchored on purpose: the strip removes only
+    ``/app/<name>`` (and Claude Code auto-loads only the root copies), so a
+    nested ``src/CLAUDE.md`` neither conflicts with the strip nor counts as
+    native-memory surface."""
+    parts = Path(path).parts
+    return bool(parts) and parts[0] in NATIVE_MEMORY_PATHS
+
+
+def assert_strip_disjoint_from_gold(bundle: TaskBundle) -> None:
+    """The clean-room strip must never remove a path the gold diff touches -- the
+    stripped image and the (unstripped) scoring checkout would diverge on scored
+    paths, corrupting the repro/replay coordinate space."""
+    offenders = [path for path, _ in bundle.output.file_diffs if touches_native_memory(path)]
+    if offenders:
+        raise ValueError(
+            f"{bundle.work_id}: gold diff touches the clean-room strip set {offenders} -- "
+            "a clean-condition run of this bundle cannot be scored faithfully"
+        )
+
+
+def _strip_native_memory(task_dir: Path) -> None:
+    """Remove the repo-shipped native project memory from the image (clean room).
+
+    Appended AFTER `reconstruct_env` writes the base Dockerfile, so the strip runs
+    after the repo snapshot lands at /app (the same append pattern as
+    `_bake_memory_into_env`)."""
+    targets = " ".join(f"{CONTAINER_WORKDIR}/{path}" for path in NATIVE_MEMORY_PATHS)
+    dockerfile = task_dir / "environment" / "Dockerfile"
+    dockerfile.write_text(
+        dockerfile.read_text(encoding="utf-8") + f"RUN rm -rf {targets}\n",
+        encoding="utf-8",
+    )
+
+
 def build_probe_task(
     bundle: TaskBundle,
     condition: str,
@@ -196,17 +246,35 @@ def build_probe_task(
     *,
     rig_repos: Mapping[str, Path] = DEFAULT_RIG_REPOS,
     runner: Runner = subprocess.run,
+    ours_payloads: Mapping[str, str] | None = None,
 ) -> Path:
     """Write one (bundle, condition) Harbor task dir; return it.
 
     Environment = the rig clone snapshot at the bundle's EXACT ``env.base_commit``
     with ``env.base_image`` (via `env_recon.reconstruct_env` -- the bundle carries
-    the exact anchor, so no timestamp approximation). The prompt is identical for
-    both conditions; ``oracle`` additionally injects `oracle_context_payload`
-    through `memory_inject.inject_context` and bakes it into the image. Every
-    agent-readable text is leak-checked BEFORE any write."""
-    if condition not in CONDITIONS:
-        raise ValueError(f"unknown probe condition {condition!r}; known: {list(CONDITIONS)}")
+    the exact anchor, so no timestamp approximation). The prompt is byte-identical
+    across ALL conditions; only the image differs:
+
+    - ``none``       -- the snapshot as-is (native project memory present);
+    - ``oracle``     -- + `oracle_context_payload` baked in via `memory_inject`;
+    - ``none-clean`` -- native project memory stripped (`NATIVE_MEMORY_PATHS`);
+    - ``ours``       -- stripped + the caller-resolved retrieval payloads
+      (``ours_payloads``, source-id -> rendered citation+lessons) baked in. An
+      empty payload is a caller bug: the empty-retrieval case reuses the
+      ``none-clean`` run instead of burning an agent run on an identical task.
+
+    Every agent-readable text is leak-checked BEFORE any write."""
+    if condition not in ALL_CONDITIONS:
+        raise ValueError(f"unknown probe condition {condition!r}; known: {list(ALL_CONDITIONS)}")
+    if condition == "ours" and not ours_payloads:
+        raise ValueError(
+            "the ours condition needs non-empty ours_payloads; an empty retrieval "
+            "reuses the none-clean run instead of executing an identical task"
+        )
+    if condition != "ours" and ours_payloads:
+        raise ValueError(f"condition {condition!r} takes no ours_payloads")
+    if condition in CLEAN_CONDITIONS:
+        assert_strip_disjoint_from_gold(bundle)
     clone = rig_repos.get(bundle.rig)
     if clone is None:
         raise RuntimeError(
@@ -215,9 +283,14 @@ def build_probe_task(
 
     instruction = probe_instruction(bundle)
     task_toml = _task_toml(bundle, condition)
-    agent_readable = {"instruction.md": instruction, "task.toml": task_toml}
+    injected: dict[str, str] | None = None
     if condition == "oracle":
-        agent_readable["memory/MEMORY.md"] = oracle_context_payload(bundle)
+        injected = {"oracle-files": oracle_context_payload(bundle)}
+    elif condition == "ours":
+        injected = dict(ours_payloads or ())  # non-empty: guarded above
+    agent_readable = {"instruction.md": instruction, "task.toml": task_toml}
+    if injected:
+        agent_readable["memory/MEMORY.md"] = "\n".join(injected.values())
     assert_probe_task_clean(agent_readable, bundle)
 
     task_dir.mkdir(parents=True, exist_ok=True)
@@ -230,12 +303,10 @@ def build_probe_task(
         base_image=bundle.env.base_image,
         runner=runner,
     )
-    if condition == "oracle":
-        memory_file = inject_context(
-            task_dir,
-            {"oracle-files": oracle_context_payload(bundle)},
-            outcome_labels=probe_leak_labels(bundle),
-        )
+    if condition in CLEAN_CONDITIONS:
+        _strip_native_memory(task_dir)
+    if injected:
+        memory_file = inject_context(task_dir, injected, outcome_labels=probe_leak_labels(bundle))
         _bake_memory_into_env(task_dir, memory_file)
     return task_dir
 
@@ -300,6 +371,50 @@ def detect_run_failure(stream: str) -> str | None:
     return None
 
 
+class PinMismatchError(RuntimeError):
+    """A run executed on a different model or claude-code CLI version than the
+    arm it must stay comparable with (mem-p3w: the cached builtin runs) -- a
+    silent instrument confound. The caller must persist NO result for such a run
+    (the `EmptyRunError` discipline). The stale job dir is NOT removed on this
+    path -- the driver's startup scrub (`scrub_unfinished_jobs`) removes it on
+    the next invocation, so harbor re-runs instead of re-harvesting the drifted
+    transcript."""
+
+
+def assert_run_pins(stream: str, *, model: str, cli_version: str) -> None:
+    """Assert the run's stream init event matches the pinned model + CLI version.
+
+    Harbor installs the claude CLI fresh in every container, so an unpinned run
+    silently drifts to latest -- across days that is a different instrument than
+    the cached arm it is paired against. Raises `PinMismatchError` on drift or
+    when the stream carries no init event to verify."""
+    for line in stream.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, Mapping) or event.get("type") != "system":
+            continue
+        # Only the init event carries model/version; other system events (e.g.
+        # thinking_tokens) would otherwise read as None != pinned and false-fail.
+        if event.get("subtype") != "init":
+            continue
+        mismatches = []
+        if event.get("model") != model:
+            mismatches.append(f"model {event.get('model')!r} != pinned {model!r}")
+        if event.get("claude_code_version") != cli_version:
+            mismatches.append(
+                f"cli version {event.get('claude_code_version')!r} != pinned {cli_version!r}"
+            )
+        if mismatches:
+            raise PinMismatchError("; ".join(mismatches))
+        return
+    raise PinMismatchError("no system init event in stream -- cannot verify run pins")
+
+
 def harbor_stream_exec(
     task_dir: Path,
     *,
@@ -308,10 +423,12 @@ def harbor_stream_exec(
     model: str | None = None,
     harbor_bin: str = "harbor",
     timeout_sec: float | None = None,
+    agent_version: str | None = None,
 ) -> str:
     """Production `StreamExec`: ``harbor run`` one task (the spike's exact invocation
     path -- OAuth token from the Harbor process env, jobs-dir layout, ``-q -y``),
-    then return the raw stream transcript. Requires Docker + the subscription."""
+    then return the raw stream transcript. Requires Docker + the subscription.
+    ``agent_version`` pins the in-container claude CLI install (mem-p3w parity)."""
     jobs_dir = jobs_dir or (task_dir.parent / "_harbor_jobs")
     job_name = job_name or task_dir.name
     job_dir = run_harbor_job(
@@ -321,6 +438,7 @@ def harbor_stream_exec(
         model=model,
         harbor_bin=harbor_bin,
         timeout_sec=timeout_sec,
+        agent_version=agent_version,
     )
     return load_stream(job_dir)
 
@@ -486,7 +604,7 @@ def paired_deltas(
     grid's `pair_grid`."""
     deltas: list[tuple[str, float]] = []
     for metric, none_value in sorted(none_metrics.items()):
-        oracle_value = oracle_metrics[metric]
+        oracle_value = oracle_metrics.get(metric)
         if none_value is None or oracle_value is None:
             continue
         deltas.append((metric, oracle_value - none_value))

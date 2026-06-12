@@ -38,7 +38,7 @@ import json
 import shutil
 import subprocess
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from membench.harbor.env_recon import DEFAULT_RIG_REPOS
@@ -96,11 +96,15 @@ def run_probe_batch(
     runner: Runner = subprocess.run,
     worktree_root: Path = Path("/tmp"),
     dry_run: bool = False,
+    ours_payloads_for: Callable[[TaskBundle], Mapping[str, str]] | None = None,
 ) -> dict[str, int]:
     """The resumable bundle x condition loop. Each scored result persists to
     ``<probe_dir>/<work_id>.<condition>.json`` IMMEDIATELY; existing result files
     are skipped. Returns the ``{"executed": n, "skipped": n, "planned": n}`` tally.
     Used clones are exit-swept for leftover probe worktrees (leftovers raise).
+
+    ``ours_payloads_for`` resolves the injected retrieval payload per bundle for the
+    ``ours`` condition (mem-p3w); other conditions never consult it.
 
     A dead run (`EmptyRunError` -- auth/usage-limit failure or zero-output transcript)
     is FATAL: no result file is written (so a rerun re-executes it) and the batch
@@ -126,7 +130,19 @@ def run_probe_batch(
                 task_dir = tasks_dir / f"{bundle.work_id}.{condition}"
                 if task_dir.exists():  # rebuild fresh -- bundles are the source of truth
                     shutil.rmtree(task_dir)
-                build_probe_task(bundle, condition, task_dir, rig_repos=rig_repos, runner=runner)
+                payloads = (
+                    ours_payloads_for(bundle)
+                    if condition == "ours" and ours_payloads_for is not None
+                    else None
+                )
+                build_probe_task(
+                    bundle,
+                    condition,
+                    task_dir,
+                    rig_repos=rig_repos,
+                    runner=runner,
+                    ours_payloads=payloads,
+                )
                 if dry_run:
                     planned += 1
                     print(_dry_run_row(bundle, condition, task_dir))

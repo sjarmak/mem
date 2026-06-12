@@ -336,6 +336,26 @@ def test_job_config_omits_agent_env_so_token_passes_through_unmodified():
     assert cfg["verifier"] == {"disable": True}
 
 
+def test_job_config_threads_agent_version_pin():
+    """mem-p3w: `agent_version` must reach the installed-agent constructor via
+    AgentConfig.kwargs (harbor's factory spreads **kwargs into the agent class) or
+    the in-container CLI install silently drifts to latest -- an instrument
+    confound between arms executed on different days."""
+    cfg = build_job_config(
+        Path("/t/task"),
+        job_name="j",
+        jobs_dir=Path("/t/jobs"),
+        model="claude-x",
+        agent_version="2.1.173",
+    )
+    assert cfg["agents"][0]["kwargs"] == {"version": "2.1.173"}
+
+
+def test_job_config_omits_kwargs_without_version_pin():
+    cfg = build_job_config(Path("/t/task"), job_name="j", jobs_dir=Path("/t/jobs"))
+    assert "kwargs" not in cfg["agents"][0]
+
+
 # --- harbor_exec: guard behavior (no Docker / no subscription run here) ----------
 
 

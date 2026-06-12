@@ -61,6 +61,68 @@ def load_admitted_bundles(bundles_dir: Path, manifest: Path) -> list[TaskBundle]
     return bundles
 
 
+def score_runs(
+    pending: Sequence[tuple[TaskBundle, str]],
+    *,
+    probe_jobs_dir: Path,
+    grid_dir: Path,
+) -> tuple[dict[tuple[str, str], GridConditionResult], dict[str, int]]:
+    """Dual-score every pending (bundle, condition) run from its persisted job
+    dir, resumable: an existing scored result under ``grid_dir`` is loaded, never
+    re-executed. Shared by this CLI and `run_grid_3arm`. Returns the results
+    keyed by (work_id, condition) plus the ``{"executed", "skipped"}`` tally.
+
+    Used clones are swept BEFORE starting (worktrees stranded by a previously
+    KILLED run would otherwise sit on the clone for this whole run) and on exit
+    (the run_gate_probe discipline -- LiveReproRunner.close() only covers this
+    process's own worktrees)."""
+    grid_dir.mkdir(parents=True, exist_ok=True)
+    executed = skipped = 0
+    results: dict[tuple[str, str], GridConditionResult] = {}
+
+    clones = {DEFAULT_RIG_REPOS[b.rig] for b, _ in pending if b.rig in DEFAULT_RIG_REPOS}
+    for swept in sorted(clones):
+        sweep_probe_worktrees(swept, prefix=WORKTREE_PREFIX)
+
+    used_clones: set[Path] = set()
+    try:
+        with LiveReproRunner() as test_runner:
+            for bundle, condition in pending:
+                out = grid_dir / f"{bundle.work_id}.{condition}.json"
+                if out.exists():
+                    skipped += 1
+                    results[(bundle.work_id, condition)] = (
+                        GridConditionResult.model_validate_json(out.read_text(encoding="utf-8"))
+                    )
+                    print(f"SKIP  {bundle.work_id} {condition}  (result exists)")
+                    continue
+                clone = DEFAULT_RIG_REPOS.get(bundle.rig)
+                if clone is None:
+                    raise RuntimeError(f"no local clone for rig {bundle.rig!r}")
+                used_clones.add(clone)
+                job_dir = probe_jobs_dir / f"{bundle.work_id}.{condition}"
+                if not job_dir.is_dir():
+                    raise FileNotFoundError(
+                        f"no persisted run for {bundle.work_id} [{condition}] at {job_dir} -- "
+                        "grid scoring needs the probe's persisted jobs"
+                    )
+                result = score_grid_condition(
+                    bundle, condition, job_dir, clone=clone, test_runner=test_runner
+                )
+                out.write_text(result.model_dump_json(indent=2) + "\n", encoding="utf-8")
+                results[(bundle.work_id, condition)] = result
+                executed += 1
+                print(
+                    f"DONE  {bundle.work_id} {condition}  mode={result.direct_mode} "
+                    f"direct={result.score_direct} repro={result.repro_passed} "
+                    f"out_tokens={result.efficiency.output_tokens}"
+                )
+    finally:
+        for clone in sorted(used_clones):
+            sweep_probe_worktrees(clone, prefix=WORKTREE_PREFIX)
+    return results, {"executed": executed, "skipped": skipped}
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundles-dir", type=Path, default=DEFAULT_BUNDLES_DIR)
@@ -72,56 +134,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     bundles = load_admitted_bundles(args.bundles_dir, args.manifest)
-    args.grid_dir.mkdir(parents=True, exist_ok=True)
-    executed = skipped = 0
-    results: dict[tuple[str, str], GridConditionResult] = {}
-
-    # Sweep BEFORE starting: worktrees stranded by a previously KILLED run would
-    # otherwise sit on the clone for this whole run (the finally below only covers
-    # strays this process leaves beyond its own close()).
-    clones = {DEFAULT_RIG_REPOS[b.rig] for b in bundles if b.rig in DEFAULT_RIG_REPOS}
-    for clone in sorted(clones):
-        sweep_probe_worktrees(clone, prefix=WORKTREE_PREFIX)
-
-    used_clones: set[Path] = set()
-    try:
-        with LiveReproRunner() as test_runner:
-            for bundle in bundles:
-                clone = DEFAULT_RIG_REPOS.get(bundle.rig)
-                if clone is None:
-                    raise RuntimeError(f"no local clone for rig {bundle.rig!r}")
-                used_clones.add(clone)
-                for condition in GRID_CONDITIONS:
-                    out = args.grid_dir / f"{bundle.work_id}.{condition}.json"
-                    if out.exists():
-                        skipped += 1
-                        results[(bundle.work_id, condition)] = (
-                            GridConditionResult.model_validate_json(out.read_text(encoding="utf-8"))
-                        )
-                        print(f"SKIP  {bundle.work_id} {condition}  (result exists)")
-                        continue
-                    job_dir = args.probe_jobs_dir / f"{bundle.work_id}.{condition}"
-                    if not job_dir.is_dir():
-                        raise FileNotFoundError(
-                            f"no cached run for {bundle.work_id} [{condition}] at {job_dir} -- "
-                            "the grid rescoring needs the gate probe's persisted jobs"
-                        )
-                    result = score_grid_condition(
-                        bundle, condition, job_dir, clone=clone, test_runner=test_runner
-                    )
-                    out.write_text(result.model_dump_json(indent=2) + "\n", encoding="utf-8")
-                    results[(bundle.work_id, condition)] = result
-                    executed += 1
-                    print(
-                        f"DONE  {bundle.work_id} {condition}  mode={result.direct_mode} "
-                        f"direct={result.score_direct} repro={result.repro_passed} "
-                        f"out_tokens={result.efficiency.output_tokens}"
-                    )
-    finally:
-        # Exit-sweep (the run_gate_probe discipline): catch repro worktrees stranded
-        # by a killed run -- LiveReproRunner.close() only covers this process's own.
-        for clone in sorted(used_clones):
-            sweep_probe_worktrees(clone, prefix=WORKTREE_PREFIX)
+    results, tally = score_runs(
+        [(bundle, condition) for bundle in bundles for condition in GRID_CONDITIONS],
+        probe_jobs_dir=args.probe_jobs_dir,
+        grid_dir=args.grid_dir,
+    )
 
     pairs = [
         pair_grid(results[(bundle.work_id, "none")], results[(bundle.work_id, "oracle")])
@@ -135,7 +152,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     summary = summarize_grid(pairs, evidence)
     out = args.grid_dir / "summary.json"
     out.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-    print(f"\nexecuted={executed} skipped={skipped}")
+    print(f"\nexecuted={tally['executed']} skipped={tally['skipped']}")
     print(f"summary -> {out}  (pairs={summary['n_pairs']})")
     return 0
 

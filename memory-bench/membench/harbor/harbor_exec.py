@@ -194,6 +194,7 @@ def build_job_config(
     jobs_dir: Path,
     model: str | None = None,
     agent: str = DEFAULT_AGENT,
+    agent_version: str | None = None,
 ) -> dict[str, Any]:
     """The minimal Harbor `JobConfig` to run one local task with the OAuth agent.
 
@@ -205,10 +206,17 @@ def build_job_config(
     (claude_code.py ``run``), so the caller MUST export it before invoking `harbor_exec`
     (e.g. `run_real_spike` sets ``os.environ`` from the account's credentials). Leaving
     ``agent.env`` unset keeps no secret on disk and lets the real token through unmodified.
-    ``ANTHROPIC_API_KEY`` stays unset so Claude Code uses subscription auth (D16)."""
+    ``ANTHROPIC_API_KEY`` stays unset so Claude Code uses subscription auth (D16).
+
+    ``agent_version`` pins the in-container CLI install (harbor's installed-agent
+    ``version`` constructor kwarg, reached via ``AgentConfig.kwargs``); without it
+    every container installs whatever is latest — a silent instrument drift across
+    runs executed on different days (mem-p3w)."""
     agent_cfg: dict[str, Any] = {"name": agent}
     if model is not None:
         agent_cfg["model_name"] = model
+    if agent_version is not None:
+        agent_cfg["kwargs"] = {"version": agent_version}
     return {
         "job_name": job_name,
         "jobs_dir": str(jobs_dir),
@@ -265,6 +273,7 @@ def run_harbor_job(
     model: str | None = None,
     harbor_bin: str = "harbor",
     timeout_sec: float | None = None,
+    agent_version: str | None = None,
 ) -> Path:
     """Run one local task through ``harbor run`` and return its job dir.
 
@@ -273,7 +282,9 @@ def run_harbor_job(
     (the OAuth token) that would otherwise block on stdin; ``-q`` suppresses the live
     UI. A non-zero exit raises -- a failed run is never silently a clean trace."""
     jobs_dir.mkdir(parents=True, exist_ok=True)
-    config = build_job_config(task_dir, job_name=job_name, jobs_dir=jobs_dir, model=model)
+    config = build_job_config(
+        task_dir, job_name=job_name, jobs_dir=jobs_dir, model=model, agent_version=agent_version
+    )
     config_path = jobs_dir / f"{job_name}.job.json"
     config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
 
