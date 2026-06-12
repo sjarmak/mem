@@ -224,6 +224,20 @@ def test_malformed_lines_are_skipped(tmp_path: Path) -> None:
     assert join.pairs == ()
 
 
+def test_malformed_bead_lines_are_counted(tmp_path: Path) -> None:
+    # A bead-shaped line that fails to parse is COUNTED (not silently dropped) so
+    # event-log corruption surfaces as a coverage gap (mem-2el item 3). A
+    # non-bead malformed line is below the probe and never reaches the parse.
+    live = tmp_path / "events.jsonl"
+    _write_events(
+        live,
+        ['{"type":"bead.updated", truncated', '{"type":"bead.x" also broken', "not even json"],
+    )
+    join = collect_events_join([live])
+    assert join.n_malformed_lines == 2
+    assert join.pairs == ()
+
+
 # --- file discovery ------------------------------------------------------------
 
 

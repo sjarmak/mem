@@ -217,6 +217,21 @@ def test_contradicted_assignee_is_suspect() -> None:
     assert entry.suspect
 
 
+def test_out_of_store_strong_link_still_contradicts_assignee() -> None:
+    # The transcript strongly worked an OUT-OF-STORE bead and never mentions mem-1.
+    # The assignee link must still be flagged suspect -- regression for the gap
+    # where the contradiction view was filtered to the in-store population, so an
+    # out-of-store strong link could not contradict (mem-2el item 1).
+    merged = _merge(
+        content_rows=[_content_row("uuid-z", "out-999", "/t/z.jsonl")],  # out-999 NOT in store
+        assignee_links={"mem-1": "/t/z.jsonl"},
+    )
+    assert "out-999" not in merged  # population stays in-store: no entry created
+    (entry,) = merged["mem-1"].entries
+    assert entry.sources == ["assignee"]
+    assert entry.suspect
+
+
 def test_unscanned_assignee_transcript_is_kept_not_suspect() -> None:
     merged = _merge(assignee_links={"mem-1": "/t/never-scanned.jsonl"})
     (entry,) = merged["mem-1"].entries

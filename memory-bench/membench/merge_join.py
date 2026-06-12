@@ -236,9 +236,12 @@ def merge_bead_sessions(
         gc_by_uuid.setdefault(uuid, []).append(gc_id)
 
     # --- 2. content scan: merge into event entries via the uuid bridge -------
-    deduped = _dedupe_content_rows(
-        row for row in content_rows if str(row.get("work_id") or "") in store_ids
-    )
+    # Dedupe ALL rows once; the join POPULATION takes only the in-store subset, but
+    # the out-of-store rows are retained for the contradiction test in step 4 (a
+    # transcript that strongly belongs to an out-of-store bead must still be able to
+    # contradict an in-store assignee link — the gc-01wm wrong-conversation class).
+    deduped_all = _dedupe_content_rows(content_rows)
+    deduped = {key: row for key, row in deduped_all.items() if key[1] in store_ids}
     for (uuid, work_id), row in sorted(deduped.items()):
         entries = entry_map(work_id)
         t_first = normalize_ts(str(row.get("t_first") or "") or None)
@@ -299,9 +302,10 @@ def merge_bead_sessions(
 
     # --- 4. store assignee link: annotate or flag (content overrides) --------
     # transcript -> {work_id: strength} view of the scan, for the contradiction
-    # test on assignee-only transcripts.
+    # test on assignee-only transcripts. Built from `deduped_all` (NOT the in-store
+    # population) so a strong link to an out-of-store bead still contradicts.
     scanned: dict[str, dict[str, str]] = {}
-    for (_uuid, work_id), row in deduped.items():
+    for (_uuid, work_id), row in deduped_all.items():
         path = str(row.get("transcript_path") or "")
         if path:
             scanned.setdefault(path, {})[work_id] = str(row.get("strength"))

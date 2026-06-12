@@ -139,6 +139,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"events: {len(events.pairs)} (bead, session) pairs, "
         f"{len(events.session_keys)} session keys in {time.monotonic() - t0:.1f}s"
     )
+    if events.n_malformed_lines:
+        print(f"  WARNING: {events.n_malformed_lines} malformed event line(s) skipped")
 
     # --- dolt history (cross-check)
     dolt_sessions: dict[str, list[str]] = {}
@@ -202,6 +204,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "pairs": len(events.pairs),
             "session_keys": len(events.session_keys),
             "bead_events": events.n_bead_events,
+            "malformed_lines": events.n_malformed_lines,
         },
         "dolt_rig_gaps": dolt_gaps,
         "stats": stats,

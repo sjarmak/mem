@@ -75,6 +75,10 @@ class EventsJoin:
     session_keys: Mapping[str, str]
     n_events_scanned: int
     n_bead_events: int
+    # bead-shaped lines that failed to parse as JSON -- surfaced (not swallowed) so
+    # event-log corruption shows up as a coverage gap in the report rather than
+    # silently dropping pairs.
+    n_malformed_lines: int = 0
 
 
 def actor_session(actor: str) -> str | None:
@@ -160,7 +164,12 @@ class _PairAcc:
             self.n_assignee += 1
 
 
-def _iter_bead_events(paths: Iterable[Path], skip_live_upto: int) -> Iterator[Mapping[str, Any]]:
+def _iter_bead_events(
+    paths: Iterable[Path], skip_live_upto: int, malformed: list[int]
+) -> Iterator[Mapping[str, Any]]:
+    """Yield parsed bead-shaped events. ``malformed`` is a single-element
+    accumulator the caller reads after the generator is drained: a bead-shaped line
+    that fails to parse increments it rather than vanishing silently."""
     for path in paths:
         is_live = path.suffix != ".gz"
         with _open_text(path) as handle:
@@ -170,6 +179,7 @@ def _iter_bead_events(paths: Iterable[Path], skip_live_upto: int) -> Iterator[Ma
                 try:
                     event = json.loads(line)
                 except json.JSONDecodeError:
+                    malformed[0] += 1
                     continue
                 if not isinstance(event, Mapping):
                     continue
@@ -192,8 +202,9 @@ def collect_events_join(paths: Iterable[Path]) -> EventsJoin:
     session_keys: dict[str, str] = {}
     n_scanned = 0
     n_bead = 0
+    malformed = [0]
 
-    for event in _iter_bead_events(path_list, skip_live_upto):
+    for event in _iter_bead_events(path_list, skip_live_upto, malformed):
         n_scanned += 1
         event_type = event.get("type")
         if not isinstance(event_type, str) or not event_type.startswith("bead."):
@@ -245,4 +256,5 @@ def collect_events_join(paths: Iterable[Path]) -> EventsJoin:
         session_keys=session_keys,
         n_events_scanned=n_scanned,
         n_bead_events=n_bead,
+        n_malformed_lines=malformed[0],
     )
