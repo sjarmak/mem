@@ -54,3 +54,40 @@ def test_beads_to_json_sequences_entries() -> None:
     payload = build_merged_join.beads_to_json(merged)
     assert [e["sequence"] for e in payload["mem-1"]] == [1, 2]
     assert [e["gc_session_id"] for e in payload["mem-1"]] == ["gc-1", "gc-2"]
+
+
+def test_extend_corpus_with_restored_adds_pruned_top_level_only(tmp_path: Path) -> None:
+    """mem-qw5 window extension: restored transcripts join the corpus unless the
+    live corpus already resolves the uuid (live wins) or the ORIGINAL path was a
+    subagent sidecar."""
+    from membench.transcript_archive import RestoredTranscript
+
+    live = tmp_path / "proj" / "aaaa-1111.jsonl"
+    live.parent.mkdir(parents=True)
+    live.write_text("", encoding="utf-8")
+    files = [live]
+    uuid_map = build_merged_join.uuid_to_path_map(files)
+
+    restored_dir = tmp_path / "archive" / "restored"
+    pruned = restored_dir / "d1" / "bbbb-2222.jsonl"
+    dup_of_live = restored_dir / "d2" / "aaaa-1111.jsonl"
+    sidecar = restored_dir / "d3" / "agent-1.jsonl"
+    for p in (pruned, dup_of_live, sidecar):
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("", encoding="utf-8")
+    restored = [
+        RestoredTranscript(path=pruned, source="/gone/proj/bbbb-2222.jsonl"),
+        RestoredTranscript(path=dup_of_live, source="/gone/proj/aaaa-1111.jsonl"),
+        RestoredTranscript(path=sidecar, source="/gone/proj/x/subagents/agent-1.jsonl"),
+    ]
+
+    out_files, out_map, added = build_merged_join.extend_corpus_with_restored(
+        files, uuid_map, restored
+    )
+
+    assert added == 1
+    assert out_files == [live, pruned]
+    assert out_map == {"aaaa-1111": str(live), "bbbb-2222": str(pruned)}
+    # Pure: the inputs are untouched.
+    assert files == [live]
+    assert uuid_map == {"aaaa-1111": str(live)}

@@ -11,6 +11,7 @@ from membench.transcript_archive import (
     archive_name,
     archive_transcripts,
     load_manifest,
+    restore_pruned,
     restore_transcript,
 )
 
@@ -88,3 +89,55 @@ def test_restore_unknown_path_raises(tmp_path: Path) -> None:
     (dest / MANIFEST_NAME).write_text("", encoding="utf-8")
     with pytest.raises(FileNotFoundError):
         restore_transcript(dest, "/nope.jsonl", tmp_path / "out.jsonl")
+
+
+# --- pruned-transcript restore (mem-qw5: corpus window extension) -----------------------
+
+
+def test_restore_pruned_restores_only_missing_sources(tmp_path: Path) -> None:
+    live = _make_transcript(
+        tmp_path / "proj" / "11111111-aaaa-bbbb-cccc-000000000001.jsonl", "live\n"
+    )
+    pruned = _make_transcript(
+        tmp_path / "proj" / "22222222-aaaa-bbbb-cccc-000000000002.jsonl", "old\n"
+    )
+    dest = tmp_path / "archive"
+    archive_transcripts([live, pruned], dest)
+    pruned.unlink()  # the rolling window pruned it
+
+    restored = restore_pruned(dest)
+
+    assert [r.source for r in restored] == [str(pruned)]
+    (item,) = restored
+    # Restored under the archive, named back to the original transcript filename
+    # (stem == session uuid), content intact.
+    assert item.path.is_relative_to(dest)
+    assert item.path.name == pruned.name
+    assert item.path.read_text(encoding="utf-8") == "old\n"
+
+
+def test_restore_pruned_is_idempotent(tmp_path: Path) -> None:
+    pruned = _make_transcript(tmp_path / "proj" / "abc.jsonl", "x\n")
+    dest = tmp_path / "archive"
+    archive_transcripts([pruned], dest)
+    pruned.unlink()
+
+    first = restore_pruned(dest)
+    mtime = first[0].path.stat().st_mtime_ns
+    second = restore_pruned(dest)
+    assert [r.path for r in second] == [r.path for r in first]
+    assert second[0].path.stat().st_mtime_ns == mtime  # not rewritten
+
+
+def test_restore_pruned_same_filename_different_dirs(tmp_path: Path) -> None:
+    a = _make_transcript(tmp_path / "p1" / "abc.jsonl", "a\n")
+    b = _make_transcript(tmp_path / "p2" / "abc.jsonl", "b\n")
+    dest = tmp_path / "archive"
+    archive_transcripts([a, b], dest)
+    a.unlink()
+    b.unlink()
+
+    restored = restore_pruned(dest)
+    assert len(restored) == 2
+    assert {r.path.read_text(encoding="utf-8") for r in restored} == {"a\n", "b\n"}
+    assert len({r.path for r in restored}) == 2  # digest dirs keep them apart

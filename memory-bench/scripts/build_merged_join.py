@@ -33,7 +33,7 @@ import importlib.util
 import json
 import sys
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -43,7 +43,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from membench.events_join import collect_events_join, event_paths
 from membench.merge_join import MergedBead, merge_bead_sessions, merged_stats
 from membench.session_join import derive_prefixes, load_store_work_ids
-from membench.transcript_archive import archive_transcripts
+from membench.transcript_archive import (
+    RestoredTranscript,
+    archive_transcripts,
+    restore_pruned,
+)
 
 
 def _load_sibling(name: str) -> Any:
@@ -74,6 +78,37 @@ def uuid_to_path_map(files: Sequence[Path]) -> dict[str, str]:
             continue
         mapping[path.stem] = str(path)
     return mapping
+
+
+def extend_corpus_with_restored(
+    files: Sequence[Path],
+    uuid_map: Mapping[str, str],
+    restored: Sequence[RestoredTranscript],
+) -> tuple[list[Path], dict[str, str], int]:
+    """Merge archive-restored (pruned) transcripts into the corpus view.
+
+    The window extension (mem-qw5): a transcript the rolling retention already
+    pruned re-enters the scan + uuid map through its durable restored copy, so
+    transcript-linked axes reach past the live ~6-week window. Three rules: a
+    uuid the LIVE corpus resolves keeps the live path (fresher -- the session may
+    have grown after archival); subagent sidecars (by ORIGINAL path -- the
+    restored layout loses the `subagents/` component) stay out, mirroring
+    `uuid_to_path_map`; pure -- inputs are not mutated. Returns
+    (files, uuid_map, n_added)."""
+    out_files = list(files)
+    out_map = dict(uuid_map)
+    added = 0
+    for item in restored:
+        source = Path(item.source)
+        if "subagents" in source.parts:
+            continue
+        uuid = source.stem
+        if uuid in out_map:
+            continue
+        out_map[uuid] = str(item.path)
+        out_files.append(item.path)
+        added += 1
+    return out_files, out_map, added
 
 
 def load_content_rows(artifact: str) -> list[dict[str, Any]]:
@@ -107,6 +142,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--dolt-port", type=int, default=_session_join_driver.DOLT_PORT)
     parser.add_argument("--archive-dir", default=DEFAULT_ARCHIVE)
     parser.add_argument("--skip-archive", action="store_true")
+    parser.add_argument(
+        "--skip-restore",
+        action="store_true",
+        help="do not extend the corpus with archive-restored (pruned) transcripts",
+    )
     parser.add_argument("--limit", type=int, default=None, help="debug: scan only N transcripts")
     args = parser.parse_args(argv)
 
@@ -120,6 +160,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         files = files[: args.limit]
     uuid_map = uuid_to_path_map(files)
     print(f"corpus: {len(files)} transcripts, {len(uuid_map)} top-level session uuids")
+
+    # --- window extension: archive-restored transcripts the live corpus lost
+    n_restored = n_restored_added = 0
+    if not args.skip_restore:
+        restored = restore_pruned(args.archive_dir)
+        files, uuid_map, n_restored_added = extend_corpus_with_restored(files, uuid_map, restored)
+        n_restored = len(restored)
+        print(
+            f"archive restore: {n_restored} pruned transcript(s) on disk, "
+            f"{n_restored_added} added to the corpus (window extension)"
+        )
 
     if args.content_join:
         content_rows = load_content_rows(args.content_join)
@@ -178,11 +229,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     # --- archival (before the rolling window prunes anything we just linked)
     archive_report: dict[str, int] | None = None
     if not args.skip_archive:
+        # Restored copies already live in the archive -- re-archiving them would
+        # only mint duplicate manifest entries under new digests.
+        archive_root = str(Path(args.archive_dir))
         linked_paths = {
             entry.transcript_path
             for bead in merged.values()
             for entry in bead.entries
             if entry.transcript_path
+            and not entry.transcript_path.startswith(archive_root + "/")
         }
         report = archive_transcripts(sorted(linked_paths), args.archive_dir)
         archive_report = report.to_json()
@@ -199,6 +254,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             "content_join": args.content_join,
             "skip_dolt": args.skip_dolt,
             "archive_dir": None if args.skip_archive else args.archive_dir,
+            "restored_transcripts": None
+            if args.skip_restore
+            else {"on_disk": n_restored, "added_to_corpus": n_restored_added},
         },
         "events": {
             "pairs": len(events.pairs),

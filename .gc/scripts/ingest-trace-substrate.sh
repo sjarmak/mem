@@ -47,6 +47,13 @@ uv run python scripts/classify_task_types.py --store "$STORE" --out "$TASK_TYPES
 # --- 2. store rebuild with the merged join ------------------------------------
 cd "$GC_CITY"
 
+# Seed the scratch from the live store (mem-qw5 window extension): the dolt
+# spine COMPACTS over time (2026-06-12: ~530 beads pruned in one day), so a
+# from-scratch build loses the records — and trace axes — of every compacted
+# bead. The writer upserts, so a seeded build converges to live+current instead
+# of dolt-current-only (verified: fresh=6445 records vs seeded=7309).
+[ -f "$STORE" ] && cp "$STORE" "$SCRATCH"
+
 # --json so we can read the coverage report back deterministically instead of
 # scraping the human lines.
 TT_FLAG=()

@@ -144,3 +144,45 @@ def restore_transcript(dest_dir: str | Path, source_path: str, out_path: str | P
     archived = dest / str(entry["name"])
     with gzip.open(archived, "rb") as src, Path(out_path).open("wb") as out:
         shutil.copyfileobj(src, out)
+
+
+# Where `restore_pruned` lands decompressed transcripts inside the archive dir.
+RESTORED_SUBDIR = "restored"
+
+
+@dataclass(frozen=True)
+class RestoredTranscript:
+    """One pruned transcript brought back from the archive: the durable restored
+    jsonl plus the ORIGINAL live path (the manifest key) -- callers need the
+    original for path-based semantics (e.g. subagent-sidecar detection)."""
+
+    path: Path
+    source: str
+
+
+def restore_pruned(dest_dir: str | Path) -> list[RestoredTranscript]:
+    """Restore every archived transcript whose original source no longer exists.
+
+    The ~6-week rolling retention prunes live session jsonl; the archive is the
+    durable copy. This decompresses each pruned transcript to
+    ``<dest_dir>/restored/<digest>/<original name>`` (the manifest name's digest
+    prefix keeps same-named transcripts from different project dirs apart; the
+    restored filename stem stays the session uuid). Idempotent: a restored file
+    whose size matches the manifest's recorded source size is kept as-is.
+    Returns the restored entries sorted by original source path."""
+    dest = Path(dest_dir)
+    restored: list[RestoredTranscript] = []
+    for source, entry in sorted(load_manifest(dest).items()):
+        if Path(source).exists():
+            continue
+        name = str(entry["name"])
+        digest, _, original = name.partition("__")
+        out = dest / RESTORED_SUBDIR / digest / original.removesuffix(".gz")
+        if not (out.is_file() and out.stat().st_size == entry.get("size")):
+            out.parent.mkdir(parents=True, exist_ok=True)
+            tmp = out.with_suffix(out.suffix + ".tmp")
+            with gzip.open(dest / name, "rb") as src, tmp.open("wb") as handle:
+                shutil.copyfileobj(src, handle)
+            tmp.replace(out)
+        restored.append(RestoredTranscript(path=out, source=source))
+    return restored

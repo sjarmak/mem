@@ -11,9 +11,14 @@ The archival step is the time-sensitive one: the transcript corpus is a
 cron delay permanently loses the oldest bead-linked sessions.
 
 The exec is `.gc/scripts/ingest-trace-substrate.sh` — mechanical, no LLM. It
-builds into a scratch store, refuses to swap if zero traces resolved (the
-wrong-cwd failure mode), carries the append-only lessons table across the
-swap, and appends a coverage-delta line to `.mem/ingest-trace-substrate.log`.
+builds into a scratch store SEEDED from the live one (the dolt spine compacts
+over time, so an unseeded build sheds every compacted bead's records —
+mem-qw5), refuses to swap if zero traces resolved (the wrong-cwd failure mode;
+only reachable on an unseeded first build), carries the append-only lessons
+table across the swap, and appends a coverage-delta line to
+`.mem/ingest-trace-substrate.log`. The join build it runs also restores
+archive-pruned transcripts into the corpus (`restore_pruned`), extending the
+transcript window past the live ~6-week retention.
 
 ## Schedule
 
