@@ -7,7 +7,6 @@ exercised through the injectable `StreamExec` seam.
 """
 
 import json
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -34,6 +33,7 @@ from membench.harbor.probe_gate import (
     summarize_pairs,
 )
 from membench.schemas.bundle import BundleEnv, TaskBundle
+from tests.helpers import git as _git
 
 GOLD_DIFF = (
     "diff --git a/src/app.ts b/src/app.ts\n"
@@ -43,13 +43,6 @@ GOLD_DIFF = (
     "-const value = 1\n"
     "+const value = 2\n"
 )
-
-
-def _git(repo: Path, *args: str) -> str:
-    completed = subprocess.run(
-        ["git", "-C", str(repo), *args], capture_output=True, text=True, check=True
-    )
-    return completed.stdout
 
 
 @pytest.fixture

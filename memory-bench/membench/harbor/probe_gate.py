@@ -352,26 +352,31 @@ def _remove_worktree(clone: Path, dest: Path, runner: Runner) -> None:
     _run_git(clone, ["worktree", "prune"], runner)
 
 
-def stale_probe_worktrees(clone: Path, *, runner: Runner = subprocess.run) -> tuple[str, ...]:
-    """Any ``probe-cand-`` worktree paths the clone still lists -- the CLI's
-    exit-sweep input (must be empty after a run)."""
+def stale_probe_worktrees(
+    clone: Path, *, runner: Runner = subprocess.run, prefix: str = _WORKTREE_PREFIX
+) -> tuple[str, ...]:
+    """Any ``prefix``-named worktree paths the clone still lists -- the CLI's
+    exit-sweep input (must be empty after a run). Defaults to the probe's own
+    prefix; the grid sweeps its repro worktrees through the same mechanism."""
     completed = _run_git(clone, ["worktree", "list", "--porcelain"], runner)
     if completed.returncode != 0:
         raise RuntimeError(f"git worktree list in {clone} failed: {completed.stderr.strip()}")
     return tuple(
         line.removeprefix("worktree ")
         for line in completed.stdout.splitlines()
-        if line.startswith("worktree ") and _WORKTREE_PREFIX in line
+        if line.startswith("worktree ") and prefix in line
     )
 
 
-def sweep_probe_worktrees(clone: Path, *, runner: Runner = subprocess.run) -> None:
-    """Remove every leftover probe worktree in ``clone``; raise if any survives."""
-    for stale in stale_probe_worktrees(clone, runner=runner):
+def sweep_probe_worktrees(
+    clone: Path, *, runner: Runner = subprocess.run, prefix: str = _WORKTREE_PREFIX
+) -> None:
+    """Remove every leftover ``prefix`` worktree in ``clone``; raise if any survives."""
+    for stale in stale_probe_worktrees(clone, runner=runner, prefix=prefix):
         _remove_worktree(clone, Path(stale), runner)
-    remaining = stale_probe_worktrees(clone, runner=runner)
+    remaining = stale_probe_worktrees(clone, runner=runner, prefix=prefix)
     if remaining:
-        raise RuntimeError(f"probe worktrees left in {clone} after sweep: {remaining}")
+        raise RuntimeError(f"{prefix} worktrees left in {clone} after sweep: {remaining}")
 
 
 def harvest_candidate(
@@ -470,6 +475,21 @@ def score_condition(
     )
 
 
+def paired_deltas(
+    none_metrics: Mapping[str, float | None], oracle_metrics: Mapping[str, float | None]
+) -> tuple[tuple[str, float], ...]:
+    """Per-metric (oracle - none) deltas; a metric absent (None) on either side is
+    omitted, never imputed. Shared by the gate's `score_pair` and the ablation
+    grid's `pair_grid`."""
+    deltas: list[tuple[str, float]] = []
+    for metric, none_value in sorted(none_metrics.items()):
+        oracle_value = oracle_metrics[metric]
+        if none_value is None or oracle_value is None:
+            continue
+        deltas.append((metric, oracle_value - none_value))
+    return tuple(deltas)
+
+
 def score_pair(none: ProbeConditionResult, oracle: ProbeConditionResult) -> ProbePair:
     """Pair one bundle's two condition results and compute the per-metric deltas
     (oracle - none). Mismatched work_ids or conditions are caller bugs -- raise."""
@@ -479,14 +499,8 @@ def score_pair(none: ProbeConditionResult, oracle: ProbeConditionResult) -> Prob
         raise ValueError(
             f"score_pair needs (none, oracle), got ({none.condition!r}, {oracle.condition!r})"
         )
-    none_metrics, oracle_metrics = none.metrics(), oracle.metrics()
-    deltas: list[tuple[str, float]] = []
-    for metric, none_value in sorted(none_metrics.items()):
-        oracle_value = oracle_metrics[metric]
-        if none_value is None or oracle_value is None:
-            continue
-        deltas.append((metric, oracle_value - none_value))
-    return ProbePair(work_id=none.work_id, none=none, oracle=oracle, deltas=tuple(deltas))
+    deltas = paired_deltas(none.metrics(), oracle.metrics())
+    return ProbePair(work_id=none.work_id, none=none, oracle=oracle, deltas=deltas)
 
 
 def run_probe(
@@ -519,6 +533,23 @@ def run_probe(
 # --- summary / gap arithmetic ------------------------------------------------------------
 
 
+def metric_gap_stats(delta_maps: Sequence[Mapping[str, float]]) -> dict[str, Any]:
+    """Per-metric gap stats over per-bundle delta maps: raw deltas, mean/median,
+    and the count where oracle beat none. Shared by the gate's `summarize_pairs`
+    and the ablation grid's `summarize_grid`."""
+    gaps: dict[str, Any] = {}
+    for metric in sorted({metric for deltas in delta_maps for metric in deltas}):
+        deltas = [d[metric] for d in delta_maps if metric in d]
+        gaps[metric] = {
+            "deltas": deltas,
+            "mean_delta": fmean(deltas),
+            "median_delta": median(deltas),
+            "n_oracle_gt_none": sum(1 for d in deltas if d > 0),
+            "n_pairs": len(deltas),
+        }
+    return gaps
+
+
 def summarize_pairs(pairs: Sequence[ProbePair]) -> dict[str, Any]:
     """The gate's DATA product: per-bundle paired scores + per-metric gap stats
     (deltas, mean/median, count where oracle > none) and the mechanical
@@ -527,30 +558,20 @@ def summarize_pairs(pairs: Sequence[ProbePair]) -> dict[str, Any]:
     orchestrator's, written elsewhere -- never computed here."""
     if not pairs:
         raise ValueError("summarize_pairs needs at least one (none, oracle) pair")
+    delta_maps = [dict(pair.deltas) for pair in pairs]
     per_bundle = [
         {
             "work_id": pair.work_id,
             "none": pair.none.metrics(),
             "oracle": pair.oracle.metrics(),
-            "deltas": dict(pair.deltas),
-        }
-        for pair in pairs
-    ]
-    metric_names = sorted({metric for pair in pairs for metric, _ in pair.deltas})
-    gaps: dict[str, Any] = {}
-    for metric in metric_names:
-        deltas = [dict(pair.deltas)[metric] for pair in pairs if metric in dict(pair.deltas)]
-        gaps[metric] = {
             "deltas": deltas,
-            "mean_delta": fmean(deltas),
-            "median_delta": median(deltas),
-            "n_oracle_gt_none": sum(1 for d in deltas if d > 0),
-            "n_pairs": len(deltas),
         }
-    combined_positive = sum(1 for pair in pairs if dict(pair.deltas).get("combined", 0.0) > 0)
+        for pair, deltas in zip(pairs, delta_maps, strict=True)
+    ]
+    combined_positive = sum(1 for deltas in delta_maps if deltas.get("combined", 0.0) > 0)
     return {
         "n_pairs": len(pairs),
         "per_bundle": per_bundle,
-        "gaps": gaps,
+        "gaps": metric_gap_stats(delta_maps),
         "gap_positive_majority": combined_positive * 2 > len(pairs),
     }

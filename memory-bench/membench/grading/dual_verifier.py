@@ -74,19 +74,23 @@ _TEST_SUFFIXES = (".test.ts", ".test.tsx", ".test.js", ".spec.ts", ".spec.tsx", 
 _TEST_SEGMENTS = ("/tests/", "/test/", "/__tests__/")
 
 
+def is_test_path(path: str) -> bool:
+    """True when ``path`` is a test file by shape -- the predicate behind
+    `gold_has_tests`, shared with the live repro runner (which must split a gold
+    diff into its test and implementation halves). Purely structural (no IO)."""
+    norm = posixpath.normpath(path)
+    base = posixpath.basename(norm)
+    if norm.endswith(_TEST_SUFFIXES):
+        return True
+    if base.startswith("test_") or base.endswith("_test.py"):
+        return True
+    return any(seg in f"/{norm}" for seg in _TEST_SEGMENTS)
+
+
 def gold_has_tests(gold_paths: Sequence[str]) -> bool:
     """True when any gold-diff path is a test file -- the trigger for the primary
-    test-reproduction direct leg. A purely structural path check (no IO)."""
-    for path in gold_paths:
-        norm = posixpath.normpath(path)
-        base = posixpath.basename(norm)
-        if norm.endswith(_TEST_SUFFIXES):
-            return True
-        if base.startswith("test_") or base.endswith("_test.py"):
-            return True
-        if any(seg in f"/{norm}" for seg in _TEST_SEGMENTS):
-            return True
-    return False
+    test-reproduction direct leg."""
+    return any(is_test_path(path) for path in gold_paths)
 
 
 # ---------------------------------------------------------------------------

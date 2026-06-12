@@ -7,7 +7,6 @@ path (the test_assemble_batch idiom). Execution goes through the injectable
 
 import importlib.util
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -16,6 +15,7 @@ import pytest
 from membench.bundle.replay import CallReplay, ReplayOutcome, ReplayResult
 from membench.harbor.probe_gate import EmptyRunError
 from membench.schemas.bundle import BundleEnv, TaskBundle
+from tests.helpers import git as _git
 
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "run_gate_probe.py"
 
@@ -39,13 +39,6 @@ GOLD_DIFF = (
     "-const value = 1\n"
     "+const value = 2\n"
 )
-
-
-def _git(repo: Path, *args: str) -> str:
-    completed = subprocess.run(
-        ["git", "-C", str(repo), *args], capture_output=True, text=True, check=True
-    )
-    return completed.stdout
 
 
 @pytest.fixture
