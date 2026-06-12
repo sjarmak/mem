@@ -65,10 +65,10 @@ calls. The pass/fail status this module keys on was produced upstream by the
 deterministic trace parse (``parse/trace-parse.ts``), not judged here.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import Any, Protocol
 
 from membench.bundle.replay import ReplayResult
 from membench.grading.leak_guard import assert_no_outcome_leak, outcome_labels
@@ -106,6 +106,11 @@ class RejectionReason(StrEnum):
     BASE_PREDATES_TREE = "base_predates_tree"
     EMPTY_OUTPUT = "empty_output"
     LOW_REPLAY_FIDELITY = "low_replay_fidelity"
+    # Post-assembly guard (mem-75t.7.7): the issue bead fanned out to many sibling
+    # work beads, so its text over-describes this bundle's narrow gold-diff slice and
+    # the model judged the scopes mismatched. Checked AFTER the replay gates by
+    # `fanout_scope_guard`, not inside `assemble_bundle`.
+    ISSUE_FANOUT_SCOPE_MISMATCH = "issue_fanout_scope_mismatch"
 
 
 @dataclass(frozen=True)
@@ -419,4 +424,165 @@ def assemble_bundle(
         env=env,
         loo_excluded_work_ids=loo_excluded_ids(record, corpus),
         verification=BundleVerification(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Issue-fanout scope guard (mem-75t.7.7) -- the post-assembly admission gate the
+# mem-75t.7.6 gate verdict demanded. The gate measured the failure mode directly:
+# e29gw's issue bead spawned 31 sibling work beads, so the bundle's issue leg
+# described far more work than its narrow gold diff covered, and both eval arms
+# scored 0 against the wrong scope (the issue-fanout confound). The guard is two
+# stages by the bead's ZFC split:
+#   - MECHANICAL: `issue_fanout` counts the sibling work records sharing the issue
+#     bead -- pure dependency-graph arithmetic. Fanout < `DEFAULT_MIN_FANOUT` (no
+#     decomposition) needs no review; a bare count cannot reject, since a clean
+#     bundle and a confound both sit at fanout 2 (gye8 vs 035r).
+#   - SEMANTIC: whether the issue text actually matches the gold diff's scope is a
+#     judgment, delegated to an injected `ScopeMatchJudge` exactly like the Tier-2
+#     oracle curator -- no keyword/regex scope heuristic lives here. The concrete
+#     `claude -p` judge is wired by the batch runner; this module ships only the
+#     protocol + a deterministic stub, so it stays model-call-free and unit-testable.
+
+# Fanout at or above this routes a candidate to the scope judge. 2 is the structural
+# definition of "the issue spawned sibling work" (this record + >=1 other sharing the
+# issue bead), not a tuned magic number; exposed so a batch can raise it.
+DEFAULT_MIN_FANOUT: int = 2
+
+
+def issue_fanout(record: Mapping[str, Any], corpus: Sequence[Mapping[str, Any]]) -> int:
+    """How many corpus work records were decomposed from the SAME issue bead as
+    ``record`` -- the breadth of the issue's fanout, counting ``record`` itself.
+
+    Records sharing this record's ``metadata[gc.var.issue]`` value. 0 means the
+    record names no issue bead (its own text is the issue leg -- no fanout); 1 means
+    a 1:1 issue->work mapping; >= 2 means the issue spawned sibling work, so its text
+    over-describes any single sibling's gold diff. Pure structural arithmetic."""
+    metadata = _mapping(record, "metadata")
+    raw = metadata.get(ISSUE_REF_KEY)
+    issue_ref = raw.strip() if isinstance(raw, str) else ""
+    if not issue_ref:
+        return 0
+    return sum(1 for other in corpus if _issue_ref_of(other) == issue_ref)
+
+
+def _issue_ref_of(record: Mapping[str, Any]) -> str:
+    raw = _mapping(record, "metadata").get(ISSUE_REF_KEY)
+    return raw.strip() if isinstance(raw, str) else ""
+
+
+@dataclass(frozen=True)
+class ScopeVerdict:
+    """One scope-match judgment for a high-fanout candidate. ``keep`` is the model's
+    call (does the gold diff's scope match the issue's stated scope?); ``error`` set
+    => the judge could not score, and the guard rejects conservatively (a high-fanout
+    candidate the model cannot vouch for is the risky case)."""
+
+    keep: bool
+    rationale: str = ""
+    error: str | None = None
+
+
+class ScopeMatchJudge(Protocol):
+    """Judges whether a bundle's gold diff matches the SCOPE of its (decomposed) issue
+    text. The view is exactly ``(issue_title, issue_body, gold_files)`` -- the task
+    statement and what the run actually touched; no eval outcome is passed, so the
+    answer cannot leak. The concrete `claude -p` judge lives in the batch runner."""
+
+    def judge(
+        self, *, issue_title: str, issue_body: str, gold_files: Sequence[str]
+    ) -> ScopeVerdict: ...
+
+
+@dataclass(frozen=True)
+class StubScopeJudge:
+    """Deterministic, offline scope judge. The whole guard and every test run on this;
+    supply exactly one of ``keep`` (a constant verdict) or ``fn`` (a pure function over
+    the same view)."""
+
+    keep: bool | None = None
+    fn: Callable[[str, str, tuple[str, ...]], ScopeVerdict] | None = None
+
+    def __post_init__(self) -> None:
+        if (self.keep is None) == (self.fn is None):
+            raise ValueError("StubScopeJudge needs exactly one of keep or fn")
+
+    def judge(
+        self, *, issue_title: str, issue_body: str, gold_files: Sequence[str]
+    ) -> ScopeVerdict:
+        if self.fn is not None:
+            return self.fn(issue_title, issue_body, tuple(gold_files))
+        assert self.keep is not None  # __post_init__ guarantees it
+        return ScopeVerdict(keep=self.keep, rationale="stub")
+
+
+@dataclass(frozen=True)
+class FanoutDecision:
+    """The guard's verdict for one assembled bundle, the per-bundle admission
+    provenance the bead requires. ``rejection`` is None when admitted. ``fanout`` is
+    the mechanical count; ``reviewed`` is whether the scope judge actually ran (False
+    when fanout was below the review threshold, or no judge was supplied);
+    ``rationale`` records WHY -- the no-silent-decision contract."""
+
+    rejection: Rejection | None
+    fanout: int
+    reviewed: bool
+    rationale: str
+
+    @property
+    def admitted(self) -> bool:
+        return self.rejection is None
+
+
+def fanout_scope_guard(
+    bundle: TaskBundle,
+    record: Mapping[str, Any],
+    corpus: Sequence[Mapping[str, Any]],
+    *,
+    judge: ScopeMatchJudge | None = None,
+    min_fanout: int = DEFAULT_MIN_FANOUT,
+) -> FanoutDecision:
+    """Guard an assembled ``bundle`` against issue-fanout scope mismatch.
+
+    Mechanical fanout < ``min_fanout`` => admit unreviewed (no decomposition, no scope
+    risk). Otherwise the scope judgment is delegated to ``judge``: keep => admitted,
+    reject or judge-error => `ISSUE_FANOUT_SCOPE_MISMATCH` rejection. With no judge a
+    high-fanout candidate is admitted but flagged unreviewed -- the guard never
+    fabricates a scope verdict without the model."""
+    fanout = issue_fanout(record, corpus)
+    if fanout < min_fanout:
+        return FanoutDecision(
+            None, fanout, reviewed=False, rationale="no fanout (below review threshold)"
+        )
+    if judge is None:
+        return FanoutDecision(
+            None, fanout, reviewed=False, rationale=f"fanout={fanout} but no scope judge supplied"
+        )
+
+    gold_files = tuple(sorted(path for path, _ in bundle.output.file_diffs))
+    verdict = judge.judge(
+        issue_title=bundle.issue_title, issue_body=bundle.issue_body, gold_files=gold_files
+    )
+    if verdict.error is not None:
+        return FanoutDecision(
+            Rejection(
+                work_id=bundle.work_id,
+                reason=RejectionReason.ISSUE_FANOUT_SCOPE_MISMATCH,
+                detail=f"fanout={fanout}; scope judge error: {verdict.error}",
+            ),
+            fanout,
+            reviewed=True,
+            rationale=f"judge error: {verdict.error}",
+        )
+    if verdict.keep:
+        return FanoutDecision(None, fanout, reviewed=True, rationale=verdict.rationale)
+    return FanoutDecision(
+        Rejection(
+            work_id=bundle.work_id,
+            reason=RejectionReason.ISSUE_FANOUT_SCOPE_MISMATCH,
+            detail=f"fanout={fanout}; scope mismatch: {verdict.rationale}",
+        ),
+        fanout,
+        reviewed=True,
+        rationale=verdict.rationale,
     )
