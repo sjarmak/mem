@@ -76,6 +76,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     executed = skipped = 0
     results: dict[tuple[str, str], GridConditionResult] = {}
 
+    # Sweep BEFORE starting: worktrees stranded by a previously KILLED run would
+    # otherwise sit on the clone for this whole run (the finally below only covers
+    # strays this process leaves beyond its own close()).
+    clones = {DEFAULT_RIG_REPOS[b.rig] for b in bundles if b.rig in DEFAULT_RIG_REPOS}
+    for clone in sorted(clones):
+        sweep_probe_worktrees(clone, prefix=WORKTREE_PREFIX)
+
     used_clones: set[Path] = set()
     try:
         with LiveReproRunner() as test_runner:

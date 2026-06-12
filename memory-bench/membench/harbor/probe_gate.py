@@ -364,7 +364,10 @@ def stale_probe_worktrees(
     return tuple(
         line.removeprefix("worktree ")
         for line in completed.stdout.splitlines()
-        if line.startswith("worktree ") and prefix in line
+        # Match on the path's BASENAME -- a clone whose own path merely contains
+        # the prefix must never be swept (it would force-remove a real checkout).
+        if line.startswith("worktree ")
+        and Path(line.removeprefix("worktree ")).name.startswith(prefix)
     )
 
 
