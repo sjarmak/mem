@@ -12,6 +12,7 @@ import { importLessonsCommand } from './cli/commands/import-lessons.js';
 import { signatureCommand } from './cli/commands/signature.js';
 import { searchErrorsCommand } from './cli/commands/search-errors.js';
 import { extractErrorsCommand } from './cli/commands/extract-errors.js';
+import { distillLessonsCommand } from './cli/commands/distill-lessons.js';
 import { retrieveCommand } from './cli/commands/retrieve.js';
 
 /** Registers all commands and runs the CLI. The bin entrypoint calls this. */
@@ -29,6 +30,7 @@ export function main(argv: string[]): Promise<void> {
   registerCommand('signature', signatureCommand);
   registerCommand('search-errors', searchErrorsCommand);
   registerCommand('extract-errors', extractErrorsCommand);
+  registerCommand('distill-lessons', distillLessonsCommand);
   registerCommand('retrieve', retrieveCommand);
 
   return runCli(argv);
