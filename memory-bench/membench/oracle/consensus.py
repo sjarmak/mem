@@ -24,11 +24,12 @@ calibration knob.
 from __future__ import annotations
 
 import logging
+import posixpath
 from collections.abc import Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from itertools import combinations
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal, Protocol
 
 logger = logging.getLogger(__name__)
@@ -37,9 +38,36 @@ ConsensusMode = Literal["intersection", "union"]
 
 DEFAULT_THRESHOLD: float = 0.8
 DEFAULT_MODE: ConsensusMode = "intersection"
-# mem rigs start grep + Sourcegraph (plan §7.3); an AST backend is added per-rig
-# only if the Tier-2 quarantine rate proves it is needed, never speculatively.
-DEFAULT_BACKEND_NAMES: tuple[str, ...] = ("grep", "sourcegraph")
+
+
+def canonicalize_repo_path(path: str, repo_root: Path) -> str:
+    """Reduce a backend-emitted path to ONE repo-relative form so every backend
+    shares a single path space.
+
+    grep and Sourcegraph both emit repo-relative paths today, but nothing enforces
+    it: a future backend (the deferred TS/AST resolver, plan §7.3) or an SG result
+    shape emitting ``./src/a`` or an absolute ``/repo/src/a`` would otherwise (a)
+    defeat the pairwise agreement count -- the same file counted as two distinct
+    paths never reaches the F1 threshold -- and (b) slip past the gold-file
+    self-exclusion in ``oracle.build`` (whose ``modified_set`` is repo-relative),
+    re-entering the modified file as oracle context = an oracle leak.
+
+    Strips a leading ``./``, collapses ``.``/``..`` segments, and rebases an
+    absolute path under ``repo_root`` to repo-relative. An absolute path OUTSIDE the
+    repo is left normalized-absolute -- that is a genuine divergence the consensus
+    report should show, not one to silently rewrite into a bogus relative path."""
+    raw = path.strip()
+    if not raw:
+        return raw
+    candidate = PurePosixPath(raw)
+    if candidate.is_absolute():
+        try:
+            return posixpath.normpath(
+                str(candidate.relative_to(PurePosixPath(repo_root.as_posix())))
+            )
+        except ValueError:
+            return posixpath.normpath(raw)
+    return posixpath.normpath(raw)
 
 
 @dataclass(frozen=True)
@@ -64,6 +92,21 @@ class SymbolResolver(Protocol):
     def name(self) -> str: ...
 
     def resolve(self, symbol: str, *, defining_file: str, repo_root: Path) -> BackendResult: ...
+
+
+def _canonicalize_result(result: BackendResult, repo_root: Path) -> BackendResult:
+    """A copy of ``result`` with every file path canonicalized to the shared
+    repo-relative space (no-op for an unavailable / empty result). The single seam
+    where cross-backend path identity is enforced, so the agreement count and the
+    downstream oracle self-exclusion compare like for like."""
+    if not result.files:
+        return result
+    return BackendResult(
+        backend=result.backend,
+        files=frozenset(canonicalize_repo_path(f, repo_root) for f in result.files),
+        available=result.available,
+        error=result.error,
+    )
 
 
 def compute_pair_metrics(
@@ -243,7 +286,11 @@ def compute_consensus(
             res = fut.result()
             results[res.backend] = res
 
-    ordered_results = tuple(results[name] for name in backends_attempted if name in results)
+    ordered_results = tuple(
+        _canonicalize_result(results[name], repo_root)
+        for name in backends_attempted
+        if name in results
+    )
     available = tuple(br for br in ordered_results if br.available)
     available_names = tuple(br.backend for br in available)
 

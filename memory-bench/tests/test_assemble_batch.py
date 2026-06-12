@@ -12,6 +12,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "assemble_batch.py"
 
 
@@ -319,6 +321,48 @@ def test_checkout_failure_cleans_partly_created_worktree_dir(tmp_path):
     assert isinstance(outcome, batch.BatchRejection)
     assert outcome.reason == batch.CHECKOUT_FAILED
     assert not dest.exists()
+
+
+def test_remove_worktree_tolerates_untracked_leftover_dir(tmp_path):
+    # A dir git never registered (a crashed run's leftover): `worktree remove` exits
+    # non-zero, the rmtree backstop clears it, prune is clean -> NOT a failure.
+    clone, _ = _make_clone(tmp_path)
+    dest = tmp_path / "wt" / "bundle-asm-leftover"
+    dest.mkdir(parents=True)
+    (dest / "stale.txt").write_text("x", encoding="utf-8")
+    batch.remove_worktree(clone, dest)
+    assert not dest.exists()
+
+
+def test_remove_worktree_raises_when_prune_fails(tmp_path):
+    clone, _ = _make_clone(tmp_path)
+    dest = tmp_path / "wt" / "bundle-asm-prune"
+    dest.mkdir(parents=True)
+
+    def runner(cmd, **kwargs):
+        if "prune" in cmd:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="prune boom")
+        return subprocess.run(cmd, **kwargs)
+
+    with pytest.raises(batch.WorktreeRemovalError, match="prune"):
+        batch.remove_worktree(clone, dest, runner=runner)
+
+
+def test_remove_worktree_raises_when_dir_survives(tmp_path, monkeypatch):
+    # `worktree remove` fails AND the dir cannot be cleared -> the leak is surfaced,
+    # never swallowed (the old ignore_errors=True path reported a false success).
+    clone, _ = _make_clone(tmp_path)
+    dest = tmp_path / "wt" / "bundle-asm-survives"
+    dest.mkdir(parents=True)
+
+    def runner(cmd, **kwargs):
+        if "remove" in cmd and "worktree" in cmd:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="not a working tree")
+        return subprocess.run(cmd, **kwargs)
+
+    monkeypatch.setattr(batch.shutil, "rmtree", lambda *a, **k: None)  # cleanup no-op
+    with pytest.raises(batch.WorktreeRemovalError, match="still present"):
+        batch.remove_worktree(clone, dest, runner=runner)
 
 
 def test_process_candidate_unmapped_rig_is_no_rig_clone(tmp_path):

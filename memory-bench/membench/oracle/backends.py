@@ -137,7 +137,10 @@ class SourcegraphResolver:
                 available=False,
                 error=f"{ENV_SG_ENDPOINT}/{ENV_SG_TOKEN} not set",
             )
-        query = f"repo:^{self.sg_repo}$ count:all case:yes select:file content:{symbol}"
+        # Quote the symbol: an unquoted ``content:foo bar`` would split into two
+        # search terms; a quoted literal keeps a multi-word / punctuated symbol stem
+        # as one term (symbol stems carry no embedded double-quote to escape).
+        query = f'repo:^{self.sg_repo}$ count:all case:yes select:file content:"{symbol}"'
         try:
             completed = self.runner(
                 ["src", "search", "-json", query],

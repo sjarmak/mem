@@ -20,6 +20,7 @@ from membench.oracle import (
     StubOracleCurator,
     StubResolver,
     build_oracle_context,
+    canonicalize_repo_path,
     compute_consensus,
     compute_pair_metrics,
     curate_bundle,
@@ -47,6 +48,46 @@ def _repo_with(root: Path, *files: str) -> Path:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(f"// {rel}\n", encoding="utf-8")
     return root
+
+
+# --- canonicalize_repo_path ------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("src/a.ts", "src/a.ts"),  # already canonical -- unchanged
+        ("./src/a.ts", "src/a.ts"),  # leading ./ stripped
+        ("src/./a.ts", "src/a.ts"),  # interior . collapsed
+        ("src/sub/../a.ts", "src/a.ts"),  # .. collapsed
+        ("  src/a.ts  ", "src/a.ts"),  # whitespace trimmed
+        ("", ""),  # empty stays empty
+    ],
+)
+def test_canonicalize_relative_forms(raw, expected):
+    assert canonicalize_repo_path(raw, Path("/repo")) == expected
+
+
+def test_canonicalize_absolute_under_repo_is_rebased():
+    assert canonicalize_repo_path("/repo/src/a.ts", Path("/repo")) == "src/a.ts"
+
+
+def test_canonicalize_absolute_outside_repo_left_absolute():
+    # A genuine divergence the consensus report should show, not silently rewrite.
+    assert canonicalize_repo_path("/elsewhere/a.ts", Path("/repo")) == "/elsewhere/a.ts"
+
+
+def test_consensus_counts_divergent_path_shapes_as_one_file():
+    # Two backends naming the SAME files in different shapes must AGREE (F1=1.0),
+    # not be defeated by the path shape -- the dormant 2nd-backend failure mode.
+    a = StubResolver("grep", {"s": frozenset({"src/a.ts", "src/b.ts"})})
+    b = StubResolver("sourcegraph", {"s": frozenset({"./src/a.ts", "src/./b.ts"})})
+    d = compute_consensus(
+        symbol="s", defining_file="s.ts", repo_root=Path("/repo"), resolvers=[a, b]
+    )
+    assert d.shipped
+    assert d.max_pair_f1 == 1.0
+    assert d.consensus_files == frozenset({"src/a.ts", "src/b.ts"})
 
 
 # --- compute_pair_metrics --------------------------------------------------------
@@ -437,6 +478,23 @@ def test_sg_resolver_parses_results_with_injected_runner():
     assert res.available and res.files == frozenset({"a.ts", "b.ts"})
 
 
+def test_sg_resolver_quotes_multiword_symbol_in_query():
+    # An unquoted content:<symbol> would split a multi-word stem into two terms;
+    # the query must wrap the symbol in double quotes.
+    env = {ENV_SG_ENDPOINT: "https://sg", ENV_SG_TOKEN: "tok"}
+    seen: dict = {}
+
+    def runner(argv, **kw):
+        seen["argv"] = argv
+        return _completed(stdout='{"Results": []}')
+
+    SourcegraphResolver(sg_repo="github.com/x/y", env=env, runner=runner).resolve(
+        "build store", defining_file="s.ts", repo_root=REPO
+    )
+    query = next(a for a in seen["argv"] if "content:" in a)
+    assert 'content:"build store"' in query
+
+
 def test_sg_resolver_non_json_is_unavailable():
     env = {ENV_SG_ENDPOINT: "https://sg", ENV_SG_TOKEN: "tok"}
     r = SourcegraphResolver(
@@ -466,6 +524,30 @@ def test_build_required_from_gold_diff_plus_consensus_context():
     assert answer["src/store/schema.ts"] == "required"  # Tier-1 consensus
     assert GOLD_DIFF_BACKEND in ob.oracle.oracle_backends_consensus
     assert not ob.symbol_quarantines
+
+
+def test_build_excludes_gold_file_re_found_in_divergent_shape():
+    # ORACLE-LEAK GUARD: a backend re-finding the modified file in a different path
+    # shape (absolute / ./-prefixed) must NOT slip past the self-exclusion and
+    # re-enter the oracle as context -- it stays required-from-ground-truth only.
+    resolvers = _two_resolvers(
+        {"writer": frozenset({"/repo/src/store/writer.ts", "src/store/dep.ts"})},
+        {"writer": frozenset({"./src/store/writer.ts", "src/store/dep.ts"})},
+    )
+    ob = build_oracle_context(
+        modified_files=["src/store/writer.ts"],
+        repo_root=Path("/repo"),
+        resolvers=resolvers,
+        threshold=0.5,
+    )
+    tiers = dict(ob.oracle.oracle_tiers)
+    # The gold file appears exactly once, as required ground truth -- not duplicated
+    # under a divergent shape, not downgraded to context.
+    assert tiers["src/store/writer.ts"] == "required"
+    assert [p for p in ob.oracle.oracle_answer if p.endswith("writer.ts")] == [
+        "src/store/writer.ts"
+    ]
+    assert tiers["src/store/dep.ts"] == "required"  # the genuine Tier-1 consensus context
 
 
 def test_build_symbol_quarantine_on_single_backend():

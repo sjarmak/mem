@@ -21,11 +21,11 @@ from membench.oracle.build import (
     curate_bundle,
 )
 from membench.oracle.consensus import (
-    DEFAULT_BACKEND_NAMES,
     DEFAULT_THRESHOLD,
     BackendResult,
     ConsensusDecision,
     SymbolResolver,
+    canonicalize_repo_path,
     compute_consensus,
     compute_pair_metrics,
 )
@@ -43,7 +43,6 @@ from membench.oracle.curator import (
 )
 
 __all__ = [
-    "DEFAULT_BACKEND_NAMES",
     "DEFAULT_MAX_ORACLE_FILES",
     "DEFAULT_MIN_BACKENDS",
     "DEFAULT_THRESHOLD",
@@ -64,6 +63,7 @@ __all__ = [
     "SymbolQuarantine",
     "SymbolResolver",
     "build_oracle_context",
+    "canonicalize_repo_path",
     "compute_consensus",
     "compute_pair_metrics",
     "curate_bundle",

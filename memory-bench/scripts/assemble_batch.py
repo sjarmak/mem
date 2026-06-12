@@ -117,6 +117,12 @@ class CheckoutFailedError(RuntimeError):
     local clone (timestamp-approximate provenance vs a pruned/foreign commit)."""
 
 
+class WorktreeRemovalError(RuntimeError):
+    """Worktree teardown could not be confirmed -- the dest dir survived cleanup or
+    ``git worktree prune`` failed. Surfaced (not swallowed) because a leaked worktree
+    or stale admin metadata silently breaks rerun idempotency for the next batch."""
+
+
 def _load_records(store: Path, sql: str) -> list[dict[str, Any]]:
     conn = sqlite3.connect(f"file:{store}?mode=ro", uri=True)
     try:
@@ -217,12 +223,37 @@ def add_worktree(
 
 
 def remove_worktree(clone: Path, dest: Path, *, runner: Runner = subprocess.run) -> None:
-    """Force-remove ``dest`` from the clone's worktree set, then prune. The rmtree
-    backstop covers a dir git no longer tracks (a previous crashed run)."""
-    _run_git(clone, ["worktree", "remove", "--force", str(dest)], runner)
+    """Force-remove ``dest`` from the clone's worktree set, then prune, raising
+    `WorktreeRemovalError` if teardown could not be confirmed.
+
+    A non-zero ``git worktree remove`` is NOT itself fatal -- it is expected for a
+    dir git never registered (a crashed run's leftover, a failed ``add``), which the
+    rmtree backstop then clears. The genuine failures, which would otherwise pass
+    silently and corrupt the next run's idempotency, are: the dest dir still present
+    after the backstop, or ``git worktree prune`` failing (stale admin metadata)."""
+    removed = _run_git(clone, ["worktree", "remove", "--force", str(dest)], runner)
+    rmtree_error: str | None = None
     if dest.exists():
-        shutil.rmtree(dest, ignore_errors=True)
-    _run_git(clone, ["worktree", "prune"], runner)
+        try:
+            shutil.rmtree(dest)
+        except OSError as exc:
+            rmtree_error = str(exc)
+    pruned = _run_git(clone, ["worktree", "prune"], runner)
+
+    problems: list[str] = []
+    if dest.exists():
+        detail = f"git worktree remove exit {removed.returncode}: {removed.stderr.strip()}"
+        if rmtree_error is not None:
+            detail += f"; rmtree: {rmtree_error}"
+        problems.append(f"dest dir still present after cleanup ({detail})")
+    if pruned.returncode != 0:
+        problems.append(
+            f"git worktree prune failed (exit {pruned.returncode}): {pruned.stderr.strip()}"
+        )
+    if problems:
+        raise WorktreeRemovalError(
+            f"worktree teardown of {dest} in {clone} failed: " + "; ".join(problems)
+        )
 
 
 def stale_bundle_worktrees(clone: Path, *, runner: Runner = subprocess.run) -> tuple[str, ...]:

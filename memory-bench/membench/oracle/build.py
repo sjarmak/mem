@@ -33,6 +33,7 @@ from pathlib import Path, PurePosixPath
 from membench.oracle.consensus import (
     DEFAULT_THRESHOLD,
     SymbolResolver,
+    canonicalize_repo_path,
     compute_consensus,
 )
 from membench.oracle.curator import (
@@ -108,7 +109,13 @@ def build_oracle_context(
     if max_oracle_files < 1:
         raise ValueError(f"max_oracle_files must be >= 1, got {max_oracle_files!r}")
 
-    modified = tuple(sorted({m for m in modified_files if m.strip()}))
+    # Canonicalize to the same repo-relative space the backends are reduced to in
+    # ``compute_consensus``, so the ``item.path in modified_set`` self-exclusion
+    # below compares like for like -- a divergent gold-path shape would otherwise
+    # let a modified file re-enter as context (oracle leak).
+    modified = tuple(
+        sorted({canonicalize_repo_path(m, repo_root) for m in modified_files if m.strip()})
+    )
     modified_set = set(modified)
 
     # Tier "required" from ground truth -- the modified files themselves. Consensus
