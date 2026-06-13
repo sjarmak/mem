@@ -144,6 +144,33 @@ Two honest qualifications on size and reach:
    the clone-wiring lever compose: this run shows the population is there; the
    clones are what cap how much of it is runnable.
 
+## Independent re-mine verification (mem-apg.7 review gate)
+
+An independent re-run of the full pipeline (same live store, same 54 non-zero-
+mutation candidates) confirms the core result and pins down its one moving part.
+The flat/carved split, the five `uzhr` rejections, the `node:22-bookworm`
+anchoring, and the clone-bound reach all reproduce exactly. The admitted count,
+however, is **judge-variance-sensitive at one bundle**: the re-run admitted a
+fifth carve, `km0wj` (issue `035r`, fanout 2), which the run above rejected.
+
+- **Swing bundle: `km0wj`/`035r`.** The `claude -p` scope judge read its 14-file
+  diff as *one cohesive attention subsystem* (compose/registry/routeHighlight/
+  panel + tests → ADMIT) on the re-run, and as *three distinct requirements* →
+  REJECT above. Same input, different verdict — the documented non-determinism
+  of the scope seam, on a genuinely borderline candidate.
+- **Reconciled range: N = 6–7 admitted, 4–5 gold-test-anchorable.** Every other
+  verdict is stable across runs; `c95q2`/`bqey` rejects in both.
+
+This **strengthens** the conclusion rather than weakening it: the headline (lever
+overturns mem-apg.6's 0-anchorable null; ≥4 focused, single-issue, toolchain-
+anchored carves from gas-city's own exhaust) holds under judge variance. It also
+reinforces the "N is a floor, not a headline-grade sample" qualification — with
+the count swinging ±1 on a single borderline judge call at this size, the case
+for widening the pool via clone-wiring (mem-e3h2) is unchanged. The
+implementation (`select_rank.py` population SQL, alias guard, read-only store)
+verified clean under independent code review; one test-fixture robustness fix
+(`json.dumps` for the synthetic store) landed alongside this note.
+
 ## Reproduce
 
 ```bash

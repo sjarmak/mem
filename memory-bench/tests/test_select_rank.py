@@ -3,6 +3,7 @@ convoy/epic extension). Pure SQL/set membership over a synthetic in-memory store
 ranking + replay machinery is covered elsewhere."""
 
 import importlib.util
+import json
 import sqlite3
 from pathlib import Path
 
@@ -22,11 +23,9 @@ def _store(tmp_path, records, agents):
     conn.execute("CREATE TABLE work_records (work_id TEXT PRIMARY KEY, record TEXT NOT NULL)")
     conn.execute("CREATE TABLE record_agents (work_id TEXT, agent_id TEXT, suspect INTEGER)")
     for work_id, issue_ref in records:
-        meta = f'{{"gc.var.issue": "{issue_ref}"}}' if issue_ref else "{}"
-        conn.execute(
-            "INSERT INTO work_records VALUES (?, ?)",
-            (work_id, f'{{"work_id": "{work_id}", "metadata": {meta}}}'),
-        )
+        meta = {"gc.var.issue": issue_ref} if issue_ref else {}
+        record = json.dumps({"work_id": work_id, "metadata": meta})
+        conn.execute("INSERT INTO work_records VALUES (?, ?)", (work_id, record))
     conn.executemany("INSERT INTO record_agents VALUES (?, ?, ?)", agents)
     conn.commit()
     conn.close()
