@@ -59,25 +59,88 @@ WHERE suspect = 0
 GROUP BY work_id HAVING count(DISTINCT agent_id) >= 2
 """
 
+# The convoy/epic extension (mem-apg.7): a fanned-out milestone/epic is multi-session
+# work even when each of its sibling beads was touched by a single agent. A work_id
+# qualifies iff the ISSUE GROUP it belongs to (records sharing its ``gc.var.issue``
+# ref) spans >=2 distinct non-suspect agents in total -- i.e. the milestone was worked
+# by multiple sessions across its fanned-out beads. Carving a focused sub-bundle out
+# of such a convoy means admitting these member beads as candidates (the per-bead
+# replayable slice) rather than rejecting the whole fanout. Same alias guard
+# (``suspect=0``), same mechanical set membership (ZFC).
+CONVOY_EPIC_SQL = """
+WITH issue_of AS (
+    SELECT work_id, json_extract(record, '$.metadata."gc.var.issue"') AS issue_ref
+    FROM work_records
+    WHERE json_extract(record, '$.metadata."gc.var.issue"') IS NOT NULL
+),
+group_agents AS (
+    SELECT issue_of.issue_ref AS issue_ref
+    FROM issue_of
+    JOIN record_agents ON record_agents.work_id = issue_of.work_id
+                      AND record_agents.suspect = 0
+    GROUP BY issue_of.issue_ref
+    HAVING count(DISTINCT record_agents.agent_id) >= 2
+)
+SELECT issue_of.work_id
+FROM issue_of
+JOIN group_agents ON group_agents.issue_ref = issue_of.issue_ref
+"""
+
+# The two multi-session population definitions ``--ms-population`` selects between.
+# ``flat`` reproduces mem-apg.6 exactly; ``convoy-epic`` extends it with the
+# issue-group members (the lever is additive -- it never drops a flat candidate).
+MS_POPULATIONS = ("flat", "convoy-epic")
+
 ELIGIBILITY_BASE = "trace_path NOT NULL AND base_commit NOT NULL AND status='closed'"
 ELIGIBILITY_MULTI_SESSION = ELIGIBILITY_BASE + " AND >=2 distinct non-suspect record_agents"
+ELIGIBILITY_CONVOY_EPIC = (
+    ELIGIBILITY_BASE
+    + " AND member of a multi-session group (flat >=2-agent work_id, OR >=2 distinct"
+    " non-suspect agents across its gc.var.issue group)"
+)
+
+
+def _query_ids(store: Path, sql: str) -> set[str]:
+    """The work_ids returned by ``sql`` over the read-only store (uri mode=ro)."""
+    conn = sqlite3.connect(f"file:{store}?mode=ro", uri=True)
+    try:
+        rows = conn.execute(sql).fetchall()
+    finally:
+        conn.close()
+    return {str(row[0]) for row in rows}
 
 
 def load_multi_session_ids(store: Path) -> set[str]:
-    """The alias-guarded multi-session work_ids (read-only)."""
-    conn = sqlite3.connect(f"file:{store}?mode=ro", uri=True)
-    try:
-        rows = conn.execute(MULTI_SESSION_SQL).fetchall()
-    finally:
-        conn.close()
-    return {row[0] for row in rows}
+    """The flat alias-guarded multi-session work_ids (read-only)."""
+    return _query_ids(store, MULTI_SESSION_SQL)
 
 
-def load_pool(store: Path, *, multi_session: bool = False) -> list[dict[str, Any]]:
+def load_convoy_epic_ids(store: Path) -> set[str]:
+    """The convoy/epic issue-group members: work_ids whose ``gc.var.issue`` group
+    spans >=2 distinct non-suspect agents (read-only). May overlap the flat set
+    (a work_id can be both per-bead multi-session and a member of a multi-session
+    issue group); ``multi_session_ids`` unions the two, so the overlap is deduped."""
+    return _query_ids(store, CONVOY_EPIC_SQL)
+
+
+def multi_session_ids(store: Path, population: str) -> set[str]:
+    """The multi-session candidate ids for ``population``. ``convoy-epic`` is the
+    additive extension: the flat set UNION the issue-group members."""
+    flat = load_multi_session_ids(store)
+    if population == "flat":
+        return flat
+    if population == "convoy-epic":
+        return flat | load_convoy_epic_ids(store)
+    raise ValueError(f"unknown ms-population {population!r}; choose one of {MS_POPULATIONS}")
+
+
+def load_pool(
+    store: Path, *, multi_session: bool = False, ms_population: str = "flat"
+) -> list[dict[str, Any]]:
     """The bundle-eligible WorkRecords, parsed from the ``record`` JSON column.
     The store is opened read-only (uri mode=ro) — this script never writes to it.
-    When ``multi_session`` is set, the pool is further restricted to the
-    alias-guarded multi-session candidate set."""
+    When ``multi_session`` is set, the pool is restricted to the multi-session
+    candidate set named by ``ms_population`` (``flat`` or ``convoy-epic``)."""
     conn = sqlite3.connect(f"file:{store}?mode=ro", uri=True)
     try:
         rows = conn.execute(ELIGIBLE_SQL).fetchall()
@@ -85,7 +148,7 @@ def load_pool(store: Path, *, multi_session: bool = False) -> list[dict[str, Any
         conn.close()
     records = [json.loads(row[0]) for row in rows]
     if multi_session:
-        ms_ids = load_multi_session_ids(store)
+        ms_ids = multi_session_ids(store, ms_population)
         records = [r for r in records if str(r["work_id"]) in ms_ids]
     return records
 
@@ -225,14 +288,30 @@ def main() -> None:
         help="restrict the eligible pool to the alias-guarded multi-session candidate "
         "set (>=2 distinct non-suspect record_agents; mem-qw5/mem-apg.6)",
     )
+    parser.add_argument(
+        "--ms-population",
+        choices=MS_POPULATIONS,
+        default="flat",
+        help="which multi-session definition when --multi-session is set: 'flat' "
+        "(per-work_id >=2 agents; mem-apg.6 reproducible) or 'convoy-epic' (also "
+        "include members of a >=2-agent gc.var.issue group; mem-apg.7 carving)",
+    )
     args = parser.parse_args()
 
     pool = [
-        assess_shape(record) for record in load_pool(args.store, multi_session=args.multi_session)
+        assess_shape(record)
+        for record in load_pool(
+            args.store, multi_session=args.multi_session, ms_population=args.ms_population
+        )
     ]
     ranked = rank_candidates(pool, mutation_count_provider=default_mutation_count_provider)
 
-    eligibility = ELIGIBILITY_MULTI_SESSION if args.multi_session else ELIGIBILITY_BASE
+    if not args.multi_session:
+        eligibility = ELIGIBILITY_BASE
+    elif args.ms_population == "convoy-epic":
+        eligibility = ELIGIBILITY_CONVOY_EPIC
+    else:
+        eligibility = ELIGIBILITY_MULTI_SESSION
     write_artifact(args.json_out, args.store, len(pool), ranked, eligibility=eligibility)
     write_report(args.report_out, args.store, pool, ranked, eligibility=eligibility)
 
