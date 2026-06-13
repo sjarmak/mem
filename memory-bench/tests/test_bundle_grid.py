@@ -140,6 +140,45 @@ def test_score_grid_condition_test_repro_primary(clone: Path, tmp_path: Path) ->
     assert result.metrics()["repro_passed"] == 1.0
 
 
+def test_score_grid_condition_carries_graded_signals(clone: Path, tmp_path: Path) -> None:
+    # S1/S2 ride along in metrics(); a StubReproRunner has no per-file counts so
+    # test_ratio is absent, while the always-on diff_sim is present on every run.
+    bundle = _bundle(clone)
+    result = score_grid_condition(
+        bundle,
+        "none",
+        _job_dir(tmp_path, _stream()),
+        clone=clone,
+        test_runner=StubReproRunner(ReproOutcome(passed=True, tests_passed=2, tests_total=2)),
+        worktree_root=tmp_path,
+    )
+    assert result.test_ratio == 1.0
+    assert result.diff_sim is not None
+    assert result.metrics()["test_ratio"] == 1.0
+    assert result.metrics()["diff_sim"] == result.diff_sim
+    assert result.metrics()["judge_score"] is None  # no judge wired
+
+
+def test_score_grid_condition_runs_judge_when_wired(clone: Path, tmp_path: Path) -> None:
+    from membench.grading.graded import StubRubricJudge
+
+    bundle = _bundle(clone)
+    result = score_grid_condition(
+        bundle,
+        "none",
+        _job_dir(tmp_path, _stream()),
+        clone=clone,
+        test_runner=StubReproRunner(ReproOutcome(passed=True, tests_passed=2, tests_total=2)),
+        worktree_root=tmp_path,
+        judge=StubRubricJudge(fixed=0.5),
+    )
+    assert result.judge_score == 0.5
+    assert result.metrics()["judge_score"] == 0.5
+    assert result.judge_confidence == 1.0
+    # diff_sim of the candidate (1 of 2 files) is < 0.5 away? divergence recorded.
+    assert result.judge_divergence is not None
+
+
 def test_score_grid_condition_records_fallback_reason(clone: Path, tmp_path: Path) -> None:
     bundle = _bundle(clone)
     result = score_grid_condition(
@@ -153,7 +192,8 @@ def test_score_grid_condition_records_fallback_reason(clone: Path, tmp_path: Pat
     assert result.direct_mode == "diff_sim"
     assert result.repro_passed is None
     assert result.repro_error == "npm exploded"
-    assert result.diff_sim_combined is not None
+    # On the fallback the always-on S2 signal IS the value the direct leg fell back to.
+    assert result.diff_sim is not None
 
 
 def _condition(
@@ -172,7 +212,6 @@ def _condition(
         direct_mode="test_repro" if repro_passed is not None else "diff_sim",
         repro_passed=repro_passed,
         repro_error=None,
-        diff_sim_combined=None,
         efficiency=ProbeEfficiency(
             turns=turns, tool_calls=5, input_tokens=10, output_tokens=output_tokens
         ),
@@ -269,6 +308,42 @@ def test_summarize_grid_ours_status_follows_evidence() -> None:
     ours = summarize_grid(pairs, evidence)["rung_availability"]["ours"]
     assert ours["status"] == "payload_available"
     assert "2 lesson-bearing item(s)" in ours["reason"]
+
+
+def test_summarize_grid_validity_block_reports_invalid_bundles() -> None:
+    from membench.grading.validity_gate import ValidityResult
+
+    pairs = [pair_grid(_condition("none"), _condition("oracle"))]
+    validity = [
+        ValidityResult(
+            work_id="demo-1",
+            gold_repro_passed=True,
+            gold_test_ratio=1.0,
+            empty_repro_passed=False,
+            empty_test_ratio=0.0,
+            valid=True,
+            reason="gold reproduces, empty fails",
+        ),
+        ValidityResult(
+            work_id="demo-2",
+            gold_repro_passed=False,
+            gold_test_ratio=0.0,
+            empty_repro_passed=False,
+            empty_test_ratio=0.0,
+            valid=False,
+            reason="gold diff did not reproduce (expected repro_pass=True)",
+        ),
+    ]
+    block = summarize_grid(pairs, [], validity)["validity_gates"]
+    assert block["checked"] == 2 and block["valid"] == 1
+    assert block["invalid"] == ["demo-2"]
+    assert block["evidence"][1]["reason"].startswith("gold diff did not reproduce")
+
+
+def test_summarize_grid_validity_block_empty_when_no_gate() -> None:
+    pairs = [pair_grid(_condition("none"), _condition("oracle"))]
+    block = summarize_grid(pairs, [])["validity_gates"]
+    assert block == {"checked": 0, "valid": 0, "invalid": [], "evidence": []}
 
 
 def test_summarize_grid_rejects_empty() -> None:

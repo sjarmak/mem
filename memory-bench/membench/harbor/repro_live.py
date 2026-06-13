@@ -15,14 +15,20 @@ against the bare base: 5/5 files fail):
    the spec, so the candidate is never judged on its own test edits;
 3. ``git apply`` the gold diff's TEST files on top;
 4. re-run the install when an applied path touched a dependency manifest;
-5. run each workspace's test command scoped to the gold test files.
+5. run the workspace's test command on EACH gold test file on its own (mem-g6a S1),
+   with no short-circuit, recording how many of the files passed.
 
-``passed`` = every scoped test command (and the rig's setup commands) exits 0. A
-nonzero test or setup exit is a legitimate FAIL (the candidate did not satisfy the
-gold tests / broke the build), never an error. Infrastructure failures -- a diff
-that does not apply, an install failure, a timeout, an unmapped rig or workspace --
-return ``ReproOutcome(error=...)`` so `score_direct` falls back to diff similarity
-and records why (the dual verifier's designed degradation, never a silent 0).
+``passed`` = every gold test file (each run on its own) and the rig's setup commands
+exit 0 -- the ungameable all-or-nothing anchor, unchanged in meaning from the
+batch era (each file is independent fail-to-pass). ``tests_passed``/``tests_total``
+are the S1 partial-credit counts UNDER that anchor: a candidate that fixes some but
+not all gold tests lands strictly between 0 and 1 on the ratio while the binary
+anchor still FAILS. A nonzero test or setup exit is a legitimate FAIL (the candidate
+did not satisfy the gold tests / broke the build), never an error. Infrastructure
+failures -- a diff that does not apply, an install failure, a timeout, an unmapped
+rig or workspace -- return ``ReproOutcome(error=...)`` so `score_direct` falls back
+to diff similarity and records why (the dual verifier's designed degradation, never
+a silent 0).
 
 ZFC: pure mechanism -- worktree IO, ``git apply``, subprocess fan-out, exit-code
 interpretation. The only judgement (do the tests pass?) is the test runner's.
@@ -174,23 +180,32 @@ class LiveReproRunner:
         except _InfraError as exc:
             return ReproOutcome(passed=False, error=str(exc))
 
+        # S1 (mem-g6a): score each gold-test FILE on its own, NO short-circuit, so a
+        # candidate that fixes some-but-not-all gold tests lands strictly between the
+        # binary anchor's 0 and 1. ``passed`` stays the ungameable all-or-nothing
+        # floor: every file (and every setup step) must exit 0. A setup failure is a
+        # binary FAIL with zero files credited -- the tests never ran.
+        total = len(gold_tests)
         try:
             for argv in config.setup:
                 if self._exec(worktree, argv, TEST_TIMEOUT_SEC).returncode != 0:
-                    return ReproOutcome(passed=False)
+                    return ReproOutcome(passed=False, tests_passed=0, tests_total=total)
+            tests_passed = 0
             for workspace in config.workspaces:
-                paths = sorted(p for p in gold_tests if p.startswith(workspace.prefix))
-                if not paths:
-                    continue
-                relative = tuple(p[len(workspace.prefix) :] for p in paths)
-                completed = self._exec(
-                    worktree / workspace.cwd, workspace.argv_prefix + relative, TEST_TIMEOUT_SEC
-                )
-                if completed.returncode != 0:
-                    return ReproOutcome(passed=False)
+                for path in sorted(p for p in gold_tests if p.startswith(workspace.prefix)):
+                    relative = path[len(workspace.prefix) :]
+                    completed = self._exec(
+                        worktree / workspace.cwd,
+                        (*workspace.argv_prefix, relative),
+                        TEST_TIMEOUT_SEC,
+                    )
+                    if completed.returncode == 0:
+                        tests_passed += 1
         except _InfraError as exc:
             return ReproOutcome(passed=False, error=str(exc))
-        return ReproOutcome(passed=True)
+        return ReproOutcome(
+            passed=tests_passed == total, tests_passed=tests_passed, tests_total=total
+        )
 
     # -- internals -------------------------------------------------------------------
 

@@ -38,7 +38,9 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from membench.grading.dual_verifier import ReproRunner, RunResult, score_run
+from membench.grading.graded import DEFAULT_JUDGE_ROUNDS, RubricJudge, judge_graded
 from membench.grading.probe_direct import ProbeEfficiency
+from membench.grading.validity_gate import ValidityResult
 from membench.harbor.probe_gate import (
     CONDITIONS,
     Runner,
@@ -69,17 +71,34 @@ class GridConditionResult(BaseModel):
     direct_mode: str
     repro_passed: bool | None
     repro_error: str | None
-    diff_sim_combined: float | None
     # Efficiency headline.
     efficiency: ProbeEfficiency
     candidate_files: tuple[str, ...]
+    # Graded side-signals (mem-g6a), additive under the binary repro anchor. All
+    # default to absent so cached pre-graded result JSONs still load, and a metric
+    # absent on a run is omitted from its paired deltas (never imputed). S1
+    # ``test_ratio`` is None on the diff-sim fallback (no tests ran); S2 ``diff_sim``
+    # is the ALWAYS-ON bounded structural similarity, computed on every run (on the
+    # fallback path it is exactly the value the direct leg fell back to); S3 judge
+    # fields are populated only when a judge is wired.
+    test_ratio: float | None = None
+    diff_sim: float | None = None
+    judge_score: float | None = None
+    judge_confidence: float | None = None
+    judge_divergence: float | None = None
+    judge_divergence_flagged: bool = False
 
     def metrics(self) -> dict[str, float | None]:
-        """The per-condition metric vector the pairing arithmetic consumes."""
+        """The per-condition metric vector the pairing arithmetic consumes. The
+        graded signals (``test_ratio``/``diff_sim``/``judge_score``) ride along and
+        pair automatically; a None metric is omitted from a bundle's deltas."""
         return {
             "score_direct": self.score_direct,
             "score_artifact": self.score_artifact,
             "repro_passed": None if self.repro_passed is None else float(self.repro_passed),
+            "test_ratio": self.test_ratio,
+            "diff_sim": self.diff_sim,
+            "judge_score": self.judge_score,
             "input_tokens": (
                 None
                 if self.efficiency.input_tokens is None
@@ -129,10 +148,14 @@ def score_grid_condition(
     test_runner: ReproRunner,
     runner: Runner = subprocess.run,
     worktree_root: Path = Path("/tmp"),
+    judge: RubricJudge | None = None,
+    judge_rounds: int = DEFAULT_JUDGE_ROUNDS,
 ) -> GridConditionResult:
     """Dual-score one cached (bundle, condition) run: load the persisted stream,
     re-harvest the candidate diff (same replay machinery as the gate), and run
-    `score_run` with the live repro runner."""
+    `score_run` with the live repro runner. When ``judge`` is supplied, the S3
+    semantic signal is computed too (mem-g6a); left None (the default) the run carries
+    only the mechanical S1/S2 signals -- no model call, the offline path."""
     stream = load_stream(job_dir)
     candidate = harvest_candidate(
         stream, bundle, clone=clone, runner=runner, worktree_root=worktree_root
@@ -150,6 +173,18 @@ def score_grid_condition(
         # Unreachable while `transcript=stream` above: the grid's headline metric
         # must never be silently zero-filled.
         raise ValueError(f"no efficiency readout for {bundle.work_id} [{condition}]")
+
+    graded = None
+    if judge is not None:
+        graded = judge_graded(
+            judge,
+            issue_title=bundle.issue_title,
+            issue_body=bundle.issue_body,
+            candidate_diff=candidate_diff,
+            gold_diff=bundle.output.diff_by_file(),
+            mechanical_reference=dual.diff_sim.combined,
+            rounds=judge_rounds,
+        )
     return GridConditionResult(
         work_id=bundle.work_id,
         condition=condition,
@@ -158,9 +193,14 @@ def score_grid_condition(
         direct_mode=direct.mode,
         repro_passed=None if direct.test_outcome is None else direct.test_outcome.passed,
         repro_error=direct.repro_error,
-        diff_sim_combined=None if direct.diff_sim is None else direct.diff_sim.combined,
         efficiency=dual.efficiency,
         candidate_files=candidate_files,
+        test_ratio=dual.test_ratio,
+        diff_sim=dual.diff_sim.combined,
+        judge_score=None if graded is None else graded.judge_score,
+        judge_confidence=None if graded is None else graded.judge_confidence,
+        judge_divergence=None if graded is None else graded.divergence,
+        judge_divergence_flagged=graded is not None and graded.divergence_flagged,
     )
 
 
@@ -201,14 +241,29 @@ def ours_rung_evidence(
     )
 
 
+def _validity_block(validity: Sequence[ValidityResult]) -> dict[str, Any]:
+    """The CSB validity-gate report block (mem-g6a): how many bundles' oracles were
+    checked, how many passed, and the work_ids + reasons of those that did not. An
+    invalid bundle is named so its exclusion from the graded comparison is never
+    silent. ``checked == 0`` means no gate ran (no runner was wired), distinct from
+    all-valid."""
+    return {
+        "checked": len(validity),
+        "valid": sum(1 for v in validity if v.valid),
+        "invalid": [v.work_id for v in validity if not v.valid],
+        "evidence": [v.model_dump() for v in validity],
+    }
+
+
 def summarize_grid(
     pairs: Sequence[GridPair],
     ours_evidence: Sequence[OursRungEvidence],
+    validity: Sequence[ValidityResult] = (),
 ) -> dict[str, Any]:
     """The grid's DATA product (the mem-apg.4 report input): per-bundle paired
     deltas (the headline shape -- never pooled means alone), per-metric gap stats,
-    quality-guard pass counts, and the rung-availability record. Verdict prose is
-    the orchestrator's, never computed here."""
+    quality-guard pass counts, the rung-availability record, and the CSB validity
+    gate block. Verdict prose is the orchestrator's, never computed here."""
     if not pairs:
         raise ValueError("summarize_grid needs at least one (none, oracle) pair")
     delta_maps = [dict(pair.deltas) for pair in pairs]
@@ -264,6 +319,7 @@ def summarize_grid(
             "builtin": "deferred to mem-whi (agent built-in memory)",
             "ours+builtin": "deferred to mem-whi (agent built-in memory)",
         },
+        "validity_gates": _validity_block(validity),
     }
 
 
@@ -362,11 +418,13 @@ def _arm_gap_stats(delta_maps: Sequence[dict[str, float]]) -> dict[str, Any]:
 def summarize_grid_3arm(
     rows: Sequence[ThreeArmRow],
     ours_evidence: Sequence[OursRungEvidence],
+    validity: Sequence[ValidityResult] = (),
 ) -> dict[str, Any]:
     """The 3-arm pilot's DATA product: per-bundle metrics + paired deltas vs the
     clean-room baseline (never pooled means alone), per-comparison gap stats, the
-    quality-guard pass counts per arm, retrieval coverage, and each arm's
-    provenance. Verdict prose is the orchestrator's, never computed here."""
+    quality-guard pass counts per arm, retrieval coverage, the CSB validity gate
+    block, and each arm's provenance. Verdict prose is the orchestrator's, never
+    computed here."""
     if not rows:
         raise ValueError("summarize_grid_3arm needs at least one three-arm row")
     per_bundle = [
@@ -396,9 +454,7 @@ def summarize_grid_3arm(
         "gaps": {
             "ours_vs_none_clean": _arm_gap_stats([dict(row.deltas_ours) for row in rows]),
             "builtin_vs_none_clean": _arm_gap_stats([dict(row.deltas_builtin) for row in rows]),
-            "ours_vs_builtin": _arm_gap_stats(
-                [dict(row.deltas_ours_vs_builtin) for row in rows]
-            ),
+            "ours_vs_builtin": _arm_gap_stats([dict(row.deltas_ours_vs_builtin) for row in rows]),
         },
         "quality_guard": {
             "repro_scored_rows": sum(
@@ -420,6 +476,7 @@ def summarize_grid_3arm(
             "evidence": [e.model_dump() for e in ours_evidence],
         },
         "arm_provenance": dict(ARM_PROVENANCE),
+        "validity_gates": _validity_block(validity),
     }
 
 

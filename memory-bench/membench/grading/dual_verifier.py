@@ -169,14 +169,34 @@ class ReproOutcome:
     """The fail-to-pass result of running the gold tests against the candidate diff.
     Exit-code semantics (SWE-bench shape): the gold tests pass after applying the
     candidate, or they do not. ``error`` set => the run could not be scored (apply
-    failed, runner crashed) and the leg falls back to diff similarity."""
+    failed, runner crashed) and the leg falls back to diff similarity.
+
+    ``tests_passed`` / ``tests_total`` are the S1 per-test-FILE partial-credit counts
+    (mem-g6a): how many of the gold-diff's test files passed when each is run on its
+    own. They are the graded *resolution underneath* the binary anchor, never a
+    replacement for it -- ``passed`` (and ``score``) stay the ungameable all-or-nothing
+    floor. Both are None when the leg did not run a per-file count (a stub outcome, or
+    an ``error`` outcome that never reached the test loop), so ``test_ratio`` is a typed
+    absence rather than a misleading 0.0."""
 
     passed: bool
     error: str | None = None
+    tests_passed: int | None = None
+    tests_total: int | None = None
 
     @property
     def score(self) -> float:
         return 1.0 if self.passed else 0.0
+
+    @property
+    def test_ratio(self) -> float | None:
+        """S1 partial credit: ``tests_passed / tests_total`` in [0, 1], or None when
+        the per-file counts were not recorded. A passed run is necessarily 1.0 (every
+        file passed); a failed run lands strictly below 1.0 only when some files
+        passed -- the resolution the binary anchor cannot see."""
+        if self.tests_passed is None or self.tests_total is None or self.tests_total == 0:
+            return None
+        return self.tests_passed / self.tests_total
 
 
 class ReproRunner(Protocol):
@@ -214,6 +234,9 @@ class DirectScore:
     test_outcome: ReproOutcome | None = None
     diff_sim: ProbeDirectScore | None = None
     repro_error: str | None = None
+    # S1 per-test-file partial credit, carried up from ``test_outcome`` when the
+    # primary test-reproduction leg ran; None on the diff-sim fallback (no tests ran).
+    test_ratio: float | None = None
 
 
 def score_direct(
@@ -232,7 +255,12 @@ def score_direct(
     if candidate_diff and test_runner is not None and gold_has_tests(list(gold)):
         outcome = test_runner.run(bundle=bundle, candidate_diff=candidate_diff)
         if outcome.error is None:
-            return DirectScore(mode="test_repro", score=outcome.score, test_outcome=outcome)
+            return DirectScore(
+                mode="test_repro",
+                score=outcome.score,
+                test_outcome=outcome,
+                test_ratio=outcome.test_ratio,
+            )
         # Runner could not score (apply failed, crash): record WHY on the fallback so
         # a diff_sim result is never an unexplained downgrade from the primary leg.
         repro_error = outcome.error
@@ -310,6 +338,13 @@ class DualScore:
     degradations: tuple[tuple[str, str], ...]
     passed_direct: bool
     passed_artifact: bool
+    # S1/S2 graded side-signals (mem-g6a), additive layers under the binary anchor:
+    # ``test_ratio`` is the per-test-file partial credit (None on the diff-sim
+    # fallback, where no tests ran); ``diff_sim`` is the ALWAYS-ON bounded structural
+    # similarity -- promoted from error-only fallback to a side signal computed on
+    # every run, never a gate (its known equivalent-fix bias is carried in the report).
+    test_ratio: float | None
+    diff_sim: ProbeDirectScore
 
 
 def score_run(
@@ -332,6 +367,17 @@ def score_run(
     sd: float | None = direct.score
     if not run.candidate_diff:
         degradations.append(("direct", "run produced no candidate diff -> direct 0.0"))
+
+    # S2: always-on bounded diff similarity (mem-g6a) -- a continuous side signal on
+    # EVERY run, not just the repro-error fallback. Reuse the fallback's computation
+    # when the direct leg already produced it (same candidate vs same gold); otherwise
+    # compute it once here. An empty candidate scores 0.0; gold is non-empty by
+    # admission (`score_probe_direct` raises on an empty gold, an upstream bundle bug).
+    diff_sim = (
+        direct.diff_sim
+        if direct.diff_sim is not None
+        else score_probe_direct(run.candidate_diff, dict(bundle.output.file_diffs))
+    )
 
     # Comprehension leg: a missing artifact scores 0.0 (acceptance); a missing oracle
     # is unscoreable (None) -- a 0.0 there would falsely blame the run.
@@ -378,5 +424,7 @@ def score_run(
         degradations=tuple(degradations),
         passed_direct=sd is not None and sd >= PASS_THRESHOLD,
         passed_artifact=sa is not None and sa >= PASS_THRESHOLD,
+        test_ratio=direct.test_ratio,
+        diff_sim=diff_sim,
     )
     return dual, new_bundle

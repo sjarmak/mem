@@ -179,6 +179,23 @@ def test_direct_empty_candidate_is_zero_diff_sim():
     assert d.mode == "diff_sim" and d.score == 0.0
 
 
+def test_direct_carries_test_ratio_from_outcome():
+    # S1: a partial per-file outcome surfaces as DirectScore.test_ratio alongside the
+    # binary score (which stays 0.0 -- not every file passed).
+    bundle = _bundle({"a.test.ts": _diff("a.test.ts", "+x")})
+    outcome = ReproOutcome(passed=False, tests_passed=1, tests_total=2)
+    d = score_direct(
+        bundle, {"a.test.ts": _diff("a.test.ts", "+x")}, test_runner=StubReproRunner(outcome)
+    )
+    assert d.mode == "test_repro" and d.score == 0.0 and d.test_ratio == 0.5
+
+
+def test_direct_fallback_has_no_test_ratio():
+    gold = {"src/a.ts": _diff("src/a.ts", "+x")}
+    d = score_direct(_bundle(gold), dict(gold), test_runner=None)
+    assert d.mode == "diff_sim" and d.test_ratio is None
+
+
 # --- compose_automated_score ------------------------------------------------------
 
 
@@ -311,6 +328,32 @@ def test_score_run_is_immutable():
     )
     assert bundle.verification.score_direct is None  # original untouched
     assert new_bundle.verification.score_direct == 1.0
+
+
+def test_score_run_computes_always_on_diff_sim_on_test_repro_path():
+    # S2: diff_sim is computed on EVERY run, including the test-repro happy path where
+    # the direct leg itself never falls back to it. Identical candidate==gold -> 1.0.
+    gold = {"a.test.ts": _diff("a.test.ts", "+x")}
+    dual, _ = _scored_bundle(
+        gold,
+        _oracle(["a.test.ts"]),
+        RunResult(candidate_diff=dict(gold), identified_files=("a.test.ts",)),
+        test_runner=StubReproRunner(ReproOutcome(passed=True, tests_passed=1, tests_total=1)),
+    )
+    assert dual.direct.mode == "test_repro"
+    assert dual.diff_sim is not None and dual.diff_sim.combined == 1.0
+    assert dual.test_ratio == 1.0
+
+
+def test_score_run_diff_sim_reuses_fallback_computation():
+    # On the diff-sim fallback the always-on signal IS the leg's own computation.
+    gold = {"src/a.ts": _diff("src/a.ts", "+x")}
+    dual, _ = _scored_bundle(
+        gold, _oracle(["src/a.ts"]), RunResult(candidate_diff=dict(gold), identified_files=None)
+    )
+    assert dual.direct.mode == "diff_sim"
+    assert dual.diff_sim is dual.direct.diff_sim
+    assert dual.test_ratio is None  # no tests ran on the fallback
 
 
 def test_score_run_pass_flags_use_threshold():

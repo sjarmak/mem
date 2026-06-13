@@ -272,6 +272,101 @@ def test_blank_manifest_diff_never_triggers_reinstall(clone: Path, tmp_path: Pat
     assert recording.count("true") == 1
 
 
+def test_per_file_partial_credit_no_short_circuit(clone: Path, tmp_path: Path) -> None:
+    """S1 (mem-g6a): two gold-test files, one passing and one failing -> the binary
+    anchor FAILS but the per-file counts record 1/2, and BOTH files ran (no
+    short-circuit on the first failure)."""
+    # A second gold test file in the same workspace; the impl diff is shared.
+    second_test = (
+        "diff --git a/frontend/src/two.test.ts b/frontend/src/two.test.ts\n"
+        "--- a/frontend/src/two.test.ts\n"
+        "+++ b/frontend/src/two.test.ts\n"
+        "@@ -1 +1 @@\n-// base\n+// gold\n"
+    )
+    (clone / "frontend" / "src" / "two.test.ts").write_text("// base\n", encoding="utf-8")
+    _git(clone, "add", ".")
+    _git(clone, "commit", "-qm", "two")
+    bundle = _bundle(
+        clone,
+        file_diffs=(*GOLD, ("frontend/src/two.test.ts", second_test)),
+    )
+    # First test file exits 0, second exits 1: a per-file runner keyed on the path's
+    # last segment so exactly one of the two files fails.
+    recording = RecordingRunner()
+    config = RigTestConfig(
+        install=(("true",),),
+        setup=(),
+        workspaces=(
+            WorkspaceTests(
+                prefix="frontend/",
+                cwd="frontend",
+                argv_prefix=(
+                    "python3",
+                    "-c",
+                    "import sys; sys.exit(0 if sys.argv[1].endswith('app.test.ts') else 1)",
+                ),
+            ),
+        ),
+    )
+    with _runner(clone, config, tmp_path, recording) as runner:
+        outcome = runner.run(bundle=bundle, candidate_diff={"frontend/src/app.ts": IMPL_DIFF})
+    assert not outcome.passed  # binary anchor still all-or-nothing
+    assert outcome.error is None
+    assert outcome.tests_passed == 1 and outcome.tests_total == 2
+    assert outcome.test_ratio == 0.5
+    # No short-circuit: both gold-test files were executed.
+    test_calls = [c for c in recording.calls if c[:1] == ("python3",)]
+    assert len(test_calls) == 2
+
+
+def test_files_across_two_workspaces_each_run_once(clone: Path, tmp_path: Path) -> None:
+    """A gold diff spanning two workspaces: each file is mapped to exactly one
+    workspace and run exactly once, so tests_total counts both without double-counting
+    across prefixes."""
+    backend_test = (
+        "diff --git a/backend/api.test.ts b/backend/api.test.ts\n"
+        "--- a/backend/api.test.ts\n"
+        "+++ b/backend/api.test.ts\n"
+        "@@ -1 +1 @@\n-// base\n+// gold\n"
+    )
+    (clone / "backend").mkdir()
+    (clone / "backend" / "api.test.ts").write_text("// base\n", encoding="utf-8")
+    _git(clone, "add", ".")
+    _git(clone, "commit", "-qm", "backend")
+    bundle = _bundle(clone, file_diffs=(*GOLD, ("backend/api.test.ts", backend_test)))
+    recording = RecordingRunner()
+    config = RigTestConfig(
+        install=(("true",),),
+        setup=(),
+        workspaces=(
+            WorkspaceTests(prefix="frontend/", cwd="frontend", argv_prefix=PASS_ARGV),
+            WorkspaceTests(prefix="backend/", cwd="backend", argv_prefix=PASS_ARGV),
+        ),
+    )
+    with _runner(clone, config, tmp_path, recording) as runner:
+        outcome = runner.run(bundle=bundle, candidate_diff={"frontend/src/app.ts": IMPL_DIFF})
+    assert outcome.passed
+    assert outcome.tests_passed == 2 and outcome.tests_total == 2
+    # Each gold test file ran exactly once (two files -> two test invocations).
+    assert recording.count("python3") == 2
+
+
+def test_all_files_pass_anchor_and_ratio_agree(clone: Path, tmp_path: Path) -> None:
+    bundle = _bundle(clone, file_diffs=GOLD)
+    with _runner(clone, _config(), tmp_path, RecordingRunner()) as runner:
+        outcome = runner.run(bundle=bundle, candidate_diff={"frontend/src/app.ts": IMPL_DIFF})
+    assert outcome.passed and outcome.test_ratio == 1.0
+    assert outcome.tests_passed == 1 and outcome.tests_total == 1
+
+
+def test_setup_failure_credits_zero_files(clone: Path, tmp_path: Path) -> None:
+    bundle = _bundle(clone, file_diffs=GOLD)
+    with _runner(clone, _config(setup=(FAIL_ARGV,)), tmp_path, RecordingRunner()) as runner:
+        outcome = runner.run(bundle=bundle, candidate_diff={"frontend/src/app.ts": IMPL_DIFF})
+    assert not outcome.passed and outcome.error is None
+    assert outcome.tests_passed == 0 and outcome.tests_total == 1 and outcome.test_ratio == 0.0
+
+
 def test_close_removes_cached_worktrees(clone: Path, tmp_path: Path) -> None:
     bundle = _bundle(clone, file_diffs=GOLD)
     runner = _runner(clone, _config(), tmp_path, RecordingRunner())

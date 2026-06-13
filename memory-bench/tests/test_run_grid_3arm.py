@@ -59,7 +59,6 @@ def _result(work_id: str, condition: str, *, turns: int = 10) -> GridConditionRe
         direct_mode="test_repro",
         repro_passed=False,
         repro_error=None,
-        diff_sim_combined=None,
         efficiency=ProbeEfficiency(turns=turns, tool_calls=5, input_tokens=10, output_tokens=100),
         candidate_files=("src/app.ts",),
     )
