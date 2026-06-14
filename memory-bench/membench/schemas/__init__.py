@@ -7,8 +7,8 @@ Each module maps to a spec section:
   - memory_event    → §6.2 normalized memory operations + memory_event
   - candidate_memory→ §8 extractor output (schema only; extractor is a later phase)
   - trace           → §8 trace capture
-  - metrics         → §12 metric groups (task/efficiency/retrieval/retention now;
-                      privacy/interruption stubbed per plan §A DIV-4)
+  - metrics         → §12 metric groups (task/efficiency/retrieval/retention/
+                      synthesis/action-impact + privacy/interruption per plan §A DIV-4)
 """
 
 from membench.schemas.candidate_memory import CandidateMemory, MemoryType, RetentionPolicy
@@ -16,18 +16,21 @@ from membench.schemas.conditions import Condition
 from membench.schemas.config import AgentConfig, ExperimentConfig, MemoryConfig
 from membench.schemas.memory_event import MemoryBackend, MemoryEvent, MemoryOperation
 from membench.schemas.metrics import (
+    ActionImpactMetrics,
     EfficiencyMetrics,
     InterruptionMetrics,
     MetricsBundle,
     PrivacyMetrics,
     RetentionMetrics,
     RetrievalMetrics,
+    SynthesisMetrics,
     TaskMetrics,
 )
 from membench.schemas.sequence import BenchmarkSequence, SequenceStep
 from membench.schemas.trace import ToolCall, Trace, TraceMessage
 
 __all__ = [
+    "ActionImpactMetrics",
     "AgentConfig",
     "BenchmarkSequence",
     "CandidateMemory",
@@ -46,6 +49,7 @@ __all__ = [
     "RetentionPolicy",
     "RetrievalMetrics",
     "SequenceStep",
+    "SynthesisMetrics",
     "TaskMetrics",
     "ToolCall",
     "Trace",

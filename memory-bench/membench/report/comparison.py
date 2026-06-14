@@ -25,7 +25,11 @@ class ConditionSummary:
     memory_tool_calls: int
     mean_precision_at_k: float
     mean_recall_at_k: float
+    mean_mrr: float
+    mean_ndcg: float
     write_hit_rate: float
+    over_retention_rate: float
+    cross_session_success_rate: float
 
 
 def _summarize(condition: Condition, trials: list[StepTrial]) -> ConditionSummary:
@@ -43,7 +47,13 @@ def _summarize(condition: Condition, trials: list[StepTrial]) -> ConditionSummar
         memory_tool_calls=sum(t.metrics.efficiency.memory_tool_calls for t in trials),
         mean_precision_at_k=mean([t.metrics.retrieval.precision_at_k for t in trials]),
         mean_recall_at_k=mean([t.metrics.retrieval.recall_at_k for t in trials]),
+        mean_mrr=mean([t.metrics.retrieval.mrr for t in trials]),
+        mean_ndcg=mean([t.metrics.retrieval.nDCG for t in trials]),
         write_hit_rate=mean([t.metrics.retention.write_hit_rate for t in trials]),
+        over_retention_rate=mean([t.metrics.retention.over_retention_rate for t in trials]),
+        cross_session_success_rate=mean(
+            [1.0 if t.metrics.synthesis.cross_session_dependency_success else 0.0 for t in trials]
+        ),
     )
 
 
@@ -101,9 +111,10 @@ class ComparisonReport:
             "",
             (
                 "| condition | steps | mean_reward | pass_rate | tokens"
-                " | mem_calls | precision@k | recall@k | write_hit |"
+                " | mem_calls | precision@k | recall@k | mrr | nDCG | write_hit"
+                " | over_retention | x_session |"
             ),
-            "|---|---|---|---|---|---|---|---|---|",
+            "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
         ]
         for c in order:
             s = self.summaries.get(c)
@@ -113,7 +124,9 @@ class ComparisonReport:
                 f"| {s.condition} | {s.n_steps} | {s.mean_reward:.3f} | "
                 f"{s.pass_rate:.3f} | {s.total_tokens} | {s.memory_tool_calls} | "
                 f"{s.mean_precision_at_k:.3f} | {s.mean_recall_at_k:.3f} | "
-                f"{s.write_hit_rate:.3f} |"
+                f"{s.mean_mrr:.3f} | {s.mean_ndcg:.3f} | "
+                f"{s.write_hit_rate:.3f} | {s.over_retention_rate:.3f} | "
+                f"{s.cross_session_success_rate:.3f} |"
             )
         lines += ["", f"**Interpretation (§4):** {self.interpretation}"]
         return "\n".join(lines)

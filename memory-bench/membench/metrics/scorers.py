@@ -1,0 +1,214 @@
+"""Deterministic §12 scorers: retrieval / retention / synthesis / efficiency.
+
+Each scorer is a pure function of explicit inputs (ordered retrieved ids, the
+step's required / distractor / stale / superseded id sets, write events, the
+trace's token + tool counts). It returns a populated metric model with ONLY the
+mechanical fields set; the judge seams documented in `schemas.metrics` are left at
+their defaults.
+
+Ranking math (`mrr`, `nDCG`, `retrieval_rank`) keys on the *ordered* retrieved-id
+list — `MemoryEvent.retrieved_ids` carries retrieval order, so a backend that ranks
+distractors above a required id is penalised correctly. Set-only fields (precision,
+recall, miss counts) are order-independent.
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass, field
+
+from membench.schemas.memory_event import MemoryEvent
+from membench.schemas.metrics import (
+    EfficiencyMetrics,
+    RetentionMetrics,
+    RetrievalMetrics,
+    SynthesisMetrics,
+)
+
+
+def _ratio(num: int, denom: int) -> float:
+    return num / denom if denom else 0.0
+
+
+# --------------------------------------------------------------------------- #
+# Retrieval (§12.3)
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class RetrievalInputs:
+    """What a retrieval scorer needs for one step.
+
+    `retrieved_ids` is the ranked list the backend returned (order matters for
+    rank/mrr/nDCG). `required_ids` are the ids the step depends on. `distractor_ids`
+    and `stale_ids` are known-irrelevant / known-superseded ids the backend should
+    NOT have surfaced; both default empty, so an arm that seeds neither reports 0.0
+    for those rates (an honest "not measured here", not a fabricated number).
+    """
+
+    retrieved_ids: list[str]
+    required_ids: list[str]
+    distractor_ids: list[str] = field(default_factory=list)
+    stale_ids: list[str] = field(default_factory=list)
+    read_attempted: bool = True
+
+
+def _dcg(relevances: list[int]) -> float:
+    return sum(rel / math.log2(i + 2) for i, rel in enumerate(relevances))
+
+
+def score_retrieval(inp: RetrievalInputs) -> RetrievalMetrics:
+    retrieved = inp.retrieved_ids
+    required = inp.required_ids
+    required_set = set(required)
+    distractor_set = set(inp.distractor_ids)
+    stale_set = set(inp.stale_ids)
+
+    retrieved_relevant = [m for m in retrieved if m in required_set]
+
+    # First-relevant rank (1-based) drives retrieval_rank + mrr.
+    rank: int | None = None
+    for i, mid in enumerate(retrieved):
+        if mid in required_set:
+            rank = i + 1
+            break
+
+    # Ideal DCG = every required id retrieved at the top (binary relevance).
+    gains = [1 if mid in required_set else 0 for mid in retrieved]
+    ideal = [1] * min(len(required_set), len(retrieved))
+    idcg = _dcg(ideal)
+
+    n_distractor = sum(1 for m in retrieved if m in distractor_set)
+    n_stale = sum(1 for m in retrieved if m in stale_set)
+
+    return RetrievalMetrics(
+        read_attempted=inp.read_attempted and bool(required),
+        relevant_memory_available=bool(retrieved_relevant),
+        relevant_memory_retrieved=bool(required) and required_set.issubset(set(retrieved)),
+        retrieval_rank=rank,
+        precision_at_k=_ratio(len(retrieved_relevant), len(retrieved)),
+        recall_at_k=_ratio(len(retrieved_relevant), len(required_set)),
+        mrr=(1.0 / rank) if rank else 0.0,
+        nDCG=(_dcg(gains) / idcg) if idcg else 0.0,
+        distractor_retrieval_rate=_ratio(n_distractor, len(retrieved)),
+        stale_memory_retrieval_rate=_ratio(n_stale, len(retrieved)),
+        missed_required_memory_count=len(required_set - set(retrieved)),
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Retention (§12.4)
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class RetentionInputs:
+    """What a retention scorer needs for one step.
+
+    `written_ids` are the ids the agent actually persisted. `expected_writes` are
+    the ids the step was supposed to establish. `correct_scope_ids` /
+    `correct_backend_ids` are the subsets that landed in the right scope / backend —
+    defaulting to the expected-and-written intersection means a backend that does
+    not distinguish scope reports a clean 1.0 rather than a fabricated penalty.
+    `removed_ids` and `superseded_expected_ids` drive the supersession fields.
+    """
+
+    written_ids: list[str]
+    expected_writes: list[str]
+    correct_scope_ids: list[str] | None = None
+    correct_backend_ids: list[str] | None = None
+    removed_ids: list[str] = field(default_factory=list)
+    superseded_expected_ids: list[str] = field(default_factory=list)
+
+
+def score_retention(inp: RetentionInputs) -> RetentionMetrics:
+    written = inp.written_ids
+    written_set = set(written)
+    expected = inp.expected_writes
+    expected_set = set(expected)
+
+    written_expected = [m for m in written if m in expected_set]
+    hit_rate = _ratio(len(written_expected), len(expected_set))
+    n_noise = len(written) - len(written_expected)
+
+    scope_ids = inp.correct_scope_ids if inp.correct_scope_ids is not None else written_expected
+    backend_ids = (
+        inp.correct_backend_ids if inp.correct_backend_ids is not None else written_expected
+    )
+
+    superseded = set(inp.superseded_expected_ids)
+    removed = set(inp.removed_ids)
+
+    return RetentionMetrics(
+        expected_memory_written=bool(expected) and expected_set.issubset(written_set),
+        write_hit_rate=hit_rate,
+        write_miss_rate=(1.0 - hit_rate) if expected else 0.0,
+        # Over-retention = ids written that were not asked for, relative to writes.
+        over_retention_rate=_ratio(n_noise, len(written)),
+        noise_write_rate=_ratio(n_noise, len(written)),
+        correct_scope_rate=_ratio(len(set(scope_ids) & written_set), len(written_expected)),
+        correct_backend_rate=_ratio(len(set(backend_ids) & written_set), len(written_expected)),
+        # Supersession: a superseded id is correctly handled iff it was removed.
+        stale_memory_removed=bool(superseded) and superseded.issubset(removed),
+        supersession_correct=(not superseded) or superseded.issubset(removed),
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Synthesis (§12.5)
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class SynthesisInputs:
+    """Cross-session synthesis inputs.
+
+    `supporting_required_ids` are the memories the step's probes/checks say it
+    depends on; `available_ids` are the ids the harness surfaced this step. Cross-
+    session dependency succeeds iff every required supporting memory was available.
+    `multi_backend_synthesis_success` and `contradiction_resolution_success` are
+    judge seams and are NOT set here.
+    """
+
+    supporting_required_ids: list[str]
+    available_ids: list[str]
+
+
+def score_synthesis(inp: SynthesisInputs) -> SynthesisMetrics:
+    required = set(inp.supporting_required_ids)
+    available = set(inp.available_ids)
+    used = required & available
+    return SynthesisMetrics(
+        supporting_memories_required=len(required),
+        supporting_memories_used=len(used),
+        cross_session_dependency_success=bool(required) and required.issubset(available),
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Efficiency arithmetic (§12.2)
+# --------------------------------------------------------------------------- #
+def score_efficiency(
+    *,
+    input_tokens: int,
+    output_tokens: int,
+    non_memory_tool_calls: int,
+    memory_events: list[MemoryEvent],
+    non_memory_tool_latency_ms: float = 0.0,
+    turns: int = 0,
+    retries: int = 0,
+) -> EfficiencyMetrics:
+    """Sum tokens / tool-call counts / latencies over a trial.
+
+    `memory_tool_calls` counts the normalized memory events (each retrieve/write is
+    one memory tool call); `tool_latency_ms` sums their measured latency plus the
+    non-memory tool latency. `cost_usd` and `model_latency_ms` stay 0.0 in the
+    deterministic path — they are populated on the Harbor/model path, not here.
+    """
+    mem_calls = len(memory_events)
+    mem_latency = sum(ev.latency_ms for ev in memory_events)
+    return EfficiencyMetrics(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=input_tokens + output_tokens,
+        tool_calls_total=non_memory_tool_calls + mem_calls,
+        memory_tool_calls=mem_calls,
+        non_memory_tool_calls=non_memory_tool_calls,
+        tool_latency_ms=non_memory_tool_latency_ms + mem_latency,
+        turns=turns,
+        retries=retries,
+    )
