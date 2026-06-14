@@ -104,6 +104,25 @@ def test_reset_clears_only_its_scope():
     assert list(kept.payloads) == ["trial-B-2"]
 
 
+def test_reset_rejects_duplicate_trial_id():
+    # A reused trial_id shares a backend scope across two distinct trials and silently
+    # cross-contaminates (mem-lvp.12); the arm refuses it rather than corrupt results.
+    arm = _arm()
+    arm.reset("trial-A")
+    arm.reset("trial-B")  # distinct ids are fine
+    with pytest.raises(ValueError, match="globally unique"):
+        arm.reset("trial-A")
+
+
+def test_uniqueness_guard_is_per_instance():
+    # Two arms (e.g. mem0 + a-mem) legitimately run the same logical trial_id; the
+    # guard is per-instance, so one arm's ids never block another's.
+    arm_a = _arm()
+    arm_b = _arm()
+    arm_a.reset("trial-shared")
+    arm_b.reset("trial-shared")  # must not raise
+
+
 def test_top_k_must_be_positive():
     with pytest.raises(ValueError, match="top_k"):
         StubArm(FakeSemanticClient(), top_k=0)

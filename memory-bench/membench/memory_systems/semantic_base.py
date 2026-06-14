@@ -87,8 +87,20 @@ class AbstractSemanticArm(MemorySystem, ABC):
             raise ValueError(f"top_k must be >= 1, got {top_k}")
         self._client = client
         self._top_k = top_k
+        # Trial ids this arm has scoped, to assert global uniqueness (mem-lvp.12).
+        self._seen_trial_ids: set[str] = set()
 
     def reset(self, trial_id: str) -> None:
+        # ``trial_id`` is the backend isolation scope (``user_id``/``group_id``/
+        # collection). Two distinct trials sharing an id would write the same scope and
+        # silently cross-contaminate, which no backend filter can undo — so a reused id
+        # is a harness bug, caught here rather than corrupting the comparison.
+        if trial_id in self._seen_trial_ids:
+            raise ValueError(
+                f"{self.name!r}: trial_id {trial_id!r} was already used in this run; "
+                "trial ids must be globally unique (mem-lvp.12 isolation)."
+            )
+        self._seen_trial_ids.add(trial_id)
         self._client.clear(scope=trial_id)
 
     def retrieve(self, request: RetrievalRequest, ctx: StepContext) -> RetrieveResult:
