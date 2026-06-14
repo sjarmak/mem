@@ -4,11 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  attachTaskTypes,
-  deriveMechanicalType,
-  loadTaskTypes,
-} from '../src/ingest/task-type.js';
+import { attachTaskTypes, deriveMechanicalType, loadTaskTypes } from '../src/ingest/task-type.js';
 import { openStore } from '../src/store/index.js';
 import { writeRecords } from '../src/store/writer.js';
 import { WorkRecordSchema, type WorkRecord } from '../src/schemas/workrecord.js';
@@ -135,7 +131,9 @@ describe('writer task-type projection', () => {
     };
     writeRecords(db, [rec]);
     const row = db
-      .prepare('SELECT task_type, task_type_source, molecule_id FROM work_records WHERE work_id = ?')
+      .prepare(
+        'SELECT task_type, task_type_source, molecule_id FROM work_records WHERE work_id = ?'
+      )
       .get(rec.work_id) as Record<string, unknown>;
     expect(row).toEqual({
       task_type: 'mol-do-work.drain',

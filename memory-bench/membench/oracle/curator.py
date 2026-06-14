@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+from membench._claude_cli import unwrap_cli_json
 from membench.oracle.consensus import BackendResult
 
 logger = logging.getLogger(__name__)
@@ -164,20 +165,7 @@ class ClaudeOracleCurator:
                 f"claude -p failed (exit {completed.returncode}): "
                 f"{completed.stderr.strip() or completed.stdout.strip()}"
             )
-        return _unwrap_cli_json(completed.stdout)
-
-
-def _unwrap_cli_json(stdout: str) -> str:
-    """The model text from ``claude --output-format json`` stdout (the ``result``
-    field). A non-wrapper stdout is returned verbatim so a plain reply still
-    parses downstream."""
-    try:
-        wrapper = json.loads(stdout)
-    except json.JSONDecodeError:
-        return stdout
-    if isinstance(wrapper, dict) and isinstance(wrapper.get("result"), str):
-        return str(wrapper["result"])
-    return stdout
+        return unwrap_cli_json(completed.stdout)
 
 
 def curate_consensus(

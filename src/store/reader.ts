@@ -166,6 +166,10 @@ export interface ErrorSearchHit {
   message: string;
 }
 
+/** Default row cap for {@link searchErrorMessages}, exported so the CLI can
+ * report the same value it falls back to instead of restating the literal. */
+export const SEARCH_ERROR_DEFAULT_LIMIT = 20;
+
 /**
  * Full-text search over trace-error messages — the Decision-8 "weak
  * tiebreaker". `query` is raw FTS5 MATCH syntax and the trust boundary is the
@@ -176,7 +180,7 @@ export interface ErrorSearchHit {
 export function searchErrorMessages(
   db: StoreDatabase,
   query: string,
-  limit = 20
+  limit = SEARCH_ERROR_DEFAULT_LIMIT
 ): ErrorSearchHit[] {
   return db
     .prepare(

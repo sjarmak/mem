@@ -21,7 +21,13 @@ const record = (workId: string, assignee?: { id: string; trace?: string }): Work
     title: `work ${workId}`,
     lifecycle: { created: '2026-06-01T00:00:00Z', status: 'closed' },
     agents: assignee
-      ? [{ agent_id: assignee.id, role: 'polecat', ...(assignee.trace && { trace_ref: assignee.trace }) }]
+      ? [
+          {
+            agent_id: assignee.id,
+            role: 'polecat',
+            ...(assignee.trace && { trace_ref: assignee.trace }),
+          },
+        ]
       : [],
   });
 
@@ -58,10 +64,7 @@ describe('loadSessionJoin', () => {
 
   it('parses session_paths when present', () => {
     const path = join(dir, 'join2.json');
-    writeFileSync(
-      path,
-      JSON.stringify({ beads: {}, session_paths: { 'gc-100': '/t/a.jsonl' } })
-    );
+    writeFileSync(path, JSON.stringify({ beads: {}, session_paths: { 'gc-100': '/t/a.jsonl' } }));
     expect(loadSessionJoin(path).sessionPaths.get('gc-100')).toBe('/t/a.jsonl');
   });
 

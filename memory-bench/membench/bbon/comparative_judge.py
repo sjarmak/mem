@@ -26,6 +26,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from membench._claude_cli import first_json_object, unwrap_cli_json
 from membench.bbon.models import Attempt, Judgment, NarrativeDiff, deterministic_id
 
 DEFAULT_PROMPT_VERSION = "v1"
@@ -128,20 +129,7 @@ class ClaudeComparativeJudge:
                 f"claude -p failed (exit {completed.returncode}): "
                 f"{completed.stderr.strip() or completed.stdout.strip()}"
             )
-        return _unwrap_cli_json(completed.stdout)
-
-
-def _unwrap_cli_json(stdout: str) -> str:
-    """The model text from ``claude --output-format json`` stdout: the wrapper's
-    ``result`` field. If stdout is not the documented wrapper, it is treated as the
-    raw model text (so a plain-text reply still parses downstream)."""
-    try:
-        wrapper = json.loads(stdout)
-    except json.JSONDecodeError:
-        return stdout
-    if isinstance(wrapper, dict) and isinstance(wrapper.get("result"), str):
-        return str(wrapper["result"])
-    return stdout
+        return unwrap_cli_json(completed.stdout)
 
 
 def judge_cache_key(
@@ -221,37 +209,6 @@ Confidence: 1.0 clear winner, 0.8 strong, 0.6 moderate, 0.5 essentially tied
 (still pick one). Be decisive but honest about confidence."""
 
 
-def _extract_first_json_object(text: str) -> str | None:
-    """The first balanced ``{...}`` block in ``text``, tolerating surrounding prose
-    and braces inside string literals (port of tom-swe's `extractFirstJsonObject`)."""
-    start = text.find("{")
-    if start == -1:
-        return None
-    depth = 0
-    in_string = False
-    escaped = False
-    for i in range(start, len(text)):
-        ch = text[i]
-        if escaped:
-            escaped = False
-            continue
-        if in_string:
-            if ch == "\\":
-                escaped = True
-            elif ch == '"':
-                in_string = False
-            continue
-        if ch == '"':
-            in_string = True
-        elif ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                return text[start : i + 1]
-    return None
-
-
 def parse_judgment_reply(
     reply: str,
     left: Attempt,
@@ -265,7 +222,7 @@ def parse_judgment_reply(
     invalid JSON, a winner that is not ``A``/``B``, a non-numeric/out-of-range
     confidence, or a missing rationale raises `ComparativeJudgeError` — a malformed
     verdict is a real failure, never silently coerced to a default winner."""
-    block = _extract_first_json_object(reply)
+    block = first_json_object(reply)
     if block is None:
         raise ComparativeJudgeError(f"judge reply has no JSON object: {reply[:200]!r}")
     try:

@@ -157,10 +157,10 @@ class CurveReadout:
         return self.curve.ceiling_gap
 
 
-def build_readout(summary: dict[str, Any]) -> CurveReadout:
+def build_readout(records: list[RewardRecord]) -> CurveReadout:
     """Build the reward curve and attempt the saturation / min-useful readouts,
     surfacing the curve's own refusal verbatim when the ladder is too short."""
-    curve = build_curve(_reward_records(summary))
+    curve = build_curve(records)
     try:
         saturation = saturation_point(curve).rung
         min_useful = min_useful_combo(curve).rung
@@ -187,11 +187,13 @@ def _reward_span(curve: ScoreInformationCurve) -> dict[str, Any] | None:
     }
 
 
-def _per_task_curve(summary: dict[str, Any]) -> list[dict[str, Any]]:
+def _per_task_curve(
+    summary: dict[str, Any], reward_records: list[RewardRecord]
+) -> list[dict[str, Any]]:
     """Each held-out task's reward at every executable rung — the per-task curve the
     aggregate is the mean of. One row per bundle; ``None`` where a rung's reward could
     not be formed (the artifact term is always present, so this stays populated)."""
-    records = {(r.work_id, r.rung): r.reward for r in _reward_records(summary)}
+    records = {(r.work_id, r.rung): r.reward for r in reward_records}
     rows: list[dict[str, Any]] = []
     for bundle in summary["per_bundle"]:
         work_id = bundle["work_id"]
@@ -223,7 +225,8 @@ def _source_coverage(summary: dict[str, Any]) -> dict[str, int]:
 
 def assemble(summary: dict[str, Any]) -> dict[str, Any]:
     """The full machine artifact the markdown is rendered from."""
-    readout = build_readout(summary)
+    reward_records = _reward_records(summary)
+    readout = build_readout(reward_records)
     repro = _leg_stats(summary, REPRO_LEG)
     artifact = _leg_stats(summary, ARTIFACT_LEG)
     return {
@@ -247,7 +250,7 @@ def assemble(summary: dict[str, Any]) -> dict[str, Any]:
         "saturation_point": readout.saturation,
         "min_useful_combo": readout.min_useful,
         "ladder_refusal": readout.refusal,
-        "per_task_curve": _per_task_curve(summary),
+        "per_task_curve": _per_task_curve(summary, reward_records),
         "reward_legs": {
             REPRO_LEG: [vars(s) for s in repro],
             ARTIFACT_LEG: [vars(s) for s in artifact],

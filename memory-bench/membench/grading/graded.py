@@ -58,6 +58,7 @@ from dataclasses import dataclass
 from statistics import median
 from typing import Protocol
 
+from membench._claude_cli import first_json_object, unwrap_cli_json
 from membench.grading.judge import Rubric, RubricCriterion, score_completion
 
 # Judge score and the mechanical reference disagree by more than this -> flag the run
@@ -164,43 +165,13 @@ class RubricParseError(ValueError):
     default score (the `grading.judge` fail-loud contract)."""
 
 
-def _first_json_object(text: str) -> str | None:
-    """The first balanced ``{...}`` block in ``text``, tolerating surrounding prose
-    and braces inside string literals. (Mirrors the comparative judge's reply parser;
-    kept local so `grading` does not depend on the higher-level `bbon` package.)"""
-    start = text.find("{")
-    if start == -1:
-        return None
-    depth = 0
-    in_string = False
-    escaped = False
-    for i in range(start, len(text)):
-        ch = text[i]
-        if escaped:
-            escaped = False
-        elif in_string:
-            if ch == "\\":
-                escaped = True
-            elif ch == '"':
-                in_string = False
-        elif ch == '"':
-            in_string = True
-        elif ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                return text[start : i + 1]
-    return None
-
-
 def parse_criteria(reply: str, rubric: Rubric) -> tuple[CriterionVerdict, ...]:
     """Parse a judge reply into one validated `CriterionVerdict` per rubric criterion.
 
     Enforces the anti-gaming contract structurally: every rubric criterion present
     exactly once, each score on the coarse {0, 0.5, 1.0} scale, each with non-empty
     code-specific evidence. Any breach raises `RubricParseError`."""
-    block = _first_json_object(reply)
+    block = first_json_object(reply)
     if block is None:
         raise RubricParseError(f"judge reply has no JSON object: {reply[:200]!r}")
     try:
@@ -275,7 +246,8 @@ class StubRubricJudge:
     def score(self, task: str, run_output: str, rubric: Rubric) -> float:
         if self.fn is not None:
             return self.fn(task, run_output, rubric)
-        assert self.fixed is not None  # __post_init__ guarantees one is set
+        if self.fixed is None:  # unreachable — __post_init__ guarantees one is set
+            raise AssertionError("StubRubricJudge has neither fixed nor fn")
         return self.fixed
 
 
@@ -357,19 +329,7 @@ class ClaudeRubricJudge:
                 f"claude -p failed (exit {completed.returncode}): "
                 f"{completed.stderr.strip() or completed.stdout.strip()}"
             )
-        return _unwrap_cli_json(completed.stdout)
-
-
-def _unwrap_cli_json(stdout: str) -> str:
-    """The model text from ``claude --output-format json`` stdout: the wrapper's
-    ``result`` field, or the raw stdout when it is not the documented wrapper."""
-    try:
-        wrapper = json.loads(stdout)
-    except json.JSONDecodeError:
-        return stdout
-    if isinstance(wrapper, Mapping) and isinstance(wrapper.get("result"), str):
-        return str(wrapper["result"])
-    return stdout
+        return unwrap_cli_json(completed.stdout)
 
 
 @dataclass(frozen=True)

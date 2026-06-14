@@ -24,6 +24,7 @@ export {
   lessonsFor,
   queryRecords,
   runsFor,
+  SEARCH_ERROR_DEFAULT_LIMIT,
   searchErrorMessages,
   supersedesClosure,
   workIdsBySignature,

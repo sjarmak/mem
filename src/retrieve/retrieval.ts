@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
-import { errorClass, failureSignature } from '../parse/recurrence.js';
-import { normalizePath } from '../parse/recurrence.js';
+import { errorClass, failureSignature, normalizePath } from '../parse/recurrence.js';
 import { TraceErrorSchema } from '../schemas/trace.js';
 import type { WorkRecord } from '../schemas/workrecord.js';
 import {

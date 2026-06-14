@@ -1,6 +1,10 @@
 import { CommandContext } from '../index.js';
 import { withReadStore } from '../store.js';
-import { searchErrorMessages, type ErrorSearchHit } from '../../store/index.js';
+import {
+  searchErrorMessages,
+  SEARCH_ERROR_DEFAULT_LIMIT,
+  type ErrorSearchHit,
+} from '../../store/index.js';
 
 export interface SearchErrorsResult {
   query: string;
@@ -9,12 +13,9 @@ export interface SearchErrorsResult {
   hits: ErrorSearchHit[];
 }
 
-/** The reader's own default; restated so the result envelope can report it. */
-const DEFAULT_LIMIT = 20;
-
-/** Parse `--limit` into a positive integer, or fall back to the default. */
+/** Parse `--limit` into a positive integer, or fall back to the reader's default. */
 function parseLimit(value: string | boolean | undefined): number {
-  if (value === undefined) return DEFAULT_LIMIT;
+  if (value === undefined) return SEARCH_ERROR_DEFAULT_LIMIT;
   if (typeof value !== 'string') throw new Error('--limit requires a value');
   const n = Number(value);
   if (!Number.isInteger(n) || n < 1) {

@@ -43,7 +43,13 @@ interface GcSessionLogs {
 
 /** Pure parse of `gc session logs --json` stdout → transcript path (or null). */
 export function parseTranscriptPath(stdout: string): string | null {
-  const parsed = JSON.parse(stdout) as GcSessionLogs;
+  let parsed: GcSessionLogs;
+  try {
+    parsed = JSON.parse(stdout) as GcSessionLogs;
+  } catch (err: unknown) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`gc session logs returned non-JSON output: ${detail}`);
+  }
   return parsed.ok && parsed.transcript_path ? parsed.transcript_path : null;
 }
 

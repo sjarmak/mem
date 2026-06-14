@@ -25,6 +25,7 @@ import argparse
 import datetime
 import json
 import sqlite3
+from collections import Counter
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -244,9 +245,7 @@ def write_report(
     eligibility: str = ELIGIBILITY_BASE,
 ) -> None:
     by_id = {str(r["work_id"]): r for r in pool}
-    rigs: dict[str, int] = {}
-    for record in pool:
-        rigs[str(record["rig"])] = rigs.get(str(record["rig"]), 0) + 1
+    rigs = Counter(str(record["rig"]) for record in pool)
     replayable = sum(1 for a in ranked if a.replayable)
     gated = [a for a in ranked if not (a.env_reconstructable and a.replayable)]
     today = datetime.date.today().isoformat()
