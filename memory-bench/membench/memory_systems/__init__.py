@@ -18,6 +18,7 @@ both `AbstractSemanticArm` subclasses behind an injectable client. `graphiti` /
 from typing import Any
 
 from membench.memory_systems.amem_system import AMemMemory
+from membench.memory_systems.async_bridge import AsyncClientBridge
 from membench.memory_systems.base import (
     MemorySystem,
     RetrievalRequest,
@@ -37,6 +38,7 @@ from membench.memory_systems.semantic_base import (
 __all__ = [
     "AMemMemory",
     "AbstractSemanticArm",
+    "AsyncClientBridge",
     "FilesystemMemory",
     "Mem0Memory",
     "MemorySystem",

@@ -137,6 +137,31 @@ class SemanticMemoryClient(Protocol):              # sync; async backends hold a
 arm is pure construction-time wiring (which client + `top_k`). The harness keeps
 the LOO boundary (`validity.assert_no_leak`).
 
+### 5b. Graphiti reset strategy — DECIDED (mem-lvp.11)
+
+Graphiti has no native group-wipe. Two ways to give it a per-trial clean slate
+were on the table: (a) a Cypher `DETACH DELETE` over the trial's `group_id`,
+which would force a driver `execute_query` hook onto the `SemanticMemoryClient`
+Protocol; or (b) mint a fresh, unique `group_id` per trial and never reuse it.
+
+**Decision: adopt (b) — fresh unique `group_id` per trial, never reused.**
+Rationale:
+
+1. **No Protocol widening** — keeps the seam at `store`/`query`/`clear` only; no
+   driver `execute_query` hook leaks onto `SemanticMemoryClient`.
+2. **Zero cross-trial leakage** — each trial writes into a brand-new `group_id`
+   namespace, so no prior-trial nodes are reachable by construction.
+3. **Simplest fake** — the CI fake just keys by `group_id` exactly like the real
+   client; no destructive-delete path to emulate.
+
+The per-trial namespace is `group_id = <run_id>:<ctx.trial_id>`, consistent with
+the mem-lvp.12 concurrency-isolation audit: rec.2 (inject the store/namespace
+per-run rather than sharing process-global state) and rec.4 (`trial_id` must be
+globally unique). **Consequence for mem-lvp.4:** Graphiti's `clear(scope)` is a
+no-op (or, equivalently, mints the next fresh `group_id`) — there is no
+destructive purge, because isolation comes from the never-reused namespace, not
+from deletion.
+
 ## 6. Build order & parallel front
 
 `mem-lvp.1` (base + Protocol) was the only true serialization point — **it has
@@ -153,7 +178,7 @@ mem-lvp.1 (base) ─┬─> .2  mem0      (sync, lightest, independent)
 
 New sub-beads carved from the research: **.9** (A-MEM, split out of the old
 `.4`), **.10** (`AsyncClientBridge`, blocks the two async arms), **.11** (Graphiti
-reset-strategy decision — recommend fresh `group_id` per trial), **.12**
+reset-strategy decision — DECIDED: fresh `group_id` per trial, see §5b), **.12**
 (concurrency-isolation audit — gates *real-arm* provisioning of mem0/A-MEM, not
 their CI fakes). Every arm's CI is model-free/network-free via the fake client, so
 the Ollama/Qdrant/Redis/FalkorDB/Chroma infra (`.5`/`.5`-adjacent) only gates
