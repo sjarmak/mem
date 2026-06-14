@@ -87,3 +87,10 @@ class MemorySystem(ABC):
     @abstractmethod
     def write(self, memory_id: str, content: str, ctx: StepContext) -> MemoryEvent:
         """Persist a memory; returns the normalized write event."""
+
+    def close(self) -> None:  # noqa: B027 (intentional no-op hook, NOT abstract)
+        """Release any process-lifetime resources the arm holds — event loops,
+        executor threads, connection pools. No-op by default; an arm that holds a
+        live resource (e.g. NAT/Graphiti's ``AsyncClientBridge`` loop, mem-lvp.15)
+        overrides this. The harness calls it once per arm at end of run, so it must
+        be idempotent: a double close (harness + a test fixture) is safe."""

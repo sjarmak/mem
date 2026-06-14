@@ -10,6 +10,7 @@ import pytest
 from membench.memory_systems.base import MemorySystem, RetrievalRequest
 from membench.memory_systems.semantic_base import (
     AbstractSemanticArm,
+    ClosableClient,
     SemanticMemoryClient,
 )
 from membench.runtime import IdClock, StepContext
@@ -20,6 +21,16 @@ from tests.semantic_fakes import FakeSemanticClient
 class StubArm(AbstractSemanticArm):
     name = "stub"
     backend = MemoryBackend.VECTOR_DB
+
+
+class _ClosableFake(FakeSemanticClient):
+    """A semantic client that also holds a (pretend) resource — records that close()
+    ran, so the arm's delegation is observable without a real bridge."""
+
+    closed: int = 0
+
+    def close(self) -> None:
+        self.closed += 1
 
 
 def _ctx(trial_id: str = "t") -> StepContext:
@@ -36,6 +47,28 @@ def test_is_a_memory_system():
 
 def test_fake_client_satisfies_protocol():
     assert isinstance(FakeSemanticClient(), SemanticMemoryClient)
+
+
+# --- close() lifecycle (mem-lvp.15) ------------------------------------------
+
+
+def test_closable_client_protocol_membership():
+    # The plain fake holds no resource and is NOT closable; the resource-holding one
+    # is. This is the discriminator the arm's close() keys off.
+    assert not isinstance(FakeSemanticClient(), ClosableClient)
+    assert isinstance(_ClosableFake(), ClosableClient)
+
+
+def test_close_delegates_to_a_closable_client():
+    client = _ClosableFake()
+    StubArm(client).close()
+    assert client.closed == 1
+
+
+def test_close_noops_on_a_non_closable_client():
+    # The base contract: close() on an arm whose client holds nothing is a safe
+    # no-op, never an AttributeError for a missing client.close.
+    _arm().close()  # does not raise
 
 
 def test_write_returns_backend_minted_id_not_requested_id():

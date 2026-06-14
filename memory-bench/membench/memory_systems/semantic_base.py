@@ -43,6 +43,19 @@ class SemanticHit:
 
 
 @runtime_checkable
+class ClosableClient(Protocol):
+    """A ``SemanticMemoryClient`` that owns a process-lifetime resource — an
+    ``AsyncClientBridge`` event loop, a connection pool — and must be torn down
+    (mem-lvp.15). Kept SEPARATE from ``SemanticMemoryClient`` so the seam stays at
+    ``store``/``query``/``clear`` (the §5b no-widening rule): only the clients that
+    actually hold a resource (NAT, Graphiti) implement it; the in-memory fakes and
+    stateless clients (mem0/A-MEM) don't, and the arm skips closing them."""
+
+    def close(self) -> None:
+        """Release the held resource. Idempotent."""
+
+
+@runtime_checkable
 class SemanticMemoryClient(Protocol):
     """The minimal seam a competitive memory backend must expose — three verbs over
     a normalized item shape. Each arm adapts its native SDK to this (mem0
@@ -89,6 +102,14 @@ class AbstractSemanticArm(MemorySystem, ABC):
         self._top_k = top_k
         # Trial ids this arm has scoped, to assert global uniqueness (mem-lvp.12).
         self._seen_trial_ids: set[str] = set()
+
+    def close(self) -> None:
+        # Tear down the injected client when it holds a process-lifetime resource
+        # (mem-lvp.15): NAT and Graphiti wrap an AsyncClientBridge loop, so closing
+        # the arm closes the loop. mem0/A-MEM and the test fakes hold nothing and are
+        # skipped. Delegates to bridge.close(), which is itself idempotent.
+        if isinstance(self._client, ClosableClient):
+            self._client.close()
 
     def reset(self, trial_id: str) -> None:
         # ``trial_id`` is the backend isolation scope (``user_id``/``group_id``/

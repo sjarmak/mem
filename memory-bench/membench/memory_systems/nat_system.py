@@ -135,6 +135,14 @@ class _NatClient:
     def clear(self, *, scope: str) -> None:
         self._bridge.run(self._editor.remove_items(user_id=scope))
 
+    def close(self) -> None:
+        """Tear down the persistent bridge — its event loop and default executor
+        (mem-lvp.15). The editor holds no loop; the bridge does, and without this it
+        leaks the loop + self-pipe sockets and any RedisEditor ``run_in_executor``
+        threads for the process's lifetime. Idempotent (``AsyncClientBridge.close``
+        no-ops once closed), so ``NatMemory.close`` is safe to call repeatedly."""
+        self._bridge.close()
+
 
 def default_nat_client() -> SemanticMemoryClient:
     """Build the real RedisEditor-backed client over its own persistent bridge. The

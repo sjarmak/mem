@@ -202,6 +202,41 @@ def test_clear_removes_only_its_scope() -> None:
     assert [h.content for h in kept] == ["alpha"]
 
 
+# --- close() lifecycle (mem-lvp.15) -------------------------------------------
+
+
+def test_nat_client_close_tears_down_bridge_loop() -> None:
+    client = _client()
+    loop = client._bridge.loop
+    client.close()
+    # The persistent loop (and its self-pipe sockets / executor) is released; without
+    # this the bridge leaks them for the process lifetime.
+    assert loop.is_closed()
+
+
+def test_nat_client_close_is_idempotent() -> None:
+    client = _client()
+    client.close()
+    client.close()  # second close must not raise (bridge.close no-ops once closed)
+
+
+def test_arm_close_delegates_to_the_closable_client() -> None:
+    # NatMemory inherits AbstractSemanticArm.close(), which closes the client only
+    # when it holds a resource — the real _NatClient wraps a bridge, so the arm's
+    # close tears that loop down.
+    bridge = AsyncClientBridge()
+    _OPEN_BRIDGES.append(bridge)
+    arm = NatMemory(_NatClient(FakeMemoryEditor(), bridge, item_factory=_FakeItem))
+    arm.close()
+    assert bridge.loop.is_closed()
+
+
+def test_arm_close_noops_on_a_non_closable_client() -> None:
+    # The shared in-memory fake holds no resource and exposes no close(); the arm's
+    # close() must be a safe no-op, not an AttributeError.
+    NatMemory(FakeSemanticClient()).close()
+
+
 # --- NatMemory arm (via the shared FakeSemanticClient) ------------------------
 
 
