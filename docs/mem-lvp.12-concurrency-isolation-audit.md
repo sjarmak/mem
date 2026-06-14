@@ -17,6 +17,20 @@ their CI fakes, which are in-process, hermetic, and already green. Companion to
 > own its store path / collection / group_id; do not parallelize trials until
 > namespace isolation is proven per backend.**
 
+> **Status update (2026-06-14).** The highest-priority gap below — the mem0
+> store-path constant (rec. 2, failure modes 1 & 7) — **landed** at `43934c7`:
+> `mem0_system.py` now injects a unique per-run store path
+> (`default_mem0_store_path()`, `MEMBENCH_MEM0_STORE_DIR` override) instead of the
+> shared `/tmp/membench-mem0-qdrant` constant. The async-arm gates also cleared:
+> mem-lvp.10 (`AsyncClientBridge`, one loop per instance — rec. 5) and mem-lvp.11
+> (Graphiti fresh-`group_id`-per-trial — failure mode 6) are both resolved. Rec. 4
+> also landed at `b593ce8`: `AbstractSemanticArm.reset()` now records each
+> `trial_id` and raises on reuse (a per-arm uniqueness guard, so a duplicate scope
+> fails loud instead of silently merging two trials). The one gap remaining before
+> a real mem0/A-MEM run is per-run namespace injection for the **A-MEM** Chroma
+> collection (still `membench_<scope>`, not run-id-scoped — failure mode 7 across
+> runs); mem0's equivalent already landed above.
+
 ## 1. Current execution model — single process, sequential, fresh instance per condition
 
 One Python process, one thread, no async on the run path. Both entry points loop:
@@ -150,8 +164,10 @@ Actionable contract for whoever provisions the real backends:
 only after** rec. 2 (injected per-run store path) and rec. 4 (trial_id
 uniqueness assertion) land — both are small, harness-side changes, no Protocol
 churn. The async arms (NAT, Graphiti) additionally gate on mem-lvp.10 pinning
-one-loop-per-instance (rec. 5) and mem-lvp.11's `group_id` reset decision. Until
-the injected store path lands, two real-arm instances in one process share
-`/tmp/membench-mem0-qdrant` and will silently cross-contaminate — that single
-constant (`mem0_system.py:38`) is the highest-priority fix before any real mem0
-run.
+one-loop-per-instance (rec. 5) and mem-lvp.11's `group_id` reset decision. The
+mem0 store-path fix — formerly the highest-priority blocker, when two real-arm
+instances shared `/tmp/membench-mem0-qdrant` — **landed at `43934c7`** (see the
+status update at the top); rec. 4 (`trial_id` uniqueness) landed at `b593ce8`, and
+rec. 5 + the Graphiti decision are also resolved. The one remaining gate before a
+real mem0/A-MEM run is per-run namespace injection for A-MEM's Chroma collection
+(run-id-scoped, not just `membench_<scope>`).

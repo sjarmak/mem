@@ -146,6 +146,12 @@ it needs) is a later, eval-design step, deliberately not made here.
   extractor, and judge stay OSS or self-hosted.
 - The TypeScript work-audit graph builder in `../src/` is a **data source**. It
   exports sequences and fixtures as JSON; it is not rewritten here.
-- **Not built here** (later phases): competitive memory systems, an embedding
-  retrieval lane, the synthetic sequence generator, the full ≥10-sequence
-  dataset, and the complete metrics and diagnostics suite.
+- **Later-phase work, now landing on the `mem-lvp` front** (see
+  `../docs/competitive-arms-integration.md`): the competitive memory systems are
+  partly in — the sync `SemanticMemoryClient` seam, the `AsyncClientBridge` for
+  async backends, and the mem0 + A-MEM arms have landed (CI runs against
+  deterministic fakes; real-arm provisioning is gated on local Ollama/Qdrant/
+  Chroma infra). The §12 metric groups and a real-derived sequence seed have
+  also landed.
+- **Still not built**: the NAT and Graphiti arms, an embedding retrieval lane,
+  the synthetic sequence generator, and the full ≥10-sequence dataset.

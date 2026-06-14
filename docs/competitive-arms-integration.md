@@ -162,28 +162,65 @@ no-op (or, equivalently, mints the next fresh `group_id`) — there is no
 destructive purge, because isolation comes from the never-reused namespace, not
 from deletion.
 
+### 5c. AsyncClientBridge — the sync↔async seam (mem-lvp.10, LANDED)
+
+The Protocol in §5 is **sync** on purpose, so the seam and the deterministic
+fakes never go async. But two backends are async-native — NAT's `MemoryEditor`
+and `graphiti-core` — so they need a sync adapter. That adapter is
+`AsyncClientBridge` (`membench/memory_systems/async_bridge.py`): it holds one
+persistent asyncio event loop and exposes `run(coro)`, so a concrete async client
+calls `bridge.run(self._editor.add_items(...))` and satisfies the sync
+`store`/`query`/`clear` contract.
+
+Three design choices are load-bearing, and all trace back to the mem-lvp.12
+concurrency audit:
+
+- **One loop per bridge instance**, created with `asyncio.new_event_loop()` and
+  held for the instance's lifetime — never a module-global or shared loop (audit
+  failure mode #5: a shared loop is both a global serialization point and a
+  shared-connection contamination vector across trials/arms).
+- **Never `asyncio.set_event_loop()`.** The loop stays off the thread-global
+  current-loop slot, so it can't be picked up by unrelated `get_event_loop()`
+  callers. This is also why the bridge does **not** delegate to `asyncio.Runner`,
+  which would otherwise be the obvious fit: `Runner.__init__` calls
+  `set_event_loop()`, reintroducing exactly the global mutation the audit forbids.
+- **Warm connection lifecycle.** Reusing one loop across many sequential `run`
+  calls keeps the backend's Redis/graph-driver connection pool warm;
+  `asyncio.run` per call would tear it down every time. `close()` drains async
+  generators and the default executor before closing the loop (the same teardown
+  `asyncio.run`/`Runner` perform) so streaming backends don't leak pending tasks
+  or daemon threads.
+
+The bridge is sequential-use only (matching the audit's serialize-per-arm
+contract); an optional per-call timeout to bound a hung backend coroutine is
+tracked as a follow-up (mem-lvp.13).
+
 ## 6. Build order & parallel front
 
-`mem-lvp.1` (base + Protocol) was the only true serialization point — **it has
-landed and is closed**. The remaining beads run on a wide parallel front:
+`mem-lvp.1` (base + Protocol) was the only true serialization point. It, both
+sync arms, and the async infra have since **landed and closed**; the two async
+arms are the remaining frontier (✓ = closed):
 
 ```
-mem-lvp.1 (base) ─┬─> .2  mem0      (sync, lightest, independent)
-                  ├─> .10 AsyncClientBridge (infra) ─┬─> .3 NAT      (async)
-                  │                                   └─> .4 Graphiti (async; + .11 reset decision)
-                  ├─> .9  A-MEM     (sync; real arm gated by .12 concurrency audit)
-                  └─> .5  score-norm helpers (consumed by all, no blocker)
-.6 metrics · .7 synthetic · .8 dataset   — independent workstreams, parallel anytime
+mem-lvp.1 ✓ (base) ─┬─> .2  mem0      ✓ (sync, lightest, independent)
+                    ├─> .10 ✓ AsyncClientBridge (infra) ─┬─> .3 NAT      ○ (async)
+                    │                                      └─> .4 Graphiti ○ (async; + .11 reset decision ✓)
+                    ├─> .9  A-MEM     ✓ (sync)
+                    └─> .5  score-norm helpers (consumed by all, no blocker)
+.6 metrics · .7 synthetic ○ · .8 dataset   — independent workstreams, parallel anytime
 ```
 
-New sub-beads carved from the research: **.9** (A-MEM, split out of the old
-`.4`), **.10** (`AsyncClientBridge`, blocks the two async arms), **.11** (Graphiti
-reset-strategy decision — DECIDED: fresh `group_id` per trial, see §5b), **.12**
-(concurrency-isolation audit — gates *real-arm* provisioning of mem0/A-MEM, not
-their CI fakes). Every arm's CI is model-free/network-free via the fake client, so
-the Ollama/Qdrant/Redis/FalkorDB/Chroma infra (`.5`/`.5`-adjacent) only gates
-*real-arm provisioning*, downstream of green CI.
+Sub-beads carved from the research, now resolved: **.9** (A-MEM, split out of the
+old `.4`) ✓, **.10** (`AsyncClientBridge`, unblocks the two async arms — see §5c)
+✓, **.11** (Graphiti reset-strategy decision — fresh `group_id` per trial, §5b) ✓,
+**.12** (concurrency-isolation audit — gates *real-arm* provisioning of mem0/A-MEM,
+not their CI fakes) ✓. Every arm's CI is model-free/network-free via the fake
+client, so the Ollama/Qdrant/Redis/FalkorDB/Chroma infra only gates *real-arm
+provisioning*, downstream of green CI.
 
-The natural next workflow: a parallel **worktree** build of `.2` (mem0) and `.9`
-(A-MEM) — both sync, both independent of the AsyncClientBridge — each landing as
-subclass + fake-client tests.
+**Frontier:** the two async arms, `.3` (NAT) and `.4` (Graphiti), both now
+unblocked by `AsyncClientBridge` — each lands as a concrete `SemanticMemoryClient`
+over the bridge plus fake-client tests. Real-arm provisioning of the sync arms has
+largely cleared its mem-lvp.12 gates: the mem0 per-run store path (`43934c7`) and
+the per-arm `trial_id` uniqueness guard (`b593ce8`) both landed; the one remaining
+real-run gate is per-run namespace injection for A-MEM's Chroma collection.
