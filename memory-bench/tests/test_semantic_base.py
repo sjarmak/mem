@@ -167,7 +167,7 @@ def test_top_k_must_be_positive():
 # --- l2_distance_to_similarity: shared NAT/A-MEM normalization (mem-lvp.16) ----
 
 
-def test_l2_distance_to_similarity_is_monotone_decreasing():
+def test_l2_distance_to_similarity_is_monotone_decreasing() -> None:
     # The contract every L2-distance arm shares: 1/(1+d) maps a non-negative distance
     # to a higher-is-better similarity in (0, 1], so best-first ordering is preserved.
     assert l2_distance_to_similarity(0.0) == 1.0
@@ -186,13 +186,13 @@ def test_l2_distance_to_similarity_is_monotone_decreasing():
         float("-inf"),
     ],
 )
-def test_l2_distance_to_similarity_rejects_non_finite_or_negative(bad: float):
+def test_l2_distance_to_similarity_rejects_non_finite_or_negative(bad: float) -> None:
     # A real L2 distance is finite and >= 0; a negative/NaN value means the backend
     # misbehaved, so fail loud rather than corrupt benchmark scores silently.
     with pytest.raises(ValueError, match="distance"):
         l2_distance_to_similarity(bad)
 
 
-def test_l2_distance_to_similarity_does_not_emit_nan():
+def test_l2_distance_to_similarity_does_not_emit_nan() -> None:
     # Guards the specific failure the validation prevents: a NaN score poisoning ranking.
     assert not math.isnan(l2_distance_to_similarity(0.0))

@@ -236,7 +236,7 @@ def test_clear_with_blank_scope_raises_and_never_calls_remove_items(blank: str) 
 # --- distance validation (mem-lvp.16) -----------------------------------------
 
 
-@pytest.mark.parametrize("bad", [-1.0, float("nan"), float("inf")])
+@pytest.mark.parametrize("bad", [-1.0, float("nan"), float("inf"), float("-inf")])
 def test_query_raises_on_non_finite_or_negative_distance(bad: float) -> None:
     # A misbehaving backend returning a negative/NaN/inf L2 distance must fail loud:
     # raw 1/(1+d) is a ZeroDivisionError at d=-1 and silently NaN/out-of-range otherwise.

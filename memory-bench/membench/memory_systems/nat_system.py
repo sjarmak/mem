@@ -83,12 +83,9 @@ def _default_item_factory(*, user_id: str, memory: str, metadata: dict[str, Any]
     return MemoryItem(user_id=user_id, memory=memory, metadata=metadata)
 
 
-def _similarity(distance: float) -> float:
-    """Map a RedisEditor L2 distance to a higher-is-better similarity. Delegates to the
-    shared ``l2_distance_to_similarity`` (same convention as the A-MEM arm), which
-    validates the distance is finite and non-negative so a misbehaving editor fails
-    loud rather than emitting a NaN/out-of-range score (mem-lvp.16)."""
-    return l2_distance_to_similarity(distance)
+# The RedisEditor L2 distance → similarity mapping is the shared, validated one
+# (mem-lvp.16); aliased so the query() call site and arm tests keep a module-local name.
+_similarity = l2_distance_to_similarity
 
 
 class _NatClient:
