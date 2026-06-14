@@ -34,6 +34,7 @@ from membench.memory_systems.semantic_base import (
     DEFAULT_TOP_K,
     AbstractSemanticArm,
     SemanticHit,
+    l2_distance_to_similarity,
 )
 from membench.schemas.memory_event import MemoryBackend
 
@@ -67,10 +68,11 @@ def _distance(hit: dict[str, Any]) -> float:
 
 
 def _similarity(distance: float) -> float:
-    """Map a ChromaDB L2 distance (>= 0, lower = closer) to a higher-is-better
-    similarity in (0, 1]. ``1 / (1 + d)`` is monotone-decreasing in the distance,
-    so the base's best-first ordering matches ChromaDB's nearest-first ordering."""
-    return 1.0 / (1.0 + distance)
+    """Map a ChromaDB L2 distance to a higher-is-better similarity. Delegates to the
+    shared ``l2_distance_to_similarity`` (same convention as the NAT arm), which
+    validates the distance is finite and non-negative so a misbehaving backend fails
+    loud rather than emitting a NaN/out-of-range score (mem-lvp.16)."""
+    return l2_distance_to_similarity(distance)
 
 
 class _AMemClient:
