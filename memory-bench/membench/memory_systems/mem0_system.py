@@ -19,7 +19,11 @@ suite — needs neither the SDK nor a network. Tests inject a fake instead.
 
 from __future__ import annotations
 
+import os
+import tempfile
+import uuid
 from collections.abc import Sequence
+from copy import deepcopy
 from typing import Any, Protocol
 
 from membench.memory_systems.semantic_base import (
@@ -30,13 +34,16 @@ from membench.memory_systems.semantic_base import (
 )
 from membench.schemas.memory_event import MemoryBackend
 
-# Local-only mem0 config: Qdrant embedded as the vector store and Ollama for both
-# the embedder and the LLM, so the real arm runs with no paid API and no network
-# beyond the local Ollama daemon (mem-lvp.5 owns provisioning it).
+# Local-only mem0 base config: Qdrant embedded as the vector store and Ollama for
+# both the embedder and the LLM, so the real arm runs with no paid API and no
+# network beyond the local Ollama daemon (mem-lvp.5 owns provisioning it). The
+# vector-store *path* is deliberately NOT baked here — it is injected per run by
+# ``build_mem0_config`` so two arm instances (or two membench runs) never share one
+# Qdrant collection. A shared collection separated only by the ``user_id`` filter is
+# a silent cross-trial contamination risk (mem-lvp.12 audit).
 LOCAL_CONFIG: dict[str, Any] = {
     "vector_store": {
         "provider": "qdrant",
-        "config": {"path": "/tmp/membench-mem0-qdrant", "on_disk": True},
     },
     "embedder": {
         "provider": "ollama",
@@ -47,6 +54,23 @@ LOCAL_CONFIG: dict[str, Any] = {
         "config": {"model": "llama3"},
     },
 }
+
+
+def default_mem0_store_path() -> str:
+    """A unique on-disk Qdrant location per call, so no two ``Mem0Memory`` instances —
+    and no two membench runs — share a collection (mem-lvp.12). ``mem-lvp.5`` can pin
+    the parent directory with ``MEMBENCH_MEM0_STORE_DIR`` or override the whole path by
+    passing ``store_path`` explicitly."""
+    base = os.environ.get("MEMBENCH_MEM0_STORE_DIR") or tempfile.gettempdir()
+    return os.path.join(base, f"membench-mem0-{os.getpid()}-{uuid.uuid4().hex}")
+
+
+def build_mem0_config(store_path: str) -> dict[str, Any]:
+    """Compose the full mem0 config for one run, injecting ``store_path`` into a copy
+    of ``LOCAL_CONFIG`` (never mutating the module constant)."""
+    config = deepcopy(LOCAL_CONFIG)
+    config["vector_store"]["config"] = {"path": store_path, "on_disk": True}
+    return config
 
 
 class _NativeMem0(Protocol):
@@ -110,13 +134,14 @@ class _Mem0Client:
         self._native.delete_all(user_id=scope)
 
 
-def default_mem0_client() -> SemanticMemoryClient:
-    """Build the real local mem0 client. ``mem0`` is imported HERE, lazily, so the
-    module (and the suite) loads without the SDK installed; the arm depends only on
-    the Protocol."""
+def default_mem0_client(store_path: str | None = None) -> SemanticMemoryClient:
+    """Build the real local mem0 client over a per-run store (``store_path`` or a fresh
+    unique path). ``mem0`` is imported HERE, lazily, so the module (and the suite) loads
+    without the SDK installed; the arm depends only on the Protocol."""
     from mem0 import Memory
 
-    return _Mem0Client(Memory.from_config(LOCAL_CONFIG))
+    path = store_path if store_path is not None else default_mem0_store_path()
+    return _Mem0Client(Memory.from_config(build_mem0_config(path)))
 
 
 class Mem0Memory(AbstractSemanticArm):
@@ -131,5 +156,9 @@ class Mem0Memory(AbstractSemanticArm):
         client: SemanticMemoryClient | None = None,
         *,
         top_k: int = DEFAULT_TOP_K,
+        store_path: str | None = None,
     ) -> None:
-        super().__init__(client if client is not None else default_mem0_client(), top_k=top_k)
+        super().__init__(
+            client if client is not None else default_mem0_client(store_path),
+            top_k=top_k,
+        )

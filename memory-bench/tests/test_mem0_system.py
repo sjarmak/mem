@@ -23,6 +23,8 @@ from membench.memory_systems.mem0_system import (
     Mem0Memory,
     SemanticMemoryClient,
     _Mem0Client,
+    build_mem0_config,
+    default_mem0_store_path,
 )
 from membench.runtime import IdClock, StepContext
 from membench.schemas.memory_event import MemoryBackend, MemoryOperation
@@ -190,3 +192,28 @@ def test_local_config_is_network_free_local_models():
     assert LOCAL_CONFIG["vector_store"]["provider"] == "qdrant"
     assert LOCAL_CONFIG["embedder"]["provider"] == "ollama"
     assert LOCAL_CONFIG["llm"]["provider"] == "ollama"
+
+
+def test_local_config_bakes_no_shared_store_path():
+    # The path must be injected per run, never baked: a static shared path would put
+    # every instance/run in one Qdrant collection (mem-lvp.12 contamination risk).
+    assert "config" not in LOCAL_CONFIG["vector_store"]
+
+
+def test_default_store_path_is_unique_per_call():
+    # Two arms — or two runs — must land in different collections.
+    assert default_mem0_store_path() != default_mem0_store_path()
+
+
+def test_store_dir_env_override(monkeypatch, tmp_path):
+    monkeypatch.setenv("MEMBENCH_MEM0_STORE_DIR", str(tmp_path))
+    path = default_mem0_store_path()
+    assert path.startswith(str(tmp_path))
+
+
+def test_build_mem0_config_injects_path_without_mutating_constant():
+    config = build_mem0_config("/some/run/store")
+    assert config["vector_store"]["config"] == {"path": "/some/run/store", "on_disk": True}
+    # local models preserved; module constant untouched (deepcopy).
+    assert config["embedder"]["provider"] == "ollama"
+    assert "config" not in LOCAL_CONFIG["vector_store"]
