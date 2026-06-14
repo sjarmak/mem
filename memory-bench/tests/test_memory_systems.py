@@ -63,12 +63,10 @@ def test_build_unknown_system_raises():
 
 def test_build_deferred_system_raises_with_pointer():
     # `builtin` is the paid Harbor audit owned by mem-whi; the factory must reject
-    # it with a precise pointer, not pretend it is wired.
+    # it with a precise pointer, not pretend it is wired. It is the only deferred arm
+    # now that mem0 / a-mem / nat / graphiti are all wired (mem-lvp.2/.9/.3/.4).
     with pytest.raises(ValueError, match="mem-whi"):
         build_memory_system("builtin")
-    # graphiti / nat remain competitive arms pending mem-lvp (mem0 + a-mem are wired).
-    with pytest.raises(ValueError, match="mem-lvp"):
-        build_memory_system("graphiti")
 
 
 def test_build_ours_constructs():

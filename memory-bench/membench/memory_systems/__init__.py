@@ -10,9 +10,9 @@ First-run arm scope is `none` / `ours` / `builtin` (fork 4):
 - `builtin` — the agent's own opaque memory (Claude/Codex). Its audit is the
   paid Harbor path owned by **mem-whi**, not implemented here.
 
-`mem0`, `a-mem`, and `nat` are the wired competitive arms (mem-lvp.2 / mem-lvp.9 /
-mem-lvp.3), all `AbstractSemanticArm` subclasses behind an injectable client.
-`graphiti` plugs in LATER (mem-lvp.4) behind this same `MemorySystem` contract.
+`mem0`, `a-mem`, `nat`, and `graphiti` are the wired competitive arms (mem-lvp.2 /
+mem-lvp.9 / mem-lvp.3 / mem-lvp.4), all `AbstractSemanticArm` subclasses behind an
+injectable client.
 """
 
 from typing import Any
@@ -25,6 +25,7 @@ from membench.memory_systems.base import (
     RetrieveResult,
 )
 from membench.memory_systems.filesystem_system import FilesystemMemory
+from membench.memory_systems.graphiti_system import GraphitiMemory
 from membench.memory_systems.local_stack import (
     LocalModelStack,
     LocalStackUnavailableError,
@@ -45,6 +46,7 @@ __all__ = [
     "AbstractSemanticArm",
     "AsyncClientBridge",
     "FilesystemMemory",
+    "GraphitiMemory",
     "LocalModelStack",
     "LocalStackUnavailableError",
     "Mem0Memory",
@@ -65,7 +67,6 @@ __all__ = [
 # keeping the uniform interface honest about what is wired vs pending.
 _DEFERRED = {
     "builtin": "the built-in Claude/Codex memory audit is the paid Harbor path (mem-whi)",
-    "graphiti": "competitive arm (mem-lvp.4)",
 }
 
 
@@ -81,6 +82,7 @@ def build_memory_system(name: str, **kwargs: Any) -> MemorySystem:
         "mem0": Mem0Memory,
         "a-mem": AMemMemory,
         "nat": NatMemory,
+        "graphiti": GraphitiMemory,
     }
     cls = systems.get(name)
     if cls is None:

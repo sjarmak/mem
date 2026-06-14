@@ -197,14 +197,14 @@ tracked as a follow-up (mem-lvp.13).
 
 ## 6. Build order & parallel front
 
-`mem-lvp.1` (base + Protocol) was the only true serialization point. It, both
-sync arms, and the async infra have since **landed and closed**; the two async
-arms are the remaining frontier (✓ = closed):
+`mem-lvp.1` (base + Protocol) was the only true serialization point. **All four
+competitive arms have now landed and closed** — both sync arms, the async infra,
+and both async arms (✓ = closed):
 
 ```
 mem-lvp.1 ✓ (base) ─┬─> .2  mem0      ✓ (sync, lightest, independent)
-                    ├─> .10 ✓ AsyncClientBridge (infra) ─┬─> .3 NAT      ○ (async)
-                    │                                      └─> .4 Graphiti ○ (async; + .11 reset decision ✓)
+                    ├─> .10 ✓ AsyncClientBridge (infra) ─┬─> .3 NAT      ✓ (async)
+                    │                                      └─> .4 Graphiti ✓ (async; + .11 reset decision ✓)
                     ├─> .9  A-MEM     ✓ (sync)
                     └─> .5  shared local model/embedder stack ✓ (consumed by all real clients — §7)
 .6 metrics · .7 synthetic ○ · .8 dataset   — independent workstreams, parallel anytime
@@ -218,12 +218,18 @@ not their CI fakes) ✓. Every arm's CI is model-free/network-free via the fake
 client, so the Ollama/Qdrant/Redis/FalkorDB/Chroma infra only gates *real-arm
 provisioning*, downstream of green CI.
 
-**Frontier:** the two async arms, `.3` (NAT) and `.4` (Graphiti), both now
-unblocked by `AsyncClientBridge` — each lands as a concrete `SemanticMemoryClient`
-over the bridge plus fake-client tests. Real-arm provisioning of the sync arms has
-largely cleared its mem-lvp.12 gates: the mem0 per-run store path (`43934c7`) and
-the per-arm `trial_id` uniqueness guard (`b593ce8`) both landed; the one remaining
-real-run gate is per-run namespace injection for A-MEM's Chroma collection.
+**Both async arms have landed.** `.3` (NAT) and `.4` (Graphiti) each ship as a
+concrete `SemanticMemoryClient` over `AsyncClientBridge` plus an async fake-client
+test suite. Graphiti follows the §5b reset decision (fresh `group_id` per trial →
+`clear` is a no-op) and the §7 local stack (Ollama LLM/embedder via Graphiti's
+OpenAI-compatible clients + a sentence-transformers reranker + FalkorDB), and is
+wired in the factory (no longer in `_DEFERRED`). NAT and Graphiti also implement
+the `close()` lifecycle (mem-lvp.15) so their persistent bridge loop is torn down.
+
+Real-arm provisioning of the sync arms has largely cleared its mem-lvp.12 gates:
+the mem0 per-run store path (`43934c7`) and the per-arm `trial_id` uniqueness guard
+(`b593ce8`) both landed; the one remaining real-run gate is per-run namespace
+injection for A-MEM's Chroma collection.
 
 ## 7. The shared local model/embedder stack (mem-lvp.5, LANDED)
 
