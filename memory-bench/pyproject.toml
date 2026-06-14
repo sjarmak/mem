@@ -56,3 +56,9 @@ strict = true
 module = ["opentelemetry.*"]
 ignore_missing_imports = true
 disallow_untyped_calls = false
+
+# Competitive arms lazily import optional memory SDKs that ship no type stubs and
+# need not be installed for the suite to load; silence import-not-found uniformly.
+[[tool.mypy.overrides]]
+module = ["mem0", "mem0.*", "agentic_memory", "agentic_memory.*", "nat.*"]
+ignore_missing_imports = true
