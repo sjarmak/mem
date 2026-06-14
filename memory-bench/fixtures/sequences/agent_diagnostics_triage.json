@@ -1,0 +1,91 @@
+{
+  "sequence_id": "agent-diagnostics-triage",
+  "title": "Agent-diagnostics traces — a root-cause hypothesis is revised; verification must target the corrected cause",
+  "domain": "diagnostics/traces",
+  "goal": "Run the verification strategy against the CORRECTED root cause after the first hypothesis is disproven.",
+  "steps": [
+    {
+      "step_id": "s1-first-hypothesis",
+      "user_request": "Triage the failing run trace. The errors cluster on retrieval timeouts — record the working root-cause hypothesis.",
+      "available_tools": ["shell"],
+      "environment_state": {"trace": "run-9912"},
+      "expected_memory_writes": {
+        "rootcause-v1": "run-9912 root cause hypothesis: retrieval backend timing out under load (network bound)."
+      },
+      "expected_memory_reads": [],
+      "outcome_checks": [
+        {
+          "check_id": "hypothesis-v1-recorded",
+          "description": "First root-cause hypothesis recorded.",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p1-v1-written",
+          "expected_memory_id": "rootcause-v1",
+          "description": "First hypothesis persisted."
+        }
+      ]
+    },
+    {
+      "step_id": "s2-revise-hypothesis",
+      "user_request": "New evidence: the timeouts are a symptom — the real cause is a malformed query that retries forever. Update the root cause and mark the timeout hypothesis as disproven.",
+      "available_tools": ["shell"],
+      "environment_state": {"trace": "run-9912"},
+      "expected_memory_writes": {
+        "rootcause-v2": "run-9912 CORRECTED root cause: malformed query triggers an infinite retry loop; the timeouts were a downstream symptom. The retrieval-timeout hypothesis is DISPROVEN."
+      },
+      "expected_memory_reads": [],
+      "superseded_memory_ids": ["rootcause-v1"],
+      "outcome_checks": [
+        {
+          "check_id": "hypothesis-v2-recorded",
+          "description": "Corrected root cause recorded; v1 superseded.",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p2-v2-written",
+          "expected_memory_id": "rootcause-v2",
+          "description": "Corrected hypothesis persisted; rootcause-v1 is now stale."
+        }
+      ],
+      "distractor_memories": {
+        "rootcause-run9910": "run-9910 (a different trace) root cause: disk pressure — similar diagnostics shape, wrong run (interference B)."
+      }
+    },
+    {
+      "step_id": "s3-design-verification",
+      "user_request": "Design the verification check that will confirm the fix for run-9912 works.",
+      "available_tools": ["shell"],
+      "environment_state": {"trace": "run-9912"},
+      "expected_memory_writes": {},
+      "expected_memory_reads": ["rootcause-v2"],
+      "outcome_checks": [
+        {
+          "check_id": "verification-drafted",
+          "description": "A verification check was drafted (stateless).",
+          "requires_memory": []
+        },
+        {
+          "check_id": "targets-corrected-cause",
+          "description": "Verifies the malformed-query/retry fix (v2), NOT the disproven timeout hypothesis (v1) — staleness/supersession (C) driving verification strategy (G).",
+          "requires_memory": ["rootcause-v2"]
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p3-uses-corrected-cause",
+          "expected_memory_id": "rootcause-v2",
+          "description": "Must use the revised root cause (C) to shape the verification action (G); reading v1 would be stale_memory_used."
+        }
+      ]
+    }
+  ],
+  "final_goal_check": {
+    "description": "Verification targets the corrected root cause; the disproven hypothesis is not re-tested.",
+    "axes_covered": ["B", "C", "G"]
+  }
+}

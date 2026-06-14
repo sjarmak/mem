@@ -1,0 +1,117 @@
+{
+  "sequence_id": "codescalebench-eval-task",
+  "title": "CodeScaleBench eval task — keep per-repo harness config scoped so the right base image is used",
+  "domain": "eval/codescalebench",
+  "goal": "Run the eval for repo scix_experiments using the base image and entrypoint scoped to THAT repo, not a sibling clone.",
+  "steps": [
+    {
+      "step_id": "s1-config-scix",
+      "user_request": "Configure the eval harness for clone scix_experiments: record its base image and test entrypoint.",
+      "available_tools": ["shell", "docker"],
+      "environment_state": {"clone": "scix_experiments"},
+      "expected_memory_writes": {
+        "cfg-scix": "scix_experiments eval config: base image scix/py311-eval, entrypoint pytest tests/eval, scope key = clone:scix_experiments."
+      },
+      "expected_memory_reads": [],
+      "outcome_checks": [
+        {
+          "check_id": "scix-config-recorded",
+          "description": "scix_experiments config is recorded under its own scope key.",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p1-scix-written",
+          "expected_memory_id": "cfg-scix",
+          "description": "Per-repo scoped config persisted (scope isolation E)."
+        }
+      ]
+    },
+    {
+      "step_id": "s2-config-sibling",
+      "user_request": "Configure the eval harness for a SIBLING clone EnterpriseBench: record its base image and entrypoint.",
+      "available_tools": ["shell", "docker"],
+      "environment_state": {"clone": "EnterpriseBench"},
+      "expected_memory_writes": {
+        "cfg-enterprisebench": "EnterpriseBench eval config: base image enterprise/go122-eval, entrypoint go test ./eval/..., scope key = clone:EnterpriseBench."
+      },
+      "expected_memory_reads": [],
+      "outcome_checks": [
+        {
+          "check_id": "sibling-config-recorded",
+          "description": "EnterpriseBench config recorded under its own scope key.",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p2-sibling-written",
+          "expected_memory_id": "cfg-enterprisebench",
+          "description": "Sibling config persisted; a similar-but-different scope (interference B + scope isolation E)."
+        }
+      ],
+      "distractor_memories": {
+        "cfg-codeprobe-old": "codeprobe legacy config: base image codeprobe/py39-eval, entrypoint pytest -m probe — an unrelated third clone (interference B)."
+      }
+    },
+    {
+      "step_id": "s3-run-scix-eval",
+      "user_request": "Run the eval for clone scix_experiments. Use the config scoped to that clone.",
+      "available_tools": ["shell", "docker"],
+      "environment_state": {"clone": "scix_experiments"},
+      "expected_memory_writes": {},
+      "expected_memory_reads": ["cfg-scix"],
+      "outcome_checks": [
+        {
+          "check_id": "eval-launched",
+          "description": "An eval run was launched (stateless).",
+          "requires_memory": []
+        },
+        {
+          "check_id": "uses-scix-scoped-config",
+          "description": "Uses the scix base image/entrypoint, NOT the EnterpriseBench sibling or codeprobe distractor — scope isolation (E) plus interference resistance (B).",
+          "requires_memory": ["cfg-scix"]
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p3-scope-isolation",
+          "expected_memory_id": "cfg-scix",
+          "description": "Retrieve the correctly-scoped config and resist the two similar sibling configs (E, B)."
+        }
+      ]
+    },
+    {
+      "step_id": "s4-cross-clone-report",
+      "user_request": "Produce a comparison report covering BOTH clones: list each clone's base image and entrypoint side by side.",
+      "available_tools": ["shell"],
+      "environment_state": {"clone": "all"},
+      "expected_memory_writes": {},
+      "expected_memory_reads": ["cfg-scix", "cfg-enterprisebench"],
+      "outcome_checks": [
+        {
+          "check_id": "report-produced",
+          "description": "A comparison report was produced (stateless).",
+          "requires_memory": []
+        },
+        {
+          "check_id": "combines-both-clone-configs",
+          "description": "Report combines the scix (s1) AND EnterpriseBench (s2) configs — multi-source synthesis (F) across two distinct scopes (E).",
+          "requires_memory": ["cfg-scix", "cfg-enterprisebench"]
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p4-cross-clone-synthesis",
+          "expected_memory_id": "cfg-enterprisebench",
+          "description": "Both per-clone configs must be retrieved and combined (F) while keeping their scopes distinct (E)."
+        }
+      ]
+    }
+  ],
+  "final_goal_check": {
+    "description": "scix_experiments eval runs on its own base image and entrypoint; sibling/legacy configs are not used; the cross-clone report combines both scoped configs.",
+    "axes_covered": ["B", "E", "F"]
+  }
+}

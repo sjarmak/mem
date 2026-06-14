@@ -1,0 +1,111 @@
+{
+  "sequence_id": "sprint-epic-monitoring",
+  "title": "Sprint/epic monitoring — combine the epic's exit criteria and the blocker ledger across sessions",
+  "domain": "monitoring/sprint-epic",
+  "goal": "Decide whether the epic can close by synthesizing its exit criteria and the accumulated blocker ledger from earlier sessions.",
+  "steps": [
+    {
+      "step_id": "s1-record-exit-criteria",
+      "user_request": "Record the exit criteria for epic mem-lvp: all child beads closed AND the head-to-head dataset has >= 6 fixtures.",
+      "available_tools": ["bd"],
+      "environment_state": {"epic": "mem-lvp"},
+      "expected_memory_writes": {
+        "epic-exit-criteria": "Epic mem-lvp closes only when: (1) all child beads are closed, and (2) the benchmark dataset has at least 6 sequence fixtures."
+      },
+      "expected_memory_reads": [],
+      "outcome_checks": [
+        {
+          "check_id": "criteria-recorded",
+          "description": "Exit criteria recorded.",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p1-criteria-written",
+          "expected_memory_id": "epic-exit-criteria",
+          "description": "Exit criteria persisted for the later close decision."
+        }
+      ]
+    },
+    {
+      "step_id": "s2-record-blocker",
+      "user_request": "Log that child bead mem-lvp.8 (dataset seed) is still open and blocks the epic.",
+      "available_tools": ["bd"],
+      "environment_state": {"epic": "mem-lvp"},
+      "expected_memory_writes": {
+        "blocker-ledger": "Open blocker for epic mem-lvp: child bead mem-lvp.8 (real dataset seed) is not yet closed."
+      },
+      "expected_memory_reads": [],
+      "outcome_checks": [
+        {
+          "check_id": "blocker-recorded",
+          "description": "Blocker ledger entry recorded.",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p2-blocker-written",
+          "expected_memory_id": "blocker-ledger",
+          "description": "Blocker ledger persisted for synthesis at close time."
+        }
+      ]
+    },
+    {
+      "step_id": "s3-unrelated-standup",
+      "user_request": "Record this week's standup attendance for the team.",
+      "available_tools": ["bd"],
+      "environment_state": {"epic": "mem-lvp"},
+      "expected_memory_writes": {
+        "standup-attendance": "Standup attendance logged for the week."
+      },
+      "expected_memory_reads": [],
+      "outcome_checks": [
+        {
+          "check_id": "standup-recorded",
+          "description": "Standup note recorded (stateless).",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p3-standup-written",
+          "expected_memory_id": "standup-attendance",
+          "description": "Adds temporal distance before the dependent synthesis read (A)."
+        }
+      ]
+    },
+    {
+      "step_id": "s4-close-decision",
+      "user_request": "Decide whether epic mem-lvp can be closed now.",
+      "available_tools": ["bd"],
+      "environment_state": {"epic": "mem-lvp"},
+      "expected_memory_writes": {},
+      "expected_memory_reads": ["epic-exit-criteria", "blocker-ledger"],
+      "outcome_checks": [
+        {
+          "check_id": "decision-made",
+          "description": "A close/keep-open decision was made (stateless).",
+          "requires_memory": []
+        },
+        {
+          "check_id": "keeps-open-per-criteria-and-ledger",
+          "description": "Concludes the epic must STAY OPEN by synthesizing the exit criteria (s1) against the open-blocker ledger (s2) — multi-source synthesis (F) over a temporal gap (A).",
+          "requires_memory": ["epic-exit-criteria", "blocker-ledger"]
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p4-criteria-vs-ledger",
+          "expected_memory_id": "blocker-ledger",
+          "description": "Both the criteria and the blocker ledger must be combined (F) across a 3-step gap (A) to reach the right decision."
+        }
+      ]
+    }
+  ],
+  "final_goal_check": {
+    "description": "Epic close decision correctly applies the exit criteria to the current blocker ledger.",
+    "axes_covered": ["A", "F"]
+  }
+}

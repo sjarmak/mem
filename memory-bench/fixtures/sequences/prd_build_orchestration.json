@@ -1,0 +1,91 @@
+{
+  "sequence_id": "prd-build-orchestration",
+  "title": "PRD build orchestration — synthesize work-unit decomposition and merge order across sessions",
+  "domain": "orchestration/prd-build",
+  "goal": "Run the final FF-merge step using BOTH the dependency order and the worktree mapping decided in earlier sessions.",
+  "steps": [
+    {
+      "step_id": "s1-decompose-units",
+      "user_request": "Decompose the PRD into parallel work units and record the dependency order between them.",
+      "available_tools": ["shell", "git"],
+      "environment_state": {"prd": "memory-eval-harness", "run_id": "build-42"},
+      "expected_memory_writes": {
+        "wu-dep-order": "Work-unit dependency order for build-42: schema -> dataset -> runner -> report; runner must merge before report."
+      },
+      "expected_memory_reads": [],
+      "outcome_checks": [
+        {
+          "check_id": "units-decomposed",
+          "description": "Work units and their order are recorded.",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p1-order-written",
+          "expected_memory_id": "wu-dep-order",
+          "description": "Dependency order persisted for the later merge step."
+        }
+      ]
+    },
+    {
+      "step_id": "s2-map-worktrees",
+      "user_request": "Create isolated worktrees for each work unit and record which branch each unit lives on.",
+      "available_tools": ["git", "shell"],
+      "environment_state": {"prd": "memory-eval-harness", "run_id": "build-42"},
+      "expected_memory_writes": {
+        "wu-worktree-map": "build-42 worktree map: schema=wt/schema, dataset=wt/dataset, runner=wt/runner, report=wt/report."
+      },
+      "expected_memory_reads": [],
+      "outcome_checks": [
+        {
+          "check_id": "worktrees-mapped",
+          "description": "The worktree-to-branch mapping is recorded.",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p2-map-written",
+          "expected_memory_id": "wu-worktree-map",
+          "description": "Worktree mapping persisted for the later merge step."
+        }
+      ],
+      "distractor_memories": {
+        "wu-worktree-map-build41": "build-41 worktree map: api=wt/api, ui=wt/ui — a DIFFERENT, older build run (interference B: similar schema, wrong run_id).",
+        "wu-dep-order-build41": "build-41 dependency order: api -> ui — older run, must not be applied to build-42."
+      }
+    },
+    {
+      "step_id": "s3-ff-merge",
+      "user_request": "Fast-forward merge all completed work units into main in the correct order. Use the build-42 plan, not any earlier run.",
+      "available_tools": ["git", "shell"],
+      "environment_state": {"prd": "memory-eval-harness", "run_id": "build-42"},
+      "expected_memory_writes": {},
+      "expected_memory_reads": ["wu-dep-order", "wu-worktree-map"],
+      "outcome_checks": [
+        {
+          "check_id": "merge-attempted",
+          "description": "A merge was attempted (stateless).",
+          "requires_memory": []
+        },
+        {
+          "check_id": "merges-in-dependency-order",
+          "description": "Merges runner before report per s1 order AND from the s2 worktree branches — multi-source synthesis (F) of two prior memories.",
+          "requires_memory": ["wu-dep-order", "wu-worktree-map"]
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p3-synthesis",
+          "expected_memory_id": "wu-dep-order",
+          "description": "Both the order and the worktree map must be retrieved and combined (F); the build-41 distractors must be ignored (B)."
+        }
+      ]
+    }
+  ],
+  "final_goal_check": {
+    "description": "Work units merged in the build-42 dependency order from their mapped worktrees, ignoring the build-41 distractors.",
+    "axes_covered": ["B", "F"]
+  }
+}

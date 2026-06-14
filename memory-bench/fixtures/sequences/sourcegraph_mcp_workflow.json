@@ -1,0 +1,90 @@
+{
+  "sequence_id": "sourcegraph-mcp-workflow",
+  "title": "Sourcegraph/MCP code-intelligence — synthesize a definition site and its callers across two repos",
+  "domain": "code-intelligence/sourcegraph-mcp",
+  "goal": "Plan a cross-repo refactor using BOTH the definition location and the caller set found in earlier sessions.",
+  "steps": [
+    {
+      "step_id": "s1-locate-definition",
+      "user_request": "Use the Sourcegraph MCP to find where build_memory_system is defined and record the repo and path.",
+      "available_tools": ["sourcegraph-mcp"],
+      "environment_state": {"symbol": "build_memory_system", "repo": "memory-bench"},
+      "expected_memory_writes": {
+        "def-site": "build_memory_system is defined in repo memory-bench at membench/memory_systems/__init__.py (the factory)."
+      },
+      "expected_memory_reads": [],
+      "outcome_checks": [
+        {
+          "check_id": "definition-located",
+          "description": "Definition site recorded.",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p1-def-written",
+          "expected_memory_id": "def-site",
+          "description": "Definition location persisted (scope: repo memory-bench)."
+        }
+      ]
+    },
+    {
+      "step_id": "s2-find-callers-other-repo",
+      "user_request": "Use find-references to locate callers of build_memory_system in the SEPARATE harbor-runner repo and record them.",
+      "available_tools": ["sourcegraph-mcp"],
+      "environment_state": {"symbol": "build_memory_system", "repo": "harbor-runner"},
+      "expected_memory_writes": {
+        "caller-set": "build_memory_system callers in repo harbor-runner: runner/launch.py and runner/replay.py (cross-repo callers, scope key = repo:harbor-runner)."
+      },
+      "expected_memory_reads": [],
+      "outcome_checks": [
+        {
+          "check_id": "callers-located",
+          "description": "Cross-repo caller set recorded.",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p2-callers-written",
+          "expected_memory_id": "caller-set",
+          "description": "Cross-repo callers persisted; different repo scope from the definition (scope isolation E)."
+        }
+      ],
+      "distractor_memories": {
+        "caller-set-test": "build_memory_system is also referenced in test stubs — fixtures, not real callers; must not be treated as a refactor target (interference B)."
+      }
+    },
+    {
+      "step_id": "s3-plan-refactor",
+      "user_request": "Plan a refactor that renames build_memory_system. Cover the definition site and every cross-repo caller.",
+      "available_tools": ["sourcegraph-mcp", "editor"],
+      "environment_state": {"symbol": "build_memory_system"},
+      "expected_memory_writes": {},
+      "expected_memory_reads": ["def-site", "caller-set"],
+      "outcome_checks": [
+        {
+          "check_id": "plan-drafted",
+          "description": "A refactor plan was drafted (stateless).",
+          "requires_memory": []
+        },
+        {
+          "check_id": "covers-def-and-cross-repo-callers",
+          "description": "Plan edits the definition (s1, memory-bench) AND the harbor-runner callers (s2) — multi-source synthesis (F) across two repo scopes (E).",
+          "requires_memory": ["def-site", "caller-set"]
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p3-cross-repo-synthesis",
+          "expected_memory_id": "caller-set",
+          "description": "Both the definition site and the cross-repo caller set must be combined (F), keeping the two repo scopes distinct (E)."
+        }
+      ]
+    }
+  ],
+  "final_goal_check": {
+    "description": "Refactor plan spans the definition repo and the cross-repo caller repo, excluding test-stub references.",
+    "axes_covered": ["B", "E", "F"]
+  }
+}

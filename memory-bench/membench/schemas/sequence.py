@@ -44,6 +44,14 @@ class SequenceStep(BaseModel):
     # completeness; SEEDING into the store is a Phase-2 stressor and is NOT wired
     # into the skeleton runner yet (distractor_retrieval_rate stays 0 until then).
     distractor_memories: dict[str, str] = Field(default_factory=dict)
+    # Staleness/supersession marker (§10.C). Memory ids written by an EARLIER step
+    # that this step makes stale by establishing a newer value under a *distinct*
+    # id (the runner's oracle pool rejects same-id/different-content rewrites, so
+    # supersession is modeled as v1→v2 distinct ids, with later reads depending on
+    # v2 only). This is a metadata annotation for dataset analysis and the
+    # stale_memory_used diagnostic; the skeleton runner does not act on it yet,
+    # and it defaults empty so existing fixtures stay valid.
+    superseded_memory_ids: list[str] = Field(default_factory=list)
 
 
 class BenchmarkSequence(BaseModel):

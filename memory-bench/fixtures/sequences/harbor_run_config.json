@@ -1,0 +1,96 @@
+{
+  "sequence_id": "harbor-run-config",
+  "title": "Harbor run config — apply the established account/auth path when launching a paid-model run",
+  "domain": "orchestration/harbor",
+  "goal": "Launch a harbor run using the OAuth-subscription auth path recorded earlier, resisting similar paid-API-key configs.",
+  "steps": [
+    {
+      "step_id": "s1-record-auth-path",
+      "user_request": "Record how harbor runs must authenticate Claude for this project: OAuth subscription, never a paid API key.",
+      "available_tools": ["harbor", "shell"],
+      "environment_state": {"runner": "harbor"},
+      "expected_memory_writes": {
+        "auth-oauth": "Harbor must run Claude via the OAuth subscription account (free path); the paid per-token API key is OUT OF SCOPE for this project's cost stance."
+      },
+      "expected_memory_reads": [],
+      "outcome_checks": [
+        {
+          "check_id": "auth-recorded",
+          "description": "The OAuth auth path is recorded.",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p1-auth-written",
+          "expected_memory_id": "auth-oauth",
+          "description": "Auth-path convention persisted for later runs."
+        }
+      ]
+    },
+    {
+      "step_id": "s2-record-dataset-pin",
+      "user_request": "Pin which dataset version harbor should run against.",
+      "available_tools": ["harbor"],
+      "environment_state": {"runner": "harbor"},
+      "expected_memory_writes": {
+        "dataset-pin": "Harbor runs pin dataset memory-eval@v1 for reproducibility."
+      },
+      "expected_memory_reads": [],
+      "outcome_checks": [
+        {
+          "check_id": "dataset-pinned",
+          "description": "Dataset pin recorded (stateless).",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p2-pin-written",
+          "expected_memory_id": "dataset-pin",
+          "description": "Dataset pin persisted; adds distance before the auth read."
+        }
+      ],
+      "distractor_memories": {
+        "auth-apikey-otherproj": "A different project authenticates harbor with ANTHROPIC_API_KEY (paid) — similar auth config, wrong project (interference B).",
+        "auth-bedrock": "Some runs use the Bedrock provider auth — another similar-but-irrelevant auth path (interference B)."
+      }
+    },
+    {
+      "step_id": "s3-launch-run",
+      "user_request": "Launch the harbor run for the pinned dataset. Use this project's required auth path.",
+      "available_tools": ["harbor", "shell"],
+      "environment_state": {"runner": "harbor"},
+      "expected_memory_writes": {},
+      "expected_memory_reads": ["auth-oauth", "dataset-pin"],
+      "outcome_checks": [
+        {
+          "check_id": "run-launched",
+          "description": "A harbor run was launched (stateless).",
+          "requires_memory": []
+        },
+        {
+          "check_id": "uses-oauth-not-paid",
+          "description": "Launches with the OAuth subscription path (s1), NOT the paid-API-key or Bedrock distractors — memory drives the tool-choice action (G), resisting interference (B).",
+          "requires_memory": ["auth-oauth"]
+        },
+        {
+          "check_id": "launches-pinned-on-oauth",
+          "description": "The launch command combines the s1 OAuth auth path AND the s2 dataset pin — both must be retrieved to issue a correct run (multi-source synthesis F).",
+          "requires_memory": ["auth-oauth", "dataset-pin"]
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p3-correct-auth",
+          "expected_memory_id": "auth-oauth",
+          "description": "Retrieve the project's auth convention (G) and ignore the two similar paid-auth distractors (B)."
+        }
+      ]
+    }
+  ],
+  "final_goal_check": {
+    "description": "Harbor run launches on the OAuth subscription path against the pinned dataset; paid-API-key/Bedrock configs are not used.",
+    "axes_covered": ["B", "F", "G"]
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "sequence_id": "agentic-memory-supersession",
+  "title": "Agentic-memory project — a store path is established, then relocated; later work must use the new path",
+  "domain": "agentic-memory/infra",
+  "goal": "Rebuild the mem sidecar store using the CURRENT (relocated) store path, not the stale original.",
+  "steps": [
+    {
+      "step_id": "s1-establish-store-path",
+      "user_request": "Record where the mem sidecar store lives so build-store runs can find it.",
+      "available_tools": ["shell"],
+      "environment_state": {"project": "agentic-memory"},
+      "expected_memory_writes": {
+        "store-path-v1": "mem sidecar store path is .mem/store.db under the gas-city cwd."
+      },
+      "expected_memory_reads": [],
+      "outcome_checks": [
+        {
+          "check_id": "path-v1-recorded",
+          "description": "The original store path is recorded.",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p1-path-v1-written",
+          "expected_memory_id": "store-path-v1",
+          "description": "Original store path persisted."
+        }
+      ]
+    },
+    {
+      "step_id": "s2-relocate-store",
+      "user_request": "The store was moved to a dedicated data volume. Update the recorded store path to the new location and mark the old one obsolete.",
+      "available_tools": ["shell"],
+      "environment_state": {"project": "agentic-memory"},
+      "expected_memory_writes": {
+        "store-path-v2": "mem sidecar store path is now /data/mem/store.db on the dedicated volume; the .mem/store.db path is OBSOLETE."
+      },
+      "expected_memory_reads": [],
+      "superseded_memory_ids": ["store-path-v1"],
+      "outcome_checks": [
+        {
+          "check_id": "path-v2-recorded",
+          "description": "The new store path is recorded and the old one is superseded.",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p2-path-v2-written",
+          "expected_memory_id": "store-path-v2",
+          "description": "Updated store path persisted; store-path-v1 is now stale."
+        }
+      ]
+    },
+    {
+      "step_id": "s3-add-distractors",
+      "user_request": "Note the test fixture store paths used by the unit suite so they aren't confused with production.",
+      "available_tools": ["shell"],
+      "environment_state": {"project": "agentic-memory"},
+      "expected_memory_writes": {
+        "test-store-note": "Unit tests stub the store under a tmp dir; never the production path."
+      },
+      "expected_memory_reads": [],
+      "outcome_checks": [
+        {
+          "check_id": "test-note-recorded",
+          "description": "Test-store note recorded (stateless).",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p3-test-note-written",
+          "expected_memory_id": "test-store-note",
+          "description": "Adds temporal distance before the dependent read."
+        }
+      ],
+      "distractor_memories": {
+        "store-path-staging": "A staging store once lived at .mem/staging.db — similar-looking path, not production (interference B)."
+      }
+    },
+    {
+      "step_id": "s4-rebuild-store",
+      "user_request": "Rebuild the mem sidecar store at the current production path.",
+      "available_tools": ["shell"],
+      "environment_state": {"project": "agentic-memory"},
+      "expected_memory_writes": {},
+      "expected_memory_reads": ["store-path-v2"],
+      "outcome_checks": [
+        {
+          "check_id": "rebuild-attempted",
+          "description": "A rebuild was attempted (stateless).",
+          "requires_memory": []
+        },
+        {
+          "check_id": "uses-current-path",
+          "description": "Rebuilds at the v2 (/data/mem) path, NOT the superseded v1 path — staleness/supersession (C); reading v1 here would be a stale_memory_used failure.",
+          "requires_memory": ["store-path-v2"]
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p4-uses-v2-not-v1",
+          "expected_memory_id": "store-path-v2",
+          "description": "Must use the updated path (C), not the stale store-path-v1 or the staging distractor (B)."
+        }
+      ]
+    }
+  ],
+  "final_goal_check": {
+    "description": "Store rebuilt at the relocated production path; the obsolete original path is not used.",
+    "axes_covered": ["B", "C"]
+  }
+}
