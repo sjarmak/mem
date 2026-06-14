@@ -75,17 +75,35 @@ class FakeMemoryEditor:
             )
             for item in items
         ]
-        hits.sort(key=lambda h: h.similarity_score or 0.0)
+        # Explicit None check rather than ``or 0.0`` so a real 0.0 distance (exact
+        # match) is not conflated with "no score"; both sort nearest-first.
+        hits.sort(key=lambda h: h.similarity_score if h.similarity_score is not None else 0.0)
         return hits[:top_k]
 
     async def remove_items(self, **kwargs: Any) -> None:
         self._scopes.pop(kwargs["user_id"], None)
 
 
+# Bridges created by the helpers below each own a persistent event loop; track them
+# so the autouse fixture closes every one at test teardown (close() drains async-gens
+# and the executor — see test_async_bridge.py). Without this they leak loop+self-pipe
+# sockets until GC, which trips ``-W error::ResourceWarning``.
+_OPEN_BRIDGES: list[AsyncClientBridge] = []
+
+
+@pytest.fixture(autouse=True)
+def _close_bridges() -> Any:
+    yield
+    while _OPEN_BRIDGES:
+        _OPEN_BRIDGES.pop().close()
+
+
 def _nat_client(editor: FakeMemoryEditor) -> _NatClient:
     # Bind ``_FakeItem`` as the item factory so ``store`` builds the fake editor's
-    # item type without importing the nat SDK.
-    return _NatClient(editor, AsyncClientBridge(), item_factory=_FakeItem)
+    # item type without importing the nat SDK. The bridge is registered for teardown.
+    bridge = AsyncClientBridge()
+    _OPEN_BRIDGES.append(bridge)
+    return _NatClient(editor, bridge, item_factory=_FakeItem)
 
 
 def _client() -> _NatClient:
@@ -95,7 +113,7 @@ def _client() -> _NatClient:
 # --- _similarity normalization ------------------------------------------------
 
 
-def test_similarity_is_monotone_decreasing_in_distance():
+def test_similarity_is_monotone_decreasing_in_distance() -> None:
     assert _similarity(0.0) == 1.0
     assert _similarity(1.0) == pytest.approx(0.5)
     assert _similarity(0.0) > _similarity(1.0) > _similarity(3.0) > 0.0
@@ -104,11 +122,11 @@ def test_similarity_is_monotone_decreasing_in_distance():
 # --- _NatClient adapter -------------------------------------------------------
 
 
-def test_client_satisfies_protocol():
+def test_client_satisfies_protocol() -> None:
     assert isinstance(_client(), SemanticMemoryClient)
 
 
-def test_store_returns_minted_id_round_tripped_via_metadata():
+def test_store_returns_minted_id_round_tripped_via_metadata() -> None:
     editor = FakeMemoryEditor()
     client = _nat_client(editor)
     minted = client.store(scope="trial-A", content="missing import foo", memory_id="m1")
@@ -120,7 +138,7 @@ def test_store_returns_minted_id_round_tripped_via_metadata():
     assert stored.memory == "missing import foo"
 
 
-def test_query_maps_content_id_and_normalizes_distance_to_similarity():
+def test_query_maps_content_id_and_normalizes_distance_to_similarity() -> None:
     client = _client()
     a = client.store(scope="t", content="alpha beta", memory_id="m1")
     b = client.store(scope="t", content="gamma delta", memory_id="m2")
@@ -133,20 +151,20 @@ def test_query_maps_content_id_and_normalizes_distance_to_similarity():
     assert hits[1].score == pytest.approx(0.5)
 
 
-def test_query_respects_scope_isolation():
+def test_query_respects_scope_isolation() -> None:
     client = _client()
     client.store(scope="trial-A", content="alpha beta", memory_id="m1")
     assert list(client.query(scope="trial-B", query_text="alpha", top_k=10)) == []
 
 
-def test_query_respects_top_k():
+def test_query_respects_top_k() -> None:
     client = _client()
     for i in range(5):
         client.store(scope="t", content=f"alpha note {i}", memory_id=f"m{i}")
     assert len(list(client.query(scope="t", query_text="alpha", top_k=2))) == 2
 
 
-def test_query_with_no_similarity_score_yields_none_score():
+def test_query_with_no_similarity_score_yields_none_score() -> None:
     # similarity_score is optional on MemoryItem; when the backend omits it, the hit
     # carries score=None and the base trusts the editor's list order (Graphiti path).
     class NoScoreEditor(FakeMemoryEditor):
@@ -161,7 +179,7 @@ def test_query_with_no_similarity_score_yields_none_score():
     assert hits[0].score is None
 
 
-def test_query_missing_memory_id_in_metadata_raises():
+def test_query_missing_memory_id_in_metadata_raises() -> None:
     # The adapter round-trips the id through metadata; an item missing it means the
     # editor dropped it, so the mapping is broken — fail loud rather than guess.
     class NoIdEditor(FakeMemoryEditor):
@@ -174,7 +192,7 @@ def test_query_missing_memory_id_in_metadata_raises():
         list(client.query(scope="t", query_text="alpha", top_k=5))
 
 
-def test_clear_removes_only_its_scope():
+def test_clear_removes_only_its_scope() -> None:
     client = _client()
     client.store(scope="A", content="alpha", memory_id="m1")
     client.store(scope="B", content="alpha", memory_id="m2")
@@ -195,7 +213,7 @@ def _arm(top_k: int = 10) -> NatMemory:
     return NatMemory(FakeSemanticClient(), top_k=top_k)
 
 
-def test_arm_identity():
+def test_arm_identity() -> None:
     arm = _arm()
     assert arm.name == "nat"
     assert arm.backend == MemoryBackend.VECTOR_DB
@@ -203,7 +221,7 @@ def test_arm_identity():
     assert isinstance(arm, MemorySystem)
 
 
-def test_arm_write_records_requested_and_backend_ids():
+def test_arm_write_records_requested_and_backend_ids() -> None:
     ev = _arm().write("m1", "missing import foo", _ctx())
     assert ev.normalized_operation == MemoryOperation.WRITE
     assert ev.target_ids == ["m1"]
@@ -211,7 +229,7 @@ def test_arm_write_records_requested_and_backend_ids():
     assert ev.success
 
 
-def test_arm_retrieve_keys_payloads_off_backend_ids():
+def test_arm_retrieve_keys_payloads_off_backend_ids() -> None:
     arm = _arm()
     ctx = _ctx()
     arm.write("m1", "missing import foo", ctx)
@@ -224,7 +242,7 @@ def test_arm_retrieve_keys_payloads_off_backend_ids():
 # --- factory wiring -----------------------------------------------------------
 
 
-def test_factory_builds_arm_with_injected_client():
+def test_factory_builds_arm_with_injected_client() -> None:
     arm = build_memory_system("nat", client=FakeSemanticClient())
     assert isinstance(arm, NatMemory)
     assert arm.name == "nat"

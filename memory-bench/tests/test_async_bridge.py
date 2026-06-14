@@ -9,6 +9,7 @@ assert loop identity is reused within an instance but DISTINCT across instances.
 """
 
 import asyncio
+from collections.abc import AsyncGenerator
 
 import pytest
 
@@ -17,6 +18,13 @@ from membench.memory_systems.async_bridge import AsyncClientBridge
 
 async def _echo(value: int) -> int:
     await asyncio.sleep(0)
+    return value
+
+
+async def _slowish(value: int) -> int:
+    # Slower than the 0.05s timeout the timeout tests use, but short for a test run —
+    # used to prove the default (no-timeout) path drives a slow coro to completion.
+    await asyncio.sleep(0.1)
     return value
 
 
@@ -100,11 +108,12 @@ def test_context_manager_closes_loop_on_exit() -> None:
 
 def test_default_no_timeout_does_not_wrap_slow_coro() -> None:
     # Default (timeout=None) preserves exact current behavior: a coro is driven to
-    # completion with no wait_for guard, so even a "slow" coro returns (here it's
-    # short enough to finish promptly).
+    # completion with no wait_for guard. _slowish sleeps 0.1s — well past the 0.05s
+    # budget the timeout tests trip on — yet still returns, proving the default path
+    # imposes no deadline.
     bridge = AsyncClientBridge()
     try:
-        assert bridge.run(_echo(5)) == 5
+        assert bridge.run(_slowish(5)) == 5
     finally:
         bridge.close()
 
@@ -152,14 +161,14 @@ def test_close_drains_unexhausted_async_generators() -> None:
     bridge = AsyncClientBridge()
     finalized = {"done": False}
 
-    async def streaming_gen():
+    async def streaming_gen() -> AsyncGenerator[int, None]:
         try:
             yield 1
             yield 2
         finally:
             finalized["done"] = True
 
-    async def start_but_dont_exhaust():
+    async def start_but_dont_exhaust() -> AsyncGenerator[int, None]:
         gen = streaming_gen()
         await gen.__anext__()  # start it; the loop now tracks it, left pending
         return gen

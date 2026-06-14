@@ -59,7 +59,11 @@ class _NatEditor(Protocol):
 
     async def add_items(self, items: list[Any]) -> None: ...
 
-    async def search(self, query: str, top_k: int = 5, **kwargs: Any) -> list[_NatItem]: ...
+    # Returns ``list[Any]`` (not ``list[_NatItem]``) so a stand-in editor returning
+    # its own concrete item type satisfies this Protocol — ``list`` is invariant, so a
+    # ``list[_NatItem]`` return would reject a structurally-valid fake. The adapter
+    # reads the ``_NatItem`` field slice off each hit at the ``query`` call site.
+    async def search(self, query: str, top_k: int = 5, **kwargs: Any) -> list[Any]: ...
 
     async def remove_items(self, **kwargs: Any) -> None: ...
 
@@ -112,7 +116,11 @@ class _NatClient:
         return minted
 
     def query(self, *, scope: str, query_text: str, top_k: int) -> Sequence[SemanticHit]:
-        items = self._bridge.run(self._editor.search(query_text, top_k=top_k, user_id=scope))
+        # Editor returns ``list[Any]`` (invariance, see _NatEditor.search); read each
+        # hit as the _NatItem field slice the adapter relies on.
+        items: list[_NatItem] = self._bridge.run(
+            self._editor.search(query_text, top_k=top_k, user_id=scope)
+        )
         return [
             SemanticHit(
                 memory_id=item.metadata["memory_id"],
