@@ -40,11 +40,16 @@ class AsyncClientBridge:
     its global-state side effect.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, timeout: float | None = None) -> None:
         # new_event_loop (not get_event_loop) guarantees a fresh, instance-private
         # loop — never the thread's shared current loop.
         self._loop = asyncio.new_event_loop()
         self._closed = False
+        # Optional per-call wall-clock budget for run(). None (default) preserves the
+        # original unbounded behavior; a value bounds a hung backend coroutine
+        # (Redis/Graphiti/NAT stall) so it raises instead of blocking the harness
+        # thread forever.
+        self._timeout = timeout
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -54,9 +59,16 @@ class AsyncClientBridge:
 
     def run(self, coro: Coroutine[Any, Any, T]) -> T:
         """Drive ``coro`` to completion on the held loop and return its result.
-        Exceptions raised inside the coroutine propagate to the caller unchanged."""
+        Exceptions raised inside the coroutine propagate to the caller unchanged.
+
+        If a ``timeout`` was set at construction, the coroutine is bounded by
+        ``asyncio.wait_for``: on expiry it is cancelled and ``asyncio.TimeoutError``
+        propagates (never swallowed into a sentinel). The loop stays alive and usable
+        for subsequent ``run``/``close`` calls."""
         if self._closed:
             raise RuntimeError("AsyncClientBridge is closed; create a new instance.")
+        if self._timeout is not None:
+            coro = asyncio.wait_for(coro, self._timeout)
         return self._loop.run_until_complete(coro)
 
     def close(self) -> None:

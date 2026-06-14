@@ -24,6 +24,11 @@ async def _boom() -> None:
     raise ValueError("kaboom")
 
 
+async def _slow() -> int:
+    await asyncio.sleep(10)  # far past any test timeout; cancelled by wait_for
+    return 99
+
+
 def test_run_returns_coroutine_result() -> None:
     bridge = AsyncClientBridge()
     try:
@@ -91,6 +96,52 @@ def test_context_manager_closes_loop_on_exit() -> None:
         assert bridge.run(_echo(42)) == 42
         loop = bridge.loop
     assert loop.is_closed()
+
+
+def test_default_no_timeout_does_not_wrap_slow_coro() -> None:
+    # Default (timeout=None) preserves exact current behavior: a coro is driven to
+    # completion with no wait_for guard, so even a "slow" coro returns (here it's
+    # short enough to finish promptly).
+    bridge = AsyncClientBridge()
+    try:
+        assert bridge.run(_echo(5)) == 5
+    finally:
+        bridge.close()
+
+
+def test_timeout_set_slow_coro_raises_timeout_error() -> None:
+    # A backend stall (Redis/Graphiti/NAT) must not block the harness thread forever:
+    # with a timeout, a coro that runs past it raises TimeoutError loudly — never a
+    # silent sentinel.
+    bridge = AsyncClientBridge(timeout=0.05)
+    try:
+        with pytest.raises(asyncio.TimeoutError):
+            bridge.run(_slow())
+    finally:
+        bridge.close()
+
+
+def test_timeout_set_fast_coro_returns_normally() -> None:
+    # A timeout guard must not penalize the common case: a coro that finishes within
+    # the budget returns its result unchanged.
+    bridge = AsyncClientBridge(timeout=5.0)
+    try:
+        assert bridge.run(_echo(11)) == 11
+    finally:
+        bridge.close()
+
+
+def test_loop_recoverable_after_timeout_then_close_drains() -> None:
+    # A fired timeout must leave the loop usable: a subsequent run() succeeds and
+    # close() still drains cleanly (no abandoned tasks past a timeout).
+    bridge = AsyncClientBridge(timeout=0.05)
+    try:
+        with pytest.raises(asyncio.TimeoutError):
+            bridge.run(_slow())
+        assert bridge.run(_echo(3)) == 3  # loop still alive after the timeout
+    finally:
+        bridge.close()
+    assert bridge.loop.is_closed()
 
 
 def test_close_drains_unexhausted_async_generators() -> None:
