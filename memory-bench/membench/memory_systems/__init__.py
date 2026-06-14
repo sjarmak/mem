@@ -10,9 +10,9 @@ First-run arm scope is `none` / `ours` / `builtin` (fork 4):
 - `builtin` — the agent's own opaque memory (Claude/Codex). Its audit is the
   paid Harbor path owned by **mem-whi**, not implemented here.
 
-`mem0` and `a-mem` are the first wired competitive arms (mem-lvp.2 / mem-lvp.9),
-both `AbstractSemanticArm` subclasses behind an injectable client. `graphiti` /
-`nat` plug in LATER (mem-lvp) behind this same `MemorySystem` contract.
+`mem0`, `a-mem`, and `nat` are the wired competitive arms (mem-lvp.2 / mem-lvp.9 /
+mem-lvp.3), all `AbstractSemanticArm` subclasses behind an injectable client.
+`graphiti` plugs in LATER (mem-lvp.4) behind this same `MemorySystem` contract.
 """
 
 from typing import Any
@@ -26,6 +26,7 @@ from membench.memory_systems.base import (
 )
 from membench.memory_systems.filesystem_system import FilesystemMemory
 from membench.memory_systems.mem0_system import Mem0Memory
+from membench.memory_systems.nat_system import NatMemory
 from membench.memory_systems.none_system import NoneMemory
 from membench.memory_systems.oracle_system import OracleMemory
 from membench.memory_systems.ours_system import OursMemory
@@ -42,6 +43,7 @@ __all__ = [
     "FilesystemMemory",
     "Mem0Memory",
     "MemorySystem",
+    "NatMemory",
     "NoneMemory",
     "OracleMemory",
     "OursMemory",
@@ -58,7 +60,6 @@ __all__ = [
 _DEFERRED = {
     "builtin": "the built-in Claude/Codex memory audit is the paid Harbor path (mem-whi)",
     "graphiti": "competitive arm (mem-lvp.4)",
-    "nat": "competitive arm (mem-lvp.3)",
 }
 
 
@@ -73,6 +74,7 @@ def build_memory_system(name: str, **kwargs: Any) -> MemorySystem:
         "ours": OursMemory,
         "mem0": Mem0Memory,
         "a-mem": AMemMemory,
+        "nat": NatMemory,
     }
     cls = systems.get(name)
     if cls is None:

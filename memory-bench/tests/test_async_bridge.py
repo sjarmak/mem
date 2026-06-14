@@ -9,6 +9,7 @@ assert loop identity is reused within an instance but DISTINCT across instances.
 """
 
 import asyncio
+from collections.abc import AsyncGenerator
 
 import pytest
 
@@ -20,8 +21,20 @@ async def _echo(value: int) -> int:
     return value
 
 
+async def _slowish(value: int) -> int:
+    # Slower than the 0.05s timeout the timeout tests use, but short for a test run —
+    # used to prove the default (no-timeout) path drives a slow coro to completion.
+    await asyncio.sleep(0.1)
+    return value
+
+
 async def _boom() -> None:
     raise ValueError("kaboom")
+
+
+async def _slow() -> int:
+    await asyncio.sleep(10)  # far past any test timeout; cancelled by wait_for
+    return 99
 
 
 def test_run_returns_coroutine_result() -> None:
@@ -93,6 +106,53 @@ def test_context_manager_closes_loop_on_exit() -> None:
     assert loop.is_closed()
 
 
+def test_default_no_timeout_does_not_wrap_slow_coro() -> None:
+    # Default (timeout=None) preserves exact current behavior: a coro is driven to
+    # completion with no wait_for guard. _slowish sleeps 0.1s — well past the 0.05s
+    # budget the timeout tests trip on — yet still returns, proving the default path
+    # imposes no deadline.
+    bridge = AsyncClientBridge()
+    try:
+        assert bridge.run(_slowish(5)) == 5
+    finally:
+        bridge.close()
+
+
+def test_timeout_set_slow_coro_raises_timeout_error() -> None:
+    # A backend stall (Redis/Graphiti/NAT) must not block the harness thread forever:
+    # with a timeout, a coro that runs past it raises TimeoutError loudly — never a
+    # silent sentinel.
+    bridge = AsyncClientBridge(timeout=0.05)
+    try:
+        with pytest.raises(asyncio.TimeoutError):
+            bridge.run(_slow())
+    finally:
+        bridge.close()
+
+
+def test_timeout_set_fast_coro_returns_normally() -> None:
+    # A timeout guard must not penalize the common case: a coro that finishes within
+    # the budget returns its result unchanged.
+    bridge = AsyncClientBridge(timeout=5.0)
+    try:
+        assert bridge.run(_echo(11)) == 11
+    finally:
+        bridge.close()
+
+
+def test_loop_recoverable_after_timeout_then_close_drains() -> None:
+    # A fired timeout must leave the loop usable: a subsequent run() succeeds and
+    # close() still drains cleanly (no abandoned tasks past a timeout).
+    bridge = AsyncClientBridge(timeout=0.05)
+    try:
+        with pytest.raises(asyncio.TimeoutError):
+            bridge.run(_slow())
+        assert bridge.run(_echo(3)) == 3  # loop still alive after the timeout
+    finally:
+        bridge.close()
+    assert bridge.loop.is_closed()
+
+
 def test_close_drains_unexhausted_async_generators() -> None:
     # A backend that streams via `async for` may leave an async generator started
     # but not exhausted on the held loop. close() must finalize it (shutdown_asyncgens)
@@ -101,14 +161,14 @@ def test_close_drains_unexhausted_async_generators() -> None:
     bridge = AsyncClientBridge()
     finalized = {"done": False}
 
-    async def streaming_gen():
+    async def streaming_gen() -> AsyncGenerator[int, None]:
         try:
             yield 1
             yield 2
         finally:
             finalized["done"] = True
 
-    async def start_but_dont_exhaust():
+    async def start_but_dont_exhaust() -> AsyncGenerator[int, None]:
         gen = streaming_gen()
         await gen.__anext__()  # start it; the loop now tracks it, left pending
         return gen
