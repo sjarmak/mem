@@ -109,21 +109,56 @@ This keeps the no-paid-API constraint intact (CI never calls a paid API), makes
 the arm mergeable immediately, and isolates the heavy infra into one swappable
 dependency per arm.
 
-## 5. Recommended build order
+## 5. The reconciled client Protocol (mem-lvp.1, LANDED)
 
-1. **`AbstractSemanticArm`** — a shared base over `MemorySystem` that does the
-   `RetrievalRequest.query_text` → `client.search(query, top_k)` →
-   `RetrieveResult` + `MemoryEvent` translation once, with the injectable-client
-   protocol. Every semantic arm subclasses it; this is the DRY core (and the
-   thing the per-arm beads depend on).
-2. **mem0 arm** first — its `add`/`search`/`delete` is the cleanest contract fit
-   and it self-hosts with a local embedder, so it validates the base.
-3. **NAT arm** second — wraps NAT's memory tools; because NAT itself delegates to
-   mem0/redis, the mem0 arm de-risks it. Pair with the **outbound NAT provider**
-   (publish `ours`) since they share the translation layer.
-4. **A-MEM** and **Graphiti/Zep-OSS** — heavier infra (graph store / evolving
-   notes); schedule after the base + first two prove the seam and the local-model
-   stack exists.
+A spec-research pass over the four systems' *real* current APIs (mem0 main, NAT
+`MemoryEditor`, `graphiti-core`, A-MEM) forced three corrections to the naive
+seam before any arm was built — the shipped `SemanticMemoryClient`
+(`membench/memory_systems/semantic_base.py`) is:
 
-Each step is one child bead under mem-lvp (see the decomposition committed
-alongside this doc).
+```python
+class SemanticMemoryClient(Protocol):              # sync; async backends hold a loop inside
+    def store(self, *, scope: str, content: str, memory_id: str) -> str: ...   # returns BACKEND id
+    def query(self, *, scope: str, query_text: str, top_k: int) -> Sequence[SemanticHit]: ...
+    def clear(self, *, scope: str) -> None: ...
+```
+
+- **`scope` (= `ctx.trial_id`)** — every backend isolates trials by a native key
+  (mem0 `user_id`, NAT `user_id`, Graphiti `group_id`, A-MEM collection), so the
+  arm scopes instead of dropping the store between trials.
+- **`store` returns the backend-minted id** — mem0/A-MEM/Graphiti mint their own
+  UUIDs and ignore the caller's `memory_id`; payloads key off the returned id, and
+  the write event records `target_ids=[requested]` vs `written_ids=[assigned]`.
+- **`SemanticHit.score` is `float | None`** — direction varies (cosine vs L2
+  distance); the *client* normalizes to higher-is-better, and the base trusts list
+  order when score is `None` (Graphiti).
+
+`AbstractSemanticArm` implements `reset`/`retrieve`/`write` once against this; an
+arm is pure construction-time wiring (which client + `top_k`). The harness keeps
+the LOO boundary (`validity.assert_no_leak`).
+
+## 6. Build order & parallel front
+
+`mem-lvp.1` (base + Protocol) was the only true serialization point — **it has
+landed and is closed**. The remaining beads run on a wide parallel front:
+
+```
+mem-lvp.1 (base) ─┬─> .2  mem0      (sync, lightest, independent)
+                  ├─> .10 AsyncClientBridge (infra) ─┬─> .3 NAT      (async)
+                  │                                   └─> .4 Graphiti (async; + .11 reset decision)
+                  ├─> .9  A-MEM     (sync; real arm gated by .12 concurrency audit)
+                  └─> .5  score-norm helpers (consumed by all, no blocker)
+.6 metrics · .7 synthetic · .8 dataset   — independent workstreams, parallel anytime
+```
+
+New sub-beads carved from the research: **.9** (A-MEM, split out of the old
+`.4`), **.10** (`AsyncClientBridge`, blocks the two async arms), **.11** (Graphiti
+reset-strategy decision — recommend fresh `group_id` per trial), **.12**
+(concurrency-isolation audit — gates *real-arm* provisioning of mem0/A-MEM, not
+their CI fakes). Every arm's CI is model-free/network-free via the fake client, so
+the Ollama/Qdrant/Redis/FalkorDB/Chroma infra (`.5`/`.5`-adjacent) only gates
+*real-arm provisioning*, downstream of green CI.
+
+The natural next workflow: a parallel **worktree** build of `.2` (mem0) and `.9`
+(A-MEM) — both sync, both independent of the AsyncClientBridge — each landing as
+subclass + fake-client tests.
