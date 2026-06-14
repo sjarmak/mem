@@ -30,34 +30,52 @@ DEFAULT_TOP_K = 10
 
 @dataclass(frozen=True)
 class SemanticHit:
-    """One search hit from a semantic client: the stored id, its content, and the
-    backend's relevance score (higher = closer; the scale is backend-specific and
-    used only for ordering, never compared across backends)."""
+    """One normalized search hit. ``memory_id`` is the backend-assigned id (what
+    ``store`` returned), ``content`` is the text to surface, and ``score`` is the
+    relevance **normalized higher = better**, or ``None`` when the backend exposes
+    no per-hit score (Graphiti) — in which case the base trusts the client's list
+    order. The client owns the normalization (cosine, L2-distance→similarity, …),
+    so the base builds every arm's result identically."""
 
     memory_id: str
     content: str
-    score: float
+    score: float | None = None
 
 
 @runtime_checkable
 class SemanticMemoryClient(Protocol):
-    """The minimal surface a competitive memory backend must expose. Each arm adapts
-    its native SDK to this shape (mem0 ``add``/``search``, NAT
-    ``add_memory``/``get_memory``, ...); tests inject a deterministic fake.
+    """The minimal seam a competitive memory backend must expose — three verbs over
+    a normalized item shape. Each arm adapts its native SDK to this (mem0
+    ``add``/``search``/``delete_all``, NAT ``MemoryEditor`` ``add_items``/``search``/
+    ``remove_items``, Graphiti ``add_episode``/``search``, A-MEM
+    ``add_note``/``search``); tests inject a deterministic fake.
 
-    ``search`` returns at most ``top_k`` hits already ranked best-first; the arm does
-    no re-ranking, so determinism is the client's responsibility."""
+    ``scope`` is the per-trial isolation key (``ctx.trial_id``); each client maps it
+    to its native key (mem0 ``user_id``, NAT ``user_id``, Graphiti ``group_id``,
+    A-MEM per-trial collection). The Protocol is **sync**: an async-native backend
+    holds a persistent event loop inside its concrete client (mem-lvp.5a
+    ``AsyncClientBridge``) rather than forcing the seam — and the fakes — async.
+    Backend-specific concerns (infer-mode, metadata round-trip, episode type, score
+    normalization) live INSIDE the concrete client, never in the Protocol."""
 
-    def add(self, memory_id: str, content: str) -> None: ...
+    def store(self, *, scope: str, content: str, memory_id: str) -> str:
+        """Persist one memory under ``scope``; return the **backend-assigned id**
+        (mem0/A-MEM/Graphiti mint their own and ignore ``memory_id``, which the
+        client round-trips via metadata/a side map). The returned id is what
+        retrieval keys its payloads off."""
 
-    def search(self, query: str, top_k: int) -> Sequence[SemanticHit]: ...
+    def query(self, *, scope: str, query_text: str, top_k: int) -> Sequence[SemanticHit]:
+        """Return at most ``top_k`` normalized hits for ``scope``, ranked best-first;
+        the arm does no re-ranking, so determinism is the client's responsibility."""
 
-    def reset(self) -> None: ...
+    def clear(self, *, scope: str) -> None:
+        """Reset one ``scope`` only; idempotent, never touches other scopes."""
 
 
 class AbstractSemanticArm(MemorySystem, ABC):
     """Translates the uniform ``MemorySystem`` contract onto an injected
-    ``SemanticMemoryClient``. Subclasses set ``name`` + ``backend`` only."""
+    ``SemanticMemoryClient``, scoping every call by ``ctx.trial_id``. Subclasses set
+    ``name`` + ``backend`` only and add no retrieval logic."""
 
     name: str = "semantic"
     backend: MemoryBackend = MemoryBackend.VECTOR_DB
@@ -71,7 +89,7 @@ class AbstractSemanticArm(MemorySystem, ABC):
         self._top_k = top_k
 
     def reset(self, trial_id: str) -> None:
-        self._client.reset()
+        self._client.clear(scope=trial_id)
 
     def retrieve(self, request: RetrievalRequest, ctx: StepContext) -> RetrieveResult:
         query = request.query_text
@@ -81,7 +99,7 @@ class AbstractSemanticArm(MemorySystem, ABC):
                 "query/failure string). It does not serve the failure-triggered "
                 "query_work path that `ours` uses."
             )
-        hits = list(self._client.search(query, self._top_k))
+        hits = list(self._client.query(scope=ctx.trial_id, query_text=query, top_k=self._top_k))
         # Insertion order = the client's rank order; dict dedupes by id (vector
         # stores key uniquely, so a collision would be a backend bug, not silent loss).
         payloads = {hit.memory_id: hit.content for hit in hits}
@@ -104,7 +122,7 @@ class AbstractSemanticArm(MemorySystem, ABC):
         return RetrieveResult(payloads=payloads, event=event, total_matched=len(hits))
 
     def write(self, memory_id: str, content: str, ctx: StepContext) -> MemoryEvent:
-        self._client.add(memory_id, content)
+        backend_id = self._client.store(scope=ctx.trial_id, content=content, memory_id=memory_id)
         return MemoryEvent(
             event_id=ctx.clock.event_id(),
             trial_id=ctx.trial_id,
@@ -114,8 +132,10 @@ class AbstractSemanticArm(MemorySystem, ABC):
             concrete_tool=f"{self.name}.add",
             normalized_operation=MemoryOperation.WRITE,
             backend=self.backend,
+            # requested id vs the id the backend actually assigned (they differ for
+            # mem0/A-MEM/Graphiti, which mint their own).
             target_ids=[memory_id],
-            written_ids=[memory_id],
+            written_ids=[backend_id],
             latency_ms=ctx.clock.latency_ms(),
             success=True,
         )
