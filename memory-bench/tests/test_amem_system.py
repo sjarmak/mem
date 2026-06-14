@@ -17,8 +17,10 @@ from membench.memory_systems.amem_system import (
     AMemMemory,
     _AMemClient,
     _similarity,
+    build_amem_kwargs,
 )
 from membench.memory_systems.base import MemorySystem, RetrievalRequest
+from membench.memory_systems.local_stack import LocalModelStack
 from membench.memory_systems.semantic_base import (
     AbstractSemanticArm,
     SemanticMemoryClient,
@@ -183,3 +185,19 @@ def test_factory_builds_arm_with_injected_client():
     arm = build_memory_system("a-mem", client=FakeSemanticClient())
     assert isinstance(arm, AMemMemory)
     assert arm.name == "a-mem"
+
+
+def test_amem_kwargs_pin_local_llm_never_openai():
+    # The pre-mem-lvp.5 factory passed no llm_backend, so A-MEM defaulted to a PAID
+    # OpenAI call at ingest. The shared stack must pin a local Ollama backend.
+    kwargs = build_amem_kwargs("trial-A")
+    assert kwargs["llm_backend"] == "ollama"
+    assert kwargs["llm_backend"] != "openai"
+    assert kwargs["collection_name"] == "membench_trial-A"
+
+
+def test_amem_kwargs_source_models_from_shared_stack():
+    stack = LocalModelStack(chat_model="my-chat", sentence_transformer_model="my-st")
+    kwargs = build_amem_kwargs("t", stack=stack)
+    assert kwargs["model_name"] == "my-st"
+    assert kwargs["llm_model"] == "my-chat"

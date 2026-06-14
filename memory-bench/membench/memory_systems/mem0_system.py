@@ -23,9 +23,9 @@ import os
 import tempfile
 import uuid
 from collections.abc import Sequence
-from copy import deepcopy
 from typing import Any, Protocol
 
+from membench.memory_systems.local_stack import LocalModelStack
 from membench.memory_systems.semantic_base import (
     DEFAULT_TOP_K,
     AbstractSemanticArm,
@@ -33,27 +33,6 @@ from membench.memory_systems.semantic_base import (
     SemanticMemoryClient,
 )
 from membench.schemas.memory_event import MemoryBackend
-
-# Local-only mem0 base config: Qdrant embedded as the vector store and Ollama for
-# both the embedder and the LLM, so the real arm runs with no paid API and no
-# network beyond the local Ollama daemon (mem-lvp.5 owns provisioning it). The
-# vector-store *path* is deliberately NOT baked here — it is injected per run by
-# ``build_mem0_config`` so two arm instances (or two membench runs) never share one
-# Qdrant collection. A shared collection separated only by the ``user_id`` filter is
-# a silent cross-trial contamination risk (mem-lvp.12 audit).
-LOCAL_CONFIG: dict[str, Any] = {
-    "vector_store": {
-        "provider": "qdrant",
-    },
-    "embedder": {
-        "provider": "ollama",
-        "config": {"model": "nomic-embed-text"},
-    },
-    "llm": {
-        "provider": "ollama",
-        "config": {"model": "llama3"},
-    },
-}
 
 
 def default_mem0_store_path() -> str:
@@ -65,12 +44,38 @@ def default_mem0_store_path() -> str:
     return os.path.join(base, f"membench-mem0-{os.getpid()}-{uuid.uuid4().hex}")
 
 
-def build_mem0_config(store_path: str) -> dict[str, Any]:
-    """Compose the full mem0 config for one run, injecting ``store_path`` into a copy
-    of ``LOCAL_CONFIG`` (never mutating the module constant)."""
-    config = deepcopy(LOCAL_CONFIG)
-    config["vector_store"]["config"] = {"path": store_path, "on_disk": True}
-    return config
+def build_mem0_config(store_path: str, *, stack: LocalModelStack | None = None) -> dict[str, Any]:
+    """Compose the full mem0 config for one run: Qdrant embedded as the vector store,
+    Ollama for both the embedder and the LLM, so the real arm runs with no paid API
+    and no network beyond the local Ollama daemon (mem-lvp.5 owns provisioning it).
+
+    The embedder/LLM model names come from the shared ``LocalModelStack`` — the single
+    source of truth across every arm — never hardcoded here, so the V2 confound pin is
+    consistent. The vector-store ``store_path`` is injected per run so two arm
+    instances (or two runs) never share one Qdrant collection: a shared collection
+    separated only by the ``user_id`` filter is a silent cross-trial contamination risk
+    (mem-lvp.12 audit)."""
+    stack = stack or LocalModelStack.from_env()
+    return {
+        "vector_store": {
+            "provider": "qdrant",
+            "config": {"path": store_path, "on_disk": True},
+        },
+        "embedder": {
+            "provider": "ollama",
+            "config": {
+                "model": stack.ollama_embedding_model,
+                "ollama_base_url": stack.ollama_base_url,
+            },
+        },
+        "llm": {
+            "provider": "ollama",
+            "config": {
+                "model": stack.chat_model,
+                "ollama_base_url": stack.ollama_base_url,
+            },
+        },
+    }
 
 
 class _NativeMem0(Protocol):

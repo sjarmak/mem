@@ -206,7 +206,7 @@ mem-lvp.1 ✓ (base) ─┬─> .2  mem0      ✓ (sync, lightest, independent)
                     ├─> .10 ✓ AsyncClientBridge (infra) ─┬─> .3 NAT      ○ (async)
                     │                                      └─> .4 Graphiti ○ (async; + .11 reset decision ✓)
                     ├─> .9  A-MEM     ✓ (sync)
-                    └─> .5  score-norm helpers (consumed by all, no blocker)
+                    └─> .5  shared local model/embedder stack ✓ (consumed by all real clients — §7)
 .6 metrics · .7 synthetic ○ · .8 dataset   — independent workstreams, parallel anytime
 ```
 
@@ -224,3 +224,69 @@ over the bridge plus fake-client tests. Real-arm provisioning of the sync arms h
 largely cleared its mem-lvp.12 gates: the mem0 per-run store path (`43934c7`) and
 the per-arm `trial_id` uniqueness guard (`b593ce8`) both landed; the one remaining
 real-run gate is per-run namespace injection for A-MEM's Chroma collection.
+
+## 7. The shared local model/embedder stack (mem-lvp.5, LANDED)
+
+§4 named the real blocker: every semantic arm needs a **local embedder** (and
+usually a **local LLM**) to honor the scix no-paid-API constraint, and that shared
+dependency — not the per-adapter code — is the bulk of the work. mem-lvp.5 lands it
+as **one source of truth** so the arms can't drift to different (or paid) models:
+`membench/memory_systems/local_stack.py` →
+[`LocalModelStack`](../memory-bench/membench/memory_systems/local_stack.py).
+
+The phase-2.5-plan verdict (§"Shared self-hosted stack") is **one shared local
+stack, two embedder modalities**:
+
+| Field | Default | Consumed by | Modality |
+|---|---|---|---|
+| `chat_model` | `llama3` | mem0, A-MEM | Ollama-served instruct LLM (ingest) |
+| `ollama_embedding_model` | `nomic-embed-text` | mem0 | Ollama-served embedder |
+| `sentence_transformer_model` | `all-MiniLM-L6-v2` | A-MEM, NAT | in-process sentence-transformers |
+| `ollama_base_url` | `http://localhost:11434` | mem0, A-MEM | daemon address |
+
+Every field is env-overridable (`MEMBENCH_LOCAL_CHAT_MODEL`,
+`MEMBENCH_LOCAL_EMBED_MODEL`, `MEMBENCH_LOCAL_ST_MODEL`,
+`MEMBENCH_OLLAMA_BASE_URL`) so a run pins a stronger/weaker model without a code
+change. Each arm's **real-client factory** maps the stack onto its backend config
+via a small pure function, unit-tested with no SDK installed:
+
+- **mem0** → `build_mem0_config(store_path, stack=…)` — Qdrant + Ollama embedder +
+  Ollama LLM, the model names sourced from the stack (not hardcoded).
+- **A-MEM** → `build_amem_kwargs(scope, stack=…)` — pins `llm_backend="ollama"`.
+  **This closes a real no-paid-API leak:** A-MEM defaults `llm_backend="openai"`, so
+  the pre-mem-lvp.5 factory silently routed ingest through a *paid* OpenAI call.
+- **NAT** → its `RedisEditor` already embeds locally via sentence-transformers (no
+  paid API by construction); the stack's `sentence_transformer_model` is the
+  reference identity to pin when NAT's real RedisEditor is provisioned.
+
+### Two reasons this is a module, not three hardcoded configs
+
+1. **No-paid-API enforcement.** `LocalModelStack.preflight()` checks the Ollama
+   daemon is up and the pinned models are pulled, and raises
+   `LocalStackUnavailableError` with the exact `ollama pull …` to run. A real run
+   **fails fast at the boundary** instead of a backend degrading to a paid API.
+2. **V2 confound control.** The phase-2.5-plan Validity §V2 requires pinning the
+   model + version and recording it in telemetry (a weak local model is a
+   controlled confound, not a result). `LocalModelStack.telemetry_dict()` is that
+   pinned identity, identical across every arm.
+
+The module is **config only** — no SDK import, no network at construction — so
+importing it and the whole suite stays model-free (CI never calls a paid API).
+`preflight` is the one network method, called explicitly before a real run with an
+injectable fetcher so the readiness logic is itself unit-tested with no live daemon.
+
+### Provisioning a real run (operator steps)
+
+```bash
+# 1. Bring up the shared local stack (one Ollama daemon for all arms)
+ollama serve &
+ollama pull llama3            # chat/instruct (mem0, A-MEM ingest)
+ollama pull nomic-embed-text  # mem0 embedder
+# sentence-transformers (A-MEM/NAT) is a pip dep, pulled on first arm use
+
+# 2. (optional) pin different models for this run
+export MEMBENCH_LOCAL_CHAT_MODEL=qwen2
+
+# 3. Each arm's preflight then verifies readiness before any trial; a missing
+#    daemon/model is a loud LocalStackUnavailableError, never a paid-API fallback.
+```

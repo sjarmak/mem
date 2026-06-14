@@ -18,8 +18,8 @@ from typing import Any
 import pytest
 
 from membench.memory_systems.base import MemorySystem, RetrievalRequest
+from membench.memory_systems.local_stack import LocalModelStack
 from membench.memory_systems.mem0_system import (
-    LOCAL_CONFIG,
     Mem0Memory,
     SemanticMemoryClient,
     _Mem0Client,
@@ -188,16 +188,33 @@ def test_arm_default_factory_is_lazy_no_sdk_needed():
     assert isinstance(arm, Mem0Memory)
 
 
-def test_local_config_is_network_free_local_models():
-    assert LOCAL_CONFIG["vector_store"]["provider"] == "qdrant"
-    assert LOCAL_CONFIG["embedder"]["provider"] == "ollama"
-    assert LOCAL_CONFIG["llm"]["provider"] == "ollama"
+def test_config_is_network_free_local_models():
+    config = build_mem0_config("/tmp/membench-mem0-x")
+    assert config["vector_store"]["provider"] == "qdrant"
+    assert config["embedder"]["provider"] == "ollama"
+    assert config["llm"]["provider"] == "ollama"
 
 
-def test_local_config_bakes_no_shared_store_path():
-    # The path must be injected per run, never baked: a static shared path would put
-    # every instance/run in one Qdrant collection (mem-lvp.12 contamination risk).
-    assert "config" not in LOCAL_CONFIG["vector_store"]
+def test_config_sources_model_identity_from_shared_stack():
+    # The embedder/LLM models are the shared-stack pin, not hardcoded here, so the V2
+    # confound identity is consistent across every arm.
+    stack = LocalModelStack(
+        ollama_base_url="http://host:1",
+        chat_model="my-chat",
+        ollama_embedding_model="my-embed",
+    )
+    config = build_mem0_config("/tmp/p", stack=stack)
+    assert config["embedder"]["config"] == {"model": "my-embed", "ollama_base_url": "http://host:1"}
+    assert config["llm"]["config"] == {"model": "my-chat", "ollama_base_url": "http://host:1"}
+
+
+def test_config_injects_store_path_never_shares_a_collection():
+    # The path must be injected per run, never baked: two runs must get distinct
+    # on-disk collections (mem-lvp.12 contamination risk).
+    a = build_mem0_config("/tmp/run-a")
+    b = build_mem0_config("/tmp/run-b")
+    assert a["vector_store"]["config"] == {"path": "/tmp/run-a", "on_disk": True}
+    assert b["vector_store"]["config"]["path"] == "/tmp/run-b"
 
 
 def test_default_store_path_is_unique_per_call():
@@ -209,11 +226,3 @@ def test_store_dir_env_override(monkeypatch, tmp_path):
     monkeypatch.setenv("MEMBENCH_MEM0_STORE_DIR", str(tmp_path))
     path = default_mem0_store_path()
     assert path.startswith(str(tmp_path))
-
-
-def test_build_mem0_config_injects_path_without_mutating_constant():
-    config = build_mem0_config("/some/run/store")
-    assert config["vector_store"]["config"] == {"path": "/some/run/store", "on_disk": True}
-    # local models preserved; module constant untouched (deepcopy).
-    assert config["embedder"]["provider"] == "ollama"
-    assert "config" not in LOCAL_CONFIG["vector_store"]

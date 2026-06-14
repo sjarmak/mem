@@ -29,6 +29,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any, Protocol
 
+from membench.memory_systems.local_stack import LocalModelStack
 from membench.memory_systems.semantic_base import (
     DEFAULT_TOP_K,
     AbstractSemanticArm,
@@ -120,18 +121,39 @@ class _AMemClient:
         self._minted.pop(scope, None)
 
 
-def _default_native_factory() -> _NativeFactory:
+def build_amem_kwargs(scope: str, *, stack: LocalModelStack | None = None) -> dict[str, Any]:
+    """The ``AgenticMemorySystem`` constructor kwargs for one per-trial collection,
+    pinned to the shared local stack. ``llm_backend="ollama"`` is the load-bearing
+    field: A-MEM defaults ``llm_backend="openai"``, so omitting it (the pre-mem-lvp.5
+    behaviour) silently routed ingest through a PAID OpenAI call — violating the scix
+    no-paid-API constraint. ``model_name`` is the bundled sentence-transformers
+    embedder and ``llm_model`` the local chat model, both from the shared stack so the
+    V2 confound pin matches every other arm."""
+    stack = stack or LocalModelStack.from_env()
+    return {
+        "collection_name": f"membench_{scope}",
+        "memories": {},
+        "model_name": stack.sentence_transformer_model,
+        "llm_backend": "ollama",
+        "llm_model": stack.chat_model,
+    }
+
+
+def _default_native_factory(stack: LocalModelStack | None = None) -> _NativeFactory:
     """Bind the real A-MEM SDK, imported LAZILY so this module loads without it.
 
     Each scope gets its own ``AgenticMemorySystem`` with a per-trial
     ``collection_name`` and an empty ``memories`` map (ChromaDB embedded +
-    sentence-transformers + a local Ollama LLM — all local, no paid API)."""
+    sentence-transformers + a local Ollama LLM — all local, no paid API), with the
+    model identity pinned by the shared ``LocalModelStack``."""
 
     # Imported lazily (not at module top level) so the suite is green with no SDK.
     from agentic_memory import AgenticMemorySystem
 
+    resolved = stack or LocalModelStack.from_env()
+
     def build(scope: str) -> _AMemNative:
-        return AgenticMemorySystem(collection_name=f"membench_{scope}", memories={})
+        return AgenticMemorySystem(**build_amem_kwargs(scope, stack=resolved))
 
     return build
 

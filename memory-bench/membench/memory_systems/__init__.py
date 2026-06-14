@@ -25,6 +25,10 @@ from membench.memory_systems.base import (
     RetrieveResult,
 )
 from membench.memory_systems.filesystem_system import FilesystemMemory
+from membench.memory_systems.local_stack import (
+    LocalModelStack,
+    LocalStackUnavailableError,
+)
 from membench.memory_systems.mem0_system import Mem0Memory
 from membench.memory_systems.nat_system import NatMemory
 from membench.memory_systems.none_system import NoneMemory
@@ -41,6 +45,8 @@ __all__ = [
     "AbstractSemanticArm",
     "AsyncClientBridge",
     "FilesystemMemory",
+    "LocalModelStack",
+    "LocalStackUnavailableError",
     "Mem0Memory",
     "MemorySystem",
     "NatMemory",
