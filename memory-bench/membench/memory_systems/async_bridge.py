@@ -15,9 +15,9 @@ serialization point and a shared-connection contamination vector across trials/a
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable
+from collections.abc import Coroutine
 from types import TracebackType
-from typing import TypeVar
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 
@@ -28,6 +28,16 @@ class AsyncClientBridge:
     One loop per instance, owned for the instance's lifetime. ``close`` (or exiting
     the context manager) tears the loop down; ``run`` after that raises rather than
     silently spinning up a replacement.
+
+    Not thread-safe: calls must be sequential. ``run_until_complete`` rejects
+    re-entrant or concurrent use of the same loop, which matches the harness's
+    one-bridge-per-arm, serial-trial execution model.
+
+    We deliberately do NOT delegate to ``asyncio.Runner`` despite the overlap:
+    ``Runner`` calls ``events.set_event_loop()`` on init, reintroducing the
+    thread-global current-loop mutation the mem-lvp.12 audit (failure mode #5)
+    requires us to avoid. ``close`` replicates only its teardown sequence, never
+    its global-state side effect.
     """
 
     def __init__(self) -> None:
@@ -42,7 +52,7 @@ class AsyncClientBridge:
         to drive directly — go through ``run``."""
         return self._loop
 
-    def run(self, coro: Awaitable[T]) -> T:
+    def run(self, coro: Coroutine[Any, Any, T]) -> T:
         """Drive ``coro`` to completion on the held loop and return its result.
         Exceptions raised inside the coroutine propagate to the caller unchanged."""
         if self._closed:
@@ -50,11 +60,20 @@ class AsyncClientBridge:
         return self._loop.run_until_complete(coro)
 
     def close(self) -> None:
-        """Stop reusing the loop and release it. Idempotent."""
+        """Stop reusing the loop and release it. Idempotent.
+
+        Drains async generators and the default executor before closing — the same
+        teardown ``asyncio.run``/``asyncio.Runner`` perform — so backends that stream
+        via ``async for`` or offload work through ``run_in_executor`` don't leak
+        pending tasks or daemon threads past the bridge's lifetime."""
         if self._closed:
             return
         self._closed = True
-        self._loop.close()
+        try:
+            self._loop.run_until_complete(self._loop.shutdown_asyncgens())
+            self._loop.run_until_complete(self._loop.shutdown_default_executor())
+        finally:
+            self._loop.close()
 
     def __enter__(self) -> AsyncClientBridge:
         return self
