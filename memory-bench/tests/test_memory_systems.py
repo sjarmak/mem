@@ -8,6 +8,7 @@ from membench.memory_systems import (
     build_memory_system,
 )
 from membench.runtime import IdClock, StepContext
+from tests.semantic_fakes import FakeSemanticClient
 
 
 def _ctx(trial="t"):
@@ -65,11 +66,25 @@ def test_build_deferred_system_raises_with_pointer():
     # it with a precise pointer, not pretend it is wired.
     with pytest.raises(ValueError, match="mem-whi"):
         build_memory_system("builtin")
+    # graphiti / nat remain competitive arms pending mem-lvp (mem0 + a-mem are wired).
     with pytest.raises(ValueError, match="mem-lvp"):
-        build_memory_system("mem0")
+        build_memory_system("graphiti")
 
 
 def test_build_ours_constructs():
     arm = build_memory_system("ours", runner=lambda q: {"items": []}, store_path="x")
     assert arm.name == "ours"
     assert arm.uses_scope is True
+
+
+def test_build_mem0_constructs_with_injected_client():
+    # The competitive arms take an injectable client so construction needs no SDK.
+    arm = build_memory_system("mem0", client=FakeSemanticClient())
+    assert arm.name == "mem0"
+    assert arm.uses_scope is False
+
+
+def test_build_amem_constructs_with_injected_client():
+    arm = build_memory_system("a-mem", client=FakeSemanticClient())
+    assert arm.name == "a-mem"
+    assert arm.uses_scope is False

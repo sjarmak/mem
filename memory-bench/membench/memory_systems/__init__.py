@@ -10,18 +10,21 @@ First-run arm scope is `none` / `ours` / `builtin` (fork 4):
 - `builtin` — the agent's own opaque memory (Claude/Codex). Its audit is the
   paid Harbor path owned by **mem-whi**, not implemented here.
 
-The competitive systems (a-mem / mem0 / graphiti / nat) plug in LATER (mem-lvp)
-behind this same `MemorySystem` contract.
+`mem0` and `a-mem` are the first wired competitive arms (mem-lvp.2 / mem-lvp.9),
+both `AbstractSemanticArm` subclasses behind an injectable client. `graphiti` /
+`nat` plug in LATER (mem-lvp) behind this same `MemorySystem` contract.
 """
 
 from typing import Any
 
+from membench.memory_systems.amem_system import AMemMemory
 from membench.memory_systems.base import (
     MemorySystem,
     RetrievalRequest,
     RetrieveResult,
 )
 from membench.memory_systems.filesystem_system import FilesystemMemory
+from membench.memory_systems.mem0_system import Mem0Memory
 from membench.memory_systems.none_system import NoneMemory
 from membench.memory_systems.oracle_system import OracleMemory
 from membench.memory_systems.ours_system import OursMemory
@@ -32,8 +35,10 @@ from membench.memory_systems.semantic_base import (
 )
 
 __all__ = [
+    "AMemMemory",
     "AbstractSemanticArm",
     "FilesystemMemory",
+    "Mem0Memory",
     "MemorySystem",
     "NoneMemory",
     "OracleMemory",
@@ -50,10 +55,8 @@ __all__ = [
 # keeping the uniform interface honest about what is wired vs pending.
 _DEFERRED = {
     "builtin": "the built-in Claude/Codex memory audit is the paid Harbor path (mem-whi)",
-    "a-mem": "competitive arm (mem-lvp)",
-    "mem0": "competitive arm (mem-lvp)",
-    "graphiti": "competitive arm (mem-lvp)",
-    "nat": "competitive arm (mem-lvp)",
+    "graphiti": "competitive arm (mem-lvp.4)",
+    "nat": "competitive arm (mem-lvp.3)",
 }
 
 
@@ -66,6 +69,8 @@ def build_memory_system(name: str, **kwargs: Any) -> MemorySystem:
         "oracle": OracleMemory,
         "filesystem": FilesystemMemory,
         "ours": OursMemory,
+        "mem0": Mem0Memory,
+        "a-mem": AMemMemory,
     }
     cls = systems.get(name)
     if cls is None:
