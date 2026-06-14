@@ -25,8 +25,14 @@ from membench.memory_systems.filesystem_system import FilesystemMemory
 from membench.memory_systems.none_system import NoneMemory
 from membench.memory_systems.oracle_system import OracleMemory
 from membench.memory_systems.ours_system import OursMemory
+from membench.memory_systems.semantic_base import (
+    AbstractSemanticArm,
+    SemanticHit,
+    SemanticMemoryClient,
+)
 
 __all__ = [
+    "AbstractSemanticArm",
     "FilesystemMemory",
     "MemorySystem",
     "NoneMemory",
@@ -34,6 +40,8 @@ __all__ = [
     "OursMemory",
     "RetrievalRequest",
     "RetrieveResult",
+    "SemanticHit",
+    "SemanticMemoryClient",
     "build_memory_system",
 ]
 
