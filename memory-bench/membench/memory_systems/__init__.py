@@ -24,6 +24,7 @@ from membench.memory_systems.base import (
     RetrievalRequest,
     RetrieveResult,
 )
+from membench.memory_systems.consolidating_system import ConsolidatingMemory
 from membench.memory_systems.filesystem_system import FilesystemMemory
 from membench.memory_systems.graphiti_system import GraphitiMemory
 from membench.memory_systems.local_stack import (
@@ -45,6 +46,7 @@ __all__ = [
     "AMemMemory",
     "AbstractSemanticArm",
     "AsyncClientBridge",
+    "ConsolidatingMemory",
     "FilesystemMemory",
     "GraphitiMemory",
     "LocalModelStack",
@@ -78,6 +80,7 @@ def build_memory_system(name: str, **kwargs: Any) -> MemorySystem:
         "none": NoneMemory,
         "oracle": OracleMemory,
         "filesystem": FilesystemMemory,
+        "consolidating": ConsolidatingMemory,
         "ours": OursMemory,
         "mem0": Mem0Memory,
         "a-mem": AMemMemory,
