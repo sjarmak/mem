@@ -466,6 +466,37 @@ def _scoring_target_block(rows: Sequence[ThreeArmRow]) -> dict[str, str]:
     return targets
 
 
+def _coverage_matched_block(rows: Sequence[ThreeArmRow]) -> dict[str, Any]:
+    """M5: deltas over the bundle set every arm could GENUINELY attempt, vs the full
+    set. A bundle whose ours leg degenerated to the none-clean reuse
+    (``ours_retrieval_empty``) was not a genuine memory attempt, so it is excluded
+    from the matched deltas — present, labeled, in the full set (no silent hole)."""
+    full = [row.work_id for row in rows]
+    matched_rows = [row for row in rows if not row.ours_retrieval_empty]
+    matched = [row.work_id for row in matched_rows]
+    excluded = [row.work_id for row in rows if row.ours_retrieval_empty]
+    matched_gaps: dict[str, Any] = {}
+    if matched_rows:
+        matched_gaps = {
+            "ours_vs_none_clean": _arm_gap_stats([dict(r.deltas_ours) for r in matched_rows]),
+            "builtin_vs_none_clean": _arm_gap_stats([dict(r.deltas_builtin) for r in matched_rows]),
+            "ours_vs_builtin": _arm_gap_stats(
+                [dict(r.deltas_ours_vs_builtin) for r in matched_rows]
+            ),
+        }
+    return {
+        "full_set": full,
+        "full_set_size": len(full),
+        "matched_set": matched,
+        "matched_set_size": len(matched),
+        "excluded": excluded,
+        "exclusion_reason": (
+            "ours_retrieval_empty (degenerate none-clean reuse, not a genuine memory attempt)"
+        ),
+        "matched_gaps": matched_gaps,
+    }
+
+
 def summarize_grid_3arm(
     rows: Sequence[ThreeArmRow],
     ours_evidence: Sequence[OursRungEvidence],
@@ -532,6 +563,8 @@ def summarize_grid_3arm(
         # M1: the declared TIAP scoring target per retrieval-bearing arm (raw / source
         # / canonical). Empty when no arm computed a retrieval leg.
         "scoring_target": scoring_target,
+        # M5: the genuine-attempt-matched bundle set + its deltas, vs the full set.
+        "coverage_matched": _coverage_matched_block(rows),
     }
 
 
