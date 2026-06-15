@@ -27,7 +27,6 @@ from collections.abc import Mapping
 
 from pydantic import BaseModel, ConfigDict
 
-from membench.harbor.probe_gate import assert_probe_task_clean
 from membench.schemas.bundle import TaskBundle
 
 RAW_TRAJECTORY = "raw-trajectory"
@@ -107,5 +106,9 @@ def assert_control_payload_clean(payload: ControlPayload, bundle: TaskBundle) ->
     """Run the probe leak guard on a control payload before it could be baked. A raw
     transcript / prior-work dump that quotes the gold diff, base_commit, or a
     verification marker raises ``OutcomeLeakError`` — the run fails loud, the payload
-    is never silently scrubbed."""
+    is never silently scrubbed. ``probe_gate`` is imported lazily: it is the higher-
+    level task-construction module (it owns the leak labels) and imports the payload
+    builders here, so a module-level import the other way would cycle."""
+    from membench.harbor.probe_gate import assert_probe_task_clean
+
     assert_probe_task_clean({_PAYLOAD_FILE: payload.text}, bundle)

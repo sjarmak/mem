@@ -58,6 +58,13 @@ from membench.grading.probe_direct import (
     gold_file_list,
     score_probe_direct,
 )
+from membench.harbor.control_conditions import (
+    FULL_CONTEXT,
+    RAW_TRAJECTORY,
+    PayloadTruncation,
+    full_context_payload,
+    raw_trajectory_payload,
+)
 from membench.harbor.env_recon import DEFAULT_RIG_REPOS, reconstruct_env
 from membench.harbor.harbor_exec import _locate_one, run_harbor_job
 from membench.harbor.memory_inject import inject_context
@@ -72,7 +79,19 @@ CONDITIONS: tuple[str, ...] = ("none", "oracle")
 # ``none-clean`` is the clean-room floor; ``ours`` additionally injects retrieval-v1's
 # citation+lessons payload (D9) through the same `memory_inject` path as the oracle.
 CLEAN_CONDITIONS: tuple[str, ...] = ("none-clean", "ours")
-ALL_CONDITIONS: tuple[str, ...] = CONDITIONS + CLEAN_CONDITIONS
+
+# Brute-force control conditions (M3/M4): the distilled-memory arm's opposites,
+# injected on the native (non-clean) base like ``oracle``. ``raw-trajectory`` bakes
+# the bundle's RAW transcript; ``full-context`` bakes ALL in-scope prior work,
+# LOO-bounded. Both run the SAME leak guard as every other condition — a raw
+# transcript / prior-work dump that quotes the gold diff fails loud (a coverage
+# exclusion the driver records, never a silent skip).
+CONTROL_CONDITIONS: tuple[str, ...] = ("raw-trajectory", "full-context")
+ALL_CONDITIONS: tuple[str, ...] = CONDITIONS + CLEAN_CONDITIONS + CONTROL_CONDITIONS
+
+# Char budget for a baked control payload; truncation beyond it is recorded
+# (``truncation.json``), never silent (premortem lens 5).
+DEFAULT_CONTROL_MAX_CHARS: int = 200_000
 
 # Repo-shipped paths Claude Code auto-loads as project memory (CLAUDE.md/AGENTS.md
 # instruction files, the .claude project dir, the .agents migration dir carrying
@@ -248,6 +267,9 @@ def build_probe_task(
     rig_repos: Mapping[str, Path] = DEFAULT_RIG_REPOS,
     runner: Runner = subprocess.run,
     ours_payloads: Mapping[str, str] | None = None,
+    raw_transcript: str | None = None,
+    in_scope_payloads: Mapping[str, str] | None = None,
+    control_max_chars: int = DEFAULT_CONTROL_MAX_CHARS,
 ) -> Path:
     """Write one (bundle, condition) Harbor task dir; return it.
 
@@ -274,6 +296,19 @@ def build_probe_task(
         )
     if condition != "ours" and ours_payloads:
         raise ValueError(f"condition {condition!r} takes no ours_payloads")
+    if condition == RAW_TRAJECTORY and raw_transcript is None:
+        raise ValueError(
+            f"the {RAW_TRAJECTORY!r} condition needs raw_transcript (the bundle's raw trace)"
+        )
+    if condition == FULL_CONTEXT and not in_scope_payloads:
+        raise ValueError(
+            f"the {FULL_CONTEXT!r} condition needs non-empty in_scope_payloads "
+            "(the LOO-bounded in-scope prior work to inject)"
+        )
+    if condition != RAW_TRAJECTORY and raw_transcript is not None:
+        raise ValueError(f"condition {condition!r} takes no raw_transcript")
+    if condition != FULL_CONTEXT and in_scope_payloads:
+        raise ValueError(f"condition {condition!r} takes no in_scope_payloads")
     if condition in CLEAN_CONDITIONS:
         assert_strip_disjoint_from_gold(bundle)
     clone = rig_repos.get(bundle.rig)
@@ -285,10 +320,19 @@ def build_probe_task(
     instruction = probe_instruction(bundle)
     task_toml = _task_toml(bundle, condition)
     injected: dict[str, str] | None = None
+    control_truncation: PayloadTruncation | None = None
     if condition == "oracle":
         injected = {"oracle-files": oracle_context_payload(bundle)}
     elif condition == "ours":
         injected = dict(ours_payloads or ())  # non-empty: guarded above
+    elif condition == RAW_TRAJECTORY:
+        payload = raw_trajectory_payload(bundle, raw_transcript or "", max_chars=control_max_chars)
+        injected = {RAW_TRAJECTORY: payload.text}
+        control_truncation = payload.truncation
+    elif condition == FULL_CONTEXT:
+        payload = full_context_payload(bundle, in_scope_payloads or {}, max_chars=control_max_chars)
+        injected = {FULL_CONTEXT: payload.text}
+        control_truncation = payload.truncation
     agent_readable = {"instruction.md": instruction, "task.toml": task_toml}
     if injected:
         agent_readable["memory/MEMORY.md"] = "\n".join(injected.values())
@@ -309,6 +353,12 @@ def build_probe_task(
     if injected:
         memory_file = inject_context(task_dir, injected, outcome_labels=probe_leak_labels(bundle))
         _bake_memory_into_env(task_dir, memory_file)
+    # Truncation of a control payload is persisted, never silent (premortem lens 5):
+    # a reader of the task dir sees exactly how much of the source was dropped.
+    if control_truncation is not None and control_truncation.truncated:
+        (task_dir / "truncation.json").write_text(
+            control_truncation.model_dump_json(indent=2), encoding="utf-8"
+        )
     return task_dir
 
 
