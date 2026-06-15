@@ -141,6 +141,21 @@ def test_missing_distance_field_raises():
         list(client.query(scope="t", query_text="alpha", top_k=5))
 
 
+@pytest.mark.parametrize("bad", [-1.0, float("nan"), float("inf"), float("-inf")])
+def test_query_raises_on_non_finite_or_negative_distance(bad: float) -> None:
+    # ChromaDB L2 distance is finite and >= 0; a negative/NaN/inf value means the
+    # backend misbehaved, so fail loud rather than emit a NaN/out-of-range score
+    # (raw 1/(1+d) is a ZeroDivisionError at d=-1). Shared with the NAT arm (mem-lvp.16).
+    class BadDistance(FakeAMem):
+        def search(self, query: str, k: int) -> list[dict[str, Any]]:
+            return [{"id": "x", "content": "alpha", "distance": bad}]
+
+    client = _AMemClient(lambda scope: BadDistance(f"membench_{scope}"))
+    client.store(scope="t", content="alpha", memory_id="m1")
+    with pytest.raises(ValueError, match="distance"):
+        list(client.query(scope="t", query_text="alpha", top_k=5))
+
+
 # --- AMemMemory arm (via the shared FakeSemanticClient) -----------------------
 
 

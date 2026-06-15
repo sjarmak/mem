@@ -16,6 +16,7 @@ leave-one-out boundary and re-checks every arm's output with
 translation layer (mirrors ``OursMemory``). See docs/competitive-arms-integration.md.
 """
 
+import math
 from abc import ABC
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -26,6 +27,25 @@ from membench.runtime import StepContext
 from membench.schemas.memory_event import MemoryBackend, MemoryEvent, MemoryOperation
 
 DEFAULT_TOP_K = 10
+
+
+def l2_distance_to_similarity(distance: float) -> float:
+    """Map an L2/Euclidean distance (finite, >= 0, lower = closer) to a higher-is-better
+    similarity in (0, 1] via ``1 / (1 + d)``. Monotone-decreasing in the distance, so
+    the base's best-first ordering matches the backend's nearest-first ordering. Shared
+    by the NAT (RedisEditor) and A-MEM (ChromaDB) arms — both expose an L2 distance.
+
+    A real distance is finite and non-negative; a misbehaving backend that returns a
+    negative, NaN, or infinite value would otherwise corrupt scores silently — ``d=-1``
+    raises ZeroDivisionError, ``d<-1`` yields an out-of-range/negative similarity, and a
+    NaN propagates through every downstream score. Validate so the backend fails loud
+    rather than poisoning the benchmark (mem-lvp.16)."""
+    if not math.isfinite(distance) or distance < 0:
+        raise ValueError(
+            f"L2 distance must be finite and >= 0, got {distance!r}; a negative/NaN/inf "
+            "distance means the backend misbehaved."
+        )
+    return 1.0 / (1.0 + distance)
 
 
 @dataclass(frozen=True)

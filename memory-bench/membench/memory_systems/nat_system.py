@@ -38,6 +38,7 @@ from membench.memory_systems.semantic_base import (
     AbstractSemanticArm,
     SemanticHit,
     SemanticMemoryClient,
+    l2_distance_to_similarity,
 )
 from membench.schemas.memory_event import MemoryBackend
 
@@ -82,12 +83,9 @@ def _default_item_factory(*, user_id: str, memory: str, metadata: dict[str, Any]
     return MemoryItem(user_id=user_id, memory=memory, metadata=metadata)
 
 
-def _similarity(distance: float) -> float:
-    """Map a RedisEditor L2 distance (>= 0, lower = closer) to a higher-is-better
-    similarity in (0, 1]. ``1 / (1 + d)`` is monotone-decreasing in the distance, so
-    the base's best-first ordering matches the editor's nearest-first ordering. Same
-    convention as the A-MEM arm — the two backends both expose an L2 distance."""
-    return 1.0 / (1.0 + distance)
+# The RedisEditor L2 distance → similarity mapping is the shared, validated one
+# (mem-lvp.16); aliased so the query() call site and arm tests keep a module-local name.
+_similarity = l2_distance_to_similarity
 
 
 class _NatClient:
@@ -133,6 +131,14 @@ class _NatClient:
         ]
 
     def clear(self, *, scope: str) -> None:
+        # RedisEditor.remove_items() with no user_id wipes the WHOLE store, so a blank
+        # scope would clear-all across trials. Refuse before reaching the editor — a
+        # missing scope is a harness bug, not a request to reset every trial (mem-lvp.16).
+        if not scope.strip():
+            raise ValueError(
+                "nat clear requires a non-blank scope (maps to RedisEditor user_id); a "
+                "blank scope would clear the whole store, not one trial."
+            )
         self._bridge.run(self._editor.remove_items(user_id=scope))
 
     def close(self) -> None:

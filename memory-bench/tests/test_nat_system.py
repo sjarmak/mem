@@ -202,6 +202,61 @@ def test_clear_removes_only_its_scope() -> None:
     assert [h.content for h in kept] == ["alpha"]
 
 
+# --- clear-all guard (mem-lvp.16) ---------------------------------------------
+
+
+class _SpyEditor(FakeMemoryEditor):
+    """Records every ``remove_items`` call so a test can assert the guard short-circuits
+    BEFORE the editor is touched — the real RedisEditor with no ``user_id`` would wipe
+    the whole store, so clear with a blank scope must never reach it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.remove_calls: list[dict[str, Any]] = []
+
+    async def remove_items(self, **kwargs: Any) -> None:
+        self.remove_calls.append(kwargs)
+        await super().remove_items(**kwargs)
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_clear_with_blank_scope_raises_and_never_calls_remove_items(blank: str) -> None:
+    # A blank scope would map to a missing/empty user_id; the real RedisEditor would
+    # then clear-all. The adapter must fail loud and never reach the backend.
+    editor = _SpyEditor()
+    client = _nat_client(editor)
+    client.store(scope="A", content="alpha", memory_id="m1")
+    with pytest.raises(ValueError, match="scope"):
+        client.clear(scope=blank)
+    assert editor.remove_calls == []
+    # The store is untouched — nothing was wiped.
+    assert [h.content for h in client.query(scope="A", query_text="alpha", top_k=5)] == ["alpha"]
+
+
+# --- distance validation (mem-lvp.16) -----------------------------------------
+
+
+@pytest.mark.parametrize("bad", [-1.0, float("nan"), float("inf"), float("-inf")])
+def test_query_raises_on_non_finite_or_negative_distance(bad: float) -> None:
+    # A misbehaving backend returning a negative/NaN/inf L2 distance must fail loud:
+    # raw 1/(1+d) is a ZeroDivisionError at d=-1 and silently NaN/out-of-range otherwise.
+    class BadDistanceEditor(FakeMemoryEditor):
+        async def search(self, query: str, top_k: int = 5, **kwargs: Any) -> list[_FakeItem]:
+            return [
+                _FakeItem(
+                    user_id=kwargs["user_id"],
+                    memory="alpha",
+                    metadata={"memory_id": "x"},
+                    similarity_score=bad,
+                )
+            ]
+
+    client = _nat_client(BadDistanceEditor())
+    client.store(scope="t", content="alpha", memory_id="m1")
+    with pytest.raises(ValueError, match="distance"):
+        list(client.query(scope="t", query_text="alpha", top_k=5))
+
+
 # --- close() lifecycle (mem-lvp.15) -------------------------------------------
 
 

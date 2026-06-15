@@ -5,6 +5,8 @@ and no model. These assert the contract translation every competitive arm inheri
 trial-scoped isolation, backend-minted ids, and normalized event emission.
 """
 
+import math
+
 import pytest
 
 from membench.memory_systems.base import MemorySystem, RetrievalRequest
@@ -12,6 +14,7 @@ from membench.memory_systems.semantic_base import (
     AbstractSemanticArm,
     ClosableClient,
     SemanticMemoryClient,
+    l2_distance_to_similarity,
 )
 from membench.runtime import IdClock, StepContext
 from membench.schemas.memory_event import MemoryBackend, MemoryOperation
@@ -159,3 +162,37 @@ def test_uniqueness_guard_is_per_instance():
 def test_top_k_must_be_positive():
     with pytest.raises(ValueError, match="top_k"):
         StubArm(FakeSemanticClient(), top_k=0)
+
+
+# --- l2_distance_to_similarity: shared NAT/A-MEM normalization (mem-lvp.16) ----
+
+
+def test_l2_distance_to_similarity_is_monotone_decreasing() -> None:
+    # The contract every L2-distance arm shares: 1/(1+d) maps a non-negative distance
+    # to a higher-is-better similarity in (0, 1], so best-first ordering is preserved.
+    assert l2_distance_to_similarity(0.0) == 1.0
+    assert l2_distance_to_similarity(1.0) == pytest.approx(0.5)
+    assert l2_distance_to_similarity(0.0) > l2_distance_to_similarity(1.0) > 0.0
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        -1.0,  # would be a ZeroDivisionError under raw 1/(1+d)
+        -0.5,  # would yield an out-of-range similarity (> 1)
+        -100.0,  # would yield a negative similarity
+        float("nan"),  # silently propagates NaN through every downstream score
+        float("inf"),
+        float("-inf"),
+    ],
+)
+def test_l2_distance_to_similarity_rejects_non_finite_or_negative(bad: float) -> None:
+    # A real L2 distance is finite and >= 0; a negative/NaN value means the backend
+    # misbehaved, so fail loud rather than corrupt benchmark scores silently.
+    with pytest.raises(ValueError, match="distance"):
+        l2_distance_to_similarity(bad)
+
+
+def test_l2_distance_to_similarity_does_not_emit_nan() -> None:
+    # Guards the specific failure the validation prevents: a NaN score poisoning ranking.
+    assert not math.isnan(l2_distance_to_similarity(0.0))
