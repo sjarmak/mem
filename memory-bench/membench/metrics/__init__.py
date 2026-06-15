@@ -7,20 +7,24 @@ derailment_signal magnitude) are left at their None/default seams by the callers
 """
 
 from membench.metrics.scorers import (
+    PrivacyInputs,
     RetentionInputs,
     RetrievalInputs,
     SynthesisInputs,
     score_efficiency,
+    score_privacy,
     score_retention,
     score_retrieval,
     score_synthesis,
 )
 
 __all__ = [
+    "PrivacyInputs",
     "RetentionInputs",
     "RetrievalInputs",
     "SynthesisInputs",
     "score_efficiency",
+    "score_privacy",
     "score_retention",
     "score_retrieval",
     "score_synthesis",

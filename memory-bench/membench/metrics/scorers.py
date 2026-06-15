@@ -1,10 +1,12 @@
-"""Deterministic §12 scorers: retrieval / retention / synthesis / efficiency.
+"""Deterministic §12 scorers: retrieval / retention / synthesis / efficiency / privacy.
 
 Each scorer is a pure function of explicit inputs (ordered retrieved ids, the
 step's required / distractor / stale / superseded id sets, write events, the
-trace's token + tool counts). It returns a populated metric model with ONLY the
-mechanical fields set; the judge seams documented in `schemas.metrics` are left at
-their defaults.
+trace's token + tool counts, injected-item rig provenance). It returns a populated
+metric model with ONLY the mechanical fields set; the judge seams documented in
+`schemas.metrics` are left at their defaults. Privacy's `leakage_flags` is mechanical
+and computed here; its `privacy_class` is a model-classified seam (DIV-4) passed
+THROUGH, never decided here — the ZFC boundary the module enforces.
 
 Ranking math (`mrr`, `nDCG`, `retrieval_rank`) keys on the *ordered* retrieved-id
 list — `MemoryEvent.retrieved_ids` carries retrieval order, so a backend that ranks
@@ -20,10 +22,17 @@ from dataclasses import dataclass, field
 from membench.schemas.memory_event import MemoryEvent
 from membench.schemas.metrics import (
     EfficiencyMetrics,
+    PrivacyMetrics,
     RetentionMetrics,
     RetrievalMetrics,
     SynthesisMetrics,
 )
+
+# DIV-4 frozen vocabulary (phase-2.5-plan §A): the model-classified sensitivity
+# buckets, and the cross-rig isolation leak a strict cross_rig run must never produce.
+PRIVACY_CLASSES = ("none", "internal", "sensitive")
+CROSS_RIG_SCOPE = "cross_rig"
+LEAK_CROSS_RIG_SAME_RIG = "cross_rig_same_rig_injection"
 
 
 def _ratio(num: int, denom: int) -> float:
@@ -212,3 +221,48 @@ def score_efficiency(
         turns=turns,
         retries=retries,
     )
+
+
+# --------------------------------------------------------------------------- #
+# Privacy (plan §A DIV-4) — measured, not acted on in v1
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class PrivacyInputs:
+    """What the privacy scorer needs for one trial.
+
+    `run_scope` is the Decision-7 retrieval track (`cross_rig` / `same_rig_temporal`);
+    `task_rig` is the rig the task belongs to; `injected_rigs` maps each injected
+    memory id to the rig it came from. All default to the honest "not measured here"
+    (no scope, no provenance) so a run that does not thread rig provenance reports an
+    empty `leakage_flags` rather than a fabricated clean bill — the same default
+    discipline `distractor_ids`/`stale_ids` use.
+
+    `privacy_class` is the DIV-4 model-classified sensitivity bucket
+    (`none`/`internal`/`sensitive`), decided by a judge UPSTREAM and passed through
+    here; `None` means unclassified. The scorer never calls a model — classification
+    is a judge seam, the leak check is the mechanism.
+    """
+
+    run_scope: str | None = None
+    task_rig: str | None = None
+    injected_rigs: dict[str, str] = field(default_factory=dict)
+    privacy_class: str | None = None
+
+
+def score_privacy(inp: PrivacyInputs) -> PrivacyMetrics:
+    """Deterministic privacy readout. ``leakage_flags`` carries the cross-rig-in-strict
+    check: a ``cross_rig`` run must never inject SAME-rig content (that would defeat the
+    cross-rig generalization isolation), so each injected id whose source rig equals the
+    task's rig is flagged ``cross_rig_same_rig_injection:<id>``. A ``same_rig_temporal``
+    run injecting same-rig content is expected and never flagged. ``privacy_class`` is
+    passed through after a vocabulary check (an out-of-bucket class is a producer bug,
+    surfaced loudly, not silently kept)."""
+    if inp.privacy_class is not None and inp.privacy_class not in PRIVACY_CLASSES:
+        raise ValueError(
+            f"privacy_class {inp.privacy_class!r} is not one of {PRIVACY_CLASSES} (DIV-4)"
+        )
+    leakage_flags: list[str] = []
+    if inp.run_scope == CROSS_RIG_SCOPE and inp.task_rig is not None:
+        offending = sorted(mid for mid, rig in inp.injected_rigs.items() if rig == inp.task_rig)
+        leakage_flags.extend(f"{LEAK_CROSS_RIG_SAME_RIG}:{mid}" for mid in offending)
+    return PrivacyMetrics(privacy_class=inp.privacy_class, leakage_flags=leakage_flags)

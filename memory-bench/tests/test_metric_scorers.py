@@ -8,10 +8,12 @@ import math
 import pytest
 
 from membench.metrics.scorers import (
+    PrivacyInputs,
     RetentionInputs,
     RetrievalInputs,
     SynthesisInputs,
     score_efficiency,
+    score_privacy,
     score_retention,
     score_retrieval,
     score_synthesis,
@@ -270,3 +272,51 @@ def test_efficiency_sums_tokens_and_calls():
     # Model-path-only fields stay zero in the deterministic path.
     assert m.cost_usd == 0.0
     assert m.model_latency_ms == 0.0
+
+
+# --------------------------------------------------------------------------- #
+# Privacy (DIV-4) — deterministic leakage check + model-classified passthrough
+# --------------------------------------------------------------------------- #
+def test_privacy_cross_rig_same_rig_injection_is_flagged_with_ids():
+    # A cross_rig run injecting content from the task's OWN rig defeats the cross-rig
+    # isolation → each offending id is flagged; an other-rig id is clean.
+    m = score_privacy(
+        PrivacyInputs(
+            run_scope="cross_rig",
+            task_rig="gascity",
+            injected_rigs={"m1": "gascity", "m2": "codeprobe", "m3": "gascity"},
+        )
+    )
+    assert m.leakage_flags == [
+        "cross_rig_same_rig_injection:m1",
+        "cross_rig_same_rig_injection:m3",
+    ]
+
+
+def test_privacy_same_rig_temporal_run_never_flags_same_rig_injection():
+    # same_rig_temporal is SUPPOSED to inject same-rig content — never a leak.
+    m = score_privacy(
+        PrivacyInputs(
+            run_scope="same_rig_temporal",
+            task_rig="gascity",
+            injected_rigs={"m1": "gascity"},
+        )
+    )
+    assert m.leakage_flags == []
+
+
+def test_privacy_unmeasured_provenance_reports_no_flags_not_a_fabricated_clean_bill():
+    # No scope / no provenance threaded → honest empty, like distractor/stale defaults.
+    assert score_privacy(PrivacyInputs()).leakage_flags == []
+    assert score_privacy(PrivacyInputs(run_scope="cross_rig")).leakage_flags == []
+
+
+@pytest.mark.parametrize("cls", ["none", "internal", "sensitive", None])
+def test_privacy_class_passes_through_valid_buckets(cls):
+    assert score_privacy(PrivacyInputs(privacy_class=cls)).privacy_class == cls
+
+
+def test_privacy_class_out_of_bucket_raises():
+    # An off-vocabulary class is a producer bug, surfaced loudly (DIV-4 is frozen).
+    with pytest.raises(ValueError, match="DIV-4"):
+        score_privacy(PrivacyInputs(privacy_class="secret"))
