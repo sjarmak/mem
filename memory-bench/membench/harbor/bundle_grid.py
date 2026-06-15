@@ -569,9 +569,12 @@ def summarize_grid_3arm(
 
 
 def load_grid_ready_work_ids(manifest_path: Path) -> tuple[str, ...]:
-    """The admitted work_ids from the fanout-guard manifest
-    (``.mem/grid-ready-pool.json``, mem-75t.7.7). Rejected bundles never enter the
-    grid -- their issue text mismatches their gold diff's scope."""
+    """The admitted work_ids from the two-stage admission manifest
+    (``.mem/grid-ready-pool.json``, schema v2). ``admitted`` means the bundle cleared
+    BOTH gates: issue<->diff scope match (mem-75t.7.7) AND oracle soundness — the gold
+    diff reproduces and the empty diff fails (mem-1eph). A bundle rejected by either
+    gate never enters the grid; the manifest's ``provenance`` records which gate and
+    why. The reader consumes only ``admitted``, so it is stable across schema bumps."""
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     admitted = manifest.get("admitted")
     if not admitted:
