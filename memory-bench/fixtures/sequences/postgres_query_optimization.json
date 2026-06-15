@@ -1,0 +1,115 @@
+{
+  "sequence_id": "postgres-query-optimization",
+  "title": "Postgres slow-query tuning — synthesize the schema and the query plan to derive a composite index, superseding a first-pass single-column index",
+  "domain": "database/postgres-optimization",
+  "goal": "Recommend the final index migration using BOTH the orders schema (session 1) and the EXPLAIN-ANALYZE plan (session 3), after the initial single-column index is superseded by a composite one.",
+  "steps": [
+    {
+      "step_id": "s1-capture-schema",
+      "user_request": "Inspect the `orders` table in the shop_primary database and record its primary key, foreign keys, and which hot columns are currently unindexed.",
+      "available_tools": ["psql"],
+      "environment_state": {"database": "shop_primary", "table": "orders"},
+      "expected_memory_writes": {
+        "schema-orders": "orders(shop_primary): PK id; FK customer_id -> customers(id); created_at is NOT indexed. customer_id has a standalone btree index."
+      },
+      "expected_memory_reads": [],
+      "outcome_checks": [
+        {
+          "check_id": "schema-recorded",
+          "description": "Table schema and unindexed hot columns recorded (stateless).",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p1-schema-written",
+          "expected_memory_id": "schema-orders",
+          "description": "Orders schema persisted (scope: database shop_primary)."
+        }
+      ]
+    },
+    {
+      "step_id": "s2-first-pass-index",
+      "user_request": "A report query filtering orders by created_at is slow. Propose an index to fix it and record the recommendation.",
+      "available_tools": ["psql"],
+      "environment_state": {"database": "shop_primary", "table": "orders"},
+      "expected_memory_writes": {
+        "index-v1": "First-pass fix: single-column btree index on orders(created_at) to speed the date-range report."
+      },
+      "expected_memory_reads": [],
+      "outcome_checks": [
+        {
+          "check_id": "first-index-recommended",
+          "description": "An initial index recommendation is recorded (stateless).",
+          "requires_memory": []
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p2-index-v1-written",
+          "expected_memory_id": "index-v1",
+          "description": "First-pass index recommendation persisted; revisited in s3."
+        }
+      ],
+      "distractor_memories": {
+        "orders-archive-note": "orders_archive is a cold partition with its own brin index — similarly named, but a different table that the live report never touches; not a tuning target (interference B)."
+      }
+    },
+    {
+      "step_id": "s3-explain-supersede",
+      "user_request": "Run EXPLAIN ANALYZE on the actual production report query, then revise the index recommendation to match the real predicate. Mark the earlier recommendation obsolete.",
+      "available_tools": ["psql"],
+      "environment_state": {"database": "shop_primary", "table": "orders"},
+      "expected_memory_writes": {
+        "index-v2": "Plan shows the hot query filters on customer_id = $1 AND created_at >= $2. The single-column created_at index (index-v1) is INSUFFICIENT; recommend a COMPOSITE index orders(customer_id, created_at). index-v1 is OBSOLETE."
+      },
+      "expected_memory_reads": ["schema-orders"],
+      "superseded_memory_ids": ["index-v1"],
+      "outcome_checks": [
+        {
+          "check_id": "composite-derived-from-schema",
+          "description": "The composite index is derived from the orders schema (customer_id FK + created_at) established in s1 — synthesis of schema knowledge with the new plan.",
+          "requires_memory": ["schema-orders"]
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p3-index-v2-supersedes-v1",
+          "expected_memory_id": "index-v2",
+          "description": "Composite recommendation persisted and supersedes index-v1 (staleness C); later reads must depend on v2 only."
+        }
+      ]
+    },
+    {
+      "step_id": "s4-final-migration",
+      "user_request": "Write the final migration to add the recommended index to the orders table. Use the current recommendation and respect the table's existing constraints.",
+      "available_tools": ["psql", "editor"],
+      "environment_state": {"database": "shop_primary", "table": "orders"},
+      "expected_memory_writes": {},
+      "expected_memory_reads": ["schema-orders", "index-v2"],
+      "outcome_checks": [
+        {
+          "check_id": "migration-drafted",
+          "description": "A migration adding an index was drafted (stateless).",
+          "requires_memory": []
+        },
+        {
+          "check_id": "uses-composite-and-schema",
+          "description": "Migration adds the COMPOSITE orders(customer_id, created_at) index (index-v2), NOT the superseded single-column index-v1, and is consistent with the s1 schema (customer_id FK, PK id) — multi-source synthesis (F) of the schema and the revised plan across a 3-step gap (A); using index-v1 here would be a stale_memory_used failure (C).",
+          "requires_memory": ["schema-orders", "index-v2"]
+        }
+      ],
+      "memory_probes": [
+        {
+          "probe_id": "p4-composite-not-stale",
+          "expected_memory_id": "index-v2",
+          "description": "Must combine schema-orders and index-v2 (F), using the current composite recommendation rather than the stale index-v1 (C) or the orders_archive distractor (B)."
+        }
+      ]
+    }
+  ],
+  "final_goal_check": {
+    "description": "Final migration adds the composite (customer_id, created_at) index consistent with the orders schema; the superseded single-column index and the archive-table distractor are not used.",
+    "axes_covered": ["A", "B", "C", "F"]
+  }
+}
