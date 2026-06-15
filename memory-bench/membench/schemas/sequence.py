@@ -61,3 +61,9 @@ class BenchmarkSequence(BaseModel):
     goal: str = ""
     steps: list[SequenceStep]
     final_goal_check: dict[str, Any] = Field(default_factory=dict)
+    # S2 schema-induction oracle (additive): the abstract rule every episode
+    # INSTANTIATES without stating it verbatim — the answer the final probe must
+    # induce. None for non-schema sequences, so existing fixtures stay valid. The
+    # source-trace set is the written episode ids (expected_memory_writes across
+    # steps); it is not duplicated here.
+    latent_rule: str | None = None
