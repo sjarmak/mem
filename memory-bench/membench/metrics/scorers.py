@@ -19,9 +19,16 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+from membench.schemas.handoff import (
+    INTERRUPTION_POINTS,
+    VALIDATION,
+    VALIDATION_FAIL,
+    PredecessorEvent,
+)
 from membench.schemas.memory_event import MemoryEvent
 from membench.schemas.metrics import (
     EfficiencyMetrics,
+    InterruptionMetrics,
     PrivacyMetrics,
     RetentionMetrics,
     RetrievalMetrics,
@@ -33,6 +40,11 @@ from membench.schemas.metrics import (
 PRIVACY_CLASSES = ("none", "internal", "sensitive")
 CROSS_RIG_SCOPE = "cross_rig"
 LEAK_CROSS_RIG_SAME_RIG = "cross_rig_same_rig_injection"
+
+# Interruption inject-timing buckets (plan §A DIV-4): whether the takeover landed ON a
+# live failure signal or not — the mechanical attribute the derailment proxy conditions on.
+ON_FAILURE = "on_failure"
+OFF_FAILURE = "off_failure"
 
 
 def _ratio(num: int, denom: int) -> float:
@@ -266,3 +278,46 @@ def score_privacy(inp: PrivacyInputs) -> PrivacyMetrics:
         offending = sorted(mid for mid, rig in inp.injected_rigs.items() if rig == inp.task_rig)
         leakage_flags.extend(f"{LEAK_CROSS_RIG_SAME_RIG}:{mid}" for mid in offending)
     return PrivacyMetrics(privacy_class=inp.privacy_class, leakage_flags=leakage_flags)
+
+
+# --------------------------------------------------------------------------- #
+# Interruption (plan §A DIV-4) — measured, not acted on in v1
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class InterruptionInputs:
+    """What the interruption scorer needs for one mem-dsu handoff task.
+
+    `point` is the interruption point the task was cut at (one of
+    `schemas.handoff.INTERRUPTION_POINTS`). `checkpoint_prefix` is the predecessor
+    trajectory up to AND INCLUDING the event that triggered the point — the frozen
+    state the successor inherits. The caller derives both from the generator:
+    `detect_interruption_points(traj.events)[point]` gives the trigger index, and the
+    prefix is `traj.events[: index + 1]`. The 4 view arms of one point share this
+    prefix, so they share one `inject_timing` (timing is a property of the point, not
+    the injected memory view).
+    """
+
+    point: str
+    checkpoint_prefix: tuple[PredecessorEvent, ...]
+
+
+def score_interruption(inp: InterruptionInputs) -> InterruptionMetrics:
+    """Deterministic interruption readout. `inject_timing` is `on_failure` iff a
+    validation FAILED on or before the frozen checkpoint — i.e. the takeover lands on a
+    live failure signal (`first_validation_result` of a failing run, or any
+    `first_post_failure_edit`) — else `off_failure` (e.g. `first_source_edit`, before
+    any validation). It is read from the trajectory's actual outcomes, never hardcoded
+    by point name, so a trajectory whose first validation PASSES classifies honestly.
+
+    `derailment_signal` MAGNITUDE is a judge seam, left `None`: the added-iterations /
+    abandonment effort proxy rides the efficiency metrics (`handoff_efficiency`), and
+    the semantic derailment scalar is the model's call, never decided here (ZFC)."""
+    if inp.point not in INTERRUPTION_POINTS:
+        raise ValueError(f"point {inp.point!r} is not one of {INTERRUPTION_POINTS}")
+    on_failure = any(
+        e.kind == VALIDATION and e.outcome == VALIDATION_FAIL for e in inp.checkpoint_prefix
+    )
+    return InterruptionMetrics(
+        inject_timing=ON_FAILURE if on_failure else OFF_FAILURE,
+        derailment_signal=None,
+    )

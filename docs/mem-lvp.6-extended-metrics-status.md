@@ -13,11 +13,28 @@ DIV-4 only — no new eval-design choices were opened.
 | Retrieval | §12.3 | `metrics/scorers.py::score_retrieval` | **done** (precision/recall/mrr/nDCG/distractor/stale) |
 | Retention | §12.4 | `metrics/scorers.py::score_retention` + the retention-schedule leg (b8c98fc) | **done** |
 | Synthesis | §12.5 | `metrics/scorers.py::score_synthesis` | **done** (judge seams left None) |
-| **Privacy** | DIV-4 | `metrics/scorers.py::score_privacy` (**this commit**) | **done** — deterministic `leakage_flags` + `privacy_class` passthrough |
+| **Privacy** | DIV-4 | `metrics/scorers.py::score_privacy` | **done** — deterministic `leakage_flags` + `privacy_class` passthrough |
+| **Interruption** | DIV-4 | `metrics/scorers.py::score_interruption` (**this commit**) | **done (mechanical)** — `inject_timing` wired against the mem-dsu generator; `derailment_signal` left a judge seam |
 
 §12.1–12.5 were already implemented + committed (concurrent work); this branch verified
-them green (the focus-review gate) and added the **privacy** scorer — the one remaining
-deterministic, fully-frozen leg.
+them green (the focus-review gate) and added the **privacy** then **interruption** scorers
+— the remaining deterministic, frozen-spec legs.
+
+### Interruption (DIV-4) — what landed
+
+The mem-dsu interruption generator (`generators/interruption.py`, merged from
+`mem-dsu-interruption-generator`) is now on this branch, so the previously-forked
+interruption leg is wired: `score_interruption(InterruptionInputs)` (pure mechanism).
+
+- **`inject_timing`** (`on_failure` / `off_failure`) — read from the predecessor
+  trajectory's ACTUAL validation outcomes at the frozen checkpoint: `on_failure` iff a
+  validation FAILED on or before the checkpoint (the takeover lands on a live failure
+  signal), never hardcoded by point name — a trajectory whose first validation passes
+  classifies `off_failure` honestly. The 4 view arms of a point share one timing (it is
+  a property of the point, verified end-to-end against `generate_handoff_tasks`).
+- **`derailment_signal`** magnitude is left `None`: the added-iterations / abandonment
+  effort proxy rides the efficiency metrics (`handoff_efficiency`), and the semantic
+  derailment scalar is the model's call (ZFC), not decided in the scorer.
 
 ### Privacy (DIV-4) — what landed
 
@@ -42,26 +59,23 @@ provenance threaded through the runner, which is not currently plumbed. Threadin
 is a mechanical follow-up — improvising provenance now would fabricate data, so it is
 deliberately left to the wiring step.
 
-## Forks — surfaced, NOT improvised (frozen-spec discipline)
+## Open fork — surfaced, NOT improvised (frozen-spec discipline)
 
-### Action-impact (§12.6) — deferred judge seam
+### Action-impact (§12.6) — OPEN judge seam (deliberately NOT frozen)
 `ActionImpactMetrics` (memory_changed_tool_choice / _plan / _output /
 prevented_known_failure / improved_verification) is **intentionally a judge seam**: the
 `metrics/` module docstring leaves these `None` by design, and their derivation is a
 counterfactual ("would the agent have chosen differently WITHOUT this memory?") that
 requires either paired memory-on/off runs or a judge — a derivation method that is **not
 frozen**. Building a deterministic version would violate the ZFC boundary; building a
-judge version requires an eval-design decision. → **Fork: needs a frozen action-impact
-derivation decision (counterfactual-pairing vs judge) before implementation.**
+judge version requires an eval-design decision. → **Fork: kept OPEN; needs a frozen
+action-impact derivation decision (counterfactual-pairing vs judge) before
+implementation. Do not freeze the counterfactual derivation here.**
 
-### Interruption (DIV-4) — blocked on mem-dsu
-The interruption metric leg is the matched-pair target of **mem-dsu** (adopt the
-Handoff-Debt takeover protocol: frozen-checkpoint matched pairs, 3 interruption points,
-4 view arms). **mem-dsu is OPEN** — the protocol is specified but not settled into the
-§11 generator. Per the dispatch instruction, the interruption eval design is NOT
-improvised here. → **Fork: blocked on mem-dsu; build the interruption generator + metric
-once that protocol is adopted.**
+_(The interruption leg, previously forked on mem-dsu, is now LANDED — see above — after
+the mem-dsu generator merged onto this branch.)_
 
 ## Bead state
-`mem-lvp.6` stays **OPEN**: privacy landed branch-ready (this branch, not pushed); the
-two forks above remain. Branch-ready — mayor publishes after Stephanie approval.
+`mem-lvp.6` stays **OPEN**: retention, privacy, and interruption (mechanical) all landed
+branch-ready on this branch (not pushed); only the §12.6 action-impact judge-seam fork
+remains. Branch-ready — mayor publishes after Stephanie approval.
