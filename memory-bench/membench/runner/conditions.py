@@ -11,6 +11,7 @@ from pathlib import Path
 
 from membench.memory_systems import build_memory_system
 from membench.memory_systems.base import MemorySystem, RetrievalRequest, RetrieveResult
+from membench.memory_systems.consolidation import ConsolidationCapable, ConsolidationResult
 from membench.memory_systems.oracle_system import OracleMemory
 from membench.runner.agent import Agent, ScriptedAgent
 from membench.runner.metrics import compute_metrics
@@ -43,6 +44,10 @@ class SequenceRun:
     sequence_id: str
     experiment_id: str
     trials: list[StepTrial] = field(default_factory=list)
+    # The offline consolidation pass per condition (S1). Keyed by Condition.value;
+    # populated only for a ConsolidationCapable arm under MEMORY_ENABLED, empty
+    # otherwise — so a non-consolidating run carries an honest absence, not a stub.
+    consolidations: dict[str, ConsolidationResult] = field(default_factory=dict)
 
     def by_condition(self) -> dict[Condition, list[StepTrial]]:
         out: dict[Condition, list[StepTrial]] = {}
@@ -76,13 +81,20 @@ def _oracle_pool(seq: BenchmarkSequence) -> dict[str, str]:
 
 
 def _system_for(
-    condition: Condition, experiment: ExperimentConfig, fs_base_dir: Path | None
+    condition: Condition,
+    experiment: ExperimentConfig,
+    fs_base_dir: Path | None,
+    override: MemorySystem | None = None,
 ) -> tuple[MemorySystem, str]:
     if condition is Condition.NO_MEMORY:
         return build_memory_system("none"), "none"
     if condition is Condition.ORACLE_MEMORY:
         return build_memory_system("oracle"), "oracle"
-    # memory_enabled → the configured system under test (skeleton: filesystem).
+    # memory_enabled → the system under test. A caller-supplied instance wins (the
+    # injection seam for arms the factory can't build with config alone, e.g. a
+    # ConsolidatingMemory with an injected summarizer); else build from config.
+    if override is not None:
+        return override, getattr(override, "name", experiment.memory.memory_config_id)
     kwargs = {}
     if experiment.memory.system == "filesystem" and fs_base_dir is not None:
         kwargs["base_dir"] = fs_base_dir
@@ -99,6 +111,7 @@ def run_sequence(
     *,
     conditions: list[Condition] | None = None,
     fs_base_dir: str | Path | None = None,
+    memory_system: MemorySystem | None = None,
 ) -> SequenceRun:
     agent = agent or ScriptedAgent()
     conditions = conditions or experiment.conditions
@@ -106,7 +119,7 @@ def run_sequence(
     run = SequenceRun(sequence_id=seq.sequence_id, experiment_id=experiment.experiment_id)
 
     for condition in conditions:
-        system, memory_config_id = _system_for(condition, experiment, base)
+        system, memory_config_id = _system_for(condition, experiment, base, memory_system)
         condition_root = f"{seq.sequence_id}-{condition.value}"
         system.reset(condition_root)
         if isinstance(system, OracleMemory):
@@ -189,4 +202,18 @@ def run_sequence(
                     metrics=metrics,
                 )
             )
+
+        # Offline consolidation runs ONCE per condition, after every step's writes
+        # are persisted (so it sees the full episode set), and only for an arm that
+        # opts into the ConsolidationCapable Protocol under the write-bearing
+        # condition. The ClosableClient isinstance pattern keeps the MemorySystem
+        # ABC un-widened; non-capable arms record an honest empty consolidation.
+        if condition is Condition.MEMORY_ENABLED and isinstance(system, ConsolidationCapable):
+            consolidate_ctx = StepContext(
+                trial_id=f"{condition_root}-consolidate",
+                session_id=condition_root,
+                step_id="consolidate",
+                clock=IdClock(),
+            )
+            run.consolidations[condition.value] = system.consolidate(consolidate_ctx)
     return run
