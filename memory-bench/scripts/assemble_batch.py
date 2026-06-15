@@ -496,6 +496,7 @@ def run_batch(
             if remaining:
                 raise RuntimeError(f"bundle worktrees left in {clone} after sweep: {remaining}")
 
+    report_out.parent.mkdir(parents=True, exist_ok=True)
     report_out.write_text(
         render_report(
             store=store,
