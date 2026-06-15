@@ -15,6 +15,7 @@ from pathlib import Path
 
 import toml
 
+from membench.harbor.task_env import environment_network
 from membench.schemas.conditions import Condition
 from membench.schemas.sequence import BenchmarkSequence, SequenceStep
 
@@ -124,13 +125,11 @@ class SequenceAdapter:
                 "expected_memory_reads": step.expected_memory_reads,
                 "expected_memory_writes": sorted(step.expected_memory_writes),
             },
-            "environment": {
-                # Internet is a task-level property, not a condition-level one: the
-                # only thing that may vary across conditions is memory, else the
-                # oracle ceiling is contaminated by web lookups. Off by default in
-                # the skeleton (tools are local fs/git; memory persists via a mount).
-                "allow_internet": False,
-            },
+            # Internet is a task-level property, not a condition-level one: the only
+            # thing that may vary across conditions is memory, else the oracle ceiling
+            # is contaminated by web lookups. Off by default in the skeleton (tools are
+            # local fs/git; memory persists via a mount).
+            "environment": environment_network(False),
             "verifier": {"timeout_sec": 300.0},
             "agent": {"timeout_sec": 600.0},
         }

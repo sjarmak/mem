@@ -19,6 +19,7 @@ from typing import Any
 import toml
 
 from membench.grading import AblationSource, assert_no_outcome_leak, outcome_labels
+from membench.harbor.task_env import environment_network
 from membench.validity import query_from_record
 
 # The stateless baseline rung surfaces no prior-session memory; every other rung
@@ -94,7 +95,7 @@ class WorkRecordLadderAdapter:
                 "loo_boundary": loo_boundary,
                 "source": "workrecord",
             },
-            "environment": {"allow_internet": self.allow_internet},
+            "environment": environment_network(self.allow_internet),
             "verifier": {"timeout_sec": 300.0},
             "agent": {"timeout_sec": 600.0},
         }

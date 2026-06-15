@@ -61,6 +61,7 @@ from membench.grading.probe_direct import (
 from membench.harbor.env_recon import DEFAULT_RIG_REPOS, reconstruct_env
 from membench.harbor.harbor_exec import _locate_one, run_harbor_job
 from membench.harbor.memory_inject import inject_context
+from membench.harbor.task_env import environment_network
 from membench.schemas.bundle import TaskBundle
 
 # The gate's two conditions (plan §9.2): the stateless floor and the cheap ceiling.
@@ -179,8 +180,8 @@ def _task_toml(bundle: TaskBundle, condition: str) -> str:
             "source": "task-bundle",
         },
         # Real runs need the network: the installed claude-code agent fetches its
-        # CLI + the rig's deps (the spike's allow_internet=True precedent).
-        "environment": {"allow_internet": True},
+        # CLI + the rig's deps (the spike's internet-on precedent).
+        "environment": environment_network(True),
         "verifier": {"timeout_sec": 300.0},
         "agent": {"timeout_sec": AGENT_TIMEOUT_SEC},
     }
