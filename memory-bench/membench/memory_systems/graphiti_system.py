@@ -36,7 +36,7 @@ from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
-from membench.memory_systems.async_bridge import AsyncClientBridge
+from membench.memory_systems.async_bridge import AsyncClientBridge, trial_timeout
 from membench.memory_systems.local_stack import LocalModelStack
 from membench.memory_systems.semantic_base import (
     DEFAULT_TOP_K,
@@ -199,7 +199,11 @@ def default_graphiti_client(stack: LocalModelStack | None = None) -> SemanticMem
         embedder=embedder,
         cross_encoder=BGERerankerClient(),
     )
-    return _GraphitiClient(graphiti, AsyncClientBridge(), episode_source=_default_episode_source())
+    return _GraphitiClient(
+        graphiti,
+        AsyncClientBridge(timeout=trial_timeout()),
+        episode_source=_default_episode_source(),
+    )
 
 
 class GraphitiMemory(AbstractSemanticArm):

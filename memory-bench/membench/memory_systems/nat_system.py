@@ -32,7 +32,7 @@ import uuid
 from collections.abc import Callable, Sequence
 from typing import Any, Protocol
 
-from membench.memory_systems.async_bridge import AsyncClientBridge
+from membench.memory_systems.async_bridge import AsyncClientBridge, trial_timeout
 from membench.memory_systems.semantic_base import (
     DEFAULT_TOP_K,
     AbstractSemanticArm,
@@ -151,7 +151,7 @@ def default_nat_client() -> SemanticMemoryClient:
     NAT plugins are intentionally excluded — only the self-hostable RedisEditor."""
     from nat.plugins.redis.redis_editor import RedisEditor
 
-    return _NatClient(RedisEditor(), AsyncClientBridge())
+    return _NatClient(RedisEditor(), AsyncClientBridge(timeout=trial_timeout()))
 
 
 class NatMemory(AbstractSemanticArm):

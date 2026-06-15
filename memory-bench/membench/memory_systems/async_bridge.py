@@ -15,11 +15,40 @@ serialization point and a shared-connection contamination vector across trials/a
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Coroutine
+import os
+from collections.abc import Coroutine, Mapping
 from types import TracebackType
 from typing import Any, TypeVar
 
 T = TypeVar("T")
+
+#: Harness per-trial wall-clock budget (seconds) for a single backend coroutine,
+#: read by ``trial_timeout`` and threaded into the real-backend client factories'
+#: ``AsyncClientBridge``. Unset means unbounded (the default bridge behavior).
+ENV_TRIAL_TIMEOUT_SEC = "MEMBENCH_TRIAL_TIMEOUT_SEC"
+
+
+def trial_timeout(env: Mapping[str, str] | None = None) -> float | None:
+    """Resolve the harness per-trial timeout for ``AsyncClientBridge(timeout=...)``
+    from the environment (``MEMBENCH_TRIAL_TIMEOUT_SEC``), so the real-backend arms
+    bound a hung Redis/Graphiti/NAT call instead of taking it from a hardcoded literal.
+
+    Unset or empty -> ``None`` (unbounded, preserving the default bridge behavior). A
+    positive float is the per-call budget. A non-numeric or non-positive value is a
+    misconfiguration and raises ``ValueError`` at this boundary rather than silently
+    disabling the guard (a ``wait_for`` deadline of 0/negative would trip every trial).
+    """
+    source = os.environ if env is None else env
+    raw = source.get(ENV_TRIAL_TIMEOUT_SEC, "").strip()
+    if not raw:
+        return None
+    try:
+        seconds = float(raw)
+    except ValueError as exc:
+        raise ValueError(f"{ENV_TRIAL_TIMEOUT_SEC}={raw!r} is not a number") from exc
+    if seconds <= 0:
+        raise ValueError(f"{ENV_TRIAL_TIMEOUT_SEC}={raw!r} must be a positive number of seconds")
+    return seconds
 
 
 class AsyncClientBridge:

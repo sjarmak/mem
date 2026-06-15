@@ -13,7 +13,11 @@ from collections.abc import AsyncGenerator
 
 import pytest
 
-from membench.memory_systems.async_bridge import AsyncClientBridge
+from membench.memory_systems.async_bridge import (
+    ENV_TRIAL_TIMEOUT_SEC,
+    AsyncClientBridge,
+    trial_timeout,
+)
 
 
 async def _echo(value: int) -> int:
@@ -178,3 +182,41 @@ def test_close_drains_unexhausted_async_generators() -> None:
     bridge.close()
     assert finalized["done"] is True, "close() must drain tracked async generators"
     assert gen is not None
+
+
+# --- trial_timeout: harness config -> AsyncClientBridge(timeout=...) ----------
+
+
+def test_trial_timeout_unset_returns_none() -> None:
+    # No env var = the default unbounded bridge behavior (None), not a fabricated
+    # default deadline.
+    assert trial_timeout(env={}) is None
+
+
+def test_trial_timeout_blank_returns_none() -> None:
+    # An empty / whitespace-only value reads as "not configured", same as unset.
+    assert trial_timeout(env={ENV_TRIAL_TIMEOUT_SEC: "   "}) is None
+
+
+def test_trial_timeout_valid_value_parsed() -> None:
+    assert trial_timeout(env={ENV_TRIAL_TIMEOUT_SEC: "2.5"}) == 2.5
+
+
+def test_trial_timeout_non_numeric_raises() -> None:
+    # A misconfigured value fails loudly at the boundary rather than silently
+    # disabling the guard.
+    with pytest.raises(ValueError, match="is not a number"):
+        trial_timeout(env={ENV_TRIAL_TIMEOUT_SEC: "soon"})
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "-0.5"])
+def test_trial_timeout_non_positive_raises(value: str) -> None:
+    # A zero/negative wait_for deadline would trip every trial — reject it.
+    with pytest.raises(ValueError, match="must be a positive"):
+        trial_timeout(env={ENV_TRIAL_TIMEOUT_SEC: value})
+
+
+def test_trial_timeout_defaults_to_process_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    # With no env arg it reads os.environ, so the factories pick up the harness config.
+    monkeypatch.setenv(ENV_TRIAL_TIMEOUT_SEC, "1.0")
+    assert trial_timeout() == 1.0
