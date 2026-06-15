@@ -62,6 +62,12 @@ class RetrieveResult:
     total_matched: int = 0
     near_duplicate_top: bool = False
     fts_truncated: bool = False
+    # Reversibility/provenance contract (M7): for a CONSOLIDATING arm, each returned
+    # item maps to the source trace ids it was derived from, so the provenance gate
+    # can dereference the citation chain. Default-empty: id-based / semantic arms
+    # return raw rows with no derivation, so they cite nothing (an honest absence,
+    # never a fabricated provenance).
+    source_trace_ids: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 class MemorySystem(ABC):
