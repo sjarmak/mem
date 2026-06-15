@@ -24,6 +24,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from membench.grading.graded import DEFAULT_JUDGE_ROUNDS, RubricJudge
 from membench.harbor.bundle_grid import (
     GRID_CONDITIONS,
     GridConditionResult,
@@ -66,11 +67,17 @@ def score_runs(
     *,
     probe_jobs_dir: Path,
     grid_dir: Path,
+    judge: RubricJudge | None = None,
+    judge_rounds: int = DEFAULT_JUDGE_ROUNDS,
 ) -> tuple[dict[tuple[str, str], GridConditionResult], dict[str, int]]:
     """Dual-score every pending (bundle, condition) run from its persisted job
     dir, resumable: an existing scored result under ``grid_dir`` is loaded, never
     re-executed. Shared by this CLI and `run_grid_3arm`. Returns the results
     keyed by (work_id, condition) plus the ``{"executed", "skipped"}`` tally.
+
+    When ``judge`` is supplied the S3 graded semantic signal is computed per run
+    (mem-r5y); left None (the default) only the mechanical S1/S2 signals ride
+    along -- the offline path run_grid's own CLI takes.
 
     Used clones are swept BEFORE starting (worktrees stranded by a previously
     KILLED run would otherwise sit on the clone for this whole run) and on exit
@@ -107,7 +114,13 @@ def score_runs(
                         "grid scoring needs the probe's persisted jobs"
                     )
                 result = score_grid_condition(
-                    bundle, condition, job_dir, clone=clone, test_runner=test_runner
+                    bundle,
+                    condition,
+                    job_dir,
+                    clone=clone,
+                    test_runner=test_runner,
+                    judge=judge,
+                    judge_rounds=judge_rounds,
                 )
                 out.write_text(result.model_dump_json(indent=2) + "\n", encoding="utf-8")
                 results[(bundle.work_id, condition)] = result

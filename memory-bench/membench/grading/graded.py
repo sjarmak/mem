@@ -160,17 +160,30 @@ class CriterionVerdict:
 
 class RubricParseError(ValueError):
     """A judge reply that is not a usable per-criterion verdict -- missing JSON, a
-    criterion off the coarse scale, an unknown/duplicate criterion, or evidence-free
-    scoring. A malformed verdict is a real error surfaced loudly, never coerced to a
-    default score (the `grading.judge` fail-loud contract)."""
+    criterion score OUT OF RANGE (outside [0, 1]), an unknown/duplicate criterion, or
+    evidence-free scoring. A malformed verdict is a real error surfaced loudly, never
+    coerced to a default score (the `grading.judge` fail-loud contract)."""
+
+
+def _snap_to_coarse(score: float) -> float:
+    """Snap an in-range score to the nearest coarse value (mem-r5y robustness). The
+    judge is prompted for the 3-point {0, 0.5, 1.0} scale, but the ``claude -p`` seam
+    occasionally returns a finer value (e.g. 0.8) -- benign imprecision, not a
+    malformed verdict. Snapping is deterministic arithmetic that preserves the coarse
+    intent (0.8 -> 1.0, 0.3 -> 0.5), so one off-grid value never aborts a multi-hour
+    grid; an OUT-OF-RANGE score is a different failure and is rejected before this is
+    called. Ties (e.g. 0.25) resolve to the lower value -- `min` keeps the first."""
+    return min(ALLOWED_CRITERION_SCORES, key=lambda allowed: abs(allowed - score))
 
 
 def parse_criteria(reply: str, rubric: Rubric) -> tuple[CriterionVerdict, ...]:
     """Parse a judge reply into one validated `CriterionVerdict` per rubric criterion.
 
     Enforces the anti-gaming contract structurally: every rubric criterion present
-    exactly once, each score on the coarse {0, 0.5, 1.0} scale, each with non-empty
-    code-specific evidence. Any breach raises `RubricParseError`."""
+    exactly once, each score IN RANGE [0, 1] (an out-of-range score raises), each with
+    non-empty code-specific evidence. Any breach raises `RubricParseError`. An in-range
+    but off-grid score is snapped to the nearest coarse {0, 0.5, 1.0} value
+    (`_snap_to_coarse`) -- benign judge imprecision, not a malformed verdict."""
     block = first_json_object(reply)
     if block is None:
         raise RubricParseError(f"judge reply has no JSON object: {reply[:200]!r}")
@@ -194,14 +207,16 @@ def parse_criteria(reply: str, rubric: Rubric) -> tuple[CriterionVerdict, ...]:
         score = entry.get("score")
         if isinstance(score, bool) or not isinstance(score, (int, float)):
             raise RubricParseError(f"criterion {name!r} score is not a number: {score!r}")
-        if float(score) not in ALLOWED_CRITERION_SCORES:
+        if not 0.0 <= float(score) <= 1.0:
             raise RubricParseError(
-                f"criterion {name!r} score {score} is off the {ALLOWED_CRITERION_SCORES} scale"
+                f"criterion {name!r} score {score} is out of range (expected [0, 1])"
             )
         evidence = entry.get("evidence")
         if not isinstance(evidence, str) or not evidence.strip():
             raise RubricParseError(f"criterion {name!r} has no evidence: {evidence!r}")
-        by_name[name] = CriterionVerdict(name=name, score=float(score), evidence=evidence)
+        by_name[name] = CriterionVerdict(
+            name=name, score=_snap_to_coarse(float(score)), evidence=evidence
+        )
 
     missing = expected - by_name.keys()
     if missing:

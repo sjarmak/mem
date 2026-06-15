@@ -80,10 +80,22 @@ def test_parse_tolerates_surrounding_prose() -> None:
     assert len(parse_criteria(reply, graded_rubric())) == 3
 
 
-@pytest.mark.parametrize("bad_score", [0.7, 0.3, 2.0, -1.0])
-def test_parse_rejects_off_scale_scores(bad_score: float) -> None:
-    with pytest.raises(RubricParseError, match="scale"):
+@pytest.mark.parametrize("bad_score", [2.0, -1.0, 1.5])
+def test_parse_rejects_out_of_range_scores(bad_score: float) -> None:
+    with pytest.raises(RubricParseError, match="out of range"):
         parse_criteria(_reply(resolves=bad_score), graded_rubric())
+
+
+@pytest.mark.parametrize(
+    ("raw", "snapped"),
+    [(0.8, 1.0), (0.7, 0.5), (0.9, 1.0), (0.3, 0.5), (0.1, 0.0), (0.25, 0.0)],
+)
+def test_parse_snaps_in_range_off_grid_scores(raw: float, snapped: float) -> None:
+    """An in-range but off-coarse-grid judge score (the `claude -p` seam occasionally
+    returns 0.8 despite the 0/0.5/1.0 prompt) snaps to the nearest coarse value rather
+    than aborting the run; ties resolve to the lower value."""
+    verdicts = parse_criteria(_reply(resolves=raw), graded_rubric())
+    assert verdicts[0].score == snapped
 
 
 def test_parse_rejects_missing_evidence() -> None:
