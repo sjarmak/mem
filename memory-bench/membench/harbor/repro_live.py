@@ -99,7 +99,36 @@ DASHBOARD_TEST_CONFIG = RigTestConfig(
     ),
 )
 
-RIG_TEST_CONFIGS: dict[str, RigTestConfig] = {"gascity_dashboard": DASHBOARD_TEST_CONFIG}
+# mem: the rig is THIS repo, which carries two independent test surfaces -- the root
+# TypeScript suite (vitest, tests/*.test.ts) and the Python memory-bench suite
+# (pytest, memory-bench/tests/test_*.py). Both run on the host worktree (the gate's
+# direct leg, not the agent container), so the install seeds both toolchains once.
+# Prefixes are disjoint: a root-TS path starts with "tests/" and never "memory-bench/",
+# and vice versa, so each gold test routes to exactly one workspace (no double-run).
+# Root-TS workspace runs from the worktree root (cwd ".") so vitest resolves its config
+# + aliases; the stripped bare filename is the path-substring filter `vitest run` takes.
+# Python workspace keeps prefix == cwd + "/" (the dashboard discipline) so the stripped
+# path is the real path relative to memory-bench/. `python3 -m pip`/`-m pytest` pin the
+# same interpreter (the host carries python3, not a bare `python`), avoiding pip/pytest
+# PATH ambiguity.
+MEM_TEST_CONFIG = RigTestConfig(
+    install=(
+        ("npm", "ci", "--no-audit", "--no-fund"),
+        ("python3", "-m", "pip", "install", "-e", "memory-bench[dev]"),
+    ),
+    setup=(),
+    workspaces=(
+        WorkspaceTests(prefix="tests/", cwd=".", argv_prefix=("npx", "vitest", "run")),
+        WorkspaceTests(
+            prefix="memory-bench/", cwd="memory-bench", argv_prefix=("python3", "-m", "pytest")
+        ),
+    ),
+)
+
+RIG_TEST_CONFIGS: dict[str, RigTestConfig] = {
+    "gascity_dashboard": DASHBOARD_TEST_CONFIG,
+    "mem": MEM_TEST_CONFIG,
+}
 
 
 class LiveReproRunner:
