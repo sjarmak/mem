@@ -376,20 +376,18 @@ def test_mem_rig_is_registered() -> None:
     assert RIG_TEST_CONFIGS["mem"] is MEM_TEST_CONFIG
 
 
-def test_mem_rig_config_routes_ts_and_python_suites(tmp_path: Path) -> None:
-    """The real MEM_TEST_CONFIG routes a root-TS gold test to `npx vitest run` from the
-    worktree root and a memory-bench gold test to `python -m pytest <path>` from
-    memory-bench/ -- the two surfaces the mem rig actually carries. npm/pip/test argvs
-    are stubbed to exit 0 (no JS/Python toolchain needed); git runs for real so the
-    worktree + gold-diff apply are exercised end-to-end."""
+def test_mem_rig_config_routes_root_ts_suite(tmp_path: Path) -> None:
+    """The real MEM_TEST_CONFIG routes a root-TS gold test to `npx vitest run <filter>`
+    from the worktree root, installing ONLY the node toolchain (`npm ci`) -- the TS-only
+    surface validated against mem-us6j (the sole assembled mem bundle). npm/test argvs
+    are stubbed to exit 0; git runs for real so the worktree + gold-diff apply are
+    exercised end-to-end."""
     repo = tmp_path / "clone"
     (repo / "tests").mkdir(parents=True)
-    (repo / "memory-bench" / "tests").mkdir(parents=True)
     _git(repo, "init", "-q")
     _git(repo, "config", "user.email", "t@t")
     _git(repo, "config", "user.name", "t")
     (repo / "tests" / "cli.test.ts").write_text("// base\n", encoding="utf-8")
-    (repo / "memory-bench" / "tests" / "test_x.py").write_text("# base\n", encoding="utf-8")
     _git(repo, "add", ".")
     _git(repo, "commit", "-qm", "base")
     commit = _git(repo, "rev-parse", "HEAD").strip()
@@ -399,11 +397,6 @@ def test_mem_rig_config_routes_ts_and_python_suites(tmp_path: Path) -> None:
         "--- a/tests/cli.test.ts\n+++ b/tests/cli.test.ts\n"
         "@@ -1 +1 @@\n-// base\n+// gold\n"
     )
-    py_gold = (
-        "diff --git a/memory-bench/tests/test_x.py b/memory-bench/tests/test_x.py\n"
-        "--- a/memory-bench/tests/test_x.py\n+++ b/memory-bench/tests/test_x.py\n"
-        "@@ -1 +1 @@\n-# base\n+# gold\n"
-    )
     bundle = TaskBundle(
         work_id="mem-us6j",
         rig="mem",
@@ -412,10 +405,7 @@ def test_mem_rig_config_routes_ts_and_python_suites(tmp_path: Path) -> None:
         trace_ref="/tmp/mem-trace.jsonl",
         output=ReplayResult(
             calls=(),
-            file_diffs=(
-                ("tests/cli.test.ts", ts_gold),
-                ("memory-bench/tests/test_x.py", py_gold),
-            ),
+            file_diffs=(("tests/cli.test.ts", ts_gold),),
             replay_success_rate=1.0,
         ),
         env=BundleEnv(repo="mem", base_commit=commit, base_image="node:22-bookworm"),
@@ -439,24 +429,60 @@ def test_mem_rig_config_routes_ts_and_python_suites(tmp_path: Path) -> None:
         outcome = r.run(bundle=bundle, candidate_diff={})
 
     assert outcome.passed
-    assert outcome.tests_passed == 2 and outcome.tests_total == 2
-
+    assert outcome.tests_passed == 1 and outcome.tests_total == 1
     vitest = [(cwd, argv) for cwd, argv in recorded if "vitest" in argv]
-    pytest_runs = [(cwd, argv) for cwd, argv in recorded if argv[:3] == ("python3", "-m", "pytest")]
     assert len(vitest) == 1
     cwd, argv = vitest[0]
-    # Root TS suite: stripped bare filename, run from the worktree root (repro-*).
+    # Stripped bare filename, run from the worktree root (repro-*).
     assert argv == ("npx", "vitest", "run", "cli.test.ts")
     assert cwd.name.startswith("repro-")
-    assert len(pytest_runs) == 1
-    cwd, argv = pytest_runs[0]
-    # Python suite: path relative to memory-bench/, run from memory-bench/.
-    assert argv == ("python3", "-m", "pytest", "tests/test_x.py")
-    assert cwd.name == "memory-bench"
-    # Install seeded both toolchains once.
     argvs = [a for _, a in recorded]
     assert ("npm", "ci", "--no-audit", "--no-fund") in argvs
-    assert ("python3", "-m", "pip", "install", "-e", "memory-bench[dev]") in argvs
+    # No Python toolchain install -- the surface is deliberately TS-only.
+    assert not any(a[:2] == ("python3", "-m") and "pip" in a for a in argvs)
+
+
+def test_mem_rig_python_gold_test_is_outside_known_workspaces(tmp_path: Path) -> None:
+    """A mem bundle whose gold test is a memory-bench Python file is REJECTED loudly
+    (not silently mis-run): the TS-only config maps no `memory-bench/` workspace, so the
+    runner errors rather than guessing. Documents the deliberate scope boundary."""
+    repo = tmp_path / "clone"
+    (repo / "memory-bench" / "tests").mkdir(parents=True)
+    _git(repo, "init", "-q")
+    _git(repo, "config", "user.email", "t@t")
+    _git(repo, "config", "user.name", "t")
+    (repo / "memory-bench" / "tests" / "test_x.py").write_text("# base\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "base")
+    commit = _git(repo, "rev-parse", "HEAD").strip()
+    py_gold = (
+        "diff --git a/memory-bench/tests/test_x.py b/memory-bench/tests/test_x.py\n"
+        "--- a/memory-bench/tests/test_x.py\n+++ b/memory-bench/tests/test_x.py\n"
+        "@@ -1 +1 @@\n-# base\n+# gold\n"
+    )
+    bundle = TaskBundle(
+        work_id="mem-pybundle",
+        rig="mem",
+        issue_title="x",
+        issue_body="",
+        trace_ref="/tmp/t.jsonl",
+        output=ReplayResult(
+            calls=(),
+            file_diffs=(("memory-bench/tests/test_x.py", py_gold),),
+            replay_success_rate=1.0,
+        ),
+        env=BundleEnv(repo="mem", base_commit=commit, base_image="node:22-bookworm"),
+        loo_excluded_work_ids=("mem-pybundle",),
+    )
+    with LiveReproRunner(
+        rig_repos={"mem": repo},
+        configs={"mem": MEM_TEST_CONFIG},
+        worktree_root=tmp_path / "worktrees",
+        runner=RecordingRunner(),
+    ) as r:
+        outcome = r.run(bundle=bundle, candidate_diff={})
+    assert not outcome.passed
+    assert outcome.error is not None and "outside known workspaces" in outcome.error
 
 
 def test_close_removes_cached_worktrees(clone: Path, tmp_path: Path) -> None:

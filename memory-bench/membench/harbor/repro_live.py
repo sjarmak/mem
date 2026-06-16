@@ -99,30 +99,23 @@ DASHBOARD_TEST_CONFIG = RigTestConfig(
     ),
 )
 
-# mem: the rig is THIS repo, which carries two independent test surfaces -- the root
-# TypeScript suite (vitest, tests/*.test.ts) and the Python memory-bench suite
-# (pytest, memory-bench/tests/test_*.py). Both run on the host worktree (the gate's
-# direct leg, not the agent container), so the install seeds both toolchains once.
-# Prefixes are disjoint: a root-TS path starts with "tests/" and never "memory-bench/",
-# and vice versa, so each gold test routes to exactly one workspace (no double-run).
-# Root-TS workspace runs from the worktree root (cwd ".") so vitest resolves its config
-# + aliases; the stripped bare filename is the path-substring filter `vitest run` takes.
-# Python workspace keeps prefix == cwd + "/" (the dashboard discipline) so the stripped
-# path is the real path relative to memory-bench/. `python3 -m pip`/`-m pytest` pin the
-# same interpreter (the host carries python3, not a bare `python`), avoiding pip/pytest
-# PATH ambiguity.
+# mem: the rig is THIS repo. The gold tests it carries in the corpus are the root
+# TypeScript suite (vitest, tests/*.test.ts) -- mem-us6j, the only assembled mem bundle,
+# is TS-only. `npm ci` seeds a local, isolated node_modules; the workspace runs from the
+# worktree root (cwd ".") so vitest resolves its config + aliases, and the stripped bare
+# filename is the path-substring filter `vitest run` takes.
+#
+# Deliberately TS-only: the Python memory-bench suite is NOT wired here. It would need
+# `pip install -e memory-bench[dev]`, which fails on a PEP-668 externally-managed host
+# python (the gate's direct leg runs on the host, not in a container) -- and no mem
+# bundle in the pool has a Python gold test, so wiring it would be unvalidated,
+# host-fragile generality. A future Python-gold-test mem bundle needs a venv-scoped,
+# per-workspace install (RigTestConfig.install is shared across workspaces today), which
+# is the change to make THEN -- see docs/mem-7q6e-replay-engine-null.md.
 MEM_TEST_CONFIG = RigTestConfig(
-    install=(
-        ("npm", "ci", "--no-audit", "--no-fund"),
-        ("python3", "-m", "pip", "install", "-e", "memory-bench[dev]"),
-    ),
+    install=(("npm", "ci", "--no-audit", "--no-fund"),),
     setup=(),
-    workspaces=(
-        WorkspaceTests(prefix="tests/", cwd=".", argv_prefix=("npx", "vitest", "run")),
-        WorkspaceTests(
-            prefix="memory-bench/", cwd="memory-bench", argv_prefix=("python3", "-m", "pytest")
-        ),
-    ),
+    workspaces=(WorkspaceTests(prefix="tests/", cwd=".", argv_prefix=("npx", "vitest", "run")),),
 )
 
 RIG_TEST_CONFIGS: dict[str, RigTestConfig] = {
