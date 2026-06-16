@@ -195,7 +195,7 @@ def test_dataset_mvp_ratios() -> None:
     """§15 Dataset MVP ratio targets, measured over the seed corpus."""
     corpus = _corpus()
     n = len(corpus)
-    assert n >= 6, f"seed batch should add >=6 fixtures; corpus has {n}"
+    assert n >= 10, f"§15 Dataset MVP wants >=10 multi-session sequences; corpus has {n}"
 
     synthesis = sum(1 for seq in corpus if _axis_f_synthesis(seq))
     stale_or_interf = sum(

@@ -27,7 +27,7 @@ with no SDK installed and the suite stays green under the no-paid-API contract.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from membench.memory_systems.local_stack import LocalModelStack
 from membench.memory_systems.semantic_base import (
@@ -152,7 +152,9 @@ def _default_native_factory(stack: LocalModelStack | None = None) -> _NativeFact
     resolved = stack or LocalModelStack.from_env()
 
     def build(scope: str) -> _AMemNative:
-        return AgenticMemorySystem(**build_amem_kwargs(scope, stack=resolved))
+        # The A-MEM SDK ships no types, so its constructor is Any; cast to the
+        # structural Protocol the arm relies on (the SDK is the override-ignored import).
+        return cast(_AMemNative, AgenticMemorySystem(**build_amem_kwargs(scope, stack=resolved)))
 
     return build
 

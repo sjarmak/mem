@@ -7,14 +7,33 @@ import math
 
 import pytest
 
+from membench.generators.interruption import (
+    detect_interruption_points,
+    generate_handoff_tasks,
+    trajectory_for_seed,
+)
 from membench.metrics.scorers import (
+    InterruptionInputs,
+    PrivacyInputs,
     RetentionInputs,
     RetrievalInputs,
     SynthesisInputs,
     score_efficiency,
+    score_interruption,
+    score_privacy,
     score_retention,
     score_retrieval,
     score_synthesis,
+)
+from membench.schemas.handoff import (
+    FIRST_POST_FAILURE_EDIT,
+    FIRST_SOURCE_EDIT,
+    FIRST_VALIDATION_RESULT,
+    SOURCE_EDIT,
+    VALIDATION,
+    VALIDATION_FAIL,
+    VALIDATION_PASS,
+    PredecessorEvent,
 )
 from membench.schemas.memory_event import MemoryBackend, MemoryEvent, MemoryOperation
 
@@ -270,3 +289,118 @@ def test_efficiency_sums_tokens_and_calls():
     # Model-path-only fields stay zero in the deterministic path.
     assert m.cost_usd == 0.0
     assert m.model_latency_ms == 0.0
+
+
+# --------------------------------------------------------------------------- #
+# Privacy (DIV-4) — deterministic leakage check + model-classified passthrough
+# --------------------------------------------------------------------------- #
+def test_privacy_cross_rig_same_rig_injection_is_flagged_with_ids():
+    # A cross_rig run injecting content from the task's OWN rig defeats the cross-rig
+    # isolation → each offending id is flagged; an other-rig id is clean.
+    m = score_privacy(
+        PrivacyInputs(
+            run_scope="cross_rig",
+            task_rig="gascity",
+            injected_rigs={"m1": "gascity", "m2": "codeprobe", "m3": "gascity"},
+        )
+    )
+    assert m.leakage_flags == [
+        "cross_rig_same_rig_injection:m1",
+        "cross_rig_same_rig_injection:m3",
+    ]
+
+
+def test_privacy_same_rig_temporal_run_never_flags_same_rig_injection():
+    # same_rig_temporal is SUPPOSED to inject same-rig content — never a leak.
+    m = score_privacy(
+        PrivacyInputs(
+            run_scope="same_rig_temporal",
+            task_rig="gascity",
+            injected_rigs={"m1": "gascity"},
+        )
+    )
+    assert m.leakage_flags == []
+
+
+def test_privacy_unmeasured_provenance_reports_no_flags_not_a_fabricated_clean_bill():
+    # No scope / no provenance threaded → honest empty, like distractor/stale defaults.
+    assert score_privacy(PrivacyInputs()).leakage_flags == []
+    assert score_privacy(PrivacyInputs(run_scope="cross_rig")).leakage_flags == []
+
+
+@pytest.mark.parametrize("cls", ["none", "internal", "sensitive", None])
+def test_privacy_class_passes_through_valid_buckets(cls):
+    assert score_privacy(PrivacyInputs(privacy_class=cls)).privacy_class == cls
+
+
+def test_privacy_class_out_of_bucket_raises():
+    # An off-vocabulary class is a producer bug, surfaced loudly (DIV-4 is frozen).
+    with pytest.raises(ValueError, match="DIV-4"):
+        score_privacy(PrivacyInputs(privacy_class="secret"))
+
+
+# --------------------------------------------------------------------------- #
+# Interruption (DIV-4) — inject_timing wired against the mem-dsu generator
+# --------------------------------------------------------------------------- #
+def _inputs_at(events, point):
+    """Wire the scorer against the generator: detect the point's trigger index, then
+    feed the checkpoint-inclusive prefix the successor inherits."""
+    idx = detect_interruption_points(events)[point]
+    return InterruptionInputs(point=point, checkpoint_prefix=events[: idx + 1])
+
+
+def test_interruption_timing_classifies_from_validation_outcomes():
+    # edit -> failing validation -> post-failure edit. Source edit is pre-failure
+    # (off), the failing validation and the post-failure edit are on-failure.
+    events = (
+        PredecessorEvent(kind=SOURCE_EDIT, target="a.py", detail="edit"),
+        PredecessorEvent(
+            kind=VALIDATION, target="pytest", outcome=VALIDATION_FAIL, detail="1 failed"
+        ),
+        PredecessorEvent(kind=SOURCE_EDIT, target="a.py", detail="fix"),
+    )
+    assert score_interruption(_inputs_at(events, FIRST_SOURCE_EDIT)).inject_timing == "off_failure"
+    assert (
+        score_interruption(_inputs_at(events, FIRST_VALIDATION_RESULT)).inject_timing
+        == "on_failure"
+    )
+    assert (
+        score_interruption(_inputs_at(events, FIRST_POST_FAILURE_EDIT)).inject_timing
+        == "on_failure"
+    )
+
+
+def test_interruption_first_validation_passing_is_off_failure_not_hardcoded():
+    # A trajectory whose first post-edit validation PASSES must classify off_failure —
+    # timing reads the actual outcome, never the point name.
+    events = (
+        PredecessorEvent(kind=SOURCE_EDIT, target="a.py"),
+        PredecessorEvent(kind=VALIDATION, target="pytest", outcome=VALIDATION_PASS),
+    )
+    m = score_interruption(_inputs_at(events, FIRST_VALIDATION_RESULT))
+    assert m.inject_timing == "off_failure"
+
+
+def test_interruption_derailment_signal_is_left_a_judge_seam():
+    events = (PredecessorEvent(kind=SOURCE_EDIT, target="a.py"),)
+    m = score_interruption(_inputs_at(events, FIRST_SOURCE_EDIT))
+    assert m.derailment_signal is None  # magnitude is the model's call, not the scorer's
+
+
+def test_interruption_unknown_point_raises():
+    with pytest.raises(ValueError, match="not one of"):
+        score_interruption(InterruptionInputs(point="halfway", checkpoint_prefix=()))
+
+
+def test_interruption_end_to_end_against_generator_views_share_timing():
+    # Wire the real generator: the 4 view arms of one interruption point are a matched
+    # set, so they MUST share one inject_timing (timing is a property of the point).
+    traj = trajectory_for_seed(seed=0)
+    tasks = generate_handoff_tasks(seed=0)
+    by_point: dict[str, set[str]] = {}
+    for task in tasks:
+        timing = score_interruption(_inputs_at(traj.events, task.point)).inject_timing
+        by_point.setdefault(task.point, set()).add(timing)
+    # Every point resolved to exactly one timing across its 4 views.
+    assert by_point  # the generator emitted at least one point
+    assert all(len(timings) == 1 for timings in by_point.values())

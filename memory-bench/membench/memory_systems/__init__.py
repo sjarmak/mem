@@ -24,6 +24,7 @@ from membench.memory_systems.base import (
     RetrievalRequest,
     RetrieveResult,
 )
+from membench.memory_systems.consolidating_system import ConsolidatingMemory
 from membench.memory_systems.filesystem_system import FilesystemMemory
 from membench.memory_systems.graphiti_system import GraphitiMemory
 from membench.memory_systems.local_stack import (
@@ -35,6 +36,7 @@ from membench.memory_systems.nat_system import NatMemory
 from membench.memory_systems.none_system import NoneMemory
 from membench.memory_systems.oracle_system import OracleMemory
 from membench.memory_systems.ours_system import OursMemory
+from membench.memory_systems.retention_scheduled_system import RetentionScheduledMemory
 from membench.memory_systems.semantic_base import (
     AbstractSemanticArm,
     SemanticHit,
@@ -45,6 +47,7 @@ __all__ = [
     "AMemMemory",
     "AbstractSemanticArm",
     "AsyncClientBridge",
+    "ConsolidatingMemory",
     "FilesystemMemory",
     "GraphitiMemory",
     "LocalModelStack",
@@ -55,6 +58,7 @@ __all__ = [
     "NoneMemory",
     "OracleMemory",
     "OursMemory",
+    "RetentionScheduledMemory",
     "RetrievalRequest",
     "RetrieveResult",
     "SemanticHit",
@@ -78,6 +82,8 @@ def build_memory_system(name: str, **kwargs: Any) -> MemorySystem:
         "none": NoneMemory,
         "oracle": OracleMemory,
         "filesystem": FilesystemMemory,
+        "consolidating": ConsolidatingMemory,
+        "retention_scheduled": RetentionScheduledMemory,
         "ours": OursMemory,
         "mem0": Mem0Memory,
         "a-mem": AMemMemory,

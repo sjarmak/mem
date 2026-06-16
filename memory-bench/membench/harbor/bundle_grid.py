@@ -40,6 +40,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from membench.grading.dual_verifier import ReproRunner, RunResult, score_run
 from membench.grading.graded import DEFAULT_JUDGE_ROUNDS, RubricJudge, judge_graded
 from membench.grading.probe_direct import ProbeEfficiency
+from membench.grading.retrieval_leg import RetrievalLeg
 from membench.grading.validity_gate import ValidityResult
 from membench.harbor.probe_gate import (
     CONDITIONS,
@@ -87,11 +88,36 @@ class GridConditionResult(BaseModel):
     judge_confidence: float | None = None
     judge_divergence: float | None = None
     judge_divergence_flagged: bool = False
+    # White-box retrieval-correctness leg (M1/M2), additive + None-defaulted so cached
+    # pre-M2 result JSONs still load. ``retrieval_target`` is the declared TIAP scoring
+    # target (M1); the four metric fields ride ``metrics()`` SEPARATELY from
+    # score_direct/judge_score (never folded into a composite). A retrieval-bearing
+    # result (``retrieval_recall is not None``) with no declared target is flagged in
+    # summarize, not scored silently.
+    retrieval_target: str | None = None
+    retrieval_precision: float | None = None
+    retrieval_recall: float | None = None
+    retrieval_mrr: float | None = None
+    retrieval_ndcg: float | None = None
+
+    def with_retrieval_leg(self, leg: RetrievalLeg) -> GridConditionResult:
+        """Return a copy carrying the white-box retrieval leg (frozen model)."""
+        return self.model_copy(
+            update={
+                "retrieval_target": leg.retrieval_target,
+                "retrieval_precision": leg.precision,
+                "retrieval_recall": leg.recall,
+                "retrieval_mrr": leg.mrr,
+                "retrieval_ndcg": leg.ndcg,
+            }
+        )
 
     def metrics(self) -> dict[str, float | None]:
         """The per-condition metric vector the pairing arithmetic consumes. The
-        graded signals (``test_ratio``/``diff_sim``/``judge_score``) ride along and
-        pair automatically; a None metric is omitted from a bundle's deltas."""
+        graded signals (``test_ratio``/``diff_sim``/``judge_score``) and the white-box
+        retrieval leg ride along and pair automatically; a None metric is omitted from
+        a bundle's deltas. Retrieval metrics are their own keys — never folded into
+        score_direct/judge_score."""
         return {
             "score_direct": self.score_direct,
             "score_artifact": self.score_artifact,
@@ -99,6 +125,10 @@ class GridConditionResult(BaseModel):
             "test_ratio": self.test_ratio,
             "diff_sim": self.diff_sim,
             "judge_score": self.judge_score,
+            "retrieval_precision": self.retrieval_precision,
+            "retrieval_recall": self.retrieval_recall,
+            "retrieval_mrr": self.retrieval_mrr,
+            "retrieval_ndcg": self.retrieval_ndcg,
             "input_tokens": (
                 None
                 if self.efficiency.input_tokens is None
@@ -415,6 +445,58 @@ def _arm_gap_stats(delta_maps: Sequence[dict[str, float]]) -> dict[str, Any]:
     return gaps
 
 
+def _scoring_target_block(rows: Sequence[ThreeArmRow]) -> dict[str, str]:
+    """Validate + collect the declared TIAP scoring targets per arm (M1). A result
+    that COMPUTED a retrieval leg (``retrieval_recall is not None``) but declared no
+    ``retrieval_target`` is a silent-scoring bug — raise, naming the arm. Returns
+    ``{arm: target}`` for every arm that declared one (retrieval-bearing arms only;
+    a non-retrieving arm legitimately declares nothing)."""
+    targets: dict[str, str] = {}
+    for row in rows:
+        for result in (row.none_clean, row.ours, row.builtin):
+            if result.retrieval_recall is not None and result.retrieval_target is None:
+                raise ValueError(
+                    f"arm {result.condition!r} (bundle {result.work_id!r}) computed a "
+                    "retrieval leg with no declared retrieval_target (M1 TIAP): a "
+                    "retrieval-bearing result must declare its scoring target, not "
+                    "score silently"
+                )
+            if result.retrieval_target is not None:
+                targets.setdefault(result.condition, result.retrieval_target)
+    return targets
+
+
+def _coverage_matched_block(rows: Sequence[ThreeArmRow]) -> dict[str, Any]:
+    """M5: deltas over the bundle set every arm could GENUINELY attempt, vs the full
+    set. A bundle whose ours leg degenerated to the none-clean reuse
+    (``ours_retrieval_empty``) was not a genuine memory attempt, so it is excluded
+    from the matched deltas — present, labeled, in the full set (no silent hole)."""
+    full = [row.work_id for row in rows]
+    matched_rows = [row for row in rows if not row.ours_retrieval_empty]
+    matched = [row.work_id for row in matched_rows]
+    excluded = [row.work_id for row in rows if row.ours_retrieval_empty]
+    matched_gaps: dict[str, Any] = {}
+    if matched_rows:
+        matched_gaps = {
+            "ours_vs_none_clean": _arm_gap_stats([dict(r.deltas_ours) for r in matched_rows]),
+            "builtin_vs_none_clean": _arm_gap_stats([dict(r.deltas_builtin) for r in matched_rows]),
+            "ours_vs_builtin": _arm_gap_stats(
+                [dict(r.deltas_ours_vs_builtin) for r in matched_rows]
+            ),
+        }
+    return {
+        "full_set": full,
+        "full_set_size": len(full),
+        "matched_set": matched,
+        "matched_set_size": len(matched),
+        "excluded": excluded,
+        "exclusion_reason": (
+            "ours_retrieval_empty (degenerate none-clean reuse, not a genuine memory attempt)"
+        ),
+        "matched_gaps": matched_gaps,
+    }
+
+
 def summarize_grid_3arm(
     rows: Sequence[ThreeArmRow],
     ours_evidence: Sequence[OursRungEvidence],
@@ -427,6 +509,7 @@ def summarize_grid_3arm(
     computed here."""
     if not rows:
         raise ValueError("summarize_grid_3arm needs at least one three-arm row")
+    scoring_target = _scoring_target_block(rows)
     per_bundle = [
         {
             "work_id": row.work_id,
@@ -477,13 +560,21 @@ def summarize_grid_3arm(
         },
         "arm_provenance": dict(ARM_PROVENANCE),
         "validity_gates": _validity_block(validity),
+        # M1: the declared TIAP scoring target per retrieval-bearing arm (raw / source
+        # / canonical). Empty when no arm computed a retrieval leg.
+        "scoring_target": scoring_target,
+        # M5: the genuine-attempt-matched bundle set + its deltas, vs the full set.
+        "coverage_matched": _coverage_matched_block(rows),
     }
 
 
 def load_grid_ready_work_ids(manifest_path: Path) -> tuple[str, ...]:
-    """The admitted work_ids from the fanout-guard manifest
-    (``.mem/grid-ready-pool.json``, mem-75t.7.7). Rejected bundles never enter the
-    grid -- their issue text mismatches their gold diff's scope."""
+    """The admitted work_ids from the two-stage admission manifest
+    (``.mem/grid-ready-pool.json``, schema v2). ``admitted`` means the bundle cleared
+    BOTH gates: issue<->diff scope match (mem-75t.7.7) AND oracle soundness — the gold
+    diff reproduces and the empty diff fails (mem-1eph). A bundle rejected by either
+    gate never enters the grid; the manifest's ``provenance`` records which gate and
+    why. The reader consumes only ``admitted``, so it is stable across schema bumps."""
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     admitted = manifest.get("admitted")
     if not admitted:

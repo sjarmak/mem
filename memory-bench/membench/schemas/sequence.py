@@ -52,6 +52,14 @@ class SequenceStep(BaseModel):
     # stale_memory_used diagnostic; the skeleton runner does not act on it yet,
     # and it defaults empty so existing fixtures stay valid.
     superseded_memory_ids: list[str] = Field(default_factory=list)
+    # S3 retention-schedule oracle (additive; consumer = the RetentionScheduledMemory
+    # arm + its scorer). ``record_class`` is the retention class the step's record is
+    # assigned at write (the arm's classify input); ``disposition`` is the schedule's
+    # ground-truth disposition for that record at sweep time (the deterministic oracle
+    # the wrongful_destruction gate scores against). Both None for non-retention
+    # sequences, so existing fixtures stay valid.
+    record_class: str | None = None
+    disposition: str | None = None
 
 
 class BenchmarkSequence(BaseModel):
@@ -61,3 +69,9 @@ class BenchmarkSequence(BaseModel):
     goal: str = ""
     steps: list[SequenceStep]
     final_goal_check: dict[str, Any] = Field(default_factory=dict)
+    # S2 schema-induction oracle (additive): the abstract rule every episode
+    # INSTANTIATES without stating it verbatim — the answer the final probe must
+    # induce. None for non-schema sequences, so existing fixtures stay valid. The
+    # source-trace set is the written episode ids (expected_memory_writes across
+    # steps); it is not duplicated here.
+    latent_rule: str | None = None

@@ -56,10 +56,11 @@ def test_task_toml_carries_rung_workid_rig_and_loo_boundary(tmp_path):
 def test_allow_internet_defaults_offline_and_is_opt_in(tmp_path):
     # Offline by default (deterministic scoring); the real-exec spike opts in because
     # Harbor's installed claude-code agent fetches its CLI + deps over the network.
+    # Emitted as harbor>=0.13's network_mode, not the deprecated allow_internet field.
     offline = WorkRecordLadderAdapter(_record(), tmp_path / "off").run()
-    assert toml.load(offline[0] / "task.toml")["environment"]["allow_internet"] is False
+    assert toml.load(offline[0] / "task.toml")["environment"]["network_mode"] == "no-network"
     online = WorkRecordLadderAdapter(_record(), tmp_path / "on", allow_internet=True).run()
-    assert toml.load(online[0] / "task.toml")["environment"]["allow_internet"] is True
+    assert toml.load(online[0] / "task.toml")["environment"]["network_mode"] == "public"
 
 
 def test_each_dir_carries_its_own_rung(tmp_path):
