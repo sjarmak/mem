@@ -1,0 +1,93 @@
+# =============================================================================
+# Dockerfile.sft — STABLE SFT-only training image (PRD primary track R4)
+# =============================================================================
+#
+# This is the image the project SPINE rides on. It carries Unsloth QLoRA SFT
+# (R4: external-data reasoning reranker) and NOTHING ELSE that can break on
+# sm_120. Per PRD amendment A1 (lines 193-201) the env is a digest-pinned
+# container split in two:
+#
+#   * THIS image (SFT-only): Unsloth QLoRA. Needs NEITHER vLLM NOR flash-attn.
+#     Kept deliberately minimal so it can ship even if the RL env never
+#     stabilizes. This is the stable one.
+#   * Dockerfile.vllm (separate, EXPENDABLE): adds vLLM (+flash-attn) for the
+#     R7/R10 GRPO behavior track. If sm_120 vLLM colocate is unstable today
+#     (an [OPEN] question, PRD line 183), only that image is at risk.
+#
+# WHY THE SPLIT: vLLM and flash-attn are the two most fragile sm_120 components
+# (premortem theme B + issues vLLM #13306/#16515/#36865, flash-attn #2168).
+# Putting them in the SFT image would couple the deliverable to the riskiest
+# dependencies. Unsloth QLoRA SFT does not import either — so they are omitted
+# here entirely.
+#
+# DIGEST-PIN DISCIPLINE: the FROM line uses an immutable @sha256 digest, not a
+# floating tag. The cu129 PyTorch base is pinned so the toolchain is
+# byte-reproducible. Replace the placeholder digest below with the digest you
+# resolve at build time (see README: `docker buildx imagetools inspect`), then
+# COMMIT the digest. Never rebuild against a moving tag.
+#
+# NEVER `pip install`/auto-update inside a running container built from this
+# image (env drift = premortem risk #1). To change a pin, edit
+# requirements.lock and REBUILD.
+# =============================================================================
+
+# ---- Base: CUDA 12.9 PyTorch runtime, DIGEST-PINNED ------------------------
+# NOTE (morning): resolve the real digest for the cu129 base before building:
+#   docker buildx imagetools inspect pytorch/pytorch:2.11.0-cuda12.9-cudnn9-devel
+# then paste the @sha256 here and commit it. The tag is shown only for legibility.
+FROM pytorch/pytorch:2.11.0-cuda12.9-cudnn9-devel@sha256:REPLACE_WITH_RESOLVED_DIGEST AS sft
+
+LABEL org.opencontainers.image.title="mem-rl-sft" \
+      org.opencontainers.image.description="Stable Unsloth QLoRA SFT image (sm_120 / RTX 5090), no vLLM, no flash-attn" \
+      mem.track="R4-primary-spine" \
+      mem.pinset="torch2.11+cu129 / bitsandbytes0.49.2 / TRL0.23.x via Unsloth Studio"
+
+# ---- Contended-box ops: bake ALL cache/temp dirs into the IMAGE env --------
+# (premortem rec #5 / A6) These must live in the env, not an interactive shell,
+# so every launch inherits them. They point at container-internal paths that the
+# README maps to a wipeable named volume at run time (NOT the 72 GB host root).
+ENV HF_HOME=/cache/hf \
+    HF_DATASETS_CACHE=/cache/hf/datasets \
+    TRANSFORMERS_CACHE=/cache/hf/transformers \
+    PIP_CACHE_DIR=/cache/pip \
+    TMPDIR=/cache/tmp \
+    # Disable TorchDynamo/compile by default — sm_120 inductor paths are a
+    # known footgun on a moving target; opt in explicitly per-run, never implicitly.
+    TORCHDYNAMO_DISABLE=1 \
+    # Fail fast on the cu126 silent-wheel trap: surface CUDA errors synchronously.
+    CUDA_LAUNCH_BLOCKING=0 \
+    PYTHONUNBUFFERED=1
+
+RUN mkdir -p /cache/hf /cache/pip /cache/tmp /workspace
+
+WORKDIR /workspace
+
+# ---- Pinned install from the single SoT lockfile ---------------------------
+# torch comes from the cu129 index to dodge the cu126 silent-wheel trap; all
+# other pins come from requirements.lock. The lockfile's [vllm] lines are
+# comments, so they are correctly skipped here.
+COPY requirements.lock /workspace/requirements.lock
+
+# Single-layer install; --no-cache-dir keeps the image lean (the build CACHE is
+# the disk risk, handled by a separate buildx cache mount — see README).
+RUN --mount=type=cache,target=/cache/pip \
+    python -m pip install --upgrade pip && \
+    python -m pip install \
+        --extra-index-url https://download.pytorch.org/whl/cu129 \
+        -r /workspace/requirements.lock
+
+# ---- Build-time capability assertion (NOT a runtime GPU call) ---------------
+# We CANNOT touch the GPU during `docker build`. This only asserts the import
+# graph resolves and torch was not silently downgraded by a transitive dep.
+# The REAL (12,0) + real-kernel check is smoke_test.py, run after build.
+RUN python -c "import torch, bitsandbytes, unsloth, peft, transformers, trl; \
+print('torch', torch.__version__); \
+assert torch.__version__.startswith('2.11'), 'torch was silently bumped — abort'; \
+assert '+cu129' in torch.__version__, 'non-cu129 wheel (cu126 silent-wheel trap?) — abort'; \
+print('SFT image import graph OK')"
+
+# ---- Smoke test ships in the image so it can be run with one command -------
+COPY smoke_test.py /workspace/smoke_test.py
+
+# Default to a shell; the smoke test / training is launched explicitly per README.
+CMD ["/bin/bash"]

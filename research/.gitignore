@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+
+# Internal-detail docs, internal-corpus analysis, and internal-ID results are kept
+# LOCAL and NOT published to the public repo (these reference infra, project names,
+# bead IDs, and failure signatures). The reusable engineering lives alongside them.
+MORNING_LEDGER.md
+_grounding_brief.md
+grid_assembly_plan.md
+prd_finetuning_rl_agentic_retrieval_memory_rtx5090.md
+premortem_finetuning_rl_agentic_retrieval_memory_rtx5090.md
+scripts/PARALLEL_RUN.md
+scripts/gate0_density.py
+scripts/leak_check.py
+results/

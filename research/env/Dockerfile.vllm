@@ -1,0 +1,66 @@
+# =============================================================================
+# Dockerfile.vllm — EXPENDABLE vLLM image (PRD behavior track R7/R10)
+# =============================================================================
+#
+# This is the SECOND of the two images mandated by PRD amendment A1 (lines
+# 193-201). It adds vLLM (+ flash-attn) on top of the exact same known-good
+# pin set, to carry ONLY the GRPO / frozen-generator-searcher behavior track
+# (R7 s3-style searcher; R10 corpus-native mem-RL contingency).
+#
+# IT IS DELIBERATELY EXPENDABLE. The stable SFT spine (Dockerfile.sft) does not
+# depend on this image and ships independently. vLLM sm_120 colocate stability
+# "today on this box" is an explicit [OPEN] question (PRD line 183) that R2.5/A2
+# resolves via a colocation + 2-hour soak gate BEFORE R7 eats the runway. If
+# this image proves unstable, R7 falls back to OFFLINE SEQUENTIAL
+# (serve -> dump rollouts -> unload -> train); nothing else is blocked.
+#
+# WHY flash-attn lives ONLY here: it is needed by the vLLM serving leg, not by
+# Unsloth QLoRA SFT, and its sm_120 build is slow to compile and disk-hungry
+# (see README build-cache note). Keep it out of the stable image.
+#
+# Known-fragile issues this image MUST be re-verified against before trusting
+# colocate: vLLM #13306 / #16515 / #36865, flash-attn #2168 (premortem line 102).
+#
+# Same digest-pin + no-pip-inside discipline as Dockerfile.sft.
+# =============================================================================
+
+# Build FROM the already-built, digest-pinned SFT image so the torch/bnb/Unsloth
+# pin set is shared byte-for-byte and cannot drift between the two images.
+# Replace the placeholder digest with the digest of YOUR locally built sft image
+# (see README: `docker images --digests mem-rl-sft`). Tag shown for legibility.
+FROM mem-rl-sft:latest@sha256:REPLACE_WITH_LOCAL_SFT_IMAGE_DIGEST AS vllm
+
+LABEL org.opencontainers.image.title="mem-rl-vllm" \
+      org.opencontainers.image.description="Expendable vLLM+flash-attn image (sm_120 / RTX 5090) for R7/R10 GRPO behavior track" \
+      mem.track="R7-R10-behavior-expendable" \
+      mem.depends_on="mem-rl-sft (same pin set)"
+
+WORKDIR /workspace
+
+# ---- Add ONLY the vLLM-leg pins (the [vllm]-marked lines in the lockfile) ---
+# These are commented in requirements.lock so the SFT image skips them; here we
+# install them explicitly by version to keep the single SoT pin authoritative.
+# torch is ALREADY the cu129 build from the base image — we pass the same
+# extra-index-url so pip never resolves a conflicting (cu126) torch wheel while
+# pulling vLLM's deps (the silent-wheel trap also bites here).
+#
+# IMPORTANT: --no-deps-style discipline — we do NOT let vLLM/flash-attn upgrade
+# torch. The constraints flag pins torch to the inherited version so a transitive
+# requirement cannot silently bump it.
+RUN --mount=type=cache,target=/cache/pip \
+    python -m pip install \
+        --extra-index-url https://download.pytorch.org/whl/cu129 \
+        --constraint /workspace/requirements.lock \
+        "vllm==0.11.2" "flash-attn==2.8.3"
+
+# ---- Build-time guard: torch must NOT have been bumped by vLLM's resolver ---
+RUN python -c "import torch, vllm; \
+print('torch', torch.__version__, '| vllm', vllm.__version__); \
+assert torch.__version__.startswith('2.11') and '+cu129' in torch.__version__, \
+  'vLLM install silently changed the torch wheel — abort (cu126 silent-wheel trap)'; \
+print('vLLM image import graph OK; torch pin intact')"
+
+# flash-attn import is GPU/runtime sensitive; do not import it at build time.
+# The real colocate + soak verification is R2.5/A2, run after build on the GPU.
+
+CMD ["/bin/bash"]

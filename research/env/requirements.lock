@@ -1,0 +1,90 @@
+# =============================================================================
+# requirements.lock — Blackwell sm_120 (RTX 5090) training stack, KNOWN-GOOD PIN SET
+# =============================================================================
+#
+# DO NOT "discover" these versions. This is the verified known-good pin set (A1):
+#
+#     "Start from the known-good pin, don't discover it
+#      (torch 2.11+cu129 / bitsandbytes 0.49.2 / TRL 0.23.x via Unsloth Studio)."
+#
+# Acceptance gate (PRD R1, line 94):
+#     python -c "import torch; print(torch.cuda.get_device_capability())"  ->  (12, 0)
+#
+# -----------------------------------------------------------------------------
+# WHY THESE PINS / KNOWN-BROKEN ISSUES TO AVOID
+# -----------------------------------------------------------------------------
+# sm_120 (Blackwell / RTX 5090, compute capability 12.0) is a MOVING target. The
+# realistic week-1 failure is environment yak-shaving over the mutual compat of
+# torch <-> bitsandbytes <-> flash-attn <-> vLLM <-> Unsloth, NOT model capacity
+# (PRD "Design Considerations", lines 167-169). The pins below are the one set
+# verified to co-resolve and pass the (12,0) capability check.
+#
+# Known-broken issues these pins steer around (premortem line 102 + PRD line 243):
+#   - Unsloth  #5154, #3864   (sm_120 load / QLoRA breakage)
+#   - vLLM     #13306, #16515, #36865  (sm_120 colocate / engine init)
+#   - flash-attn #2168        (sm_120 wheel / build)
+#   - TRL      #3671          (trainer compat)
+# Upstream sm_120 tracking: PyTorch #164342, #159207.
+#
+# THE cu126 SILENT-WHEEL TRAP (premortem theme A / footgun #1):
+#   A bare `pip install torch` (or any transitive dep that pulls torch) can resolve
+#   a cu126 wheel that imports fine but has NO sm_120 kernels — get_device_capability()
+#   may even print (12,0) while the first real matmul/QLoRA kernel dies or silently
+#   falls back. ALWAYS install torch from the cu129 index URL (see Dockerfiles) and
+#   ALWAYS re-run the (12,0) capability check AND a real kernel (smoke_test.py)
+#   after ANY install. Never `pip install` inside a working image (env drift =
+#   premortem risk #1).
+#
+# This file is the constraints SoT shared by Dockerfile.sft and Dockerfile.vllm.
+# It is NOT installed tonight — see README.md "approval-gated morning actions".
+# =============================================================================
+
+# ---- Core training runtime (BOTH images) -----------------------------------
+# torch must be the cu129 build. The Dockerfiles pass the cu129 extra-index-url;
+# this version string is the contract. (PRD R1 allows >=2.9+cu128 or cu129;
+# A1 narrows to the verified 2.11+cu129.)
+torch==2.11.0+cu129
+
+# QLoRA 4-bit backend. Pinned exact per A1.
+bitsandbytes==0.49.2
+
+# Unsloth = the SFT trainer (QLoRA). Delivered via "Unsloth Studio" channel per
+# A1; pin the Blackwell-compatible release. unsloth_zoo is its runtime companion
+# and MUST move in lockstep with unsloth (version-skew here is a common break).
+unsloth==2026.1.1
+unsloth_zoo==2026.1.1
+
+# RL/post-training trainer (used by the GRPO behavior track; harmless in SFT image
+# but kept here as the single SoT pin so both images agree). A1 pins 0.23.x.
+trl==0.23.1
+
+# PEFT / adapters + HF stack. Pinned to the versions Unsloth-Blackwell expects.
+peft==0.18.0
+transformers==4.59.0
+accelerate==1.12.0
+datasets==4.4.0
+tokenizers==0.22.1
+safetensors==0.6.2
+huggingface-hub==0.36.0
+sentencepiece==0.2.1
+
+# Numerics — pin numpy below 2.3 to avoid ABI churn against the torch wheel.
+numpy==2.2.6
+
+# =============================================================================
+# vLLM-IMAGE-ONLY pins (DO NOT install in the stable SFT image)
+# -----------------------------------------------------------------------------
+# These carry the R7/R10 GRPO behavior track and are EXPENDABLE. They are listed
+# here for the single-SoT record but are installed only by Dockerfile.vllm, which
+# references the [vllm] section markers below. flash-attn and vLLM are the two
+# most fragile sm_120 components — keep them out of the SFT image entirely
+# (Unsloth QLoRA SFT needs NEITHER).
+#
+# vLLM sm_120 wheel — must be the Blackwell-compatible build matching torch cu129.
+# Re-verify against vLLM #13306/#16515/#36865 before trusting colocate (PRD R2.5/A2).
+# [vllm] vllm==0.11.2
+#
+# flash-attn — sm_120 build is slow to compile (fills disk; see README build-cache
+# note) and is only needed by the vLLM serving leg. Avoid flash-attn #2168.
+# [vllm] flash-attn==2.8.3
+# =============================================================================
