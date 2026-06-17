@@ -99,13 +99,13 @@ It is the orchestrator's own audit; nothing needs to be generated:
 Everything keys off a **work id** and joins outward. This graph is the dataset:
 
 ```
-            ┌──────────── deps / convoy ───────────┐
-            ▼                                       │
-   Work item (work_id) ─assignee─▶ Agent/Session ───▶ Trace (jsonl)
-   labels,                  │      (agent_id)         tool calls, errors,
-   metadata                 │                         decisions, outputs
-            └─external-ref/branch─▶ PR / Commit ──▶ Outcome
-                                                    merged | closed | CI pass/fail
+   Work item (work_id)          deps / convoy ── link sibling work items
+   │  labels, metadata
+   ├── assignee ──────────────▶ Agent / Session ─▶ Trace (jsonl)
+   │                            (agent_id)         tool calls, errors,
+   │                                               decisions, outputs
+   └── external-ref / branch ─▶ PR / Commit ─────▶ Outcome
+                                                   merged | closed | CI pass/fail
 ```
 
 - **Work id** = the work-item id. The anchor.
