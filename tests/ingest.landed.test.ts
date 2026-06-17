@@ -170,7 +170,7 @@ describe('landedInput', () => {
 });
 
 describe('attachLanded', () => {
-  it('marks overlapping windows on the same checkout+branch as ambiguous without calling git', () => {
+  it('keeps overlapping windows with non-empty own windows as ambiguous', () => {
     const r1 = rec(
       'r1',
       { base_commit: BASE, base_branch: 'main' },
@@ -187,12 +187,55 @@ describe('attachLanded', () => {
         closed: '2026-06-01 03:00:00',
       }
     );
-    const run: GitRunner = () => {
-      throw new Error('git must not be called for an ambiguous window');
-    };
-    const [a, b] = attachLanded([r1, r2], { run });
+    // Each record's own window carries forward commits (the default handlers), so
+    // the landed commits genuinely exist but cannot be split between the two
+    // overlapping sessions — both stay ambiguous.
+    const [a, b] = attachLanded([r1, r2], { run: git({}) });
     expect(a.landed).toEqual({ base_commit: BASE, landed_state: 'ambiguous-window' });
     expect(b.landed).toEqual({ base_commit: BASE, landed_state: 'ambiguous-window' });
+  });
+
+  it('downgrades an overlapping record whose own window is empty to empty-window', () => {
+    const r1 = rec(
+      'r1',
+      { base_commit: BASE, base_branch: 'main' },
+      {
+        started: '2026-06-01 00:00:00',
+        closed: '2026-06-01 02:00:00',
+      }
+    );
+    const r2 = rec(
+      'r2',
+      { base_commit: BASE, base_branch: 'main' },
+      {
+        started: '2026-06-01 01:00:00',
+        closed: '2026-06-01 03:00:00',
+      }
+    );
+    // The branch tip never moved past base over either window: nothing landed,
+    // so the overlap is irrelevant — both are deterministically empty, not
+    // ambiguous. This needs no per-session attribution.
+    const [a, b] = attachLanded([r1, r2], { run: git({ tip: () => `${BASE}\n` }) });
+    expect(a.landed).toEqual({ base_commit: BASE, n_commits: 0, landed_state: 'empty-window' });
+    expect(b.landed).toEqual({ base_commit: BASE, n_commits: 0, landed_state: 'empty-window' });
+  });
+
+  it('keeps an overlapping record ambiguous when its own close tip is unresolved', () => {
+    const r1 = rec(
+      'r1',
+      { base_commit: BASE, base_branch: 'main' },
+      { started: '2026-06-01 00:00:00', closed: '2026-06-01 02:00:00' }
+    );
+    const r2 = rec(
+      'r2',
+      { base_commit: BASE, base_branch: 'main' },
+      { started: '2026-06-01 01:00:00', closed: '2026-06-01 03:00:00' }
+    );
+    // An unresolvable close tip cannot prove the window empty, so the record stays
+    // ambiguous rather than being downgraded on a guess.
+    const [a, b] = attachLanded([r1, r2], { run: git({ tip: () => '   \n' }) });
+    expect(a.landed?.landed_state).toBe('ambiguous-window');
+    expect(b.landed?.landed_state).toBe('ambiguous-window');
   });
 
   it('resolves non-overlapping candidates via git', () => {

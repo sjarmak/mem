@@ -136,27 +136,47 @@ function revertedShas(run: GitRunner, work_dir: string, end: string, branch: str
 }
 
 /**
+ * A record's own `[base, end]` window resolved against git: `empty` when nothing
+ * landed in it (the close tip never moved past `base`, or no forward commits),
+ * `unresolved` when the close tip cannot be dated, else `commits` carrying the
+ * end anchor and the forward SHAs. Shared by {@link deriveLanded} (full
+ * classification) and the ambiguous-window empty-split in {@link attachLanded}:
+ * window emptiness is a per-record git fact independent of any overlap.
+ */
+type Window =
+  | { state: 'empty' }
+  | { state: 'unresolved' }
+  | { state: 'commits'; end: string; commits: string[] };
+
+function resolveWindow(run: GitRunner, input: LandedInput): Window {
+  const end = resolveTipBefore(run, input.work_dir, input.base_branch, input.ended_at);
+  if (end === null) return { state: 'unresolved' };
+  // `end` at base means the branch tip never moved over the window — nothing
+  // landed, even before listing commits.
+  if (end === input.base_commit) return { state: 'empty' };
+  const commits = rangeCommits(run, input.work_dir, input.base_commit, end);
+  // `end` is at or behind `base` (no forward progress) — nothing landed.
+  if (commits.length === 0) return { state: 'empty' };
+  return { state: 'commits', end, commits };
+}
+
+/**
  * Map landed inputs onto a validated {@link Landed} via git. Resolves the close
  * anchor, the window commits, and whether they survived / were reverted. Does NOT
  * detect overlap — that is cross-record and handled in {@link attachLanded},
- * which short-circuits an overlapping record before calling this.
+ * which routes an overlapping record through {@link resolveWindow} directly.
  */
 export function deriveLanded(input: LandedInput, run: GitRunner): Landed {
   const base_commit = input.base_commit;
-  const end = resolveTipBefore(run, input.work_dir, input.base_branch, input.ended_at);
-  if (end === null) {
+  const window = resolveWindow(run, input);
+  if (window.state === 'unresolved') {
     return LandedSchema.parse({ base_commit, landed_state: 'unresolved' });
   }
-  if (end === base_commit) {
+  if (window.state === 'empty') {
     return LandedSchema.parse({ base_commit, n_commits: 0, landed_state: 'empty-window' });
   }
 
-  const commits = rangeCommits(run, input.work_dir, base_commit, end);
-  if (commits.length === 0) {
-    // `end` is at or behind `base` (no forward progress) — nothing landed.
-    return LandedSchema.parse({ base_commit, n_commits: 0, landed_state: 'empty-window' });
-  }
-
+  const { end, commits } = window;
   const common = { base_commit, landed_commit: end, n_commits: commits.length };
 
   if (!survives(run, input.work_dir, end, input.base_branch)) {
@@ -195,9 +215,12 @@ export interface AttachLandedOptions {
  * Attach a landed outcome to every candidate record (one whose provenance
  * resolved a `base_commit` and that recorded a close time); others pass through
  * unchanged. A record whose `[started, closed]` window overlaps another
- * candidate's on the SAME checkout+branch is marked `ambiguous-window` without a
- * git query — time alone cannot attribute its commits. Records are copied, never
- * mutated.
+ * candidate's on the SAME checkout+branch cannot have its landed commits
+ * attributed by time alone. But an overlapping record whose OWN window landed
+ * nothing has no commits to contest, so it is still resolved deterministically
+ * to `empty-window`; only the genuinely-contested non-empty windows stay
+ * `ambiguous-window` (the prize that needs ingest-time SHA capture to attribute —
+ * mem-75t.12). Records are copied, never mutated.
  */
 export function attachLanded(records: WorkRecord[], opts: AttachLandedOptions = {}): WorkRecord[] {
   const run = opts.run ?? defaultGitRunner;
@@ -237,12 +260,19 @@ export function attachLanded(records: WorkRecord[], opts: AttachLandedOptions = 
     const input = inputs.get(record.work_id);
     if (input === undefined) return record;
     if (ambiguous.has(record.work_id)) {
+      // Overlap blocks attributing commits that EXIST to one of the sessions; it
+      // says nothing about a window that produced none. Probe the record's own
+      // window: an empty one landed nothing regardless of the overlap, so it is
+      // deterministically `empty-window` (no attribution needed). A non-empty or
+      // unprovable window stays ambiguous — never guessed.
+      const empty = resolveWindow(run, input).state === 'empty';
       return {
         ...record,
-        landed: LandedSchema.parse({
-          base_commit: input.base_commit,
-          landed_state: 'ambiguous-window',
-        }),
+        landed: LandedSchema.parse(
+          empty
+            ? { base_commit: input.base_commit, n_commits: 0, landed_state: 'empty-window' }
+            : { base_commit: input.base_commit, landed_state: 'ambiguous-window' }
+        ),
       };
     }
     return { ...record, landed: deriveLanded(input, run) };
