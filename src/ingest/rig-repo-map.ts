@@ -63,7 +63,25 @@ export const RIG_REPOS: Record<string, RigRepo> = {
     slug: 'sjarmak/code-intelligence-digest',
     dir: '/home/ds/projects/code-intelligence-digest',
   },
-  // gc orchestrates work across many forks — the rig alone cannot name one repo.
+  // Long-tail rigs (mem-75t.14): each a 1:1 repo with a single durable local
+  // checkout, verified by its origin remote slug. The local dir name does not
+  // always match the rig or the upstream name (mcp_ax→mg-ax, live_docs→livedocs).
+  website: { slug: 'sjarmak/website', dir: '/home/ds/projects/website' },
+  mcp_ax: { slug: 'sjarmak/mg-ax', dir: '/home/ds/projects/mcp-ax' },
+  agent_diagnostics: {
+    slug: 'sjarmak/agent-diagnostics',
+    dir: '/home/ds/projects/agent-diagnostics',
+  },
+  live_docs: { slug: 'sjarmak/livedocs', dir: '/home/ds/projects/live_docs' },
+  background_agents: {
+    slug: 'sjarmak/background-agents',
+    dir: '/home/ds/projects/background-agents',
+  },
+  brains: { slug: 'sjarmak/brains', dir: '/home/ds/projects/brains' },
+  tom_swe: { slug: 'sjarmak/tom-swe', dir: '/home/ds/projects/tom-swe' },
+  // `dec` is a decisions/beads ledger, not a git repo (no checkout, no upstream),
+  // so it stays unmapped rather than being guessed a path. gc orchestrates work
+  // across many forks — the rig alone cannot name one repo.
   gc: { slug: '', multi: true },
 };
 
