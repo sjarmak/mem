@@ -213,11 +213,14 @@ synthetic sequence generator — deterministic oracle authored in code, a local
 model used only for the natural-language surface and frozen offline — scales the
 dataset past the thin real pool. Details in `memory-bench/README.md`.
 
-**In flight.** The native graded 3-arm grid returned an honest null
-(`mem-apg.9`): of 5 carved candidates only 2 passed the oracle-soundness gate
-and 1 fired a non-empty `ours` retrieval — too thin for a headline, which is why
-the soundness gate is moving to *pre-admission* so the grid is admissible by
-construction. A Harbor **failure-recurrence** track has landed its generator, a
-frozen 369-anchor matched-pair fixture (temporal-LOO-clean), and real Harbor
-task-dir emission; the soundness-gated runner and the matched-pair effort-delta
-scorer are the open next step before it yields a number.
+**In flight.** The native 3-arm grid first returned an honest null
+(`mem-apg.9`): of 5 carved candidates only 2 passed the oracle-soundness check
+and 1 fired a non-empty `ours` retrieval — too thin for a headline. That has
+since been addressed on two fronts: the oracle-soundness gate now runs at
+*pre-admission* (`mem-1eph`), so every task entering the grid is admissible by
+construction, and oracle-repair waves carried the full native pool through the
+gate to **N=8–9 sound oracles** (`mem-qarg`, `mem-us6j`). A Harbor
+**failure-recurrence** track (not yet committed) has its generator, a frozen
+369-anchor matched-pair fixture (temporal-LOO-clean), and real Harbor task-dir
+emission; its soundness-gated runner and matched-pair effort-delta scorer are the
+open next step before it yields a number.
