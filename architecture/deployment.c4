@@ -1,0 +1,55 @@
+// Deployment model — where each piece runs at review time.
+//
+// The two halves are ordinary local processes (a Node CLI/server and a Python
+// harness) sharing one generated SQLite file; replay and inference run on
+// separate substrates. This is the "what runs where / what's the process &
+// data boundary" view a design review always asks for.
+
+deployment {
+
+  devHost = host 'Developer / CI host' {
+    description 'Local toolchain — builds the store and runs the harness'
+
+    nodeProc = proc 'Node runtime — mem CLI + store builder/server' {
+      instanceOf mem.store
+    }
+    pyProc = proc 'Python runtime — memory-bench harness' {
+      instanceOf mem.bench
+    }
+    storeDb = proc 'SQLite sidecar — .mem/store.db' {
+      description 'Generated artifact (gitignored). Node writes it; Python reads it through `mem query`'
+    }
+  }
+
+  orchestratorHost = host 'Orchestrator hosts' {
+    description 'Source of the audit corpus — read-only to mem'
+    instanceOf gascity
+  }
+
+  harborHost = host 'Harbor execution substrate' {
+    description 'Replays held-out tasks; runs the agent under test in isolation'
+    instanceOf harbor
+    instanceOf agent
+  }
+
+  inferenceHost = host 'Inference host' {
+    description 'Self-hostable extractor / judge / embedding models'
+    instanceOf models
+  }
+
+  // Runtime data & control flow between processes/hosts.
+  nodeProc -> storeDb 'writes WorkRecords + lessons'
+  nodeProc -> orchestratorHost 'ingests beads + traces'
+  nodeProc -> inferenceHost 'semantic extraction + distillation'
+  pyProc -> storeDb 'reads LOO-bounded store'
+  pyProc -> harborHost 'submits per-condition tasks'
+  pyProc -> inferenceHost 'LLM-judge rubric'
+}
+
+views {
+
+  deployment view deployment {
+    title 'Deployment — where each piece runs'
+    include *
+  }
+}

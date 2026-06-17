@@ -1,0 +1,183 @@
+// Views over the mem model. Planned (#planned) and research (#research)
+// elements/relationships are dimmed + dashed so the "what exists vs what is
+// proposed" split is readable at a glance.
+
+views {
+
+  // Landscape — the whole system in context.
+  view index {
+    title 'mem — system landscape'
+    include *
+
+    style * {
+      opacity 25%
+    }
+    style element.tag == #built, element.tag == #evolving {
+      opacity 100%
+    }
+    style element.tag == #planned {
+      color muted
+      border dashed
+    }
+    style element.tag == #research {
+      color indigo
+      border dashed
+    }
+  }
+
+  // The mem system, decomposed into its containers.
+  view memSystem of mem {
+    title 'mem — containers (built vs planned)'
+    include *
+
+    style element.tag == #planned {
+      color muted
+      border dashed
+    }
+    style element.tag == #research {
+      color indigo
+      border dashed
+    }
+  }
+
+  // TypeScript half — the store builder/server internals.
+  view storeContainer of mem.store {
+    title 'Store builder & server (src/) — components'
+    include *
+  }
+
+  // Python half — the eval harness internals.
+  view benchContainer of mem.bench {
+    title 'memory-bench/ eval harness — components'
+    include *
+  }
+
+  // The competitive memory arms.
+  view armsView of mem.bench.arms {
+    title 'Competitive memory arms'
+    include *
+
+    style element.tag == #evolving {
+      color amber
+    }
+  }
+
+  // The grading / validity stack.
+  view gradingView of mem.bench.grading {
+    title 'Grading — validity gates & scoring stack'
+    include *
+  }
+
+  // Risks & open questions — the elements that carry a #risk flag, with the
+  // open question stated in each box's description. The things a reviewer
+  // should probe, surfaced rather than discovered mid-meeting.
+  view risks {
+    title 'Risks & open questions'
+    include
+      mem,
+      element.tag == #risk,
+      mem.store.ingest,
+      mem.bench.grading
+
+    style * {
+      opacity 30%
+    }
+    style element.tag == #risk {
+      opacity 100%
+      color red
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Walkthrough flows (dynamic views) — the narrative spine of the review.
+  // ───────────────────────────────────────────────────────────────────────
+
+  // Flow 1 — building the store from the audit.
+  dynamic view buildStore {
+    title 'Walkthrough — store build / ingest pipeline'
+    description 'Run from the gas-city checkout so `--with-traces` resolves transcripts via city.toml; verify trace/repo/base-commit counts before swapping the store into place.'
+
+    mem.store.cli -> mem.store.ingest 'mem build-store --with-traces --with-provenance'
+    mem.store.ingest.beadReader -> gascity.beadStore 'read work spine + outcomes'
+    mem.store.ingest.traceReader -> gascity.gcLogs 'resolve session id → JSONL path'
+    mem.store.ingest.traceReader -> gascity.sessionTraces 'read transcript turns'
+    mem.store.ingest -> mem.store.parse.deterministic 'tool exits + file:line + recurrence (in code)'
+    mem.store.ingest -> mem.store.parse.semantic 'root-cause via model (batched, append-only)'
+    mem.store.parse.semantic -> models 'extract'
+    mem.store.parse -> mem.store.graph 'upsert WorkRecord + projections'
+    mem.store.distill -> mem.store.graph 'append distilled lessons + citations'
+  }
+
+  // Flow 2 — one benchmark run, end to end.
+  dynamic view evalRun {
+    title 'Walkthrough — an eval run end-to-end'
+    description 'Three conditions per task: no_memory (floor), oracle (ceiling + validity gate, oracle ≈ no_memory rejects the task), memory_enabled (the system under test).'
+
+    mem.bench.runner -> mem.bench.bundle 'assemble oracle bundle'
+    mem.bench.bundle -> mem.store.cli 'load LOO-bounded store via mem query'
+    mem.bench.grading.soundness -> mem.bench.bundle 'CSB fail-to-pass admission gate'
+    mem.bench.runner -> mem.bench.harborAdapter 'no_memory / oracle / memory_enabled'
+    mem.bench.arms.armsBuilt -> mem.store.retrieve 'ours arm: failure-triggered fetch'
+    mem.bench.harborAdapter -> harbor 'replay task under each condition'
+    harbor -> agent 'run'
+    mem.bench.grading.scorers -> models 'LLM-judge rubric_score'
+    mem.bench.grading.ablation -> mem.bench.report 'reward-vs-information curve'
+    mem.bench.telemetry -> mem.bench.report '5-axis spans (OTel + ATIF)'
+  }
+
+  // Flow 3 — failure-triggered retrieval at agent runtime.
+  dynamic view retrievalFlow {
+    title 'Walkthrough — failure-triggered retrieval at runtime'
+    description 'Retrieval is deterministic, so the index call and the details call that follows it see the same ranking; the agent, not the pipeline, chooses how many tokens to spend.'
+
+    agent -> mem.store.retrieve 'build/test/lint error hit'
+    mem.store.retrieve.ranker -> mem.store.graph 'query by normalized file:line + error-class'
+    mem.store.graph -> mem.store.retrieve.ranker 'candidates (closed strictly before; siblings excluded)'
+    mem.store.retrieve.disclosure -> agent 'index: ranked citations + token cost'
+    agent -> mem.store.retrieve.disclosure 'details --pick a,b'
+    mem.store.retrieve.disclosure -> agent 'distilled lesson + mem:// citation'
+  }
+
+  // Flow 4 — the planned 6-stage controller loop.
+  dynamic view controllerLoop {
+    title 'Walkthrough — planned 6-stage controller loop'
+    description 'PLANNED. v1 fills each learnable stage with a heuristic/judge and logs its decision, so the controller is trainable the moment replay produces labels.'
+
+    agent -> mem.controller 'MCP retrieve (need)'
+    mem.controller.classify -> mem.controller.multiRetrieve 'need → query'
+    mem.controller.multiRetrieve -> mem.store.graph 'multi-type retrieval'
+    mem.controller.multiRetrieve -> mem.controller.inject 'rerank (logged features)'
+    mem.controller.inject -> agent 'minimal-useful context'
+    agent -> mem.controller.writeGate 'post-task: MCP write / reflect'
+    mem.controller.writeGate -> mem.store.graph 'P(improve|memory) gate → append / supersede'
+  }
+
+  // Planned-only lens: the learned controller + research tracks in context.
+  view planned {
+    title 'Planned & research work'
+    include
+      mem,
+      mem.controller,
+      mem.controller.*,
+      mem.reranker,
+      mem.sequenceEval,
+      mem.store.graph,
+      mem.store.retrieve,
+      mem.bench.bundle,
+      agent
+
+    style * {
+      opacity 30%
+    }
+    style element.tag == #planned {
+      opacity 100%
+      color muted
+      border dashed
+    }
+    style element.tag == #research {
+      opacity 100%
+      color indigo
+      border dashed
+    }
+  }
+}

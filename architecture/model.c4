@@ -1,0 +1,351 @@
+// The `mem` work-audit graph + agentic-memory benchmark.
+//
+// Two halves: a TypeScript store builder/server (src/) and a Python eval
+// harness (memory-bench/). Planned and research work is tagged so it renders
+// distinctly from what is already built (see spec.c4 for the tag legend).
+//
+// Elements carry `link`s to their source and to the relevant entry in the
+// chronological decision log (docs/architecture-decisions.md), so a reviewer
+// can jump from any box to the code and the rationale behind it.
+
+model {
+
+  agent = actor 'Agent under test' {
+    description 'Coding agent whose runs are replayed and measured across memory conditions'
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // External systems — the audit substrate and execution/inference services.
+  // The corpus is the orchestrator's own audit; nothing is synthesized.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  gascity = externalSystem 'Multi-agent orchestrator' {
+    description 'Runs agents across 18 project rigs — produces the audit corpus'
+
+    beadStore = datastore 'Work-item store' {
+      description 'The work spine: 6,691 items (id, status, assignee, labels, deps, convoy)'
+    }
+    sessionTraces = datastore 'Session traces (JSONL)' {
+      description '874 resolved transcripts: tool calls, outputs, decisions, errors'
+    }
+    gcLogs = externalSystem 'Session-log resolver' {
+      description 'Maps an assignee/session id to its transcript JSONL path'
+    }
+  }
+
+  github = externalSystem 'GitHub' {
+    description 'PRs / commits — the external outcome label, where a linkage exists'
+  }
+
+  harbor = externalSystem 'Harbor' {
+    description 'Execution substrate that replays held-out tasks under each memory arm'
+  }
+
+  models = externalSystem 'Inference models' {
+    description 'Semantic extractor, LLM-judge, and embedding models'
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // The mem system.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  mem = system 'mem' {
+    description 'Turns the work spine + transcripts into a work-audit graph, then benchmarks memory on it'
+    link ../ARCHITECTURE.md 'Architecture overview'
+    link ../docs/architecture-decisions.md 'Decision log (1–17)'
+
+    // ── TypeScript half: builds and serves the store ───────────────────────
+    store = container 'Store builder & server' {
+      description 'src/ — ingest → parse → store → retrieve → distill, exposed through the mem CLI'
+      technology 'TypeScript / Node'
+      link ../src 'src/'
+
+      ingest = component 'ingest/' {
+        #built
+        description 'Source readers → raw WorkRecords (pure IO)'
+        link ../src/ingest 'src/ingest/'
+
+        beadReader = component 'beads + outcomes' {
+          #built
+          #risk
+          description 'Reads the work spine and PR/commit outcomes. RISK: outcome linkage is structurally sparse (≈1 in 6,000 carries a usable external ref), which is why the headline is ablation-based, not merged-PR'
+          link ../src/ingest/beads.ts 'beads.ts'
+          link ../docs/architecture-decisions.md 'Decision 17 — ablation headline'
+        }
+        traceReader = component 'trace resolve + index' {
+          #built
+          description 'Resolves each session id to its JSONL and indexes turns/tool calls'
+          link ../src/ingest/trace-resolve.ts 'trace-resolve.ts'
+        }
+        provenance = component 'provenance' {
+          #built
+          #risk
+          description 'Session-start base commit (commit-by-date). RISK: gc never records the exact base SHA, so cleaner replay coverage depends on capturing each session’s true per-worktree base commit — a trace-substrate change, not a harness patch'
+          link ../src/ingest/provenance.ts 'provenance.ts'
+        }
+        repoResolve = component 'repo resolve (rig→repo map)' {
+          #built
+          description 'Canonical owner/name on every record; records how it resolved'
+          link ../src/ingest/repo-resolve.ts 'repo-resolve.ts'
+        }
+      }
+
+      parse = component 'parse/' {
+        #built
+        description 'Two extractors, kept strictly separate (the ZFC boundary)'
+        link ../src/parse 'src/parse/'
+
+        deterministic = component 'deterministic extractor' {
+          #built
+          description 'Tool exit states + file:line build/test/lint errors + cross-task recurrence math — in code, no keyword heuristics'
+          link ../src/parse/error-extractors.ts 'error-extractors.ts'
+        }
+        semantic = component 'semantic extractor' {
+          #evolving
+          description 'Root-cause + resolution approach via a model — batched once per record, append-only'
+          link ../src/parse/trace-parse.ts 'trace-parse.ts'
+        }
+      }
+
+      graph = datastore 'store/ — SQLite + FTS5 sidecar' {
+        #built
+        description '.mem/store.db (schema v6). WorkRecord projection (rebuilt on upsert) + append-only lessons table'
+        link ../src/store/schema.ts 'schema.ts'
+        link ../docs/architecture-decisions.md 'Decision 3 — append-only lessons'
+      }
+
+      retrieve = component 'retrieve/' {
+        #built
+        description 'Failure-triggered retrieval v1: keys on normalized file:line + error-class'
+        link ../src/retrieve 'src/retrieve/'
+        link ../docs/architecture-decisions.md 'Decision 8 — failure-triggered trigger'
+
+        ranker = component 'retrieval + exclusions' {
+          #built
+          description 'Temporal leave-one-out + convoy/supersedes/PR-share exclusions enforced at read time'
+          link ../src/retrieve/exclusions.ts 'exclusions.ts'
+          link ../docs/architecture-decisions.md 'Decision 6 — temporal LOO + exclusions'
+        }
+        disclosure = component 'progressive disclosure' {
+          #built
+          description 'index → details --pick → full; agent sees token cost before hydrating'
+          link ../src/retrieve/disclosure.ts 'disclosure.ts'
+          link ../docs/architecture-decisions.md 'Decision 9 — distilled payload'
+        }
+      }
+
+      distill = component 'distill/' {
+        #evolving
+        description 'Distills prior resolutions into retrievable lessons with citations (236 so far, dashboard rig)'
+        link ../src/distill/distiller.ts 'distiller.ts'
+      }
+
+      cli = component 'bin/mem CLI' {
+        #built
+        description 'build-store, ingest-traces, query, retrieve, coverage, export/import-lessons — JSON envelope'
+        link ../bin/mem 'bin/mem'
+        link ../src/cli 'src/cli/'
+      }
+    }
+
+    // ── Python half: the replay eval harness ───────────────────────────────
+    bench = container 'memory-bench/ eval harness' {
+      description 'Replays held-out tasks under no_memory / oracle / memory_enabled and reads the gaps'
+      technology 'Python'
+      link ../memory-bench 'memory-bench/'
+      link ../memory-bench/README.md 'harness README'
+
+      runner = component 'runner/' {
+        #built
+        description 'Drives the agent per condition; records per-run conditions + metrics'
+        link ../memory-bench/membench/runner 'runner/'
+      }
+
+      bundle = component 'bundle/ + oracle/' {
+        #built
+        description 'Assembles oracle bundles (build, curate, consensus) and replays held-out tasks'
+        link ../memory-bench/membench/bundle 'bundle/'
+        link ../docs/architecture-decisions.md 'Decision 5 — replay closed beads'
+      }
+
+      arms = component 'memory_systems/ — competitive arms' {
+        description 'Uniform ingest/retrieve interface; arms never read the store directly'
+        link ../memory-bench/membench/memory_systems 'memory_systems/'
+        link ../docs/architecture-decisions.md 'Decision 11 — competitive-arm contract'
+
+        armsBuilt = component 'none / ours / oracle / filesystem' {
+          #built
+          description 'Stateless floor, failure-triggered ours, exact-memory ceiling, and the filesystem baseline'
+        }
+        armsExternal = component 'mem0 / A-MEM / NAT / Graphiti' {
+          #evolving
+          description 'Third-party memory systems behind the same interface — adapters landing'
+        }
+        armsConsolidating = component 'consolidating / retention-scheduled' {
+          #evolving
+          description 'Consolidation and TTL/retention-policy variants'
+        }
+      }
+
+      grading = component 'grading/ — gates & metrics' {
+        description 'Validity gates plus the scoring stack (L1 retrieval, L2 utilization, L3 end-to-end)'
+        link ../memory-bench/membench/grading 'grading/'
+
+        leakGuard = component 'leak guard + validity gate' {
+          #built
+          description 'Temporal LOO leak guard; oracle ≈ no_memory rejects the task'
+          link ../memory-bench/membench/grading/leak_guard.py 'leak_guard.py'
+          link ../docs/architecture-decisions.md 'Decision 6 — temporal LOO'
+        }
+        soundness = component 'oracle-soundness gate' {
+          #built
+          #risk
+          description 'CodeScaleBench fail-to-pass admission gate. RISK: only 9 sound oracles admitted so far; the headline runs at small N with a stated caveat'
+          link ../memory-bench/membench/grading/safety_gates.py 'safety_gates.py'
+        }
+        ablation = component 'ablation curve + graded scorer' {
+          #evolving
+          #risk
+          description 'Reward-vs-information saturation curve — the headline metric. RISK: the headline number is still being pinned (graded 3-arm grid executing on Harbor)'
+          link ../memory-bench/membench/grading/ablation.py 'ablation.py'
+          link ../docs/architecture-decisions.md 'Decision 17 — ablation headline'
+        }
+        scorers = component 'trace / judge / merged-diff scorers' {
+          #built
+          description 'Deterministic trace-error check, LLM-judge rubric, opportunistic merged-diff oracle'
+          link ../memory-bench/membench/grading/judge.py 'judge.py'
+        }
+        precision = component 'precision / coverage guard' {
+          #built
+          description 'Injected-context volume + retrieval precision so over-injection cannot fake a win'
+          link ../memory-bench/membench/grading/coverage.py 'coverage.py'
+          link ../docs/architecture-decisions.md 'Decision 10 — precision guard'
+        }
+      }
+
+      telemetry = component 'telemetry/ + metrics/' {
+        #built
+        description '5-axis vector (task, efficiency, latency, privacy, interruption) as OTel GenAI spans + ATIF'
+        link ../memory-bench/membench/telemetry 'telemetry/'
+        link ../docs/architecture-decisions.md 'Decision 12 — 5-axis telemetry'
+      }
+
+      generators = component 'generators/ — synthetic tasks' {
+        #evolving
+        description 'Deterministic synthetic-task generator, pilot validity filter, schema induction, interruption/retention schedules'
+        link ../memory-bench/membench/generators 'generators/'
+        link ../docs/architecture-decisions.md 'Decision 16 — eval object + scope'
+      }
+
+      harborAdapter = component 'harbor/ — execution adapter' {
+        #built
+        description 'WorkRecord→task-env, memory injection, control grids, repro, env recon'
+        link ../memory-bench/membench/harbor 'harbor/'
+      }
+
+      report = component 'report/ + bbon/' {
+        #evolving
+        description 'Per-arm vectors, comparative judge, narrative diffs, aggregate reporting'
+        link ../memory-bench/membench/report 'report/'
+      }
+    }
+
+    // ── Planned: the learned memory controller ─────────────────────────────
+    controller = container '6-stage memory controller (MCP server)' {
+      #planned
+      description 'Designed; v1 fills each stage with a heuristic/judge and logs the decision so it is trainable'
+      link ../.gc/memory-eval-harness-spec.md 'Harness spec §1'
+      link ../docs/architecture-decisions.md 'Decision 14 — controller-loop framing'
+
+      classify = component 'need-classification → query-formation' {
+        #planned
+      }
+      multiRetrieve = component 'multi-type retrieval → reranking' {
+        #planned
+        description 'rerank_features vector logged from run one (relevance / recency / importance / trust / task-fit)'
+      }
+      inject = component 'minimal-useful injection' {
+        #planned
+      }
+      writeGate = component 'post-task write decision' {
+        #planned
+        description 'Scored as P(future task improves | memory retrievable); dual-confidence (retrieval vs truth)'
+        link ../docs/memory-prediction-and-dual-confidence.md 'write-decision & dual-confidence'
+      }
+    }
+
+    // ── Research track ─────────────────────────────────────────────────────
+    reranker = container 'Fine-tuning / RL reranker' {
+      #research
+      description 'research/ PRDs — learned reranker + retrieval behavior, trained once replay produces labels'
+    }
+    sequenceEval = container 'Multi-session sequence eval' {
+      #planned
+      description 'Sequence / convoy-epic eval object — scales past the thin real task pool'
+      link ../docs/architecture-decisions.md 'Decision 16 — eval object'
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Relationships.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Ingest pipeline (IO → graph)
+  store.ingest.beadReader -> gascity.beadStore 'reads work spine + labels'
+  store.ingest.beadReader -> github 'reads PR / commit outcome (where linked)'
+  store.ingest.traceReader -> gascity.gcLogs 'resolves session → JSONL path'
+  store.ingest.traceReader -> gascity.sessionTraces 'reads transcripts'
+  store.ingest -> store.parse 'raw WorkRecords'
+
+  // Parse (deterministic in code, semantic via model)
+  store.parse.semantic -> models 'root-cause + resolution (batched, once per record)'
+  store.parse -> store.graph 'writes signal + projections'
+
+  // Distill + retrieve
+  store.distill -> store.graph 'appends lessons'
+  store.distill -> models 'distills resolutions'
+  store.retrieve -> store.graph 'failure-triggered query'
+
+  // CLI surface
+  store.cli -> store.ingest 'build-store / ingest-traces'
+  store.cli -> store.retrieve 'mem retrieve'
+  store.cli -> store.graph 'mem query / coverage'
+  store.cli -> store.distill 'mem distill-lessons'
+
+  // Eval harness
+  bench.bundle -> store.cli 'loads store via `mem query`'
+  bench.runner -> bench.bundle 'runs each condition'
+  bench.arms -> bench.bundle 'uniform ingest/retrieve interface'
+  bench.arms.armsBuilt -> store.retrieve 'the `ours` arm fires failure-triggered retrieval'
+  bench.runner -> bench.harborAdapter 'submits per-condition tasks'
+  bench.harborAdapter -> harbor 'replays tasks'
+  harbor -> agent 'runs the agent under test'
+  bench.grading -> bench.runner 'gates + scores each run'
+  bench.grading.scorers -> models 'LLM-judge rubric_score'
+  bench.telemetry -> bench.runner 'emits per-run spans'
+  bench.generators -> bench.bundle 'synthetic sequences feed the task pool'
+  bench.report -> bench.grading 'aggregates graded results per arm'
+
+  // Planned controller wiring
+  controller -> store.graph 'multi-type retrieval + write' {
+    #planned
+  }
+  controller.classify -> controller.multiRetrieve {
+    #planned
+  }
+  controller.multiRetrieve -> controller.inject {
+    #planned
+  }
+  controller.inject -> controller.writeGate {
+    #planned
+  }
+  agent -> controller 'MCP retrieve / write / reflect' {
+    #planned
+  }
+  reranker -> controller.multiRetrieve 'learned rerank' {
+    #research
+  }
+  sequenceEval -> bench.bundle 'multi-session task object' {
+    #planned
+  }
+}
