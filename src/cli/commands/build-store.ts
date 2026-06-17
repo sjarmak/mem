@@ -8,6 +8,7 @@ import {
   gcSessionResolver,
 } from '../../ingest/trace-resolve.js';
 import { attachProvenance } from '../../ingest/provenance.js';
+import { attachRepo } from '../../ingest/repo-resolve.js';
 import {
   type SessionJoin,
   attachSessionJoin,
@@ -29,6 +30,10 @@ export interface BuildStoreResult {
   /** Records carrying ≥1 deterministic trace error after the P1.6 parse (0 when
    * `--with-traces` is off). The D8 failure signatures the `ours` arm fires on. */
   records_with_errors: number;
+  /** Records that resolved a canonical `repo` (mem-bme): from a PR outcome or
+   * the rig→repo map. The complement (`count - records_with_repo`) is the
+   * `unmapped` residue a coverage probe should chase down. */
+  records_with_repo: number;
   /** Records carrying a work_dir, so a git baseline was attempted (0 when
    * `--with-provenance` is off). */
   records_with_provenance: number;
@@ -126,20 +131,26 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
 
   let count = 0;
   let recordsWithErrors = 0;
+  let recordsWithRepo = 0;
   let recordsWithProvenance = 0;
   let recordsWithCommit = 0;
   let recordsMultiSession = 0;
 
   for (const name of rigs) {
     const spine = await readRig(run, name);
+    // Canonical repo identity (mem-bme): pure name→name resolution, always on —
+    // no IO, no flag. Runs before typing/traces so the resolved repo is present
+    // for every downstream stage and the write.
+    const located = attachRepo(spine);
     // The merged join attaches first: it pre-resolves each session's
     // transcript, so P1.3 only shells `gc` for the residue.
-    const typed = attachTaskTypes(spine, taskTypes);
+    const typed = attachTaskTypes(located, taskTypes);
     const joined = join === null ? typed : attachSessionJoin(typed, join);
     const traced = withTraces ? attachAndParse(joined, resolve ? { resolve } : {}) : joined;
     const records = withProvenance ? attachProvenance(traced) : traced;
 
     count += buildStoreFromRecords(path, records);
+    recordsWithRepo += records.filter(r => r.repo !== undefined).length;
     recordsWithErrors += records.filter(r => (r.trace?.errors?.length ?? 0) > 0).length;
     recordsWithProvenance += records.filter(r => r.provenance !== undefined).length;
     recordsWithCommit += records.filter(
@@ -152,13 +163,14 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
 
   if (!ctx.options.json) {
     const scope = rig === null ? 'all rigs' : rig;
+    const repoNote = `; ${recordsWithRepo}/${count} resolved a repo`;
     const traceNote = withTraces ? `; ${recordsWithErrors} carry trace errors` : '';
     const provNote = withProvenance
       ? `; ${recordsWithProvenance} carry a work_dir, ${recordsWithCommit} resolved a base commit`
       : '';
     const joinNote = join !== null ? `; ${recordsMultiSession} are multi-session` : '';
     console.error(
-      `built ${count} work records from ${scope} into ${path}${traceNote}${provNote}${joinNote}`
+      `built ${count} work records from ${scope} into ${path}${repoNote}${traceNote}${provNote}${joinNote}`
     );
   }
 
@@ -166,6 +178,7 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     store: path,
     rig,
     count,
+    records_with_repo: recordsWithRepo,
     records_with_errors: recordsWithErrors,
     records_with_provenance: recordsWithProvenance,
     records_with_commit: recordsWithCommit,

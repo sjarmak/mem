@@ -108,6 +108,13 @@ export const ProvenanceSchema = z.object({
 
 export type Provenance = z.infer<typeof ProvenanceSchema>;
 
+/** How a record's canonical `repo` was resolved (mem-bme, ingest/repo-resolve):
+ * `outcome` (owner/name of a verified PR), `rig-map` (a rig that is 1:1 with a
+ * repo), or `unmapped` (no source — `repo` left absent, never guessed). */
+export const RepoSourceSchema = z.enum(['outcome', 'rig-map', 'unmapped']);
+
+export type RepoSource = z.infer<typeof RepoSourceSchema>;
+
 /** Extracted memory signal. Shapes are open until P1.6+/Phase 2 settle them. */
 export const SignalSchema = z.object({
   deterministic: z.record(z.string(), z.unknown()).default({}),
@@ -142,6 +149,13 @@ export const WorkRecordSchema = z.object({
   // The bead's `external_ref` (e.g. "gh-1873"). Captured in the P1.2 spine so
   // P1.4 can resolve it to a PR/commit `outcome`; absent until a bead sets one.
   external_ref: z.string().optional(),
+  // Canonical repository identity (`owner/name`), backfilled by
+  // ingest/repo-resolve (mem-bme). Distinct from `provenance.repo` (a bare
+  // work_dir basename for the env baseline): this is the grouping/retrieval key
+  // and the source the memory-bench rig→repo stopgap now reads. Absent until the
+  // resolve stage runs, and stays absent when `repo_source` is `unmapped`.
+  repo: z.string().min(1).optional(),
+  repo_source: RepoSourceSchema.optional(),
   lifecycle: LifecycleSchema,
   agents: z.array(AgentRefSchema).default([]),
   trace: TraceRefSchema.optional(),

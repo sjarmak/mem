@@ -30,7 +30,8 @@ It is the orchestrator's own audit; nothing needs to be generated:
 | **Audit / scanner logs** | dispatch, reaper, supervisor events | orchestrator logs |
 | **Convoy / workflow records** | how work fanned out and composed | orchestrator state |
 | **PRs / commits** | the external outcome, where a linkage exists (rare; see above) | GitHub, via the work item's external ref or branch |
-| **Git provenance** | `repo` + session-start `base_commit` per record, so a run can be replayed as a checkout | resolved at ingest (`--with-provenance`) |
+| **Git provenance** | session-start `base_commit` per record (commit-by-date from a recorded base branch; an absent base branch stays `unresolved`, never guessed), so a run can be replayed as a checkout | `--with-provenance` |
+| **Repo identity** | canonical `repo` (`owner/name`) on every record via a deterministic rig→repo map; `repo_source` records how it resolved (`outcome` / `rig-map` / `unmapped`), and umbrella rigs that span many forks stay honestly `unmapped` rather than mislabeled | resolved at ingest, always on |
 
 ## The work-audit graph (the core mapping)
 
@@ -72,10 +73,14 @@ semantic signal is read by a model.
    fires on failure: when an agent hits a build, test, or lint error, key on the
    deterministic failure signature (normalized `file:line` plus error class) and
    return distilled prior resolutions, not raw traces.
-5. **Benchmark** — run the agent *with and without* retrieved memory and measure
-   outcome lift (success, iterations, cost), with retrieval precision and
-   injected-context volume as a first-class guard so over-injection can't fake a
-   win.
+5. **Benchmark** — run each multi-session sequence under three conditions
+   (`no_memory` / `oracle_memory` / `memory_enabled`) on Harbor and read the
+   gaps. Because merged-PR/CI outcome linkage is structurally absent from this
+   corpus (see *Status*, Decision 17), the headline is an *ablation
+   score-vs-information curve* rather than merged-PR outcome lift; retrieval
+   precision and injected-context volume stay a first-class guard so
+   over-injection can't fake a win. The Python harness lives under
+   `memory-bench/`.
 
 ## Data model
 
@@ -97,9 +102,12 @@ WorkRecord {
 }
 ```
 
-The **outcome** field is what makes this a benchmark substrate: every record
-carries a real label from work that happened (lifecycle status, deterministic
-trace failures), never a synthetic one.
+The **outcome** field is the benchmark label, but read it honestly: the labels
+that are actually present on every record are the lifecycle status and the
+deterministic trace failures. The `pr` / `commit_sha` / `ci` fields exist in the
+schema but are populated on only a handful of records (Decision 17), so the eval
+rests on lifecycle plus trace-derived signal — never a synthetic label, and
+never a merged-PR/CI label at scale.
 
 When the benchmark evaluates a record, the retrievable set is bounded in time:
 only records for work closed strictly before the target started, with the
@@ -149,10 +157,12 @@ substrate, only the wiring that lands real WorkRecords in the store the
 retrieval/eval path reads. With `--with-traces` it additionally resolves each
 record's transcript (P1.3) and parses its deterministic build/test/lint failure
 signatures (P1.6) into the store, so the failure-triggered `ours` arm fires;
-with `--with-provenance` it attaches each record's git baseline (repo plus
-session-start commit, resolved by date). The spine-only default stays fast (no
-`gc`/transcript/git IO). The Python harness loads the store through `mem query`
-(`memory-bench/`).
+with `--with-provenance` it attaches each record's git baseline (session-start
+commit, resolved by date). Canonical `repo` identity is resolved from the
+rig→repo map on every build (no flag), and `build-store` reports
+`records_with_repo` on its coverage line so the residual `unmapped` rate stays
+observable. The spine-only default stays fast (no `gc`/transcript/git IO). The
+Python harness loads the store through `mem query` (`memory-bench/`).
 
 `mem ingest-traces` is the packaged, idempotent form for the recurring rebuild:
 it is `build-store` with `--with-traces --with-provenance` always on, wrapped in
@@ -170,16 +180,44 @@ mem coverage       --store /home/ds/projects/mem/.mem/store.db   # read-only rep
 
 ## Status
 
-The store is at schema v3 and populated: 6,691 work records, 874 resolved
-transcripts (with per-run metadata in `trace_runs`), 321 deterministic trace
-errors across 77 records, and git provenance on 482 records, 113 of which
-carry both a trace and a checkoutable base commit. That last set is the pool
-the task-bundle builder (`mem-75t.7`) mines: the Python harness under
-`memory-bench/` now assembles evaluable bundles (issue → trace → gold diff →
-oracle context) by replaying a transcript's edit calls against a checkout of
-the record's base commit, a design validated on 8 real beads (134/199 calls
-replayed cleanly, 6/8 beads yielding applyable multi-file diffs; see
-`.gc/docs/mem-75t.7.1-replay-validation.md`). The next gate before the full
-oracle-curation and dual-verifier ports is a dynamic-range probe: run a
-zero-memory agent against a cheap oracle-context rung on the first bundle
-batch and confirm the eval has headroom before investing further.
+**Store (schema v6), populated from the bead spine:** 6,691 work records, 874
+resolved transcripts (per-run metadata in `trace_runs`), 321 deterministic trace
+errors across 77 records, git provenance on 482 records (113 with both a trace
+and a checkoutable base commit), and a canonical `repo` resolved on every record
+via the deterministic rig→repo map. Gates green: 1,297 Python + 332 TypeScript
+tests pass.
+
+**Headline = ablation score-vs-information curve (Decision 17).** The corpus does
+not carry the bead→PR→commit linkage a merged-PR/CI outcome oracle needs —
+across 5,977 closed records exactly one has a usable external ref — so the
+merged-PR outcome-lift headline is *structurally uncomputable at scale*. The
+headline is therefore env- and label-independent: the agent is its own control
+across an information ladder, and the saturation point + minimum-useful
+information combination are read off the curve. Per-rung reward is a
+deterministic check on data the corpus has (did the run avoid/resolve the
+held-out task's known `trace_error`) plus a calibrated OSS LLM-judge for semantic
+quality. The merged-diff oracle is opportunistic validation on the handful of
+beads that carry PR/commit metadata, never the headline.
+
+**Eval harness (`memory-bench/`).** Each multi-session sequence runs under three
+conditions — `no_memory` (stateless floor), `oracle_memory` (exact memory
+injected = ceiling, and the task-validity gate: `oracle ≈ no_memory ⇒ reject the
+task`), and `memory_enabled` (the real system) — on **Harbor** as the execution
+substrate. Competitive arms (mem0, A-MEM, graphiti, NAT, filesystem, plus the
+failure-triggered `ours`) run behind one uniform ingest/retrieve interface, all
+under a temporal leave-one-out leak guard, a CodeScaleBench fail-to-pass
+oracle-soundness gate, the precision guard, and a *raw* 5-axis telemetry vector
+(task, efficiency, latency, privacy, interruption) emitted as OpenTelemetry GenAI
+spans (ATIF derived). A ≥10 real-sequence dataset MVP gate is enforced; a
+synthetic sequence generator — deterministic oracle authored in code, a local
+model used only for the natural-language surface and frozen offline — scales the
+dataset past the thin real pool. Details in `memory-bench/README.md`.
+
+**In flight.** The native graded 3-arm grid returned an honest null
+(`mem-apg.9`): of 5 carved candidates only 2 passed the oracle-soundness gate
+and 1 fired a non-empty `ours` retrieval — too thin for a headline, which is why
+the soundness gate is moving to *pre-admission* so the grid is admissible by
+construction. A Harbor **failure-recurrence** track has landed its generator, a
+frozen 369-anchor matched-pair fixture (temporal-LOO-clean), and real Harbor
+task-dir emission; the soundness-gated runner and the matched-pair effort-delta
+scorer are the open next step before it yields a number.
