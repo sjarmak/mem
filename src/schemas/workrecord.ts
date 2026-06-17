@@ -104,9 +104,59 @@ export const ProvenanceSchema = z.object({
     .regex(/^[0-9a-f]{40}$/)
     .optional(),
   history_state: z.enum(['commit-by-date', 'unresolved']),
+  // Where the inputs came from, surfaced so a baseline reconstructed from rig
+  // convention is never mistaken for one the session actually recorded.
+  // `metadata` = read from `gc.work_dir`/`gc.var.base_branch`; `rig-map` =
+  // backfilled from the rig's canonical dir; `default` = the assumed integration
+  // branch. Absent on records built before this field existed.
+  work_dir_source: z.enum(['metadata', 'rig-map']).optional(),
+  base_branch_source: z.enum(['metadata', 'default']).optional(),
 });
 
 export type Provenance = z.infer<typeof ProvenanceSchema>;
+
+/** Locally-derived OUTCOME for the direct-to-main majority (ingest/landed).
+ * Where `provenance` reconstructs the commit a session STARTED from, this
+ * reconstructs what it LEFT on the integration branch: the tip at session close
+ * and how many commits landed in the `[started, closed]` window. It is the
+ * outcome oracle for repos with no PR/CI workflow — the corpus norm — where the
+ * verifiable question is "did this work land on `main` and survive", a pure git
+ * fact needing no GitHub linkage.
+ *
+ * `landed_state` is self-describing and never guesses:
+ *  - `landed`          — commits landed in-window and the tip is still an
+ *                        ancestor of the current branch (the work survives).
+ *  - `reverted`        — a later commit on the branch reverts one of them.
+ *  - `abandoned`       — the window tip is no longer reachable from the current
+ *                        branch (history was rewritten; the work was dropped).
+ *  - `empty-window`    — no commit landed between start and close (a session
+ *                        that produced nothing on the branch — a real negative).
+ *  - `ambiguous-window`— another session's window overlaps this one on the same
+ *                        checkout+branch, so commits cannot be attributed by time
+ *                        alone (left for author/SHA attribution, never guessed).
+ *  - `unresolved`      — the branch/checkout is unreachable or the close commit
+ *                        could not be resolved. */
+export const LandedSchema = z.object({
+  // The start anchor (echoed from provenance) the window is measured from.
+  base_commit: z.string().regex(/^[0-9a-f]{40}$/),
+  // The integration-branch tip at session close — the session's contribution tip.
+  landed_commit: z
+    .string()
+    .regex(/^[0-9a-f]{40}$/)
+    .optional(),
+  // Commits in `base_commit..landed_commit` (0 for an empty window).
+  n_commits: z.number().int().nonnegative().optional(),
+  landed_state: z.enum([
+    'landed',
+    'reverted',
+    'abandoned',
+    'empty-window',
+    'ambiguous-window',
+    'unresolved',
+  ]),
+});
+
+export type Landed = z.infer<typeof LandedSchema>;
 
 /** How a record's canonical `repo` was resolved (mem-bme, ingest/repo-resolve):
  * `outcome` (owner/name of a verified PR), `rig-map` (a rig that is 1:1 with a
@@ -161,6 +211,7 @@ export const WorkRecordSchema = z.object({
   trace: TraceRefSchema.optional(),
   outcome: OutcomeSchema.optional(),
   provenance: ProvenanceSchema.optional(),
+  landed: LandedSchema.optional(),
   signal: SignalSchema.optional(),
   // Factory form: a literal default would share one array instance across
   // every parsed record (zod does not deep-clone nested defaults).

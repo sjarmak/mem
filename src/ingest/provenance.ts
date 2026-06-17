@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { basename, isAbsolute } from 'node:path';
 
 import { ProvenanceSchema, type Provenance, type WorkRecord } from '../schemas/workrecord.js';
+import { DEFAULT_BRANCH, RIG_REPOS } from './rig-repo-map.js';
 
 /**
  * ingest/provenance — git-provenance ingest, a sibling stage to ingest/outcomes
@@ -30,13 +31,18 @@ export const WORK_DIR_KEYS = ['gc.work_dir', 'work_dir'] as const;
 /** Metadata key carrying the base branch the work was started against. */
 export const BASE_BRANCH_KEY = 'gc.var.base_branch';
 
-/** The metadata-derived inputs needed to reconstruct one record's git baseline.
- * `base_branch` is optional because only a minority of records record it; when
- * absent, the commit is left unresolved rather than guessed. */
+/** The inputs needed to reconstruct one record's git baseline. `work_dir` and
+ * `base_branch` come from the record's metadata when present, else are backfilled
+ * from the rig's canonical checkout (work_dir is a rig constant). The `*_source`
+ * tags carry that provenance forward so an inferred baseline is never mistaken
+ * for a recorded one. `base_branch` stays optional: an unmapped rig with no
+ * recorded branch has no branch to assume, so its commit is left unresolved. */
 export interface ProvenanceInput {
   work_dir: string;
+  work_dir_source: 'metadata' | 'rig-map';
   repo: string;
   base_branch?: string;
+  base_branch_source?: 'metadata' | 'default';
   started_at: string;
 }
 
@@ -54,25 +60,61 @@ function readMetaString(
 }
 
 /**
- * Derive the provenance inputs from a record, or null when it carries no usable
- * work_dir (the common case — work_dir is present on a minority of records).
- * `started_at` falls back to the record's creation time when the session start
- * was not recorded; the derived commit is an approximation either way.
+ * Derive the provenance inputs from a record. Prefers the metadata the session
+ * recorded (`gc.work_dir`, `gc.var.base_branch`); when those are absent — the
+ * common case, since work_dir was recorded on only a minority of records — it
+ * backfills from the rig's canonical checkout in {@link RIG_REPOS}, because the
+ * working directory is a property of the rig, not of the individual record.
+ *
+ * Returns null only when neither source yields a usable work_dir: a metadata
+ * work_dir that is not absolute and a rig with no mapped `dir` (or a `multi`
+ * rig). `started_at` falls back to the record's creation time when the session
+ * start was not recorded; the derived commit is an approximation either way.
  */
 export function provenanceInput(record: WorkRecord): ProvenanceInput | null {
-  const work_dir = readMetaString(record.metadata, WORK_DIR_KEYS);
-  // gc.work_dir is by contract an absolute path. A relative (or otherwise
-  // non-absolute) value is bad metadata, not a usable repo root — reject it
-  // rather than letting `git -C <value>` resolve it against the scan cwd.
-  if (work_dir === undefined || !isAbsolute(work_dir)) return null;
+  const metaWorkDir = readMetaString(record.metadata, WORK_DIR_KEYS);
+  // A mapped, single-repo rig contributes its canonical checkout + branch as the
+  // backfill source; a `multi` (or unmapped) rig contributes nothing.
+  const mappedRig = RIG_REPOS[record.rig];
+  const rig = mappedRig !== undefined && mappedRig.multi !== true ? mappedRig : undefined;
 
-  const base_branch = readMetaString(record.metadata, [BASE_BRANCH_KEY]);
+  let work_dir: string;
+  let work_dir_source: 'metadata' | 'rig-map';
+  // gc.work_dir is by contract an absolute path. A relative (or otherwise
+  // non-absolute) value is bad metadata, not a usable repo root — fall through to
+  // the rig map rather than letting `git -C <value>` resolve against the scan cwd.
+  if (metaWorkDir !== undefined && isAbsolute(metaWorkDir)) {
+    work_dir = metaWorkDir;
+    work_dir_source = 'metadata';
+  } else if (rig?.dir !== undefined) {
+    work_dir = rig.dir;
+    work_dir_source = 'rig-map';
+  } else {
+    return null;
+  }
+
+  const metaBranch = readMetaString(record.metadata, [BASE_BRANCH_KEY]);
+  let base_branch: string | undefined;
+  let base_branch_source: 'metadata' | 'default' | undefined;
+  if (metaBranch !== undefined) {
+    base_branch = metaBranch;
+    base_branch_source = 'metadata';
+  } else if (rig !== undefined) {
+    // Default to the rig's known integration branch only for a mapped rig. This
+    // is leak-safe (unlike resolving against the work_dir's HEAD): it names the
+    // integration branch and dates it at session START, so the commit is the
+    // pre-session baseline, which cannot yet contain the session's own solution.
+    base_branch = rig.branch ?? DEFAULT_BRANCH;
+    base_branch_source = 'default';
+  }
+
   const started_at = record.lifecycle.started ?? record.lifecycle.created;
 
   return {
     work_dir,
+    work_dir_source,
     repo: basename(work_dir),
-    ...(base_branch !== undefined && { base_branch }),
+    ...(base_branch !== undefined && { base_branch, base_branch_source }),
     started_at,
   };
 }
@@ -121,8 +163,17 @@ export const defaultGitRunner: GitRunner = (workDir, args) =>
 /** True when `execFileSync` failed because git exited non-zero (as opposed to
  * the binary being missing). A non-zero exit — work_dir gone, unknown branch —
  * is an expected "unresolved" outcome; a missing `git` binary is not. */
-function isNonZeroExit(err: unknown): boolean {
+export function isNonZeroExit(err: unknown): boolean {
   return typeof (err as { status?: unknown }).status === 'number';
+}
+
+/** The exit code of a git failure, or undefined when the failure was not a
+ * non-zero exit (e.g. a missing binary). Lets a caller distinguish git's
+ * documented status codes — `merge-base --is-ancestor` returns 1 for "not an
+ * ancestor" vs 128 for a bad object — from a real misconfiguration. */
+export function exitStatus(err: unknown): number | undefined {
+  const status = (err as { status?: unknown }).status;
+  return typeof status === 'number' ? status : undefined;
 }
 
 /**
@@ -161,11 +212,12 @@ export function resolveSessionCommit(
 }
 
 /**
- * Map provenance inputs onto a validated {@link Provenance}. A commit is
- * resolved ONLY when a base branch was recorded: resolving against the
- * work_dir's HEAD would walk the agent's own feature branch (whose history may
- * contain the solution) — a train/test leak for the checkout environment — so an
- * absent base branch is terminal `unresolved`, never guessed.
+ * Map provenance inputs onto a validated {@link Provenance}. A commit is resolved
+ * ONLY when a base branch is known — either recorded or defaulted to the rig's
+ * named integration branch (see {@link provenanceInput}). It is never resolved
+ * against the work_dir's HEAD, which would walk the agent's own feature branch
+ * (whose history may contain the solution) — a train/test leak for the checkout
+ * environment. An unmapped rig with no recorded branch stays `unresolved`.
  */
 export function deriveProvenance(input: ProvenanceInput, run: GitRunner): Provenance {
   const commit =
@@ -176,7 +228,11 @@ export function deriveProvenance(input: ProvenanceInput, run: GitRunner): Proven
   return ProvenanceSchema.parse({
     work_dir: input.work_dir,
     repo: input.repo,
-    ...(input.base_branch !== undefined && { base_branch: input.base_branch }),
+    work_dir_source: input.work_dir_source,
+    ...(input.base_branch !== undefined && {
+      base_branch: input.base_branch,
+      base_branch_source: input.base_branch_source,
+    }),
     ...(commit !== null && { base_commit: commit }),
     history_state: commit !== null ? 'commit-by-date' : 'unresolved',
   });

@@ -17,7 +17,7 @@
  * yet populate convoy/supersedes, so those columns carry data only when
  * upstream provides it.
  */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export const SCHEMA_DDL = `
 CREATE TABLE work_records (
@@ -53,6 +53,17 @@ CREATE TABLE work_records (
   -- commit_sha above, which is the verifiable GitHub outcome SHA.
   base_commit  TEXT,
   commit_state TEXT,
+  -- Landed-outcome projection (ingest/landed; see workrecord.ts LandedSchema).
+  -- The forward mirror of the provenance baseline: landed_state is the
+  -- work->landed-commit verdict for the direct-to-main corpus
+  -- (landed | reverted | abandoned | empty-window | ambiguous-window |
+  -- unresolved), landed_commit the integration-branch tip at session close, and
+  -- n_commits the count in base_commit..landed_commit. NULL when --with-provenance
+  -- did not run (landed is its forward stage). landed_state is indexed so the
+  -- eval/analysis layer can filter the outcome-grounded subset directly.
+  landed_state  TEXT,
+  landed_commit TEXT,
+  n_commits     INTEGER,
   -- Task typing (mem-75t.11). task_type_source says HOW the type was
   -- assigned: 'formula' (molecule/step beads, mechanical), 'structural'
   -- (machine-generated title grammars, mechanical), 'model' (classified by a
@@ -73,6 +84,7 @@ CREATE INDEX idx_records_pr           ON work_records(pr);
 CREATE INDEX idx_records_external_ref ON work_records(external_ref);
 CREATE INDEX idx_records_repo         ON work_records(repo);
 CREATE INDEX idx_records_repo_source  ON work_records(repo_source);
+CREATE INDEX idx_records_landed_state ON work_records(landed_state);
 
 -- Genuinely multi-row per work_id since v4 (mem-75t.9 phase 2 / mem-75t.4):
 -- one row per session iteration, ordered by sequence, tagged with the join

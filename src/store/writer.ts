@@ -21,12 +21,14 @@ INSERT INTO work_records (
   created_at, started_at, closed_at, convoy_id,
   pr, pr_state, commit_sha, ci, trace_path, n_turns,
   repo, repo_source, base_commit, commit_state,
+  landed_state, landed_commit, n_commits,
   task_type, task_type_source, molecule_id, record
 ) VALUES (
   @work_id, @rig, @title, @status, @priority, @external_ref,
   @created_at, @started_at, @closed_at, @convoy_id,
   @pr, @pr_state, @commit_sha, @ci, @trace_path, @n_turns,
   @repo, @repo_source, @base_commit, @commit_state,
+  @landed_state, @landed_commit, @n_commits,
   @task_type, @task_type_source, @molecule_id, @record
 )
 ON CONFLICT(work_id) DO UPDATE SET
@@ -39,6 +41,8 @@ ON CONFLICT(work_id) DO UPDATE SET
   trace_path = excluded.trace_path, n_turns = excluded.n_turns,
   repo = excluded.repo, repo_source = excluded.repo_source,
   base_commit = excluded.base_commit, commit_state = excluded.commit_state,
+  landed_state = excluded.landed_state, landed_commit = excluded.landed_commit,
+  n_commits = excluded.n_commits,
   task_type = excluded.task_type, task_type_source = excluded.task_type_source,
   molecule_id = excluded.molecule_id, record = excluded.record
 `;
@@ -96,6 +100,9 @@ function toRow(record: WorkRecord): Record<string, string | number | null> {
     repo_source: record.repo_source ?? null,
     base_commit: record.provenance?.base_commit ?? null,
     commit_state: record.provenance?.history_state ?? null,
+    landed_state: record.landed?.landed_state ?? null,
+    landed_commit: record.landed?.landed_commit ?? null,
+    n_commits: record.landed?.n_commits ?? null,
     task_type: record.task_type ?? null,
     task_type_source: record.task_type_source ?? null,
     molecule_id: moleculeId(record),

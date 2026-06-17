@@ -254,7 +254,43 @@ makes the "outcome lift" number real. Grounded in the literature pass (see
     reward-vs-information-rung; saturation point + minimum-useful information
     combination are read off it. Scores use data the corpus *has* (trace errors), not
     data it *lacks* (PR outcomes); ZFC-clean (deterministic signature match +
-    delegated semantic judgment).
+    delegated semantic judgment). **Amended by Decision 18** — the "merged-PR
+    uncomputable" finding is re-diagnosed (the corpus is direct-to-main, not
+    outcome-free) and a git-native landed oracle is added; the ablation headline is
+    unchanged.
+18. **The sparse-linkage wall is a direct-to-main workflow property, not missing
+    data — git-native work→landed-commit oracle added (Stephanie, 2026-06-17).**
+    Re-examining Decision 17's "1 external_ref in ~6000" finding from first
+    principles: the merged-PR/CI oracle is *inapplicable*, not merely uncomputable.
+    Every record that recorded an integration branch recorded `main` (364/364 in
+    `store-v6p-lessons`), i.e. the orchestrator's rigs commit straight to `main` —
+    there are essentially no pull requests to link. The sparse external-ref count
+    measures an absent *workflow*, not an unrecoverable chain. The right oracle for
+    direct-to-main work is "did this session's work land on the branch and survive",
+    a pure git fact. **Two stages added:** (a) `rig-repo-map.ts` now carries a
+    canonical local `dir`/`branch` per rig, and `provenance.ts` backfills
+    `work_dir` from it (work_dir is a rig constant, recorded on only ~12% of
+    records) and defaults `base_branch` to the rig's integration branch — leak-safe
+    because it dates the *named* branch at session start, never the work_dir HEAD.
+    This lifts session-start base-commit resolution **359 → 5,644 records (15.7×,
+    ≈79% of the corpus)** — the corpus is now broadly *replayable*. (b) `landed.ts`
+    is the forward mirror of provenance: it resolves the branch tip at session
+    close, the `base..end` commit range, and survival/revert state, emitting a
+    `landed_state` ∈ {landed, reverted, abandoned, empty-window, ambiguous-window,
+    unresolved}. **Result on `store-v6p-lessons` (7,159 records):** 5,031 landed
+    candidates; attribution-blind, **2,867 coincide with real `main` progress**
+    (non-empty windows), 2,164 empty, **0 reverted/abandoned** (direct-to-main work
+    survives). The binding constraint is no longer external-ref linkage but
+    **in-repo session concurrency**: time-window attribution is ambiguous when two
+    sessions hold the same branch over overlapping intervals (4,910 of 5,031), so
+    the *deterministically* attributed landed set is **31 today**, with the ~2,836
+    gap recoverable by **author/SHA attribution** (scoped future work, never
+    guessed). **Headline unchanged:** the ablation score-vs-information curve stays
+    the headline (it is outcome-label-independent by construction); the landed
+    oracle upgrades the *opportunistic validation* set from a single PR-linked bead
+    to the much larger pool of sessions with reconstructed base→landed diffs, and
+    re-frames the limitation from "structurally uncomputable" to "diagnosed +
+    partially wired + concurrency-gated."
 
 ## Literature grounding (`~/lit_explorers`, agentic-memory pass 2026-06-04)
 

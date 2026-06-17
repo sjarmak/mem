@@ -364,6 +364,34 @@ describe('queryRecords', () => {
     expect(queryRecords(db, { agent: 'gc-2002' }).map(r => r.work_id)).toEqual(['demo-2b3c']);
   });
 
+  it('filters by landed_state (the work→landed-commit verdict)', () => {
+    const db = openStore(':memory:');
+    const sha = '0'.repeat(40);
+    writeRecords(db, [
+      fullRecord({
+        work_id: 'land-aaaa',
+        landed: {
+          base_commit: sha,
+          landed_commit: '1'.repeat(40),
+          n_commits: 3,
+          landed_state: 'landed',
+        },
+      }),
+      fullRecord({
+        work_id: 'land-bbbb',
+        landed: { base_commit: sha, landed_state: 'ambiguous-window' },
+      }),
+      // A record with no landed projection must not match any landed filter.
+      fullRecord({ work_id: 'land-cccc' }),
+    ]);
+
+    expect(queryRecords(db, { landed_state: 'landed' }).map(r => r.work_id)).toEqual(['land-aaaa']);
+    expect(queryRecords(db, { landed_state: 'ambiguous-window' }).map(r => r.work_id)).toEqual([
+      'land-bbbb',
+    ]);
+    expect(queryRecords(db, { landed_state: 'unresolved' })).toEqual([]);
+  });
+
   it('closedBefore is strict — the temporal leave-one-out boundary (D6)', () => {
     const db = openStore(':memory:');
     seed(db);

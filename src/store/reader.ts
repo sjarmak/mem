@@ -38,6 +38,15 @@ export interface RecordFilter {
   agent?: string;
   ci?: 'pass' | 'fail';
   pr_state?: 'merged' | 'closed';
+  /** The work→landed-commit verdict (ingest/landed); filters the
+   * outcome-grounded subset of the direct-to-main corpus. */
+  landed_state?:
+    | 'landed'
+    | 'reverted'
+    | 'abandoned'
+    | 'empty-window'
+    | 'ambiguous-window'
+    | 'unresolved';
   closedBefore?: string;
 }
 
@@ -51,6 +60,7 @@ export function queryRecords(db: StoreDatabase, filter: RecordFilter = {}): Work
     ['status', filter.status],
     ['ci', filter.ci],
     ['pr_state', filter.pr_state],
+    ['landed_state', filter.landed_state],
   ];
   for (const [column, value] of equals) {
     if (value !== undefined) {

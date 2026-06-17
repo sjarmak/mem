@@ -14,10 +14,13 @@ multi-agent orchestrator produces something richer: a continuous stream of
 real work where every unit carries a lifecycle label (created, started,
 closed) and a full trace of how it got there, so the labels come from work
 that actually happened rather than from synthetic tasks. One caveat constrains
-the whole evaluation design: external outcome linkage is sparse in practice
-(roughly 1 in 6,000 records carries a PR reference), so the benchmark's oracles
-rest on the lifecycle labels, the traces themselves, and trace-derived gold
-diffs, not on a merged-PR or CI signal.
+the whole evaluation design, and it is a workflow property, not missing data:
+the corpus is direct-to-main (every record that records a base branch records
+`main`), so there is no pull-request workflow to link (roughly 1 in 6,000
+records carries a PR reference). A merged-PR/CI oracle is therefore inapplicable
+by construction; the benchmark's oracles rest on the lifecycle labels, the
+traces themselves, trace-derived gold diffs, and a git-native work→landed-commit
+signal, not on a merged-PR or CI signal.
 
 The pieces fit together as a pipeline: ingest the orchestrator's audit into a
 queryable work-audit graph, parse deterministic failure signal out of the
@@ -30,22 +33,29 @@ half (`memory-bench/`) runs the eval.
 
 **Store (schema v6), populated from the bead spine:** 6,691 work records, 874
 resolved transcripts (per-run metadata in `trace_runs`), deterministic trace
-errors parsed across the error-bearing slice of the corpus, git provenance on
-482 records (113 with both a trace and a checkoutable base commit), and a
-canonical `repo` resolved on every record via the deterministic rig→repo map.
-Gates green: 1,297 Python + 332 TypeScript tests pass.
+errors parsed across the error-bearing slice of the corpus, and a canonical
+`repo` resolved on every record via the deterministic rig→repo map. Git
+provenance now backfills the working directory from the rig (a rig constant, not
+a per-record fact), lifting session-start base-commit resolution from ~360 to
+~5,600 records (≈79% of the corpus) — realized on rebuild via the rig→dir map.
+Gates green: 1,297 Python + 358 TypeScript tests pass.
 
-**Headline = ablation score-vs-information curve (Decision 17).** The corpus
-does not carry the bead→PR→commit linkage a merged-PR/CI outcome oracle needs;
-across 5,977 closed records exactly one has a usable external ref, so the
-merged-PR outcome-lift headline is *structurally uncomputable at scale*. The
-headline is therefore env- and label-independent: the agent is its own control
-across an information ladder, and the saturation point plus minimum-useful
-information combination are read off the curve. Per-rung reward is a
-deterministic check on data the corpus has (did the run avoid or resolve the
-held-out task's known `trace_error`) plus a calibrated OSS LLM-judge for
-semantic quality. The merged-diff oracle is opportunistic validation on the
-handful of beads that carry PR/commit metadata, never the headline.
+**Headline = ablation score-vs-information curve (Decision 17, amended by 18).**
+The corpus is *direct-to-main*: its rigs commit straight to the integration
+branch (every record that records a base branch records `main`), so there is no
+pull-request workflow to link — across 5,977 closed records exactly one has a
+usable external ref. A merged-PR/CI outcome oracle is therefore *inapplicable by
+construction*, not a wiring gap. The headline is env- and label-independent: the
+agent is its own control across an information ladder, and the saturation point
+plus minimum-useful information combination are read off the curve. Per-rung
+reward is a deterministic check on data the corpus has (did the run avoid or
+resolve the held-out task's known `trace_error`) plus a calibrated OSS LLM-judge
+for semantic quality. For outcome grounding, the *right* oracle for direct-to-main
+work is git-native: `ingest/landed` (the forward mirror of provenance) dates the
+branch tip at session close and takes the surviving in-window commits as the
+session's landed work. Its scale limit is in-repo session concurrency
+(overlapping branch windows are marked ambiguous, never guessed), addressable by
+author/SHA attribution — opportunistic validation, never the headline.
 
 **Where the grid stands.** A pre-admission oracle-soundness gate (`mem-1eph`)
 plus oracle-repair waves carried the native pool to 8 sound dashboard oracles
@@ -136,9 +146,10 @@ semantic signal is read by a model.
    and returns distilled prior resolutions, not raw traces.
 5. **Benchmark.** Run each multi-session sequence under three conditions
    (`no_memory` / `oracle_memory` / `memory_enabled`) on Harbor and read the
-   gaps. Because merged-PR/CI outcome linkage is structurally absent from this
-   corpus (see *Status*, Decision 17), the headline is an *ablation
-   score-vs-information curve* rather than merged-PR outcome lift; retrieval
+   gaps. Because this corpus is direct-to-main and a merged-PR/CI oracle is
+   inapplicable by construction (see *Status*, Decision 17/18), the headline is
+   an *ablation score-vs-information curve* rather than merged-PR outcome lift;
+   retrieval
    precision and injected-context volume stay a first-class guard so
    over-injection cannot fake a win. The Python harness lives under
    `memory-bench/`.

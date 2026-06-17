@@ -16,6 +16,11 @@ function buildFilter(options: CommandContext['options']): RecordFilter {
   const agent = asString(options.agent, 'agent');
   const ci = asEnum(options.ci, ['pass', 'fail'] as const, 'ci');
   const prState = asEnum(options['pr-state'], ['merged', 'closed'] as const, 'pr-state');
+  const landedState = asEnum(
+    options['landed-state'],
+    ['landed', 'reverted', 'abandoned', 'empty-window', 'ambiguous-window', 'unresolved'] as const,
+    'landed-state'
+  );
   const closedBefore = asString(options['closed-before'], 'closed-before');
 
   return {
@@ -24,17 +29,19 @@ function buildFilter(options: CommandContext['options']): RecordFilter {
     ...(agent !== undefined && { agent }),
     ...(ci !== undefined && { ci }),
     ...(prState !== undefined && { pr_state: prState }),
+    ...(landedState !== undefined && { landed_state: landedState }),
     ...(closedBefore !== undefined && { closedBefore }),
   };
 }
 
 /**
  * `mem query [<work_id>] [--rig R] [--agent A] [--status S] [--ci pass|fail]
- *  [--pr-state merged|closed] [--closed-before T] [--store PATH]`
+ *  [--pr-state merged|closed] [--landed-state STATE] [--closed-before T]
+ *  [--store PATH]`
  *
  * Query the work-audit graph by the four axes the bead names — work_id (exact,
- * via the positional), or agent / rig / outcome (and status / temporal) via the
- * promoted-column filters. A positional work_id and filters are mutually
+ * via the positional), or agent / rig / outcome (and status / temporal / landed
+ * verdict) via the promoted-column filters. A positional work_id and filters are mutually
  * exclusive: the id is an exact lookup, filters are a scan. Output ordering is
  * the reader's deterministic `ORDER BY work_id`.
  */

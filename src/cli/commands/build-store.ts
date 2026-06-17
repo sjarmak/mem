@@ -8,6 +8,7 @@ import {
   gcSessionResolver,
 } from '../../ingest/trace-resolve.js';
 import { attachProvenance } from '../../ingest/provenance.js';
+import { attachLanded } from '../../ingest/landed.js';
 import { attachRepo } from '../../ingest/repo-resolve.js';
 import {
   type SessionJoin,
@@ -40,6 +41,10 @@ export interface BuildStoreResult {
   /** Subset of the above whose session-start commit resolved by date — the
    * git-checkout anchors a future real-exec replay can use. */
   records_with_commit: number;
+  /** Records whose work landed on the integration branch and survived
+   * (`landed.landed_state === 'landed'`); the forward outcome signal for the
+   * direct-to-main corpus (0 when `--with-provenance` is off). */
+  records_landed: number;
   /** Records that received ≥2 session iterations from the merged session-join
    * artifact (0 when `--session-join` is off). */
   records_multi_session: number;
@@ -96,7 +101,9 @@ export function buildStoreFromRecords(path: string, records: WorkRecord[]): numb
  * so the store carries the D8 signals the failure-triggered `ours` arm fires on.
  * With `--with-provenance`, each record's git baseline (repo + session-start
  * commit by date) is attached so it can be replayed as a git-checkout
- * environment. Without either flag, the store is the bead spine only (fast, no
+ * environment, followed by its forward mirror `landed` (session-close branch tip
+ * + survival), the work→landed-commit outcome signal for the direct-to-main
+ * corpus. Without either flag, the store is the bead spine only (fast, no
  * `gc`/transcript/git IO).
  *
  * Rigs stream through the writer one at a time (read → attach → write per
@@ -134,6 +141,7 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
   let recordsWithRepo = 0;
   let recordsWithProvenance = 0;
   let recordsWithCommit = 0;
+  let recordsLanded = 0;
   let recordsMultiSession = 0;
 
   for (const name of rigs) {
@@ -147,7 +155,10 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     const typed = attachTaskTypes(located, taskTypes);
     const joined = join === null ? typed : attachSessionJoin(typed, join);
     const traced = withTraces ? attachAndParse(joined, resolve ? { resolve } : {}) : joined;
-    const records = withProvenance ? attachProvenance(traced) : traced;
+    // Provenance reconstructs the session-start baseline; landed is its forward
+    // mirror (session-close branch tip + survival), so it runs only after, and
+    // only when provenance has been attached.
+    const records = withProvenance ? attachLanded(attachProvenance(traced)) : traced;
 
     count += buildStoreFromRecords(path, records);
     recordsWithRepo += records.filter(r => r.repo !== undefined).length;
@@ -156,6 +167,7 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     recordsWithCommit += records.filter(
       r => r.provenance?.history_state === 'commit-by-date'
     ).length;
+    recordsLanded += records.filter(r => r.landed?.landed_state === 'landed').length;
     recordsMultiSession += records.filter(
       r => r.agents.filter(a => a.suspect !== true).length >= 2
     ).length;
@@ -166,7 +178,7 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     const repoNote = `; ${recordsWithRepo}/${count} resolved a repo`;
     const traceNote = withTraces ? `; ${recordsWithErrors} carry trace errors` : '';
     const provNote = withProvenance
-      ? `; ${recordsWithProvenance} carry a work_dir, ${recordsWithCommit} resolved a base commit`
+      ? `; ${recordsWithProvenance} carry a work_dir, ${recordsWithCommit} resolved a base commit, ${recordsLanded} landed on the branch`
       : '';
     const joinNote = join !== null ? `; ${recordsMultiSession} are multi-session` : '';
     console.error(
@@ -182,6 +194,7 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     records_with_errors: recordsWithErrors,
     records_with_provenance: recordsWithProvenance,
     records_with_commit: recordsWithCommit,
+    records_landed: recordsLanded,
     records_multi_session: recordsMultiSession,
   };
 }

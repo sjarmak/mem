@@ -11,3 +11,6 @@ dist/
 
 # Internal working notes + Gas City project context (not public)
 .gc/
+
+# Paper draft — kept out of the public repo
+paper/
