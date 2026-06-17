@@ -19,7 +19,68 @@ the whole evaluation design: external outcome linkage is sparse in practice
 rest on the lifecycle labels, the traces themselves, and trace-derived gold
 diffs, not on a merged-PR or CI signal.
 
-## The data already exists
+The pieces fit together as a pipeline: ingest the orchestrator's audit into a
+queryable work-audit graph, parse deterministic failure signal out of the
+traces, distill prior resolutions into retrievable lessons, then benchmark
+memory systems by replaying held-out tasks under controlled memory conditions
+on Harbor. The TypeScript half (`src/`) builds and serves the store; the Python
+half (`memory-bench/`) runs the eval.
+
+## Status
+
+**Store (schema v6), populated from the bead spine:** 6,691 work records, 874
+resolved transcripts (per-run metadata in `trace_runs`), deterministic trace
+errors parsed across the error-bearing slice of the corpus, git provenance on
+482 records (113 with both a trace and a checkoutable base commit), and a
+canonical `repo` resolved on every record via the deterministic rig→repo map.
+Gates green: 1,297 Python + 332 TypeScript tests pass.
+
+**Headline = ablation score-vs-information curve (Decision 17).** The corpus
+does not carry the bead→PR→commit linkage a merged-PR/CI outcome oracle needs;
+across 5,977 closed records exactly one has a usable external ref, so the
+merged-PR outcome-lift headline is *structurally uncomputable at scale*. The
+headline is therefore env- and label-independent: the agent is its own control
+across an information ladder, and the saturation point plus minimum-useful
+information combination are read off the curve. Per-rung reward is a
+deterministic check on data the corpus has (did the run avoid or resolve the
+held-out task's known `trace_error`) plus a calibrated OSS LLM-judge for
+semantic quality. The merged-diff oracle is opportunistic validation on the
+handful of beads that carry PR/commit metadata, never the headline.
+
+**Where the grid stands.** A pre-admission oracle-soundness gate (`mem-1eph`)
+plus oracle-repair waves carried the native pool to 8 sound dashboard oracles
+(`mem-qarg`), and a `mem` test config admitted one mem-rig bundle for 9
+(`mem-us6j`). The 3-arm graded grid (`none` / `ours` / `builtin`) runs on those
+9; distilling the dashboard rig's lessons brought the `ours` arm to 4-of-8
+retrieval coverage. Details and competitive-arm wiring in `memory-bench/README.md`.
+
+## Roadmap
+
+Near-term work, roughly in priority order:
+
+- **Lift lesson coverage corpus-wide.** The `ours` arm injects distilled
+  lessons, and the distiller has run over the dashboard rig so far (236 lessons,
+  lifting the running grid to 4-of-8 coverage). Distilling the remaining
+  error-bearing records across rigs is the single biggest lever on the headline.
+- **Land the N=9 graded headline.** The 3-arm grid is executing on Harbor; the
+  open step is reading the per-arm graded result with confidence intervals and
+  the small-N caveat.
+- **Grow the sound-oracle pool past 9.** Repairing the four replay-rejected
+  bundles proved unsound (corpus-extraction drift, not a fixable bug), so the
+  lever moves upstream: capturing each session's true per-worktree base commit so
+  more bundles replay cleanly. Trace-substrate work, larger than a harness patch.
+- **Finish the failure-recurrence track.** Its generator, a frozen 369-anchor
+  matched-pair fixture (temporal-LOO-clean), and real Harbor task-dir emission
+  are done; the soundness-gated runner and matched-pair effort-delta scorer are
+  what stands between it and a number.
+- **Wire the synthetic dataset.** The deterministic synthetic-task generator and
+  its pilot validity filter are built and tested but not yet run through an eval;
+  generating, pilot-filtering, and running a batch on the sequence track scales
+  the dataset past the thin real pool.
+
+## How it works
+
+### The data already exists
 
 It is the orchestrator's own audit; nothing needs to be generated:
 
@@ -33,7 +94,7 @@ It is the orchestrator's own audit; nothing needs to be generated:
 | **Git provenance** | session-start `base_commit` per record (commit-by-date from a recorded base branch; an absent base branch stays `unresolved`, never guessed), so a run can be replayed as a checkout | `--with-provenance` |
 | **Repo identity** | canonical `repo` (`owner/name`) on every record via a deterministic rig→repo map; `repo_source` records how it resolved (`outcome` / `rig-map` / `unmapped`), and umbrella rigs that span many forks stay `unmapped` rather than mislabeled | resolved at ingest, always on |
 
-## The work-audit graph (the core mapping)
+### The work-audit graph (the core mapping)
 
 Everything keys off a **work id** and joins outward. This graph is the dataset:
 
@@ -55,7 +116,7 @@ Everything keys off a **work id** and joins outward. This graph is the dataset:
   in the schema but are rarely populated. That is what makes it a *benchmark*,
   not just a log.
 
-## Pipeline
+### Pipeline
 
 The pipeline mirrors a small set of stages, each a module under `src/`. The
 extraction split follows a strict boundary: mechanical signal is read in code,
@@ -82,7 +143,7 @@ semantic signal is read by a model.
    over-injection cannot fake a win. The Python harness lives under
    `memory-bench/`.
 
-## Data model
+### Data model
 
 The atomic unit is a **WorkRecord**, keyed by a work-item id, joining the whole
 audit:
@@ -115,7 +176,7 @@ target's convoy siblings, supersedes-chain, and any item sharing its PR or
 branch excluded. That holds the retrieved set to memory as it existed when the
 work began and structurally blocks future leakage.
 
-## Building the store
+### Building the store
 
 The P1.5 sidecar is a generated artifact (gitignored at `.mem/store.db`). Build
 it from the bead spine, then query / retrieve / replay against it:
@@ -178,60 +239,18 @@ mem ingest-traces --store /home/ds/projects/mem/.mem/store.db   # rebuild + delt
 mem coverage       --store /home/ds/projects/mem/.mem/store.db   # read-only report
 ```
 
-## Status
+### Eval harness (`memory-bench/`)
 
-**Store (schema v6), populated from the bead spine:** 6,691 work records, 874
-resolved transcripts (per-run metadata in `trace_runs`), deterministic trace
-errors parsed across the error-bearing slice of the corpus, git provenance on
-482 records (113 with both a trace and a checkoutable base commit), and a
-canonical `repo` resolved on every record via the deterministic rig→repo map.
-Gates green: 1,297 Python + 332 TypeScript tests pass.
-
-**Headline = ablation score-vs-information curve (Decision 17).** The corpus
-does not carry the bead→PR→commit linkage a merged-PR/CI outcome oracle needs;
-across 5,977 closed records exactly one has a usable external ref, so the
-merged-PR outcome-lift headline is *structurally uncomputable at scale*. The
-headline is therefore env- and label-independent: the agent is its own control
-across an information ladder, and the saturation point plus minimum-useful
-information combination are read off the curve. Per-rung reward is a
-deterministic check on data the corpus has (did the run avoid or resolve the
-held-out task's known `trace_error`) plus a calibrated OSS LLM-judge for
-semantic quality. The merged-diff oracle is opportunistic validation on the
-handful of beads that carry PR/commit metadata, never the headline.
-
-**Eval harness (`memory-bench/`).** Each multi-session sequence runs under three
-conditions on **Harbor** as the execution substrate: `no_memory` (stateless
-floor), `oracle_memory` (exact memory injected, the ceiling and the
-task-validity gate, where `oracle ≈ no_memory` rejects the task), and
-`memory_enabled` (the real system). Competitive arms (mem0, A-MEM, graphiti,
-NAT, filesystem, plus the failure-triggered `ours`) run behind one uniform
-ingest/retrieve interface, all under a temporal leave-one-out leak guard, a
-CodeScaleBench fail-to-pass oracle-soundness gate, the precision guard, and a
-*raw* 5-axis telemetry vector (task, efficiency, latency, privacy, interruption)
-emitted as OpenTelemetry GenAI spans (ATIF derived). A ≥10 real-sequence dataset
-MVP gate is enforced; a synthetic sequence generator (deterministic oracle
-authored in code, a local model used only for the natural-language surface and
-frozen offline) scales the dataset past the thin real pool. Details in
-`memory-bench/README.md`.
-
-**In flight.** The native 3-arm grid first returned a null (`mem-apg.9`): of 5
-carved candidates only 2 passed the oracle-soundness check and 1 fired a
-non-empty `ours` retrieval, too thin for a headline. Two fixes followed. The
-oracle-soundness gate now runs at pre-admission (`mem-1eph`), so every task
-entering the grid is admissible by construction, and oracle-repair waves carried
-the full native pool through the gate to 8 sound dashboard oracles (`mem-qarg`);
-wiring a `mem` test config admitted the one mem-rig bundle for 9 (`mem-us6j`).
-Pushing past 9 by repairing the four replay-rejected bundles turned out to be
-unrecoverable: their dropped edits are corpus-extraction drift, an edit anchored
-to a base the timestamp-approximate checkout does not carry or a session that
-wrote across two filesystem roots, not a replay-engine bug, so the engine fails
-them closed by construction (`mem-7q6e`). The binding constraint is now lesson
-coverage. The `ours` arm injects distilled lessons, and the distiller had only
-ever run over the ~17 records one early grid surfaced, so the rebuilt store
-carried zero. Distilling the dashboard rig (236 lessons over its error-bearing
-records) lifts the running 8-bundle grid to 4-of-8 retrieval coverage; a
-corpus-wide distillation is the lever that takes it higher. A Harbor
-**failure-recurrence** track has its generator, a frozen 369-anchor matched-pair
-fixture (temporal-LOO-clean), and real Harbor task-dir emission; its
-soundness-gated runner and matched-pair effort-delta scorer are the open next
-step before it yields a number.
+Each multi-session sequence runs under three conditions on **Harbor** as the
+execution substrate: `no_memory` (stateless floor), `oracle_memory` (exact
+memory injected, the ceiling and the task-validity gate, where
+`oracle ≈ no_memory` rejects the task), and `memory_enabled` (the real system).
+Competitive arms (mem0, A-MEM, graphiti, NAT, filesystem, plus the
+failure-triggered `ours`) run behind one uniform ingest/retrieve interface, all
+under a temporal leave-one-out leak guard, a CodeScaleBench fail-to-pass
+oracle-soundness gate, the precision guard, and a *raw* 5-axis telemetry vector
+(task, efficiency, latency, privacy, interruption) emitted as OpenTelemetry
+GenAI spans (ATIF derived). A ≥10 real-sequence dataset MVP gate is enforced; a
+synthetic sequence generator (deterministic oracle authored in code, a local
+model used only for the natural-language surface and frozen offline) scales the
+dataset past the thin real pool. Details in `memory-bench/README.md`.
