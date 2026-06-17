@@ -4,6 +4,8 @@
  */
 export * from './beads.js';
 export * from './outcomes.js';
+export { type RigRepo, RIG_REPOS } from './rig-repo-map.js';
+export { type RepoResolution, attachRepo, resolveRepo } from './repo-resolve.js';
 export {
   type TraceIndexEntry,
   defaultProjectsRoot,

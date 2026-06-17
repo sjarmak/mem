@@ -62,7 +62,7 @@ def _as_trajectory_dict(trajectory: Mapping[str, Any]) -> dict[str, Any]:
 
     Validation is REQUIRED, not optional: if Harbor is not importable the harvest
     cannot be trusted, so we fail rather than parse a best-effort shape."""
-    from harbor.models.trajectories import Trajectory  # type: ignore[import-untyped]
+    from harbor.models.trajectories import Trajectory
 
     validated = Trajectory.model_validate(dict(trajectory)).to_json_dict(exclude_none=True)
     return cast(dict[str, Any], validated)

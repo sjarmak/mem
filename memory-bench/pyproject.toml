@@ -20,7 +20,7 @@ dependencies = [
 # harbor.TaskConfig only when the package is present (see tests/test_harbor_adapter.py).
 [project.optional-dependencies]
 harbor = ["harbor>=0.3"]
-dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.11", "black>=24.0"]
+dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.11", "black>=24.0", "types-toml>=0.10"]
 
 [project.scripts]
 membench = "membench.cli:main"
@@ -69,4 +69,11 @@ module = [
     "graphiti_core",
     "graphiti_core.*",
 ]
+ignore_missing_imports = true
+
+# Harbor (the eval framework) is an optional dep, lazily imported inside the exec
+# path and shipping no stubs; ignore-missing keeps the type gate green whether or
+# not it's installed (it is required at RUNTIME, validated where it is imported).
+[[tool.mypy.overrides]]
+module = ["harbor.*"]
 ignore_missing_imports = true

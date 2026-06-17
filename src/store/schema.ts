@@ -17,7 +17,7 @@
  * yet populate convoy/supersedes, so those columns carry data only when
  * upstream provides it.
  */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export const SCHEMA_DDL = `
 CREATE TABLE work_records (
@@ -37,12 +37,20 @@ CREATE TABLE work_records (
   ci           TEXT,
   trace_path   TEXT,
   n_turns      INTEGER,
-  -- Git-provenance projection (locally-derived env baseline; see workrecord.ts
-  -- ProvenanceSchema). repo + base_commit are the git-checkout anchors for a
-  -- future real-exec replay; commit_state records whether base_commit is a
-  -- commit-by-date approximation ('commit-by-date') or absent ('unresolved').
-  -- Distinct from commit_sha above, which is the verifiable GitHub outcome SHA.
+  -- Canonical repository identity (mem-bme; see workrecord.ts repo/repo_source,
+  -- projected from record.repo by ingest/repo-resolve). repo is the
+  -- owner/name grouping + retrieval key; repo_source records HOW it resolved
+  -- (outcome | rig-map | unmapped), so the build coverage line can report
+  -- the residual null-rate. NULL repo means repo_source = unmapped (or the
+  -- resolve stage has not run). Distinct from the bare work_dir basename that
+  -- lives only inside record.provenance.repo.
   repo         TEXT,
+  repo_source  TEXT,
+  -- Git-provenance projection (locally-derived env baseline; see workrecord.ts
+  -- ProvenanceSchema). base_commit is the git-checkout anchor for a future
+  -- real-exec replay; commit_state records whether it is a commit-by-date
+  -- approximation ('commit-by-date') or absent ('unresolved'). Distinct from
+  -- commit_sha above, which is the verifiable GitHub outcome SHA.
   base_commit  TEXT,
   commit_state TEXT,
   -- Task typing (mem-75t.11). task_type_source says HOW the type was
@@ -64,6 +72,7 @@ CREATE INDEX idx_records_closed       ON work_records(closed_at);
 CREATE INDEX idx_records_pr           ON work_records(pr);
 CREATE INDEX idx_records_external_ref ON work_records(external_ref);
 CREATE INDEX idx_records_repo         ON work_records(repo);
+CREATE INDEX idx_records_repo_source  ON work_records(repo_source);
 
 -- Genuinely multi-row per work_id since v4 (mem-75t.9 phase 2 / mem-75t.4):
 -- one row per session iteration, ordered by sequence, tagged with the join

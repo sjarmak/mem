@@ -8,6 +8,7 @@ exercised here; only its argv/guard behavior is asserted.
 """
 
 import json
+from importlib.util import find_spec
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,13 @@ from membench.harbor.harbor_exec import (
     harbor_exec,
     project_claude_stream,
     project_trajectory,
+)
+
+# Some tests exercise code paths that import Harbor's ATIF `Trajectory` model, an
+# optional dep (the `harbor` extra). Skip those when the SDK is absent, mirroring the
+# `pytest.importorskip("harbor.models.trajectories")` guard used elsewhere in this file.
+requires_harbor = pytest.mark.skipif(
+    find_spec("harbor") is None, reason="optional 'harbor' SDK not installed"
 )
 
 
@@ -104,12 +112,14 @@ def test_fixture_is_valid_against_harbor_model():
 # --- derive_files_touched: file tool-calls -> (read, written) -------------------
 
 
+@requires_harbor
 def test_derive_files_splits_read_and_written():
     read, written = derive_files_touched(_traj_go_test_failure())
     assert read == frozenset({"/app/internal/workdir/workdir_test.go"})
     assert written == frozenset({"/app/internal/workdir/workdir.go"})
 
 
+@requires_harbor
 def test_derive_files_ignores_non_file_tools():
     # Bash/Grep/Glob touch files but not via a structured path arg -> not attributed.
     traj = _atif(
@@ -130,6 +140,7 @@ def test_derive_files_ignores_non_file_tools():
     assert written == frozenset()
 
 
+@requires_harbor
 def test_derive_files_notebook_edit_is_written():
     traj = _atif(
         [
@@ -154,6 +165,7 @@ def test_derive_files_notebook_edit_is_written():
 # --- collect_output: observation contents the extractor parses ------------------
 
 
+@requires_harbor
 def test_collect_output_joins_observation_contents():
     output = collect_output(_traj_go_test_failure())
     assert "--- FAIL: TestWorkdir" in output
@@ -162,6 +174,7 @@ def test_collect_output_joins_observation_contents():
     assert "Patching." not in output
 
 
+@requires_harbor
 def test_collect_output_handles_multimodal_content_parts():
     traj = _atif(
         [
@@ -194,6 +207,7 @@ def test_collect_output_handles_multimodal_content_parts():
 # --- project_trajectory: the full RunTranscript shape grid.py consumes ----------
 
 
+@requires_harbor
 def test_project_emits_run_transcript_shape():
     transcript = project_trajectory(_traj_go_test_failure())
     assert set(transcript) == {"output", "files_read", "files_written"}
@@ -202,6 +216,7 @@ def test_project_emits_run_transcript_shape():
     assert "/app/internal/workdir/workdir.go" in transcript["files_written"]
 
 
+@requires_harbor
 def test_project_rejects_malformed_trajectory():
     # Non-sequential step_id -> Harbor's model rejects it; we surface, not swallow.
     # pydantic's ValidationError subclasses ValueError.
@@ -210,6 +225,7 @@ def test_project_rejects_malformed_trajectory():
         project_trajectory(bad)
 
 
+@requires_harbor
 def test_projected_files_suffix_match_repo_relative_held_path():
     # The container paths are absolute (/app/...); the scorer's _same_file suffix
     # match aligns them with a repo-relative held path. Guard that contract here so

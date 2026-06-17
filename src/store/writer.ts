@@ -20,13 +20,13 @@ INSERT INTO work_records (
   work_id, rig, title, status, priority, external_ref,
   created_at, started_at, closed_at, convoy_id,
   pr, pr_state, commit_sha, ci, trace_path, n_turns,
-  repo, base_commit, commit_state,
+  repo, repo_source, base_commit, commit_state,
   task_type, task_type_source, molecule_id, record
 ) VALUES (
   @work_id, @rig, @title, @status, @priority, @external_ref,
   @created_at, @started_at, @closed_at, @convoy_id,
   @pr, @pr_state, @commit_sha, @ci, @trace_path, @n_turns,
-  @repo, @base_commit, @commit_state,
+  @repo, @repo_source, @base_commit, @commit_state,
   @task_type, @task_type_source, @molecule_id, @record
 )
 ON CONFLICT(work_id) DO UPDATE SET
@@ -37,8 +37,8 @@ ON CONFLICT(work_id) DO UPDATE SET
   pr = excluded.pr, pr_state = excluded.pr_state,
   commit_sha = excluded.commit_sha, ci = excluded.ci,
   trace_path = excluded.trace_path, n_turns = excluded.n_turns,
-  repo = excluded.repo, base_commit = excluded.base_commit,
-  commit_state = excluded.commit_state,
+  repo = excluded.repo, repo_source = excluded.repo_source,
+  base_commit = excluded.base_commit, commit_state = excluded.commit_state,
   task_type = excluded.task_type, task_type_source = excluded.task_type_source,
   molecule_id = excluded.molecule_id, record = excluded.record
 `;
@@ -90,7 +90,10 @@ function toRow(record: WorkRecord): Record<string, string | number | null> {
     ci: record.outcome?.ci ?? null,
     trace_path: record.trace?.jsonl_path ?? null,
     n_turns: record.trace?.n_turns ?? null,
-    repo: record.provenance?.repo ?? null,
+    // Canonical owner/name from repo-resolve (mem-bme), NOT provenance.repo
+    // (a bare work_dir basename that stays inside the record JSON).
+    repo: record.repo ?? null,
+    repo_source: record.repo_source ?? null,
     base_commit: record.provenance?.base_commit ?? null,
     commit_state: record.provenance?.history_state ?? null,
     task_type: record.task_type ?? null,

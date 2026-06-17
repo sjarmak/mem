@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { attachAndParse, buildStoreFromRecords } from '../src/cli/commands/build-store.js';
 import { attachProvenance } from '../src/ingest/provenance.js';
+import { attachRepo } from '../src/ingest/repo-resolve.js';
 import { openStore, queryRecords, workIdsBySignature } from '../src/store/index.js';
 import { failureSignature } from '../src/parse/recurrence.js';
 import { WorkRecordSchema, type WorkRecord } from '../src/schemas/workrecord.js';
@@ -128,7 +129,7 @@ describe('attachAndParse (P1.3 resolve → P1.6 parse)', () => {
 });
 
 describe('build-store provenance projection', () => {
-  it('promotes repo / base_commit / commit_state into queryable columns', () => {
+  it('promotes base_commit / commit_state into queryable columns', () => {
     const rec = WorkRecordSchema.parse({
       work_id: 'w-prov',
       rig: 'mem',
@@ -148,9 +149,9 @@ describe('build-store provenance projection', () => {
     const db = openStore(path);
     try {
       const row = db
-        .prepare('SELECT repo, base_commit, commit_state FROM work_records WHERE work_id = ?')
-        .get('w-prov') as { repo: string; base_commit: string; commit_state: string };
-      expect(row).toEqual({ repo: 'mem', base_commit: sha, commit_state: 'commit-by-date' });
+        .prepare('SELECT base_commit, commit_state FROM work_records WHERE work_id = ?')
+        .get('w-prov') as { base_commit: string; commit_state: string };
+      expect(row).toEqual({ base_commit: sha, commit_state: 'commit-by-date' });
 
       // Round-trips through the JSON blob as well.
       expect(queryRecords(db, { rig: 'mem' })[0].provenance?.base_commit).toBe(sha);
@@ -166,13 +167,44 @@ describe('build-store provenance projection', () => {
     const db = openStore(path);
     try {
       const row = db
-        .prepare('SELECT repo, base_commit, commit_state FROM work_records WHERE work_id = ?')
+        .prepare('SELECT base_commit, commit_state FROM work_records WHERE work_id = ?')
         .get('w-noprov') as {
-        repo: string | null;
         base_commit: string | null;
         commit_state: string | null;
       };
-      expect(row).toEqual({ repo: null, base_commit: null, commit_state: null });
+      expect(row).toEqual({ base_commit: null, commit_state: null });
+    } finally {
+      db.close();
+    }
+  });
+});
+
+describe('build-store repo projection (mem-bme)', () => {
+  it('promotes the canonical repo + repo_source from the rig→repo map', () => {
+    const located = attachRepo([record('w-repo', 'mem')]);
+    const path = join(dir, 'store.db');
+    buildStoreFromRecords(path, located);
+    const db = openStore(path);
+    try {
+      const row = db
+        .prepare('SELECT repo, repo_source FROM work_records WHERE work_id = ?')
+        .get('w-repo') as { repo: string | null; repo_source: string | null };
+      expect(row).toEqual({ repo: 'sjarmak/mem', repo_source: 'rig-map' });
+    } finally {
+      db.close();
+    }
+  });
+
+  it('leaves repo NULL and tags unmapped for an umbrella rig', () => {
+    const located = attachRepo([record('w-gc', 'gc')]);
+    const path = join(dir, 'store.db');
+    buildStoreFromRecords(path, located);
+    const db = openStore(path);
+    try {
+      const row = db
+        .prepare('SELECT repo, repo_source FROM work_records WHERE work_id = ?')
+        .get('w-gc') as { repo: string | null; repo_source: string | null };
+      expect(row).toEqual({ repo: null, repo_source: 'unmapped' });
     } finally {
       db.close();
     }

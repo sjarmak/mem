@@ -288,7 +288,7 @@ def test_batch_clean_room_conditions_with_payload_seam(
     )
     assert tally == {"executed": 4, "skipped": 0, "planned": 0}
     for work_id in ("demo-a", "demo-b"):
-        clean_df = (probe_dir / "tasks" / f"{work_id}.none-clean" / "environment" / "Dockerfile")
+        clean_df = probe_dir / "tasks" / f"{work_id}.none-clean" / "environment" / "Dockerfile"
         assert "rm -rf" in clean_df.read_text(encoding="utf-8")
         memory = probe_dir / "tasks" / f"{work_id}.ours" / "memory" / "MEMORY.md"
         assert "gc-prior-1" in memory.read_text(encoding="utf-8")

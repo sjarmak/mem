@@ -11,7 +11,7 @@ work-audit graph, so retrieval and the memory-bench eval can learn from past
 work without leaking answers. Invariants that must hold:
 
 - **The work-audit graph is the source of truth.** SQLite + FTS5 sidecar at
-  `.mem/store.db` (`src/cli/store.ts`), schema version 5
+  `.mem/store.db` (`src/cli/store.ts`), schema version 6
   (`src/store/schema.ts`). Every projected column is rebuilt from the
   `work_records.record` JSON on upsert — never write projections directly.
 - **The `lessons` table is append-only** — deliberately no foreign key to

@@ -24,7 +24,9 @@ GEN_AI_SYSTEM = "anthropic"
 
 
 def _span_to_dict(span: ReadableSpan) -> dict[str, Any]:
-    ctx = span.get_span_context()  # type: ignore[no-untyped-call]  # OTel ships no stubs here
+    ctx = span.get_span_context()
+    if ctx is None:
+        raise ValueError(f"span {span.name!r} has no span context")
     parent = span.parent
     return {
         "name": span.name,

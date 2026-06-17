@@ -576,9 +576,12 @@ def _pinned_stream(model: str = "claude-sonnet-4-6", version: str = "2.1.173") -
         "model": model,
         "claude_code_version": version,
     }
-    return "\n".join(
-        json.dumps(event) for event in (decoy, init, {"type": "result", "is_error": False})
-    ) + "\n"
+    return (
+        "\n".join(
+            json.dumps(event) for event in (decoy, init, {"type": "result", "is_error": False})
+        )
+        + "\n"
+    )
 
 
 def test_assert_run_pins_accepts_matching_stream() -> None:
