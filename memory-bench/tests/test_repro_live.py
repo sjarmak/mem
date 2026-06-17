@@ -14,6 +14,8 @@ import pytest
 
 from membench.bundle.replay import CallReplay, ReplayOutcome, ReplayResult
 from membench.harbor.repro_live import (
+    MEM_TEST_CONFIG,
+    RIG_TEST_CONFIGS,
     LiveReproRunner,
     RigTestConfig,
     WorkspaceTests,
@@ -365,6 +367,96 @@ def test_setup_failure_credits_zero_files(clone: Path, tmp_path: Path) -> None:
         outcome = runner.run(bundle=bundle, candidate_diff={"frontend/src/app.ts": IMPL_DIFF})
     assert not outcome.passed and outcome.error is None
     assert outcome.tests_passed == 0 and outcome.tests_total == 1 and outcome.test_ratio == 0.0
+
+
+def test_mem_rig_is_registered() -> None:
+    """The `mem` rig is wired into the default config map, so the runner no longer
+    hard-errors `no test config for rig 'mem'` -- the mem-us6j oracle-soundness
+    blocker (mem-qarg wave-2 triage: "infra gap, not a broken oracle")."""
+    assert RIG_TEST_CONFIGS["mem"] is MEM_TEST_CONFIG
+
+
+def test_mem_rig_config_routes_ts_and_python_suites(tmp_path: Path) -> None:
+    """The real MEM_TEST_CONFIG routes a root-TS gold test to `npx vitest run` from the
+    worktree root and a memory-bench gold test to `python -m pytest <path>` from
+    memory-bench/ -- the two surfaces the mem rig actually carries. npm/pip/test argvs
+    are stubbed to exit 0 (no JS/Python toolchain needed); git runs for real so the
+    worktree + gold-diff apply are exercised end-to-end."""
+    repo = tmp_path / "clone"
+    (repo / "tests").mkdir(parents=True)
+    (repo / "memory-bench" / "tests").mkdir(parents=True)
+    _git(repo, "init", "-q")
+    _git(repo, "config", "user.email", "t@t")
+    _git(repo, "config", "user.name", "t")
+    (repo / "tests" / "cli.test.ts").write_text("// base\n", encoding="utf-8")
+    (repo / "memory-bench" / "tests" / "test_x.py").write_text("# base\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "base")
+    commit = _git(repo, "rev-parse", "HEAD").strip()
+
+    ts_gold = (
+        "diff --git a/tests/cli.test.ts b/tests/cli.test.ts\n"
+        "--- a/tests/cli.test.ts\n+++ b/tests/cli.test.ts\n"
+        "@@ -1 +1 @@\n-// base\n+// gold\n"
+    )
+    py_gold = (
+        "diff --git a/memory-bench/tests/test_x.py b/memory-bench/tests/test_x.py\n"
+        "--- a/memory-bench/tests/test_x.py\n+++ b/memory-bench/tests/test_x.py\n"
+        "@@ -1 +1 @@\n-# base\n+# gold\n"
+    )
+    bundle = TaskBundle(
+        work_id="mem-us6j",
+        rig="mem",
+        issue_title="Fix the thing",
+        issue_body="",
+        trace_ref="/tmp/mem-trace.jsonl",
+        output=ReplayResult(
+            calls=(),
+            file_diffs=(
+                ("tests/cli.test.ts", ts_gold),
+                ("memory-bench/tests/test_x.py", py_gold),
+            ),
+            replay_success_rate=1.0,
+        ),
+        env=BundleEnv(repo="mem", base_commit=commit, base_image="node:22-bookworm"),
+        loo_excluded_work_ids=("mem-us6j",),
+    )
+
+    recorded: list[tuple[Path, tuple[str, ...]]] = []
+
+    def runner(argv, **kwargs):  # type: ignore[no-untyped-def]
+        if argv and argv[0] == "git":
+            return subprocess.run(argv, **kwargs)
+        recorded.append((Path(kwargs["cwd"]), tuple(argv)))
+        return subprocess.CompletedProcess(list(argv), 0, "", "")
+
+    with LiveReproRunner(
+        rig_repos={"mem": repo},
+        configs={"mem": MEM_TEST_CONFIG},
+        worktree_root=tmp_path / "worktrees",
+        runner=runner,
+    ) as r:
+        outcome = r.run(bundle=bundle, candidate_diff={})
+
+    assert outcome.passed
+    assert outcome.tests_passed == 2 and outcome.tests_total == 2
+
+    vitest = [(cwd, argv) for cwd, argv in recorded if "vitest" in argv]
+    pytest_runs = [(cwd, argv) for cwd, argv in recorded if argv[:3] == ("python3", "-m", "pytest")]
+    assert len(vitest) == 1
+    cwd, argv = vitest[0]
+    # Root TS suite: stripped bare filename, run from the worktree root (repro-*).
+    assert argv == ("npx", "vitest", "run", "cli.test.ts")
+    assert cwd.name.startswith("repro-")
+    assert len(pytest_runs) == 1
+    cwd, argv = pytest_runs[0]
+    # Python suite: path relative to memory-bench/, run from memory-bench/.
+    assert argv == ("python3", "-m", "pytest", "tests/test_x.py")
+    assert cwd.name == "memory-bench"
+    # Install seeded both toolchains once.
+    argvs = [a for _, a in recorded]
+    assert ("npm", "ci", "--no-audit", "--no-fund") in argvs
+    assert ("python3", "-m", "pip", "install", "-e", "memory-bench[dev]") in argvs
 
 
 def test_close_removes_cached_worktrees(clone: Path, tmp_path: Path) -> None:
