@@ -5,7 +5,7 @@ and arms, and where would concurrent execution (or a shared real backend)
 cross-contaminate results? This audit **gates real-arm provisioning** of the
 competitive arms (mem0, A-MEM, NAT, Graphiti; mem-lvp.5). It does *not* gate
 their CI fakes, which are in-process, hermetic, and already green. Companion to
-`docs/competitive-arms-integration.md` §5–6 and `ARCHITECTURE.md` Decision 11.
+`docs/competitive-arms-integration.md` §5–6 and `docs/architecture-decisions.md` Decision 11.
 
 > **Bottom line.** Execution is single-process, single-threaded, fully sequential
 > today, so no contamination is *currently* reachable. But isolation rests on a

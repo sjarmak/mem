@@ -3,7 +3,7 @@
 Scope: how mem0, Zep, A-MEM, and the NVIDIA **NeMo Agent Toolkit (NAT)** plug
 into the membench harness as competitive arms (mem-lvp), how they compare to
 `ours` (retrieval-v1), and the order to build them in. Companion to
-`ARCHITECTURE.md` (Decision 11, the uniform-arm contract) and
+`docs/architecture-decisions.md` (Decision 11, the uniform-arm contract) and
 `.gc/memory-eval-harness-spec.md` §14.
 
 > **The seam already exists.** Every arm implements one 3-method contract
