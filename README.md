@@ -13,8 +13,8 @@ Most agentic-memory work learns from a single agent's session prose. A
 multi-agent orchestrator produces something richer: a continuous stream of
 real work where every unit carries a lifecycle label (created, started,
 closed) and a full trace of how it got there, so the labels come from work
-that actually happened rather than from synthetic tasks. One caveat shapes the
-whole evaluation design. External outcome linkage is sparse in practice
+that actually happened rather than from synthetic tasks. One caveat constrains
+the whole evaluation design: external outcome linkage is sparse in practice
 (roughly 1 in 6,000 records carries a PR reference), so the benchmark's oracles
 rest on the lifecycle labels, the traces themselves, and trace-derived gold
 diffs, not on a merged-PR or CI signal.
