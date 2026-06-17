@@ -11,7 +11,7 @@ into the membench harness as competitive arms (mem-lvp), how they compare to
 > record set, the leave-one-out boundary, scope, and telemetry. The factory's
 > `_DEFERRED` registry already names `nat`, `mem0`, `a-mem`, `graphiti` as
 > pending arms. Adding one is a ~90-line class + a factory entry, with
-> `filesystem_system.py` as the template — **not** a re-architecture.
+> `filesystem_system.py` as the template, **not** a re-architecture.
 
 ## 1. The contract an arm implements
 
@@ -30,9 +30,9 @@ class MemorySystem(ABC):
 `RetrievalRequest` carries **both** retrieval families so one signature serves
 all arms:
 
-- `query_text` + `requested_ids` — the **id/semantic** path (oracle, filesystem,
+- `query_text` + `requested_ids`: the **id/semantic** path (oracle, filesystem,
   and every competitive arm's native `search(query, top_k)`).
-- `query_work` + `scope` — the **failure-triggered** path `ours` uses, under the
+- `query_work` + `scope`: the **failure-triggered** path `ours` uses, under the
   harness-owned D6/D8 LOO boundary.
 
 Every arm's output is re-checked against the boundary by
@@ -58,8 +58,8 @@ agentic dev-work?*
 NAT is explicitly extensible ("Adding a Memory Provider"). We can ship
 retrieval-v1 as a `nvidia-nat-mem` provider plugin implementing NAT's
 `nat.memory.interfaces`, so NAT users get our failure-triggered memory as a
-drop-in backend next to mem0/redis/zep. This is the inverse adapter — our store
-behind *their* interface — and is the lowest-cost way to get the framework in
+drop-in backend next to mem0/redis/zep. This is the inverse adapter (our store
+behind *their* interface) and is the lowest-cost way to get the framework in
 front of an existing agent-framework audience.
 
 The two share a translation layer (our `MemoryEvent`/`RetrievalRequest` ↔ NAT's
@@ -80,7 +80,7 @@ inbound NAT arm de-risks the outbound provider and vice versa.
 space: no LLM on the read path, no embedder, ranking is explicit tiered
 arithmetic (signature → error-class → FTS). Every system above is
 **semantic/embedding** retrieval with an LLM in the write path. So the headline
-comparison is not "which retriever is better" in the abstract — it is **"does a
+comparison is not "which retriever is better" in the abstract; it is **"does a
 heavyweight semantic memory layer earn its cost over a cheap deterministic one on
 recurring build/test/lint failures?"** That framing is the contribution; the
 arms exist to make it measurable, and the precision/efficiency guards (D10) are
@@ -89,11 +89,11 @@ what keep "just retrieve everything" from winning.
 ## 4. The real blocker is infra, not adapter code
 
 Every competitive arm needs a **local embedding model** (and usually a local
-LLM) to honor the scix no-paid-API constraint — which is exactly why the mem-lvp
+LLM) to honor the scix no-paid-API constraint, which is exactly why the mem-lvp
 scope says "direct self-hosted" and "Redis/custom local backend." That shared
 dependency, not the ~90 lines per adapter, is the bulk of the work.
 
-**Idiomatic way to land arms before the infra exists** — mirror how
+**Idiomatic way to land arms before the infra exists:** mirror how
 `distill/distiller.ts` injects its `DistillRunner` and how `filesystem_system.py`
 defaults to an in-process dict:
 
@@ -113,7 +113,7 @@ dependency per arm.
 
 A spec-research pass over the four systems' *real* current APIs (mem0 main, NAT
 `MemoryEditor`, `graphiti-core`, A-MEM) forced three corrections to the naive
-seam before any arm was built — the shipped `SemanticMemoryClient`
+seam before any arm was built. The shipped `SemanticMemoryClient`
 (`membench/memory_systems/semantic_base.py`) is:
 
 ```python
@@ -123,13 +123,13 @@ class SemanticMemoryClient(Protocol):              # sync; async backends hold a
     def clear(self, *, scope: str) -> None: ...
 ```
 
-- **`scope` (= `ctx.trial_id`)** — every backend isolates trials by a native key
+- **`scope` (= `ctx.trial_id`):** every backend isolates trials by a native key
   (mem0 `user_id`, NAT `user_id`, Graphiti `group_id`, A-MEM collection), so the
   arm scopes instead of dropping the store between trials.
-- **`store` returns the backend-minted id** — mem0/A-MEM/Graphiti mint their own
+- **`store` returns the backend-minted id:** mem0/A-MEM/Graphiti mint their own
   UUIDs and ignore the caller's `memory_id`; payloads key off the returned id, and
   the write event records `target_ids=[requested]` vs `written_ids=[assigned]`.
-- **`SemanticHit.score` is `float | None`** — direction varies (cosine vs L2
+- **`SemanticHit.score` is `float | None`:** direction varies (cosine vs L2
   distance); the *client* normalizes to higher-is-better, and the base trusts list
   order when score is `None` (Graphiti).
 
@@ -144,29 +144,29 @@ were on the table: (a) a Cypher `DETACH DELETE` over the trial's `group_id`,
 which would force a driver `execute_query` hook onto the `SemanticMemoryClient`
 Protocol; or (b) mint a fresh, unique `group_id` per trial and never reuse it.
 
-**Decision: adopt (b) — fresh unique `group_id` per trial, never reused.**
+**Decision: adopt (b), fresh unique `group_id` per trial, never reused.**
 Rationale:
 
-1. **No Protocol widening** — keeps the seam at `store`/`query`/`clear` only; no
+1. **No Protocol widening:** keeps the seam at `store`/`query`/`clear` only; no
    driver `execute_query` hook leaks onto `SemanticMemoryClient`.
-2. **Zero cross-trial leakage** — each trial writes into a brand-new `group_id`
+2. **Zero cross-trial leakage:** each trial writes into a brand-new `group_id`
    namespace, so no prior-trial nodes are reachable by construction.
-3. **Simplest fake** — the CI fake just keys by `group_id` exactly like the real
+3. **Simplest fake:** the CI fake just keys by `group_id` exactly like the real
    client; no destructive-delete path to emulate.
 
 The per-trial namespace is `group_id = <run_id>:<ctx.trial_id>`, consistent with
 the mem-lvp.12 concurrency-isolation audit: rec.2 (inject the store/namespace
 per-run rather than sharing process-global state) and rec.4 (`trial_id` must be
 globally unique). **Consequence for mem-lvp.4:** Graphiti's `clear(scope)` is a
-no-op (or, equivalently, mints the next fresh `group_id`) — there is no
+no-op (or, equivalently, mints the next fresh `group_id`); there is no
 destructive purge, because isolation comes from the never-reused namespace, not
 from deletion.
 
 ### 5c. AsyncClientBridge — the sync↔async seam (mem-lvp.10, LANDED)
 
 The Protocol in §5 is **sync** on purpose, so the seam and the deterministic
-fakes never go async. But two backends are async-native — NAT's `MemoryEditor`
-and `graphiti-core` — so they need a sync adapter. That adapter is
+fakes never go async. But two backends are async-native (NAT's `MemoryEditor`
+and `graphiti-core`), so they need a sync adapter. That adapter is
 `AsyncClientBridge` (`membench/memory_systems/async_bridge.py`): it holds one
 persistent asyncio event loop and exposes `run(coro)`, so a concrete async client
 calls `bridge.run(self._editor.add_items(...))` and satisfies the sync
@@ -176,7 +176,7 @@ Three design choices are load-bearing, and all trace back to the mem-lvp.12
 concurrency audit:
 
 - **One loop per bridge instance**, created with `asyncio.new_event_loop()` and
-  held for the instance's lifetime — never a module-global or shared loop (audit
+  held for the instance's lifetime, never a module-global or shared loop (audit
   failure mode #5: a shared loop is both a global serialization point and a
   shared-connection contamination vector across trials/arms).
 - **Never `asyncio.set_event_loop()`.** The loop stays off the thread-global
@@ -198,7 +198,7 @@ tracked as a follow-up (mem-lvp.13).
 ## 6. Build order & parallel front
 
 `mem-lvp.1` (base + Protocol) was the only true serialization point. **All four
-competitive arms have now landed and closed** — both sync arms, the async infra,
+competitive arms have now landed and closed**: both sync arms, the async infra,
 and both async arms (✓ = closed):
 
 ```
@@ -211,9 +211,9 @@ mem-lvp.1 ✓ (base) ─┬─> .2  mem0      ✓ (sync, lightest, independent)
 ```
 
 Sub-beads carved from the research, now resolved: **.9** (A-MEM, split out of the
-old `.4`) ✓, **.10** (`AsyncClientBridge`, unblocks the two async arms — see §5c)
-✓, **.11** (Graphiti reset-strategy decision — fresh `group_id` per trial, §5b) ✓,
-**.12** (concurrency-isolation audit — gates *real-arm* provisioning of mem0/A-MEM,
+old `.4`) ✓, **.10** (`AsyncClientBridge`, unblocks the two async arms, see §5c)
+✓, **.11** (Graphiti reset-strategy decision: fresh `group_id` per trial, §5b) ✓,
+**.12** (concurrency-isolation audit, gates *real-arm* provisioning of mem0/A-MEM,
 not their CI fakes) ✓. Every arm's CI is model-free/network-free via the fake
 client, so the Ollama/Qdrant/Redis/FalkorDB/Chroma infra only gates *real-arm
 provisioning*, downstream of green CI.
@@ -235,7 +235,7 @@ injection for A-MEM's Chroma collection.
 
 §4 named the real blocker: every semantic arm needs a **local embedder** (and
 usually a **local LLM**) to honor the scix no-paid-API constraint, and that shared
-dependency — not the per-adapter code — is the bulk of the work. mem-lvp.5 lands it
+dependency, not the per-adapter code, is the bulk of the work. mem-lvp.5 lands it
 as **one source of truth** so the arms can't drift to different (or paid) models:
 `membench/memory_systems/local_stack.py` →
 [`LocalModelStack`](../memory-bench/membench/memory_systems/local_stack.py).
@@ -256,9 +256,9 @@ Every field is env-overridable (`MEMBENCH_LOCAL_CHAT_MODEL`,
 change. Each arm's **real-client factory** maps the stack onto its backend config
 via a small pure function, unit-tested with no SDK installed:
 
-- **mem0** → `build_mem0_config(store_path, stack=…)` — Qdrant + Ollama embedder +
+- **mem0** → `build_mem0_config(store_path, stack=…)`: Qdrant + Ollama embedder +
   Ollama LLM, the model names sourced from the stack (not hardcoded).
-- **A-MEM** → `build_amem_kwargs(scope, stack=…)` — pins `llm_backend="ollama"`.
+- **A-MEM** → `build_amem_kwargs(scope, stack=…)`: pins `llm_backend="ollama"`.
   **This closes a real no-paid-API leak:** A-MEM defaults `llm_backend="openai"`, so
   the pre-mem-lvp.5 factory silently routed ingest through a *paid* OpenAI call.
 - **NAT** → its `RedisEditor` already embeds locally via sentence-transformers (no
@@ -276,7 +276,7 @@ via a small pure function, unit-tested with no SDK installed:
    controlled confound, not a result). `LocalModelStack.telemetry_dict()` is that
    pinned identity, identical across every arm.
 
-The module is **config only** — no SDK import, no network at construction — so
+The module is **config only** (no SDK import, no network at construction), so
 importing it and the whole suite stays model-free (CI never calls a paid API).
 `preflight` is the one network method, called explicitly before a real run with an
 injectable fetcher so the readiness logic is itself unit-tested with no live daemon.

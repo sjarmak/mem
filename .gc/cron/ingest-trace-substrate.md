@@ -10,9 +10,9 @@ The archival step is the time-sensitive one: the transcript corpus is a
 ~6-week rolling window (Claude Code prunes old session jsonl), so every day of
 cron delay permanently loses the oldest bead-linked sessions.
 
-The exec is `.gc/scripts/ingest-trace-substrate.sh` — mechanical, no LLM. It
+The exec is `.gc/scripts/ingest-trace-substrate.sh`: mechanical, no LLM. It
 builds into a scratch store SEEDED from the live one (the dolt spine compacts
-over time, so an unseeded build sheds every compacted bead's records —
+over time, so an unseeded build sheds every compacted bead's records,
 mem-qw5), refuses to swap if zero traces resolved (the wrong-cwd failure mode;
 only reachable on an unseeded first build), carries the append-only lessons
 table across the swap, and appends a coverage-delta line to
@@ -26,7 +26,7 @@ Nightly at 03:17 local (off the :00 mark so the fleet doesn't synchronize).
 
 ## Register it (pick one)
 
-**System crontab — the only form that actually fires unattended.** A live agent
+**System crontab: the only form that actually fires unattended.** A live agent
 session is not required:
 
 ```cron
@@ -34,7 +34,7 @@ session is not required:
 ```
 
 (The explicit PATH matters: the script needs `uv`, `node`, `gc`, `dolt`, and
-`jq`, which live in `~/.local/bin` — not on cron's default PATH.)
+`jq`, which live in `~/.local/bin`, not on cron's default PATH.)
 
 ```bash
 ( crontab -l 2>/dev/null; \
@@ -67,6 +67,6 @@ Each run appends one line:
 2026-06-11T03:17:00Z OK records=6691 with_trace=1207 trace_errors=842 with_base_commit=331 multi_session=1727 join_multi=1773 archive={"archived":12,...} delta={"records":0,"with_trace":4,...}
 ```
 
-`delta: none` (all-zero) on a re-run is expected — the substrate is already
+`delta: none` (all-zero) on a re-run is expected; the substrate is already
 complete. An `ABORT` line means no transcripts resolved and the store was left
 untouched; check that the exec ran from the gas-city checkout.

@@ -1,6 +1,6 @@
 # mem-g6a — Graded quality metric design (EB/CSB-informed)
 
-Design only — no wiring lands until Stephanie signs off. Scoped 2026-06-12 against
+Design only; no wiring lands until Stephanie signs off. Scoped 2026-06-12 against
 the mem-apg.3 grid results and the grading code in EnterpriseBench and
 CodeScaleBench. The recommendation is at the bottom; everything above it is the
 evidence and the options.
@@ -11,20 +11,20 @@ The quality guard in the mem-apg.3 grid is gold-test reproduction: apply the
 agent's harvested diff to a fresh checkout, apply the gold test files on top, run
 them, exit code 0 = pass (`membench/harbor/repro_live.py:99-193`, scored to
 1.0/0.0 in `membench/grading/dual_verifier.py:219`). The grid outcome
-(`docs/mem-apg.3-grid.md`): **repro pass none 1/9, oracle 1/9 — the same single
-bundle (e9y0d), Δ = 0 on every pair.** The instrument is honest but has almost no
+(`docs/mem-apg.3-grid.md`): **repro pass none 1/9, oracle 1/9 (the same single
+bundle (e9y0d), Δ = 0 on every pair).** The instrument is accurate but has almost no
 dynamic range between rungs on this pool: 8 of 9 bundles score 0–0 and contribute
 nothing to the quality axis, so the headline degrades to "quality flat, efficiency
 clear" no matter what the memory system does in the failing-but-improving region.
 
 That failing region is exactly where a memory intervention should first show up:
-an agent that gets *closer* — right files, right shape, one missed edge case —
+an agent that gets *closer* (right files, right shape, one missed edge case)
 scores identically to an agent that did nothing. Binary pass/fail is the right
 *anchor* (ungameable, SWE-bench-shaped) and the wrong *only* signal.
 
 Constraints fixed by the bead:
 
-1. Gold-test repro stays as the floor/anchor — never replaced, never diluted.
+1. Gold-test repro stays as the floor/anchor, never replaced, never diluted.
 2. New signals are additive layers, each independently reported.
 3. ZFC: semantic judgment is delegated to a model; everything in membench code is
    mechanical arithmetic over model or test outputs.
@@ -43,7 +43,7 @@ Constraints fixed by the bead:
 
 Two consequences. First, most of the graded metric is *promotion and wiring*, not
 new machinery. Second, the reporting layer already does the right thing (per-bundle
-paired deltas, never pooled means alone — the mem-75t.7.6 lesson), so a new signal
+paired deltas, never pooled means alone; the mem-75t.7.6 lesson), so a new signal
 only has to land in the per-run result dict to be reported correctly.
 
 ## 3. Prior art: what EB and CSB actually did
@@ -55,10 +55,10 @@ only has to land in the per-run result dict to be reported correctly.
   score is the weighted sum (`lib/eb_verify/scoring.py:44-52`, `:194-202`). The
   documented driver (`docs/LEGACY_CSB_ASSESSMENT.md`): single monolithic binary
   checkpoints on a 90.5%-hard pool produced all-zero/all-one outcomes with no
-  stratification — the exact pathology our 8-of-9 zero-zero pairs reproduce.
+  stratification, the exact pathology our 8-of-9 zero-zero pairs reproduce.
 - **The LLM judge is a ceiling, not a bonus:** `final = min(grep_score,
   judge_score)` (`lib/eb_verify/runner.py:340-347`). The judge can only take away
-  points from the mechanical signal, never add — gaming the judge gains nothing.
+  points from the mechanical signal, never add; gaming the judge gains nothing.
 - **Judge anti-gaming** (`lib/eb_verify/judge/prompts.py:9-55`): coarse 3-point
   scale (0/0.5/1.0); answers must cite code-specific evidence (paths, symbol
   names) or score low; structured JSON with quoted evidence + confidence;
@@ -80,7 +80,7 @@ only has to land in the per-run result dict to be reported correctly.
   (GPT-4o judging Claude agents) to avoid same-family bias; preamble stripping so
   the judge never sees harness/condition context (`run_judge.py:352-408`);
   optional multi-round majority vote with median tie-break
-  (`judge/engine.py:252-299`); **kappa calibration as a gate** — Cohen's/Fleiss'
+  (`judge/engine.py:252-299`); **kappa calibration as a gate**: Cohen's/Fleiss'
   kappa computed against reference labels, κ < 0.4 = uncalibrated, do not trust
   (`judge/agreement.py`).
 - **Validity gate before any scoring:** the gold answer must score 1.0 and the
@@ -88,29 +88,29 @@ only has to land in the per-run result dict to be reported correctly.
   (`docs/ORG_CALIBRATION.md:75-98`).
 - **Documented limitation we inherit:** diff similarity penalizes
   functionally-equivalent but structurally-different fixes
-  (`SCORING_SEMANTICS.md:69`) — fine as a bounded sub-signal, wrong as a gate.
+  (`SCORING_SEMANTICS.md:69`); fine as a bounded sub-signal, wrong as a gate.
 
 ## 4. Candidate signals
 
-**S0 — gold-test repro (anchor, unchanged).** Binary, ungameable, already live.
+**S0: gold-test repro (anchor, unchanged).** Binary, ungameable, already live.
 Everything below exists to add resolution *underneath* it, in the fail region.
 
-**S1 — test-subset partial credit (mechanical).** Today
+**S1: test-subset partial credit (mechanical).** Today
 `LiveReproRunner.run` passes all gold test paths to one runner invocation per
 workspace and gates on exit code, short-circuiting on first workspace failure
 (`repro_live.py:181-190`). Graded variant: invoke per gold-test *file* (no
 short-circuit), score = passed_files / total_files.
 - Pros: same trust class as the anchor (real tests, real checkout); zero new
   semantics; CSB's test-ratio family.
-- Cons: resolution capped by test-file count — bundles whose gold diff carries one
+- Cons: resolution capped by test-file count; bundles whose gold diff carries one
   test file gain nothing (granularity 1–50 in CSB's experience); ~k× test runtime
   (mitigated by the existing worktree cache, `repro_live.py:197`); per-test-*case*
   resolution would need per-workspace JSON reporters (vitest `--reporter=json`,
-  pytest `--json-report`) — real but rig-specific plumbing.
-- Verdict: **include.** Cheapest honest resolution gain; per-case parsing deferred
+  pytest `--json-report`); real but rig-specific plumbing.
+- Verdict: **include.** Cheapest resolution gain; per-case parsing deferred
   until per-file proves too coarse on real data.
 
-**S2 — bounded diff similarity (mechanical, already built).** Promote
+**S2: bounded diff similarity (mechanical, already built).** Promote
 `score_probe_direct` (`probe_direct.py:123`) from error-fallback to
 always-computed side signal on every run.
 - Pros: free (the harvested candidate diff and gold diff are already in hand);
@@ -120,7 +120,7 @@ always-computed side signal on every run.
   without correctness).
 - Verdict: **include as diagnostic with a small bounded weight, never a gate.**
 
-**S3 — guarded LLM judge (semantic).** Rubric-scored judgment of the harvested
+**S3: guarded LLM judge (semantic).** Rubric-scored judgment of the harvested
 diff against the bundle's issue text and gold diff. All semantic judgment lives in
 the model (ZFC); membench code only validates the JSON shape and does arithmetic.
 Controls, composed from EB + CSB:
@@ -137,54 +137,54 @@ Controls, composed from EB + CSB:
 
 Judge backend: `OssLlmJudge` (`judge.py:207`, self-hosted OpenAI-compatible
 endpoint) is the D4/D16-compliant default. A Claude-in-Harbor OAuth run is a
-cost-free alternative backend but is same-family with the agent under test —
+cost-free alternative backend but is same-family with the agent under test, so
 EB's bias warning applies; if used, the κ-calibration gate is mandatory, not
 advisory. **Judge model choice is a sign-off item.**
 
-**S4 — artifact comprehension F1 (`score_artifact`).** Already reported. Stays a
+**S4: artifact comprehension F1 (`score_artifact`).** Already reported. Stays a
 *separate axis* (comprehension, not solution quality); not folded into the
 composite.
 
 Signals considered and rejected:
-- **Lint/build pass as a quality term** — measures the repo's toolchain, not the
+- **Lint/build pass as a quality term**: measures the repo's toolchain, not the
   task; gold diffs already presuppose a building tree.
 - **Transcript-derived "effort" signals** (turns, tool mix) in the quality
-  composite — they are the *efficiency* axis; mixing them into quality would let
+  composite: they are the *efficiency* axis; mixing them into quality would let
   a cheaper failure outscore a costlier near-pass.
-- **Per-criterion learned weights** — no labeled data to fit them; revisit after
+- **Per-criterion learned weights**: no labeled data to fit them; revisit after
   the calibration slice exists.
 
 ## 5. Composite options
 
-**Option A — anchored weighted sum.**
+**Option A: anchored weighted sum.**
 `Q = 1.0 if repro_pass else λ·(w1·test_ratio + w2·diff_sim + w3·judge)` with
 λ ≈ 0.8 capping the fail region below any true pass.
 *Pros:* one headline number; monotone in every signal; pass strictly dominates.
-*Cons:* w1/w2/w3 are unfounded today — picking them before calibration data
+*Cons:* w1/w2/w3 are unfounded today; picking them before calibration data
 exists is weight-gaming ourselves; ZFC-adjacent smell (hardcoded thresholds for a
 semantic blend).
 
-**Option B — EB-style min-gating.**
+**Option B: EB-style min-gating.**
 `Q = min(mechanical, judge)` where mechanical = anchored blend of S1+S2.
 *Pros:* judge strictly anti-gaming (can only subtract).
-*Cons:* discards the judge's upside in exactly our common case — when mechanical
+*Cons:* discards the judge's upside in exactly our common case; when mechanical
 signals are near 0 but the diff is semantically close, `min` stays ~0 and the
 flatness problem survives. Built for EB's "verify claimed evidence" shape, not
 ours.
 
-**Option C — score vector, no composite (yet).**
+**Option C: score vector, no composite (yet).**
 Report `(repro_pass, test_ratio, diff_sim, judge, artifact_f1)` per run; the
 existing pairing machinery (`paired_deltas` omits absent metrics, never imputes)
 yields per-signal paired deltas per bundle; bundles are *ordered* lexicographically
 (repro pass first, then test_ratio, then the bounded graded tail) when a ranking is
 needed.
-*Pros:* most honest; no invented weights; matches the house reporting doctrine
+*Pros:* most faithful to the data; no invented weights; matches the house reporting doctrine
 (per-bundle deltas, pooled means distrusted); every signal's calibration is
 visible separately.
 *Cons:* no single headline number; lexicographic ordering can over-trust
 test_ratio granularity on 1-test-file bundles.
 
-### Recommended: C now, A later — staged.
+### Recommended: C now, A later, staged.
 
 1. **Phase 1 (next grid run):** compute the vector. S1 per-test-file ratio, S2
    always-on diff-sim, S4 unchanged. S3 runs but is **report-only** (excluded from
@@ -196,7 +196,7 @@ test_ratio granularity on 1-test-file bundles.
 3. **Phase 3 (only if a single number is demanded for mem-apg.4 aggregation):**
    fit Option A's weights against the Phase-2 labels and freeze them with
    provenance (weights + label set + κ recorded in the summary). Until then the
-   composite simply does not exist — absence is more honest than an arbitrary one.
+   composite simply does not exist; absence is more truthful than an arbitrary one.
 
 Validity gates precede all phases, per CSB: per bundle, the gold diff itself must
 score `repro_pass=True, test_ratio=1.0` and the empty diff
@@ -211,7 +211,7 @@ excluded (this also catches the km0wj-style null-repro bundles mechanically).
 - Semantic, delegated to a model: every quality judgment in S3 (the rubric
   criteria themselves). No keyword/regex semantic detection anywhere in the layer.
 - Documented exception (per the ZFC carve-outs): diff similarity is a *calibrated
-  mechanical comparison*, not a semantic judgment — it is bounded, never gating,
+  mechanical comparison*, not a semantic judgment; it is bounded, never gating,
   and its known equivalent-fix bias is carried in the report text.
 
 ## 7. Integration sketch (for sizing, not for building now)

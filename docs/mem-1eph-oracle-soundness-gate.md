@@ -6,7 +6,7 @@ Two-stage grid admission over the materialized `.mem/bundles/` pool: `fanout_sco
 
 - pool: **10** bundles → **3 admitted** (grid-ready, sound oracle), the defensible denominator.
 - stage 1 (scope): **9 admitted**, **1 rejected**; rejection reasons {'issue_fanout_scope_mismatch': 1}.
-- stage 2 (oracle): **9** scope-admitted bundles gated; **3 sound**, **6 broken** (gold non-reproducing or empty-passing) — rejected before consuming an N.
+- stage 2 (oracle): **9** scope-admitted bundles gated; **3 sound**, **6 broken** (gold non-reproducing or empty-passing), rejected before consuming an N.
 - scope-judged (fanout ≥ 2): **3**; the rest were singletons (fanout < 2) admitted without review.
 
 ## Per-bundle admission provenance

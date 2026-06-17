@@ -2,13 +2,13 @@
 
 Run 2026-06-12. The headline grid per the resolved decision (mem-bfk → dec-gck
 option a): **efficiency-vs-information is the sole mem-apg axis**, scored on task
-bundles with the dual verifier (mem-75t.7.5) — efficiency leg (tokens / turns /
-tool calls) as headline, gold-test reproduction as the quality guard — reported as
+bundles with the dual verifier (mem-75t.7.5), efficiency leg (tokens / turns /
+tool calls) as headline, gold-test reproduction as the quality guard, reported as
 **per-bundle paired deltas, never pooled means** (mem-75t.7.6 gate instruction).
 
 Pool: the 9 fanout-guard-admitted bundles (`.mem/grid-ready-pool.json`,
 mem-75t.7.7; e29gw rejected). Agent runs: the gate probe's cached real executions
-(20 Docker/OAuth Claude runs, 2026-06-11) — this grid adds NEW scoring, not new
+(20 Docker/OAuth Claude runs, 2026-06-11). This grid adds NEW scoring, not new
 agent runs: every (bundle, condition) candidate was re-harvested from its persisted
 transcript and scored by the dual verifier with the **live gold-test repro runner**
 (`membench/harbor/repro_live.py`, built this session). Artifacts:
@@ -44,13 +44,13 @@ confound: the oracle arm burned 42k output tokens and edited nothing.
 
 Aggregates (read direction per metric; medians less km0wj-dominated than means):
 output tokens median **−542** (oracle cheaper on 6/9), turns median **+5** (oracle
-fewer on 4/9), mean Δout-tokens +4,895 — dominated by km0wj/zhy00/tkhkg where the
+fewer on 4/9), mean Δout-tokens +4,895, dominated by km0wj/zhy00/tkhkg where the
 hint induced *more* work. The effect is **bundle-conditional in both magnitude and
 sign**, exactly the .7.6 finding, now confirmed under dual-verifier scoring.
 
 ## Quality guard: gold-test reproduction is FLAT across arms
 
-- Repro pass: **none 1/9, oracle 1/9 — the same bundle (e9y0d), Δ = 0 on every
+- Repro pass: **none 1/9, oracle 1/9, the same bundle (e9y0d), Δ = 0 on every
   pair.** The cheap file-list rung neither buys nor costs gold-test quality
   anywhere in the pool.
 - The guard therefore holds in both directions: no quality regression hides
@@ -58,7 +58,7 @@ sign**, exactly the .7.6 finding, now confirmed under dual-verifier scoring.
   information rung moves on this pool is **where the effort goes** (tokens/turns),
   not whether the gold tests pass.
 - e9y0d passing on BOTH arms (including zero-memory) plus 8/9 failing on both
-  says gold-test repro has little *headroom between these two rungs* — the
+  says gold-test repro has little *headroom between these two rungs*: the
   none-rung agent on this rig already reads the issue text well enough that a bare
   file list cannot flip test outcomes. This echoes the .7.6 provisional read
   ("quality flat, efficiency clear") with a harder instrument.
@@ -80,11 +80,11 @@ headline artifact at this ladder depth is the per-bundle paired-delta table abov
 
 ## What unlocks the next rungs
 
-1. **ours** — a lessons distiller over the work-audit corpus (D9 lessons are
+1. **ours**: a lessons distiller over the work-audit corpus (D9 lessons are
    produced externally and imported; none exists). Follow-up bead: mem-uts.
-2. **builtin / ours+builtin** — mem-whi.
-3. **curated as a distinct rung** — a second oracle backend for consensus.
+2. **builtin / ours+builtin**: mem-whi.
+3. **curated as a distinct rung**: a second oracle backend for consensus.
 
 The grid machinery (`scripts/run_grid.py`, resumable; `bundle_grid.py` +
-`repro_live.py`, tested) takes any new condition the moment its payload exists —
+`repro_live.py`, tested) takes any new condition the moment its payload exists;
 the marginal cost of a new rung is 9 agent runs plus zero new scoring code.

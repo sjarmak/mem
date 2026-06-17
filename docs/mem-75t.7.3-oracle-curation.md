@@ -17,7 +17,7 @@ All admitted bundles are the TS `gascity-dashboard` rig. Only one backend runs i
 | sourcegraph | unavailable | `SRC_ENDPOINT`/`SRC_ACCESS_TOKEN` unset; demo SG does not index the private repo |
 | ast | not built | TS AST resolver deferred (plan §7.3), not built speculatively |
 
-With one backend no symbol can ship 2-backend consensus, so no reference context is admitted: every oracle is exactly its **gold-diff required tier** (`oracle_backends_consensus=("gold_diff",)`). This is the conservative, precision-guarded result the design intends — the mem-75t.7.6 gate measured unfiltered context REGRESSING a bundle, so context enters only when a second backend vouches for it. Reference-context expansion and the empirical Tier-2 quarantine rate are blocked on a second backend (SG indexing the private repo, or the deferred TS-AST resolver).
+With one backend no symbol can ship 2-backend consensus, so no reference context is admitted: every oracle is exactly its **gold-diff required tier** (`oracle_backends_consensus=("gold_diff",)`). This is the conservative, precision-guarded result the design intends; the mem-75t.7.6 gate measured unfiltered context REGRESSING a bundle, so context enters only when a second backend vouches for it. Reference-context expansion and the empirical Tier-2 quarantine rate are blocked on a second backend (SG indexing the private repo, or the deferred TS-AST resolver).
 
 ## Per-bundle
 

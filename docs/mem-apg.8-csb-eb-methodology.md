@@ -3,7 +3,7 @@
 Run 2026-06-13. Carved from mem-e3h2 step 3 (Stephanie, Slack 2026-06-13: "do
 both checks"). This is the **gate** on whether external benchmark clones are ever
 wired as rigs; mem-e3h2 steps 1/2/4/5 (register clones, build base images, admit)
-stay gated on this finding. **Report only — no wiring, no base images, no admit,
+stay gated on this finding. **Report only: no wiring, no base images, no admit,
 read-only on the clones, no corpus mutation.** The legitimacy call per record is
 semantic (ZFC: model judgment over the record's nature, not a regex classifier).
 
@@ -12,13 +12,13 @@ semantic (ZFC: model judgment over the record's nature, not a regex classifier).
 CodeScaleBench (8 candidates), EnterpriseBench (1), scix_experiments (3) surfaced
 in mem-apg.6 as the richest *unwired* multi-session anchored candidates. They are
 attractive precisely because they are benchmark repos structured as
-(issue → failing test → fix) — which is also exactly why their "work records"
+(issue → failing test → fix), which is also exactly why their "work records"
 might be **eval-harness runs, not real development**. Folding them in changes what
 "gas-city's own exhaust" means for the headline, so it must be answered first.
 
 ## Headline
 
-**Rig-specific, not uniform. The records are NOT the benchmarks' own eval runs —
+**Rig-specific, not uniform. The records are NOT the benchmarks' own eval runs;
 they are gas-city `mol-focus-review` agent sessions. But what those sessions
 *worked* splits sharply by rig:**
 
@@ -29,7 +29,7 @@ they are gas-city `mol-focus-review` agent sessions. But what those sessions
 | **scix_experiments** | applied research project ("SciX Agent") | diverse real feature/bugfix/refactor/infra/triage on a live codebase | **real dev-work — the one legitimate candidate** |
 
 The shared structural fact: every candidate's own record is `task_type=formula`,
-`mol-focus-review` — i.e. *our* worker pool running *our* focus-review formula
+`mol-focus-review`, i.e. *our* worker pool running *our* focus-review formula
 against an issue bead in that clone. So legitimacy hinges entirely on the **issue
 bead** each session worked, not on the trace being "an eval run." The evidence
 below reads the issue beads.
@@ -40,7 +40,7 @@ below reads the issue beads.
 
 The clone is a benchmark harness (`base_images/ benchmarks/ calibration/
 observatory/ results/ runs/ schemas/`). 8 of 9 candidates worked siblings of a
-**single epic** `co-wv7` — *"Epic: pin task image digests + dependencies for
+**single epic** `co-wv7`, *"Epic: pin task image digests + dependencies for
 reproducibility"*:
 
 | candidate | issue | task_type | issue title |
@@ -56,11 +56,11 @@ reproducibility"*:
 | co-uv5b | co-7ac | feature | Postrun validation/quarantine for direct-harness + OpenHands paths |
 
 Reading: 8/9 are **mechanical, self-similar digest pins on the benchmark's own
-reproducibility tooling** — Dockerfile/lockfile edits, one template applied per
-image family, all under one fanned-out epic. This is not (issue → failing test →
+reproducibility tooling** (Dockerfile/lockfile edits, one template applied per
+image family, all under one fanned-out epic). This is not (issue → failing test →
 fix) application development; it is maintenance of the eval *harness*. Admitting
-them would (a) measure "does memory help pin a Docker digest" — near-zero
-reasoning surface — and (b) inject 8 near-duplicate convoy siblings, inflating N
+them would (a) measure "does memory help pin a Docker digest" (near-zero
+reasoning surface) and (b) inject 8 near-duplicate convoy siblings, inflating N
 with self-correlated bundles. The lone genuine dev item (`co-uv5b`, a harness
 feature) is real but is N=1.
 
@@ -75,13 +75,13 @@ schemas/`). Both candidates are **eval-process artifacts**:
 | EnterpriseBench-6w1yw | EnterpriseBench-dph | triage | Audit locked N=105 run set: invalid-run triage, per-task run counts, … |
 
 Reading: one is **running a benchmark comparison study**, the other is **auditing
-an eval run set**. Neither is software development — they are eval *orchestration
+an eval run set**. Neither is software development; they are eval *orchestration
 and bookkeeping*. Admitting them would measure memory-on-running-evals: textbook
 headline contamination. EB contributes **0** legitimate dev-work bundles.
 
 ### scix_experiments — 9 candidates, issue task_types {feature: 3, infra: 2, bugfix: 1, refactor: 1, triage: 1, research: 1}
 
-The clone is **not a benchmark** — it is "SciX Agent", an applied scientific
+The clone is **not a benchmark**; it is "SciX Agent", an applied scientific
 literature ingestion/retrieval research project (only `results/` reads as
 benchmark-ish; the rest is `data/ eval/ embed/graph/ingest pipelines,
 checkpoints/`). The candidates worked **distinct, organic issues** across the full
@@ -99,32 +99,32 @@ dev spectrum:
 | scix_experiments-i8ldj | …3eaq | triage | Triage 23 F841 unused-variable lint hits — several look like incomplete error-tracking |
 | scix_experiments-dngi2 | …4skc | research | Valid rerank re-eval: INDUS cross-encoder on real … |
 
-Reading: these are **real development tasks on a live codebase** — feature builds,
+Reading: these are **real development tasks on a live codebase**: feature builds,
 a DDL bugfix, a resolver-bypass refactor, sync-worker infra. Distinct issues
 (not one fanout), heterogeneous scope. This is genuine gas-city dev-work exhaust.
 Caveat: one record (`…4skc`, a rerank re-eval) is eval-adjacent, and scix is
-research-*infrastructure* (vector DBs, ingestion) rather than product code — but
+research-*infrastructure* (vector DBs, ingestion) rather than product code, but
 the lift it would measure is real memory-on-dev lift, not benchmark replay.
 
 ## Verdict per rig (the gate answer)
 
-1. **CodeScaleBench — do NOT wire as a dev-work rig.** Its multi-session
+1. **CodeScaleBench: do NOT wire as a dev-work rig.** Its multi-session
    candidates are overwhelmingly (8/9) self-similar digest-pinning infra on the
    benchmark's *own* reproducibility tooling, under one fanned-out epic. Admitting
    them measures near-zero-reasoning maintenance and inflates N with correlated
    convoy siblings. CSB is itself a benchmark; its "issue→test→fix" shape is the
    eval, not the work. (1 genuine feature exists; N=1 is not a rig.)
-2. **EnterpriseBench — do NOT wire.** Both candidates are eval-run/eval-audit
+2. **EnterpriseBench: do NOT wire.** Both candidates are eval-run/eval-audit
    artifacts (an MCP-lift study, a run-set audit). Pure benchmark-orchestration
    exhaust; 0 legitimate dev-work bundles. Folding EB in would directly
    contaminate the headline with eval-replay.
-3. **scix_experiments — the one legitimate candidate.** Diverse real
+3. **scix_experiments: the one legitimate candidate.** Diverse real
    feature/bugfix/refactor/infra dev-work on a live applied-research codebase, not
    benchmark replay. If any external clone is wired, scix is the defensible one.
    Caveats for Stephanie's call: (a) it is research-infra, not product code; (b)
    ~1/9 records are eval-adjacent and should be screened; (c) wiring still needs a
    per-rig test-toolchain base image (the gold-test floor) before any of these can
-   anchor the graded instrument — unchanged from mem-apg.6.
+   anchor the graded instrument, unchanged from mem-apg.6.
 
 **Net:** the "richest unwired candidates" framing from mem-apg.6 was driven by CSB
 (8) and scix (9) raw counts. On inspection, CSB's 8 collapse to harness-infra
@@ -134,14 +134,14 @@ of the toolchain/base-image cost. This **narrows** mem-e3h2's lever: the externa
 clone worth the base-image investment is **scix_experiments**, not the
 benchmark-named ones.
 
-## Recommendation (Stephanie's call — not made here)
+## Recommendation (Stephanie's call, not made here)
 
 - Hold CSB and EB unwired (methodology: harness-infra + eval-noise).
 - If pursuing any external rig, scope a base-image + admission pass for
   **scix_experiments only**, with a pre-screen that drops eval-adjacent records
   (e.g. the rerank re-eval). Expected legitimate dev-work bundles from scix:
   ~7–8 of 9, pending the gold-test repro floor.
-- This does not, on its own, reach a grid-ready anchored pool — the toolchain
+- This does not, on its own, reach a grid-ready anchored pool; the toolchain
   base-image floor (mem-apg.6) still binds. It only tells us *which* clone is
   worth that effort.
 

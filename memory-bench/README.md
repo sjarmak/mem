@@ -8,10 +8,11 @@ evaluation conditions and captures normalized traces plus core metrics.
 The harness answers one question per task family: does accumulated memory change
 the agent's *action* in a way that improves outcome, efficiency, or reliability
 versus a stateless baseline? A task counts only if memory materially affects
-execution — choosing the right tool because a prior session established it,
+execution: choosing the right tool because a prior session established it,
 avoiding a known failure mode, applying a project convention set earlier. Pure
 "what did I say earlier?" recall, and tasks solvable equally well without memory,
 are out of scope by design.
+
 
 The dataset is not a flat prompt set. Each benchmark item is an ordered
 multi-session sequence (Step 1 → … → Step N → Goal). Every step starts with fresh
@@ -22,12 +23,12 @@ steps.
 
 Each sequence runs under all three, and the gap between them is the signal:
 
-- **no_memory** — memory disabled. The agent gets only the current step's
+- **no_memory**: memory disabled. The agent gets only the current step's
   context and its non-memory tools. Establishes stateless performance.
-- **oracle_memory** — the harness injects the exact relevant memory. Sets the
+- **oracle_memory**: the harness injects the exact relevant memory. Sets the
   ceiling and proves the task is actually memory-sensitive. If oracle ≈
   no_memory, the task doesn't discriminate and gets redesigned.
-- **memory_enabled** — the full memory system runs through its normal retrieve,
+- **memory_enabled**: the full memory system runs through its normal retrieve,
   write, and consolidation path. This is the real system's score.
 
 The report reads the gaps directly: `oracle > memory > no_memory` means
@@ -37,10 +38,10 @@ memory is injecting noise or stale state.
 ### Metrics
 
 Each trial emits a normalized trace and a metrics bundle. Phase 1 carries four
-live families — **task outcome**, **efficiency** (tokens, tool calls, latency,
+live families: **task outcome**, **efficiency** (tokens, tool calls, latency,
 cost, retries), **retrieval** (precision/recall/rank over available memory), and
-**retention** (write hit/miss, scope, supersession). Two more groups — privacy
-and interruption — are stubbed now and filled in later.
+**retention** (write hit/miss, scope, supersession). Two more groups (privacy
+and interruption) are stubbed now and filled in later.
 
 Concrete memory tools differ across systems (filesystem read/write, MCP
 `add_memory`/`search_memories`, vector upsert/search), so every invocation maps
@@ -59,8 +60,8 @@ the verifier path Harbor expects.
 ## What's here
 
 This is the Phase-1 **skeleton**: the plumbing, proven end-to-end with a
-deterministic reference agent and reference memory systems. It is mechanism only
-— Harbor orchestration, schema validation, deterministic memory-op mapping, and
+deterministic reference agent and reference memory systems. It is mechanism only:
+Harbor orchestration, schema validation, deterministic memory-op mapping, and
 deterministic metric arithmetic. Semantic judgment (the trace-to-memory
 extractor and LLM-as-judge scoring) is a documented seam left open for later
 phases.
@@ -87,11 +88,11 @@ phases.
 
 The harness carries two complementary eval objects, each with its own runner:
 
-- **Convention sequence** (`runner/conditions.py`) — a multi-session sequence
+- **Convention sequence** (`runner/conditions.py`): a multi-session sequence
   with id-based memory, run under the three conditions (none / oracle /
   filesystem). Continuity is the persistent store; leak-safety is structural
   (a step reads only what earlier steps wrote).
-- **Replay bead** (`replay.py`) — a closed historical bead `B` (Decision 5). The
+- **Replay bead** (`replay.py`): a closed historical bead `B` (Decision 5). The
   `ours` arm = retrieval-v1 (mem-di8) over the work-audit graph, **failure-
   triggered** (Decision 8), under the harness-owned **LOO guard** (`validity.py`,
   Decision 6/11): the retrievable corpus is bounded to records closed strictly
@@ -100,7 +101,7 @@ The harness carries two complementary eval objects, each with its own runner:
   the LOO set (`assert_no_leak`). Both Decision-7 tracks (cross-rig, same-rig) are
   reported. The 5-axis report is **raw, never a weighted composite** (fork 2).
 
-`ours` consumes retrieval-v1 through the `mem retrieve --json` CLI — the single
+`ours` consumes retrieval-v1 through the `mem retrieve --json` CLI, the single
 substrate, consuming the append-only `lessons` payload (D9), never re-distilling
 and never adding a second store.
 
@@ -139,7 +140,7 @@ it needs) is a later, eval-design step, deliberately not made here.
 ## Boundaries
 
 - The agent under test is Claude (Code / Opus / Sonnet / Haiku) on our own
-  account via OAuth — the one approved paid path. It runs through the emitted
+  account via OAuth, the one approved paid path. It runs through the emitted
   Harbor tasks, not in-process. `ScriptedAgent` is the in-process reference agent
   for the skeleton and tests.
 - The no-paid-API rule applies to the **memory** stack: backends, embeddings,
@@ -148,7 +149,7 @@ it needs) is a later, eval-design step, deliberately not made here.
   exports sequences and fixtures as JSON; it is not rewritten here.
 - **Later-phase work, now landing on the `mem-lvp` front** (see
   `../docs/competitive-arms-integration.md`): the competitive memory systems are
-  partly in — the sync `SemanticMemoryClient` seam, the `AsyncClientBridge` for
+  partly in: the sync `SemanticMemoryClient` seam, the `AsyncClientBridge` for
   async backends, and the mem0 + A-MEM arms have landed (CI runs against
   deterministic fakes; real-arm provisioning is gated on local Ollama/Qdrant/
   Chroma infra). The §12 metric groups and a real-derived sequence seed have

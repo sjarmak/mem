@@ -4,9 +4,9 @@ Run 2026-06-12. The mem-apg OURS rung executed under the clean-room control
 Stephanie confirmed (2026-06-12, Slack): Claude's native project memory is
 **disabled in both the `none-clean` and `ours` arms** (so our memory system is
 the only variable between them), and **native memory becomes a third labeled
-arm (`builtin`)** — the baseline-to-beat (mem-whi). Scoring: the existing
+arm (`builtin`)**, the baseline-to-beat (mem-whi). Scoring: the existing
 binary gold-test reproduction metric as the quality guard, efficiency
-(tokens / turns / tool calls) as per-bundle paired deltas — never pooled means
+(tokens / turns / tool calls) as per-bundle paired deltas, never pooled means
 alone (the mem-75t.7.6 instruction). Feeds mem-apg.4.
 
 Pool: the 9 fanout-guard-admitted bundles (`.mem/grid-ready-pool.json`).
@@ -23,27 +23,27 @@ the repo-tracked project surface `git archive` bakes into the image:
 base commit tracks that surface (per-bundle `ls-tree` evidence in
 `summary-3arm.json:builtin_surface_evidence`).
 
-- **`builtin`** — the gate probe's cached `none` runs (2026-06-11): native
+- **`builtin`**: the gate probe's cached `none` runs (2026-06-11): native
   project memory present at `/app` by construction, our system off. Relabeled
   from the existing `.mem/grid/<id>.none.json` scores at zero new agent cost.
   (Labeling note for mem-apg.3: its "none" arm was de facto
-  project-memory-ON; its none-vs-oracle deltas are unaffected — both sides
-  carried the same surface — but the floor it measured is `builtin`, not a
+  project-memory-ON; its none-vs-oracle deltas are unaffected (both sides
+  carried the same surface), but the floor it measured is `builtin`, not a
   clean room.)
-- **`none-clean`** — 9 NEW runs; byte-identical task except a Dockerfile layer
+- **`none-clean`**: 9 NEW runs; byte-identical task except a Dockerfile layer
   strips the native-memory surface from `/app`.
-- **`ours`** — clean room + retrieval-v1's citation+lessons payload (D9,
+- **`ours`**: clean room + retrieval-v1's citation+lessons payload (D9,
   17 distilled lessons in store, D6 LOO enforced and re-asserted) injected at
   `/memory/MEMORY.md`. Retrieval returned payloads for **2/9** bundles
-  (4lf62, km0wj — 10 lesson-bearing items each); those got real runs. For the
+  (4lf62, km0wj, 10 lesson-bearing items each); those got real runs. For the
   other 7 the constructed task is byte-identical to `none-clean`, so the arm
-  **shares that run** — their ours deltas are **zero by construction**
+  **shares that run**; their ours deltas are **zero by construction**
   (retrieval injected nothing). That is a retrieval-coverage finding about
   the system under test, NOT an observed null effect of memory.
 
 Instrument pinned across arms: `claude-sonnet-4-6` on claude-code `2.1.173`
 (the cached runs' uniform stream-init values; new runs pinned via harbor agent
-kwargs and verified post-run per stream — `assert_run_pins`). Residual
+kwargs and verified post-run per stream, `assert_run_pins`). Residual
 confound: the builtin runs executed one day earlier than the clean arms.
 
 ## Quality guard: gold-test reproduction is FLAT across all three arms
@@ -51,7 +51,7 @@ confound: the builtin runs executed one day earlier than the clean arms.
 **1/9 pass in every arm, the same bundle (e9y0d), Δ = 0 on every pairing.**
 Native project memory neither buys nor costs gold-test quality on this pool;
 neither does our injected payload. This reproduces mem-apg.3's flat-quality
-finding under the clean-room control — the efficiency deltas below are not
+finding under the clean-room control; the efficiency deltas below are not
 purchased with quality anywhere, and no quality gain hides behind them.
 
 ## Per-bundle paired deltas (output tokens, the headline axis)
@@ -76,7 +76,7 @@ Aggregates (medians; per-bundle table above is the headline shape):
 - **ours vs builtin** (the baseline-to-beat): ours cheaper on **6/9**
   bundles; median Δout-tokens **−1,028**, median Δturns **−23**, at flat
   quality. The claim "beats Claude's native memory on efficiency" holds on
-  this pool — but see the mechanism caveat below.
+  this pool, but see the mechanism caveat below.
 - **builtin vs none-clean** (what native memory does): builtin MORE expensive
   on 5/9 (median Δout-tokens **+525**; 4lf62 paid +3,816 and e9y0d +2,124
   for zero quality change). On this pool the repo-shipped CLAUDE.md/AGENTS.md
@@ -85,9 +85,9 @@ Aggregates (medians; per-bundle table above is the headline shape):
   construction. On the 2 payload-bearing bundles the effect is **mixed in
   sign**: km0wj **−3,082** out-tokens / −89 turns (lessons made the run
   substantially cheaper), 4lf62 **+244** / +11 turns (payload slightly
-  increased work). n=2 — anecdote, not a claim.
+  increased work). n=2, anecdote, not a claim.
 
-## Honest read (the caveats ARE the findings)
+## The read (the caveats ARE the findings)
 
 1. **Quality is flat everywhere.** Reproduced under clean-room control: this
    pool has no quality headroom to demonstrate memory value on the gold-test
@@ -97,7 +97,7 @@ Aggregates (medians; per-bundle table above is the headline shape):
    measures "not loading native memory" rather than "loading our lessons".
    The defensible statement: *our system's policy (strip native memory,
    inject retrieved lessons only when relevant) is cheaper than Claude's
-   native project memory at equal quality on this pool* — with the lesson
+   native project memory at equal quality on this pool*, with the lesson
    payload itself contributing on exactly the 2 bundles retrieval covers.
 3. **Retrieval coverage (2/9) is the binding constraint** on saying anything
    stronger about the lessons themselves. The lever is distillation breadth
@@ -109,7 +109,7 @@ Aggregates (medians; per-bundle table above is the headline shape):
    trustworthy efficiency axes.
 5. **Cross-day confound:** builtin = cached 2026-06-11 runs; clean arms ran
    2026-06-12 on the same pinned model + CLI version. Single run per
-   (bundle, arm) — per-bundle deltas carry sampling noise; signs and
+   (bundle, arm); per-bundle deltas carry sampling noise; signs and
    magnitudes above are pilot-grade, not powered estimates.
 
 ## Reproduction

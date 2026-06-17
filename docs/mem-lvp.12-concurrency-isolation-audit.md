@@ -3,13 +3,13 @@
 Scope: does the membench harness share one process / backend state across trials
 and arms, and where would concurrent execution (or a shared real backend)
 cross-contaminate results? This audit **gates real-arm provisioning** of the
-competitive arms (mem0, A-MEM, NAT, Graphiti — mem-lvp.5). It does *not* gate
+competitive arms (mem0, A-MEM, NAT, Graphiti; mem-lvp.5). It does *not* gate
 their CI fakes, which are in-process, hermetic, and already green. Companion to
 `docs/competitive-arms-integration.md` §5–6 and `ARCHITECTURE.md` Decision 11.
 
 > **Bottom line.** Execution is single-process, single-threaded, fully sequential
 > today, so no contamination is *currently* reachable. But isolation rests on a
-> **soft contract** — `reset(trial_id)` + a `scope = ctx.trial_id` native-key
+> **soft contract**: `reset(trial_id)` + a `scope = ctx.trial_id` native-key
 > partition that the harness *assumes* the backend honors. The moment a real arm
 > points at shared infra (one Qdrant path, one Chroma dir, one FalkorDB,
 > one Ollama daemon), that soft contract is the only thing standing between two
@@ -17,18 +17,18 @@ their CI fakes, which are in-process, hermetic, and already green. Companion to
 > own its store path / collection / group_id; do not parallelize trials until
 > namespace isolation is proven per backend.**
 
-> **Status update (2026-06-14).** The highest-priority gap below — the mem0
-> store-path constant (rec. 2, failure modes 1 & 7) — **landed** at `43934c7`:
+> **Status update (2026-06-14).** The highest-priority gap below, the mem0
+> store-path constant (rec. 2, failure modes 1 & 7), **landed** at `43934c7`:
 > `mem0_system.py` now injects a unique per-run store path
 > (`default_mem0_store_path()`, `MEMBENCH_MEM0_STORE_DIR` override) instead of the
 > shared `/tmp/membench-mem0-qdrant` constant. The async-arm gates also cleared:
-> mem-lvp.10 (`AsyncClientBridge`, one loop per instance — rec. 5) and mem-lvp.11
-> (Graphiti fresh-`group_id`-per-trial — failure mode 6) are both resolved. Rec. 4
+> mem-lvp.10 (`AsyncClientBridge`, one loop per instance, rec. 5) and mem-lvp.11
+> (Graphiti fresh-`group_id`-per-trial, failure mode 6) are both resolved. Rec. 4
 > also landed at `b593ce8`: `AbstractSemanticArm.reset()` now records each
 > `trial_id` and raises on reuse (a per-arm uniqueness guard, so a duplicate scope
 > fails loud instead of silently merging two trials). The one gap remaining before
 > a real mem0/A-MEM run is per-run namespace injection for the **A-MEM** Chroma
-> collection (still `membench_<scope>`, not run-id-scoped — failure mode 7 across
+> collection (still `membench_<scope>`, not run-id-scoped, failure mode 7 across
 > runs); mem0's equivalent already landed above.
 
 ## 1. Current execution model — single process, sequential, fresh instance per condition
@@ -40,7 +40,7 @@ One Python process, one thread, no async on the run path. Both entry points loop
   steps in series. A trial is one `(step × condition)` pair (`StepTrial`,
   `:26`).
 - **Replay runner** (`membench/replay.py:121`): a single list comprehension
-  `[replay_arm(arm, ...) for arm in arms for scope in _scopes_for(arm)]` — arms
+  `[replay_arm(arm, ...) for arm in arms for scope in _scopes_for(arm)]`; arms
   and D7 tracks run strictly in series.
 - **CLI** (`membench/cli.py:57`, `:97`): one `run_sequence` / `run_replay` call
   per invocation, results written after the loop completes. No pool, no
@@ -52,7 +52,7 @@ One Python process, one thread, no async on the run path. Both entry points loop
 (`conditions.py:78`) calls `build_memory_system(...)` **once per condition**
 (`:109`), then `system.reset(condition_root)` **once** (`:111`). The *same*
 instance is then reused across every step in that condition; there is no
-`reset()` between steps. Continuity across steps is the whole point — the store
+`reset()` between steps. Continuity across steps is the whole point; the store
 *is* the cross-step channel (`conditions.py:1-7`). In replay, a fresh `reset`
 runs per `replay_arm` call (`replay.py:89`), i.e. per `(arm × scope)`.
 
@@ -60,7 +60,7 @@ Consequence for real arms: a real backend client is constructed once per
 `build_memory_system` call and lives for the whole condition/replay loop. Its
 embedder, LLM handle, connection pool, and (for A-MEM) in-process scope map are
 **shared across every trial in that loop**. That is fine sequentially; it is the
-contamination surface the moment anything runs concurrently or two loops share
+contamination surface the moment anything runs concurrently, or two loops share
 one backend.
 
 ## 2. Isolation guarantees that exist today
@@ -76,7 +76,7 @@ one backend.
 Key gap visible already: the LOO guard (`validity.py`) is the only *enforced*
 post-hoc audit, and it only checks temporal leakage (work the arm shouldn't see
 because it post-dates `B.started`). It would **not** flag a trial reading another
-trial's writes if both live inside the LOO-eligible window — that class of bug is
+trial's writes if both live inside the LOO-eligible window; that class of bug is
 entirely on the soft `scope` contract.
 
 ## 3. Contamination failure modes (ranked: likelihood × blast radius)
@@ -97,14 +97,14 @@ entirely on the soft `scope` contract.
    `user_id`, A-MEM scope map, NAT `user_id`, Graphiti `group_id`) keys off it
    (`semantic_base.py:92,102,125`). Nothing asserts two trials can't produce the
    same `trial_id`. `condition_root` (`conditions.py:110`) is unique per
-   `(sequence, condition)` and `trial_id` appends `step_id` — unique *within one
+   `(sequence, condition)` and `trial_id` appends `step_id`, unique *within one
    run*, but **not** across concurrent runs sharing a backend (failure mode 1/7).
 2. **Per-instance physical store isolation.** The store path / collection root is
    a **module constant** (`mem0_system.py:38`), not injected per instance. Two
    instances in one process, or two processes, collide.
 3. **A serialization contract.** The runner's docstrings *assume* serial
    execution but never state trials **must not** run concurrently. There is no
-   lock, no per-trial boundary — so the assumption is invisible to whoever wires
+   lock, no per-trial boundary, so the assumption is invisible to whoever wires
    the real backends.
 4. **Backend teardown / ephemerality.** `reset` clears a *scope*, never the
    *collection* (`mem0_system.py:13`); there is no run-scoped store dir or
@@ -123,11 +123,11 @@ Actionable contract for whoever provisions the real backends:
    serially. If throughput is needed, parallelize **across arms** (one process
    per arm), never across trials inside one arm's backend.
 
-2. **One physical store per arm instance, injected — not the module constant.**
+2. **One physical store per arm instance, injected, not the module constant.**
    Make the store path / collection / `group_id` root a **constructor argument**
    to each concrete client, derived from a run id, e.g.
    `/tmp/membench-<run_id>-mem0-qdrant`, A-MEM `collection_name=membench_<run_id>_<scope>`
-   (already scope-suffixed at `amem_system.py:134` — add the run id), Graphiti
+   (already scope-suffixed at `amem_system.py:134`; add the run id), Graphiti
    `group_id = <run_id>:<trial_id>`. This removes failure modes 1 and 7 outright.
    Replace the hardcoded `LOCAL_CONFIG[...]["path"]` (`mem0_system.py:38`)
    accordingly.
@@ -136,7 +136,7 @@ Actionable contract for whoever provisions the real backends:
    Real-arm isolation strategy = **process-per-arm** (isolates embedder/LLM/loop
    state, failure modes 3/5) **× per-trial native-key namespace** (`scope =
    ctx.trial_id`, already wired). Do **not** require a fresh container per
-   trial — too heavy and unnecessary if (a) the store path is per-run and (b)
+   trial, too heavy and unnecessary if (a) the store path is per-run and (b)
    trial_ids are unique. A fresh container **per arm** is the clean option if
    process isolation is insufficient for a given SDK.
 
@@ -148,7 +148,7 @@ Actionable contract for whoever provisions the real backends:
    so collision (the root cause behind modes 1/4) fails loud instead of merging
    silently.
 
-5. **No Protocol change needed** — the `SemanticMemoryClient` seam
+5. **No Protocol change needed.** The `SemanticMemoryClient` seam
    (`semantic_base.py:46-72`) already scopes every call by `ctx.trial_id` and
    `clear` is already specced as "reset one scope only … never touches other
    scopes" (`:71-72`). The gap is **enforcement of that contract inside the real
@@ -162,11 +162,11 @@ Actionable contract for whoever provisions the real backends:
 ### Verdict for the gate
 **Real-arm provisioning is safe to proceed for the two sync arms (mem0, A-MEM)
 only after** rec. 2 (injected per-run store path) and rec. 4 (trial_id
-uniqueness assertion) land — both are small, harness-side changes, no Protocol
-churn. The async arms (NAT, Graphiti) additionally gate on mem-lvp.10 pinning
+uniqueness assertion) land (both are small, harness-side changes, no Protocol
+churn). The async arms (NAT, Graphiti) additionally gate on mem-lvp.10 pinning
 one-loop-per-instance (rec. 5) and mem-lvp.11's `group_id` reset decision. The
-mem0 store-path fix — formerly the highest-priority blocker, when two real-arm
-instances shared `/tmp/membench-mem0-qdrant` — **landed at `43934c7`** (see the
+mem0 store-path fix, formerly the highest-priority blocker, when two real-arm
+instances shared `/tmp/membench-mem0-qdrant`, **landed at `43934c7`** (see the
 status update at the top); rec. 4 (`trial_id` uniqueness) landed at `b593ce8`, and
 rec. 5 + the Graphiti decision are also resolved. The one remaining gate before a
 real mem0/A-MEM run is per-run namespace injection for A-MEM's Chroma collection

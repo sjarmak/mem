@@ -13,8 +13,8 @@ work without leaking answers. Invariants that must hold:
 - **The work-audit graph is the source of truth.** SQLite + FTS5 sidecar at
   `.mem/store.db` (`src/cli/store.ts`), schema version 6
   (`src/store/schema.ts`). Every projected column is rebuilt from the
-  `work_records.record` JSON on upsert — never write projections directly.
-- **The `lessons` table is append-only** — deliberately no foreign key to
+  `work_records.record` JSON on upsert; never write projections directly.
+- **The `lessons` table is append-only**, deliberately no foreign key to
   `work_records`; citations are snapshotted at append time, never joined live
   (`src/store/schema.ts`). There is no in-place schema migration: a version
   bump means rebuilding from the bead spine, and lessons are the one thing a
@@ -28,17 +28,17 @@ work without leaking answers. Invariants that must hold:
   this layer; the model is reserved for semantic annotation only (task-type
   residue classification, root-cause extraction).
 - **Temporal leave-one-out is load-bearing for eval validity.** Retrieval only
-  sees records closed strictly before the target work started — the reader's
-  strict `closedBefore` (`src/store/reader.ts`) — and excludes convoy
+  sees records closed strictly before the target work started (the reader's
+  strict `closedBefore` in `src/store/reader.ts`) and excludes convoy
   siblings, PR/branch sharers (`src/retrieve/exclusions.ts`), and supersedes
   chains via the reader's recursive closure. Weakening any exclusion leaks the
   answer into the eval context.
 - **Trace resolution depends on the working directory.** `--with-traces`
   shells `gc session logs` (`src/ingest/trace-resolve.ts`), which loads
-  `city.toml` from the cwd — run full rebuilds from `/home/ds/gas-city`.
+  `city.toml` from the cwd; run full rebuilds from `/home/ds/gas-city`.
   Gotcha: run from this repo, a missing `city.toml` exits 0 with zero traces
   resolved; no error is raised. Default (flagless) builds are spine-only and
-  fast — keep them that way.
+  fast; keep them that way.
 - **CLI contract:** the entrypoint is `./bin/mem` (runs `dist/`, so build
   first); `--json` emits the envelope `{apiVersion, cmd, ok, data?, errors?}`
   (`src/schemas/envelope.ts`).

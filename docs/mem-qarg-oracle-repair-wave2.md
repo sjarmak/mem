@@ -37,14 +37,14 @@ dashboard candidates only ~22 assemble into an admissible bundle; the other ~83 
 typed-rejected upstream (`base_predates_tree` 16, `low_replay_fidelity` 10,
 `empty_output` 10, `shared_trace` 8, `dirty_trace_tail` 5, `no_rig_clone` 1). The
 "~95 untested dashboard candidates" runway was real as candidates but collapses to ~22
-assembled bundles — the corpus simply does not hold many more replayable single-bead
+assembled bundles; the corpus simply does not hold many more replayable single-bead
 coding tasks for this rig.
 
 ## Broken-oracle taxonomy (the 10 stage-2 rejects) + dispositions
 
 Diagnosed with a live per-test capture (`validity_gate` over `LiveReproRunner`). Every
 failure is a **corpus-extraction / decomposition limitation, not a repairable test
-fixture** — so per the bead ("if genuinely not a benchmarkable change, discard with
+fixture**, so per the bead ("if genuinely not a benchmarkable change, discard with
 reason; do NOT force it") these are discarded, not hand-patched.
 
 | mode | bundles | root cause | disposition |
@@ -63,15 +63,15 @@ The bead scoped "the mem (~4) / gascity (~2) pools" too, but: gascity/gpk contri
 assembly), and the **1** mem bundle that did assemble (`mem-us6j`) cannot be
 oracle-validated because `repro_live.RIG_TEST_CONFIGS` only carries
 `gascity_dashboard`. Wiring a `mem` `RigTestConfig` would validate at most that one
-bundle — below the ROI bar for this wave, and a per-rig harness extension rather than
-oracle repair. Noted, not attempted.
+bundle (below the ROI bar for this wave, and a per-rig harness extension rather than
+oracle repair). Noted, not attempted.
 
 ## Decision needed (the bead's stop condition)
 
 Native sound-oracle yield is **8** dashboard bundles after the full pool + repair
 triage. Repair cannot cheaply raise it: the broken oracles are corpus/decomposition
 limitations whose only recovery lever is replay-engine improvement (sequential-edit
-rebasing + multi-workspace work_dir inference) — a separate, substantial piece, not
+rebasing + multi-workspace work_dir inference); a separate, substantial piece, not
 in-scope here. Whether N=8 clears a defensible headline for the 3-arm graded grid (vs.
 apg.9's N=2) is a validity/scope call: **does the scix robustness arm (mem-e3h2) become
 load-bearing?** Flagged to mem-pl per the bead's stop instruction. HALT at branch-ready.
