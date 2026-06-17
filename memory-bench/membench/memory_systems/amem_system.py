@@ -152,7 +152,8 @@ def _default_native_factory(stack: LocalModelStack | None = None) -> _NativeFact
     resolved = stack or LocalModelStack.from_env()
 
     def build(scope: str) -> _AMemNative:
-        return AgenticMemorySystem(**build_amem_kwargs(scope, stack=resolved))
+        native: _AMemNative = AgenticMemorySystem(**build_amem_kwargs(scope, stack=resolved))
+        return native
 
     return build
 
