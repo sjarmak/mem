@@ -54,7 +54,6 @@ def compute_metrics(
     write_events: list[MemoryEvent],
     *,
     reads_enabled: bool,
-    stale_ids: list[str] | None = None,
 ) -> MetricsBundle:
     checks = agent_result.check_results
     passed = sum(checks.values())
@@ -86,12 +85,17 @@ def compute_metrics(
     retrieved_ids = (
         retrieve.event.retrieved_ids or list(retrieve.payloads) if retrieve is not None else []
     )
+    # Confusion/Staleness ground truth is harness-AUTHORED on the step (the generator
+    # populates these), never the arm's self-report — so an arm cannot launder its own
+    # noise out of the score. score_retrieval counts how many appear in retrieved_ids: 0
+    # for an id-exact arm (it only ever returns required ids), non-zero for a top-k arm
+    # whose ranking surfaces the seeded distractors / the superseded v1 (mem-zt1c).
     retrieval = score_retrieval(
         RetrievalInputs(
             retrieved_ids=list(retrieved_ids),
             required_ids=list(step.expected_memory_reads),
-            distractor_ids=retrieve.distractor_ids if retrieve is not None else [],
-            stale_ids=list(stale_ids or []),
+            distractor_ids=list(step.distractor_memories),
+            stale_ids=list(step.superseded_memory_ids),
             read_attempted=reads_enabled,
         )
     )

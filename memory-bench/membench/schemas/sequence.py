@@ -40,17 +40,19 @@ class SequenceStep(BaseModel):
     expected_memory_reads: list[str] = Field(default_factory=list)
     outcome_checks: list[OutcomeCheck] = Field(default_factory=list)
     memory_probes: list[MemoryProbe] = Field(default_factory=list)
-    # Distracting-but-irrelevant memories (§10 interference). Defined for schema
-    # completeness; SEEDING into the store is a Phase-2 stressor and is NOT wired
-    # into the skeleton runner yet (distractor_retrieval_rate stays 0 until then).
+    # Distracting-but-irrelevant memories (§10 interference). The runner SEEDS these into
+    # the store before the step's retrieve (mem-zt1c), so a query/top-k arm surfaces them
+    # as competitors and ``distractor_retrieval_rate`` (Confusion) goes non-zero; an
+    # id-exact arm never requests them, so it stays 0. Defaults empty for non-stressor steps.
     distractor_memories: dict[str, str] = Field(default_factory=dict)
     # Staleness/supersession marker (§10.C). Memory ids written by an EARLIER step
     # that this step makes stale by establishing a newer value under a *distinct*
     # id (the runner's oracle pool rejects same-id/different-content rewrites, so
     # supersession is modeled as v1→v2 distinct ids, with later reads depending on
-    # v2 only). This is a metadata annotation for dataset analysis and the
-    # stale_memory_used diagnostic; the skeleton runner does not act on it yet,
-    # and it defaults empty so existing fixtures stay valid.
+    # v2 only). The runner scores ``stale_memory_retrieval_rate`` (Staleness) against these
+    # — a top-k arm that surfaces the still-stored v1 scores non-zero — and asserts every
+    # id here is a real prior write (_assert_superseded_written). Defaults empty so existing
+    # fixtures stay valid.
     superseded_memory_ids: list[str] = Field(default_factory=list)
     # S3 retention-schedule oracle (additive; consumer = the RetentionScheduledMemory
     # arm + its scorer). ``record_class`` is the retention class the step's record is

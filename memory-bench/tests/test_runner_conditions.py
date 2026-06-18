@@ -132,3 +132,26 @@ def test_agent_crash_fails_loud_with_trial_context(tmp_path):
     seq = load_sequence(FIXTURE)
     with pytest.raises(RuntimeError, match=r"condition 'no_memory'.*step 's1-"):
         run_sequence(seq, _experiment(), agent=CrashingAgent(), fs_base_dir=tmp_path)
+
+
+def test_superseded_must_be_a_real_prior_write(tmp_path):
+    # _assert_superseded_written: a sequence marking an id superseded that no step ever
+    # writes would make the staleness signal silently unretrievable — fail fast instead.
+    import pytest
+
+    from membench.schemas.sequence import BenchmarkSequence, SequenceStep
+
+    bad = BenchmarkSequence(
+        sequence_id="bad-seq",
+        title="dangling supersession",
+        steps=[
+            SequenceStep(
+                step_id="s0",
+                user_request="record",
+                expected_memory_writes={"v2": "new value"},
+                superseded_memory_ids=["v1-never-written"],
+            ),
+        ],
+    )
+    with pytest.raises(ValueError, match="never written by any step"):
+        run_sequence(bad, _experiment(), fs_base_dir=tmp_path)

@@ -27,6 +27,7 @@ from membench.memory_systems.base import (
 from membench.memory_systems.consolidating_system import ConsolidatingMemory
 from membench.memory_systems.filesystem_system import FilesystemMemory
 from membench.memory_systems.graphiti_system import GraphitiMemory
+from membench.memory_systems.lexical_system import LexicalTopKMemory
 from membench.memory_systems.local_stack import (
     LocalModelStack,
     LocalStackUnavailableError,
@@ -50,6 +51,7 @@ __all__ = [
     "ConsolidatingMemory",
     "FilesystemMemory",
     "GraphitiMemory",
+    "LexicalTopKMemory",
     "LocalModelStack",
     "LocalStackUnavailableError",
     "Mem0Memory",
@@ -82,6 +84,7 @@ def build_memory_system(name: str, **kwargs: Any) -> MemorySystem:
         "none": NoneMemory,
         "oracle": OracleMemory,
         "filesystem": FilesystemMemory,
+        "lexical": LexicalTopKMemory,
         "consolidating": ConsolidatingMemory,
         "retention_scheduled": RetentionScheduledMemory,
         "ours": OursMemory,

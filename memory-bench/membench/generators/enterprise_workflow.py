@@ -17,8 +17,10 @@ cast (personas, channels) from the world and authors a richer fact graph:
 ZFC boundary (the generators policy): NeMo supplied only the cast and prose; every
 fact, value, dependency, distractor and supersession here is authored in pure
 Python and is seed-reproducible. ``distractor_memories`` / ``superseded_memory_ids``
-are populated as dataset annotations — the skeleton runner does not seed/score them
-yet (same status as in ``schemas.sequence``); activating the metrics is runner work.
+are the authored ground truth the runner now seeds + scores Confusion/Staleness
+against (mem-zt1c); the values are deliberately absent from the goal query, so a
+naive top-k retriever cannot rank the truth above a distractor — that hardness is
+the point.
 """
 
 from __future__ import annotations

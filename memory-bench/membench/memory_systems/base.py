@@ -58,6 +58,10 @@ class RetrieveResult:
 
     payloads: dict[str, str]  # memory_id → content (id arms) / work_id → lesson (ours)
     event: MemoryEvent
+    # Reserved arm self-report seam: an arm MAY declare which returned ids it believes are
+    # distractors. The harness does NOT score this — Confusion/Staleness are scored against
+    # the AUTHORED ground truth on the step (``distractor_memories`` / ``superseded_memory_ids``,
+    # mem-zt1c), never an arm's self-assessment — so it stays default-empty and unconsumed.
     distractor_ids: list[str] = field(default_factory=list)
     total_matched: int = 0
     near_duplicate_top: bool = False
@@ -93,6 +97,21 @@ class MemorySystem(ABC):
     @abstractmethod
     def write(self, memory_id: str, content: str, ctx: StepContext) -> MemoryEvent:
         """Persist a memory; returns the normalized write event."""
+
+    def seed(self, memories: dict[str, str], ctx: StepContext) -> None:
+        """Inject pre-existing WORLD memories (distractor / interference noise) into the
+        store WITHOUT emitting telemetry — these model environment state the harness owns,
+        not agent-persisted writes, so they must never count toward efficiency or retention
+        (mem-zt1c). The default writes each via ``write`` and DISCARDS the returned events;
+        callers pass a dedicated clock so seeding does not perturb the step's own event ids.
+        An arm that cannot hold extra state (``oracle`` is ``load``-injected, ``none`` is
+        stateless) short-circuits via ``supports_write`` and stays a no-op. An arm that sets
+        ``supports_write = True`` but overrides ``write`` to raise MUST also override this to
+        avoid raising during harness seeding."""
+        if not self.supports_write:
+            return
+        for memory_id, content in memories.items():
+            self.write(memory_id, content, ctx)
 
     def close(self) -> None:  # noqa: B027 (intentional no-op hook, NOT abstract)
         """Release any process-lifetime resources the arm holds — event loops,

@@ -80,6 +80,34 @@ def _oracle_pool(seq: BenchmarkSequence) -> dict[str, str]:
     return pool
 
 
+def _assert_superseded_written(seq: BenchmarkSequence) -> None:
+    """Every id a step marks ``superseded`` must be a real write by an EARLIER step.
+
+    Staleness is scored by whether retrieval surfaces a superseded (v1) id, which can only
+    happen if that id was already in the store when the step ran — the runner does NOT
+    separately seed stale ids (unlike distractors), it relies on the establishing step's
+    write. Prior-ordering is the real contract: an id written only by a later (or the same)
+    step is not in the store at retrieval time, so the stale signal would silently read 0.
+    Fail fast on either gap (mirrors ``_oracle_pool``'s raise) — this is exactly the
+    invariant the enterprise materialiser guarantees (v1 written before v2)."""
+    first_write: dict[str, int] = {}
+    for idx, step in enumerate(seq.steps):
+        for mid in step.expected_memory_writes:
+            first_write.setdefault(mid, idx)
+    for idx, step in enumerate(seq.steps):
+        for mid in step.superseded_memory_ids:
+            written_at = first_write.get(mid)
+            if written_at is None or written_at >= idx:
+                where = "is never written by any step" if written_at is None else (
+                    f"is first written at step index {written_at} (not BEFORE)"
+                )
+                raise ValueError(
+                    f"superseded id {mid!r} (step {step.step_id!r}, index {idx}) {where} "
+                    f"in sequence {seq.sequence_id!r}; supersession must mark a real prior "
+                    "write so the staleness signal is retrievable"
+                )
+
+
 def _system_for(
     condition: Condition,
     experiment: ExperimentConfig,
@@ -126,6 +154,20 @@ def _execute_step(
     clock = IdClock()
     ctx = StepContext(trial_id=trial_id, session_id=scope, step_id=step.step_id, clock=clock)
     reads_enabled = condition is not Condition.NO_MEMORY
+
+    # Seed the step's distractor memories (§10 interference) into the store BEFORE the
+    # retrieve, so a query/top-k arm surfaces them as competitors (Confusion, mem-zt1c).
+    # Only under the write-bearing condition: oracle is load()-injected and short-circuits
+    # via supports_write, none never reads. The dedicated clock + discarded events keep
+    # seeding off the trial's telemetry (env state the harness owns, not an agent write).
+    # The stale v1 needs no seeding — an earlier step already wrote it as a real memory
+    # that persists in scope (asserted by _assert_superseded_written).
+    if condition is Condition.MEMORY_ENABLED and step.distractor_memories:
+        seed_ctx = StepContext(
+            trial_id=trial_id, session_id=scope, step_id=step.step_id, clock=IdClock()
+        )
+        # seed() iterates read-only; no defensive copy needed.
+        system.seed(step.distractor_memories, seed_ctx)
 
     retrieve: RetrieveResult | None = None
     memory_events: list[MemoryEvent] = []
@@ -207,6 +249,7 @@ def run_sequence(
     agent = agent or ScriptedAgent()
     conditions = conditions or experiment.conditions
     base = Path(fs_base_dir) if fs_base_dir is not None else None
+    _assert_superseded_written(seq)
     run = SequenceRun(sequence_id=seq.sequence_id, experiment_id=experiment.experiment_id)
 
     for condition in conditions:

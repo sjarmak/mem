@@ -19,7 +19,13 @@ from membench.memory_systems.base import MemorySystem
 from membench.memory_systems.consolidation import ConsolidationCapable, ConsolidationResult
 from membench.memory_systems.oracle_system import OracleMemory
 from membench.runner.agent import Agent, ScriptedAgent
-from membench.runner.conditions import StepTrial, _execute_step, _oracle_pool, _system_for
+from membench.runner.conditions import (
+    StepTrial,
+    _assert_superseded_written,
+    _execute_step,
+    _oracle_pool,
+    _system_for,
+)
 from membench.runtime import IdClock, StepContext
 from membench.schemas.conditions import Condition
 from membench.schemas.config import ExperimentConfig
@@ -79,6 +85,8 @@ def run_project(
     reset once per condition (not per sequence), so writes persist across tasks."""
     if not sequences:
         raise ValueError("run_project requires at least one sequence")
+    for seq in sequences:
+        _assert_superseded_written(seq)
     agent = agent or ScriptedAgent()
     conditions = conditions or experiment.conditions
     base = Path(fs_base_dir) if fs_base_dir is not None else None
