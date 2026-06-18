@@ -26,7 +26,7 @@ from pathlib import Path
 
 from membench.engines.endpoints import EngineEndpoint, resolve_engines
 from membench.engines.run import sweep_cell
-from membench.engines.sweep import SweepRow
+from membench.engines.sweep import SweepRow, failed_cells
 from membench.engines.workload import load_prompts_jsonl, prefix_sharing_workload
 
 
@@ -55,6 +55,12 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         default=None,
         help="JSONL prompt distribution to replay instead of the synthetic workload",
     )
+    p.add_argument(
+        "--cache-bust",
+        default="",
+        help="per-cell salt prepended to every synthetic prefix; use a unique value "
+        "per invocation so a cell starts with a cold prefix cache (no cross-cell replay)",
+    )
     p.add_argument("--max-tokens", type=int, default=128)
     p.add_argument("--temperature", type=float, default=0.0)
     p.add_argument("--logprobs", action="store_true", help="request token-level logprobs")
@@ -69,6 +75,7 @@ def _build_workload(args: argparse.Namespace) -> list[list[dict[str, str]]]:
         groups=args.groups,
         prompts_per_group=args.prompts_per_group,
         prefix_words=args.prefix_words,
+        cache_bust=args.cache_bust,
     )
 
 
@@ -101,6 +108,7 @@ def main(argv: list[str] | None = None) -> int:
     workload = _build_workload(args)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
+    rows: list[SweepRow] = []
     with args.out.open("w", encoding="utf-8") as out:
         for endpoint in selected:
             for concurrency in concurrencies:
@@ -110,6 +118,7 @@ def main(argv: list[str] | None = None) -> int:
                     file=sys.stderr,
                 )
                 row = _cell(endpoint, concurrency, workload, args)
+                rows.append(row)
                 out.write(json.dumps(row.to_dict()) + "\n")
                 out.flush()
                 print(
@@ -117,10 +126,26 @@ def main(argv: list[str] | None = None) -> int:
                     f"thru={_fmt(row.request_throughput)} req/s, "
                     f"ttft_p50={_fmt(row.ttft_p50_s)}s, "
                     f"kv_after={_fmt(row.kv_cache_usage_after)}, "
-                    f"prefix_hit_after={_fmt(row.prefix_cache_hit_rate_after)}",
+                    f"prefix_hit_cell={_fmt(row.prefix_cache_hit_rate_delta)} "
+                    f"(cum_after={_fmt(row.prefix_cache_hit_rate_after)})",
                     file=sys.stderr,
                 )
     print(f"wrote {args.out}", file=sys.stderr)
+    # Cell-failure gate: a cell with swallowed failures emits a plausible-but-invalid
+    # throughput (computed over completed-only). Surface it loudly so it can't slip
+    # into a headline; non-zero exit so a wrapping script can react.
+    bad = failed_cells(rows)
+    if bad:
+        print(
+            f"WARNING: {len(bad)} cell(s) had request failures — INVALID, exclude from headline:",
+            file=sys.stderr,
+        )
+        for r in bad:
+            print(
+                f"  {r.engine} c={r.concurrency}: {r.failed}/{r.requests} failed",
+                file=sys.stderr,
+            )
+        return 2
     return 0
 
 

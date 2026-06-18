@@ -55,6 +55,10 @@ class SweepRow:
     kv_cache_usage_after: float | None
     prefix_cache_hit_rate_before: float | None
     prefix_cache_hit_rate_after: float | None
+    # True per-cell hit rate from the raw-counter delta (vLLM). The *_before/_after
+    # fields above are cumulative lifetime ratios and are NOT a per-cell rate; this is.
+    # None for engines without raw counters (SGLang) → use its windowed gauge instead.
+    prefix_cache_hit_rate_delta: float | None
     num_waiting_after: float | None
     preemptions_delta: float | None
 
@@ -98,6 +102,7 @@ def aggregate_rows(
         kv_cache_usage_after=_get(after, "kv_cache_usage"),
         prefix_cache_hit_rate_before=_get(before, "prefix_cache_hit_rate"),
         prefix_cache_hit_rate_after=_get(after, "prefix_cache_hit_rate"),
+        prefix_cache_hit_rate_delta=_delta_hit_rate(before, after),
         num_waiting_after=_get(after, "num_waiting"),
         preemptions_delta=_counter_delta(before, after, "num_preemptions_total"),
     )
@@ -114,3 +119,26 @@ def _counter_delta(
     if a is None or b is None:
         return None
     return a - b
+
+
+def _delta_hit_rate(
+    before: EngineRuntimeStats | None, after: EngineRuntimeStats | None
+) -> float | None:
+    """Per-cell prefix-cache hit rate from the raw-counter delta across the batch:
+    (hits_after - hits_before) / (queries_after - queries_before). Returns None when
+    the engine exports no raw counters (SGLang) or no new queries arrived (0/0)."""
+    hits = _counter_delta(before, after, "prefix_cache_hits_total")
+    queries = _counter_delta(before, after, "prefix_cache_queries_total")
+    if hits is None or queries is None:  # engine exports no raw counters (SGLang)
+        return None
+    if queries <= 0 or hits < 0:  # no new queries, or a counter reset (engine restart)
+        return None
+    return hits / queries
+
+
+def failed_cells(rows: Sequence[SweepRow]) -> list[SweepRow]:
+    """Cells with swallowed request failures. ``run_cell`` counts a failed request but
+    still emits a row whose throughput is computed over completed-only — a plausible
+    but invalid number. The experiment layer must reject these before they reach a
+    headline; this is that gate."""
+    return [r for r in rows if r.failed > 0]

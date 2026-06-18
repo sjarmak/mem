@@ -37,6 +37,7 @@ def prefix_sharing_workload(
     groups: int,
     prompts_per_group: int,
     prefix_words: int,
+    cache_bust: str = "",
 ) -> list[list[dict[str, str]]]:
     """Build ``groups * prompts_per_group`` chat prompts.
 
@@ -46,14 +47,23 @@ def prefix_sharing_workload(
     the spread that makes a prefix-cache hit-rate measurement meaningful.
 
     ``groups=1`` is the maximal-sharing case (every request after the first should hit
-    the prefix cache); ``prompts_per_group=1`` is the no-sharing baseline."""
+    the prefix cache); ``prompts_per_group=1`` is the no-sharing baseline.
+
+    ``cache_bust`` prepends a per-cell salt to every prefix. The sweep replays one
+    workload against a *live* engine whose prefix cache persists across cells; without
+    a salt, cell N hits the blocks cell N-1 already cached (identical prompts) and the
+    measured hit rate reflects replay, not the cell's own sharing structure. A unique
+    salt per cell isolates each cell to a cold cache while leaving the within-cell
+    sharing intact. Empty (default) reproduces the original byte-stable prefix."""
     if groups < 1 or prompts_per_group < 1:
         raise ValueError("groups and prompts_per_group must both be >= 1")
     prompts: list[list[dict[str, str]]] = []
     for g in range(groups):
         # A per-group marker keeps each group's prefix distinct (a real cache miss at
-        # the group boundary) while staying byte-stable across sweep reruns.
-        prefix = f"[memory-group-{g}] {_approx_prefix(prefix_words)}"
+        # the group boundary) while staying byte-stable across sweep reruns. The
+        # cache_bust salt (if any) leads, so a salted cell shares no prefix block with
+        # any other-salted cell.
+        prefix = f"{cache_bust}[memory-group-{g}] {_approx_prefix(prefix_words)}"
         for i in range(prompts_per_group):
             prompts.append(
                 [

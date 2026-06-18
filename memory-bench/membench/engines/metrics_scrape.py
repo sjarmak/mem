@@ -109,6 +109,12 @@ class EngineRuntimeStats:
     num_running: float | None
     num_waiting: float | None
     num_preemptions_total: float | None
+    # Raw prefix-cache counters (vLLM only). ``prefix_cache_hit_rate`` above is a
+    # CUMULATIVE lifetime ratio; the per-cell rate must be reconstructed from the delta
+    # of these counters across a batch. SGLang exports only a windowed gauge, so these
+    # stay None for it and the per-cell delta is undefined.
+    prefix_cache_hits_total: float | None = None
+    prefix_cache_queries_total: float | None = None
 
     @classmethod
     def from_samples(cls, samples: list[Sample], metric_prefix: str) -> EngineRuntimeStats:
@@ -128,13 +134,13 @@ class EngineRuntimeStats:
         return EngineRuntimeStats(
             # Newer vLLM (and the NIM build) expose ``kv_cache_usage_perc``; older
             # releases used ``gpu_cache_usage_perc``. Try the new name first, fall back.
-            kv_cache_usage=_first(
-                samples, "vllm:kv_cache_usage_perc", "vllm:gpu_cache_usage_perc"
-            ),
+            kv_cache_usage=_first(samples, "vllm:kv_cache_usage_perc", "vllm:gpu_cache_usage_perc"),
             prefix_cache_hit_rate=hit_rate,
             num_running=_first(samples, "vllm:num_requests_running"),
             num_waiting=_first(samples, "vllm:num_requests_waiting"),
             num_preemptions_total=_sum(samples, "vllm:num_preemptions_total"),
+            prefix_cache_hits_total=hits,
+            prefix_cache_queries_total=queries,
         )
 
     @staticmethod

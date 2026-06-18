@@ -88,6 +88,7 @@ def _row(concurrency: int, tps: float | None, ttft: float | None) -> SweepRow:
         kv_cache_usage_after=0.5,
         prefix_cache_hit_rate_before=None,
         prefix_cache_hit_rate_after=0.8,
+        prefix_cache_hit_rate_delta=None,
         num_waiting_after=0.0,
         preemptions_delta=0.0,
     )

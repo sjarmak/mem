@@ -54,6 +54,22 @@ def test_vllm_mapping_computes_prefix_hit_rate_from_counters() -> None:
     assert stats.num_preemptions_total == 5.0
 
 
+def test_vllm_exposes_raw_prefix_cache_counters() -> None:
+    # The cumulative ratio alone can't give a per-cell hit rate; aggregate_rows needs
+    # the raw before/after counters to compute the delta. Expose them on the snapshot.
+    stats = EngineRuntimeStats.from_samples(parse_prometheus(_VLLM_TEXT), "vllm")
+    assert stats.prefix_cache_hits_total == 75.0
+    assert stats.prefix_cache_queries_total == 100.0
+
+
+def test_sglang_has_no_raw_prefix_cache_counters() -> None:
+    # SGLang exports only a windowed cache_hit_rate gauge, no raw counters → None,
+    # so the per-cell delta is undefined for SGLang and we fall back to the gauge.
+    stats = EngineRuntimeStats.from_samples(parse_prometheus(_SGLANG_TEXT), "sglang")
+    assert stats.prefix_cache_hits_total is None
+    assert stats.prefix_cache_queries_total is None
+
+
 def test_vllm_reads_new_kv_cache_usage_name() -> None:
     # Newer vLLM / the NIM build renamed the gauge; the scraper must read it (the live
     # validation against the NeMo NIM caught the old name returning None).
