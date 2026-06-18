@@ -22,14 +22,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import time
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from membench.engines.client import StreamingClient, StreamResult
 from membench.engines.endpoints import EngineEndpoint, resolve_engines
-from membench.engines.metrics_scrape import EngineRuntimeStats, scrape_engine_stats
-from membench.engines.sweep import SweepRow, aggregate_rows
+from membench.engines.run import sweep_cell
+from membench.engines.sweep import SweepRow
 from membench.engines.workload import load_prompts_jsonl, prefix_sharing_workload
 
 
@@ -75,55 +72,19 @@ def _build_workload(args: argparse.Namespace) -> list[list[dict[str, str]]]:
     )
 
 
-def _run_one(
-    client: StreamingClient, messages: list[dict[str, str]], args: argparse.Namespace
-) -> StreamResult:
-    return client.complete(
-        messages,
-        max_tokens=args.max_tokens,
-        temperature=args.temperature,
-        logprobs=args.logprobs,
-    )
-
-
-def _safe_scrape(endpoint: EngineEndpoint) -> EngineRuntimeStats | None:
-    """Scrape runtime stats, returning None if the metrics endpoint is unreachable —
-    a sweep should still record latency even if Prometheus scraping is misconfigured.
-    The failure is surfaced on stderr, never silently dropped."""
-    try:
-        return scrape_engine_stats(endpoint.metrics_url, endpoint.metric_prefix)
-    except OSError as exc:
-        print(f"  ! metrics scrape failed for {endpoint.name}: {exc}", file=sys.stderr)
-        return None
-
-
-def _sweep_cell(
+def _cell(
     endpoint: EngineEndpoint,
     concurrency: int,
     workload: list[list[dict[str, str]]],
     args: argparse.Namespace,
 ) -> SweepRow:
-    client = StreamingClient(endpoint=endpoint)
-    before = _safe_scrape(endpoint)
-    wall_start = time.perf_counter()
-    results: list[StreamResult] = []
-    with ThreadPoolExecutor(max_workers=concurrency) as pool:
-        futures = [pool.submit(_run_one, client, msgs, args) for msgs in workload]
-        for fut in futures:
-            try:
-                results.append(fut.result())
-            except Exception as exc:
-                print(f"  ! request failed on {endpoint.name}: {exc}", file=sys.stderr)
-    wall_s = time.perf_counter() - wall_start
-    after = _safe_scrape(endpoint)
-    return aggregate_rows(
-        engine=endpoint.name,
-        concurrency=concurrency,
-        requests=len(workload),
-        results=results,
-        wall_s=wall_s,
-        before=before,
-        after=after,
+    return sweep_cell(
+        endpoint,
+        concurrency,
+        workload,
+        max_tokens=args.max_tokens,
+        temperature=args.temperature,
+        logprobs=args.logprobs,
     )
 
 
@@ -148,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
                     f"({len(workload)} requests)...",
                     file=sys.stderr,
                 )
-                row = _sweep_cell(endpoint, concurrency, workload, args)
+                row = _cell(endpoint, concurrency, workload, args)
                 out.write(json.dumps(row.to_dict()) + "\n")
                 out.flush()
                 print(
