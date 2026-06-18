@@ -1,0 +1,74 @@
+{
+  "title": "Local Inference — Engines + GPU",
+  "uid": "local-inference",
+  "schemaVersion": 39,
+  "editable": true,
+  "time": { "from": "now-15m", "to": "now" },
+  "refresh": "5s",
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "KV-cache usage (fraction)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "min": 0, "max": 1, "unit": "percentunit" } },
+      "targets": [
+        { "expr": "vllm:gpu_cache_usage_perc", "legendFormat": "vllm" },
+        { "expr": "sglang:token_usage", "legendFormat": "sglang" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Prefix-cache hit rate",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "min": 0, "max": 1, "unit": "percentunit" } },
+      "targets": [
+        { "expr": "rate(vllm:prefix_cache_hits_total[1m]) / clamp_min(rate(vllm:prefix_cache_queries_total[1m]), 1)", "legendFormat": "vllm" },
+        { "expr": "sglang:cache_hit_rate", "legendFormat": "sglang" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Queue: running vs waiting",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        { "expr": "vllm:num_requests_running", "legendFormat": "vllm running" },
+        { "expr": "vllm:num_requests_waiting", "legendFormat": "vllm waiting" },
+        { "expr": "sglang:num_running_reqs", "legendFormat": "sglang running" },
+        { "expr": "sglang:num_queue_reqs", "legendFormat": "sglang waiting" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "TTFT p50/p90 (s)  +  preemptions",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.5, sum(rate(vllm:time_to_first_token_seconds_bucket[1m])) by (le))", "legendFormat": "vllm ttft p50" },
+        { "expr": "histogram_quantile(0.9, sum(rate(vllm:time_to_first_token_seconds_bucket[1m])) by (le))", "legendFormat": "vllm ttft p90" },
+        { "expr": "rate(vllm:num_preemptions_total[1m])", "legendFormat": "vllm preempt/s" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "GPU utilization %",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "fieldConfig": { "defaults": { "min": 0, "max": 100, "unit": "percent" } },
+      "targets": [{ "expr": "DCGM_FI_DEV_GPU_UTIL", "legendFormat": "gpu {{gpu}}" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "GPU memory used (MiB)",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "decmbytes" } },
+      "targets": [{ "expr": "DCGM_FI_DEV_FB_USED", "legendFormat": "gpu {{gpu}}" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "GPU power (W)",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "watt" } },
+      "targets": [{ "expr": "DCGM_FI_DEV_POWER_USAGE", "legendFormat": "gpu {{gpu}}" }]
+    }
+  ]
+}

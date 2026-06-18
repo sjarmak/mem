@@ -1,0 +1,111 @@
+# Local dual-engine inference + observability stack for the memory harness.
+#
+# Engines are gated behind compose PROFILES because one RTX 5090 (32 GB) cannot
+# fully host two bf16 8B models at once. Pick your mode:
+#
+#   # observability only (always-on): prometheus + grafana + dcgm
+#   docker compose up -d
+#
+#   # one engine at a time (A/B sequentially — the realistic single-GPU path):
+#   docker compose --profile vllm up -d
+#   #   ... run the sweep against vllm, then ...
+#   docker compose --profile vllm down
+#   docker compose --profile sglang up -d
+#
+#   # both at once (only viable with a small model, e.g. a 3B, or a second GPU):
+#   docker compose --profile vllm --profile sglang up -d
+#
+# Requires the NVIDIA Container Toolkit. Blackwell (sm_120) needs CUDA 12.8+ —
+# pin engine image tags that ship it (see README).
+
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+services:
+  vllm:
+    profiles: ["vllm"]
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:latest}
+    <<: *gpu
+    command:
+      - --model=${MODEL:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      - --port=8000
+      - --gpu-memory-utilization=${VLLM_GPU_MEM_UTIL:-0.85}
+      - --max-model-len=${MAX_MODEL_LEN:-8192}
+      - --enable-prefix-caching          # APC — the lever this whole stack measures
+      - --disable-log-requests
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN:-}
+    ports:
+      - "8001:8000"                       # host 8001 == MEMBENCH_VLLM_BASE_URL default
+    volumes:
+      - ${HF_CACHE:-~/.cache/huggingface}:/root/.cache/huggingface
+    ipc: host
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://localhost:8000/health'); "]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  sglang:
+    profiles: ["sglang"]
+    image: ${SGLANG_IMAGE:-lmsysorg/sglang:latest}
+    <<: *gpu
+    command:
+      - python3
+      - -m
+      - sglang.launch_server
+      - --model-path=${MODEL:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      - --host=0.0.0.0
+      - --port=8000
+      - --mem-fraction-static=${SGLANG_MEM_FRACTION:-0.85}
+      - --context-length=${MAX_MODEL_LEN:-8192}
+      - --enable-metrics                  # exposes sglang:* Prometheus gauges
+      # RadixAttention prefix caching is on by default — the SGLang side of the A/B.
+    environment:
+      - HF_TOKEN=${HUGGING_FACE_HUB_TOKEN:-}
+    ports:
+      - "8002:8000"                       # host 8002 == MEMBENCH_SGLANG_BASE_URL default
+    volumes:
+      - ${HF_CACHE:-~/.cache/huggingface}:/root/.cache/huggingface
+    ipc: host
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  dcgm-exporter:
+    image: ${DCGM_IMAGE:-nvidia/dcgm-exporter:3.3.5-3.4.1-ubuntu22.04}
+    <<: *gpu
+    cap_add: ["SYS_ADMIN"]
+    ports:
+      - "9400:9400"                       # GPU util / mem / power / thermals
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    depends_on: [prometheus]
+    restart: unless-stopped
