@@ -17,7 +17,7 @@
  * yet populate convoy/supersedes, so those columns carry data only when
  * upstream provides it.
  */
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 export const SCHEMA_DDL = `
 CREATE TABLE work_records (
@@ -72,6 +72,13 @@ CREATE TABLE work_records (
   task_type        TEXT,
   task_type_source TEXT CHECK (task_type_source IN ('formula', 'structural', 'model')),
   molecule_id      TEXT,
+  -- Provenance-link projection (mem-wanz.3, the links table below). link_tier is
+  -- the record's best soundness tier (T1|T2|T3) across its links; link_source the
+  -- '+'-joined sources that established them (the record_agents convention). Both
+  -- NULL until the link stage runs; link_tier is indexed so the sound-tier-only
+  -- headline can filter the eligible population directly.
+  link_tier        TEXT,
+  link_source      TEXT,
   record       TEXT NOT NULL
 );
 CREATE INDEX idx_records_task_type ON work_records(task_type);
@@ -85,6 +92,7 @@ CREATE INDEX idx_records_external_ref ON work_records(external_ref);
 CREATE INDEX idx_records_repo         ON work_records(repo);
 CREATE INDEX idx_records_repo_source  ON work_records(repo_source);
 CREATE INDEX idx_records_landed_state ON work_records(landed_state);
+CREATE INDEX idx_records_link_tier    ON work_records(link_tier);
 
 -- Genuinely multi-row per work_id since v4 (mem-75t.9 phase 2 / mem-75t.4):
 -- one row per session iteration, ordered by sequence, tagged with the join
@@ -120,6 +128,36 @@ CREATE TABLE record_links (
 );
 CREATE INDEX idx_links_work   ON record_links(work_id);
 CREATE INDEX idx_links_target ON record_links(target_id);
+
+-- PROV-O provenance links (mem-wanz.3, PRD §4): the TASK->AGENT->OUTCOME audit
+-- graph. Deliberately SEPARATE from record_links above (which is intra-corpus
+-- dep|supersedes adjacency only, no tier/confidence) by SRP — this table carries
+-- the tiered, confidence-scored provenance edges the eval measures, and
+-- wasInformedBy is the memory edge the headline scores. tier (T1|T2|T3) is the
+-- soundness tier (sound-tier-only headline); provenance is the '+'-joined sources
+-- and suspect=1 a contradicted edge, reusing the record_agents convention. The
+-- unique key collapses one logical edge re-derived from several sources into a
+-- single row whose provenance accretes those sources.
+CREATE TABLE links (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  work_id      TEXT NOT NULL REFERENCES work_records(work_id),
+  session_uuid TEXT,
+  relation     TEXT NOT NULL CHECK (relation IN ('wasGeneratedBy', 'wasAssociatedWith', 'used', 'wasInformedBy')),
+  entity_ref   TEXT NOT NULL,
+  entity_kind  TEXT NOT NULL,
+  key_type     TEXT NOT NULL,
+  tier         TEXT NOT NULL CHECK (tier IN ('T1', 'T2', 'T3')),
+  confidence   REAL,
+  provenance   TEXT,
+  suspect      INTEGER NOT NULL DEFAULT 0,
+  created_at   TEXT NOT NULL,
+  UNIQUE(work_id, entity_ref, relation, key_type)
+);
+CREATE INDEX idx_provlinks_work     ON links(work_id);
+CREATE INDEX idx_provlinks_session  ON links(session_uuid);
+CREATE INDEX idx_provlinks_relation ON links(relation);
+CREATE INDEX idx_provlinks_tier     ON links(tier);
+CREATE INDEX idx_provlinks_entity   ON links(entity_ref);
 
 -- AUTOINCREMENT is load-bearing here: trace_errors.id is the FTS content
 -- rowid, so ids must never be reused. If the FTS index ever held a stale

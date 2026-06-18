@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  SCHEMA_VERSION,
   allLessons,
   appendLesson,
   getRecord,
@@ -97,6 +98,76 @@ describe('openStore', () => {
     db.close();
 
     expect(() => openStore(path)).toThrow(/schema version/i);
+  });
+});
+
+describe('mem-wanz.3 — PROV-O links schema (v8)', () => {
+  it('bumped SCHEMA_VERSION to 8', () => {
+    expect(SCHEMA_VERSION).toBe(8);
+  });
+
+  it('projects link_tier + link_source onto work_records', () => {
+    const db = openStore(':memory:');
+    const cols = db.prepare('PRAGMA table_info(work_records)').all() as { name: string }[];
+    const names = new Set(cols.map(c => c.name));
+    expect(names.has('link_tier')).toBe(true);
+    expect(names.has('link_source')).toBe(true);
+    db.close();
+  });
+
+  it('creates a links table with the PRD §4 columns, separate from record_links', () => {
+    const db = openStore(':memory:');
+    const cols = db.prepare('PRAGMA table_info(links)').all() as { name: string }[];
+    expect(cols.map(c => c.name)).toEqual([
+      'id',
+      'work_id',
+      'session_uuid',
+      'relation',
+      'entity_ref',
+      'entity_kind',
+      'key_type',
+      'tier',
+      'confidence',
+      'provenance',
+      'suspect',
+      'created_at',
+    ]);
+    // record_links stays the SRP-separate intra-corpus dep|supersedes table.
+    const rl = db.prepare('PRAGMA table_info(record_links)').all() as { name: string }[];
+    expect(rl.map(c => c.name)).toEqual(['work_id', 'kind', 'target_id']);
+    db.close();
+  });
+
+  it('accepts a valid wasInformedBy edge and enforces relation/tier CHECKs + the unique key', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [fullRecord()]); // the FK parent
+    const insert = (cols: Record<string, unknown>) => {
+      const keys = Object.keys(cols);
+      db.prepare(
+        `INSERT INTO links (${keys.join(',')}) VALUES (${keys.map(k => '@' + k).join(',')})`
+      ).run(cols);
+    };
+    const edge = {
+      work_id: 'demo-1a2b',
+      session_uuid: 's-1',
+      relation: 'wasInformedBy', // the memory edge the eval measures
+      entity_ref: 'mem-other',
+      entity_kind: 'work_record',
+      key_type: 'pr-link',
+      tier: 'T1',
+      confidence: 0.9,
+      provenance: 'events+content-scan',
+      suspect: 0,
+      created_at: '2026-06-18T00:00:00Z',
+    };
+    expect(() => insert(edge)).not.toThrow();
+    // A relation outside the PROV-O vocabulary is rejected.
+    expect(() => insert({ ...edge, relation: 'causedBy', entity_ref: 'x' })).toThrow(/CHECK/i);
+    // A tier outside T1|T2|T3 is rejected.
+    expect(() => insert({ ...edge, tier: 'T4', entity_ref: 'y' })).toThrow(/CHECK/i);
+    // The unique key collapses a re-derivation of the same edge.
+    expect(() => insert(edge)).toThrow(/UNIQUE/i);
+    db.close();
   });
 });
 
