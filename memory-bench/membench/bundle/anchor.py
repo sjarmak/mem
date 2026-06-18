@@ -30,11 +30,18 @@ was decided upstream by `ftp_curate` (a structural fact), not judged here.
 from __future__ import annotations
 
 import subprocess
+import typing
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from membench.bundle.replay import ReplayResult, Runner
-from membench.schemas.bundle import BundleEnv, BundleVerification, FtpOracle, TaskBundle
+from membench.schemas.bundle import (
+    BundleEnv,
+    BundleVerification,
+    FtpOracle,
+    FtpType,
+    TaskBundle,
+)
 
 # Anchor bundles carry a ground-truth git diff, not a replayed one: no mutation
 # calls were applied, and the diff is exact. 1.0 says "authoritative", distinct
@@ -42,7 +49,8 @@ from membench.schemas.bundle import BundleEnv, BundleVerification, FtpOracle, Ta
 _ANCHOR_REPLAY_SUCCESS_RATE = 1.0
 
 # Allowed FtpType values -- guards a hand-written oracle payload at the boundary.
-_FTP_TYPES: frozenset[str] = frozenset({"behavioral", "feature-presence", "none"})
+# Derived from the schema Literal so it can never drift from `FtpType`.
+_FTP_TYPES: frozenset[str] = frozenset(typing.get_args(FtpType))
 
 
 def _git_out(clone: Path, args: Sequence[str], runner: Runner) -> str:
@@ -91,9 +99,15 @@ def ftp_oracle_from_payload(entry: Mapping[str, object]) -> FtpOracle:
     ftp_type = entry.get("type")
     if ftp_type not in _FTP_TYPES:
         raise ValueError(f"ftp oracle has unknown type {ftp_type!r} (expected one of {_FTP_TYPES})")
+    try:
+        commit, parent = str(entry["commit"]), str(entry["parent"])
+    except KeyError as exc:
+        raise ValueError(
+            f"ftp oracle entry missing required field {exc}; got keys {sorted(entry)}"
+        ) from exc
     return FtpOracle(
-        commit=str(entry["commit"]),
-        parent=str(entry["parent"]),
+        commit=commit,
+        parent=parent,
         ftp_tests=tuple(_str_seq(entry, "ftp_tests")),
         behavioral=tuple(_str_seq(entry, "behavioral")),
         feature_presence=tuple(_str_seq(entry, "feature_presence")),
@@ -128,6 +142,8 @@ def anchor_bundle(
     no diff is not a task). ``work_id`` defaults to ``<rig>-<sha12>``."""
     if not gold_file_diffs:
         raise ValueError(f"anchor {rig}@{ftp.commit[:12]} has an empty gold diff -- not a task")
+    if not issue_title.strip():
+        raise ValueError(f"anchor {rig}@{ftp.commit[:12]} has an empty issue title -- no task leg")
     wid = work_id or f"{rig}-{ftp.commit[:12]}"
     output = ReplayResult(
         calls=(),

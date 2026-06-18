@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from membench.bundle.anchor import materialize_rig_anchors
@@ -36,7 +37,13 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=_DEFAULT_OUT)
     args = parser.parse_args()
 
+    if not args.oracle.exists():
+        print(f"error: oracle file not found: {args.oracle}", file=sys.stderr)
+        return 1
     payload = json.loads(args.oracle.read_text(encoding="utf-8"))
+    if "commits" not in payload:
+        print(f"error: oracle JSON at {args.oracle} has no 'commits' key", file=sys.stderr)
+        return 1
     commits = payload["commits"]
     written = materialize_rig_anchors(
         RIG,

@@ -64,8 +64,47 @@ def test_oracle_mapper_rejects_string_for_list_field():
         ftp_oracle_from_payload({**ORACLE_ENTRY, "behavioral": "t::a"})
 
 
+def test_oracle_mapper_rejects_missing_required_field():
+    entry = {k: v for k, v in ORACLE_ENTRY.items() if k != "parent"}
+    with pytest.raises(ValueError, match="missing required field"):
+        ftp_oracle_from_payload(entry)
+
+
+def test_ftp_oracle_rejects_incoherent_split():
+    # behavioral not a subset of ftp_tests -> classify_ftp's contract is violated
+    with pytest.raises(ValueError, match="must equal ftp_tests"):
+        FtpOracle(
+            commit="c", parent="p", ftp_tests=("t::a",), behavioral=("t::b",), type="behavioral"
+        )
+
+
+def test_ftp_oracle_rejects_type_disagreeing_with_split():
+    with pytest.raises(ValueError, match="disagrees with the split"):
+        FtpOracle(
+            commit="c",
+            parent="p",
+            ftp_tests=("t::a",),
+            behavioral=("t::a",),
+            type="feature-presence",
+        )
+
+
+def test_ftp_oracle_rejects_overlapping_partition():
+    with pytest.raises(ValueError, match="overlap"):
+        FtpOracle(
+            commit="c",
+            parent="p",
+            ftp_tests=("t::a",),
+            behavioral=("t::a",),
+            feature_presence=("t::a",),
+            type="behavioral",
+        )
+
+
 def test_feature_presence_oracle_has_empty_behavioral():
-    ftp = _ftp(behavioral=[], feature_presence=["t::new"], type="feature-presence")
+    ftp = _ftp(
+        ftp_tests=["t::new"], behavioral=[], feature_presence=["t::new"], type="feature-presence"
+    )
     assert ftp.behavioral == ()
     assert ftp.feature_presence == ("t::new",)
     assert ftp.type == "feature-presence"
@@ -121,6 +160,18 @@ def test_anchor_bundle_rejects_empty_gold_diff():
             ftp=_ftp(),
             gold_file_diffs={},
             issue_title="t",
+        )
+
+
+def test_anchor_bundle_rejects_empty_issue_title():
+    with pytest.raises(ValueError, match="empty issue title"):
+        anchor_bundle(
+            rig="codeprobe",
+            repo="codeprobe",
+            base_image="img",
+            ftp=_ftp(),
+            gold_file_diffs={"a": "d"},
+            issue_title="   ",
         )
 
 

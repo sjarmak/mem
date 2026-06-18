@@ -29,7 +29,7 @@ imports this module, keeping the import graph acyclic.
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from membench.bundle.replay import ReplayResult
 
@@ -63,6 +63,29 @@ class FtpOracle(BaseModel):
     behavioral: tuple[str, ...] = ()
     feature_presence: tuple[str, ...] = ()
     type: FtpType = "none"
+
+    @model_validator(mode="after")
+    def _coherent_split(self) -> "FtpOracle":
+        """Enforce `ftp_curate.classify_ftp`'s contract at the schema boundary, so a
+        drifted or hand-edited oracle cannot materialize an incoherent bundle that
+        scores the wrong discriminator: ``behavioral``/``feature_presence`` are a
+        DISJOINT partition of ``ftp_tests``, and ``type`` is the structural headline
+        (behavioral if any behavioral, else feature-presence if any of those, else
+        none)."""
+        behavioral, feature = set(self.behavioral), set(self.feature_presence)
+        if behavioral & feature:
+            raise ValueError(
+                f"behavioral and feature_presence overlap: {sorted(behavioral & feature)}"
+            )
+        if behavioral | feature != set(self.ftp_tests):
+            raise ValueError(
+                "behavioral | feature_presence must equal ftp_tests "
+                f"(got {len(behavioral | feature)} vs {len(set(self.ftp_tests))})"
+            )
+        expected = "behavioral" if behavioral else "feature-presence" if feature else "none"
+        if self.type != expected:
+            raise ValueError(f"type {self.type!r} disagrees with the split (expected {expected!r})")
+        return self
 
 
 class CuratedOracle(BaseModel):
