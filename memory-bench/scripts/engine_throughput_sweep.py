@@ -35,7 +35,13 @@ from membench.engines.workload import load_prompts_jsonl, prefix_sharing_workloa
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--engine", choices=("vllm", "sglang", "both"), default="both")
+    p.add_argument(
+        "--engine",
+        choices=("vllm", "sglang", "tokenspeed", "local", "all"),
+        default="local",
+        help="'local' = vllm+sglang (the local-GPU pair); 'all' adds tokenspeed "
+        "(datacenter-GPU only — won't run on a 5090)",
+    )
     p.add_argument(
         "--concurrency",
         default="1,4,16,32",
@@ -125,7 +131,12 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(sys.argv[1:] if argv is None else argv)
     concurrencies = [int(c) for c in args.concurrency.split(",") if c.strip()]
     engines = resolve_engines()
-    selected = list(engines.values()) if args.engine == "both" else [engines[args.engine]]
+    if args.engine == "all":
+        selected = list(engines.values())
+    elif args.engine == "local":
+        selected = [engines["vllm"], engines["sglang"]]
+    else:
+        selected = [engines[args.engine]]
     workload = _build_workload(args)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)

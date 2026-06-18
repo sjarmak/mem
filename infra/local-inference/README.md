@@ -91,6 +91,31 @@ Grafana KV/preemption traces → change one knob (`--enable-prefix-caching`,
 `--max-num-batched-tokens`/chunked-prefill, `--quantization=fp8`, `--gpu-memory-utilization`)
 → re-sweep. Change one axis at a time.
 
+## TokenSpeed (third engine — datacenter GPU only)
+
+[TokenSpeed](https://github.com/lightseekorg/tokenspeed) (LightSeek Foundation, MIT)
+is an agentic-workload-optimized engine with a custom MLA kernel. It ships **as a vLLM
+runner** — the `vllm/vllm-openai:*-tokenspeed` image with `VLLM_USE_TOKENSPEED_RUNNER=1` —
+so its `/v1` + `/metrics` surface is identical to vLLM and it drops into this harness
+with no new client/scraper code (it reuses the `vllm` metric prefix).
+
+**Hardware gate:** its MLA kernel is optimized for **B200 SXM6 / H200 SXM5 / H100 SXM5**.
+It will **not** run on a consumer RTX 5090 (sm_120). So this is a rented/cloud
+datacenter-GPU arm, not part of the local loop.
+
+```bash
+# On a datacenter GPU host:
+docker compose --profile tokenspeed up -d          # serves on :8003
+cd ../../memory-bench
+uv run python scripts/engine_throughput_sweep.py --engine tokenspeed \
+    --concurrency 1,8,32 --groups 1 --prompts-per-group 64 --out .mem/tokenspeed.jsonl
+# or --engine all to A/B vllm + sglang + tokenspeed together on a multi-GPU box.
+```
+
+The `--engine local` default (vLLM + SGLang) is the 5090 pair; `--engine all` adds
+TokenSpeed. TokenSpeed is at its best on **MLA-architecture, long-context** models
+(Kimi K2.6, DeepSeek); it's a preview ("test with your target model before production").
+
 ## Phase 2 — k8s (do it second, not first)
 
 k8s adds nothing to the single-GPU *iteration* loop and a lot of friction; stand it up

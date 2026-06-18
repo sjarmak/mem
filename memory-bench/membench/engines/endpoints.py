@@ -49,11 +49,16 @@ ENV_VLLM_MODEL = "MEMBENCH_VLLM_MODEL"
 ENV_SGLANG_BASE_URL = "MEMBENCH_SGLANG_BASE_URL"
 ENV_SGLANG_METRICS_URL = "MEMBENCH_SGLANG_METRICS_URL"
 ENV_SGLANG_MODEL = "MEMBENCH_SGLANG_MODEL"
+ENV_TOKENSPEED_BASE_URL = "MEMBENCH_TOKENSPEED_BASE_URL"
+ENV_TOKENSPEED_METRICS_URL = "MEMBENCH_TOKENSPEED_METRICS_URL"
+ENV_TOKENSPEED_MODEL = "MEMBENCH_TOKENSPEED_MODEL"
 
 DEFAULT_VLLM_BASE_URL = "http://localhost:8001/v1"
 DEFAULT_VLLM_METRICS_URL = "http://localhost:8001/metrics"
 DEFAULT_SGLANG_BASE_URL = "http://localhost:8002/v1"
 DEFAULT_SGLANG_METRICS_URL = "http://localhost:8002/metrics"
+DEFAULT_TOKENSPEED_BASE_URL = "http://localhost:8003/v1"
+DEFAULT_TOKENSPEED_METRICS_URL = "http://localhost:8003/metrics"
 # Same checkpoint on both engines so a side-by-side A/B isolates the engine, not the
 # model. Overridable per engine; an 8B at bf16 fits the 32 GB 5090 comfortably.
 DEFAULT_MODEL = "meta-llama/Meta-Llama-3.1-8B-Instruct"
@@ -113,7 +118,20 @@ def resolve_engines(env: dict[str, str] | None = None) -> dict[str, EngineEndpoi
         model=source.get(ENV_SGLANG_MODEL, DEFAULT_MODEL),
         metric_prefix="sglang",
     )
-    return {vllm.name: vllm, sglang.name: sglang}
+    # TokenSpeed (lightseekorg/tokenspeed) ships AS a vLLM runner — the
+    # ``vllm/vllm-openai:*-tokenspeed`` image with ``VLLM_USE_TOKENSPEED_RUNNER=1``.
+    # The HTTP + /metrics surface is byte-identical to vLLM, so it reuses the "vllm"
+    # metric prefix and needs no new client/scraper code. Datacenter-GPU only
+    # (B200 SXM6 / H200 / H100); it will NOT run on a consumer RTX 5090 — see
+    # infra/local-inference/README.md.
+    tokenspeed = EngineEndpoint(
+        name="tokenspeed",
+        base_url=source.get(ENV_TOKENSPEED_BASE_URL, DEFAULT_TOKENSPEED_BASE_URL),
+        metrics_url=source.get(ENV_TOKENSPEED_METRICS_URL, DEFAULT_TOKENSPEED_METRICS_URL),
+        model=source.get(ENV_TOKENSPEED_MODEL, DEFAULT_MODEL),
+        metric_prefix="vllm",
+    )
+    return {vllm.name: vllm, sglang.name: sglang, tokenspeed.name: tokenspeed}
 
 
 # Convenience snapshot of the default (un-overridden) endpoints for docs/tests. A

@@ -80,6 +80,36 @@ services:
       timeout: 5s
       retries: 20
 
+  # TokenSpeed (lightseekorg/tokenspeed) is delivered AS a vLLM runner: the same
+  # vllm-openai image family + VLLM_USE_TOKENSPEED_RUNNER=1, so its /v1 and /metrics
+  # surface is identical to the vllm service above (Prometheus job reuses vllm:* names).
+  # *** Datacenter-GPU ONLY: B200 SXM6 / H200 SXM5 / H100 SXM5. It will NOT run on a
+  # consumer RTX 5090 (sm_120) — this profile is for a rented/cloud datacenter GPU. ***
+  tokenspeed:
+    profiles: ["tokenspeed"]
+    image: ${TOKENSPEED_IMAGE:-vllm/vllm-openai:v0.18.0-tokenspeed}
+    <<: *gpu
+    command:
+      - --model=${MODEL:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      - --port=8000
+      - --gpu-memory-utilization=${VLLM_GPU_MEM_UTIL:-0.90}
+      - --max-model-len=${MAX_MODEL_LEN:-8192}
+      - --enable-prefix-caching
+      - --disable-log-requests
+    environment:
+      - VLLM_USE_TOKENSPEED_RUNNER=1      # the switch that activates the TokenSpeed path
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN:-}
+    ports:
+      - "8003:8000"                       # host 8003 == MEMBENCH_TOKENSPEED_BASE_URL default
+    volumes:
+      - ${HF_CACHE:-~/.cache/huggingface}:/root/.cache/huggingface
+    ipc: host
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
   dcgm-exporter:
     image: ${DCGM_IMAGE:-nvidia/dcgm-exporter:3.3.5-3.4.1-ubuntu22.04}
     <<: *gpu

@@ -18,6 +18,14 @@ scrape_configs:
       - targets: ["sglang:8000"]
         labels: { engine: sglang }
 
+  # TokenSpeed exposes the vLLM /metrics surface (vllm:* names); it just carries a
+  # distinct `engine` label so its row is separable in Grafana. Datacenter-GPU only.
+  - job_name: tokenspeed
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["tokenspeed:8000"]
+        labels: { engine: tokenspeed }
+
   - job_name: dcgm
     static_configs:
       - targets: ["dcgm-exporter:9400"]

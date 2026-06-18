@@ -25,13 +25,26 @@ def _local(name: str = "vllm") -> dict[str, str]:
     }
 
 
-def test_resolve_defaults_to_two_local_engines() -> None:
+def test_resolve_defaults_to_three_engines() -> None:
     engines = resolve_engines(env={})
-    assert set(engines) == {"vllm", "sglang"}
+    assert set(engines) == {"vllm", "sglang", "tokenspeed"}
     assert engines["vllm"].base_url.startswith("http://localhost")
     assert engines["sglang"].base_url.startswith("http://localhost")
     assert engines["vllm"].metric_prefix == "vllm"
     assert engines["sglang"].metric_prefix == "sglang"
+
+
+def test_tokenspeed_reuses_vllm_metrics_surface() -> None:
+    # TokenSpeed ships as a vLLM runner: identical /metrics, so it maps under the
+    # "vllm" prefix and needs no new scraper code. Distinct port/name, though.
+    ts = resolve_engines(env={})["tokenspeed"]
+    assert ts.metric_prefix == "vllm"
+    assert ts.base_url == "http://localhost:8003/v1"
+
+
+def test_tokenspeed_env_overrides() -> None:
+    engines = resolve_engines(env={"MEMBENCH_TOKENSPEED_BASE_URL": "http://b200-box:8000/v1"})
+    assert engines["tokenspeed"].base_url == "http://b200-box:8000/v1"
 
 
 def test_env_overrides_are_honored() -> None:
