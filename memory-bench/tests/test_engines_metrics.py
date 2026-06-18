@@ -54,6 +54,20 @@ def test_vllm_mapping_computes_prefix_hit_rate_from_counters() -> None:
     assert stats.num_preemptions_total == 5.0
 
 
+def test_vllm_reads_new_kv_cache_usage_name() -> None:
+    # Newer vLLM / the NIM build renamed the gauge; the scraper must read it (the live
+    # validation against the NeMo NIM caught the old name returning None).
+    text = 'vllm:kv_cache_usage_perc{engine="0"} 0.37\n'
+    stats = EngineRuntimeStats.from_samples(parse_prometheus(text), "vllm")
+    assert stats.kv_cache_usage == 0.37
+
+
+def test_vllm_kv_cache_prefers_new_name_over_old() -> None:
+    text = "vllm:kv_cache_usage_perc 0.50\nvllm:gpu_cache_usage_perc 0.10\n"
+    stats = EngineRuntimeStats.from_samples(parse_prometheus(text), "vllm")
+    assert stats.kv_cache_usage == 0.50  # new name wins; old kept only as fallback
+
+
 def test_sglang_mapping_reads_direct_gauges() -> None:
     stats = EngineRuntimeStats.from_samples(parse_prometheus(_SGLANG_TEXT), "sglang")
     assert stats.kv_cache_usage == 0.61

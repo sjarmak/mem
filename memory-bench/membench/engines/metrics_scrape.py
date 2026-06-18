@@ -78,12 +78,16 @@ def _parse_labels(label_str: str) -> dict[str, str]:
     return labels
 
 
-def _first(samples: Iterable[Sample], name: str) -> float | None:
-    """The value of the first sample named ``name`` (engine runtime gauges are
-    single-valued or repeated per model — the first is representative)."""
-    for s in samples:
-        if s.name == name:
-            return s.value
+def _first(samples: Iterable[Sample], *names: str) -> float | None:
+    """The value of the first sample matching any of ``names``, in name order then
+    sample order (engine runtime gauges are single-valued or repeated per model — the
+    first is representative). Multiple names tolerate vLLM metric renames across
+    versions (e.g. ``gpu_cache_usage_perc`` → ``kv_cache_usage_perc``)."""
+    sample_list = list(samples)
+    for name in names:
+        for s in sample_list:
+            if s.name == name:
+                return s.value
     return None
 
 
@@ -122,7 +126,11 @@ class EngineRuntimeStats:
         queries = _sum(samples, "vllm:prefix_cache_queries_total")
         hit_rate = (hits / queries) if (hits is not None and queries) else None
         return EngineRuntimeStats(
-            kv_cache_usage=_first(samples, "vllm:gpu_cache_usage_perc"),
+            # Newer vLLM (and the NIM build) expose ``kv_cache_usage_perc``; older
+            # releases used ``gpu_cache_usage_perc``. Try the new name first, fall back.
+            kv_cache_usage=_first(
+                samples, "vllm:kv_cache_usage_perc", "vllm:gpu_cache_usage_perc"
+            ),
             prefix_cache_hit_rate=hit_rate,
             num_running=_first(samples, "vllm:num_requests_running"),
             num_waiting=_first(samples, "vllm:num_requests_waiting"),
