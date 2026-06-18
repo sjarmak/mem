@@ -53,6 +53,11 @@ const CHILD_TABLES = [
   'record_links',
   'trace_errors',
   'trace_runs',
+  // The PROV-O links table (schema v8). The T3 session-association floor is
+  // rebuilt inline below from each record's run, so it clears with the other
+  // projections. Higher tiers (T1/T2) are written by post-ingest stages that
+  // re-run after a rebuild, the same as the rest of the rebuildable projection.
+  'links',
 ] as const;
 
 /** Clear every child row for the given work_ids — one DELETE per table for the
@@ -110,6 +115,33 @@ function toRow(record: WorkRecord): Record<string, string | number | null> {
   };
 }
 
+/** The T3 session-association floor edge (mem-wanz.4, PRD §5.1): every run is a
+ * PROV-O Activity that `wasAssociatedWith` its session, the Agent — keyed on
+ * `trace_runs.session_uuid`, the 100%-populated spine, so writing it in the same
+ * pass as the run covers every run by construction. `entity_ref` is the session
+ * itself (the agent the activity ran as). `created_at` derives from the run start
+ * (else the record's creation) rather than wall-clock, so a re-ingest stays
+ * byte-identical; `confidence` is 1.0 because the spine join is exact. */
+function t3AssociationLink(
+  record: WorkRecord,
+  sessionUuid: string,
+  startedAt: string | undefined
+): Record<string, string | number> {
+  return {
+    work_id: record.work_id,
+    session_uuid: sessionUuid,
+    relation: 'wasAssociatedWith',
+    entity_ref: sessionUuid,
+    entity_kind: 'session',
+    key_type: 'session_uuid',
+    tier: 'T3',
+    confidence: 1,
+    provenance: 'session_uuid',
+    suspect: 0,
+    created_at: startedAt ?? record.lifecycle.created,
+  };
+}
+
 /** The molecule grouping id, projected from generator metadata: gc molecules
  * write `molecule_id`, older workflow runs `workflow_id`. */
 function moleculeId(record: WorkRecord): string | null {
@@ -147,6 +179,12 @@ export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
       'input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, ' +
       'n_tool_calls, tool_calls_by_type, n_turns, started_at, ended_at, outcome) ' +
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  );
+  const insertProvLink = db.prepare(
+    'INSERT INTO links (work_id, session_uuid, relation, entity_ref, entity_kind, ' +
+      'key_type, tier, confidence, provenance, suspect, created_at) ' +
+      'VALUES (@work_id, @session_uuid, @relation, @entity_ref, @entity_kind, ' +
+      '@key_type, @tier, @confidence, @provenance, @suspect, @created_at)'
   );
 
   db.transaction(() => {
@@ -215,6 +253,7 @@ export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
           run.ended_at ?? null,
           run.outcome ?? null
         );
+        insertProvLink.run(t3AssociationLink(record, run.session_uuid, run.started_at));
       }
     }
   })();

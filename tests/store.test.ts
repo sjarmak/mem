@@ -10,6 +10,7 @@ import {
   getRecord,
   importLessons,
   lessonsFor,
+  linksFor,
   openStore,
   queryRecords,
   runsFor,
@@ -673,5 +674,85 @@ describe('trace_runs projection (run-level metadata)', () => {
     expect(rows[0].input_tokens).toBe(999);
     expect(rows[0].n_tool_calls).toBe(1);
     expect(rows[0].tool_calls_by_type).toEqual({ Bash: 1 });
+  });
+});
+
+describe('mem-wanz.4 — T3 session-association floor (links)', () => {
+  const run = {
+    session_uuid: 'sess-t3',
+    input_tokens: 1,
+    output_tokens: 1,
+    cache_creation_tokens: 0,
+    cache_read_tokens: 0,
+    n_tool_calls: 0,
+    tool_calls_by_type: {},
+    n_turns: 1,
+    started_at: '2026-06-01T03:00:00Z',
+  };
+  const withRun = (overrides: Partial<WorkRecord> = {}): WorkRecord =>
+    fullRecord({ trace: { jsonl_path: '/traces/x.jsonl', run }, ...overrides });
+
+  it('asserts a wasAssociatedWith T3 edge for a run, keyed on session_uuid', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [withRun()]);
+    // The PROV-O floor: the run (Activity) wasAssociatedWith its session (Agent).
+    expect(linksFor(db, 'demo-1a2b')).toEqual([
+      {
+        work_id: 'demo-1a2b',
+        session_uuid: 'sess-t3',
+        relation: 'wasAssociatedWith',
+        entity_ref: 'sess-t3', // the agent the run ran as
+        entity_kind: 'session',
+        key_type: 'session_uuid',
+        tier: 'T3',
+        confidence: 1, // exact spine join
+        provenance: 'session_uuid',
+        suspect: false,
+        created_at: '2026-06-01T03:00:00Z', // the run start — deterministic, not wall-clock
+      },
+    ]);
+  });
+
+  it('derives created_at from the record creation when the run has no start', () => {
+    const db = openStore(':memory:');
+    const { started_at: _omit, ...noStart } = run;
+    writeRecords(db, [withRun({ trace: { jsonl_path: '/traces/x.jsonl', run: noStart } })]);
+    // fullRecord's lifecycle.created — keeps the edge byte-identical on re-ingest.
+    expect(linksFor(db, 'demo-1a2b')[0].created_at).toBe('2026-06-01T00:00:00Z');
+  });
+
+  it('writes no floor edge when the record has no run (the floor is over trace_runs)', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [fullRecord()]); // fullRecord's trace carries no run
+    expect(linksFor(db, 'demo-1a2b')).toEqual([]);
+  });
+
+  it('covers 100% of trace_runs — exactly one association edge per run across a batch', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [
+      withRun(),
+      withRun({
+        work_id: 'demo-2b3c',
+        trace: { jsonl_path: '/traces/y.jsonl', run: { ...run, session_uuid: 'sess-2' } },
+      }),
+      fullRecord({ work_id: 'demo-3c4d' }), // no run → no edge
+    ]);
+    const runs = (db.prepare('SELECT count(*) AS n FROM trace_runs').get() as { n: number }).n;
+    const floor = (
+      db
+        .prepare(
+          "SELECT count(*) AS n FROM links WHERE relation = 'wasAssociatedWith' AND tier = 'T3'"
+        )
+        .get() as { n: number }
+    ).n;
+    expect(runs).toBe(2);
+    expect(floor).toBe(runs); // 100% of runs carry the floor edge — the T3 spine
+  });
+
+  it('rebuilds the floor edge on re-ingest — never drifts, never duplicates', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [withRun()]);
+    writeRecords(db, [withRun()]); // re-ingest the same record
+    expect(linksFor(db, 'demo-1a2b')).toHaveLength(1);
   });
 });

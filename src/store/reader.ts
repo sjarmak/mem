@@ -256,6 +256,43 @@ export function runsFor(db: StoreDatabase, workId: string): StoredRun[] {
   }));
 }
 
+/** One PROV-O provenance edge (schema v8, the `links` table) — a row of the
+ * TASK→AGENT→OUTCOME audit graph. `suspect` surfaces as a boolean; the rest map
+ * the columns directly. */
+export interface StoredProvLink {
+  work_id: string;
+  session_uuid: string | null;
+  relation: string;
+  entity_ref: string;
+  entity_kind: string;
+  key_type: string;
+  tier: string;
+  confidence: number | null;
+  provenance: string | null;
+  suspect: boolean;
+  created_at: string;
+}
+
+interface ProvLinkRow extends Omit<StoredProvLink, 'suspect'> {
+  suspect: number;
+}
+
+/** Provenance links for a bead, ordered by the unique-key components so the set
+ * is reproducible run-to-run (the Decision-10 precision guard). The T3 floor —
+ * the lowest soundness tier (mem-wanz.4) — gives every run a `wasAssociatedWith`
+ * edge here; higher tiers accrue as their stages run. */
+export function linksFor(db: StoreDatabase, workId: string): StoredProvLink[] {
+  const rows = db
+    .prepare(
+      'SELECT work_id, session_uuid, relation, entity_ref, entity_kind, key_type, ' +
+        'tier, confidence, provenance, suspect, created_at FROM links ' +
+        'WHERE work_id = ? ORDER BY relation, entity_ref, key_type'
+    )
+    .all(workId) as ProvLinkRow[];
+
+  return rows.map(row => ({ ...row, suspect: row.suspect === 1 }));
+}
+
 /**
  * Store-wide coverage of the trace substrate (mem-75t). Each field is a count
  * the ingest is meant to lift off zero: the epic's headline diagnostic was
