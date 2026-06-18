@@ -19,16 +19,20 @@ hardcoded search heuristic here.
 
 from __future__ import annotations
 
+from membench.autotune.calibrate import ShapeStats, calibrated_config, measure_sequences
 from membench.autotune.config import TrialConfig
 from membench.autotune.ledger import TrialRecord, append_record, best_record, keep_decision
 from membench.autotune.objective import TrialObjective, score_rows
 
 __all__ = [
+    "ShapeStats",
     "TrialConfig",
     "TrialObjective",
     "TrialRecord",
     "append_record",
     "best_record",
+    "calibrated_config",
     "keep_decision",
+    "measure_sequences",
     "score_rows",
 ]
