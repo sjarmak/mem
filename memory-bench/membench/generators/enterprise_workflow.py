@@ -92,7 +92,14 @@ def _fact(prompt: str, verb: str, value: str, persona: Persona, channel: str | N
 
 
 def _materialize_task(
-    world: EnterpriseWorld, project: Project, *, task_index: int, facts_per_task: int, seed: int
+    world: EnterpriseWorld,
+    project: Project,
+    *,
+    task_index: int,
+    facts_per_task: int,
+    seed: int,
+    charter: tuple[str, str] | None = None,
+    establish_charter: bool = False,
 ) -> BenchmarkSequence:
     rng = random.Random((seed << 16) ^ (task_index * 2654435761))
     subjects = rng.sample(_SUBJECTS, facts_per_task)
@@ -165,6 +172,30 @@ def _materialize_task(
             f"{other.name} recalled {subject.prompt} as {wrong_value}"
         )
 
+    # Cross-task continuity: a project charter established in an EARLIER task that
+    # this task's goal also requires. Under run_project (shared store) the earlier
+    # write is visible; under isolated run_sequence it is not — that gap is the
+    # continuity signal. ``establish_charter`` (task 0 only) writes it.
+    if charter is not None:
+        charter_id, charter_content = charter
+        if establish_charter:
+            steps.insert(
+                0,
+                SequenceStep(
+                    step_id=f"{seq_id}-charter",
+                    user_request="Record the project charter decision.",
+                    expected_memory_writes={charter_id: charter_content},
+                ),
+            )
+        required_ids.append(charter_id)
+        probes.append(
+            MemoryProbe(
+                probe_id=f"{seq_id}-probe-charter",
+                expected_memory_id=charter_id,
+                description="the project charter (set in an earlier task) must be recalled",
+            )
+        )
+
     prompts = ", ".join(s.prompt for s in subjects)
     steps.append(
         SequenceStep(
@@ -193,19 +224,9 @@ def _materialize_task(
     )
 
 
-def materialize_world(
-    world: EnterpriseWorld,
-    project: Project,
-    *,
-    n_tasks: int = 2,
-    facts_per_task: int = 3,
-    seed: int | None = None,
-) -> list[BenchmarkSequence]:
-    """Materialise ``n_tasks`` memory-dependent sequences from a world + project.
-
-    Deterministic: the same (world, project, args, seed) yields byte-identical
-    sequences. ``seed`` defaults to the world's seed. Each sequence is memory-
-    dependent by construction and clears ``memory_necessity_gate``."""
+def _validate(
+    world: EnterpriseWorld, project: Project, *, facts_per_task: int, n_tasks: int
+) -> None:
     if not world.personas:
         raise ValueError(f"world {world.world_id!r} has no personas to attribute facts to")
     if not 1 <= facts_per_task <= len(_SUBJECTS):
@@ -217,10 +238,65 @@ def materialize_world(
             f"project.world_id {project.world_id!r} != world.world_id {world.world_id!r}"
         )
 
+
+def materialize_world(
+    world: EnterpriseWorld,
+    project: Project,
+    *,
+    n_tasks: int = 2,
+    facts_per_task: int = 3,
+    seed: int | None = None,
+) -> list[BenchmarkSequence]:
+    """Materialise ``n_tasks`` INDEPENDENT memory-dependent sequences from a world.
+
+    Deterministic: the same (world, project, args, seed) yields byte-identical
+    sequences. ``seed`` defaults to the world's seed. Each sequence is memory-
+    dependent by construction and clears ``memory_necessity_gate``."""
+    _validate(world, project, facts_per_task=facts_per_task, n_tasks=n_tasks)
     base_seed = world.seed if seed is None else seed
     return [
         _materialize_task(
             world, project, task_index=t, facts_per_task=facts_per_task, seed=base_seed
+        )
+        for t in range(n_tasks)
+    ]
+
+
+def materialize_project(
+    world: EnterpriseWorld,
+    project: Project,
+    *,
+    n_tasks: int = 3,
+    facts_per_task: int = 3,
+    seed: int | None = None,
+    drop_charter: bool = False,
+) -> list[BenchmarkSequence]:
+    """Materialise a PROJECT: ``n_tasks`` linked by a shared charter established in
+    task 0 and required by EVERY task's goal — cross-task continuity, meant to run
+    under ``runner.project.run_project`` (shared store). Under isolated
+    ``run_sequence`` the later tasks fail (they never wrote the charter); that gap is
+    the continuity signal.
+
+    ``drop_charter`` omits the establishing step: a missing-context (Recovery)
+    variant where the charter is required but never written, so even the oracle pool
+    lacks it. Recovery is a dataset annotation — the ScriptedAgent cannot re-derive
+    missing memory, so the metric is for real agents under test."""
+    _validate(world, project, facts_per_task=facts_per_task, n_tasks=n_tasks)
+    base_seed = world.seed if seed is None else seed
+    charter_id = f"{world.world_id}-charter"
+    charter_content = _fact(
+        "the project charter decision", "is", "freeze scope at v3", world.personas[0], None
+    )
+    charter = (charter_id, charter_content)
+    return [
+        _materialize_task(
+            world,
+            project,
+            task_index=t,
+            facts_per_task=facts_per_task,
+            seed=base_seed,
+            charter=charter,
+            establish_charter=(t == 0 and not drop_charter),
         )
         for t in range(n_tasks)
     ]

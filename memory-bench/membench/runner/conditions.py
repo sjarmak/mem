@@ -20,7 +20,7 @@ from membench.schemas.conditions import Condition
 from membench.schemas.config import ExperimentConfig
 from membench.schemas.memory_event import MemoryEvent
 from membench.schemas.metrics import MetricsBundle
-from membench.schemas.sequence import BenchmarkSequence
+from membench.schemas.sequence import BenchmarkSequence, SequenceStep
 from membench.schemas.trace import Trace
 
 
@@ -104,6 +104,97 @@ def _system_for(
     )
 
 
+def _execute_step(
+    *,
+    seq_id: str,
+    step: SequenceStep,
+    system: MemorySystem,
+    condition: Condition,
+    scope: str,
+    memory_config_id: str,
+    experiment: ExperimentConfig,
+    agent: Agent,
+) -> StepTrial:
+    """Run one step against ``system`` under ``condition``, returning its trial.
+
+    ``scope`` is the memory scope + session id — the per-sequence ``condition_root``
+    for ``run_sequence`` or the per-project root for ``run_project``. Using one
+    scope across sequences is exactly what lets a later task read what an earlier
+    task wrote (cross-task continuity). Behaviour is identical to the inline loop
+    this was extracted from; ``run_sequence``'s tests pin that."""
+    trial_id = f"{scope}-{step.step_id}"
+    clock = IdClock()
+    ctx = StepContext(trial_id=trial_id, session_id=scope, step_id=step.step_id, clock=clock)
+    reads_enabled = condition is not Condition.NO_MEMORY
+
+    retrieve: RetrieveResult | None = None
+    memory_events: list[MemoryEvent] = []
+    # Only issue a retrieve when the step actually depends on prior memory; a
+    # retrieve with no requested ids would emit a phantom event and inflate
+    # memory_tool_calls for establishing steps.
+    if reads_enabled and step.expected_memory_reads:
+        request = RetrievalRequest(
+            query_text=step.user_request,
+            requested_ids=step.expected_memory_reads,
+        )
+        retrieve = system.retrieve(request, ctx)
+        memory_events.append(retrieve.event)
+    available_memory = retrieve.payloads if retrieve is not None else {}
+
+    # Fail fast WITH context. A crashed step is deliberately not captured as trial
+    # data: a partially-run sequence yields incomparable condition gaps, and a
+    # silent partial result is worse than a loud abort.
+    try:
+        agent_result = agent.run_step(step, available_memory, ctx)
+    except Exception as exc:
+        raise RuntimeError(
+            f"agent failed at condition {condition.value!r}, "
+            f"step {step.step_id!r} (trial {trial_id})"
+        ) from exc
+
+    write_events: list[MemoryEvent] = []
+    if condition is Condition.MEMORY_ENABLED and system.supports_write:
+        for mid, content in agent_result.writes_performed.items():
+            write_events.append(system.write(mid, content, ctx))
+    memory_events.extend(write_events)
+
+    metrics = compute_metrics(
+        step, agent_result, retrieve, write_events, reads_enabled=reads_enabled
+    )
+    files_read = list(available_memory) if condition is Condition.MEMORY_ENABLED else []
+    files_written = [mid for ev in write_events for mid in ev.written_ids]
+    trace = Trace(
+        trial_id=trial_id,
+        experiment_id=experiment.experiment_id,
+        dataset_id=experiment.dataset_id,
+        task_id=f"{seq_id}/{step.step_id}",
+        step_id=step.step_id,
+        agent_config_id=agent.agent_config_id,
+        memory_config_id=memory_config_id,
+        start_time=clock.timestamp(),
+        end_time=clock.timestamp(),
+        messages=agent_result.messages,
+        tool_calls=agent_result.tool_calls,
+        memory_events=memory_events,
+        files_read=files_read,
+        files_written=files_written,
+        errors=agent_result.errors,
+        final_answer=agent_result.final_answer,
+        verifier_result={"reward": metrics.task.reward},
+    )
+    return StepTrial(
+        trial_id=trial_id,
+        sequence_id=seq_id,
+        step_id=step.step_id,
+        condition=condition,
+        agent_config_id=agent.agent_config_id,
+        memory_config_id=memory_config_id,
+        reward=metrics.task.reward,
+        trace=trace,
+        metrics=metrics,
+    )
+
+
 def run_sequence(
     seq: BenchmarkSequence,
     experiment: ExperimentConfig,
@@ -126,80 +217,16 @@ def run_sequence(
             system.load(_oracle_pool(seq))
 
         for step in seq.steps:
-            trial_id = f"{condition_root}-{step.step_id}"
-            clock = IdClock()
-            ctx = StepContext(
-                trial_id=trial_id, session_id=condition_root, step_id=step.step_id, clock=clock
-            )
-            reads_enabled = condition is not Condition.NO_MEMORY
-
-            retrieve: RetrieveResult | None = None
-            memory_events: list[MemoryEvent] = []
-            # Only issue a retrieve when the step actually depends on prior memory;
-            # a retrieve with no requested ids would emit a phantom event and inflate
-            # memory_tool_calls for establishing steps.
-            if reads_enabled and step.expected_memory_reads:
-                request = RetrievalRequest(
-                    query_text=step.user_request,
-                    requested_ids=step.expected_memory_reads,
-                )
-                retrieve = system.retrieve(request, ctx)
-                memory_events.append(retrieve.event)
-            available_memory = retrieve.payloads if retrieve is not None else {}
-
-            # Fail fast WITH context. A crashed step is deliberately not captured
-            # as trial data: a partially-run sequence yields incomparable
-            # condition gaps, and a silent partial result is worse than a loud
-            # abort. The wrap names the trial so the failure is actionable.
-            try:
-                agent_result = agent.run_step(step, available_memory, ctx)
-            except Exception as exc:
-                raise RuntimeError(
-                    f"agent failed at condition {condition.value!r}, "
-                    f"step {step.step_id!r} (trial {trial_id})"
-                ) from exc
-
-            write_events: list[MemoryEvent] = []
-            if condition is Condition.MEMORY_ENABLED and system.supports_write:
-                for mid, content in agent_result.writes_performed.items():
-                    write_events.append(system.write(mid, content, ctx))
-            memory_events.extend(write_events)
-
-            metrics = compute_metrics(
-                step, agent_result, retrieve, write_events, reads_enabled=reads_enabled
-            )
-            files_read = list(available_memory) if condition is Condition.MEMORY_ENABLED else []
-            files_written = [mid for ev in write_events for mid in ev.written_ids]
-            trace = Trace(
-                trial_id=trial_id,
-                experiment_id=experiment.experiment_id,
-                dataset_id=experiment.dataset_id,
-                task_id=f"{seq.sequence_id}/{step.step_id}",
-                step_id=step.step_id,
-                agent_config_id=agent.agent_config_id,
-                memory_config_id=memory_config_id,
-                start_time=clock.timestamp(),
-                end_time=clock.timestamp(),
-                messages=agent_result.messages,
-                tool_calls=agent_result.tool_calls,
-                memory_events=memory_events,
-                files_read=files_read,
-                files_written=files_written,
-                errors=agent_result.errors,
-                final_answer=agent_result.final_answer,
-                verifier_result={"reward": metrics.task.reward},
-            )
             run.trials.append(
-                StepTrial(
-                    trial_id=trial_id,
-                    sequence_id=seq.sequence_id,
-                    step_id=step.step_id,
+                _execute_step(
+                    seq_id=seq.sequence_id,
+                    step=step,
+                    system=system,
                     condition=condition,
-                    agent_config_id=agent.agent_config_id,
+                    scope=condition_root,
                     memory_config_id=memory_config_id,
-                    reward=metrics.task.reward,
-                    trace=trace,
-                    metrics=metrics,
+                    experiment=experiment,
+                    agent=agent,
                 )
             )
 

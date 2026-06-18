@@ -7,7 +7,7 @@ fill only the NL surface text of episodes, run offline into a frozen,
 ``generator_version``-tagged fixture; CI never calls a model.
 """
 
-from membench.generators.enterprise_workflow import materialize_world
+from membench.generators.enterprise_workflow import materialize_project, materialize_world
 from membench.generators.memory_necessity_gate import NecessityResult, memory_necessity_gate
 from membench.generators.schema_induction import (
     GENERATOR_VERSION,
@@ -18,6 +18,7 @@ __all__ = [
     "GENERATOR_VERSION",
     "NecessityResult",
     "generate_schema_induction_sequence",
+    "materialize_project",
     "materialize_world",
     "memory_necessity_gate",
 ]
