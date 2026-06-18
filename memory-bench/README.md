@@ -37,11 +37,15 @@ memory is injecting noise or stale state.
 
 ### Metrics
 
-Each trial emits a normalized trace and a metrics bundle. Phase 1 carries four
-live families: **task outcome**, **efficiency** (tokens, tool calls, latency,
-cost, retries), **retrieval** (precision/recall/rank over available memory), and
-**retention** (write hit/miss, scope, supersession). Two more groups (privacy
-and interruption) are stubbed now and filled in later.
+Each trial emits a normalized trace and a metrics bundle. Four core families are
+live: **task outcome**, **efficiency** (tokens, tool calls, latency, cost,
+retries), **retrieval** (precision/recall/rank, plus **Confusion**
+(`distractor_retrieval_rate`) and **Staleness** (`stale_memory_retrieval_rate`)
+once a query/top-k arm can surface seeded distractors and superseded entries),
+and **retention** (write hit/miss, scope, supersession). The **privacy** (DIV-4)
+and **interruption** groups now carry deterministic scorer legs as well; their
+semantic fields (sensitivity class, derailment magnitude) stay judge seams left
+open for the LLM-as-judge phase.
 
 Concrete memory tools differ across systems (filesystem read/write, MCP
 `add_memory`/`search_memories`, vector upsert/search), so every invocation maps
@@ -59,12 +63,13 @@ the verifier path Harbor expects.
 
 ## What's here
 
-This is the Phase-1 **skeleton**: the plumbing, proven end-to-end with a
-deterministic reference agent and reference memory systems. It is mechanism only:
-Harbor orchestration, schema validation, deterministic memory-op mapping, and
-deterministic metric arithmetic. Semantic judgment (the trace-to-memory
-extractor and LLM-as-judge scoring) is a documented seam left open for later
-phases.
+The Phase-1 **skeleton** — the plumbing, proven end-to-end with a deterministic
+reference agent and reference memory systems — is the foundation: Harbor
+orchestration, schema validation, deterministic memory-op mapping, and
+deterministic metric arithmetic. On top of it now sit the competitive arms, the
+§12 metric legs, and the synthetic-world eval track that produces the first
+measurable lift. Semantic judgment (the trace-to-memory extractor and
+LLM-as-judge scoring) is a documented seam left open for later phases.
 
 | area | module |
 |---|---|
@@ -74,24 +79,34 @@ phases.
 | memory events | `membench/schemas/memory_event.py` (10 normalized operations) |
 | op mapper | `membench/mapper/memory_op_mapper.py` (concrete tool → canonical op) |
 | trace | `membench/schemas/trace.py` |
-| metrics | `membench/schemas/metrics.py` (task / efficiency / retrieval / retention; privacy + interruption stubbed) |
-| memory systems | `membench/memory_systems/` (arms: none / oracle / filesystem / **ours**; `builtin` → mem-whi, competitive → mem-lvp) |
+| metrics | `membench/schemas/metrics.py` (task / efficiency / retrieval / retention; privacy + interruption deterministic legs landed, judge seams open) |
+| memory systems | `membench/memory_systems/` (arms: none / oracle / filesystem / lexical / **ours** / consolidating / retention_scheduled; competitive mem0 / a-mem / nat / graphiti landed behind a sync client seam; `builtin` → mem-whi) |
+| generators | `membench/generators/` (NeMo synthetic-world → enterprise-workflow materializer, synthetic-task, schema-induction, retention-schedule, interruption) |
 | LOO guard | `membench/validity.py` (V1 leakage guard — harness-owned D6 boundary) |
 | corpus loader | `membench/corpus.py` (real P1.5 store → `WorkRef` corpus via `mem query --json`) |
-| runner | `membench/runner/` (run one sequence under 3 conditions) |
+| runner | `membench/runner/` (`conditions.py` runs one sequence under 3 conditions; `project.py` runs a project of sequences under one shared store for cross-task continuity) |
 | replay | `membench/replay.py` + `membench replay` CLI (failure-triggered arms over the work-audit graph, LOO-bounded) |
 | telemetry | `membench/telemetry/` (OTel GenAI spans, primary; ATIF, derived) |
 | Harbor adapter | `membench/harbor/adapter.py` |
-| report | `membench/report/comparison.py` (3-condition table) + `report/arm_vector.py` (per-arm raw 5-axis) |
+| report | `membench/report/comparison.py` (3-condition table) + `report/arm_vector.py` (per-arm raw 5-axis) + `report/synthetic_arms.py` (per-arm lift / oracle-gap / Confusion / Staleness over synthetic worlds) |
 
-### Two eval modes
+### Three eval modes
 
-The harness carries two complementary eval objects, each with its own runner:
+The harness carries three complementary eval objects, each with its own runner:
 
 - **Convention sequence** (`runner/conditions.py`): a multi-session sequence
   with id-based memory, run under the three conditions (none / oracle /
   filesystem). Continuity is the persistent store; leak-safety is structural
   (a step reads only what earlier steps wrote).
+- **Synthetic-world arms** (`report/synthetic_arms.py`): a NeMo-seeded
+  `EnterpriseWorld` is materialized into memory-dependent sequences where memory
+  necessity is true by construction (oracle passes, no-memory cannot). Running
+  the arms over them gives the first measurable lift on this harness — memory
+  NECESSITY (oracle vs none) and, under `run_project`'s shared store, cross-task
+  CONTINUITY (0.062 isolated → 0.188 shared). The `lexical` query/top-k arm also
+  trips the Confusion / Staleness metrics (non-zero) where the id-exact arms
+  match the oracle (zero). Every fact, distractor, and supersession is authored
+  in pure Python and seed-reproducible; NeMo supplies only the cast and prose.
 - **Replay bead** (`replay.py`): a closed historical bead `B` (Decision 5). The
   `ours` arm = retrieval-v1 (mem-di8) over the work-audit graph, **failure-
   triggered** (Decision 8), under the harness-owned **LOO guard** (`validity.py`,
@@ -115,6 +130,13 @@ python3 -m membench.cli run-sequence \
 # Emit Harbor task dirs for a real `harbor run` (paid Claude path):
 python3 -m membench.cli gen-tasks \
   fixtures/sequences/gascity_backend_conventions.json --out tasks/
+
+# Arms over synthetic worlds — measurable lift + Confusion/Staleness, in-process:
+#   from membench.generators import materialize_world
+#   from membench.report.synthetic_arms import eval_arms_over_sequences, format_report
+#   seqs = materialize_world(world, project, n_tasks=2)   # NeMo-seeded world/project
+#   res = eval_arms_over_sequences(seqs, ["none", "oracle", "filesystem", "lexical"])
+#   print(format_report("synthetic arms", res))
 
 # Replay arms over the REAL P1.5 store under the LOO guard (the caller names the
 # query work — the harness never curates the eval target). `--with-traces`
@@ -147,12 +169,17 @@ it needs) is a later, eval-design step, deliberately not made here.
   extractor, and judge stay OSS or self-hosted.
 - The TypeScript work-audit graph builder in `../src/` is a **data source**. It
   exports sequences and fixtures as JSON; it is not rewritten here.
-- **Later-phase work, now landing on the `mem-lvp` front** (see
-  `../docs/competitive-arms-integration.md`): the competitive memory systems are
-  partly in: the sync `SemanticMemoryClient` seam, the `AsyncClientBridge` for
-  async backends, and the mem0 + A-MEM arms have landed (CI runs against
+- **Competitive arms** (see `../docs/competitive-arms-integration.md`): mem0,
+  A-MEM, NAT, and Graphiti are all wired behind the sync `SemanticMemoryClient`
+  seam (NAT/Graphiti via the `AsyncClientBridge`). CI runs them against
   deterministic fakes; real-arm provisioning is gated on local Ollama/Qdrant/
-  Chroma infra). The §12 metric groups and a real-derived sequence seed have
+  Chroma infra. The §12 metric groups and the ≥10-sequence real dataset have
   also landed.
-- **Still not built**: the NAT and Graphiti arms, an embedding retrieval lane,
-  the synthetic sequence generator, and the full ≥10-sequence dataset.
+- **Synthetic-world generator landed**: NeMo worlds → enterprise-workflow
+  materializer → memory-dependent sequences, verified on a live local NIM and
+  frozen behind a determinism manifest. This is what makes the arms-over-
+  synthetic lift and the Confusion/Staleness signal measurable.
+- **Still open**: a real embedding-retrieval lane for `lexical`/competitive arms
+  (the deterministic token-overlap ranker is the current baseline), the
+  trace-to-memory extractor, and the LLM-as-judge scoring that fills the
+  remaining semantic seams (privacy class, derailment magnitude, synthesis).
