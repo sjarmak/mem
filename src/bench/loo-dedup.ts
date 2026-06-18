@@ -53,8 +53,11 @@ export function canonicalIdentity(record: WorkRecord): CanonicalIdentity {
   };
 }
 
-/** Namespaced merge keys, so a slug can never collide with a like-valued commit. */
-function mergeKeys(id: CanonicalIdentity): string[] {
+/** Namespaced merge keys, so a slug can never collide with a like-valued commit.
+ * Exported so the session-fanout gate (mem-wanz.10) collapses fanned work_ids on
+ * the SAME canonical-identity definition this gate uses — the two must never
+ * diverge on what "the same underlying work" means. */
+export function mergeKeys(id: CanonicalIdentity): string[] {
   const keys = [`slug:${id.slug}`];
   if (id.branchRoot !== undefined) keys.push(`branch:${id.branchRoot}`);
   if (id.landedCommit !== undefined) keys.push(`landed:${id.landedCommit}`);
