@@ -24,6 +24,7 @@ configured model provider — point ``model_alias`` at a local NIM via
 
 from __future__ import annotations
 
+import random
 import re
 from pathlib import Path
 from typing import Any
@@ -33,8 +34,10 @@ from membench.generators.nemo.column_spec import (
     DEFAULT_MODEL_ALIAS,
     DEFAULT_WORLD_SPEC,
     DOMAINS,
+    ORG_SIZES,
     PERSONA_ROLES,
     REPO_LANGUAGES,
+    CategorySampler,
     WorldColumnSpec,
 )
 from membench.generators.nemo.model_provider import (
@@ -107,24 +110,49 @@ def build_config_builder(
     return builder
 
 
+def _choose_org(seed: int) -> tuple[str, str]:
+    """Pick the world's single domain + org_size deterministically from ``seed``.
+    These are org-level (one per world); making them constant across rows is what
+    keeps the generated rows describing one organization."""
+    rng = random.Random(seed)
+    return rng.choice(DOMAINS), rng.choice(ORG_SIZES)
+
+
+def _with_constant_org(spec: WorldColumnSpec, *, domain: str, org_size: str) -> WorldColumnSpec:
+    """Augment a per-row spec with single-value (constant) domain/org_size samplers,
+    so every row shares one org and the text columns can reference them via jinja."""
+    return WorldColumnSpec(
+        samplers=(
+            *spec.samplers,
+            CategorySampler("domain", (domain,)),
+            CategorySampler("org_size", (org_size,)),
+        ),
+        text_columns=spec.text_columns,
+    )
+
+
 def generate_world_records(
     *,
     num_records: int,
+    seed: int,
     spec: WorldColumnSpec = DEFAULT_WORLD_SPEC,
     nim_endpoint: str = DEFAULT_NIM_ENDPOINT,
     nim_model: str = DEFAULT_NIM_MODEL,
 ) -> list[dict[str, Any]]:
     """Run NeMo Data Designer against a LOCAL NIM and return ``num_records`` flat rows
-    (one per persona). Lazy-imports the SDK; offline operator use only — needs a NIM
+    (one per persona) describing ONE organization. ``seed`` fixes the org's
+    domain/org_size. Lazy-imports the SDK; offline operator use only — needs a NIM
     serving ``nim_model`` at ``nim_endpoint`` (no paid API)."""
     if num_records < 1:
         raise ValueError(f"num_records must be >= 1, got {num_records}")
     from data_designer.interface import DataDesigner  # lazy
 
+    domain, org_size = _choose_org(seed)
+    augmented = _with_constant_org(spec, domain=domain, org_size=org_size)
     model_config = local_nim_model_config(alias=DEFAULT_MODEL_ALIAS, model=nim_model)
     provider = local_nim_provider(endpoint=nim_endpoint)
     builder = build_config_builder(
-        spec, model_alias=DEFAULT_MODEL_ALIAS, model_configs=[model_config]
+        augmented, model_alias=DEFAULT_MODEL_ALIAS, model_configs=[model_config]
     )
     designer = DataDesigner(model_providers=[provider])
     preview = designer.preview(config_builder=builder, num_records=num_records)
@@ -176,10 +204,14 @@ def records_to_world(
         raise ValueError(f"records missing required columns: {sorted(missing)}")
 
     _check_vocab(records)
+    # domain + org_size are injected as single-value samplers -> constant by
+    # construction; assert it so a misuse (per-row org axes) fails loudly.
     domain = _require_constant(records, "domain")
-    org_name = _require_constant(records, "org_name")
     _require_constant(records, "org_size")
-    prd_summary = _require_constant(records, "prd_summary")
+    # org_name + prd_summary are org-level LLM prose. Since every row shares one
+    # domain/org_size, the first row is the canonical name/summary for the org.
+    org_name = str(records[0]["org_name"])
+    prd_summary = str(records[0]["prd_summary"])
 
     world_id = f"world-seed{seed}"
 

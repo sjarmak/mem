@@ -64,7 +64,7 @@ def test_records_to_world_is_deterministic() -> None:
 
 def test_incoherent_org_field_raises() -> None:
     rows = _rows()
-    rows[1]["org_name"] = "OtherCo"  # two orgs in one run
+    rows[1]["domain"] = "legal"  # two domains in one run -> not one organization
     with pytest.raises(ValueError, match="not constant"):
         records_to_world(rows, seed=1)
 
@@ -101,7 +101,9 @@ def test_write_rejects_mismatched_pair(tmp_path) -> None:
 def test_default_spec_column_names_are_unique() -> None:
     names = DEFAULT_WORLD_SPEC.column_names()
     assert len(names) == len(set(names))
-    assert "domain" in names and "org_name" in names
+    # domain/org_size are injected per-world (constant), not in the per-row spec.
+    assert "persona_role" in names and "org_name" in names
+    assert "domain" not in names
 
 
 def test_live_builder_smoke() -> None:

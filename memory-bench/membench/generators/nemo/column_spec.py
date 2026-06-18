@@ -79,10 +79,13 @@ CHANNEL_KINDS = ("chat", "email", "issue-tracker", "docs", "meeting")
 REPO_LANGUAGES = ("python", "cuda-cpp", "go", "typescript", "rust")
 
 
+# NOTE: ``domain`` and ``org_size`` are ORG-level — one value per world, not per
+# row — so they are NOT in this per-row sampler set. ``world_builder`` chooses them
+# once (seeded) and injects them as single-value (constant) samplers at build time,
+# which keeps every persona row in one coherent organization. The text columns
+# below reference them via jinja, so they must exist as columns at generation time.
 DEFAULT_WORLD_SPEC = WorldColumnSpec(
     samplers=(
-        CategorySampler("domain", DOMAINS),
-        CategorySampler("org_size", ORG_SIZES),
         CategorySampler("persona_role", PERSONA_ROLES),
         CategorySampler("channel_kind", CHANNEL_KINDS),
         CategorySampler("repo_language", REPO_LANGUAGES),
