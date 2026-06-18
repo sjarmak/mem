@@ -68,6 +68,8 @@ module = [
     "nat.*",
     "graphiti_core",
     "graphiti_core.*",
+    "data_designer",
+    "data_designer.*",
 ]
 ignore_missing_imports = true
 
