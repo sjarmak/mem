@@ -28,6 +28,7 @@ from membench.generators import materialize_world, memory_necessity_gate
 from membench.generators.nemo import records_to_world, write_world
 from membench.generators.nemo.model_provider import DEFAULT_NIM_ENDPOINT, DEFAULT_NIM_MODEL
 from membench.generators.nemo.world_builder import generate_world_records
+from membench.generators.world_manifest import build_manifest, write_manifest
 
 
 def main() -> int:
@@ -67,6 +68,18 @@ def main() -> int:
         json.dumps([seq.model_dump() for seq in sequences], indent=2), encoding="utf-8"
     )
     print(f"wrote {len(sequences)} sequences -> {seq_path}")
+
+    manifest = build_manifest(
+        world,
+        project,
+        sequences,
+        nim_model=args.nim_model,
+        n_tasks=args.tasks,
+        facts_per_task=args.facts,
+        seed=args.seed,
+    )
+    mpath = write_manifest(manifest, world_dir=out_dir)
+    print(f"wrote manifest (sequences_sha256={manifest.sequences_sha256[:12]}) -> {mpath}")
     print(f"admitted {admitted}/{len(sequences)} memory-required tasks")
     return 0
 
