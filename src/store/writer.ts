@@ -1,5 +1,6 @@
 import { errorClass, failureSignature, normalizePath } from '../parse/recurrence.js';
 import { LessonPayloadSchema } from '../schemas/lesson.js';
+import type { PrLink } from '../schemas/trace.js';
 import { WorkRecordSchema, type WorkRecord } from '../schemas/workrecord.js';
 import type { StoreDatabase } from './sqlite.js';
 
@@ -142,6 +143,29 @@ function t3AssociationLink(
   };
 }
 
+/** The pr-link outcome edge (mem-wanz.7, PRD §5.3): the GitHub PR (a PROV-O
+ * Entity — the outcome) `wasGeneratedBy` this work (the Activity), bridged by the
+ * transcript's explicit `pr-link` entry. `entity_ref` is the canonical PR url.
+ * tier T2 — a verifiable PR reference, not yet a CI/merge oracle (a later CI
+ * rollup elevates it to T1); `confidence` 0.98 is the bridge's measured precision
+ * (PRD §3 key #1). `created_at` derives from the entry (else the record) so a
+ * re-ingest stays byte-identical. */
+function prLinkRow(record: WorkRecord, prLink: PrLink): Record<string, string | number> {
+  return {
+    work_id: record.work_id,
+    session_uuid: prLink.session_uuid,
+    relation: 'wasGeneratedBy',
+    entity_ref: prLink.pr_url,
+    entity_kind: 'pull_request',
+    key_type: 'pr-link',
+    tier: 'T2',
+    confidence: 0.98,
+    provenance: 'pr-link',
+    suspect: 0,
+    created_at: prLink.timestamp ?? record.lifecycle.created,
+  };
+}
+
 /** The molecule grouping id, projected from generator metadata: gc molecules
  * write `molecule_id`, older workflow runs `workflow_id`. */
 function moleculeId(record: WorkRecord): string | null {
@@ -254,6 +278,11 @@ export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
           run.outcome ?? null
         );
         insertProvLink.run(t3AssociationLink(record, run.session_uuid, run.started_at));
+      }
+      // The transcript→GitHub outcome edges (mem-wanz.7). Already de-duped by PR
+      // url in the parser, so each is a distinct entity_ref under the unique key.
+      for (const prLink of record.trace?.pr_links ?? []) {
+        insertProvLink.run(prLinkRow(record, prLink));
       }
     }
   })();

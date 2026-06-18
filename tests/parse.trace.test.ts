@@ -534,6 +534,100 @@ describe('parseTranscript — run metadata', () => {
   });
 });
 
+/** A `pr-link` transcript entry, as the harness writes it (camelCase fields). */
+function prLinkEntry(opts: {
+  sessionId?: unknown;
+  prNumber?: unknown;
+  prUrl?: unknown;
+  prRepository?: unknown;
+  timestamp?: string;
+}): string {
+  return JSON.stringify({ type: 'pr-link', ...opts });
+}
+
+describe('parseTranscript — pr-link entries (mem-wanz.7)', () => {
+  it('extracts a pr-link entry into a structured PrLink', () => {
+    const text = transcript(
+      prLinkEntry({
+        sessionId: 'sess-pr',
+        prNumber: 66,
+        prUrl: 'https://github.com/sjarmak/gascity-dashboard/pull/66',
+        prRepository: 'sjarmak/gascity-dashboard',
+        timestamp: '2026-06-17T13:14:43.142Z',
+      })
+    );
+    expect(parseTranscript(text).pr_links).toEqual([
+      {
+        session_uuid: 'sess-pr',
+        pr_number: 66,
+        pr_url: 'https://github.com/sjarmak/gascity-dashboard/pull/66',
+        pr_repository: 'sjarmak/gascity-dashboard',
+        timestamp: '2026-06-17T13:14:43.142Z',
+      },
+    ]);
+  });
+
+  it('de-dupes a re-emitted PR by url, keeping distinct PRs, in transcript order', () => {
+    const link = (n: number) => ({
+      sessionId: 'sess-pr',
+      prNumber: n,
+      prUrl: `https://github.com/o/r/pull/${n}`,
+      prRepository: 'o/r',
+    });
+    const text = transcript(
+      prLinkEntry(link(66)),
+      prLinkEntry(link(70)),
+      prLinkEntry(link(66)) // revisit — same url, dropped
+    );
+    expect(parseTranscript(text).pr_links.map(l => l.pr_number)).toEqual([66, 70]);
+  });
+
+  it('skips a malformed pr-link (missing PR number or url) rather than coercing it', () => {
+    const text = transcript(
+      prLinkEntry({
+        sessionId: 'sess-pr',
+        prUrl: 'https://github.com/o/r/pull/9',
+        prRepository: 'o/r',
+      }), // no prNumber
+      prLinkEntry({ sessionId: 'sess-pr', prNumber: 9, prRepository: 'o/r' }), // no prUrl
+      prLinkEntry({ prNumber: 9, prUrl: 'https://github.com/o/r/pull/9', prRepository: 'o/r' }) // no sessionId
+    );
+    expect(parseTranscript(text).pr_links).toEqual([]);
+  });
+
+  it('skips a pr-link whose prNumber is not a positive integer (incl. a stringified number)', () => {
+    const base = {
+      sessionId: 'sess-pr',
+      prUrl: 'https://github.com/o/r/pull/9',
+      prRepository: 'o/r',
+    };
+    const text = transcript(
+      prLinkEntry({ ...base, prNumber: 0 }),
+      prLinkEntry({ ...base, prNumber: -1 }),
+      prLinkEntry({ ...base, prNumber: 1.5 }),
+      prLinkEntry({ ...base, prNumber: '9' }) // a future harness stringifying the number must not coerce
+    );
+    expect(parseTranscript(text).pr_links).toEqual([]);
+  });
+
+  it('omits the timestamp when the entry carries none', () => {
+    const text = transcript(
+      prLinkEntry({
+        sessionId: 'sess-pr',
+        prNumber: 5,
+        prUrl: 'https://github.com/o/r/pull/5',
+        prRepository: 'o/r',
+      })
+    );
+    expect(parseTranscript(text).pr_links[0].timestamp).toBeUndefined();
+  });
+
+  it('is empty for a transcript naming no PR', () => {
+    const text = transcript(userTurn({ sessionId: 'sess-1', timestamp: '2026-06-01T00:00:00Z' }));
+    expect(parseTranscript(text).pr_links).toEqual([]);
+  });
+});
+
 describe('parseRecordTrace', () => {
   const record = (overrides: Partial<WorkRecord> = {}): WorkRecord =>
     WorkRecordSchema.parse({
@@ -574,6 +668,29 @@ describe('parseRecordTrace', () => {
       n_tool_calls: 1,
     });
     expect(input.trace?.run).toBeUndefined();
+  });
+
+  it('attaches pr-link edges to trace.pr_links, and leaves them absent when none', () => {
+    const input = record({ trace: { jsonl_path: '/t.jsonl' } });
+    const withPr = parseRecordTrace(input, () =>
+      prLinkEntry({
+        sessionId: 'sess-9',
+        prNumber: 12,
+        prUrl: 'https://github.com/o/r/pull/12',
+        prRepository: 'o/r',
+      })
+    );
+    expect(withPr.trace?.pr_links).toEqual([
+      {
+        session_uuid: 'sess-9',
+        pr_number: 12,
+        pr_url: 'https://github.com/o/r/pull/12',
+        pr_repository: 'o/r',
+      },
+    ]);
+    // No pr-link in the transcript → the field stays absent (not an empty array).
+    const without = parseRecordTrace(record({ trace: { jsonl_path: '/t.jsonl' } }), () => '');
+    expect(without.trace?.pr_links).toBeUndefined();
   });
 
   it('returns the record unchanged when it has no resolved trace', () => {

@@ -756,3 +756,97 @@ describe('mem-wanz.4 — T3 session-association floor (links)', () => {
     expect(linksFor(db, 'demo-1a2b')).toHaveLength(1);
   });
 });
+
+describe('mem-wanz.7 — pr-link outcome edges (links)', () => {
+  const prLink = {
+    session_uuid: 'sess-pr',
+    pr_number: 66,
+    pr_url: 'https://github.com/sjarmak/gascity-dashboard/pull/66',
+    pr_repository: 'sjarmak/gascity-dashboard',
+    timestamp: '2026-06-17T13:14:43.142Z',
+  };
+  const withPrLinks = (links: unknown[]): WorkRecord =>
+    fullRecord({
+      trace: { jsonl_path: '/traces/x.jsonl', pr_links: links } as WorkRecord['trace'],
+    });
+
+  it('writes a wasGeneratedBy T2 edge to the PR, keyed by pr-link', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [withPrLinks([prLink])]);
+    // PROV-O: the PR (Entity, the outcome) wasGeneratedBy this work (Activity).
+    expect(linksFor(db, 'demo-1a2b')).toEqual([
+      {
+        work_id: 'demo-1a2b',
+        session_uuid: 'sess-pr',
+        relation: 'wasGeneratedBy',
+        entity_ref: 'https://github.com/sjarmak/gascity-dashboard/pull/66',
+        entity_kind: 'pull_request',
+        key_type: 'pr-link',
+        tier: 'T2', // a PR reference, not yet a CI/merge-verified oracle
+        confidence: 0.98,
+        provenance: 'pr-link',
+        suspect: false,
+        created_at: '2026-06-17T13:14:43.142Z',
+      },
+    ]);
+  });
+
+  it('writes one edge per distinct PR a session generated', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [
+      withPrLinks([
+        prLink,
+        {
+          ...prLink,
+          pr_number: 70,
+          pr_url: 'https://github.com/sjarmak/gascity-dashboard/pull/70',
+        },
+      ]),
+    ]);
+    const refs = linksFor(db, 'demo-1a2b').map(l => l.entity_ref);
+    expect(refs).toEqual([
+      'https://github.com/sjarmak/gascity-dashboard/pull/66',
+      'https://github.com/sjarmak/gascity-dashboard/pull/70',
+    ]);
+  });
+
+  it('coexists with the T3 floor edge on a record that has both a run and a PR', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [
+      fullRecord({
+        trace: {
+          jsonl_path: '/traces/x.jsonl',
+          run: {
+            session_uuid: 'sess-pr',
+            input_tokens: 1,
+            output_tokens: 1,
+            cache_creation_tokens: 0,
+            cache_read_tokens: 0,
+            n_tool_calls: 0,
+            tool_calls_by_type: {},
+            n_turns: 1,
+          },
+          pr_links: [prLink],
+        },
+      }),
+    ]);
+    const byRelation = linksFor(db, 'demo-1a2b')
+      .map(l => `${l.relation}:${l.tier}`)
+      .sort();
+    expect(byRelation).toEqual(['wasAssociatedWith:T3', 'wasGeneratedBy:T2']);
+  });
+
+  it('derives created_at from the record when the pr-link has no timestamp', () => {
+    const db = openStore(':memory:');
+    const { timestamp: _omit, ...noTs } = prLink;
+    writeRecords(db, [withPrLinks([noTs])]);
+    expect(linksFor(db, 'demo-1a2b')[0].created_at).toBe('2026-06-01T00:00:00Z'); // lifecycle.created
+  });
+
+  it('rebuilds the edge on re-ingest — never drifts, never duplicates', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [withPrLinks([prLink])]);
+    writeRecords(db, [withPrLinks([prLink])]);
+    expect(linksFor(db, 'demo-1a2b')).toHaveLength(1);
+  });
+});

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ExecutionSchema, TraceErrorSchema, TraceRunSchema } from './trace.js';
+import { ExecutionSchema, PrLinkSchema, TraceErrorSchema, TraceRunSchema } from './trace.js';
 
 /**
  * WorkRecord — the atomic unit of the work-audit graph (ARCHITECTURE.md,
@@ -54,6 +54,9 @@ export const TraceRefSchema = z.object({
   // Run-level metadata (tokens, model, harness, tool-call shape). Absent until
   // the transcript is parsed, like the sibling parsed fields above.
   run: TraceRunSchema.optional(),
+  // `pr-link` transcript entries — the explicit transcript→GitHub PR bridge
+  // (PRD §3 key #1). Absent until parsed, like the sibling parsed fields.
+  pr_links: z.array(PrLinkSchema).optional(),
 });
 
 export type TraceRef = z.infer<typeof TraceRefSchema>;

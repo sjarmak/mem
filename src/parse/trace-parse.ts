@@ -1,7 +1,7 @@
 import { closeSync, openSync, readSync } from 'node:fs';
 import { StringDecoder } from 'node:string_decoder';
 
-import type { Execution, TraceError, TraceRun } from '../schemas/trace.js';
+import type { Execution, PrLink, TraceError, TraceRun } from '../schemas/trace.js';
 import type { WorkRecord } from '../schemas/workrecord.js';
 import { dedupeErrors, extractErrors } from './error-extractors.js';
 import { matchRunner } from './runners.js';
@@ -34,6 +34,9 @@ export interface ParsedTrace {
    * Absent when the transcript has no user/assistant entries, or when no entry
    * carries a `sessionId` (the run's required natural key). */
   run?: TraceRun;
+  /** `pr-link` entries naming a GitHub PR this session was tied to, de-duplicated
+   * by PR url in transcript order. Empty when the transcript names none. */
+  pr_links: PrLink[];
 }
 
 /** The `message.usage` block — only the token fields this parser sums. */
@@ -58,6 +61,10 @@ interface TranscriptEntry {
     usage?: MessageUsage;
   };
   toolUseResult?: unknown;
+  // `pr-link` entry fields (type === 'pr-link'), camelCase as the harness writes.
+  prNumber?: unknown;
+  prUrl?: unknown;
+  prRepository?: unknown;
 }
 
 /** A content block inside `message.content[]`. */
@@ -110,6 +117,31 @@ function executionOutput(entry: TranscriptEntry, block: ContentBlock): string {
 function contentBlocks(entry: TranscriptEntry): ContentBlock[] {
   const content = entry.message?.content;
   return Array.isArray(content) ? (content as ContentBlock[]) : [];
+}
+
+/** Project a `pr-link` entry into a {@link PrLink}, or null when it lacks any of
+ * the fields that make it a usable transcript→GitHub bridge — a malformed entry
+ * is skipped, never coerced into a partial link. */
+function parsePrLink(entry: TranscriptEntry): PrLink | null {
+  if (
+    typeof entry.sessionId !== 'string' ||
+    typeof entry.prNumber !== 'number' ||
+    !Number.isInteger(entry.prNumber) ||
+    entry.prNumber <= 0 ||
+    typeof entry.prUrl !== 'string' ||
+    entry.prUrl === '' ||
+    typeof entry.prRepository !== 'string' ||
+    entry.prRepository === ''
+  ) {
+    return null;
+  }
+  return {
+    session_uuid: entry.sessionId,
+    pr_number: entry.prNumber,
+    pr_url: entry.prUrl,
+    pr_repository: entry.prRepository,
+    ...(typeof entry.timestamp === 'string' && { timestamp: entry.timestamp }),
+  };
 }
 
 /** Read-as-you-go fold of run-level metadata across transcript entries. The
@@ -231,6 +263,7 @@ export function parseTranscript(input: string | Iterable<string>): ParsedTrace {
   const pending = new Map<string, PendingCall>();
   const tool_outcomes: Execution[] = [];
   const allErrors: TraceError[] = [];
+  const prLinksByUrl = new Map<string, PrLink>();
   const run = newRunAccumulator();
 
   for (const line of lines) {
@@ -244,6 +277,14 @@ export function parseTranscript(input: string | Iterable<string>): ParsedTrace {
     }
 
     foldRunEntry(run, entry);
+
+    if (entry.type === 'pr-link') {
+      // De-dupe by PR url (the session re-emits the link on revisit), keeping the
+      // first occurrence so the parse is stable across re-ingest.
+      const link = parsePrLink(entry);
+      if (link && !prLinksByUrl.has(link.pr_url)) prLinksByUrl.set(link.pr_url, link);
+      continue;
+    }
 
     if (entry.type === 'assistant') {
       for (const block of contentBlocks(entry)) {
@@ -274,6 +315,7 @@ export function parseTranscript(input: string | Iterable<string>): ParsedTrace {
   return {
     tool_outcomes,
     errors: dedupeErrors(allErrors),
+    pr_links: [...prLinksByUrl.values()],
     ...(finalizedRun !== undefined && { run: finalizedRun }),
   };
 }
@@ -358,9 +400,16 @@ export function parseRecordTrace(
     throw err;
   }
 
-  const { tool_outcomes, errors, run } = parseTranscript(lines);
+  const { tool_outcomes, errors, run, pr_links } = parseTranscript(lines);
   return {
     ...record,
-    trace: { ...record.trace, jsonl_path: path, tool_outcomes, errors, ...(run && { run }) },
+    trace: {
+      ...record.trace,
+      jsonl_path: path,
+      tool_outcomes,
+      errors,
+      ...(run && { run }),
+      ...(pr_links.length > 0 && { pr_links }),
+    },
   };
 }

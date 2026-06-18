@@ -74,3 +74,24 @@ export const TraceRunSchema = z.object({
 });
 
 export type TraceRun = z.infer<typeof TraceRunSchema>;
+
+/**
+ * A `pr-link` transcript entry — the harness writes one whenever a session is
+ * tied to a GitHub PR (`{"type":"pr-link","sessionId":…,"prNumber":66,"prUrl":…,
+ * "prRepository":"owner/name"}`). It is the explicit transcript→GitHub bridge
+ * (PRD §3 key #1, P≈0.98): a verifiable PR reference the otherwise-empty
+ * `external_ref`/`pr` columns never carried. The PR number alone is not a CI/merge
+ * oracle, so a link derived from this is T2 until a CI rollup elevates it. */
+export const PrLinkSchema = z.object({
+  /** The Claude session UUID the entry is keyed on — equals the run's. */
+  session_uuid: z.string().min(1),
+  pr_number: z.number().int().positive(),
+  /** Canonical, globally-unique PR reference — the link's `entity_ref`. */
+  pr_url: z.string().min(1),
+  /** `owner/name` of the PR's repository. */
+  pr_repository: z.string().min(1),
+  /** The entry's ISO-8601 timestamp, when present. */
+  timestamp: z.string().optional(),
+});
+
+export type PrLink = z.infer<typeof PrLinkSchema>;
