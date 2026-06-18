@@ -112,3 +112,25 @@ def test_live_builder_smoke() -> None:
 
     builder = build_config_builder()
     assert builder is not None
+
+
+def test_live_local_nim_provider_and_config() -> None:
+    # Local NIM wiring: the provider points at an OpenAI-compatible endpoint and the
+    # model config binds the spec's alias to it. SDK-gated; CI skips.
+    pytest.importorskip("data_designer")
+    from membench.generators.nemo.column_spec import DEFAULT_MODEL_ALIAS
+    from membench.generators.nemo.model_provider import (
+        DEFAULT_NIM_ENDPOINT,
+        local_nim_model_config,
+        local_nim_provider,
+    )
+    from membench.generators.nemo.world_builder import build_config_builder
+
+    provider = local_nim_provider()
+    assert provider.endpoint == DEFAULT_NIM_ENDPOINT
+    assert provider.provider_type == "openai"
+    model_config = local_nim_model_config()
+    assert model_config.alias == DEFAULT_MODEL_ALIAS
+    # The builder must accept the model config that resolves the text columns' alias.
+    builder = build_config_builder(model_alias=DEFAULT_MODEL_ALIAS, model_configs=[model_config])
+    assert builder is not None

@@ -13,12 +13,13 @@ Three concerns, split by whether they touch the SDK:
 * ``write_world`` / ``read_world`` — freeze a world to ``fixtures/worlds/<seed>/``
   and read it back. No SDK.
 
-NeMo API note: the column-builder calls follow the documented Data Designer SDK
+NeMo API note: the SDK surface used here is verified against data-designer 0.6.1
 (``SamplerColumnConfig`` + ``CategorySamplerParams``, ``LLMTextColumnConfig``,
-``DataDesigner().preview``). The exact preview→records extraction is pinned to the
-documented surface and must be smoke-verified against the installed SDK version
-before a real generation run — the smoke test in ``tests`` is skipped until the
-SDK is present.
+``DataDesigner().preview`` returning ``PreviewResults`` with a ``.dataset``
+DataFrame). ``build_config_builder`` is covered by the live smoke test (runs
+whenever the SDK is installed). ``generate_world_records`` additionally needs a
+configured model provider — point ``model_alias`` at a local NIM via
+``generators.nemo.model_provider`` — so it is exercised by an operator run, not CI.
 """
 
 from __future__ import annotations
@@ -29,11 +30,18 @@ from typing import Any
 
 from membench.generators.nemo.column_spec import (
     CHANNEL_KINDS,
+    DEFAULT_MODEL_ALIAS,
     DEFAULT_WORLD_SPEC,
     DOMAINS,
     PERSONA_ROLES,
     REPO_LANGUAGES,
     WorldColumnSpec,
+)
+from membench.generators.nemo.model_provider import (
+    DEFAULT_NIM_ENDPOINT,
+    DEFAULT_NIM_MODEL,
+    local_nim_model_config,
+    local_nim_provider,
 )
 from membench.schemas.world import (
     WORLD_SCHEMA_VERSION,
@@ -68,15 +76,18 @@ def _slug(text: str) -> str:
 
 
 def build_config_builder(
-    spec: WorldColumnSpec = DEFAULT_WORLD_SPEC, *, model_alias: str | None = None
+    spec: WorldColumnSpec = DEFAULT_WORLD_SPEC,
+    *,
+    model_alias: str | None = None,
+    model_configs: list[Any] | None = None,
 ) -> Any:
     """Assemble a ``DataDesignerConfigBuilder`` from ``spec``. Lazy-imports the SDK;
-    ``model_alias`` overrides every text column's alias (e.g. point all columns at a
-    local NIM). Return type is the SDK's builder — annotated loosely so this module
-    needs no SDK at import."""
+    ``model_alias`` overrides every text column's alias and ``model_configs`` binds
+    those aliases to served models (e.g. a local NIM). Return type is the SDK's
+    builder — annotated loosely so this module needs no SDK at import."""
     import data_designer.config as dd  # lazy: SDK only needed for a real run
 
-    builder = dd.DataDesignerConfigBuilder()
+    builder = dd.DataDesignerConfigBuilder(model_configs=model_configs or [])
     for sampler in spec.samplers:
         builder.add_column(
             dd.SamplerColumnConfig(
@@ -100,17 +111,28 @@ def generate_world_records(
     *,
     num_records: int,
     spec: WorldColumnSpec = DEFAULT_WORLD_SPEC,
-    model_alias: str | None = None,
+    nim_endpoint: str = DEFAULT_NIM_ENDPOINT,
+    nim_model: str = DEFAULT_NIM_MODEL,
 ) -> list[dict[str, Any]]:
-    """Run NeMo Data Designer and return ``num_records`` flat rows (one per persona).
-    Lazy-imports the SDK; offline operator use only."""
+    """Run NeMo Data Designer against a LOCAL NIM and return ``num_records`` flat rows
+    (one per persona). Lazy-imports the SDK; offline operator use only — needs a NIM
+    serving ``nim_model`` at ``nim_endpoint`` (no paid API)."""
     if num_records < 1:
         raise ValueError(f"num_records must be >= 1, got {num_records}")
     from data_designer.interface import DataDesigner  # lazy
 
-    builder = build_config_builder(spec, model_alias=model_alias)
-    preview = DataDesigner().preview(config_builder=builder, num_records=num_records)
-    return [dict(record) for record in preview.dataset]
+    model_config = local_nim_model_config(alias=DEFAULT_MODEL_ALIAS, model=nim_model)
+    provider = local_nim_provider(endpoint=nim_endpoint)
+    builder = build_config_builder(
+        spec, model_alias=DEFAULT_MODEL_ALIAS, model_configs=[model_config]
+    )
+    designer = DataDesigner(model_providers=[provider])
+    preview = designer.preview(config_builder=builder, num_records=num_records)
+    if preview.dataset is None:
+        raise RuntimeError("NeMo preview returned no dataset (no records generated)")
+    # preview.dataset is a pandas DataFrame; one dict per row.
+    records: list[dict[str, Any]] = preview.dataset.to_dict(orient="records")
+    return records
 
 
 # --- pure parser (SDK-free, CI-tested) ------------------------------------------
