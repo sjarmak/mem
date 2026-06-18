@@ -7,15 +7,18 @@ that and run the project's own LiveReproRunner (worktree @ base, git apply impl,
 apply gold tests, npx vitest run) through validity_gate. A bundle is a SOUND
 oracle iff the gold diff reproduces (tests pass) AND the empty diff fails.
 
-Usage: python scripts/gate_mem_slice.py [--limit N]
+Usage: python scripts/gate_mem_slice.py [--limit N] [--repo DIR] [--store DB]
+(repo/store default to this checkout; override with the flags or MEM_REPO/MEM_STORE).
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import sqlite3
 import subprocess
 import sys
+from pathlib import Path
 
 from membench.bundle.replay import ReplayResult
 from membench.grading.dual_verifier import is_test_path
@@ -23,8 +26,12 @@ from membench.grading.validity_gate import validity_gate
 from membench.harbor.repro_live import LiveReproRunner
 from membench.schemas.bundle import BundleEnv, TaskBundle
 
-REPO = "/home/ds/projects/mem"
-STORE = "/home/ds/projects/mem/.mem/store-v7-linked.db"
+# Default to the repo this script lives in (memory-bench/scripts/ → two levels up),
+# overridable via --repo/--store or the MEM_REPO/MEM_STORE env vars. No hardcoded
+# absolute path, so the gate runs on any checkout.
+_DEFAULT_REPO = str(Path(__file__).resolve().parents[2])
+REPO = os.environ.get("MEM_REPO", _DEFAULT_REPO)
+STORE = os.environ.get("MEM_STORE", str(Path(REPO) / ".mem" / "store-v7-linked.db"))
 
 
 def git(*args: str) -> str:
@@ -69,9 +76,20 @@ def build_bundle(work_id: str, sha: str, title: str, trace: str | None) -> TaskB
 
 
 def main() -> None:
+    global REPO, STORE
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--repo", default=REPO, help="repo root (default: derived; env MEM_REPO)")
+    ap.add_argument(
+        "--store",
+        default=None,
+        help="path to the linked store db (default: <repo>/.mem/store-v7-linked.db; env MEM_STORE)",
+    )
     args = ap.parse_args()
+
+    REPO = args.repo
+    STORE = args.store or str(Path(REPO) / ".mem" / "store-v7-linked.db")
 
     bundles = eligible_bundles()
     if args.limit:
@@ -87,7 +105,7 @@ def main() -> None:
                 impl = [p for p in bundle.output.diff_by_file() if not is_test_path(p)]
                 tests = [p for p in bundle.output.diff_by_file() if is_test_path(p)]
                 res = validity_gate(bundle, test_runner=runner)
-            except Exception as exc:  # noqa: BLE001 — report, don't abort the slice
+            except Exception as exc:
                 print(f"  {work_id:14s} ERROR: {exc}", flush=True)
                 results.append((work_id, "error", str(exc)[:80]))
                 continue
