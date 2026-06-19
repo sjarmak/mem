@@ -35,6 +35,7 @@ from membench.bbon.comparative_judge import (
     parse_judgment_reply,
 )
 from membench.bbon.extract import build_attempt, steps_from_stream, terminal_status
+from membench.bbon.local_stack_judge import LocalStackComparativeJudge
 from membench.bbon.models import (
     AlignedStep,
     Attempt,
@@ -58,6 +59,7 @@ __all__ = [
     "Comparison",
     "Delta",
     "Judgment",
+    "LocalStackComparativeJudge",
     "NarrativeDiff",
     "ProsCons",
     "StubComparativeJudge",
