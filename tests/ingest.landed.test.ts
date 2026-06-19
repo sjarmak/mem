@@ -50,6 +50,23 @@ describe('deriveLanded', () => {
     expect(out).toEqual({ base_commit: BASE, n_commits: 0, landed_state: 'empty-window' });
   });
 
+  it('degrades to unresolved when the base object is missing locally (bad range exit)', () => {
+    // A base READ from a producer-recorded cut may not be a commit in this
+    // checkout; rev-list base..end then exits non-zero. Must not crash the batch.
+    const badRange = () => {
+      throw Object.assign(new Error('fatal: bad revision'), { status: 128 });
+    };
+    const out = deriveLanded(input, git({ range: badRange }));
+    expect(out).toEqual({ base_commit: BASE, landed_state: 'unresolved' });
+  });
+
+  it('rethrows a non-exit failure from the range listing (e.g. missing git)', () => {
+    const noGit = () => {
+      throw new Error('spawn git ENOENT'); // no .status → not a non-zero exit
+    };
+    expect(() => deriveLanded(input, git({ range: noGit }))).toThrow();
+  });
+
   it('classifies a window with no forward commits as empty-window', () => {
     const out = deriveLanded(input, git({ range: () => '\n' }));
     expect(out).toEqual({ base_commit: BASE, n_commits: 0, landed_state: 'empty-window' });

@@ -154,7 +154,18 @@ function resolveWindow(run: GitRunner, input: LandedInput): Window {
   // `end` at base means the branch tip never moved over the window — nothing
   // landed, even before listing commits.
   if (end === input.base_commit) return { state: 'empty' };
-  const commits = rangeCommits(run, input.work_dir, input.base_commit, end);
+  let commits: string[];
+  try {
+    commits = rangeCommits(run, input.work_dir, input.base_commit, end);
+  } catch (err) {
+    // `base_commit` may be an object this checkout does not have — e.g. a base
+    // READ from a producer-recorded `cut` (ingest/provenance-from-log) that
+    // points at a commit not present locally. The window cannot be computed, so
+    // the record is `unresolved` — never crash the batch. Mirrors the non-zero
+    // degradation in resolveTipBefore above.
+    if (isNonZeroExit(err)) return { state: 'unresolved' };
+    throw err;
+  }
   // `end` is at or behind `base` (no forward progress) — nothing landed.
   if (commits.length === 0) return { state: 'empty' };
   return { state: 'commits', end, commits };
