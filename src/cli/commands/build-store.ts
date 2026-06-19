@@ -1,6 +1,11 @@
 import { CommandContext } from '../index.js';
 import { storePath } from '../store.js';
-import { openStore, writeRecords } from '../../store/index.js';
+import {
+  deriveProvenanceEvents,
+  openStore,
+  recordProvenanceEvents,
+  writeRecords,
+} from '../../store/index.js';
 import { defaultConnection, doltRunner, listRigs, readRig } from '../../ingest/beads.js';
 import {
   type SessionResolver,
@@ -48,6 +53,10 @@ export interface BuildStoreResult {
   /** Records that received ≥2 session iterations from the merged session-join
    * artifact (0 when `--session-join` is off). */
   records_multi_session: number;
+  /** Provenance events backfilled into the append-only `provenance_events` log
+   * (cut/claim/land) across the build. Idempotent: a rebuild of the same corpus
+   * re-derives the same deterministic ids, so the count reflects new rows. */
+  records_provenance_events: number;
 }
 
 /** Options for {@link attachAndParse} — injectable so the P1.3→P1.6 wiring is
@@ -81,14 +90,33 @@ export function attachAndParse(records: WorkRecord[], deps: AttachParseDeps = {}
  * both the per-rig command loop and tests, so the persistence half is
  * exercised without a live dolt connection.
  */
-export function buildStoreFromRecords(path: string, records: WorkRecord[]): number {
+export interface BuildStoreCounts {
+  /** Records written (always === records.length). */
+  records: number;
+  /** Provenance events appended across the batch — the consumer/backfill
+   * projection (cut/claim/land) of facts the records already carry. Append-only
+   * and idempotent, so a re-run of the same batch adds 0. */
+  provenance_events: number;
+}
+
+export function buildStoreFromRecords(
+  path: string,
+  records: WorkRecord[],
+  ingestedAt: string = new Date().toISOString()
+): BuildStoreCounts {
   const db = openStore(path);
   try {
     writeRecords(db, records);
+    // Backfill the provenance event log from the facts each record already
+    // reconstructed (base_commit, agents, landed/outcome). Runs unconditionally:
+    // with no --with-provenance the records carry only agents, so only `claim`
+    // events derive — exactly the honest subset. See store/provenance.ts.
+    const events = records.flatMap(record => deriveProvenanceEvents(record, ingestedAt));
+    const provenanceEvents = recordProvenanceEvents(db, events);
+    return { records: records.length, provenance_events: provenanceEvents };
   } finally {
     db.close();
   }
-  return records.length;
 }
 
 /**
@@ -137,6 +165,7 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
   const rigs = rig === null ? await listRigs(run) : [rig];
 
   let count = 0;
+  let provenanceEvents = 0;
   let recordsWithErrors = 0;
   let recordsWithRepo = 0;
   let recordsWithProvenance = 0;
@@ -160,7 +189,9 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     // only when provenance has been attached.
     const records = withProvenance ? attachLanded(attachProvenance(traced)) : traced;
 
-    count += buildStoreFromRecords(path, records);
+    const built = buildStoreFromRecords(path, records);
+    count += built.records;
+    provenanceEvents += built.provenance_events;
     recordsWithRepo += records.filter(r => r.repo !== undefined).length;
     recordsWithErrors += records.filter(r => (r.trace?.errors?.length ?? 0) > 0).length;
     recordsWithProvenance += records.filter(r => r.provenance !== undefined).length;
@@ -181,8 +212,9 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
       ? `; ${recordsWithProvenance} carry a work_dir, ${recordsWithCommit} resolved a base commit, ${recordsLanded} landed on the branch`
       : '';
     const joinNote = join !== null ? `; ${recordsMultiSession} are multi-session` : '';
+    const provEventsNote = `; ${provenanceEvents} provenance events`;
     console.error(
-      `built ${count} work records from ${scope} into ${path}${repoNote}${traceNote}${provNote}${joinNote}`
+      `built ${count} work records from ${scope} into ${path}${repoNote}${traceNote}${provNote}${joinNote}${provEventsNote}`
     );
   }
 
@@ -196,5 +228,6 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     records_with_commit: recordsWithCommit,
     records_landed: recordsLanded,
     records_multi_session: recordsMultiSession,
+    records_provenance_events: provenanceEvents,
   };
 }
