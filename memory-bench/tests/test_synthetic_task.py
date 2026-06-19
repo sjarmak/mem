@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from membench.generators.synthetic_task import (
     GENERATOR_VERSION,
+    SHAPE_BLUEPRINTS,
     blueprint_for_seed,
     generate_synthetic_sequence,
 )
@@ -56,6 +57,17 @@ def test_every_required_memory_is_established_in_an_earlier_step() -> None:
     for required in goal.outcome_checks[0].requires_memory:
         established_before = any(required in step.expected_memory_writes for step in seq.steps[:-1])
         assert established_before, f"{required} required at goal but never established"
+
+
+def test_shape_blueprints_are_a_separate_bank_with_shape_ids() -> None:
+    # The shape-grounded blueprints live OUTSIDE the generic seed→blueprint bank, so the
+    # existing seed mapping (and byte-reproducibility of existing seeds) is untouched.
+    generic_ids = {blueprint_for_seed(s).blueprint_id for s in range(3)}
+    for bp in SHAPE_BLUEPRINTS:
+        assert bp.shape_id is not None
+        assert bp.blueprint_id not in generic_ids
+    # The generic bank carries no shape label (it mimics no specific real shape).
+    assert blueprint_for_seed(0).shape_id is None
 
 
 def test_distinct_seeds_do_not_share_a_memory_scope() -> None:
