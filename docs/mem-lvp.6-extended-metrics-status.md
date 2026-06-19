@@ -59,23 +59,47 @@ provenance threaded through the runner, which is not currently plumbed. Threadin
 is a mechanical follow-up; improvising provenance now would fabricate data, so it is
 deliberately left to the wiring step.
 
-## Open fork — surfaced, NOT improvised (frozen-spec discipline)
+### Action-impact (§12.6) — LANDED branch-ready (fork resolved: Path 1 + Path 3)
+The fork was ratified 2026-06-19 (mayor gc-390342, Stephanie): build the §12.6
+action-impact as the **Path 1 (mechanical pre-filter) + Path 3 (judge seam)** design,
+reusing the bbon comparative-judge transport. Implemented in
+`membench/metrics/action_impact.py` (16 tests, full suite 1291 green):
 
-### Action-impact (§12.6) — OPEN judge seam (deliberately NOT frozen)
-`ActionImpactMetrics` (memory_changed_tool_choice / _plan / _output /
-prevented_known_failure / improved_verification) is **intentionally a judge seam**: the
-`metrics/` module docstring leaves these `None` by design, and their derivation is a
-counterfactual ("would the agent have chosen differently WITHOUT this memory?") that
-requires either paired memory-on/off runs or a judge; a derivation method that is **not
-frozen**. Building a deterministic version would violate the ZFC boundary; building a
-judge version requires an eval-design decision. → **Fork: kept OPEN; needs a frozen
-action-impact derivation decision (counterfactual-pairing vs judge) before
-implementation. Do not freeze the counterfactual derivation here.**
+- **Path 1 — `diff_trajectories` (pure ZFC mechanism).** Index-aligns the memory-on
+  vs memory-off tool-call streams and reports, per behavioral axis
+  (tool_choice = `kind` sequence, plan = `(kind, input)` sequence, output =
+  `(output, observation)` sequence), whether they STRUCTURALLY differ. `output_observable`
+  flags whether the output fields carried data (membench tool-use steps usually do not),
+  so an "identical" output axis is only treated as informative when observed.
+- **Path 3 — `score_action_impact(inp, judge=None)`.** Emits the five
+  `ActionImpactMetrics` booleans. The judge is the SAME `complete(prompt) -> str` seam the
+  bbon comparative judge exposes (`ComparativeJudge`): reuse `ClaudeComparativeJudge`, the
+  future LocalModelStack-backed OSS judge, or `StubComparativeJudge(fn=...)` offline.
+- **Pre-filter + cross-check (exactly as the decision specifies).** An axis the streams
+  prove identical is a sound `False` set without a judge call; a fully-identical pair with
+  equal statuses skips the judge entirely as zero-impact; the judge is never allowed to
+  claim memory changed an axis the streams prove identical (overridden to `False`). With
+  no judge, the remaining behavioral axes and both outcome axes stay at their `None` seam —
+  never guessed.
+
+**Still a seam (by design):** the SEMANTIC counterfactual ("did MEMORY cause the
+difference / prevent a known failure / improve verification") remains the model's call,
+delegated to the injected judge. The module's own code is pure plumbing.
+
+**Open dependency — flagged as its own bead (§4.1 shared LocalModelStack):** the live
+OSS-judge backend the fork names (8B+ instruct model via Ollama + nomic-embed + FalkorDB,
+§4.5 Nemotron default with an OSI-clean fallback) is NOT stood up here. `LocalModelStack`
+(`memory_systems/local_stack.py`) is today a config container with no chat-completion call;
+wiring a `ComparativeJudge`-shaped local backend over it is shared infra serving §12.6 +
+§4.3 derailment + §4.5, so it deserves its own bead rather than being improvised into this
+leg. The §12.6 scorer is judge-agnostic and will consume that backend unchanged.
 
 _(The interruption leg, previously forked on mem-dsu, is now LANDED, see above, after
 the mem-dsu generator merged onto this branch.)_
 
 ## Bead state
-`mem-lvp.6` stays **OPEN**: retention, privacy, and interruption (mechanical) all landed
-branch-ready on this branch (not pushed); only the §12.6 action-impact judge-seam fork
-remains. Branch-ready. Mayor publishes after Stephanie approval.
+`mem-lvp.6` is **complete branch-ready**: retention, privacy, interruption (mechanical),
+and now §12.6 action-impact (Path 1 + Path 3 judge seam) all landed on this branch (not
+pushed). The only remaining work is the shared §4.1 LocalModelStack live-judge backend,
+flagged above as its own bead. Branch-ready — mayor publishes after Stephanie approval
+(HALT: no push without sign-off).
