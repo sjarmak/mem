@@ -17,7 +17,7 @@
  * yet populate convoy/supersedes, so those columns carry data only when
  * upstream provides it.
  */
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 export const SCHEMA_DDL = `
 CREATE TABLE work_records (
@@ -243,4 +243,36 @@ CREATE TABLE lessons (
   payload      TEXT NOT NULL
 );
 CREATE INDEX idx_lessons_work ON lessons(work_id);
+
+-- Append-only provenance event log (mem-side prototype of the proposed beads
+-- provenance_events primitive; see docs/mem-bead-provenance-upstream-
+-- contribution.md and schemas/provenance-event.ts). One immutable row per
+-- causal fact bound to a work_id: cut|claim|...|land|used. Deliberately NOT a
+-- projection of work_records.record (unlike record_agents/links above) and,
+-- like lessons, carries NO foreign key to work_records: a producer (a future
+-- git hook / orchestrator) may record a cut before the record is ingested,
+-- and the events must survive a record delete/re-ingest. id is the dedup key
+-- (deterministic for backfilled events → idempotent re-ingest; a ulid for real
+-- producer events), so the recorder is INSERT OR IGNORE and append-only: there
+-- is no update/delete path, corrections are new rows. occurred_at (event-time)
+-- is separate from created_at (ingest-time) because hooks may record after the
+-- fact; it is the ordering key. actor/ref are opaque; only kind/ref_kind are
+-- structurally validated (ZFC).
+CREATE TABLE provenance_events (
+  id          TEXT PRIMARY KEY,
+  work_id     TEXT NOT NULL,
+  kind        TEXT NOT NULL CHECK (kind IN
+                ('cut','claim','suspend','resume','handoff','commit','land','used')),
+  actor       TEXT,
+  ref         TEXT,
+  ref_kind    TEXT CHECK (ref_kind IS NULL OR ref_kind IN
+                ('git-sha','pr','work-id','transcript','branch')),
+  payload     TEXT,
+  source      TEXT NOT NULL,
+  occurred_at TEXT,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX idx_prov_events_work ON provenance_events(work_id, occurred_at);
+CREATE INDEX idx_prov_events_ref  ON provenance_events(ref);
+CREATE INDEX idx_prov_events_kind ON provenance_events(kind);
 `;

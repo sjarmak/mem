@@ -7,7 +7,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { attachAndParse, buildStoreFromRecords } from '../src/cli/commands/build-store.js';
 import { attachProvenance } from '../src/ingest/provenance.js';
 import { attachRepo } from '../src/ingest/repo-resolve.js';
-import { openStore, queryRecords, workIdsBySignature } from '../src/store/index.js';
+import {
+  openStore,
+  provenanceEventsFor,
+  queryRecords,
+  workIdsBySignature,
+} from '../src/store/index.js';
 import { failureSignature } from '../src/parse/recurrence.js';
 import { WorkRecordSchema, type WorkRecord } from '../src/schemas/workrecord.js';
 
@@ -36,9 +41,9 @@ afterEach(() => {
 describe('buildStoreFromRecords', () => {
   it('persists records into a fresh store readable by queryRecords', () => {
     const path = join(dir, 'nested', 'store.db'); // parent dir must be created
-    const count = buildStoreFromRecords(path, [record('b-1', 'rigA'), record('b-2', 'rigB')]);
+    const built = buildStoreFromRecords(path, [record('b-1', 'rigA'), record('b-2', 'rigB')]);
 
-    expect(count).toBe(2);
+    expect(built.records).toBe(2);
     expect(existsSync(path)).toBe(true);
 
     const db = openStore(path);
@@ -50,9 +55,37 @@ describe('buildStoreFromRecords', () => {
     }
   });
 
+  it('backfills the provenance event log from the records it writes', () => {
+    const path = join(dir, 'store.db');
+    const withAgents = WorkRecordSchema.parse({
+      work_id: 'b-1',
+      rig: 'rigA',
+      title: 'work b-1',
+      lifecycle: {
+        created: '2026-06-01T00:00:00Z',
+        started: '2026-06-01T01:00:00Z',
+        closed: '2026-06-05T00:00:00Z',
+        status: 'closed',
+      },
+      agents: [{ agent_id: 'gc-1', sequence: 1, started_at: '2026-06-01T01:00:00Z' }],
+    });
+    const built = buildStoreFromRecords(path, [withAgents], '2026-06-19T00:00:00Z');
+
+    // no provenance/landed → only the agent's `claim` event derives (the honest subset)
+    expect(built.provenance_events).toBe(1);
+    const db = openStore(path);
+    try {
+      const events = provenanceEventsFor(db, 'b-1');
+      expect(events.map(e => e.kind)).toEqual(['claim']);
+      expect(events[0].actor).toBe('gc-1');
+    } finally {
+      db.close();
+    }
+  });
+
   it('writes an empty store for an empty corpus (no throw)', () => {
     const path = join(dir, 'store.db');
-    expect(buildStoreFromRecords(path, [])).toBe(0);
+    expect(buildStoreFromRecords(path, []).records).toBe(0);
     const db = openStore(path);
     try {
       expect(queryRecords(db)).toEqual([]);

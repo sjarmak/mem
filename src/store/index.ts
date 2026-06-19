@@ -31,4 +31,10 @@ export {
   supersedesClosure,
   workIdsBySignature,
 } from './reader.js';
+export {
+  deriveProvenanceEvents,
+  provenanceEventsByRef,
+  provenanceEventsFor,
+  recordProvenanceEvents,
+} from './provenance.js';
 export { renderProjection, renderRecurrence, replaceBetweenMarkers } from './render.js';
