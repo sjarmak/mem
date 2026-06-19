@@ -33,8 +33,20 @@ const provRecord = (overrides: Partial<WorkRecord> = {}): WorkRecord =>
       status_history: [],
     },
     agents: [
-      { agent_id: 'gc-1001', role: 'polecat', sequence: 1, started_at: '2026-06-01T01:00:00Z', trace_ref: '/t/1.jsonl' },
-      { agent_id: 'gc-1002', role: 'polecat', sequence: 2, started_at: '2026-06-01T18:00:00Z', trace_ref: '/t/2.jsonl' },
+      {
+        agent_id: 'gc-1001',
+        role: 'polecat',
+        sequence: 1,
+        started_at: '2026-06-01T01:00:00Z',
+        trace_ref: '/t/1.jsonl',
+      },
+      {
+        agent_id: 'gc-1002',
+        role: 'polecat',
+        sequence: 2,
+        started_at: '2026-06-01T18:00:00Z',
+        trace_ref: '/t/2.jsonl',
+      },
     ],
     provenance: {
       work_dir: '/w/demo',
@@ -81,7 +93,7 @@ describe('provenance event log', () => {
     const n = recordProvenanceEvents(db, events);
     expect(n).toBe(events.length);
 
-    const kinds = provenanceEventsFor(db, 'demo-1a2b').map((e) => e.kind);
+    const kinds = provenanceEventsFor(db, 'demo-1a2b').map(e => e.kind);
     // cut(1) + claim(2) + land-by-commit(1) + land-by-pr(1)
     expect(kinds.sort()).toEqual(['claim', 'claim', 'cut', 'land', 'land']);
   });
@@ -101,16 +113,16 @@ describe('provenance event log', () => {
     const db = store();
     recordProvenanceEvents(db, deriveProvenanceEvents(provRecord(), INGESTED));
     const claims = provenanceEventsFor(db, 'demo-1a2b', 'claim');
-    expect(claims.map((c) => c.actor)).toEqual(['gc-1001', 'gc-1002']);
-    expect(claims.map((c) => c.payload?.sequence)).toEqual([1, 2]);
+    expect(claims.map(c => c.actor)).toEqual(['gc-1001', 'gc-1002']);
+    expect(claims.map(c => c.payload?.sequence)).toEqual([1, 2]);
   });
 
   it('answers by-ref: which work bound to a SHA / PR (the exact join)', () => {
     const db = store();
     recordProvenanceEvents(db, deriveProvenanceEvents(provRecord(), INGESTED));
-    expect(provenanceEventsByRef(db, B).map((e) => e.kind)).toEqual(['land']);
-    expect(provenanceEventsByRef(db, '#42').map((e) => e.work_id)).toEqual(['demo-1a2b']);
-    expect(provenanceEventsByRef(db, A).map((e) => e.kind)).toEqual(['cut']);
+    expect(provenanceEventsByRef(db, B).map(e => e.kind)).toEqual(['land']);
+    expect(provenanceEventsByRef(db, '#42').map(e => e.work_id)).toEqual(['demo-1a2b']);
+    expect(provenanceEventsByRef(db, A).map(e => e.kind)).toEqual(['cut']);
   });
 
   it('is append-only and idempotent: re-recording inserts nothing new', () => {
@@ -118,20 +130,22 @@ describe('provenance event log', () => {
     const events = deriveProvenanceEvents(provRecord(), INGESTED);
     expect(recordProvenanceEvents(db, events)).toBe(events.length);
     // same deterministic ids → INSERT OR IGNORE → zero new rows, no overwrite
-    expect(recordProvenanceEvents(db, deriveProvenanceEvents(provRecord(), '2026-07-01T00:00:00Z'))).toBe(0);
+    expect(
+      recordProvenanceEvents(db, deriveProvenanceEvents(provRecord(), '2026-07-01T00:00:00Z'))
+    ).toBe(0);
     expect(provenanceEventsFor(db, 'demo-1a2b')).toHaveLength(events.length);
   });
 
   it('honestly emits no commit/used events — those gaps need real producers', () => {
     const events = deriveProvenanceEvents(provRecord(), INGESTED);
-    const kinds = new Set(events.map((e) => e.kind));
+    const kinds = new Set(events.map(e => e.kind));
     expect(kinds.has('commit')).toBe(false); // no per-commit attribution exists
     expect(kinds.has('used')).toBe(false); // retrieval causality is absent, not lossy
   });
 
   it('derives only what is present: a record with no provenance yields no cut/land', () => {
     const bare = provRecord({ provenance: undefined, landed: undefined, outcome: undefined });
-    const kinds = new Set(deriveProvenanceEvents(bare, INGESTED).map((e) => e.kind));
+    const kinds = new Set(deriveProvenanceEvents(bare, INGESTED).map(e => e.kind));
     expect(kinds).toEqual(new Set(['claim']));
   });
 

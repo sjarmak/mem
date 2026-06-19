@@ -61,7 +61,12 @@ describe('buildStoreFromRecords', () => {
       work_id: 'b-1',
       rig: 'rigA',
       title: 'work b-1',
-      lifecycle: { created: '2026-06-01T00:00:00Z', started: '2026-06-01T01:00:00Z', closed: '2026-06-05T00:00:00Z', status: 'closed' },
+      lifecycle: {
+        created: '2026-06-01T00:00:00Z',
+        started: '2026-06-01T01:00:00Z',
+        closed: '2026-06-05T00:00:00Z',
+        status: 'closed',
+      },
       agents: [{ agent_id: 'gc-1', sequence: 1, started_at: '2026-06-01T01:00:00Z' }],
     });
     const built = buildStoreFromRecords(path, [withAgents], '2026-06-19T00:00:00Z');

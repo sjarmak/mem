@@ -60,7 +60,8 @@ function parseRow(row: ProvenanceRow): ProvenanceEvent {
     actor: row.actor ?? undefined,
     ref: row.ref ?? undefined,
     ref_kind: row.ref_kind ?? undefined,
-    payload: row.payload === null ? undefined : (JSON.parse(row.payload) as Record<string, unknown>),
+    payload:
+      row.payload === null ? undefined : (JSON.parse(row.payload) as Record<string, unknown>),
     source: row.source,
     occurred_at: row.occurred_at ?? undefined,
     created_at: row.created_at,
@@ -178,7 +179,11 @@ export function deriveProvenanceEvents(record: WorkRecord, ingestedAt: string): 
   }
 
   record.agents.forEach((agent, index) => {
-    const disc = agent.sequence !== undefined ? `seq${agent.sequence}` : `idx${index}`;
+    // The array index is the collision-safe tiebreaker: it is stable for a
+    // fixed agents list (so the id stays deterministic and re-ingest idempotent)
+    // and unique within the record even if two agents share agent_id+sequence —
+    // without it, INSERT OR IGNORE would silently drop the duplicate claim.
+    const disc = agent.sequence !== undefined ? `idx${index}:seq${agent.sequence}` : `idx${index}`;
     events.push({
       id: backfillId(work_id, 'claim', `${agent.agent_id}:${disc}`),
       work_id,

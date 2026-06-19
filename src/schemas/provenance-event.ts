@@ -32,13 +32,7 @@ export const PROVENANCE_KINDS = [
 export type ProvenanceKind = (typeof PROVENANCE_KINDS)[number];
 
 /** Namespaces what `ref` points at, so a `by-ref` lookup is unambiguous. */
-export const PROVENANCE_REF_KINDS = [
-  'git-sha',
-  'pr',
-  'work-id',
-  'transcript',
-  'branch',
-] as const;
+export const PROVENANCE_REF_KINDS = ['git-sha', 'pr', 'work-id', 'transcript', 'branch'] as const;
 export type ProvenanceRefKind = (typeof PROVENANCE_REF_KINDS)[number];
 
 export const ProvenanceEventSchema = z.object({
