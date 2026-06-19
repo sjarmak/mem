@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+
 import { CommandContext } from '../index.js';
 import { storePath } from '../store.js';
 import {
@@ -13,6 +15,7 @@ import {
   gcSessionResolver,
 } from '../../ingest/trace-resolve.js';
 import { attachProvenance } from '../../ingest/provenance.js';
+import { type RecordedBaseLookup, loadRecordedBases } from '../../ingest/provenance-from-log.js';
 import { attachLanded } from '../../ingest/landed.js';
 import { attachRepo } from '../../ingest/repo-resolve.js';
 import {
@@ -43,9 +46,13 @@ export interface BuildStoreResult {
   /** Records carrying a work_dir, so a git baseline was attempted (0 when
    * `--with-provenance` is off). */
   records_with_provenance: number;
-  /** Subset of the above whose session-start commit resolved by date — the
-   * git-checkout anchors a future real-exec replay can use. */
+  /** Records that resolved a base commit by either path (read or reconstructed)
+   * — the git-checkout anchors a future real-exec replay can use. */
   records_with_commit: number;
+  /** Subset of the above whose base was READ from a producer-recorded `cut`
+   * event in the provenance log rather than reconstructed by date — exact, not
+   * approximate (the read-first path). 0 until a producer writes `cut` events. */
+  records_recorded_base: number;
   /** Records whose work landed on the integration branch and survived
    * (`landed.landed_state === 'landed'`); the forward outcome signal for the
    * direct-to-main corpus (0 when `--with-provenance` is off). */
@@ -164,12 +171,35 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
   const run = doltRunner(defaultConnection());
   const rigs = rig === null ? await listRigs(run) : [rig];
 
+  // Read-first provenance: load any producer-recorded base commits already in
+  // the target store so this build PREFERS them over re-running the git
+  // date-heuristic. Read once into memory (the lookup holds no handle), and only
+  // when --with-provenance is on. A missing or schema-incompatible prior store
+  // simply yields no recorded bases — the reconstruction fallback is unchanged.
+  let recordedBase: RecordedBaseLookup | undefined;
+  if (withProvenance && existsSync(path)) {
+    try {
+      const prior = openStore(path);
+      recordedBase = loadRecordedBases(prior);
+      prior.close();
+    } catch (err) {
+      // Stale schema version, unreadable file, etc. Degrade to full
+      // reconstruction, but say so — a silent "0 recorded bases" after an
+      // upgrade is otherwise a mystery.
+      recordedBase = undefined;
+      if (!ctx.options.json) {
+        console.error(`prior store unreadable, skipping recorded bases: ${String(err)}`);
+      }
+    }
+  }
+
   let count = 0;
   let provenanceEvents = 0;
   let recordsWithErrors = 0;
   let recordsWithRepo = 0;
   let recordsWithProvenance = 0;
   let recordsWithCommit = 0;
+  let recordsRecordedBase = 0;
   let recordsLanded = 0;
   let recordsMultiSession = 0;
 
@@ -187,7 +217,9 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     // Provenance reconstructs the session-start baseline; landed is its forward
     // mirror (session-close branch tip + survival), so it runs only after, and
     // only when provenance has been attached.
-    const records = withProvenance ? attachLanded(attachProvenance(traced)) : traced;
+    const records = withProvenance
+      ? attachLanded(attachProvenance(traced, recordedBase ? { recordedBase } : {}))
+      : traced;
 
     const built = buildStoreFromRecords(path, records);
     count += built.records;
@@ -195,9 +227,10 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     recordsWithRepo += records.filter(r => r.repo !== undefined).length;
     recordsWithErrors += records.filter(r => (r.trace?.errors?.length ?? 0) > 0).length;
     recordsWithProvenance += records.filter(r => r.provenance !== undefined).length;
-    recordsWithCommit += records.filter(
-      r => r.provenance?.history_state === 'commit-by-date'
-    ).length;
+    // Resolved a base commit by EITHER path; the recorded subset was read from
+    // the provenance log instead of reconstructed by date (the read-first win).
+    recordsWithCommit += records.filter(r => r.provenance?.base_commit !== undefined).length;
+    recordsRecordedBase += records.filter(r => r.provenance?.history_state === 'recorded').length;
     recordsLanded += records.filter(r => r.landed?.landed_state === 'landed').length;
     recordsMultiSession += records.filter(
       r => r.agents.filter(a => a.suspect !== true).length >= 2
@@ -208,8 +241,10 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     const scope = rig === null ? 'all rigs' : rig;
     const repoNote = `; ${recordsWithRepo}/${count} resolved a repo`;
     const traceNote = withTraces ? `; ${recordsWithErrors} carry trace errors` : '';
+    const recordedNote =
+      recordsRecordedBase > 0 ? ` (${recordsRecordedBase} read from the log)` : '';
     const provNote = withProvenance
-      ? `; ${recordsWithProvenance} carry a work_dir, ${recordsWithCommit} resolved a base commit, ${recordsLanded} landed on the branch`
+      ? `; ${recordsWithProvenance} carry a work_dir, ${recordsWithCommit} resolved a base commit${recordedNote}, ${recordsLanded} landed on the branch`
       : '';
     const joinNote = join !== null ? `; ${recordsMultiSession} are multi-session` : '';
     const provEventsNote = `; ${provenanceEvents} provenance events`;
@@ -226,6 +261,7 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     records_with_errors: recordsWithErrors,
     records_with_provenance: recordsWithProvenance,
     records_with_commit: recordsWithCommit,
+    records_recorded_base: recordsRecordedBase,
     records_landed: recordsLanded,
     records_multi_session: recordsMultiSession,
     records_provenance_events: provenanceEvents,

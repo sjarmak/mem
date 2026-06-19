@@ -238,15 +238,42 @@ export function deriveProvenance(input: ProvenanceInput, run: GitRunner): Proven
   });
 }
 
+/** Map provenance inputs onto a `recorded` {@link Provenance}: the exact base
+ * SHA was READ from a producer-written `cut` event, not reconstructed. Resolves
+ * even when no base_branch is known (a producer recorded the fork point
+ * directly), so it covers records the date heuristic leaves `unresolved`. */
+export function provenanceFromRecorded(input: ProvenanceInput, baseCommit: string): Provenance {
+  return ProvenanceSchema.parse({
+    work_dir: input.work_dir,
+    repo: input.repo,
+    work_dir_source: input.work_dir_source,
+    ...(input.base_branch !== undefined && {
+      base_branch: input.base_branch,
+      base_branch_source: input.base_branch_source,
+    }),
+    base_commit: baseCommit,
+    history_state: 'recorded',
+  });
+}
+
 /** Options for {@link attachProvenance}. */
 export interface AttachProvenanceOptions {
   /** work_dir + args → stdout runner. Defaults to {@link defaultGitRunner}. */
   run?: GitRunner;
+  /** Read-first lookup of producer-recorded base commits (ingest/provenance-from-log).
+   * When it returns a SHA for a record, that exact base is used and git is NOT
+   * shelled — the "stop reconstructing, start reading" path. Absent or null →
+   * the date-heuristic reconstruction runs as before. */
+  recordedBase?: (workId: string) => string | null;
 }
 
 /**
  * Attach git provenance to every record that carries a work_dir; records
  * without one pass through unchanged. Records are copied, never mutated.
+ *
+ * Read-first: when {@link AttachProvenanceOptions.recordedBase} yields a SHA for
+ * a record, its provenance is taken from that recorded `cut` (exact, no git
+ * call); otherwise the base commit is reconstructed by date as before.
  */
 export function attachProvenance(
   records: WorkRecord[],
@@ -256,6 +283,9 @@ export function attachProvenance(
   return records.map(record => {
     const input = provenanceInput(record);
     if (input === null) return record;
-    return { ...record, provenance: deriveProvenance(input, run) };
+    const recorded = opts.recordedBase?.(record.work_id) ?? null;
+    const provenance =
+      recorded !== null ? provenanceFromRecorded(input, recorded) : deriveProvenance(input, run);
+    return { ...record, provenance };
   });
 }

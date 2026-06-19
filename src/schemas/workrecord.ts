@@ -92,9 +92,11 @@ export type Outcome = z.infer<typeof OutcomeSchema>;
  * the work_dir's HEAD would walk the agent's own feature branch (whose history
  * may contain the solution) — a train/test leak — so an absent base_branch is
  * terminal `unresolved`, never guessed. `history_state` is self-describing:
- * `commit-by-date` when a commit resolved, `unresolved` when the work_dir is not
- * a reachable local repo, no base_branch was recorded, or no commit predates
- * `started_at`. */
+ * `commit-by-date` when a commit resolved by date, `unresolved` when the work_dir
+ * is not a reachable local repo, no base_branch was recorded, or no commit
+ * predates `started_at`, and `recorded` when the exact base SHA was READ from a
+ * producer-written `cut` event in the provenance log (ingest/provenance-from-log)
+ * instead of reconstructed — the read-first path, exact rather than approximate. */
 export const ProvenanceSchema = z.object({
   work_dir: z.string().min(1),
   repo: z.string().min(1),
@@ -106,7 +108,7 @@ export const ProvenanceSchema = z.object({
     .string()
     .regex(/^[0-9a-f]{40}$/)
     .optional(),
-  history_state: z.enum(['commit-by-date', 'unresolved']),
+  history_state: z.enum(['commit-by-date', 'unresolved', 'recorded']),
   // Where the inputs came from, surfaced so a baseline reconstructed from rig
   // convention is never mistaken for one the session actually recorded.
   // `metadata` = read from `gc.work_dir`/`gc.var.base_branch`; `rig-map` =
