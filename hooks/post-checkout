@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+#
+# post-checkout — stamp a worktree's exact fork SHA as a `cut` provenance event.
+#
+# This is the PRODUCER for mem's read-first provenance path. At the moment a
+# worktree/branch is created, HEAD is the exact commit the work forked from —
+# the one fact mem otherwise can only approximate by date (and which is
+# destroyed once the branch advances). Recording it here lets build-store's
+# read-first path use the exact base (`history_state='recorded'`) instead of the
+# `git rev-list --before` heuristic. See:
+#   docs/mem-bead-provenance-event-log.md
+#   docs/mem-bead-provenance-upstream-contribution.md
+#
+# git calls post-checkout with: $1=prev HEAD  $2=new HEAD  $3=1 for a branch
+# checkout (0 for a file checkout). We only act on branch/worktree checkouts.
+#
+# Install (per repo, or via core.hooksPath for all worktrees):
+#   cp hooks/post-checkout .git/hooks/post-checkout && chmod +x .git/hooks/post-checkout
+#
+# Environment:
+#   MEM_WORK_ID  the bead id this worktree is for (gascity has it as the bead id;
+#                a plain user exports it before creating the worktree). Required.
+#   MEM_STORE    the mem store to record into (default: .mem/store.db).
+#   MEM_BIN      the mem binary (default: mem on PATH).
+#
+# Recording is best-effort: a provenance miss must never block a checkout, so a
+# failure here is logged and swallowed (the date-heuristic fallback still works).
+
+set -uo pipefail
+
+branch_checkout="${3:-0}"
+[ "$branch_checkout" = "1" ] || exit 0
+
+work_id="${MEM_WORK_ID:-}"
+if [ -z "$work_id" ]; then
+  # No bead context — nothing to attribute the cut to. Silent: not every
+  # checkout is agent work.
+  exit 0
+fi
+
+new_head="${2:-}"
+[ -n "$new_head" ] || new_head="$(git rev-parse HEAD 2>/dev/null || true)"
+if [ -z "$new_head" ]; then
+  echo "post-checkout: could not resolve HEAD, skipping provenance cut" >&2
+  exit 0
+fi
+
+store="${MEM_STORE:-.mem/store.db}"
+mem_bin="${MEM_BIN:-mem}"
+
+if ! "$mem_bin" provenance record \
+  --store "$store" \
+  --issue "$work_id" \
+  --kind cut \
+  --ref "$new_head" \
+  --ref-kind git-sha \
+  --source git-hook \
+  --payload "{\"hook\":\"post-checkout\"}" >/dev/null 2>&1; then
+  echo "post-checkout: mem provenance record failed (non-fatal), base will fall back to date heuristic" >&2
+fi
+
+exit 0
