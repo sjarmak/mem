@@ -5,7 +5,12 @@ import json
 
 import pytest
 
-from membench.bbon.extract import build_attempt, steps_from_stream, terminal_status
+from membench.bbon.extract import (
+    build_attempt,
+    steps_from_stream,
+    terminal_status,
+    tool_results_by_id,
+)
 
 _HEX64 = "c" * 64
 
@@ -15,6 +20,31 @@ def _tool_use_line(name: str, inp: dict[str, object]) -> str:
         {
             "type": "assistant",
             "message": {"content": [{"type": "tool_use", "name": name, "input": inp}]},
+        }
+    )
+
+
+def _tool_use_line_id(tool_use_id: str, name: str, inp: dict[str, object]) -> str:
+    return json.dumps(
+        {
+            "type": "assistant",
+            "message": {
+                "content": [{"type": "tool_use", "id": tool_use_id, "name": name, "input": inp}]
+            },
+        }
+    )
+
+
+def _tool_result_line(tool_use_id: str, content: object, *, is_error: bool = False) -> str:
+    return json.dumps(
+        {
+            "type": "user",
+            "message": {
+                "content": [
+                    {"type": "tool_result", "tool_use_id": tool_use_id,
+                     "content": content, "is_error": is_error}
+                ]
+            },
         }
     )
 
@@ -96,3 +126,62 @@ def test_build_attempt_requires_work_id_and_arm() -> None:
         build_attempt("", "warm", {"trace": {"tool_outcomes": []}}, "")
     with pytest.raises(ValueError, match="arm is required"):
         build_attempt("w1", "", {"trace": {"tool_outcomes": []}}, "")
+
+
+# --------------------------------------------------------------------------- #
+# tool-output capture (mem-lvp.24 Finding-2 fix)
+# --------------------------------------------------------------------------- #
+def test_tool_results_by_id_string_content() -> None:
+    stream = _tool_result_line("toolu_1", "rows: 42")
+    assert tool_results_by_id(stream) == {"toolu_1": {"is_error": False, "content": "rows: 42"}}
+
+
+def test_tool_results_by_id_text_subblocks() -> None:
+    blocks = [{"type": "text", "text": "a"}, {"type": "text", "text": "b"}]
+    stream = _tool_result_line("toolu_1", blocks)
+    assert tool_results_by_id(stream)["toolu_1"]["content"] == "ab"
+
+
+def test_tool_results_skips_unattributable() -> None:
+    # a tool_result with no tool_use_id cannot be attributed → skipped.
+    stream = json.dumps({"type": "user", "message": {"content": [
+        {"type": "tool_result", "content": "orphan"}]}})
+    assert tool_results_by_id(stream) == {}
+
+
+def test_steps_from_stream_attaches_output_by_id() -> None:
+    stream = "\n".join([
+        _tool_use_line_id("toolu_1", "Bash", {"command": "psql -c '\\d orders'"}),
+        _tool_result_line("toolu_1", "Table orders: id PK, customer_id FK", is_error=False),
+    ])
+    steps = steps_from_stream(stream, _HEX64)
+    assert len(steps) == 1
+    assert steps[0].kind == "Bash"
+    assert steps[0].output == {"is_error": False, "content": "Table orders: id PK, customer_id FK"}
+
+
+def test_steps_from_stream_output_empty_when_no_result() -> None:
+    # backward-compatible: a tool_use with no matching result → output stays {}.
+    steps = steps_from_stream(_tool_use_line_id("toolu_x", "Read", {"path": "a"}), _HEX64)
+    assert steps[0].output == {}
+
+
+def test_steps_from_stream_truncates_long_output() -> None:
+    big = "x" * 9000
+    stream = "\n".join([
+        _tool_use_line_id("toolu_1", "Bash", {"command": "cat huge"}),
+        _tool_result_line("toolu_1", big),
+    ])
+    out = steps_from_stream(stream, _HEX64)[0].output
+    assert out["truncated"] is True
+    assert len(out["content"]) == 4000
+
+
+def test_output_capture_does_not_change_step_id() -> None:
+    # the id is content-addressed over input only → same id with/without a result.
+    with_result = "\n".join([
+        _tool_use_line_id("toolu_1", "Read", {"path": "a"}),
+        _tool_result_line("toolu_1", "contents"),
+    ])
+    without = _tool_use_line_id("toolu_1", "Read", {"path": "a"})
+    assert steps_from_stream(with_result, _HEX64)[0].id == steps_from_stream(without, _HEX64)[0].id
