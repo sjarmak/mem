@@ -57,12 +57,25 @@ session's landed work. Its scale limit is in-repo session concurrency
 (overlapping branch windows are marked ambiguous, never guessed), addressable by
 author/SHA attribution — opportunistic validation, never the headline.
 
-**Where the grid stands.** A pre-admission oracle-soundness gate (`mem-1eph`)
-plus oracle-repair waves carried the native pool to 8 sound dashboard oracles
-(`mem-qarg`), and a `mem` test config admitted one mem-rig bundle for 9
-(`mem-us6j`). The 3-arm graded grid (`none` / `ours` / `builtin`) runs on those
-9; distilling the dashboard rig's lessons brought the `ours` arm to 4-of-8
-retrieval coverage. Details and competitive-arm wiring in `memory-bench/README.md`.
+**Where the eval stands — two tracks now carry numbers.** On the *real corpus*,
+commit-message linkage recovered 407 sound work→landed-commit oracles
+(`mem-wanz`), so the substrate is materially more credible than the prior N=9
+binary-oracle pool. But the recovered-oracle 3-arm graded eval
+(`none` / `ours` / `builtin`) shows no capability lift at the N the corpus
+sustains: `ours` **+0.000**, `builtin` +0.125, with only 8 of 407 oracles
+scorable — the other 98% hit the same oracle-validity wall. N is bound by
+replay/oracle fidelity, not by method, so the real-corpus headline is a
+diagnosed-ceiling negative result pending a release decision (`mem-1fl8`).
+
+On a parallel *synthetic-world* track the **first measurable lift** landed:
+cross-task continuity rises **0.062** (isolated stores) → **0.188** (shared
+store, commit `c7f3296`), and the `lexical` query/top-k arm now activates the
+**Confusion** (`distractor_retrieval_rate`) and **Staleness**
+(`stale_memory_retrieval_rate`) metrics, so a real arm stops matching the oracle
+on retrieval quality. Whether a synthetic lift generalizes to real city work is
+the open validity question (`mem-bxhh` is building a real fail-to-pass corpus to
+calibrate the synthetic shapes against it). Details and competitive-arm wiring in
+`memory-bench/README.md`.
 
 ## Roadmap
 
@@ -72,21 +85,26 @@ Near-term work, roughly in priority order:
   lessons, and the distiller has run over the dashboard rig so far (236 lessons,
   lifting the running grid to 4-of-8 coverage). Distilling the remaining
   error-bearing records across rigs is the single biggest lever on the headline.
-- **Land the N=9 graded headline.** The 3-arm grid is executing on Harbor; the
-  open step is reading the per-arm graded result with confidence intervals and
-  the small-N caveat.
-- **Grow the sound-oracle pool past 9.** Repairing the four replay-rejected
-  bundles proved unsound (corpus-extraction drift, not a fixable bug), so the
-  lever moves upstream: capturing each session's true per-worktree base commit so
-  more bundles replay cleanly. Trace-substrate work, larger than a harness patch.
+- **Decide the real-corpus negative result.** The recovered-oracle graded number
+  is in and null at usable N (`ours` +0.000, N=8 scorable of 407). The open call
+  (`mem-1fl8`) is whether to release it as a diagnosed-ceiling negative result
+  (substrate credible, capability null, N bound by oracle validity not method) or
+  hold it pending replay-fidelity work that grows N.
+- **Grow the scorable-oracle pool past 8.** Linkage recovered 407 sound oracles,
+  but only ~2% replay cleanly; the rest hit the oracle-validity wall, and three
+  independent N-lift attempts confirmed the wall is replay fidelity, not corpus
+  size. The lever is upstream: capturing each session's true per-worktree base
+  commit (`mem-75t`) so more bundles replay. Trace-substrate work, larger than a
+  harness patch.
 - **Finish the failure-recurrence track.** Its generator, a frozen 369-anchor
   matched-pair fixture (temporal-LOO-clean), and real Harbor task-dir emission
   are done; the soundness-gated runner and matched-pair effort-delta scorer are
   what stands between it and a number.
-- **Wire the synthetic dataset.** The deterministic synthetic-task generator and
-  its pilot validity filter are built and tested but not yet run through an eval;
-  generating, pilot-filtering, and running a batch on the sequence track scales
-  the dataset past the thin real pool.
+- **Build on the synthetic lift.** The synthetic-world track is now run and
+  carries the first measurable lift (continuity 0.062 → 0.188) plus live
+  Confusion/Staleness. The next steps are scaling the world/task pool and closing
+  the synthetic↔real generalization gap (`mem-bxhh`) so a synthetic win is
+  evidence about real city work, not just about the generator.
 
 ## How it works
 
@@ -256,12 +274,15 @@ Each multi-session sequence runs under three conditions on **Harbor** as the
 execution substrate: `no_memory` (stateless floor), `oracle_memory` (exact
 memory injected, the ceiling and the task-validity gate, where
 `oracle ≈ no_memory` rejects the task), and `memory_enabled` (the real system).
-Competitive arms (mem0, A-MEM, graphiti, NAT, filesystem, plus the
-failure-triggered `ours`) run behind one uniform ingest/retrieve interface, all
-under a temporal leave-one-out leak guard, a CodeScaleBench fail-to-pass
-oracle-soundness gate, the precision guard, and a *raw* 5-axis telemetry vector
-(task, efficiency, latency, privacy, interruption) emitted as OpenTelemetry
-GenAI spans (ATIF derived). A ≥10 real-sequence dataset MVP gate is enforced; a
-synthetic sequence generator (deterministic oracle authored in code, a local
-model used only for the natural-language surface and frozen offline) scales the
-dataset past the thin real pool. Details in `memory-bench/README.md`.
+Competitive arms (mem0, A-MEM, graphiti, NAT, filesystem, the deterministic
+`lexical` query/top-k arm, plus the failure-triggered `ours`) run behind one
+uniform ingest/retrieve interface, all under a temporal leave-one-out leak guard,
+a CodeScaleBench fail-to-pass oracle-soundness gate, the precision guard, and a
+*raw* 5-axis telemetry vector (task, efficiency, latency, privacy, interruption)
+emitted as OpenTelemetry GenAI spans (ATIF derived). A ≥10 real-sequence dataset
+MVP gate is enforced. A synthetic-world generator (NeMo for the natural-language
+surface, frozen offline; every fact, distractor, and supersession authored in
+code and seed-reproducible) materializes memory-dependent sequences and is the
+track that produces the first measurable lift — memory necessity, cross-task
+continuity under a shared store, and the Confusion/Staleness retrieval-quality
+metrics. Details in `memory-bench/README.md`.
