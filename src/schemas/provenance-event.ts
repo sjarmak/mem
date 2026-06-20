@@ -19,6 +19,21 @@ import { z } from 'zod';
 
 /** The open event vocabulary. Extends as new producers appear; the store
  * rejects unknown kinds so a typo is a loud failure, not a silent new class. */
+/** The source the ingest backfill projector stamps on the `cut`/`claim`/`land`
+ * events it derives FROM the date-heuristic reconstruction. The read-first path
+ * (ingest/provenance-from-log) excludes this source so it never reads a
+ * reconstruction back as if it were producer-recorded; the producer CLI rejects
+ * it so a caller cannot forge one. Exported as the single source of truth — a
+ * drift between the writer, the reader's filter, and the CLI guard would
+ * silently break the honesty guarantee. */
+export const BACKFILL_SOURCE = 'ingest-backfill';
+
+/** A full 40-hex git object id. The boundary contract for a `ref_kind: 'git-sha'`
+ * event: a base SHA that is not this shape fails the downstream
+ * ProvenanceSchema (workrecord.ts) and would abort a build, so it is rejected at
+ * the write boundary and skipped at the read boundary. */
+export const GIT_SHA_RE = /^[0-9a-f]{40}$/;
+
 export const PROVENANCE_KINDS = [
   'cut',
   'claim',

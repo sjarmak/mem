@@ -1,4 +1,5 @@
 import { provenanceEventsByRef } from '../store/provenance.js';
+import { BACKFILL_SOURCE, GIT_SHA_RE } from '../schemas/provenance-event.js';
 import type { StoreDatabase } from '../store/sqlite.js';
 
 /**
@@ -16,12 +17,6 @@ import type { StoreDatabase } from '../store/sqlite.js';
  * would relabel an approximation as `recorded` (exact). A base is `recorded`
  * only when an independent producer wrote it.
  */
-
-/** The ingest backfill source — events from this source are reconstructions of
- * the very thing we'd be replacing, so they never count as a recorded base.
- * Mirrors the constant in store/provenance.ts (kept local to avoid widening that
- * module's export surface for one string). */
-const BACKFILL_SOURCE = 'ingest-backfill';
 
 /** A 40-hex base SHA recorded by a producer for `workId`, or null. */
 export type RecordedBaseLookup = (workId: string) => string | null;
@@ -47,9 +42,14 @@ export function loadRecordedBases(db: StoreDatabase): RecordedBaseLookup {
     .all(BACKFILL_SOURCE) as CutRow[];
 
   // Last write wins: the ORDER BY puts the most recent event-time last, so a
-  // plain Map.set leaves the newest recorded base per work_id.
+  // plain Map.set leaves the newest recorded base per work_id. A ref that is not
+  // a 40-hex SHA is skipped, never returned: it would abort provenanceFromRecorded
+  // (ProvenanceSchema's 40-hex guard) and crash the build. The producer CLI
+  // rejects malformed git-sha refs at write time; this is the defensive read.
   const byWork = new Map<string, string>();
-  for (const row of rows) byWork.set(row.work_id, row.ref);
+  for (const row of rows) {
+    if (GIT_SHA_RE.test(row.ref)) byWork.set(row.work_id, row.ref);
+  }
 
   return workId => byWork.get(workId) ?? null;
 }

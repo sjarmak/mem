@@ -81,6 +81,20 @@ describe('loadRecordedBases', () => {
     expect(loadRecordedBases(db)('demo-1')).toBe(newer);
   });
 
+  it('skips a producer cut whose ref is not a 40-hex SHA (defensive read)', () => {
+    const db = openStore(':memory:');
+    recordProvenanceEvents(db, [
+      {
+        ...producerCut('demo-1', RECORDED, '2026-06-01T00:00:00Z'),
+        id: 'git-hook:demo-1:cut:bad',
+        ref: 'not-a-sha',
+      },
+    ]);
+    // a malformed base would crash provenanceFromRecorded downstream, so it is
+    // never returned even though its source is a producer
+    expect(loadRecordedBases(db)('demo-1')).toBeNull();
+  });
+
   it('isRecordedBase distinguishes a producer SHA from a backfilled one', () => {
     const db = openStore(':memory:');
     recordProvenanceEvents(db, [

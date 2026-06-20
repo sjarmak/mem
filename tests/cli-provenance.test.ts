@@ -61,8 +61,26 @@ describe('mem provenance record', () => {
     expect(events.map(e => e.work_id)).toEqual(['demo-1']);
   });
 
-  it('rejects the reserved ingest-backfill source', () => {
+  it('rejects the reserved ingest-backfill source, case- and space-insensitively', () => {
     expect(() => recordCut({ source: 'ingest-backfill' })).toThrow(/reserved/);
+    expect(() => recordCut({ source: ' Ingest-Backfill ' })).toThrow(/reserved/);
+  });
+
+  it('rejects a git-sha ref that is not a 40-hex SHA at write time', () => {
+    expect(() => recordCut({ ref: 'abc123' })).toThrow(/40-hex/);
+    expect(() => recordCut({ ref: 'main' })).toThrow(/40-hex/);
+  });
+
+  it('requires --at for a ref-less kind so the id is idempotent', () => {
+    const claim = (opts: Partial<CliOptions>) =>
+      provenanceCommand(
+        ctx(['record'], { issue: 'demo-1', kind: 'claim', source: 'gascity', ...opts })
+      ) as RecordProvenanceResult;
+    expect(() => claim({})).toThrow(/--at <iso> is required/);
+    // same --at → same id → idempotent; a different --at is a distinct event
+    expect(claim({ at: '2026-06-01T00:00:00Z' }).recorded).toBe(1);
+    expect(claim({ at: '2026-06-01T00:00:00Z' }).recorded).toBe(0);
+    expect(claim({ at: '2026-06-02T00:00:00Z' }).recorded).toBe(1);
   });
 
   it('requires --issue and --kind, and validates the kind', () => {
@@ -73,6 +91,25 @@ describe('mem provenance record', () => {
 
   it('rejects malformed --payload', () => {
     expect(() => recordCut({ payload: '{not json' })).toThrow(/valid JSON/);
+  });
+
+  it('filters log by --kind and rejects an invalid kind', () => {
+    recordCut();
+    provenanceCommand(
+      ctx(['record'], {
+        issue: 'demo-1',
+        kind: 'claim',
+        source: 'gascity',
+        at: '2026-06-01T00:00:00Z',
+      })
+    );
+    expect(
+      provenanceCommand(ctx(['log', 'demo-1'], { kind: 'cut' })) as ProvenanceEvent[]
+    ).toHaveLength(1);
+    expect(provenanceCommand(ctx(['log', 'demo-1'], {})) as ProvenanceEvent[]).toHaveLength(2);
+    expect(() => provenanceCommand(ctx(['log', 'demo-1'], { kind: 'merged' }))).toThrow(
+      /--kind must be one of/
+    );
   });
 
   it('rejects an unknown subcommand', () => {

@@ -7,6 +7,8 @@ import {
   recordProvenanceEvents,
 } from '../../store/index.js';
 import {
+  BACKFILL_SOURCE,
+  GIT_SHA_RE,
   PROVENANCE_KINDS,
   ProvenanceEventSchema,
   type ProvenanceEvent,
@@ -27,13 +29,12 @@ import {
  *   mem provenance log <issue-id> [--kind <k>]
  *   mem provenance by-ref <ref>
  *
- * Append-only: there is no update/delete verb. Re-recording the same event is a
- * no-op (the deterministic id dedups), so a hook that fires twice is harmless.
+ * Append-only: there is no update/delete verb. Re-recording an event with the
+ * same id is a no-op. The id is deterministic from the fields that identify the
+ * fact, so an event that carries a stable discriminator (a `--ref`, e.g. the
+ * `cut` SHA, or an explicit `--at`) dedups on retry. Ref-less kinds therefore
+ * require `--at` so the caller — not the clock — owns the dedup key.
  */
-
-/** The source the ingest backfill projector owns; a producer may not claim it,
- * or the read-first honesty guard (which excludes backfill) would skip it. */
-const BACKFILL_SOURCE = 'ingest-backfill';
 
 function requireString(options: CliOptions, key: string): string {
   const value = options[key];
@@ -70,11 +71,28 @@ function recordSubcommand(ctx: CommandContext, nowIso: string): RecordProvenance
     throw new Error(`--kind must be one of: ${PROVENANCE_KINDS.join(', ')}`);
   }
   const source = optionalString(ctx.options, 'source') ?? 'cli';
-  if (source === BACKFILL_SOURCE) {
+  // Case/space-insensitive: a producer must not masquerade as the backfill
+  // projector and slip past the read-first honesty guard.
+  if (source.trim().toLowerCase() === BACKFILL_SOURCE) {
     throw new Error(`--source '${BACKFILL_SOURCE}' is reserved for the ingest projector`);
   }
   const ref = optionalString(ctx.options, 'ref');
-  const occurredAt = optionalString(ctx.options, 'at') ?? nowIso;
+  const refKind = optionalString(ctx.options, 'ref-kind');
+  // A git-sha ref must be a real 40-hex object id at the WRITE boundary: a
+  // malformed base would otherwise sit in the log and abort a later
+  // build-store --with-provenance when the read-first path feeds it to
+  // ProvenanceSchema. Fail fast here where the producer can fix it.
+  if (refKind === 'git-sha' && ref !== undefined && !GIT_SHA_RE.test(ref)) {
+    throw new Error(`--ref for --ref-kind git-sha must be a 40-hex commit SHA, got '${ref}'`);
+  }
+  const at = optionalString(ctx.options, 'at');
+  // Ref-less events have no structural discriminator, so without an explicit
+  // --at the id would key on the wall clock and double-record on retry. Require
+  // the caller to own the dedup key.
+  if (ref === undefined && at === undefined) {
+    throw new Error(`--kind ${kind} has no --ref, so --at <iso> is required for a stable id`);
+  }
+  const occurredAt = at ?? nowIso;
   const payloadRaw = optionalString(ctx.options, 'payload');
   let payload: Record<string, unknown> | undefined;
   if (payloadRaw !== undefined) {
@@ -91,7 +109,7 @@ function recordSubcommand(ctx: CommandContext, nowIso: string): RecordProvenance
     kind,
     actor: optionalString(ctx.options, 'actor'),
     ref,
-    ref_kind: optionalString(ctx.options, 'ref-kind'),
+    ref_kind: refKind,
     payload,
     source,
     occurred_at: occurredAt,

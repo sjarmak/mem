@@ -12,7 +12,12 @@
 #   docs/mem-bead-provenance-upstream-contribution.md
 #
 # git calls post-checkout with: $1=prev HEAD  $2=new HEAD  $3=1 for a branch
-# checkout (0 for a file checkout). We only act on branch/worktree checkouts.
+# checkout (0 for a file checkout). We act ONLY on the initial checkout of a
+# fresh worktree/clone — where $1 is git's null ref — because only then is the
+# new HEAD the genuine fork point. post-checkout also fires on ordinary branch
+# switches within an existing worktree (where $2 is the branch TIP, not the
+# base); recording those would overwrite the true `cut` (newest-wins in
+# loadRecordedBases), so we skip them.
 #
 # Install (per repo, or via core.hooksPath for all worktrees):
 #   cp hooks/post-checkout .git/hooks/post-checkout && chmod +x .git/hooks/post-checkout
@@ -30,6 +35,12 @@ set -uo pipefail
 
 branch_checkout="${3:-0}"
 [ "$branch_checkout" = "1" ] || exit 0
+
+# Only a fresh worktree/clone, where the previous HEAD is the null ref. An
+# ordinary branch switch carries a real previous SHA — skip it.
+prev_head="${1:-}"
+null_ref="0000000000000000000000000000000000000000"
+[ "$prev_head" = "$null_ref" ] || exit 0
 
 work_id="${MEM_WORK_ID:-}"
 if [ -z "$work_id" ]; then

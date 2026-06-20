@@ -1,4 +1,5 @@
 import {
+  BACKFILL_SOURCE,
   ProvenanceEventSchema,
   type ProvenanceEvent,
   type ProvenanceKind,
@@ -27,8 +28,6 @@ import type { StoreDatabase } from './sqlite.js';
  * gap) and never `used` (retrieval causality is absent, not lossy). The gaps are
  * exactly what real producers must fill.
  */
-
-const BACKFILL_SOURCE = 'ingest-backfill';
 
 /** Deterministic id for a backfilled event so re-ingest is idempotent. The
  * discriminator distinguishes events of the same kind on one record (e.g. the
