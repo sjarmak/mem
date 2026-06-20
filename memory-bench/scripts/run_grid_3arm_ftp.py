@@ -50,6 +50,7 @@ from run_grid_3arm import (
 from run_grid_3arm_graded import run_validity_gates
 
 from membench.grading.graded import DEFAULT_JUDGE_ROUNDS, ClaudeRubricJudge
+from membench.grading.validity_gate import ValidityResult
 from membench.harbor.bundle_grid import OursRungEvidence, ours_rung_evidence, summarize_grid_3arm
 from membench.harbor.ftp_repro import FTP_REPRO_WORKTREE_PREFIX, FtpReproRunner
 from membench.harbor.probe_gate import (
@@ -124,26 +125,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     print(f"ftp corpus: {len(candidates)} bundle(s) [{', '.join(b.work_id for b in candidates)}]")
 
-    # CSB validity gate FIRST (mem-g6a), with the SAME FtpReproRunner the scorer uses.
-    # FREE (Docker pytest only) -- the corpus + wiring proof before any paid token.
-    validity = run_validity_gates(
-        candidates, grid_dir=args.grid_dir, runner_factory=FtpReproRunner
-    )
-    valid_ids = {v.work_id for v in validity if v.valid}
-    bundles = [b for b in candidates if b.work_id in valid_ids]
-    excluded = [b.work_id for b in candidates if b.work_id not in valid_ids]
-    if not bundles:
-        raise RuntimeError(
-            f"every candidate failed the validity gate (excluded: {excluded}) -- the ftp "
-            "oracle does not hold under the runner; fix the corpus, not the grid"
+    # CSB validity gate (mem-g6a) with the SAME FtpReproRunner the scorer uses -- FREE
+    # (Docker pytest only), the corpus + wiring proof before any paid token. Skipped
+    # under --dry-run, which only constructs + leak-checks tasks and must touch no
+    # container; --dry-run scores nothing, so the gate's exclusions are moot there.
+    validity: list[ValidityResult] = []
+    excluded: list[str] = []
+    bundles = candidates
+    if not args.dry_run:
+        validity = run_validity_gates(
+            candidates, grid_dir=args.grid_dir, runner_factory=FtpReproRunner
         )
-    print(
-        f"validity: {len(bundles)}/{len(candidates)} sound ftp oracle(s)"
-        + (f"; excluded {excluded}" if excluded else "")
-    )
-    if args.validity_only:
-        print("validity-only: no agent run requested.")
-        return 0
+        valid_ids = {v.work_id for v in validity if v.valid}
+        bundles = [b for b in candidates if b.work_id in valid_ids]
+        excluded = [b.work_id for b in candidates if b.work_id not in valid_ids]
+        if not bundles:
+            raise RuntimeError(
+                f"every candidate failed the validity gate (excluded: {excluded}) -- the ftp "
+                "oracle does not hold under the runner; fix the corpus, not the grid"
+            )
+        print(
+            f"validity: {len(bundles)}/{len(candidates)} sound ftp oracle(s)"
+            + (f"; excluded {excluded}" if excluded else "")
+        )
+        if args.validity_only:
+            print("validity-only: no agent run requested.")
+            return 0
 
     # Native-memory surface proof: each builtin (fresh `none`) image must carry
     # codeprobe's `.claude/` memory at base_commit, else the clean-room strip is a

@@ -48,7 +48,8 @@ def run(bundles: Sequence[TaskBundle]) -> list[ValidityResult]:
     with FtpReproRunner() as runner:
         for bundle in bundles:
             ftp = bundle.verification.ftp_oracle
-            assert ftp is not None  # load_bundles filtered to ftp anchors
+            if ftp is None:  # load_bundles filtered to ftp anchors; guard the invariant
+                raise RuntimeError(f"{bundle.work_id}: ftp_oracle is None after ftp-only filter")
             result = validity_gate(bundle, test_runner=runner)
             print(
                 f"VALIDITY  {bundle.work_id}  valid={result.valid}  "
