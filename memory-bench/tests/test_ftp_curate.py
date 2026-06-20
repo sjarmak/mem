@@ -28,6 +28,7 @@ from membench.harbor.ftp_curate import (
     classify_ftp,
     container_command,
     curate_commit,
+    curate_rig,
     drop_flaky,
     load_linked_commits,
     parse_junit_outcomes,
@@ -379,6 +380,42 @@ def test_curate_commit_skips_when_no_test_files_touched(tmp_path: Path) -> None:
         worktree_root=tmp_path,
     )
     assert result is None
+
+
+def test_curate_rig_isolates_per_commit_failure_and_keeps_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A single corpus-invalid commit (gold-test path absent at landing, a
+    # non-installable parent) raises RuntimeError inside curate_commit; the rig
+    # run must isolate it and still return the other commits' curated oracles --
+    # the JSON is written only after the loop, so an abort would discard them all.
+    good = CommitFtp(
+        commit="b" * 40,
+        parent="a" * 40,
+        ftp_tests=("tests/test_x.py::test_a",),
+        behavioral=("tests/test_x.py::test_a",),
+        feature_presence=(),
+        type="behavioral",
+    )
+
+    def fake_curate_commit(rig, landing_sha, clone, **kwargs):  # type: ignore[no-untyped-def]
+        if landing_sha == "bad":
+            raise RuntimeError("pathspec 'tests/test_gone.py' did not match any file(s)")
+        return good
+
+    monkeypatch.setattr("membench.harbor.ftp_curate.curate_commit", fake_curate_commit)
+
+    logs: list[str] = []
+    results = curate_rig(
+        "scix_experiments",
+        ["bad", "b" * 40],
+        Path("/unused"),
+        log=logs.append,
+    )
+
+    assert results == [good]
+    assert any("uncurate-able" in line for line in logs)
+    assert "1 errored" in logs[-1]
 
 
 # --- CLI commit resolution (precedence + envelope unwrap) --------------------------

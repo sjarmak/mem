@@ -436,19 +436,29 @@ def curate_rig(
     log: Logger = print,
 ) -> list[CommitFtp]:
     """Curate every linked landing commit for one rig. Commits with no
-    test-touching diff are skipped; the superset->subset shrink is logged so the
-    filtering is visible (not a silent truncation)."""
+    test-touching diff are skipped; commits whose tree is uncurate-able (a gold
+    test path absent at the landing sha, a non-installable parent) are isolated as
+    errored rather than aborting the whole rig -- a single corpus-invalid link must
+    not discard the curated results of the other commits. The superset->subset
+    shrink (skipped + errored) is logged so the filtering is visible (not a silent
+    truncation)."""
     results: list[CommitFtp] = []
     skipped = 0
+    errored = 0
     for sha in landing_shas:
-        curated = curate_commit(
-            rig,
-            sha,
-            clone,
-            base_image=base_image,
-            runner=runner,
-            worktree_root=worktree_root,
-        )
+        try:
+            curated = curate_commit(
+                rig,
+                sha,
+                clone,
+                base_image=base_image,
+                runner=runner,
+                worktree_root=worktree_root,
+            )
+        except RuntimeError as exc:
+            errored += 1
+            log(f"{rig} {sha[:12]}: uncurate-able -- {exc}")
+            continue
         if curated is None:
             skipped += 1
             log(f"{rig} {sha[:12]}: no test-touching files -- skipped")
@@ -460,7 +470,7 @@ def curate_rig(
         )
     log(
         f"{rig}: {len(landing_shas)} linked commits -> "
-        f"{len(results)} test-touching ({skipped} skipped)"
+        f"{len(results)} test-touching ({skipped} skipped, {errored} errored)"
     )
     return results
 

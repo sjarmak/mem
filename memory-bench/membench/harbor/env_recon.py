@@ -26,15 +26,18 @@ from typing import Any, cast
 
 # rig -> local working clone. HOST-SPECIFIC spike configuration (these are the rigs
 # present in the held-out corpus that have a local repo on this machine). Injectable
-# everywhere it is used; this default is the convenience, not a contract. `gpk` (2
-# held-out beads) has no local repo and is intentionally absent -- reconstructing it
-# raises rather than guessing.
+# everywhere it is used; this default is the convenience, not a contract. Paths mirror
+# the durable checkouts in the TypeScript `RIG_REPOS` (ingest/rig-repo-map.ts), the
+# canonical source of truth -- a rig is added here once its checkout is confirmed on
+# this host so the fail-to-pass curator (mem-bxhh.2) can resolve its landing commits.
 DEFAULT_RIG_REPOS: Mapping[str, Path] = {
     "gascity": Path("/home/ds/gascity"),
     "gascity_dashboard": Path("/home/ds/gascity-dashboard"),
     "mem": Path("/home/ds/projects/mem"),
     "GEO": Path("/home/ds/projects/GEO"),
     "codeprobe": Path("/home/ds/projects/codeprobe"),
+    "scix_experiments": Path("/home/ds/projects/scix_experiments"),
+    "gpk": Path("/home/ds/gascity-packs"),
 }
 
 # rig -> Docker base image carrying the rig's build/test toolchain. Best-effort, not
