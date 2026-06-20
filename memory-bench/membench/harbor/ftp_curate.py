@@ -294,16 +294,22 @@ def _changed_paths(clone: Path, parent: str, landing: str, runner: Runner) -> li
     return [line for line in out.splitlines() if line]
 
 
-def _container_pytest(
+def run_container_pytest(
     worktree: Path,
     test_files: Sequence[str],
     base_image: str,
     runner: Runner,
 ) -> dict[str, str]:
-    """Run ``test_files`` in ``base_image`` over the mounted worktree and parse the
-    junit report. No files -> no run (an absent test file at the parent is the
-    feature-presence signal, not an error). A missing report after a run is an
-    infra failure (e.g. ``pip install`` broke) and is raised, never swallowed."""
+    """Run ``test_files`` (file paths OR ``file::node`` ids) in ``base_image`` over
+    the mounted worktree and return each collected nodeid's junit outcome. No files
+    -> no run (an absent test file at the parent is the feature-presence signal, not
+    an error). A missing report after a run is an infra failure (e.g. ``pip install``
+    broke) and is raised, never swallowed.
+
+    Shared by the curator (parent/landing legs) and the graded ftp repro runner
+    (`harbor.ftp_repro`, which hands the curated nodeids straight in) -- one
+    container-pytest primitive, so a scored run installs the rig and reads junit
+    exactly as the oracle it is scored against was curated."""
     if not test_files:
         return {}
     junit_host = worktree / _JUNIT_BASENAME
@@ -399,11 +405,11 @@ def curate_commit(
             # (feature-presence). Both legs run the same `run_files`.
             _overlay_paths(wt_parent, landing_sha, run_files, runner)
             parent_out = drop_flaky(
-                _container_pytest(wt_parent, run_files, base_image, runner),
+                run_container_pytest(wt_parent, run_files, base_image, runner),
                 FLAKY_TEST_SUBSTRINGS,
             )
             landing_out = drop_flaky(
-                _container_pytest(wt_landing, run_files, base_image, runner),
+                run_container_pytest(wt_landing, run_files, base_image, runner),
                 FLAKY_TEST_SUBSTRINGS,
             )
             result = classify_ftp(parent_out, landing_out)
