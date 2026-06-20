@@ -120,9 +120,14 @@ class FtpReproRunner:
         except _InfraError as exc:
             return ReproOutcome(passed=False, error=str(exc))
 
+        # Run the spec MODULE FILES (not the curated nodeids): a curated nodeid is in
+        # junit ``classname`` form (``tests.test_x::t``), which pytest cannot take as a
+        # path arg. ftp_curate ran the files and classified the parsed nodeids -- doing
+        # the same here, with the same parser, keeps the scored nodeid form identical
+        # to the oracle's, so the lookup below matches by construction.
         try:
             outcomes = run_container_pytest(
-                worktree, oracle.ftp_tests, bundle.env.base_image, self._runner
+                worktree, sorted(spec_modules), bundle.env.base_image, self._runner
             )
         except RuntimeError as exc:
             return ReproOutcome(passed=False, error=str(exc))
