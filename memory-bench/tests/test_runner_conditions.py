@@ -78,6 +78,25 @@ def test_env_ours_live_missing_store_raises(monkeypatch, tmp_path):
         _system_for(Condition.MEMORY_ENABLED, _experiment(), tmp_path)
 
 
+def test_env_ours_live_missing_mem_bin_raises(monkeypatch, tmp_path):
+    """The symmetric guard: a live arm with no mem_bin is also a loud LAUNCH error."""
+    monkeypatch.setenv(ENV_MEMORY_SYSTEM, "ours-live")
+    monkeypatch.setenv(ENV_MEM_STORE, str(tmp_path / "store.db"))
+    monkeypatch.delenv(ENV_MEM_BIN, raising=False)
+    with pytest.raises(ValueError, match=ENV_MEM_BIN):
+        _system_for(Condition.MEMORY_ENABLED, _experiment(), tmp_path)
+
+
+def test_env_ours_live_blank_store_raises(monkeypatch, tmp_path):
+    """A whitespace-only env value is treated as absent — a blank path must not slip
+    through to defer as an opaque subprocess error later."""
+    monkeypatch.setenv(ENV_MEMORY_SYSTEM, "ours-live")
+    monkeypatch.setenv(ENV_MEM_STORE, "   ")
+    monkeypatch.setenv(ENV_MEM_BIN, str(tmp_path / "mem"))
+    with pytest.raises(ValueError, match=ENV_MEM_STORE):
+        _system_for(Condition.MEMORY_ENABLED, _experiment(), tmp_path)
+
+
 def test_env_ours_replay_also_wired_from_env(monkeypatch, tmp_path):
     """The same wiring serves replay-only `ours`: env-selected `ours` resolves its store
     + mem_bin so retrieval works, instead of building an arm with no store."""

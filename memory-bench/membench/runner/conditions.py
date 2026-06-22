@@ -159,7 +159,7 @@ def _required_env(name: str, arm: str) -> str:
     selected at launch with no store/binary is a config error, never a silently
     deferred failure on first use (mem-ymxp #4)."""
     value = os.environ.get(name)
-    if not value:
+    if value is None or not value.strip():
         target = "mem CLI" if name == ENV_MEM_BIN else "LOO-bounded store"
         raise ValueError(
             f"memory system {arm!r} selected via {ENV_MEMORY_SYSTEM} needs {name} "
