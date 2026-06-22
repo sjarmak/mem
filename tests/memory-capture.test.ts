@@ -70,6 +70,35 @@ describe('memory-capture mechanism (mem-31kz)', () => {
     );
   });
 
+  it('never reflects content-carrying tool_input fields into the event (firewall)', () => {
+    // A Write/Edit hook payload carries the file CONTENT alongside the path. The
+    // projector must read only the path; content must never appear in any captured
+    // field. Guards against a future author widening what the projector copies.
+    const event = buildCaptureEvent(
+      {
+        tool_name: 'Write',
+        tool_input: {
+          file_path: '/home/ds/brains/lesson.md',
+          content: 'SECRET memory body — pass_rate=0.875',
+          old_string: 'stale outcome',
+          new_string: 'landed=true',
+        },
+        session_id: 'sess-1',
+        cwd: '/repo',
+      },
+      { env: {}, now: NOW }
+    );
+    expect(event).not.toBeNull();
+    const serialized = JSON.stringify(event);
+    expect(serialized).not.toContain('SECRET');
+    expect(serialized).not.toContain('pass_rate');
+    expect(serialized).not.toContain('landed');
+    expect(serialized).not.toContain('stale outcome');
+    // memory_ref holds only the path; payload is never auto-populated by capture.
+    expect(event?.memory_ref).toBe('/home/ds/brains/lesson.md');
+    expect(event?.payload).toBeUndefined();
+  });
+
   it('no-ops (null) on a non-memory tool', () => {
     expect(
       buildCaptureEvent(
