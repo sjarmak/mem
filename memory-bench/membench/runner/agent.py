@@ -30,6 +30,11 @@ class AgentStepResult:
     input_tokens: int = 0
     output_tokens: int = 0
     turns: int = 1
+    # The raw agent transcript stream (Claude Code stream-json), kept verbatim so the
+    # §12.6 action-impact path can derive `AttemptStep`s from it via
+    # `bbon.extract.steps_from_stream`. Empty for the `ScriptedAgent` (no real stream —
+    # an honest absence, never fabricated); populated by `HeadlessClaudeAgent`.
+    raw_stream: str = ""
 
 
 @runtime_checkable
