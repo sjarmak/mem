@@ -17,7 +17,7 @@
  * yet populate convoy/supersedes, so those columns carry data only when
  * upstream provides it.
  */
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 export const SCHEMA_DDL = `
 CREATE TABLE work_records (
@@ -243,4 +243,34 @@ CREATE TABLE lessons (
   payload      TEXT NOT NULL
 );
 CREATE INDEX idx_lessons_work ON lessons(work_id);
+
+-- Append-only, WRITE-TIME-captured memory events (mem-31kz forward-capture).
+-- The runtime dual of every other table here: this is NOT a projection of the
+-- bead spine — it is exhaust a real memory-USING session emits at execution
+-- time (see schemas/memory-event.ts). Like lessons, it has NO foreign key to
+-- work_records and is NOT rebuilt on upsert; a rebuild CANNOT regenerate it, so
+-- it is the SECOND table (after lessons) that must be round-tripped across a
+-- schema bump (export-memory-events -> rebuild -> import-memory-events).
+-- The PK id is the dedup key: a re-fired capture hook INSERT OR IGNOREs to a
+-- no-op, keeping the log append-only. Columns are the leak-safe join keys only
+-- (op/which-memory/where-used/session/work_id) — never memory content, never an
+-- outcome field; whether a row may enter eval INPUT is the firewall's call, not
+-- the capture layer's.
+CREATE TABLE memory_events (
+  id            TEXT PRIMARY KEY,
+  session       TEXT NOT NULL,
+  work_id       TEXT,
+  op            TEXT NOT NULL,
+  backend       TEXT NOT NULL,
+  memory_ref    TEXT,
+  used_in       TEXT,
+  concrete_tool TEXT,
+  payload       TEXT,
+  source        TEXT NOT NULL,
+  occurred_at   TEXT,
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX idx_memevents_work    ON memory_events(work_id);
+CREATE INDEX idx_memevents_session ON memory_events(session);
+CREATE INDEX idx_memevents_op      ON memory_events(op);
 `;

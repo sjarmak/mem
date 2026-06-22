@@ -31,4 +31,12 @@ export {
   supersedesClosure,
   workIdsBySignature,
 } from './reader.js';
+export {
+  type ImportMemoryEventsResult,
+  recordMemoryEvents,
+  memoryEventsFor,
+  memoryEventsBySession,
+  allMemoryEvents,
+  importMemoryEvents,
+} from './memory-events.js';
 export { renderProjection, renderRecurrence, replaceBetweenMarkers } from './render.js';

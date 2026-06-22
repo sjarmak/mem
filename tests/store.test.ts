@@ -103,8 +103,8 @@ describe('openStore', () => {
 });
 
 describe('mem-wanz.3 — PROV-O links schema (v8)', () => {
-  it('bumped SCHEMA_VERSION to 8', () => {
-    expect(SCHEMA_VERSION).toBe(8);
+  it('SCHEMA_VERSION is 9 (mem-31kz memory_events table)', () => {
+    expect(SCHEMA_VERSION).toBe(9);
   });
 
   it('projects link_tier + link_source onto work_records', () => {
