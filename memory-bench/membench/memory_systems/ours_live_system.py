@@ -23,6 +23,14 @@ Boundary discipline:
 
 SCOPE (YAGNI): the pilot stays at failure-triggered capture — the same events
 replay-only `ours` is scored on. It does NOT broaden to capture every tool call.
+
+CONSTRUCTION CONTRACT: a runnable live arm needs a `mem_bin` (or an injected
+`emit_runner`) so it can reach the CLI; the factory builds it with neither, so a
+factory-built `ours-live` retrieves fine but RAISES on the first capture
+`write()`. The runnable path is the conditions-runner `override=` injection seam
+(which supplies the wired arm). The `MEMBENCH_MEMORY_SYSTEM` pilot values are
+`none | ours` (replay), NOT `ours-live`, so the env-override path never silently
+selects an unwired live arm.
 """
 
 from __future__ import annotations

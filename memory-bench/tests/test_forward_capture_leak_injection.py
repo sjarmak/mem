@@ -129,3 +129,13 @@ def test_novel_sentinel_field_raises_strict_allow_list() -> None:
     }
     with pytest.raises(ForwardCaptureFieldError):
         project_memory_event(rogue)
+
+
+def test_novel_session_field_raises_strict_allow_list() -> None:
+    """The Session side of the allow-list: a novel top-level Session field (which
+    could carry an outcome-correlated value past the firewall) RAISES, never a
+    silent drop — the symmetric guard to the memory-event allow-list."""
+    session = _leaky_session()
+    session["sneaky_sha"] = SENTINEL_COMMIT
+    with pytest.raises(ForwardCaptureFieldError):
+        project_session_to_record(session)

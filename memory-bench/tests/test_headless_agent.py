@@ -17,6 +17,7 @@ import pytest
 
 from membench.runner.agent import Agent, AgentStepResult
 from membench.runner.headless_agent import (
+    ENV_MODEL,
     HeadlessAgentError,
     HeadlessClaudeAgent,
     MemoryChannel,
@@ -141,3 +142,21 @@ def test_explicit_model_passed_and_recorded() -> None:
     argv = agent._argv("p", _step())
     assert argv[argv.index("--model") + 1] == "claude-sonnet"
     assert agent._resolved_model == "claude-sonnet"
+
+
+def test_env_model_resolves_and_passes_non_empty_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The env override must pass the RESOLVED model, not an empty string.
+    monkeypatch.setenv(ENV_MODEL, "claude-opus")
+    agent = HeadlessClaudeAgent(runner=_fake_runner(""))
+    argv = agent._argv("p", _step())
+    assert argv[argv.index("--model") + 1] == "claude-opus"
+    assert agent._resolved_model == "claude-opus"
+
+
+def test_timeout_raises() -> None:
+    def run(argv: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(cmd=argv, timeout=1.0)
+
+    agent = HeadlessClaudeAgent(runner=run)
+    with pytest.raises(HeadlessAgentError, match="did not respond"):
+        agent.run_step(_step(), {}, _ctx())

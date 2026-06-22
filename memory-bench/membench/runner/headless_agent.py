@@ -214,7 +214,10 @@ class HeadlessClaudeAgent:
         if self.strict_mcp:
             argv.append("--strict-mcp-config")
         if self._pass_model:
-            argv += ["--model", self.model]
+            # Use the RESOLVED model: when the model comes from MEMBENCH_AGENT_MODEL
+            # (not the `model=` kwarg), `self.model` is "" and would pass an empty
+            # `--model`, making the env override a silent no-op.
+            argv += ["--model", self._resolved_model]
         if self.constrain_tools and step.available_tools:
             argv += ["--allowedTools", ",".join(step.available_tools)]
         return argv
