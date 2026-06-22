@@ -269,12 +269,11 @@ model {
           description 'Rejects tasks an agent can solve without memory (oracle ≈ no_memory), and a structural pilot filter on width/shape — the synthetic analogue of the oracle-soundness gate'
           link ../memory-bench/membench/generators/memory_necessity_gate.py 'memory_necessity_gate.py'
         }
-        calibration = component 'ftp-shape calibration' {
+        calibration = component 'real-anchor / ftp-shape calibration' {
           #evolving
           #risk
           description 'Calibrates the synthetic generator against real fail-to-pass shapes (mem-bxhh.5). RISK: the open validity question is whether a synthetic lift generalizes to real city work — Gate-0 rank-correlation against a real anchor is currently flat / NO-GO'
-          link ../memory-bench/membench/generators/ftp_shapes.py 'ftp_shapes.py'
-          link ../docs/mem-72sj-gate0-nonflat-probe.md 'Gate-0 non-flatness probe'
+          link ../memory-bench/membench/generators/external_anchor.py 'external_anchor.py'
         }
         worldFreeze = component 'world freeze + determinism manifest' {
           #built
