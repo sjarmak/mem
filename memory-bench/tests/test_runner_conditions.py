@@ -1,8 +1,15 @@
 import pytest
 
 from membench.dataset import load_sequence
+from membench.memory_systems.ours_live_system import OursLiveMemory
 from membench.report.comparison import build_comparison
-from membench.runner.conditions import ENV_MEMORY_SYSTEM, _system_for, run_sequence
+from membench.runner.conditions import (
+    ENV_MEM_BIN,
+    ENV_MEM_STORE,
+    ENV_MEMORY_SYSTEM,
+    _system_for,
+    run_sequence,
+)
 from membench.schemas.conditions import Condition
 from membench.schemas.config import AgentConfig, ExperimentConfig, MemoryConfig
 from tests.paths import FIXTURE
@@ -43,6 +50,44 @@ def test_env_override_ignored_for_fixed_controls(monkeypatch, tmp_path):
     oracle_system, _ = _system_for(Condition.ORACLE_MEMORY, _experiment(), tmp_path)
     assert none_system.name == "none"
     assert oracle_system.name == "oracle"
+
+
+def test_env_ours_live_wires_working_launch_path(monkeypatch, tmp_path):
+    """mem-ymxp #4: MEMBENCH_MEMORY_SYSTEM=ours-live yields a WORKING live write-capture
+    arm — mem_bin + store resolved from env — not one that raises on first write."""
+    store = tmp_path / "store.db"
+    monkeypatch.setenv(ENV_MEMORY_SYSTEM, "ours-live")
+    monkeypatch.setenv(ENV_MEM_STORE, str(store))
+    monkeypatch.setenv(ENV_MEM_BIN, str(tmp_path / "mem"))
+    system, config_id = _system_for(Condition.MEMORY_ENABLED, _experiment(), tmp_path)
+    assert system.name == "ours-live"
+    assert config_id == "ours-live"
+    assert isinstance(system, OursLiveMemory)
+    # The construction contract is satisfied: resolving the emit runner does NOT raise
+    # (the launch-path gap in mem-mtqi was exactly an arm with no mem_bin/emit_runner).
+    system._resolve_emit_runner()
+
+
+def test_env_ours_live_missing_store_raises(monkeypatch, tmp_path):
+    """A live arm selected by env with no store path is a loud LAUNCH error, not an arm
+    that silently raises later on first use."""
+    monkeypatch.setenv(ENV_MEMORY_SYSTEM, "ours-live")
+    monkeypatch.delenv(ENV_MEM_STORE, raising=False)
+    monkeypatch.setenv(ENV_MEM_BIN, str(tmp_path / "mem"))
+    with pytest.raises(ValueError, match=ENV_MEM_STORE):
+        _system_for(Condition.MEMORY_ENABLED, _experiment(), tmp_path)
+
+
+def test_env_ours_replay_also_wired_from_env(monkeypatch, tmp_path):
+    """The same wiring serves replay-only `ours`: env-selected `ours` resolves its store
+    + mem_bin so retrieval works, instead of building an arm with no store."""
+    store = tmp_path / "store.db"
+    monkeypatch.setenv(ENV_MEMORY_SYSTEM, "ours")
+    monkeypatch.setenv(ENV_MEM_STORE, str(store))
+    monkeypatch.setenv(ENV_MEM_BIN, str(tmp_path / "mem"))
+    system, config_id = _system_for(Condition.MEMORY_ENABLED, _experiment(), tmp_path)
+    assert system.name == "ours"
+    assert config_id == "ours"
 
 
 def test_runs_all_three_conditions_for_every_step(tmp_path):

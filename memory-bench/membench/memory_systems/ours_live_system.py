@@ -25,12 +25,14 @@ SCOPE (YAGNI): the pilot stays at failure-triggered capture — the same events
 replay-only `ours` is scored on. It does NOT broaden to capture every tool call.
 
 CONSTRUCTION CONTRACT: a runnable live arm needs a `mem_bin` (or an injected
-`emit_runner`) so it can reach the CLI; the factory builds it with neither, so a
-factory-built `ours-live` retrieves fine but RAISES on the first capture
-`write()`. The runnable path is the conditions-runner `override=` injection seam
-(which supplies the wired arm). The `MEMBENCH_MEMORY_SYSTEM` pilot values are
-`none | ours` (replay), NOT `ours-live`, so the env-override path never silently
-selects an unwired live arm.
+`emit_runner`) so it can reach the CLI, plus a `store_path` for the replay READ
+leg. A bare factory call (`build_memory_system("ours-live")`) supplies neither and
+RAISES on first use — by design, so an unwired arm is never silently selected.
+The runnable paths are (a) the conditions-runner `override=` injection seam and
+(b) the `MEMBENCH_MEMORY_SYSTEM=ours-live` launch override, which resolves
+`mem_bin`/`store_path` from `MEMBENCH_MEM_BIN`/`MEMBENCH_MEM_STORE` and fails fast
+at launch if they are absent (mem-ymxp #4) — so a registered agent with that env
+does LIVE write-capture, not an arm that raises on first write.
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from membench.forward_capture import assert_capture_firewalled
 from membench.mem_cli import run_mem_json
 from membench.memory_systems.ours_system import OursMemory
 from membench.runtime import StepContext
@@ -76,10 +79,15 @@ class OursLiveMemory(OursMemory):
         mem_bin: str | None = None,
         limit: int | None = None,
         emit_runner: EmitRunner | None = None,
+        protected_labels: tuple[str, ...] = (),
     ) -> None:
         super().__init__(store_path, runner=runner, mem_bin=mem_bin, limit=limit)
         self._emit_runner = emit_runner
         self._emit_mem_bin = mem_bin
+        # The KNOWN outcome identifiers the live firewall value-scans against. Empty
+        # in the pilot (the in-flight work's outcome does not yet exist at capture
+        # time), where the STRUCTURAL scan (nested-key/allow-list) stands alone.
+        self._protected_labels = protected_labels
 
     def _resolve_emit_runner(self) -> EmitRunner:
         if self._emit_runner is not None:
@@ -92,7 +100,14 @@ class OursLiveMemory(OursMemory):
         self._emit_runner = _default_emit_runner(self._emit_mem_bin)
         return self._emit_runner
 
-    def write(self, memory_id: str, content: str, ctx: StepContext) -> MemoryEvent:
+    def write(
+        self,
+        memory_id: str,
+        content: str,
+        ctx: StepContext,
+        *,
+        payload: dict[str, Any] | None = None,
+    ) -> MemoryEvent:
         """Emit one forward-capture `memory_event` through the firewalled CLI.
 
         `memory_id` is the captured memory reference (which memory) and `ctx` carries
@@ -100,7 +115,26 @@ class OursLiveMemory(OursMemory):
         memory operation); `content` is NOT sent to the store — the CLI captures a
         REFERENCE, never memory content (the firewall scans references, content can
         carry outcome-correlated text). The returned `MemoryEvent` is the harness's
-        normalized telemetry; the store's row is whatever the CLI wrote."""
+        normalized telemetry; the store's row is whatever the CLI wrote.
+
+        The constructed event is run through `assert_capture_firewalled` BEFORE any
+        emit (mem-ymxp #3): a novel field, an outcome identifier nested in `payload`,
+        or a known outcome label embedded in `memory_ref` RAISES here, so the live
+        write path is leak-scanned end-to-end — not a bypass of the offline projector.
+        `payload` (structured, NON-content extras) is firewalled but, being label-side
+        (PRD §Firewall), is NOT forwarded to the store — the pilot capture is
+        reference-only; a dirty payload aborts the capture loudly."""
+        event: dict[str, Any] = {
+            "session": ctx.session_id,
+            "op": "write",
+            "backend": "kg",
+            "memory_ref": memory_id,
+            "source": FORWARD_CAPTURE_SOURCE,
+        }
+        if payload is not None:
+            event["payload"] = payload
+        assert_capture_firewalled(event, self._protected_labels)
+
         emit = self._resolve_emit_runner()
         argv = [
             "memory-event",

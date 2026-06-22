@@ -120,7 +120,21 @@ def _assert_superseded_written(seq: BenchmarkSequence) -> None:
 # ignore it.
 ENV_MEMORY_SYSTEM = "MEMBENCH_MEMORY_SYSTEM"
 
-_PILOT_SYSTEMS = ("none", "ours")
+# The live/replay `ours` arms reach the TS substrate through the `mem` CLI over a
+# LOO-bounded store. When selected by `MEMBENCH_MEMORY_SYSTEM` (the launch path),
+# their `mem_bin` + `store_path` are resolved from these env vars and a missing one
+# is a loud LAUNCH error — not an arm that builds fine then raises on first use
+# (mem-ymxp #4). The `override=` injection seam supplies a pre-wired arm and skips
+# this resolution.
+ENV_MEM_BIN = "MEMBENCH_MEM_BIN"
+ENV_MEM_STORE = "MEMBENCH_MEM_STORE"
+
+# The arms wired to the `mem` CLI substrate — both need a store; `ours-live` also
+# needs `mem_bin` for the forward-capture emit. `ours` (replay) needs `mem_bin` for
+# the retrieve subprocess.
+_LIVE_OURS_SYSTEMS = frozenset({"ours", "ours-live"})
+
+_PILOT_SYSTEMS = ("none", "ours", "ours-live")
 
 
 def _memory_system_name(experiment: ExperimentConfig) -> str:
@@ -140,6 +154,31 @@ def _memory_system_name(experiment: ExperimentConfig) -> str:
     return override
 
 
+def _required_env(name: str, arm: str) -> str:
+    """Read a required launch env var or RAISE a loud, actionable error — a live arm
+    selected at launch with no store/binary is a config error, never a silently
+    deferred failure on first use (mem-ymxp #4)."""
+    value = os.environ.get(name)
+    if not value:
+        target = "mem CLI" if name == ENV_MEM_BIN else "LOO-bounded store"
+        raise ValueError(
+            f"memory system {arm!r} selected via {ENV_MEMORY_SYSTEM} needs {name} "
+            f"(the path to the {target})."
+        )
+    return value
+
+
+def _live_arm_kwargs(arm: str) -> dict[str, str]:
+    """Resolve the `mem`-CLI-backed `ours`/`ours-live` launch kwargs from the
+    environment. Both need a store (`ours` to retrieve, `ours-live` also to replay);
+    both need `mem_bin` (the retrieve subprocess / the forward-capture emit). The
+    factory builds the arm with these so the env launch path is actually runnable."""
+    return {
+        "store_path": _required_env(ENV_MEM_STORE, arm),
+        "mem_bin": _required_env(ENV_MEM_BIN, arm),
+    }
+
+
 def _system_for(
     condition: Condition,
     experiment: ExperimentConfig,
@@ -156,9 +195,11 @@ def _system_for(
     if override is not None:
         return override, getattr(override, "name", experiment.memory.memory_config_id)
     system_name = _memory_system_name(experiment)
-    kwargs = {}
+    kwargs: dict[str, object] = {}
     if system_name == "filesystem" and fs_base_dir is not None:
         kwargs["base_dir"] = fs_base_dir
+    elif system_name in _LIVE_OURS_SYSTEMS:
+        kwargs.update(_live_arm_kwargs(system_name))
     # When the env override changed the arm, the experiment's memory_config_id no
     # longer describes it — report the arm name so telemetry isn't mislabeled.
     config_id = (

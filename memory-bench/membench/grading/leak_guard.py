@@ -21,7 +21,11 @@ this scan.
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-_IDENTIFYING_KEYS = ("pr", "commit_sha", "base_commit")
+# The high-entropy outcome identifiers a held-out bead must never expose — the
+# SINGLE SOURCE OF TRUTH for both this guard's value-scan and the forward-capture
+# projector's key-routing/scan (`forward_capture._OUTCOME_KEYS` imports this, so the
+# two cannot drift; mem-ymxp #5).
+IDENTIFYING_KEYS = ("pr", "commit_sha", "base_commit")
 
 
 class OutcomeLeakError(AssertionError):
@@ -40,7 +44,7 @@ def outcome_labels(record: Mapping[str, Any]) -> tuple[str, ...]:
     """The high-entropy outcome identifiers of `record` — the values that must not
     appear in any agent-readable file. Missing/empty values are skipped."""
     outcome = record.get("outcome") or {}
-    return tuple(str(outcome[key]) for key in _IDENTIFYING_KEYS if outcome.get(key))
+    return tuple(str(outcome[key]) for key in IDENTIFYING_KEYS if outcome.get(key))
 
 
 def assert_no_outcome_leak(agent_readable: str | Mapping[str, str], labels: Iterable[str]) -> None:

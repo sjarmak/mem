@@ -9,6 +9,8 @@ from typing import Any
 
 import pytest
 
+from membench.forward_capture import ForwardCaptureFieldError
+from membench.grading.leak_guard import OutcomeLeakError
 from membench.memory_systems import build_memory_system, wired_memory_systems
 from membench.memory_systems.ours_live_system import (
     FORWARD_CAPTURE_SOURCE,
@@ -18,6 +20,8 @@ from membench.memory_systems.ours_system import OursMemory
 from membench.runtime import IdClock, StepContext
 from membench.schemas.memory_event import MemoryOperation
 from membench.validity import QueryWork
+
+SENTINEL = "SENTINELLEAK0000"
 
 
 def _ctx() -> StepContext:
@@ -96,3 +100,59 @@ def test_write_without_emit_runner_or_mem_bin_raises() -> None:
     arm = OursLiveMemory(store_path="/tmp/store.db")
     with pytest.raises(ValueError, match=r"emit_runner.*mem_bin"):
         arm.write("ref", "content", _ctx())
+
+
+def _recording_emit(calls: list[list[str]]):
+    def emit(argv: list[str]) -> dict[str, Any]:
+        calls.append(argv)
+        return {"recorded": 1, "event_id": "x"}
+
+    return emit
+
+
+def test_live_write_firewall_raises_on_ref_outcome_leak() -> None:
+    """mem-ymxp #3: the LIVE write path value-scans against the arm's known outcome
+    labels; a sentinel embedded in the memory_ref RAISES BEFORE any emit — the
+    firewall is not decorative on the path that actually runs live."""
+    calls: list[list[str]] = []
+    arm = OursLiveMemory(
+        store_path="/tmp/store.db",
+        emit_runner=_recording_emit(calls),
+        protected_labels=(SENTINEL,),
+    )
+    with pytest.raises(OutcomeLeakError):
+        arm.write(f"work:mem-x@{SENTINEL}", "content", _ctx())
+    assert calls == []  # never emitted
+
+
+def test_live_write_firewall_raises_on_nested_payload_leak() -> None:
+    """mem-ymxp #3 + #1 end-to-end: a nested-in-payload outcome identifier RAISES on
+    the LIVE write path, not just the offline projector."""
+    calls: list[list[str]] = []
+    arm = OursLiveMemory(store_path="/tmp/store.db", emit_runner=_recording_emit(calls))
+    with pytest.raises(ForwardCaptureFieldError):
+        arm.write(
+            "work:mem-x",
+            "content",
+            _ctx(),
+            payload={"diff": {"commit_sha": SENTINEL}},
+        )
+    assert calls == []  # never emitted
+
+
+def test_live_write_clean_capture_emits_ref_only() -> None:
+    """A clean capture passes the firewall and emits ref-only; a clean payload is
+    firewalled then DROPPED (label-side), never forwarded to the store."""
+    calls: list[list[str]] = []
+    arm = OursLiveMemory(
+        store_path="/tmp/store.db",
+        emit_runner=_recording_emit(calls),
+        protected_labels=(SENTINEL,),
+    )
+    arm.write("work:mem-prior", "clean content", _ctx(), payload={"bytes": 10})
+    assert len(calls) == 1
+    argv = calls[0]
+    assert argv[argv.index("--ref") + 1] == "work:mem-prior"
+    # payload is label-side: never forwarded to the store.
+    assert "--payload" not in argv
+    assert "bytes" not in " ".join(argv)
