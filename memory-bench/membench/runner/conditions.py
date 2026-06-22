@@ -6,10 +6,11 @@ before the agent acts; writes are persisted after — so a step can only read wh
 earlier steps wrote.
 """
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from membench.memory_systems import build_memory_system
+from membench.memory_systems import build_memory_system, wired_memory_systems
 from membench.memory_systems.base import MemorySystem, RetrievalRequest, RetrieveResult
 from membench.memory_systems.consolidation import ConsolidationCapable, ConsolidationResult
 from membench.memory_systems.oracle_system import OracleMemory
@@ -98,14 +99,45 @@ def _assert_superseded_written(seq: BenchmarkSequence) -> None:
         for mid in step.superseded_memory_ids:
             written_at = first_write.get(mid)
             if written_at is None or written_at >= idx:
-                where = "is never written by any step" if written_at is None else (
-                    f"is first written at step index {written_at} (not BEFORE)"
+                where = (
+                    "is never written by any step"
+                    if written_at is None
+                    else (f"is first written at step index {written_at} (not BEFORE)")
                 )
                 raise ValueError(
                     f"superseded id {mid!r} (step {step.step_id!r}, index {idx}) {where} "
                     f"in sequence {seq.sequence_id!r}; supersession must mark a real prior "
                     "write so the staleness signal is retrievable"
                 )
+
+
+# The launch-time arm selector. When set, it OVERRIDES `experiment.memory.system`
+# for the memory_enabled condition, so the harness arm can be chosen at the
+# process boundary (e.g. by `gc agent add`) without editing the experiment config.
+# Pilot values are `none | ours`; any value is validated against the factory's
+# wired set (`wired_memory_systems`) and a typo / unwired name raises loudly
+# (never a silent substitution). NO_MEMORY / ORACLE_MEMORY are fixed controls and
+# ignore it.
+ENV_MEMORY_SYSTEM = "MEMBENCH_MEMORY_SYSTEM"
+
+_PILOT_SYSTEMS = ("none", "ours")
+
+
+def _memory_system_name(experiment: ExperimentConfig) -> str:
+    """The memory_enabled arm name: the `MEMBENCH_MEMORY_SYSTEM` override when set,
+    else `experiment.memory.system`. An override outside the wired factory set
+    raises (validated against `wired_memory_systems`), so an unknown arm is a loud
+    config error at launch, not a silent fallback."""
+    override = os.environ.get(ENV_MEMORY_SYSTEM)
+    if override is None or override == "":
+        return experiment.memory.system
+    wired = wired_memory_systems()
+    if override not in wired:
+        raise ValueError(
+            f"{ENV_MEMORY_SYSTEM}={override!r} is not a wired memory system "
+            f"(pilot values: {', '.join(_PILOT_SYSTEMS)}; wired: {', '.join(wired)})."
+        )
+    return override
 
 
 def _system_for(
@@ -123,13 +155,18 @@ def _system_for(
     # ConsolidatingMemory with an injected summarizer); else build from config.
     if override is not None:
         return override, getattr(override, "name", experiment.memory.memory_config_id)
+    system_name = _memory_system_name(experiment)
     kwargs = {}
-    if experiment.memory.system == "filesystem" and fs_base_dir is not None:
+    if system_name == "filesystem" and fs_base_dir is not None:
         kwargs["base_dir"] = fs_base_dir
-    return (
-        build_memory_system(experiment.memory.system, **kwargs),
-        experiment.memory.memory_config_id,
+    # When the env override changed the arm, the experiment's memory_config_id no
+    # longer describes it — report the arm name so telemetry isn't mislabeled.
+    config_id = (
+        experiment.memory.memory_config_id
+        if system_name == experiment.memory.system
+        else system_name
     )
+    return build_memory_system(system_name, **kwargs), config_id
 
 
 def _execute_step(

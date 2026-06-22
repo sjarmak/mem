@@ -1,6 +1,8 @@
+import pytest
+
 from membench.dataset import load_sequence
 from membench.report.comparison import build_comparison
-from membench.runner.conditions import run_sequence
+from membench.runner.conditions import ENV_MEMORY_SYSTEM, _system_for, run_sequence
 from membench.schemas.conditions import Condition
 from membench.schemas.config import AgentConfig, ExperimentConfig, MemoryConfig
 from tests.paths import FIXTURE
@@ -13,6 +15,34 @@ def _experiment():
         memory=MemoryConfig(memory_config_id="filesystem", system="filesystem"),
         dataset_id="gascity-backend-conventions",
     )
+
+
+def test_env_override_selects_memory_enabled_arm(monkeypatch, tmp_path):
+    monkeypatch.setenv(ENV_MEMORY_SYSTEM, "none")
+    system, config_id = _system_for(Condition.MEMORY_ENABLED, _experiment(), tmp_path)
+    assert system.name == "none"
+    assert config_id == "none"
+
+
+def test_env_override_unset_uses_config_system(monkeypatch, tmp_path):
+    monkeypatch.delenv(ENV_MEMORY_SYSTEM, raising=False)
+    system, config_id = _system_for(Condition.MEMORY_ENABLED, _experiment(), tmp_path)
+    assert system.name == "filesystem"
+    assert config_id == "filesystem"
+
+
+def test_env_override_unknown_raises(monkeypatch, tmp_path):
+    monkeypatch.setenv(ENV_MEMORY_SYSTEM, "not-a-real-arm")
+    with pytest.raises(ValueError, match="not a wired memory system"):
+        _system_for(Condition.MEMORY_ENABLED, _experiment(), tmp_path)
+
+
+def test_env_override_ignored_for_fixed_controls(monkeypatch, tmp_path):
+    monkeypatch.setenv(ENV_MEMORY_SYSTEM, "ours")
+    none_system, _ = _system_for(Condition.NO_MEMORY, _experiment(), tmp_path)
+    oracle_system, _ = _system_for(Condition.ORACLE_MEMORY, _experiment(), tmp_path)
+    assert none_system.name == "none"
+    assert oracle_system.name == "oracle"
 
 
 def test_runs_all_three_conditions_for_every_step(tmp_path):
