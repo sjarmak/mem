@@ -16,7 +16,10 @@ model {
 
   // ─────────────────────────────────────────────────────────────────────────
   // External systems — the audit substrate and execution/inference services.
-  // The corpus is the orchestrator's own audit; nothing is synthesized.
+  // The benchmark runs on TWO corpora: the orchestrator's own real audit (the
+  // headline substrate) and a seed-reproducible synthetic-world track
+  // (generators/, the source of the first measurable lift) materialized in
+  // the harness from a frozen NeMo natural-language surface.
   // ─────────────────────────────────────────────────────────────────────────
 
   gascity = externalSystem 'Multi-agent orchestrator' {
@@ -42,7 +45,11 @@ model {
   }
 
   models = externalSystem 'Inference models' {
-    description 'Semantic extractor, LLM-judge, and embedding models'
+    description 'Semantic extractor, LLM-judge, and embedding models (OSS / self-hosted — no-paid-API constraint)'
+  }
+
+  nemo = externalSystem 'NeMo / local NIM' {
+    description 'Natural-language surface for the synthetic-world generator; run offline against a local NIM, then frozen'
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -52,7 +59,7 @@ model {
   mem = system 'mem' {
     description 'Turns the work spine + transcripts into a work-audit graph, then benchmarks memory on it'
     link ../ARCHITECTURE.md 'Architecture overview'
-    link ../docs/architecture-decisions.md 'Decision log (1–17)'
+    link ../docs/architecture-decisions.md 'Decision log (1–18)'
 
     // ── TypeScript half: builds and serves the store ───────────────────────
     store = container 'Store builder & server' {
@@ -83,6 +90,13 @@ model {
           description 'Session-start base commit (commit-by-date). RISK: gc never records the exact base SHA, so cleaner replay coverage depends on capturing each session’s true per-worktree base commit — a trace-substrate change, not a harness patch'
           link ../src/ingest/provenance.ts 'provenance.ts'
         }
+        landed = component 'landed + commit-linkage (git-native oracle)' {
+          #built
+          #risk
+          description 'Decision 18: the forward mirror of provenance — dates the branch tip at session close and takes the surviving in-window commits as the session’s landed work. The right outcome oracle for a direct-to-main corpus. RISK: in-repo session concurrency makes overlapping branch windows ambiguous (deterministically attributed at small N; the rest awaits author/SHA attribution)'
+          link ../src/ingest/landed.ts 'landed.ts'
+          link ../docs/architecture-decisions.md 'Decision 18 — direct-to-main git-native oracle'
+        }
         repoResolve = component 'repo resolve (rig→repo map)' {
           #built
           description 'Canonical owner/name on every record; records how it resolved'
@@ -109,7 +123,7 @@ model {
 
       graph = datastore 'store/ — SQLite + FTS5 sidecar' {
         #built
-        description '.mem/store.db (schema v6). WorkRecord projection (rebuilt on upsert) + append-only lessons table'
+        description '.mem/store.db (schema v8). WorkRecord projection (rebuilt on upsert from the canonical record JSON) + append-only lessons + PROV-O links (T1/T2/T3)'
         link ../src/store/schema.ts 'schema.ts'
         link ../docs/architecture-decisions.md 'Decision 3 — append-only lessons'
       }
@@ -173,17 +187,21 @@ model {
         link ../memory-bench/membench/memory_systems 'memory_systems/'
         link ../docs/architecture-decisions.md 'Decision 11 — competitive-arm contract'
 
-        armsBuilt = component 'none / ours / oracle / filesystem' {
+        armsBuilt = component 'none / ours / oracle / filesystem / lexical' {
           #built
-          description 'Stateless floor, failure-triggered ours, exact-memory ceiling, and the filesystem baseline'
+          description 'Stateless floor, failure-triggered ours, exact-memory ceiling, the filesystem baseline, and the deterministic lexical top-k arm that activates the Confusion + Staleness retrieval-quality metrics'
         }
         armsExternal = component 'mem0 / A-MEM / NAT / Graphiti' {
-          #evolving
-          description 'Third-party memory systems behind the same interface — adapters landing'
+          #built
+          description 'Third-party memory systems behind the same interface — real adapters, all on a local OSS stack (Qdrant / ChromaDB / Redis / FalkorDB + Ollama), no paid API'
         }
         armsConsolidating = component 'consolidating / retention-scheduled' {
-          #evolving
-          description 'Consolidation and TTL/retention-policy variants'
+          #built
+          description 'Two-speed consolidation and TTL/retention-policy variants'
+        }
+        armsDeferred = component 'builtin (agent-native memory)' {
+          #planned
+          description 'The agent’s own built-in memory; deferred — a paid Harbor path (mem-whi), explicitly not wired into the harness'
         }
       }
 
@@ -200,15 +218,15 @@ model {
         soundness = component 'oracle-soundness gate' {
           #built
           #risk
-          description 'CodeScaleBench fail-to-pass admission gate. RISK: only 9 sound oracles admitted so far; the headline runs at small N with a stated caveat'
+          description 'CodeScaleBench fail-to-pass admission gate. RISK: commit-linkage recovered 407 sound work→landed-commit oracles, but only ~8 replay cleanly — the rest hit the oracle-validity wall, so the real-corpus headline runs at small N bound by replay fidelity, not method'
           link ../memory-bench/membench/grading/safety_gates.py 'safety_gates.py'
         }
         ablation = component 'ablation curve + graded scorer' {
           #evolving
           #risk
-          description 'Reward-vs-information saturation curve — the headline metric. RISK: the headline number is still being pinned (graded 3-arm grid executing on Harbor)'
+          description 'Reward-vs-information saturation curve — the headline metric. RISK: on the real corpus the graded 3-arm grid is null at usable N (ours +0.000, builtin +0.125, 8 of 407 scorable); the synthetic track carries the first measurable lift (continuity 0.062 → 0.188). Release decision on the diagnosed-ceiling negative is open (mem-1fl8)'
           link ../memory-bench/membench/grading/ablation.py 'ablation.py'
-          link ../docs/architecture-decisions.md 'Decision 17 — ablation headline'
+          link ../docs/architecture-decisions.md 'Decision 17/18 — ablation headline, direct-to-main'
         }
         scorers = component 'trace / judge / merged-diff scorers' {
           #built
@@ -230,11 +248,47 @@ model {
         link ../docs/architecture-decisions.md 'Decision 12 — 5-axis telemetry'
       }
 
-      generators = component 'generators/ — synthetic tasks' {
-        #evolving
-        description 'Deterministic synthetic-task generator, pilot validity filter, schema induction, interruption/retention schedules'
+      generators = component 'generators/ — synthetic-world track' {
+        #built
+        description 'Authors seed-reproducible, memory-dependent task sequences — the track that produced the first measurable lift (cross-task continuity 0.062 → 0.188 under a shared store)'
         link ../memory-bench/membench/generators 'generators/'
         link ../docs/architecture-decisions.md 'Decision 16 — eval object + scope'
+
+        worldBuilder = component 'NeMo world builder' {
+          #built
+          description 'Builds an EnterpriseWorld from a NeMo natural-language surface (personas / PRDs / repo shapes), then validates org-coherence in pure code. NeMo import is lazy + frozen offline, so the suite runs without the SDK'
+          link ../memory-bench/membench/generators/nemo/world_builder.py 'nemo/world_builder.py'
+        }
+        workflowMaterializer = component 'enterprise-workflow materializer' {
+          #built
+          description 'Turns a world into multi-session sequences: every fact, distractor, and supersession authored in code and seed-reproducible, so memory necessity / Confusion / Staleness are planted, not guessed'
+          link ../memory-bench/membench/generators/enterprise_workflow.py 'enterprise_workflow.py'
+        }
+        necessityGate = component 'memory-necessity + pilot filter' {
+          #built
+          description 'Rejects tasks an agent can solve without memory (oracle ≈ no_memory), and a structural pilot filter on width/shape — the synthetic analogue of the oracle-soundness gate'
+          link ../memory-bench/membench/generators/memory_necessity_gate.py 'memory_necessity_gate.py'
+        }
+        calibration = component 'ftp-shape calibration' {
+          #evolving
+          #risk
+          description 'Calibrates the synthetic generator against real fail-to-pass shapes (mem-bxhh.5). RISK: the open validity question is whether a synthetic lift generalizes to real city work — Gate-0 rank-correlation against a real anchor is currently flat / NO-GO'
+          link ../memory-bench/membench/generators/ftp_shapes.py 'ftp_shapes.py'
+          link ../docs/mem-72sj-gate0-nonflat-probe.md 'Gate-0 non-flatness probe'
+        }
+        worldFreeze = component 'world freeze + determinism manifest' {
+          #built
+          description 'Serializes worlds to fixtures/worlds/<seed>/ and verifies a determinism manifest, so a frozen world replays byte-identically without re-touching NeMo'
+          link ../memory-bench/membench/generators/world_manifest.py 'world_manifest.py'
+        }
+      }
+
+      // The synthetic corpus artifact — the frozen counterpart to gascity's
+      // real audit, materialized in-repo and seed-reproducible.
+      worlds = datastore 'fixtures/worlds/ — frozen synthetic worlds' {
+        #built
+        description 'Seed-keyed frozen NeMo worlds + determinism manifest; the synthetic corpus the harness replays from'
+        link ../memory-bench/membench/generators/world_manifest.py 'world_manifest.py'
       }
 
       harborAdapter = component 'harbor/ — execution adapter' {
@@ -295,6 +349,7 @@ model {
   store.ingest.beadReader -> github 'reads PR / commit outcome (where linked)'
   store.ingest.traceReader -> gascity.gcLogs 'resolves session → JSONL path'
   store.ingest.traceReader -> gascity.sessionTraces 'reads transcripts'
+  store.ingest.landed -> github 'dates branch tip at close → landed commits (direct-to-main oracle)'
   store.ingest -> store.parse 'raw WorkRecords'
 
   // Parse (deterministic in code, semantic via model)
@@ -323,8 +378,14 @@ model {
   bench.grading -> bench.runner 'gates + scores each run'
   bench.grading.scorers -> models 'LLM-judge rubric_score'
   bench.telemetry -> bench.runner 'emits per-run spans'
-  bench.generators -> bench.bundle 'synthetic sequences feed the task pool'
   bench.report -> bench.grading 'aggregates graded results per arm'
+
+  // Synthetic-world track (the second corpus)
+  bench.generators.worldBuilder -> nemo 'NeMo NL surface (run offline, then frozen)'
+  bench.generators.worldFreeze -> bench.worlds 'freezes worlds + determinism manifest'
+  bench.generators -> bench.worlds 'materializes seed-reproducible worlds'
+  bench.worlds -> bench.bundle 'frozen synthetic sequences feed the task pool'
+  bench.generators.calibration -> bench.grading.soundness 'calibrates synthetic shapes against real fail-to-pass oracles'
 
   // Planned controller wiring
   controller -> store.graph 'multi-type retrieval + write' {

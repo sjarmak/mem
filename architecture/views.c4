@@ -68,6 +68,20 @@ views {
     include *
   }
 
+  // The synthetic-world generation track — the second corpus.
+  view generatorsView of mem.bench.generators {
+    title 'Synthetic-world generation track'
+    include
+      *,
+      nemo,
+      mem.bench.worlds,
+      mem.bench.bundle
+
+    style element.tag == #evolving {
+      color amber
+    }
+  }
+
   // Risks & open questions — the elements that carry a #risk flag, with the
   // open question stated in each box's description. The things a reviewer
   // should probe, surfaced rather than discovered mid-meeting.
@@ -106,6 +120,19 @@ views {
     mem.store.parse.semantic -> models 'extract'
     mem.store.parse -> mem.store.graph 'upsert WorkRecord + projections'
     mem.store.distill -> mem.store.graph 'append distilled lessons + citations'
+  }
+
+  // Flow 1b — materializing the synthetic-world corpus.
+  dynamic view synthBuild {
+    title 'Walkthrough — synthetic-world materialization'
+    description 'The second corpus: every fact, distractor, and supersession is authored in code and seed-reproducible. NeMo supplies only the natural-language surface, run offline and frozen, so the suite (and the eval) runs without the SDK.'
+
+    mem.bench.generators.worldBuilder -> nemo 'NeMo NL surface (personas / PRDs / repos)'
+    mem.bench.generators.worldBuilder -> mem.bench.generators.workflowMaterializer 'coherent EnterpriseWorld'
+    mem.bench.generators.workflowMaterializer -> mem.bench.generators.necessityGate 'memory-dependent sequences (facts / distractors / supersessions)'
+    mem.bench.generators.necessityGate -> mem.bench.generators.worldFreeze 'tasks that need memory (oracle ≠ no_memory)'
+    mem.bench.generators.worldFreeze -> mem.bench.worlds 'freeze + determinism manifest'
+    mem.bench.worlds -> mem.bench.bundle 'frozen sequences feed the task pool'
   }
 
   // Flow 2 — one benchmark run, end to end.
