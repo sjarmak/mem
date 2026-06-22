@@ -36,6 +36,7 @@ from membench.memory_systems.mem0_system import Mem0Memory
 from membench.memory_systems.nat_system import NatMemory
 from membench.memory_systems.none_system import NoneMemory
 from membench.memory_systems.oracle_system import OracleMemory
+from membench.memory_systems.ours_live_system import OursLiveMemory
 from membench.memory_systems.ours_system import OursMemory
 from membench.memory_systems.retention_scheduled_system import RetentionScheduledMemory
 from membench.memory_systems.semantic_base import (
@@ -59,6 +60,7 @@ __all__ = [
     "NatMemory",
     "NoneMemory",
     "OracleMemory",
+    "OursLiveMemory",
     "OursMemory",
     "RetentionScheduledMemory",
     "RetrievalRequest",
@@ -87,6 +89,7 @@ def _systems_registry() -> dict[str, type[MemorySystem]]:
         "consolidating": ConsolidatingMemory,
         "retention_scheduled": RetentionScheduledMemory,
         "ours": OursMemory,
+        "ours-live": OursLiveMemory,
         "mem0": Mem0Memory,
         "a-mem": AMemMemory,
         "nat": NatMemory,

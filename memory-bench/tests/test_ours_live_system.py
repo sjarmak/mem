@@ -1,0 +1,98 @@
+"""Hermetic tests for `OursLiveMemory` — the live forward-capture analog of `ours`.
+
+Injected runners (retrieve + emit) so no built CLI / real store is needed.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+
+from membench.memory_systems import build_memory_system, wired_memory_systems
+from membench.memory_systems.ours_live_system import (
+    FORWARD_CAPTURE_SOURCE,
+    OursLiveMemory,
+)
+from membench.memory_systems.ours_system import OursMemory
+from membench.runtime import IdClock, StepContext
+from membench.schemas.memory_event import MemoryOperation
+from membench.validity import QueryWork
+
+
+def _ctx() -> StepContext:
+    return StepContext(trial_id="t1", session_id="sess-1", step_id="s1", clock=IdClock())
+
+
+def test_registered_in_factory_and_wired_list() -> None:
+    assert "ours-live" in wired_memory_systems()
+    arm = build_memory_system("ours-live")
+    assert isinstance(arm, OursLiveMemory)
+    assert arm.name == "ours-live"
+
+
+def test_supports_write_true_but_replay_only_ours_unchanged() -> None:
+    assert OursLiveMemory.supports_write is True
+    # The replay-only arm is left write-free.
+    assert OursMemory.supports_write is False
+
+
+def test_write_emits_forward_capture_event_via_cli() -> None:
+    captured: dict[str, list[str]] = {}
+
+    def emit(argv: list[str]) -> dict[str, Any]:
+        captured["argv"] = argv
+        return {"recorded": 1, "event_id": "forward-capture:sess-1:..:write:ref"}
+
+    arm = OursLiveMemory(store_path="/tmp/store.db", emit_runner=emit)
+    event = arm.write(".mem/lessons/lvp.md", "some content", _ctx())
+
+    argv = captured["argv"]
+    assert argv[:2] == ["memory-event", "record"]
+    # source is the forward-capture literal.
+    assert argv[argv.index("--source") + 1] == FORWARD_CAPTURE_SOURCE
+    assert argv[argv.index("--op") + 1] == "write"
+    assert argv[argv.index("--ref") + 1] == ".mem/lessons/lvp.md"
+    assert argv[argv.index("--session") + 1] == "sess-1"
+    # Content is never sent — only a reference.
+    assert "some content" not in argv
+
+    assert event.normalized_operation is MemoryOperation.WRITE
+    assert event.source == FORWARD_CAPTURE_SOURCE
+    assert event.written_ids == [".mem/lessons/lvp.md"]
+
+
+def test_seed_is_noop_no_emit() -> None:
+    calls: list[list[str]] = []
+
+    def emit(argv: list[str]) -> dict[str, Any]:
+        calls.append(argv)
+        return {"recorded": 1}
+
+    arm = OursLiveMemory(store_path="/tmp/store.db", emit_runner=emit)
+    arm.seed({"distractor-1": "noise"}, _ctx())
+    assert calls == []  # seeding must never capture
+
+
+def test_retrieve_delegates_to_replay_only_path() -> None:
+    def retrieve_runner(query: Any) -> dict[str, Any]:
+        return {
+            "items": [{"work_id": "mem-prior", "citation": {}, "lessons": []}],
+            "total_matched": 1,
+        }
+
+    arm = OursLiveMemory(store_path="/tmp/store.db", runner=retrieve_runner)
+    from membench.memory_systems.base import RetrievalRequest
+
+    request = RetrievalRequest(
+        query_work=QueryWork(work_id="mem-zzz", rig="scix", started="2026-06-02T00:00:00Z"),
+        scope="cross_rig",
+    )
+    result = arm.retrieve(request, _ctx())
+    assert "mem-prior" in result.payloads
+
+
+def test_write_without_emit_runner_or_mem_bin_raises() -> None:
+    arm = OursLiveMemory(store_path="/tmp/store.db")
+    with pytest.raises(ValueError, match=r"emit_runner.*mem_bin"):
+        arm.write("ref", "content", _ctx())
