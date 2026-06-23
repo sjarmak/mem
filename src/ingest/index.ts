@@ -13,6 +13,11 @@ export {
   traceIndexByPath,
 } from './trace-index.js';
 export {
+  type TranscriptArchive,
+  defaultArchiveRoot,
+  loadTranscriptArchive,
+} from './trace-archive.js';
+export {
   type SessionResolver,
   type AttachTraceOptions,
   attachTraceRefs,

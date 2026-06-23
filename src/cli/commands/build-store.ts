@@ -7,6 +7,11 @@ import {
   attachTraceRefs,
   gcSessionResolver,
 } from '../../ingest/trace-resolve.js';
+import {
+  type TranscriptArchive,
+  defaultArchiveRoot,
+  loadTranscriptArchive,
+} from '../../ingest/trace-archive.js';
 import { attachProvenance } from '../../ingest/provenance.js';
 import { attachCommitOutcomes } from '../../ingest/commitLinkage.js';
 import { attachLanded } from '../../ingest/landed.js';
@@ -60,6 +65,8 @@ export interface BuildStoreResult {
 export interface AttachParseDeps {
   resolve?: SessionResolver;
   read?: TraceReader;
+  /** Transcript archive for reaped-transcript recovery (mem-h3di.4). */
+  archive?: TranscriptArchive;
 }
 
 /**
@@ -71,7 +78,10 @@ export interface AttachParseDeps {
  * unchanged. Records are copied, never mutated.
  */
 export function attachAndParse(records: WorkRecord[], deps: AttachParseDeps = {}): WorkRecord[] {
-  const resolved = attachTraceRefs(records, deps.resolve ? { resolve: deps.resolve } : {});
+  const resolved = attachTraceRefs(records, {
+    ...(deps.resolve && { resolve: deps.resolve }),
+    ...(deps.archive && { archive: deps.archive }),
+  });
   return resolved.map(record => parseRecordTrace(record, deps.read));
 }
 
@@ -137,6 +147,17 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     join !== null && join.sessionPaths.size > 0
       ? id => join.sessionPaths.get(id) ?? gcSessionResolver(id)
       : undefined;
+  // Transcript-archive fallback (mem-h3di.4): with traces on, reaped transcripts
+  // resolve to their durable restored copies. Default root is co-located with
+  // the store; `--transcript-archive <dir>` overrides it. A missing/empty
+  // archive is a silent no-op, so this is always safe to enable.
+  const archiveRoot =
+    typeof ctx.options['transcript-archive'] === 'string'
+      ? ctx.options['transcript-archive']
+      : defaultArchiveRoot(path);
+  const archive: TranscriptArchive | undefined = withTraces
+    ? loadTranscriptArchive(archiveRoot)
+    : undefined;
 
   const run = doltRunner(defaultConnection());
   const rigs = rig === null ? await listRigs(run) : [rig];
@@ -160,7 +181,12 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     // transcript, so P1.3 only shells `gc` for the residue.
     const typed = attachTaskTypes(located, taskTypes);
     const joined = join === null ? typed : attachSessionJoin(typed, join);
-    const traced = withTraces ? attachAndParse(joined, resolve ? { resolve } : {}) : joined;
+    const traced = withTraces
+      ? attachAndParse(joined, {
+          ...(resolve && { resolve }),
+          ...(archive && { archive }),
+        })
+      : joined;
     // Provenance reconstructs the session-start baseline; commit outcomes
     // recover the work→landing-commit (populating commit_sha) from the same
     // checkout; landed is its forward mirror (session-close branch tip +

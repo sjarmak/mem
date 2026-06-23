@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 
 import type { WorkRecord } from '../schemas/workrecord.js';
 import { type TraceIndexEntry, traceIndexByPath } from './trace-index.js';
+import type { TranscriptArchive } from './trace-archive.js';
 
 /**
  * Trace resolution (P1.3) — bridge a bead's assignee to its Claude transcript.
@@ -85,17 +86,34 @@ export interface AttachTraceOptions {
   resolve?: SessionResolver;
   /** Trace index (from `indexTraces`); supplies `n_turns` for resolved paths. */
   index?: TraceIndexEntry[];
+  /** Transcript archive (from `loadTranscriptArchive`). When set, every resolved
+   * path is run through {@link TranscriptArchive.materialize}: a reaped path that
+   * names an archived transcript is rewritten to its restored copy, recovering
+   * trace signal the rolling-window prune would otherwise lose. Live wins. */
+  archive?: TranscriptArchive;
+}
+
+/** Apply the archive fallback to a resolved path (identity when no archive). */
+function materialize(path: string, archive?: TranscriptArchive): string {
+  return archive === undefined ? path : archive.materialize(path);
 }
 
 /** Resolve one agent's transcript and return the agent with `trace_ref` set.
  * An agent that already carries a `trace_ref` (attached by the merged
- * session-join artifact) is returned as-is — no `gc` shelling. */
+ * session-join artifact) is returned as-is — no `gc` shelling — but still passes
+ * through the archive fallback, since the join may point at a reaped path. */
 function resolveAgent(
   agent: WorkRecord['agents'][number],
   resolve: SessionResolver,
-  cache: Map<string, string | null>
+  cache: Map<string, string | null>,
+  archive?: TranscriptArchive
 ): { agent: WorkRecord['agents'][number]; path: string | null } {
-  if (agent.trace_ref !== undefined) return { agent, path: agent.trace_ref };
+  if (agent.trace_ref !== undefined) {
+    const recovered = materialize(agent.trace_ref, archive);
+    return recovered === agent.trace_ref
+      ? { agent, path: agent.trace_ref }
+      : { agent: { ...agent, trace_ref: recovered }, path: recovered };
+  }
   const sessionId = parseSessionId(agent.agent_id);
   if (sessionId === null) return { agent, path: null };
 
@@ -106,7 +124,8 @@ function resolveAgent(
   }
 
   if (path === null) return { agent, path: null };
-  return { agent: { ...agent, trace_ref: path }, path };
+  const recovered = materialize(path, archive);
+  return { agent: { ...agent, trace_ref: recovered }, path: recovered };
 }
 
 /**
@@ -124,13 +143,18 @@ export function attachTraceRefs(
 ): WorkRecord[] {
   const resolve = opts.resolve ?? gcSessionResolver;
   const byPath = opts.index ? traceIndexByPath(opts.index) : undefined;
+  const archive = opts.archive;
   const cache = new Map<string, string | null>();
 
   return records.map(record => {
-    const agents = record.agents.map(agent => resolveAgent(agent, resolve, cache));
+    const agents = record.agents.map(agent => resolveAgent(agent, resolve, cache, archive));
     // A pre-set trace pointer (merged session-join: the last non-suspect
-    // session) wins over the first-resolved-agent default.
-    const presetPath = record.trace?.jsonl_path;
+    // session) wins over the first-resolved-agent default — but, like the agent
+    // paths, is run through the archive fallback so a reaped preset recovers.
+    const presetPath =
+      record.trace?.jsonl_path === undefined
+        ? undefined
+        : materialize(record.trace.jsonl_path, archive);
     const primaryPath = presetPath ?? agents.find(a => a.path !== null)?.path ?? null;
 
     const next: WorkRecord = { ...record, agents: agents.map(a => a.agent) };
