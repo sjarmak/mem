@@ -208,6 +208,7 @@ def test_compare_arms_intersects_relevant_with_scope_pool() -> None:
         # D is LOO-withheld (future); G is same-rig (dropped on cross_rig). Only A
         # survives into the cross_rig denominator.
         relevant_ids=["A", "D", "G"],
+        pool_depth=10,
         stack_telemetry={"chat_model": "llama3", "ollama_embedding_model": "nomic-embed-text"},
     )
 
@@ -231,6 +232,7 @@ def test_compare_arms_same_rig_track_uses_same_rig_pool() -> None:
         semantic=semantic,
         relevant_ids=["G"],
         scope="same_rig_temporal",
+        pool_depth=10,
     )
 
     assert result.eligible_count == 1  # same_rig pool {G}
