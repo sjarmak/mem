@@ -37,4 +37,12 @@ export {
   provenanceEventsFor,
   recordProvenanceEvents,
 } from './provenance.js';
+export {
+  type ImportMemoryEventsResult,
+  recordMemoryEvents,
+  memoryEventsFor,
+  memoryEventsBySession,
+  allMemoryEvents,
+  importMemoryEvents,
+} from './memory-events.js';
 export { renderProjection, renderRecurrence, replaceBetweenMarkers } from './render.js';

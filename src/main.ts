@@ -16,6 +16,9 @@ import { distillLessonsCommand } from './cli/commands/distill-lessons.js';
 import { retrieveCommand } from './cli/commands/retrieve.js';
 import { linkOutcomesCommand } from './cli/commands/link-outcomes.js';
 import { provenanceCommand } from './cli/commands/provenance.js';
+import { memoryEventCommand } from './cli/commands/memory-event.js';
+import { exportMemoryEventsCommand } from './cli/commands/export-memory-events.js';
+import { importMemoryEventsCommand } from './cli/commands/import-memory-events.js';
 
 /** Registers all commands and runs the CLI. The bin entrypoint calls this. */
 export function main(argv: string[]): Promise<void> {
@@ -36,6 +39,9 @@ export function main(argv: string[]): Promise<void> {
   registerCommand('retrieve', retrieveCommand);
   registerCommand('link-outcomes', linkOutcomesCommand);
   registerCommand('provenance', provenanceCommand);
+  registerCommand('memory-event', memoryEventCommand);
+  registerCommand('export-memory-events', exportMemoryEventsCommand);
+  registerCommand('import-memory-events', importMemoryEventsCommand);
 
   return runCli(argv);
 }

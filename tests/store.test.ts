@@ -102,9 +102,9 @@ describe('openStore', () => {
   });
 });
 
-describe('mem-wanz.3 — PROV-O links schema (v9)', () => {
-  it('bumped SCHEMA_VERSION to 9 (provenance_events)', () => {
-    expect(SCHEMA_VERSION).toBe(9);
+describe('mem-wanz.3 — PROV-O links schema (v10)', () => {
+  it('bumped SCHEMA_VERSION to 10 (provenance_events + mem-31kz memory_events)', () => {
+    expect(SCHEMA_VERSION).toBe(10);
   });
 
   it('projects link_tier + link_source onto work_records', () => {

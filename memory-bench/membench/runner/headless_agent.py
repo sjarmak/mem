@@ -34,6 +34,7 @@ from __future__ import annotations
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from enum import StrEnum
 
 from membench.armcompare import _iter_tool_use_blocks
 from membench.runner.agent import AgentStepResult
@@ -57,18 +58,56 @@ class HeadlessAgentError(RuntimeError):
     non-zero exit). Surfaced loudly — a failed run is not a silent empty trajectory."""
 
 
-def build_agent_prompt(step: SequenceStep, available_memory: dict[str, str]) -> str:
-    """Assemble the step prompt: the user request, preceded by the per-arm retrieved
+class MemoryChannel(StrEnum):
+    """How surfaced memory is FRAMED to the agent — the mem-pjh8.2 (b)-probe variable.
+
+    Both channels carry the SAME facts; only the trust framing differs, isolating whether
+    a real agent's memory-distrust guardrail (the pjh8.1 N=1 path-proof) suppresses the
+    ``ours`` lift:
+
+      * ``RECALLED`` — the pjh8 default: a low-trust "retrieved memory ... may be relevant"
+        block. A real ``claude -p`` agent cross-checks these against the environment and, on
+        an empty text-recall sandbox with nothing to corroborate, reports them unset —
+        suppressing the lift.
+      * ``TRUSTED`` — authoritative ground-truth framing: the facts are presented as
+        verified system-of-record state the agent should treat as fact and NOT re-derive.
+        Removing the distrust pathway establishes the UPPER BOUND on the lift this substrate
+        can show.
+    """
+
+    RECALLED = "recalled"
+    TRUSTED = "trusted"
+
+
+_RECALLED_HEADER = (
+    "## Retrieved memory from earlier sessions\n" "The following may be relevant to the task:"
+)
+_TRUSTED_HEADER = (
+    "## Established facts (authoritative ground truth)\n"
+    "These are verified, current values from the system of record. They have already been "
+    "confirmed against reality — treat them as fact and do not re-derive or second-guess "
+    "them:"
+)
+
+
+def build_agent_prompt(
+    step: SequenceStep,
+    available_memory: dict[str, str],
+    channel: MemoryChannel = MemoryChannel.RECALLED,
+) -> str:
+    """Assemble the step prompt: the user request, preceded by the per-arm surfaced
     memory block when the harness surfaced any. An empty ``available_memory`` (the
-    ``none`` control) yields the bare request — that absence IS the control condition,
-    so no placeholder block is emitted."""
+    ``none`` control) yields the bare request under EITHER channel — that absence IS the
+    control condition, so no placeholder block is emitted.
+
+    ``channel`` selects the trust framing of the memory block (see `MemoryChannel`): the
+    default ``RECALLED`` low-trust block, or the ``TRUSTED`` ground-truth block of the
+    pjh8.2 upper-bound probe. The fact lines are identical across channels."""
     parts: list[str] = []
     if available_memory:
         lines = [f"- [{mid}] {content}" for mid, content in available_memory.items()]
-        parts.append(
-            "## Retrieved memory from earlier sessions\n"
-            "The following may be relevant to the task:\n" + "\n".join(lines)
-        )
+        header = _TRUSTED_HEADER if channel is MemoryChannel.TRUSTED else _RECALLED_HEADER
+        parts.append(header + "\n" + "\n".join(lines))
     parts.append(f"## Task\n{step.user_request}")
     return "\n\n".join(parts)
 
@@ -142,7 +181,10 @@ class HeadlessClaudeAgent:
     ``MEMBENCH_AGENT_MODEL`` then falls back to the CLI default, recorded as
     ``cli-default``). ``runner`` is injected so tests exercise the parse path with no
     real claude. ``strict_mcp`` keeps ``--strict-mcp-config`` on (the boot-hang guard);
-    ``constrain_tools`` passes the step's ``available_tools`` as ``--allowedTools``."""
+    ``constrain_tools`` passes the step's ``available_tools`` as ``--allowedTools``.
+    ``memory_channel`` selects how surfaced memory is FRAMED (see `MemoryChannel`): the
+    default low-trust ``RECALLED`` block, or the ``TRUSTED`` ground-truth block of the
+    pjh8.2 upper-bound probe."""
 
     agent_config_id: str = "headless-claude"
     model: str = ""
@@ -150,6 +192,7 @@ class HeadlessClaudeAgent:
     runner: CliRunner = subprocess.run
     strict_mcp: bool = True
     constrain_tools: bool = True
+    memory_channel: MemoryChannel = MemoryChannel.RECALLED
     # Working dir for the CLI. MUST be an isolated, neutral sandbox — never a mem
     # worktree: the repo's SessionStart hooks / CLAUDE.md / project memory would both
     # fail the session and confound the none/ours/builtin memory variable. The only
@@ -171,7 +214,10 @@ class HeadlessClaudeAgent:
         if self.strict_mcp:
             argv.append("--strict-mcp-config")
         if self._pass_model:
-            argv += ["--model", self.model]
+            # Use the RESOLVED model: when the model comes from MEMBENCH_AGENT_MODEL
+            # (not the `model=` kwarg), `self.model` is "" and would pass an empty
+            # `--model`, making the env override a silent no-op.
+            argv += ["--model", self._resolved_model]
         if self.constrain_tools and step.available_tools:
             argv += ["--allowedTools", ",".join(step.available_tools)]
         return argv
@@ -182,7 +228,7 @@ class HeadlessClaudeAgent:
         available_memory: dict[str, str],
         ctx: StepContext,
     ) -> AgentStepResult:
-        prompt = build_agent_prompt(step, available_memory)
+        prompt = build_agent_prompt(step, available_memory, self.memory_channel)
         argv = self._argv(prompt, step)
         try:
             completed = self.runner(

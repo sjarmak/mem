@@ -50,3 +50,11 @@ class MemoryEvent(BaseModel):
     token_count_out: int | None = None
     success: bool = True
     error: str | None = None
+    # WHO captured this event — reconciled to the canonical TS literal
+    # `source: z.string().min(1)` (src/schemas/memory-event.ts:85; TS is the source
+    # of truth, so no competing TS field is added). Required there, but defaulted
+    # OPTIONAL here so the existing in-harness construction sites (oracle /
+    # filesystem / ours / lexical / consolidating / semantic / retention) keep
+    # working unchanged. The default `"harness"` marks an event produced by the
+    # in-process eval harness; the forward-capture path sets `"forward-capture"`.
+    source: str = "harness"

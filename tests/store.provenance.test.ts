@@ -78,8 +78,8 @@ afterEach(() => {
 });
 
 describe('provenance event log', () => {
-  it('provisions the table at schema v9', () => {
-    expect(SCHEMA_VERSION).toBe(9);
+  it('provisions the table at schema v10', () => {
+    expect(SCHEMA_VERSION).toBe(10);
     const db = store();
     const row = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='provenance_events'")

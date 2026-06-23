@@ -1,5 +1,6 @@
-"""§4.4 real-run substrate: HeadlessClaudeAgent prompt assembly + stream parsing, and
-the trajectory driver. Hermetic — a fake CLI runner returns a canned Claude Code
+"""§4.4 real-run substrate: HeadlessClaudeAgent prompt assembly + stream parsing, the
+trajectory driver, and the mem-mtqi/pjh8.2 memory-channel framing (recalled vs trusted)
++ model-resolution. Hermetic — a fake CLI runner returns a canned Claude Code
 stream-json; no real `claude`, no network, no scix-batch."""
 
 from __future__ import annotations
@@ -13,8 +14,10 @@ import pytest
 from membench.metrics.action_impact_run import ArmStepTrajectory
 from membench.runner.agent import Agent
 from membench.runner.headless_agent import (
+    ENV_MODEL,
     HeadlessAgentError,
     HeadlessClaudeAgent,
+    MemoryChannel,
     build_agent_prompt,
 )
 from membench.runner.trajectory_run import (
@@ -189,6 +192,65 @@ def test_run_sequence_arms_keys_by_arm() -> None:
     )
     assert set(out) == {"none", "ours"}
     assert out["none"][0].arm == "none" and out["ours"][0].arm == "ours"
+
+
+# --------------------------------------------------------------------------- #
+# mem-mtqi / pjh8.2: memory-channel framing (recalled vs trusted) + model resolution
+# --------------------------------------------------------------------------- #
+def test_recalled_header_is_low_trust() -> None:
+    prompt = build_agent_prompt(_step(), {"m1": "max_connections=200"}, MemoryChannel.RECALLED)
+    assert "may be relevant" in prompt
+    assert "max_connections=200" in prompt
+    assert "authoritative" not in prompt.lower()
+
+
+def test_trusted_header_frames_as_ground_truth() -> None:
+    prompt = build_agent_prompt(_step(), {"m1": "max_connections=200"}, MemoryChannel.TRUSTED)
+    assert "authoritative ground truth" in prompt.lower()
+    assert "do not re-derive" in prompt.lower()
+    assert "max_connections=200" in prompt
+
+
+def test_empty_memory_yields_bare_request_under_both_channels() -> None:
+    step = _step(request="Set the postgres max_connections.")
+    for channel in (MemoryChannel.RECALLED, MemoryChannel.TRUSTED):
+        prompt = build_agent_prompt(step, {}, channel)
+        assert prompt == "## Task\nSet the postgres max_connections."
+
+
+def test_trusted_channel_threads_into_prompt() -> None:
+    captured: dict[str, str] = {}
+
+    def run(argv: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+        # argv[2] is the prompt (claude -p <prompt> ...).
+        captured["prompt"] = argv[2]
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    agent = HeadlessClaudeAgent(runner=run, memory_channel=MemoryChannel.TRUSTED)
+    agent.run_step(_step(), {"m1": "v=1"}, _ctx())
+    assert "authoritative ground truth" in captured["prompt"].lower()
+
+
+def test_no_model_resolves_to_cli_default() -> None:
+    agent = HeadlessClaudeAgent(runner=_fake_runner(""))
+    assert "--model" not in agent._argv("p", _step())
+    assert agent._resolved_model == "cli-default"
+
+
+def test_explicit_model_passed_and_recorded() -> None:
+    agent = HeadlessClaudeAgent(runner=_fake_runner(""), model="claude-sonnet")
+    argv = agent._argv("p", _step())
+    assert argv[argv.index("--model") + 1] == "claude-sonnet"
+    assert agent._resolved_model == "claude-sonnet"
+
+
+def test_env_model_resolves_and_passes_non_empty_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The env override must pass the RESOLVED model, not an empty string.
+    monkeypatch.setenv(ENV_MODEL, "claude-opus")
+    agent = HeadlessClaudeAgent(runner=_fake_runner(""))
+    argv = agent._argv("p", _step())
+    assert argv[argv.index("--model") + 1] == "claude-opus"
+    assert agent._resolved_model == "claude-opus"
 
 
 # --------------------------------------------------------------------------- #

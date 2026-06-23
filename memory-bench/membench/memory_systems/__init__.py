@@ -39,6 +39,7 @@ from membench.memory_systems.nat_system import NatMemory
 from membench.memory_systems.nemo_embed_system import NemoEmbedMemory
 from membench.memory_systems.none_system import NoneMemory
 from membench.memory_systems.oracle_system import OracleMemory
+from membench.memory_systems.ours_live_system import OursLiveMemory
 from membench.memory_systems.ours_system import OursMemory
 from membench.memory_systems.retention_scheduled_system import RetentionScheduledMemory
 from membench.memory_systems.semantic_base import (
@@ -63,6 +64,7 @@ __all__ = [
     "NemoEmbedMemory",
     "NoneMemory",
     "OracleMemory",
+    "OursLiveMemory",
     "OursMemory",
     "RetentionScheduledMemory",
     "RetrievalRequest",
@@ -70,6 +72,7 @@ __all__ = [
     "SemanticHit",
     "SemanticMemoryClient",
     "build_memory_system",
+    "wired_memory_systems",
 ]
 
 # Arms whose implementation is owned by another bead — named here so the factory
@@ -80,11 +83,9 @@ _DEFERRED = {
 }
 
 
-def build_memory_system(name: str, **kwargs: Any) -> MemorySystem:
-    """Factory over the wired arm set. Raises on unknown or deferred names rather
-    than silently substituting a default (an unknown memory system is a config
-    error, and a deferred one must not masquerade as wired)."""
-    systems: dict[str, type[MemorySystem]] = {
+def _systems_registry() -> dict[str, type[MemorySystem]]:
+    """The single source of truth for the wired arm set (name → class)."""
+    return {
         "none": NoneMemory,
         "oracle": OracleMemory,
         "filesystem": FilesystemMemory,
@@ -92,12 +93,27 @@ def build_memory_system(name: str, **kwargs: Any) -> MemorySystem:
         "consolidating": ConsolidatingMemory,
         "retention_scheduled": RetentionScheduledMemory,
         "ours": OursMemory,
+        "ours-live": OursLiveMemory,
         "mem0": Mem0Memory,
         "nemo-embed": NemoEmbedMemory,
         "a-mem": AMemMemory,
         "nat": NatMemory,
         "graphiti": GraphitiMemory,
     }
+
+
+def wired_memory_systems() -> tuple[str, ...]:
+    """The wired arm names, sorted — the validation surface for callers that select
+    an arm by name at a boundary (e.g. the `MEMBENCH_MEMORY_SYSTEM` launch override)
+    without constructing one. Reflects `_systems_registry` so it never drifts."""
+    return tuple(sorted(_systems_registry()))
+
+
+def build_memory_system(name: str, **kwargs: Any) -> MemorySystem:
+    """Factory over the wired arm set. Raises on unknown or deferred names rather
+    than silently substituting a default (an unknown memory system is a config
+    error, and a deferred one must not masquerade as wired)."""
+    systems = _systems_registry()
     cls = systems.get(name)
     if cls is None:
         if name in _DEFERRED:
