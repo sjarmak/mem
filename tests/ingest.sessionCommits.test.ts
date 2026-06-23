@@ -29,6 +29,31 @@ describe('parseSessionCommits', () => {
     expect(parseSessionCommits('[feat/x.y abcdef1] msg')).toEqual(['abcdef1']);
   });
 
+  it('reads git’s "detached HEAD" commit heading (mem-75t.19)', () => {
+    // A replay worktree commits from a detached HEAD, so git prints
+    // `[detached HEAD <sha>]` — a multi-word heading the single-token branch
+    // regex missed, making the session look like it made no local commit.
+    expect(parseSessionCommits('[detached HEAD 0a73e2151] feat: thing')).toEqual(['0a73e2151']);
+  });
+
+  it('handles the detached-HEAD root-commit form', () => {
+    expect(parseSessionCommits('[detached HEAD (root-commit) c0ffee1234] init')).toEqual([
+      'c0ffee1234',
+    ]);
+  });
+
+  it('matches a detached-HEAD commit line embedded in JSON-escaped transcript text', () => {
+    const jsonl =
+      '{"type":"user","toolUseResult":{"stdout":"[detached HEAD d7727ee] fix: y\\n 1 file"}}';
+    expect(parseSessionCommits(jsonl)).toEqual(['d7727ee']);
+  });
+
+  it('does not treat an arbitrary two-word bracket heading as a commit line', () => {
+    // Only git’s literal `detached HEAD` heading is multi-word; a prose
+    // fragment that happens to end in a hex-like word must not match.
+    expect(parseSessionCommits('[some note deadbeef] not a commit')).toEqual([]);
+  });
+
   it('matches a commit line embedded in JSON-escaped transcript text', () => {
     // The transcript is JSONL: git's success line survives JSON-string escaping
     // verbatim, so the same regex matches it inside a tool_result value.

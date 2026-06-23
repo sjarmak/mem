@@ -33,8 +33,15 @@ import {
 /** Git's commit-success line: `[<branch> <sha>] <subject>`, with `<sha>` a 7–40 hex
  * abbreviation. `(root-commit)` is the first-commit form. The global flag drives
  * `matchAll`; the SHA is capture group 1. Anchored on the `[` + branch + space so a
- * bare bracketed hex elsewhere in the transcript cannot masquerade as a commit. */
-const COMMIT_LINE_RE = /\[[\w./-]+ (?:\(root-commit\) )?([0-9a-f]{7,40})\]/g;
+ * bare bracketed hex elsewhere in the transcript cannot masquerade as a commit.
+ *
+ * The branch token is either a single ref token (`[\w./-]+`) or git's literal
+ * `detached HEAD` heading — the one multi-word commit heading git emits, printed
+ * when a session commits from a detached HEAD (the default for a replay worktree).
+ * Reading it is the same deterministic over-git's-own-output parse, not a guess
+ * (mem-75t.19): without it a worktree that committed detached looks like a session
+ * that made no local commit at all. */
+const COMMIT_LINE_RE = /\[(?:[\w./-]+|detached HEAD) (?:\(root-commit\) )?([0-9a-f]{7,40})\]/g;
 
 /**
  * The session's local commit SHAs, in trace order (first local commit first), parsed
