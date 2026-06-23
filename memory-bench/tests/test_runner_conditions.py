@@ -109,6 +109,19 @@ def test_env_ours_replay_also_wired_from_env(monkeypatch, tmp_path):
     assert config_id == "ours"
 
 
+def test_env_builtin_selects_no_store_arm(monkeypatch, tmp_path):
+    """mem-mor1 D-F: `builtin` is selectable at launch like none/ours-live, but it is a
+    control (the agent's native memory), so it needs NO store / mem_bin — it must build
+    cleanly without the live-arm env vars."""
+    monkeypatch.setenv(ENV_MEMORY_SYSTEM, "builtin")
+    monkeypatch.delenv(ENV_MEM_STORE, raising=False)
+    monkeypatch.delenv(ENV_MEM_BIN, raising=False)
+    system, config_id = _system_for(Condition.MEMORY_ENABLED, _experiment(), tmp_path)
+    assert system.name == "builtin"
+    assert config_id == "builtin"
+    assert system.supports_write is False
+
+
 def test_runs_all_three_conditions_for_every_step(tmp_path):
     seq = load_sequence(FIXTURE)
     run = run_sequence(seq, _experiment(), fs_base_dir=tmp_path)

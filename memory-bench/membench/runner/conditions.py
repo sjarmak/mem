@@ -114,10 +114,10 @@ def _assert_superseded_written(seq: BenchmarkSequence) -> None:
 # The launch-time arm selector. When set, it OVERRIDES `experiment.memory.system`
 # for the memory_enabled condition, so the harness arm can be chosen at the
 # process boundary (e.g. by `gc agent add`) without editing the experiment config.
-# Pilot values are `none | ours`; any value is validated against the factory's
-# wired set (`wired_memory_systems`) and a typo / unwired name raises loudly
-# (never a silent substitution). NO_MEMORY / ORACLE_MEMORY are fixed controls and
-# ignore it.
+# Pilot values are `_PILOT_SYSTEMS` (none | ours | ours-live | builtin); any value
+# is validated against the factory's wired set (`wired_memory_systems`) and a typo /
+# unwired name raises loudly (never a silent substitution). NO_MEMORY / ORACLE_MEMORY
+# are fixed controls and ignore it.
 ENV_MEMORY_SYSTEM = "MEMBENCH_MEMORY_SYSTEM"
 
 # The live/replay `ours` arms reach the TS substrate through the `mem` CLI over a
@@ -134,7 +134,7 @@ ENV_MEM_STORE = "MEMBENCH_MEM_STORE"
 # the retrieve subprocess.
 _LIVE_OURS_SYSTEMS = frozenset({"ours", "ours-live"})
 
-_PILOT_SYSTEMS = ("none", "ours", "ours-live")
+_PILOT_SYSTEMS = ("none", "ours", "ours-live", "builtin")
 
 
 def _memory_system_name(experiment: ExperimentConfig) -> str:

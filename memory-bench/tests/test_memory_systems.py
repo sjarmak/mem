@@ -61,12 +61,21 @@ def test_build_unknown_system_raises():
         build_memory_system("totally-unknown")
 
 
-def test_build_deferred_system_raises_with_pointer():
-    # `builtin` is the paid Harbor audit owned by mem-whi; the factory must reject
-    # it with a precise pointer, not pretend it is wired. It is the only deferred arm
-    # now that mem0 / a-mem / nat / graphiti are all wired (mem-lvp.2/.9/.3/.4).
-    with pytest.raises(ValueError, match="mem-whi"):
-        build_memory_system("builtin")
+def test_build_builtin_constructs_as_no_store_arm():
+    # mem-mor1 D-F: `builtin` (the agent's native memory baseline-to-beat) is now a
+    # wired arm on the free/OAuth path, not a deferred Harbor stub. mem's store stays
+    # uninvolved — it surfaces nothing and does not support writes.
+    arm = build_memory_system("builtin")
+    assert arm.name == "builtin"
+    assert arm.supports_write is False
+    arm.reset("t")
+    result = arm.retrieve(_req(), _ctx())
+    assert result.payloads == {}
+    # The retrieve event is labelled `builtin`, distinguishing it from the `none`
+    # control even though both surface no mem payload.
+    assert result.event.concrete_tool == "builtin"
+    with pytest.raises(NotImplementedError):
+        arm.write("m1", "x", _ctx())
 
 
 def test_build_ours_constructs():
