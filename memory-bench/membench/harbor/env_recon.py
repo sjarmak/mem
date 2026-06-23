@@ -20,7 +20,7 @@ build/test toolchain, which is the residual faithfulness risk surfaced here, not
 """
 
 import subprocess
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
 
@@ -111,17 +111,23 @@ def write_repo_archive(
         )
 
 
-def render_dockerfile(base_image: str) -> str:
+def render_dockerfile(base_image: str, *, install_steps: Sequence[str] = ()) -> str:
     """A Dockerfile that lands the archived repo at ``/app`` (the Harbor workdir).
 
     The archive is COPYed from the build context (the task's ``environment/`` dir) and
-    extracted -- so the agent starts in the reconstructed tree."""
-    return (
+    extracted -- so the agent starts in the reconstructed tree. Each ``install_steps``
+    entry becomes a ``RUN`` layer AFTER the extract (so ``/app`` already holds the tree),
+    in the given order. The default empty tuple renders no install layer, leaving the
+    base-rate Dockerfile byte-for-byte unchanged."""
+    dockerfile = (
         f"FROM {base_image}\n"
         "WORKDIR /app\n"
         f"COPY {_ARCHIVE_NAME} /tmp/{_ARCHIVE_NAME}\n"
         f"RUN tar -xf /tmp/{_ARCHIVE_NAME} -C /app && rm /tmp/{_ARCHIVE_NAME}\n"
     )
+    for step in install_steps:
+        dockerfile += f"RUN {step}\n"
+    return dockerfile
 
 
 def reconstruct_env(
