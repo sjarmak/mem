@@ -1,0 +1,276 @@
+worktree /home/ds/gascity-dashboard
+HEAD 4be6c79e16b5eb53a904fb056567c9442222c3f7
+branch refs/heads/fix/xk7u-runcounts-visible-erosion
+
+worktree /home/ds/gas-city-dashboard
+HEAD 4e547fd03f6bd745b47a94635d976104fcd63a21
+branch refs/heads/service-main
+
+worktree /home/ds/gascity-dashboard-9v00
+HEAD b0baccfc3f470ef446e0570056e022d5ce1bb8b0
+branch refs/heads/fix/supervisor-status-stale-age-9v00
+
+worktree /home/ds/gascity-dashboard-dashboard-3i31
+HEAD ab634bc291f6924574c2c902335f545bf38557d2
+detached
+
+worktree /home/ds/gascity-dashboard-dashboard-dh7t
+HEAD ab634bc291f6924574c2c902335f545bf38557d2
+detached
+
+worktree /home/ds/gascity-dashboard-dashboard-jy3d
+HEAD ab634bc291f6924574c2c902335f545bf38557d2
+detached
+
+worktree /home/ds/gascity-dashboard-dashboard-vis5
+HEAD ab634bc291f6924574c2c902335f545bf38557d2
+detached
+
+worktree /home/ds/gascity-dashboard-dashboard-xk7u
+HEAD ab634bc291f6924574c2c902335f545bf38557d2
+detached
+
+worktree /home/ds/gascity-dashboard-i3dz
+HEAD 8ee5d45ee1dbe317fbbef776490cdf742bc56a5f
+branch refs/heads/fix/i3dz-refresh-cache-bypass
+
+worktree /home/ds/gascity-dashboard-jkkc
+HEAD 2930226e804eacc4371350b4d677e09ad495b450
+branch refs/heads/fix/pr72-followups-jkkc
+
+worktree /home/ds/gascity-dashboard-k4dr
+HEAD 8f1eec1f5c7e4974157e5c06ee6f1c95d3872629
+branch refs/heads/fix/health-tool-versions-passthrough-trim-k4dr
+
+worktree /home/ds/gascity-dashboard-mc
+HEAD ab634bc291f6924574c2c902335f545bf38557d2
+branch refs/heads/main
+
+worktree /home/ds/gascity-dashboard-mp3g-recover
+HEAD 9898fa11a84d6aa3608611241e8fd73fe5ad7105
+branch refs/heads/feat/mail-bulk-select-mark-read-mp3g
+
+worktree /home/ds/gascity-dashboard-nfyw
+HEAD c280ff6638e04a4e8c8b59ea02dea34e147ceeb2
+branch refs/heads/feat/health-recommended-tool-versions-nfyw
+
+worktree /home/ds/gascity-dashboard-pr75-0m6q
+HEAD 33e8245c12bec5e6168c4be79e414535a8511e45
+branch refs/heads/feat/transcript-expand-overlay
+
+worktree /home/ds/gascity-dashboard-sg9o
+HEAD 1893ef50516fab485c24363ff50039a595286c4a
+branch refs/heads/fix/decision-deeplink-404-sg9o
+
+worktree /home/ds/gascity-dashboard-worktrees/brains-main
+HEAD 4e547fd03f6bd745b47a94635d976104fcd63a21
+detached
+
+worktree /home/ds/gascity-dashboard-wt-3i31
+HEAD 8623a0099801be8a0a0b5a9e0f147c52f581d846
+branch refs/heads/fix/3i31-convoy-graphv2-partial
+
+worktree /home/ds/gascity-dashboard-wt-9u6i
+HEAD bdde64fe8918a2a3c433933a09ff91c27b3c18a2
+branch refs/heads/fix/readonly-branch-order-9u6i
+
+worktree /home/ds/gascity-dashboard-wt-alertdto
+HEAD 4cde4a3735dfc644d47397ddc0f82b11427c0952
+branch refs/heads/feat/home-alerts-aggregator-wiring
+
+worktree /home/ds/gascity-dashboard-wt-aqje
+HEAD 3e4aa16d18b6f54b2cda54b4356a0e5984ff03f5
+branch refs/heads/fix/ur45-gated-queued-aqje
+
+worktree /home/ds/gascity-dashboard-wt-ifux
+HEAD 2a983365c1dc64819986d9736ccf04d3b9baceb7
+branch refs/heads/fix/uxvk-stranded-rebased
+
+worktree /home/ds/gascity-dashboard-wt-jfw5
+HEAD b11c7c1e6d517c7f8ed00da38cc3e7819fdc1c38
+branch refs/heads/fix/jfw5-convoy-empty-state
+
+worktree /home/ds/gascity-dashboard-wt-jj2z
+HEAD 810728689375d6b8db626011f5bac6a1ec468163
+branch refs/heads/fix/agents-maintenance-pool-not-rig-jj2z
+
+worktree /home/ds/gascity-dashboard-wt-kxk2
+HEAD 6080e5b0c9bd5b7aabd6be9455edf7b9a7924f08
+branch refs/heads/dash-ygj-attention-unavailable-tier
+
+worktree /home/ds/gascity-dashboard-wt-mayordec
+HEAD 2437fd8c5d02a5f639f528b008d1a92f64b08080
+branch refs/heads/feat/home-alerts-mayor-decision-k0cr
+
+worktree /home/ds/gascity-dashboard-wt-spbi
+HEAD 0b7ce97c650fb3ca0309fa8221e6b2f1057d0f00
+branch refs/heads/fix/security-nits-spbi
+
+worktree /home/ds/gascity-dashboard-wt-testcity
+HEAD b1ca9b87b5eb539fdb340363c8713c0cbc89fcc6
+branch refs/heads/feat/test-city-supervisor-fixture
+
+worktree /home/ds/gascity-dashboard-wt-tkac
+HEAD f500dbcdcaa5f734f70466f38acbd1fcee0fa9e1
+branch refs/heads/feat/home-alerts-mayor-decision-ledger-tkac
+
+worktree /home/ds/gascity-dashboard-wt-u6d0
+HEAD 031de5b05de32a5fb533cb0d9cc14a81fc58b2dc
+branch refs/heads/feat/health-rig-store-monitor-u6d0
+
+worktree /home/ds/gascity-dashboard-wt-vis5
+HEAD 3a39a6ff0d97409e2b478817a8e96c3cde4341c7
+branch refs/heads/fix/vis5-pxvb-review-minors
+
+worktree /home/ds/gascity-dashboard-wt-xk7u
+HEAD 3905df57e6d4ffd3e460eacf85eb4015365e72aa
+branch refs/heads/fix/xk7u-runs-erosion-cleanup
+
+worktree /home/ds/gascity-dashboard-wt-yt5m
+HEAD 00a697e1796b7833379a57574a83e0ca3a0a77c6
+branch refs/heads/chore/yt5m-remove-dead-alert-envelope
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/035r
+HEAD 4b27772ed5e07a760cf2d2c9cea6bd8169623a8a
+branch refs/heads/fix/home-alerts-provenance-gated-035r
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/2j8e2-runs-badge
+HEAD 0a3b4c691daaac272044181f98c3a52d1c46c8bc
+branch refs/heads/fix/runs-badge-blocked-only-2j8e
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/2j8e3-beads-badge
+HEAD 8503e0458b5d90b354157d469dd43958293d4e4b
+branch refs/heads/fix/beads-badge-attention-2j8e
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/2j8e4-agents-badge
+HEAD e50fce4f8efa34afb2c9c510d99386b42e009c4d
+branch refs/heads/fix/agents-badge-needs-you-2j8e
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/2j8e5-mail-badge
+HEAD 54d60d632a4a630859c6ab23dc578cbfc98d3751
+branch refs/heads/fix/mail-badge-operator-unread-2j8e
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/2j8e6-runs-nav-parity
+HEAD f15654501dae85d6ae35c2c1c41cd629b35415e3
+branch refs/heads/fix/runs-nav-badge-parity-2j8e
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/3c7u-pr73-followups
+HEAD 85df351ffe6007087d2d53587b983d5db15c439d
+branch refs/heads/fix/pr73-followups-3c7u
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/4bol-health
+HEAD f66093ce22f010b0aeb76054a4cdd51662249434
+branch refs/heads/fix/health-cached-sampler-status-4bol
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/4bol-runs-partial
+HEAD d40ffb5be4717aafe843f706a41fc410b162cf3f
+branch refs/heads/fix/runs-partial-enrichment-budget-4bol
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/61uy
+HEAD ec77180a740b805076916dd52dcafc5d2d185cf2
+branch refs/heads/fix/runs-dangling-root-refresh-shape-61uy
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/bhvn
+HEAD 9dbb213a07b6c3f9356efc2ea2424fd5d6e19051
+branch refs/heads/fix/dehardcode-runtime-config-bhvn
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/gye8
+HEAD 67fcd8873383af8120cb8f3b8a9cddc0d0ea94e0
+branch refs/heads/feat/home-alerts-pending-respond-gye8
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/history-toggle-l9q9
+HEAD fc2bf5f79b7a7226b9e1618e5ce7be9bcc7fcfa0
+branch refs/heads/fix/history-toggle-regression-l9q9
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/k0cr-decision-dedup
+HEAD c502f1cf40c35d6b7a12b6d05e13da6b8c197106
+branch refs/heads/fix/k0cr-decision-slug-dedup
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/mvig-reduced-motion
+HEAD 3e777c77f29a83b2ca827fc88eb6730649e3c11e
+branch refs/heads/fix/mvig-reduced-motion-flash
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/nyln-rig-status-timeout
+HEAD 07e6daa45d58ab2ed59d1adf78eca3592e7eb6a6
+branch refs/heads/fix/rig-store-health-status-timeout-nyln
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/o3km-workers-clickable
+HEAD d3b0d7515a112cda1dfd7cbf2224219afffb7cb9
+branch refs/heads/fix/workers-active-clickable-o3km
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/q89b-pre-exposure-polish
+HEAD ce87e56c060da7aa2beb617a3e005f90a20f73f6
+branch refs/heads/worktree-q89b-pre-exposure-polish
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/ql0f-qe62-followups
+HEAD 6d520bb033e001e795c0db86a22b4b66b9abe612
+branch refs/heads/fix/ql0f-qe62-followups
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/runs-tab-4xcv
+HEAD 62425781505f6275af0db5dc7234271ba88a9a6c
+branch refs/heads/fix/runs-tab-4xcv
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/ruoz
+HEAD 2bae53c297c5367bb3ade608a68a336b5fd38d10
+branch refs/heads/fix/event-resource-id-collision-ruoz
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/s36w-1ka9
+HEAD fca4c7be67578268d926577c0bb90936a7588fda
+branch refs/heads/fix/s36w-stranded-detail-copy
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/s4rp
+HEAD bb1dcaf7a9d98429595844286ee893acfc919a4b
+branch refs/heads/fix/runs-active-sessionless-s4rp
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/s4rp-dangling-root
+HEAD 9bc27363fb12c21b95ce4fb7eccb2d95029dcc94
+branch refs/heads/fix/runs-demote-dangling-root-s4rp
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/snoj-sampler-timeout
+HEAD c0fd4fad5458e2ae6190dd98ff70913628de8921
+branch refs/heads/fix/snoj-sampler-timeout-cap
+
+worktree /home/ds/gascity-dashboard/.claude/worktrees/uzhr-readonly
+HEAD b7da3453f993fe49d4233e4a5dec8fa1afc65502
+branch refs/heads/fix/readonly-runtime-config-uzhr
+
+worktree /home/ds/gc-wt-2ira
+HEAD a710053840ddd32c0dc47cc8b26a804dfc0f4804
+branch refs/heads/fix/rig-store-health-sampled-age-2ira
+
+worktree /home/ds/gcd-bqey
+HEAD 571d4bf16ba7157a743806ef11a29473e2907d76
+branch refs/heads/chore/consolidate-run-test-fixtures-z6x5
+
+worktree /home/ds/gcd-qoiy-rebase
+HEAD 601b5f6e18e78f4636959a0cf12c30edc446bf76
+branch refs/heads/rebase/qoiy-pr128
+
+worktree /home/ds/gcd-ship-3i31
+HEAD 1da4dcb7703ba4b7f82add379bde3411d638f327
+branch refs/heads/fix/3i31-graphv2-partial-shortcircuit
+
+worktree /home/ds/gcd-ship-xk7u
+HEAD 4be6c79e16b5eb53a904fb056567c9442222c3f7
+detached
+
+worktree /tmp/gcd-preview-ov
+HEAD 4008ace7afc104ee3de8bbadc76fa5e2af04c691
+branch refs/heads/preview/ov-120-124
+
+worktree /tmp/gcd-review-pr/wt-62
+HEAD 5056eece483f75477bd43ad5040bd9fac068f9d5
+detached
+
+worktree /tmp/pr44-ourversion
+HEAD 002e3b26d1f3edf285b6d501218f7a89ec30f429
+detached
+
+worktree /tmp/pr54
+HEAD 68d78f3d761cd55223c60effb9d4a71a38935d2c
+branch refs/heads/resolve-pr54-operator-mail
+
+worktree /tmp/ui-fixes
+HEAD 59ad0b83b12c3f146aa24a4f423421b634d58eef
+branch refs/heads/fix/run-session-id-normalize
+

@@ -1,0 +1,132 @@
+worktree /home/ds/gascity-packs
+HEAD c0894a3e9fa98d0211109062f117df2685b50da8
+branch refs/heads/main
+
+worktree /home/ds/gascity-packs-main
+HEAD f9b70a5d9f5d5b8d4a73594cb20b4532cf097b50
+detached
+
+worktree /home/ds/gascity-packs-worktrees/cass
+HEAD d5459ffb81a213ea3afd34bbffa698e4b0888131
+detached
+
+worktree /home/ds/gascity-packs-worktrees/fix-mol-adopt-pr-no-merge
+HEAD 8061b427a29b17a2b00f09d2fa394e3c515d25ba
+branch refs/heads/fix/mol-adopt-pr-strip-polecat-merge
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-1
+HEAD 538f06670f366ffacb1fecb20f5310669ca93989
+branch refs/heads/bd-gpk-fzej
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-1-9o7x
+HEAD c0894a3e9fa98d0211109062f117df2685b50da8
+detached
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-1-b3ll
+HEAD c0894a3e9fa98d0211109062f117df2685b50da8
+detached
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-1-bz05
+HEAD c0894a3e9fa98d0211109062f117df2685b50da8
+detached
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-1-m4g9
+HEAD c0894a3e9fa98d0211109062f117df2685b50da8
+detached
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-1-wko1
+HEAD c0894a3e9fa98d0211109062f117df2685b50da8
+detached
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-1-z19t
+HEAD c0894a3e9fa98d0211109062f117df2685b50da8
+detached
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-2
+HEAD cde70274cf099d8040e55262bff42047e20d0026
+branch refs/heads/bd-gpk-4l3q
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-2-4l3q
+HEAD c0894a3e9fa98d0211109062f117df2685b50da8
+detached
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-2-9rpy
+HEAD c0894a3e9fa98d0211109062f117df2685b50da8
+detached
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-2-b3ll
+HEAD c0894a3e9fa98d0211109062f117df2685b50da8
+detached
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-2-jc6c
+HEAD c0894a3e9fa98d0211109062f117df2685b50da8
+detached
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-2-jvlg
+HEAD c0894a3e9fa98d0211109062f117df2685b50da8
+detached
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-2-nckc
+HEAD c0894a3e9fa98d0211109062f117df2685b50da8
+detached
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-2-pr-iterate
+HEAD c0894a3e9fa98d0211109062f117df2685b50da8
+detached
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-2-pv5h
+HEAD c0894a3e9fa98d0211109062f117df2685b50da8
+detached
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-2-tk4u
+HEAD c0894a3e9fa98d0211109062f117df2685b50da8
+detached
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-2-viqj
+HEAD c0894a3e9fa98d0211109062f117df2685b50da8
+detached
+
+worktree /home/ds/gascity-packs-worktrees/gascity-packs-polecat-2-z19t
+HEAD c0894a3e9fa98d0211109062f117df2685b50da8
+detached
+
+worktree /home/ds/gascity-packs-worktrees/import-slack-pack
+HEAD 68c737273363df0b3287478ee6a96b1fae3c68ee
+branch refs/heads/feat/import-slack-pack
+
+worktree /home/ds/gascity-packs-worktrees/iterate-pr-45
+HEAD d386e846bafdafe1d54d3fcf98520854f602bdf1
+detached
+
+worktree /home/ds/gascity-packs-worktrees/iterate-pr-52
+HEAD bb89a90cc9a65cc3dbb301a02acf814d367901f8
+branch refs/heads/gpk-bcef-assess
+
+worktree /home/ds/gascity-packs-worktrees/ship-mol-adopt-pr-bcd
+HEAD 27d6010ad6eae343063636b3caa4e55329119957
+branch refs/heads/ship/mol-adopt-pr-bcd-mayor
+
+worktree /home/ds/gascity-packs-worktrees/slack-mini-fixup
+HEAD 8bab728adc6210f3116e37a4d92443117835bd52
+detached
+
+worktree /home/ds/gascity-packs-worktrees/slack-pack-features
+HEAD 59bab70d8c92781d8d10d6bf79a9a0ce0d6b3417
+branch refs/heads/feat/slack-pack-features
+
+worktree /home/ds/gascity-packs-worktrees/slack-v0-mrkdwn-rule
+HEAD 68c47c050cec5f4476b466bd64f71d891dc22178
+branch refs/heads/slack-v0/mrkdwn-rule
+
+worktree /tmp/gpk-agent-teams-pr
+HEAD 164b451bfdf2f19f999cca08d4a3a65babcaa6b2
+branch refs/heads/feat/agent-teams-pr-review
+
+worktree /tmp/gpk-graph-v2
+HEAD 23bce10e48b638b841712de9d1fb353b7f5454f6
+branch refs/heads/feat-graph-v2-contract-pr-review-formulas
+
+worktree /tmp/gpk-upstream-main
+HEAD 2becf3d83b6903dabb01dc915d0260fa09a42fe5
+branch refs/heads/feat/registry-hash-tool
+

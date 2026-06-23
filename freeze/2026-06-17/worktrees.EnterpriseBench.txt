@@ -1,0 +1,28 @@
+worktree /home/ds/projects/EnterpriseBench
+HEAD 1e45303824bb926f68e3e50fa5b79623017cf604
+branch refs/heads/fix/eb-kxt-decision-b-remediation
+
+worktree /home/ds/projects/EnterpriseBench-0fx
+HEAD 28e45645e79419e409604253d030484c81b018ca
+detached
+
+worktree /home/ds/projects/EnterpriseBench-bt6
+HEAD 28e45645e79419e409604253d030484c81b018ca
+detached
+
+worktree /home/ds/projects/EnterpriseBench-k6p
+HEAD b26e8cb0a2bb5dad7ca60889110364e7d515b6fb
+branch refs/heads/fix/eb-k6p-repair-8-multirepo-verifiers
+
+worktree /home/ds/projects/EnterpriseBench-ose
+HEAD 28e45645e79419e409604253d030484c81b018ca
+detached
+
+worktree /home/ds/projects/EnterpriseBench-vp7
+HEAD 28e45645e79419e409604253d030484c81b018ca
+detached
+
+worktree /home/ds/projects/EnterpriseBench-y50
+HEAD 28e45645e79419e409604253d030484c81b018ca
+detached
+

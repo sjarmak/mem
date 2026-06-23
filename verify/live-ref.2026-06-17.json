@@ -1,0 +1,17 @@
+{
+  "date": "2026-06-17",
+  "store": ".mem/store-v7-landed.db",
+  "rigs": [
+    {
+      "rig": "scix_experiments",
+      "slug": "sjarmak/scix-agent",
+      "authoritative": "origin/main",
+      "denominator": 417,
+      "resolved": 0,
+      "kept": 0,
+      "dropped": 0,
+      "drops_by_reason": {},
+      "pct": 0
+    }
+  ]
+}

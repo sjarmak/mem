@@ -1,0 +1,392 @@
+worktree /home/ds/gascity
+HEAD 58e0b8dbbece37194f8187ac9523bd4aa85d178a
+branch refs/heads/_pr1945_check
+
+worktree /home/ds/gascity-main
+HEAD ca35aa9fb75931cbf3cf4b571f39e3643c057ae3
+branch refs/heads/main
+
+worktree /home/ds/gascity-packs-worktrees/fix-oversight-rig-pl-slack
+HEAD fb0b03be55f97a49214808779dcca92558989914
+branch refs/heads/fix/oversight-rig-pl-thread-only-slack
+
+worktree /home/ds/gascity-packs-worktrees/oversight-rig
+HEAD 7b85285d0241a65ff81c0043021143fcd447a545
+branch refs/heads/gascity-pr
+
+worktree /home/ds/gascity-ship-wwbrh
+HEAD 500711af43b59ce5d2f525222226adf575b58337
+detached
+
+worktree /home/ds/gascity-ship-xy68h
+HEAD dba0e44a19bad9c23a0802dcadfaa79dc3661945
+detached
+
+worktree /home/ds/gascity-worktrees/bd-gc-o1zos
+HEAD 65a115a0d6afe795906644c92c0351a0cfbc8e88
+branch refs/heads/ship/2499-mayor-gofumpt
+
+worktree /home/ds/gascity-worktrees/bd-gc-ptjfl
+HEAD 3a4509a7b95896561748d47318b4fb74051580bf
+branch refs/heads/bd-gc-ptjfl
+
+worktree /home/ds/gascity-worktrees/bd-gc-vdtht
+HEAD 3f5293eb8f47ca482139e7968595251850ab81ef
+branch refs/heads/bd-gc-vdtht
+
+worktree /home/ds/gascity-worktrees/extmsg-reminder-strip
+HEAD ab28cd117f477232fa7abd4da736bc244793a9bf
+branch refs/heads/bd-extmsg-reminder-strip
+
+worktree /home/ds/gascity-worktrees/fix-2843-stamp-run-beads
+HEAD 0c842eef1dae012e6114225017e1f9eb99d42dc5
+branch refs/heads/fix/stamp-graphv2-run-beads
+
+worktree /home/ds/gascity-worktrees/fix-3467-lint
+HEAD 48d37ba0c2a26db284ad090017b8219d38b54454
+detached
+
+worktree /home/ds/gascity-worktrees/fix-extmsg-csrf-header
+HEAD 1ea39611654865e54d2cc8f5e44f51c035802f21
+branch refs/heads/fix/extmsg-http-adapter-csrf-header
+
+worktree /home/ds/gascity-worktrees/fix-extmsg-discord-typo-1866
+HEAD b2cb3db7a28a2e52ab209a5ba55498f2001d71ea
+branch refs/heads/fix/extmsg-notify-provider-typo-1866
+
+worktree /home/ds/gascity-worktrees/fix-extmsg-membership-leak-1865
+HEAD 2f712f1e12f649efedac807660eab1bb4f673b3b
+branch refs/heads/fix/extmsg-membership-leak-1865
+
+worktree /home/ds/gascity-worktrees/fix-extmsg-resolver-path-alias-1873
+HEAD 6eb19cce85c99c3bd821261d17c438f604a10bc0
+branch refs/heads/fix/extmsg-resolver-path-alias-1873
+
+worktree /home/ds/gascity-worktrees/fix-reaper-skip-schemaless
+HEAD f02aa485349ec1c6fbe5d279ff305cea3261d0b7
+branch refs/heads/fix/maintenance-reaper-skip-schemaless-dbs
+
+worktree /home/ds/gascity-worktrees/fix-run-bead-session-stamp
+HEAD 6160675e31ee11523e87592f4ac1e9601badc4f2
+branch refs/heads/fix/stamp-session-on-run-beads
+
+worktree /home/ds/gascity-worktrees/fix-shift-c1
+HEAD d76e2804d63de2f47b50194df19aba88ceff9ec0
+branch refs/heads/fix/shift-c1-metadata-keys-1251
+
+worktree /home/ds/gascity-worktrees/iterate-pr-1216
+HEAD e92327e7457dfee8b63b1617cf36b4f12cf321d1
+branch refs/heads/polecat/iterate-pr-1216
+
+worktree /home/ds/gascity-worktrees/iterate-pr-1425
+HEAD 70c1c512a770919a46f9644eee22557379f306d4
+branch refs/heads/polecat/iterate-pr-1425
+
+worktree /home/ds/gascity-worktrees/maintainer-2021-hooks-json-aware
+HEAD 141537cfdb059e2f928835e861fff77ec4154dbe
+branch refs/heads/maintainer/2021-hooks-json-aware
+
+worktree /home/ds/gascity-worktrees/maintainer-2469-pre-start-path
+HEAD 517c1b7ef51c207c78d79a509e6d58374a9b457b
+branch refs/heads/maintainer/2469-pre-start-path
+
+worktree /home/ds/gascity-worktrees/pack-cmd-merge-fix
+HEAD 607415dbd1665a8f8524f4c18267f3e90189323e
+branch refs/heads/bd-pack-cmd-merge-fix
+
+worktree /home/ds/gascity-worktrees/polecat-1
+HEAD 88be26e273ece9654281de88401684e030975c7a
+branch refs/heads/fix/wisp-autoclose-preserve-parked-gate
+
+worktree /home/ds/gascity-worktrees/polecat-1-ghas3
+HEAD cdcf685f54e956737941a7ca4654a76b545c8c9d
+detached
+
+worktree /home/ds/gascity-worktrees/polecat-1-mvpr4
+HEAD cdcf685f54e956737941a7ca4654a76b545c8c9d
+detached
+
+worktree /home/ds/gascity-worktrees/polecat-1-yjc3k
+HEAD cdcf685f54e956737941a7ca4654a76b545c8c9d
+detached
+
+worktree /home/ds/gascity-worktrees/polecat-2
+HEAD 6a13b94892a13fd6b20980082d873561d7fcc3aa
+branch refs/heads/fix/hook-rig-to-city-federation
+
+worktree /home/ds/gascity-worktrees/polecat-2-045t3
+HEAD 88be26e273ece9654281de88401684e030975c7a
+detached
+
+worktree /home/ds/gascity-worktrees/polecat-3
+HEAD cd38c19f88eebc255c3ada1d1e97e0519202afaf
+branch refs/heads/fix/nudge-mail-archive-delete-retention-3342
+
+worktree /home/ds/gascity-worktrees/polecat-3-7ruc5
+HEAD 70519347fde7944f1aafb0e6792b64a6b24d34a8
+detached
+
+worktree /home/ds/gascity-worktrees/polecat-3-ex6nj
+HEAD b4ca71e19ddca1353518d687d9a50002699e9977
+detached
+
+worktree /home/ds/gascity-worktrees/polecat-4
+HEAD 815ce7f625183a601f669c6be038319454e1f737
+branch refs/heads/bd-gc-7zc9i
+
+worktree /home/ds/gascity-worktrees/polecat-4-7zc9i
+HEAD 60393d57337ce7751dd58e1efdb8c7bac8c86d6f
+detached
+
+worktree /home/ds/gascity-worktrees/polecat-4-yfn01
+HEAD 60393d57337ce7751dd58e1efdb8c7bac8c86d6f
+detached
+
+worktree /home/ds/gascity-worktrees/pr-1216
+HEAD bcafa665f4cb23801193603a817d0877ae977eeb
+detached
+
+worktree /home/ds/gascity-worktrees/pr-1230
+HEAD 8acf2fc8cd1d3fff513a565249f02b3e5c8d92f7
+branch refs/heads/boylec/workspace-env
+
+worktree /home/ds/gascity-worktrees/pr-1425
+HEAD 70c1c512a770919a46f9644eee22557379f306d4
+branch refs/heads/fix/session-stranded-work-diagnostic
+
+worktree /home/ds/gascity-worktrees/pr-1974-rebase
+HEAD a890b8652a3b58f08316d38fb13773b7fff2b115
+branch refs/heads/fix/rig-formula-vars
+
+worktree /home/ds/gascity-worktrees/pr-1982-rebase
+HEAD 24c7559b5bcf058afadabc1969099afc14ef22cc
+branch refs/heads/fix/ga-ofmf-pool-dispatch-dual-claim
+
+worktree /home/ds/gascity-worktrees/pr-1993-rebase
+HEAD fae1e8d38d4348a461761a23e757da69c2115d82
+branch refs/heads/gc-rictus-444ff74a34e5
+
+worktree /home/ds/gascity-worktrees/pr-1997-rebase
+HEAD aa1f401343cad92b2faa13e24d72bd82e6e88b30
+branch refs/heads/polecat/slit/ga-82v@1778539730
+
+worktree /home/ds/gascity-worktrees/pr-2002-fix
+HEAD e43f39e23b72fc9c7d3ff5de3d9f337584c588f4
+branch refs/heads/polecat/gas-e0p
+
+worktree /home/ds/gascity-worktrees/pr-2005-fix
+HEAD 74c61d4819ca40c854cd45d88c465e1ae6dce394
+branch refs/heads/polecat/gas-yy0
+
+worktree /home/ds/gascity-worktrees/pr-2011-rebase
+HEAD 118c7cd4aed27939d53234dd685324e883b32d5c
+branch refs/heads/fix/hooks-amp-auggie-classify
+
+worktree /home/ds/gascity-worktrees/pr-2018-fix
+HEAD ea68d9ce5a64b342ec9e73291e860a74ee403e20
+branch refs/heads/fix/city-root-template-fragments
+
+worktree /home/ds/gascity-worktrees/pr-2023-rebase
+HEAD 4161b13b039fbe9bfba7ca5fcd8b3f1b7114c788
+branch refs/heads/fix/ephemeral-pool-defer-config-drift-on-assigned-work
+
+worktree /home/ds/gascity-worktrees/pr-2026-rebase
+HEAD 3c72ddf367eaa06d008c7c66fcd52bf04f9a0035
+branch refs/heads/feat/prompt-provider-fragments
+
+worktree /home/ds/gascity-worktrees/pr-2029-rebase
+HEAD 6a8996e56a222364746a2bed0b3d4eafed8414b9
+branch refs/heads/feat/prompt-synth-cli
+
+worktree /home/ds/gascity-worktrees/pr-2438
+HEAD 70c23b727a5a5936065bdc064fc572e298be9ff8
+branch refs/heads/codex/json-guide-docs
+
+worktree /home/ds/gascity-worktrees/rebase-1754
+HEAD afc4bb52adde7354747660cff64cfa020a91551a
+branch refs/heads/fix/mayor-prompt-gc-sling-rebased
+
+worktree /home/ds/gascity-worktrees/review-1989
+HEAD 58cf12eb21ec2082a8ce97c31e99817e4b86ec9b
+detached
+
+worktree /home/ds/gascity-worktrees/ship-2168-mayor
+HEAD 491b4c1fbd86fe9c7a423c987e1803637495274a
+branch refs/heads/bd-gc-qe8g52
+
+worktree /home/ds/gascity-worktrees/ship-2313-followup
+HEAD 4e2e46c30632e443b351ba9cc97a828911d1dee8
+branch refs/heads/ship/2313-m1m4-followup
+
+worktree /home/ds/gascity-worktrees/ship-2354-securityonly
+HEAD 08b2a168275aae7b87c610d5013dde8255c6bc0b
+branch refs/heads/ship/2354-security-additions
+
+worktree /home/ds/gascity-worktrees/ship-2482-mayor
+HEAD 38f0b6d466e1b99f67c770503d91e9ad33a58b71
+branch refs/heads/bd-gc-nxj6sf
+
+worktree /home/ds/gascity-worktrees/ship-2597-mayor
+HEAD 82250dc8804fcd193c4201a79116655a9aefa3fb
+branch refs/heads/bd-gc-z850nf
+
+worktree /home/ds/gascity-worktrees/ship-dolt-2090
+HEAD ed23d61de23c6413eb43a8d6ce362eafe6e79b26
+branch refs/heads/fix/dolt-stop-timeout-configurable-2090
+
+worktree /home/ds/gascity-worktrees/ship-extmsg-2484
+HEAD 61777c64cdeb313b6b887373852fb67ab140d55d
+branch refs/heads/fix/extmsg-explicit-target-broadcast-2484
+
+worktree /home/ds/gascity-worktrees/ship-pool-2319
+HEAD db2f75a4c19e88a944dc4293299a7964daed05eb
+branch refs/heads/ship/realize-pool-parallelize-2319
+
+worktree /home/ds/gascity-worktrees/ship-ralph-2320
+HEAD 09a20480b7da64c024a5e9828b005ee534c3d2c9
+branch refs/heads/fix/ralph-check-path-envelope-vs-base-2320
+
+worktree /home/ds/gascity-worktrees/ship-split-3332
+HEAD 0dae221e8de244d9221865aa4cfaa984fedf0f5a
+branch refs/heads/perf/3332-wisps-dolt-cpu
+
+worktree /home/ds/gascity-worktrees/slack-pack-e2e
+HEAD fb04617a68dbc1a33313a3b59c8ed84ac1ce4084
+branch refs/heads/feat/slack-pack-e2e-scaffold
+
+worktree /home/ds/gascity/.claude/worktrees/agent-a01eda32d6be2449b
+HEAD 13ffdc80d0732119bd98129904fc394f61dcc396
+branch refs/heads/worktree-agent-a01eda32d6be2449b
+locked claude agent agent-a01eda32d6be2449b (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-a0366e5d9be90a75a
+HEAD 587e451a4e80aa2b8068b8d4008e1421b593fb5f
+branch refs/heads/worktree-agent-a0366e5d9be90a75a
+locked claude agent agent-a0366e5d9be90a75a (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-a0d3d488515046cba
+HEAD c4c13daebe92729c06365357fa823494ba255837
+branch refs/heads/worktree-agent-a0d3d488515046cba
+locked claude agent agent-a0d3d488515046cba (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-a1b73ce84d82650c6/.claude/worktrees/agent-add0418f6d9b9c67a
+HEAD a4c2b428580c3f693da1ed3c8260bed9a1914560
+branch refs/heads/worktree-agent-add0418f6d9b9c67a
+locked claude agent agent-add0418f6d9b9c67a (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-a1fa5f0c785016107
+HEAD 1b519d20db1dcf82bcb16819b9378c25376924e5
+branch refs/heads/worktree-agent-a1fa5f0c785016107
+locked claude agent agent-a1fa5f0c785016107 (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-a28a10d81de1f8ed8
+HEAD c6af2a208625ce77b3ee4796754442507c1c5160
+branch refs/heads/cby-18-2-rig-workdir
+locked claude agent agent-a28a10d81de1f8ed8 (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-a47e2cf15a0d24c2a
+HEAD b7363d01bf4e66ae89140001232ecbe9c12a1b2c
+branch refs/heads/worktree-agent-a47e2cf15a0d24c2a
+locked claude agent agent-a47e2cf15a0d24c2a (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-a4c75be3580dde8f6
+HEAD 4976dee69d75bfa6c5905101c8d4c5fd6505e3d5
+branch refs/heads/worktree-agent-a4c75be3580dde8f6
+locked claude agent agent-a4c75be3580dde8f6 (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-a5ea9464051fc3300
+HEAD 9f1e7de74583ef577d9c0dc8b82a7ce2f0210c1d
+branch refs/heads/worktree-agent-a5ea9464051fc3300
+locked claude agent agent-a5ea9464051fc3300 (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-a66cdf905f2be2c1f
+HEAD a5b8100f7dd2efbffe35afa44e45f48aaff327a8
+branch refs/heads/worktree-agent-a66cdf905f2be2c1f
+locked claude agent agent-a66cdf905f2be2c1f (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-a7102ff1a7e14f28f
+HEAD 2c7adb1bdf26d8dbf57465bf1b6012e2ea906a6e
+branch refs/heads/worktree-agent-a7102ff1a7e14f28f
+locked claude agent agent-a7102ff1a7e14f28f (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-a9466f5d432c94067
+HEAD 3081e57308aa5ff266de8db8bef5523e0fb96676
+branch refs/heads/fix/gc-g5o-dispatch-race
+locked claude agent agent-a9466f5d432c94067 (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-ab875c83ef46f7248
+HEAD 34d9df6a29be23a21f7b8a4e916e65ba8d19e9a9
+branch refs/heads/worktree-agent-ab875c83ef46f7248
+locked claude agent agent-ab875c83ef46f7248 (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-ad5e20b21ce8d0d31
+HEAD 8177875fc69980104e7e324c6a6c26fff0bc63c9
+branch refs/heads/worktree-agent-ad5e20b21ce8d0d31
+locked claude agent agent-ad5e20b21ce8d0d31 (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-adc5439a4b15bcb9a
+HEAD 4716c0000dda03344b72f1506b59fe0b189e6588
+branch refs/heads/worktree-agent-adc5439a4b15bcb9a
+locked claude agent agent-adc5439a4b15bcb9a (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-ade4b1d1dea13ad8e
+HEAD efd17ae94e456f199a44933e87e2be9ce179dc06
+branch refs/heads/worktree-agent-ade4b1d1dea13ad8e
+locked claude agent agent-ade4b1d1dea13ad8e (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-ae756a73dd0aa8e36
+HEAD 8850c477e6965c990837c6fec6886c88bc1f9f45
+branch refs/heads/worktree-agent-ae756a73dd0aa8e36
+locked claude agent agent-ae756a73dd0aa8e36 (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-ae9813ebe7c2ebebf
+HEAD 354c9d961a61409ecfc4e3432bce63177fde5413
+branch refs/heads/worktree-agent-ae9813ebe7c2ebebf
+locked claude agent agent-ae9813ebe7c2ebebf (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-af6ea0d24213351e6
+HEAD 022393bb22ca46c69fe7c851b8bad03ac82abe93
+branch refs/heads/worktree-agent-af6ea0d24213351e6
+locked claude agent agent-af6ea0d24213351e6 (pid 1907925)
+
+worktree /home/ds/gascity/.claude/worktrees/agent-af723250398f5776d
+HEAD 83073bca9e63fb5ce77091289279a1852c861fed
+branch refs/heads/worktree-agent-af723250398f5776d
+locked claude agent agent-af723250398f5776d (pid 1907925)
+
+worktree /home/ds/ship-1039
+HEAD d269c29593d149221ebcc43c03b2820ba6a0dea3
+branch refs/heads/ship/1039-mayor
+
+worktree /home/ds/ship-1991
+HEAD 3f5293eb8f47ca482139e7968595251850ab81ef
+branch refs/heads/ship/1991-mayor
+
+worktree /home/ds/ship-2437
+HEAD a3bd02ca280491dc5b4ac1e8a3a7f21e82d45612
+branch refs/heads/ship/2437-mayor
+
+worktree /home/ds/ship-2499
+HEAD 61743dc3cf49be0d8001194a09cc8494f1b36bb4
+branch refs/heads/ship/2499-mayor
+
+worktree /tmp/gascity-baseline-hb
+HEAD c41b280266f6f9b66953868b8547042dd7f00837
+detached
+
+worktree /tmp/pr-1970-rebase
+HEAD 89c7c2e082deeb47071d16151e31cd5e0d1cac99
+branch refs/heads/maintainer/1970-rebase
+
+worktree /tmp/pr-1989-test
+HEAD 7e209cc6975509d5f0ed25114c9b3bf3776ad3a6
+branch refs/heads/pr-1989-test
+
+worktree /tmp/review-pr/20260526T114040Z-b6b7157d/worktree
+HEAD bff0396cbee252ce75634d97ab507925b18284aa
+detached
+
+worktree /tmp/review-pr/20260526T114040Z-b6b7157d/worktree-pr
+HEAD ba483b9735276a7141619c14d81562fb62543377
+detached
+

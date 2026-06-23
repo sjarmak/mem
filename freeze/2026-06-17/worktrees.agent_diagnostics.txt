@@ -1,0 +1,4 @@
+worktree /home/ds/projects/agent-diagnostics
+HEAD 8123bd8964516acd5f0e008abc6424ea7e2fbe39
+branch refs/heads/main
+

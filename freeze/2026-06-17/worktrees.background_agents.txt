@@ -1,0 +1,4 @@
+worktree /home/ds/projects/background-agents
+HEAD a77cc30c26d7f8b4b4f4c120fc40fb2524835ffb
+branch refs/heads/fix-background-agents-claude-md
+

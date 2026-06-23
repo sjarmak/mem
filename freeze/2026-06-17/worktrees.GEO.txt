@@ -1,0 +1,4 @@
+worktree /home/ds/projects/GEO
+HEAD f09a3ccd393ced09fd3013d06e430f19abca187e
+branch refs/heads/main
+

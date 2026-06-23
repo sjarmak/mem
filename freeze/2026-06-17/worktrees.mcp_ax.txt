@@ -1,0 +1,4 @@
+worktree /home/ds/projects/mcp-ax
+HEAD ba8d481fe35f9ae8521b447898aae9cbaf437b29
+branch refs/heads/bd-mcp-ax-0f4
+

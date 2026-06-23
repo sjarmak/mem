@@ -1,0 +1,4 @@
+worktree /home/ds/projects/brains
+HEAD 168d6e681585e2628a65f9e84d569613dc6288dc
+branch refs/heads/mem-0mb-prune-cleanups
+

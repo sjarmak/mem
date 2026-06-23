@@ -1,0 +1,36 @@
+worktree /home/ds/projects/codeprobe
+HEAD 82d667468dc0ec95140370f9bb1b5b5bb89d8767
+branch refs/heads/codeprobe-9tk-44i-confirm
+
+worktree /home/ds/projects/codeprobe-00e
+HEAD ee435c93d0cf760cd677f75ddb8fd927c1a6ef2b
+branch refs/heads/codeprobe-00e-comparison-viewer
+
+worktree /home/ds/projects/codeprobe-1gg
+HEAD 864674979f464ca9337a37c8383ce4d39294cd0b
+branch refs/heads/codeprobe-1gg-tool-surface-audit
+
+worktree /home/ds/projects/codeprobe-3cs
+HEAD a5a5e027e6c415c98401f61d3e49dbe2641a2471
+branch refs/heads/codeprobe-3cs-run-explorer
+
+worktree /home/ds/projects/codeprobe-9p6
+HEAD 42565e3ca3cbee2f9099a056d163b045a1f09b0c
+branch refs/heads/codeprobe-9p6-mcp-init-manifest
+
+worktree /home/ds/projects/codeprobe-a8r
+HEAD e68a0f510a706707c35ce6544c093c97bb957949
+branch refs/heads/codeprobe-a8r-quota-exclude
+
+worktree /home/ds/projects/codeprobe-b9c
+HEAD 5214c541562d917bcd7ff130b1b006607dc7d8a3
+branch refs/heads/codeprobe-b9c-hygiene-cleanup
+
+worktree /home/ds/projects/codeprobe-s6o
+HEAD 036bd1d1f0f7b0a34b54e1e56de9b06dc51f6d1a
+branch refs/heads/codeprobe-s6o-seq-exec-envelope
+
+worktree /home/ds/projects/codeprobe-u7l
+HEAD 932322924c3030dee1a7a373a1e6e7f9500870d3
+branch refs/heads/codeprobe-u7l-mine-split
+
