@@ -11,7 +11,11 @@ from pathlib import Path
 
 from membench.memory_systems import build_memory_system
 from membench.memory_systems.base import MemorySystem, RetrievalRequest, RetrieveResult
-from membench.memory_systems.consolidation import ConsolidationCapable, ConsolidationResult
+from membench.memory_systems.consolidation import (
+    Classifiable,
+    ConsolidationCapable,
+    ConsolidationResult,
+)
 from membench.memory_systems.oracle_system import OracleMemory
 from membench.runner.agent import Agent, ScriptedAgent
 from membench.runner.metrics import compute_metrics
@@ -98,8 +102,10 @@ def _assert_superseded_written(seq: BenchmarkSequence) -> None:
         for mid in step.superseded_memory_ids:
             written_at = first_write.get(mid)
             if written_at is None or written_at >= idx:
-                where = "is never written by any step" if written_at is None else (
-                    f"is first written at step index {written_at} (not BEFORE)"
+                where = (
+                    "is never written by any step"
+                    if written_at is None
+                    else (f"is first written at step index {written_at} (not BEFORE)")
                 )
                 raise ValueError(
                     f"superseded id {mid!r} (step {step.step_id!r}, index {idx}) {where} "
@@ -196,8 +202,17 @@ def _execute_step(
 
     write_events: list[MemoryEvent] = []
     if condition is Condition.MEMORY_ENABLED and system.supports_write:
+        # A consolidation arm takes a retention CLASS per record at write; assigning the
+        # step's ``record_class`` here is what lets the offline sweep act on it (§10.C
+        # consolidation factor). A step may write several ids (current + a stale v1), so the
+        # class is applied to EACH written id. Non-classifying arms and class-free steps are
+        # left untouched (backward compat) — the gate is the Classifiable Protocol + a non-None
+        # class, never a default that silently labels records the sequence did not label.
+        record_class = step.record_class
         for mid, content in agent_result.writes_performed.items():
             write_events.append(system.write(mid, content, ctx))
+            if record_class is not None and isinstance(system, Classifiable):
+                system.assign_class(mid, record_class)
     memory_events.extend(write_events)
 
     metrics = compute_metrics(

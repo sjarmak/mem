@@ -61,3 +61,16 @@ class ConsolidationCapable(Protocol):
     def consolidate(self, ctx: StepContext) -> ConsolidationResult: ...
 
     def tombstone(self, memory_id: str) -> None: ...
+
+
+@runtime_checkable
+class Classifiable(Protocol):
+    """An arm that accepts a per-record retention CLASS at write (the sweep's input).
+
+    ``run_sequence`` assigns ``step.record_class`` to each id the step writes, on the
+    write-bearing condition, when the arm satisfies this Protocol and the step carries
+    a class — so the consolidation factor reaches the live sweep instead of being inert.
+    A non-classifying arm (filesystem, lexical, oracle, none) does not satisfy this and
+    is left untouched, and a sequence with no ``record_class`` never invokes it."""
+
+    def assign_class(self, memory_id: str, record_class: str | None) -> None: ...
