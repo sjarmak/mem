@@ -170,10 +170,18 @@ def _cost_for(rng: random.Random, cost_pool: Sequence[tuple[int, int]] | None) -
 
 
 def _distractors(prefix: str, interference: bool) -> dict[str, str]:
+    """The Confusion competitors planted at the goal (OFF ⇒ none). A distractor is only
+    *plausible* — and thus only surfaceable by a token-overlap arm — if its content
+    resembles the goal's target memories ("the current value of every fact"). Earlier
+    content ("plausible-but-wrong note N") shared NO tokens with the goal query, so a
+    lexical/top-k arm provably never surfaced it and the interference factor read flat;
+    the wording here keeps "value of fact" so the competitor lands in the arm's top-k
+    (the actual Confusion stressor) while still naming a wrong value. An id-exact arm
+    never requests these ids, so its ``distractor_retrieval_rate`` stays 0 regardless."""
     if not interference:
         return {}
     return {
-        f"{prefix}-distractor{j}": f"plausible-but-wrong note {j}"
+        f"{prefix}-distractor{j}": f"plausible but wrong value of fact (note {j})"
         for j in range(DISTRACTOR_ON_COUNT)
     }
 
