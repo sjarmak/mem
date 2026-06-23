@@ -19,6 +19,12 @@ Retrieval-quality only — NO agent re-run, NO outcome lift, so it is free/local
 outcome-lift comparison is the paid Harbor path and is deliberately out of scope.
 """
 
+from membench.compare.circularity_baseline import (
+    DEFAULT_CIRCULARITY_DELTA,
+    CircularityMetric,
+    CircularityVerdict,
+    circularity_check,
+)
 from membench.compare.judged_relevance import (
     JudgedPair,
     JudgedRelevance,
@@ -64,6 +70,7 @@ from membench.compare.retrieval_compare import (
 )
 
 __all__ = [
+    "DEFAULT_CIRCULARITY_DELTA",
     "PREREGISTERED_FPR_GAP_MAX",
     "SIGNATURE_FIELD_NAMES",
     "ArmComparison",
@@ -71,6 +78,8 @@ __all__ = [
     "BinaryLabelPair",
     "CalibrationGateVerdict",
     "CalibrationReport",
+    "CircularityMetric",
+    "CircularityVerdict",
     "ClassMetrics",
     "ComparisonResult",
     "FrozenCalibration",
@@ -84,6 +93,7 @@ __all__ = [
     "RelevanceResult",
     "RelevanceVerdict",
     "build_relevance_prompt",
+    "circularity_check",
     "compare_arms",
     "harvest_and_judge",
     "harvest_ours",
