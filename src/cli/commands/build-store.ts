@@ -14,8 +14,14 @@ import {
   attachTraceRefs,
   gcSessionResolver,
 } from '../../ingest/trace-resolve.js';
+import {
+  type TranscriptArchive,
+  defaultArchiveRoot,
+  loadTranscriptArchive,
+} from '../../ingest/trace-archive.js';
 import { attachProvenance } from '../../ingest/provenance.js';
 import { type RecordedBaseLookup, loadRecordedBases } from '../../ingest/provenance-from-log.js';
+import { attachCommitOutcomes } from '../../ingest/commitLinkage.js';
 import { attachLanded } from '../../ingest/landed.js';
 import { attachRepo } from '../../ingest/repo-resolve.js';
 import {
@@ -53,6 +59,10 @@ export interface BuildStoreResult {
    * event in the provenance log rather than reconstructed by date — exact, not
    * approximate (the read-first path). 0 until a producer writes `cut` events. */
   records_recorded_base: number;
+  /** Records whose work→landing-commit outcome resolved (`outcome.commit_sha`,
+   * the recovered squash/landing commit; the `with_commit_sha` coverage axis).
+   * 0 when `--with-provenance` is off. */
+  records_with_commit_sha: number;
   /** Records whose work landed on the integration branch and survived
    * (`landed.landed_state === 'landed'`); the forward outcome signal for the
    * direct-to-main corpus (0 when `--with-provenance` is off). */
@@ -71,6 +81,8 @@ export interface BuildStoreResult {
 export interface AttachParseDeps {
   resolve?: SessionResolver;
   read?: TraceReader;
+  /** Transcript archive for reaped-transcript recovery (mem-h3di.4). */
+  archive?: TranscriptArchive;
 }
 
 /**
@@ -82,7 +94,10 @@ export interface AttachParseDeps {
  * unchanged. Records are copied, never mutated.
  */
 export function attachAndParse(records: WorkRecord[], deps: AttachParseDeps = {}): WorkRecord[] {
-  const resolved = attachTraceRefs(records, deps.resolve ? { resolve: deps.resolve } : {});
+  const resolved = attachTraceRefs(records, {
+    ...(deps.resolve && { resolve: deps.resolve }),
+    ...(deps.archive && { archive: deps.archive }),
+  });
   return resolved.map(record => parseRecordTrace(record, deps.read));
 }
 
@@ -167,6 +182,17 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     join !== null && join.sessionPaths.size > 0
       ? id => join.sessionPaths.get(id) ?? gcSessionResolver(id)
       : undefined;
+  // Transcript-archive fallback (mem-h3di.4): with traces on, reaped transcripts
+  // resolve to their durable restored copies. Default root is co-located with
+  // the store; `--transcript-archive <dir>` overrides it. A missing/empty
+  // archive is a silent no-op, so this is always safe to enable.
+  const archiveRoot =
+    typeof ctx.options['transcript-archive'] === 'string'
+      ? ctx.options['transcript-archive']
+      : defaultArchiveRoot(path);
+  const archive: TranscriptArchive | undefined = withTraces
+    ? loadTranscriptArchive(archiveRoot)
+    : undefined;
 
   const run = doltRunner(defaultConnection());
   const rigs = rig === null ? await listRigs(run) : [rig];
@@ -200,6 +226,7 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
   let recordsWithProvenance = 0;
   let recordsWithCommit = 0;
   let recordsRecordedBase = 0;
+  let recordsWithCommitSha = 0;
   let recordsLanded = 0;
   let recordsMultiSession = 0;
 
@@ -213,12 +240,22 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     // transcript, so P1.3 only shells `gc` for the residue.
     const typed = attachTaskTypes(located, taskTypes);
     const joined = join === null ? typed : attachSessionJoin(typed, join);
-    const traced = withTraces ? attachAndParse(joined, resolve ? { resolve } : {}) : joined;
-    // Provenance reconstructs the session-start baseline; landed is its forward
-    // mirror (session-close branch tip + survival), so it runs only after, and
-    // only when provenance has been attached.
+    const traced = withTraces
+      ? attachAndParse(joined, {
+          ...(resolve && { resolve }),
+          ...(archive && { archive }),
+        })
+      : joined;
+    // Provenance reconstructs the session-start baseline (reading a producer-
+    // recorded `cut` event when present, else reconstructing by date); commit
+    // outcomes recover the work→landing-commit (populating commit_sha) from the
+    // same checkout; landed is its forward mirror (session-close branch tip +
+    // survival). All three need the rig's git checkout, so they run together
+    // behind --with-provenance, after the leak-safe session-start baseline.
     const records = withProvenance
-      ? attachLanded(attachProvenance(traced, recordedBase ? { recordedBase } : {}))
+      ? attachLanded(
+          attachCommitOutcomes(attachProvenance(traced, recordedBase ? { recordedBase } : {}))
+        )
       : traced;
 
     const built = buildStoreFromRecords(path, records);
@@ -231,6 +268,7 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     // the provenance log instead of reconstructed by date (the read-first win).
     recordsWithCommit += records.filter(r => r.provenance?.base_commit !== undefined).length;
     recordsRecordedBase += records.filter(r => r.provenance?.history_state === 'recorded').length;
+    recordsWithCommitSha += records.filter(r => r.outcome?.commit_sha !== undefined).length;
     recordsLanded += records.filter(r => r.landed?.landed_state === 'landed').length;
     recordsMultiSession += records.filter(
       r => r.agents.filter(a => a.suspect !== true).length >= 2
@@ -244,7 +282,7 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     const recordedNote =
       recordsRecordedBase > 0 ? ` (${recordsRecordedBase} read from the log)` : '';
     const provNote = withProvenance
-      ? `; ${recordsWithProvenance} carry a work_dir, ${recordsWithCommit} resolved a base commit${recordedNote}, ${recordsLanded} landed on the branch`
+      ? `; ${recordsWithProvenance} carry a work_dir, ${recordsWithCommit} resolved a base commit${recordedNote}, ${recordsWithCommitSha} resolved a landing commit, ${recordsLanded} landed on the branch`
       : '';
     const joinNote = join !== null ? `; ${recordsMultiSession} are multi-session` : '';
     const provEventsNote = `; ${provenanceEvents} provenance events`;
@@ -262,6 +300,7 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     records_with_provenance: recordsWithProvenance,
     records_with_commit: recordsWithCommit,
     records_recorded_base: recordsRecordedBase,
+    records_with_commit_sha: recordsWithCommitSha,
     records_landed: recordsLanded,
     records_multi_session: recordsMultiSession,
     records_provenance_events: provenanceEvents,

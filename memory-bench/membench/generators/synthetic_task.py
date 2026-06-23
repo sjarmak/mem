@@ -52,13 +52,18 @@ class StepBrief:
 class TaskBlueprint:
     """A synthetic task plan (spec §11.2 ``task_blueprint``). The ``step_briefs``
     establish facts; ``final_goal`` is the closing request that depends on all of
-    them. Authored here as ground truth — this is the Tier-0 oracle."""
+    them. Authored here as ground truth — this is the Tier-0 oracle.
+
+    ``shape_id`` links a blueprint to the real fail-to-pass failure shape it
+    reproduces (``generators.ftp_shapes``); ``None`` for the generic continuity
+    blueprints that mimic no specific real shape."""
 
     blueprint_id: str
     title: str
     domain: str
     final_goal: str
     step_briefs: tuple[StepBrief, ...]
+    shape_id: str | None = None
 
 
 # A small bank of authored blueprints. Each is a realistic multi-session task whose
@@ -214,3 +219,75 @@ def generate_synthetic_sequence(*, seed: int) -> BenchmarkSequence:
     """Emit a deterministic synthetic ``BenchmarkSequence`` for ``seed`` (the full
     §11 pipeline: blueprint → steps → schema). Same seed ⇒ byte-identical sequence."""
     return expand_blueprint(blueprint_for_seed(seed), seed=seed)
+
+
+# Shape-grounded blueprints (mem-bxhh.5): tasks whose surface reproduces a real
+# fail-to-pass failure shape (``generators.ftp_shapes``) while keeping the same
+# structural memory-dependence — the goal cannot be met without recalling every fact
+# an earlier step established. Held in a SEPARATE bank so the generic ``_BLUEPRINTS``
+# seed→blueprint mapping (and the byte-reproducibility of existing seeds) is untouched.
+SHAPE_BLUEPRINTS: tuple[TaskBlueprint, ...] = (
+    TaskBlueprint(
+        blueprint_id="token-rollup",
+        title="Emit the per-arm token-count rollup",
+        domain="experiment-aggregation",
+        shape_id="aggregation-projection",
+        final_goal=(
+            "Emit the token-count rollup: sum the prompt and completion tokens each "
+            "arm reported earlier, and project the per-arm totals into the summary."
+        ),
+        step_briefs=(
+            StepBrief(
+                purpose="Record arm A's reported token counts.",
+                fact_key="tokens-arm-a",
+                fact_value="arm-a used 1200 prompt + 340 completion tokens",
+            ),
+            StepBrief(
+                purpose="Record arm B's reported token counts.",
+                fact_key="tokens-arm-b",
+                fact_value="arm-b used 980 prompt + 410 completion tokens",
+            ),
+            StepBrief(
+                purpose="Record arm C's reported token counts.",
+                fact_key="tokens-arm-c",
+                fact_value="arm-c used 1530 prompt + 275 completion tokens",
+            ),
+        ),
+    ),
+    TaskBlueprint(
+        blueprint_id="quota-exclusion",
+        title="Summarize scores excluding the quota-voided task",
+        domain="scoring-stats",
+        shape_id="exclusion-filter",
+        final_goal=(
+            "Report the mean score, excluding the task that was quota-voided earlier "
+            "so the paired comparison is not contaminated by the missing run."
+        ),
+        step_briefs=(
+            StepBrief(
+                purpose="Record task-1's score.",
+                fact_key="score-task-1",
+                fact_value="task-1 scored 0.82",
+            ),
+            StepBrief(
+                purpose="Record task-2's score.",
+                fact_key="score-task-2",
+                fact_value="task-2 scored 0.64",
+            ),
+            StepBrief(
+                purpose="Record which task hit the quota and must be excluded.",
+                fact_key="quota-voided-task",
+                fact_value="task-3 was quota-voided — exclude it from every aggregate",
+            ),
+        ),
+    ),
+)
+
+
+def generate_shape_sequences() -> list[BenchmarkSequence]:
+    """Expand every shape-grounded blueprint into a deterministic ``BenchmarkSequence``.
+
+    These are the synthetic tasks the mem-bxhh.5 calibration runs the arms over: each
+    reproduces a real fail-to-pass shape (its ``shape_id``) yet stays memory-dependent
+    by construction. Ids are namespaced per blueprint, so the sequences never collide."""
+    return [expand_blueprint(bp, seed=i) for i, bp in enumerate(SHAPE_BLUEPRINTS)]

@@ -12,7 +12,9 @@ First-run arm scope is `none` / `ours` / `builtin` (fork 4):
 
 `mem0`, `a-mem`, `nat`, and `graphiti` are the wired competitive arms (mem-lvp.2 /
 mem-lvp.9 / mem-lvp.3 / mem-lvp.4), all `AbstractSemanticArm` subclasses behind an
-injectable client.
+injectable client. `nemo-embed` (mem-sikg) is a second, architecturally-different
+neural BASELINE next to `mem0` — a plain dense NVIDIA NeMo embedder with exact cosine
+top-k, same seam, NOT an `ours` upgrade.
 """
 
 from typing import Any
@@ -34,6 +36,7 @@ from membench.memory_systems.local_stack import (
 )
 from membench.memory_systems.mem0_system import Mem0Memory
 from membench.memory_systems.nat_system import NatMemory
+from membench.memory_systems.nemo_embed_system import NemoEmbedMemory
 from membench.memory_systems.none_system import NoneMemory
 from membench.memory_systems.oracle_system import OracleMemory
 from membench.memory_systems.ours_system import OursMemory
@@ -57,6 +60,7 @@ __all__ = [
     "Mem0Memory",
     "MemorySystem",
     "NatMemory",
+    "NemoEmbedMemory",
     "NoneMemory",
     "OracleMemory",
     "OursMemory",
@@ -89,6 +93,7 @@ def build_memory_system(name: str, **kwargs: Any) -> MemorySystem:
         "retention_scheduled": RetentionScheduledMemory,
         "ours": OursMemory,
         "mem0": Mem0Memory,
+        "nemo-embed": NemoEmbedMemory,
         "a-mem": AMemMemory,
         "nat": NatMemory,
         "graphiti": GraphitiMemory,

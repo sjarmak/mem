@@ -8,17 +8,33 @@ fill only the NL surface text of episodes, run offline into a frozen,
 """
 
 from membench.generators.enterprise_workflow import materialize_project, materialize_world
+from membench.generators.ftp_shapes import (
+    FTP_SHAPES,
+    FtpShape,
+    assert_shapes_grounded,
+    memory_dependent_shapes,
+)
 from membench.generators.memory_necessity_gate import NecessityResult, memory_necessity_gate
 from membench.generators.schema_induction import (
     GENERATOR_VERSION,
     generate_schema_induction_sequence,
 )
+from membench.generators.synthetic_task import (
+    SHAPE_BLUEPRINTS,
+    generate_shape_sequences,
+)
 
 __all__ = [
+    "FTP_SHAPES",
     "GENERATOR_VERSION",
+    "SHAPE_BLUEPRINTS",
+    "FtpShape",
     "NecessityResult",
+    "assert_shapes_grounded",
     "generate_schema_induction_sequence",
+    "generate_shape_sequences",
     "materialize_project",
     "materialize_world",
+    "memory_dependent_shapes",
     "memory_necessity_gate",
 ]

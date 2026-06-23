@@ -8,13 +8,16 @@ to control the V2 local-LLM-quality confound (``.gc/docs/phase-2.5-plan.md``
 §Validity V2: "We pin the model + version, record it in telemetry").
 
 The design verdict (phase-2.5-plan §"Shared self-hosted stack") is one shared local
-stack, two embedder modalities:
+stack, now three embedder modalities:
 
-- an **Ollama-served** embedding model (mem0's embedder is the Ollama daemon) and
-- an **in-process sentence-transformers** model (A-MEM and NAT embed locally),
+- an **Ollama-served** embedding model (mem0's embedder is the Ollama daemon),
+- an **in-process sentence-transformers** model (A-MEM and NAT embed locally), and
+- an **in-process NeMo dense embedder** (the `nemo-embed` baseline arm, mem-sikg) —
+  also a sentence-transformers load, but pinned separately so the NeMo baseline's
+  model identity is recorded independently of A-MEM/NAT's lighter embedder.
 
 plus one **chat/instruct** model for the arms that run an LLM at ingest (mem0,
-A-MEM). Both embedders and the chat model are named here once; each arm's
+A-MEM). Every embedder and the chat model are named here once; each arm's
 real-client factory maps the stack onto its backend's native config.
 
 This module is **config only**: it imports no SDK and touches no network at
@@ -38,7 +41,8 @@ from dataclasses import dataclass
 # Bumped when the pinned default models change, so a telemetry row's stack identity
 # is unambiguous across runs (V2 confound control). The model names below ARE the
 # identity; this version disambiguates two runs that pin different defaults.
-STACK_VERSION = "1"
+# v2 (mem-sikg): added the pinned NeMo dense embedder for the `nemo-embed` arm.
+STACK_VERSION = "2"
 
 # Defaults match the phase-2.5-plan recommendation: one Ollama embedding model
 # (``nomic-embed-text``), the lightest bundled sentence-transformer
@@ -48,11 +52,16 @@ DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 DEFAULT_CHAT_MODEL = "llama3"
 DEFAULT_OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"
 DEFAULT_SENTENCE_TRANSFORMER_MODEL = "all-MiniLM-L6-v2"
+# PL default (mem-sikg, countermandable): the PERMISSIVELY-licensed NVIDIA embedder,
+# not the NVIDIA-Non-Commercial agentic-recipe backend (llama-nv-embed-reasoning-3b),
+# to keep the published stack redistribution-clean. Swap via the env override below.
+DEFAULT_NEMO_EMBEDDING_MODEL = "nvidia/llama-nemotron-embed-1b-v2"
 
 ENV_OLLAMA_BASE_URL = "MEMBENCH_OLLAMA_BASE_URL"
 ENV_CHAT_MODEL = "MEMBENCH_LOCAL_CHAT_MODEL"
 ENV_OLLAMA_EMBEDDING_MODEL = "MEMBENCH_LOCAL_EMBED_MODEL"
 ENV_SENTENCE_TRANSFORMER_MODEL = "MEMBENCH_LOCAL_ST_MODEL"
+ENV_NEMO_EMBEDDING_MODEL = "MEMBENCH_LOCAL_NEMO_EMBED_MODEL"
 
 
 class LocalStackUnavailableError(RuntimeError):
@@ -91,6 +100,7 @@ class LocalModelStack:
     chat_model: str = DEFAULT_CHAT_MODEL
     ollama_embedding_model: str = DEFAULT_OLLAMA_EMBEDDING_MODEL
     sentence_transformer_model: str = DEFAULT_SENTENCE_TRANSFORMER_MODEL
+    nemo_embedding_model: str = DEFAULT_NEMO_EMBEDDING_MODEL
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> LocalModelStack:
@@ -107,6 +117,7 @@ class LocalModelStack:
             sentence_transformer_model=source.get(
                 ENV_SENTENCE_TRANSFORMER_MODEL, DEFAULT_SENTENCE_TRANSFORMER_MODEL
             ),
+            nemo_embedding_model=source.get(ENV_NEMO_EMBEDDING_MODEL, DEFAULT_NEMO_EMBEDDING_MODEL),
         )
 
     def telemetry_dict(self) -> dict[str, str]:
@@ -118,6 +129,7 @@ class LocalModelStack:
             "chat_model": self.chat_model,
             "ollama_embedding_model": self.ollama_embedding_model,
             "sentence_transformer_model": self.sentence_transformer_model,
+            "nemo_embedding_model": self.nemo_embedding_model,
         }
 
     def preflight(
@@ -132,9 +144,10 @@ class LocalModelStack:
         is ``False`` for an arm that only embeds (no ingest LLM). ``fetch`` is injected
         in tests; the default queries ``{base_url}/api/tags`` over urllib.
 
-        The sentence-transformers model is intentionally NOT checked here: it is a pip
-        package pulled lazily by the arm on first use, not an Ollama-served model, so a
-        missing one surfaces at install time, not as a daemon-readiness failure."""
+        The sentence-transformers model AND the NeMo embedder are intentionally NOT
+        checked here: both are HF/pip models pulled lazily by their arm on first use,
+        not Ollama-served, so a missing one surfaces at install time, not as a
+        daemon-readiness failure."""
         tags_url = f"{self.ollama_base_url.rstrip('/')}/api/tags"
         do_fetch = fetch if fetch is not None else (lambda url: _urllib_fetch(url, timeout=timeout))
         try:
