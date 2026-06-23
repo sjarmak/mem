@@ -26,6 +26,18 @@ from membench.compare.judged_relevance import (
     harvest_and_judge,
     judge_relevance,
 )
+from membench.compare.relevance_calibration import (
+    PREREGISTERED_FPR_GAP_MAX,
+    BinaryLabelPair,
+    CalibrationGateVerdict,
+    CalibrationReport,
+    ClassMetrics,
+    FrozenCalibration,
+    GradedLabelPair,
+    RelevanceCalibration,
+    load_frozen_calibration,
+    relevance_calibration_authority,
+)
 from membench.compare.relevance_judge import (
     SIGNATURE_FIELD_NAMES,
     RelevanceInputs,
@@ -52,13 +64,21 @@ from membench.compare.retrieval_compare import (
 )
 
 __all__ = [
+    "PREREGISTERED_FPR_GAP_MAX",
     "SIGNATURE_FIELD_NAMES",
     "ArmComparison",
     "ArmHarvest",
+    "BinaryLabelPair",
+    "CalibrationGateVerdict",
+    "CalibrationReport",
+    "ClassMetrics",
     "ComparisonResult",
+    "FrozenCalibration",
+    "GradedLabelPair",
     "JudgedPair",
     "JudgedRelevance",
     "PairCache",
+    "RelevanceCalibration",
     "RelevanceInputs",
     "RelevanceJudgeError",
     "RelevanceResult",
@@ -69,10 +89,12 @@ __all__ = [
     "harvest_ours",
     "harvest_semantic",
     "judge_relevance",
+    "load_frozen_calibration",
     "ours_replay",
     "parse_relevance_verdict",
     "pool_candidates",
     "relevance_cache_key",
+    "relevance_calibration_authority",
     "score_harvest",
     "score_relevance",
     "seed_semantic_arm",
