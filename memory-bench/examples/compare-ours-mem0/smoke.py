@@ -63,6 +63,7 @@ def main() -> int:
             semantic=semantic,
             relevant_ids=relevance.get(query.work_id, []),
             scope="cross_rig",
+            pool_depth=10,
             stack_telemetry={"note": "lexical stand-in; mem0 plugs in behind the same seam"},
         )
         print(f"\nquery={result.work_id}  track={result.arms[0].scope}")

@@ -51,6 +51,7 @@ def test_example_fixtures_load_and_compare() -> None:
         semantic=LexicalTopKMemory(top_k=10),
         relevant_ids=relevance[query.work_id],
         scope="cross_rig",
+        pool_depth=10,
     )
 
     # cross_rig pool = the 3 other-rig LOO-survivors (sibling/future/supersedes

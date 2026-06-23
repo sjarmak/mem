@@ -21,18 +21,28 @@ outcome-lift comparison is the paid Harbor path and is deliberately out of scope
 
 from membench.compare.retrieval_compare import (
     ArmComparison,
+    ArmHarvest,
     ComparisonResult,
     compare_arms,
+    harvest_ours,
+    harvest_semantic,
     ours_replay,
+    pool_candidates,
+    score_harvest,
     seed_semantic_arm,
     semantic_replay,
 )
 
 __all__ = [
     "ArmComparison",
+    "ArmHarvest",
     "ComparisonResult",
     "compare_arms",
+    "harvest_ours",
+    "harvest_semantic",
     "ours_replay",
+    "pool_candidates",
+    "score_harvest",
     "seed_semantic_arm",
     "semantic_replay",
 ]

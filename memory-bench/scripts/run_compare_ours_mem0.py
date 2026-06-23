@@ -52,6 +52,12 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--scope", default="cross_rig", choices=["cross_rig", "same_rig_temporal"])
     parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument(
+        "--pool-depth",
+        type=int,
+        default=10,
+        help="equal-depth candidate contribution D: exactly top-D from each arm is pooled",
+    )
     return parser.parse_args(argv)
 
 
@@ -94,6 +100,7 @@ def main(argv: list[str]) -> int:
                 semantic=semantic,
                 relevant_ids=relevance.get(query.work_id, []),
                 scope=args.scope,
+                pool_depth=args.pool_depth,
                 stack_telemetry=stack.telemetry_dict(),
             )
             handle.write(json.dumps(result.model_dump(), sort_keys=True) + "\n")
