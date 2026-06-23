@@ -1,0 +1,116 @@
+worktree /home/ds/projects/scix_experiments
+HEAD 27e1183cc6f1c594beef241c8b1507041ce0759c
+branch refs/heads/scix_experiments-x2dp/mcp-contract-conformance
+
+worktree /home/ds/projects/scix-sankey-work
+HEAD 1bdb27ff005e2eb6e25b0013e39a8a852319f403
+branch refs/heads/viz/sankey-cross-community
+
+worktree /home/ds/projects/scix-uq28-worktree
+HEAD 1ba83b1656a5005f621255d85cc0fb3bddf15815
+branch refs/heads/scix_experiments-uq28/search-lane-error-handling
+
+worktree /home/ds/projects/scix_experiments-50ww
+HEAD 369148653550a894f9027e4c1c5b3245ad30e120
+branch refs/heads/bd/50ww-qdrant-full-load-payload
+
+worktree /home/ds/projects/scix_experiments-7ede
+HEAD 1ba83b1656a5005f621255d85cc0fb3bddf15815
+detached
+
+worktree /home/ds/projects/scix_experiments-9afa
+HEAD 3786b656aa34ba78968f2a6ead5ecdf2396b2d2d
+branch refs/heads/bd/9afa-mcp-contract-consolidation
+
+worktree /home/ds/projects/scix_experiments-ccxl
+HEAD 1ba83b1656a5005f621255d85cc0fb3bddf15815
+detached
+
+worktree /home/ds/projects/scix_experiments-cfc8
+HEAD 7b88b0d5da1f173bef0b2e5ad7df352363568c40
+branch refs/heads/bd/cfc8-ml-dataset-registry
+
+worktree /home/ds/projects/scix_experiments-chg
+HEAD de39414f76b27e89cfd3c756c81c6fdd55f10da7
+branch refs/heads/bd/chg-refresh-calibration-snippets
+
+worktree /home/ds/projects/scix_experiments-dbl.10
+HEAD fe7d2c822c81352afcb4771524513b6cf811b874
+branch refs/heads/bd/dbl.10-discipline-facet
+
+worktree /home/ds/projects/scix_experiments-dbl.16
+HEAD 78552b534fce1b085121761b9ae04069b068297f
+branch refs/heads/bd/dbl.16-registry-ingest
+
+worktree /home/ds/projects/scix_experiments-dbl.17
+HEAD 92c143b75a5a50c7de36f18b33d0c835458db79e
+branch refs/heads/bd/dbl.17-materials-registry
+
+worktree /home/ds/projects/scix_experiments-dbl.24
+HEAD b8993cbb0c4c37009306dac22b2220332a7d2e5f
+branch refs/heads/bd/dbl.24-residual-fp-gazetteer
+
+worktree /home/ds/projects/scix_experiments-e4xv
+HEAD 134215ba511628f7493fe123b79dc067aac20278
+branch refs/heads/bd/e4xv-outbox-payload-fix
+
+worktree /home/ds/projects/scix_experiments-gzjq
+HEAD 1ba83b1656a5005f621255d85cc0fb3bddf15815
+detached
+
+worktree /home/ds/projects/scix_experiments-h2sj
+HEAD ca8e41542d8bc3116709418552aee66946a92cff
+branch refs/heads/bd/h2sj-recall-gold-v1
+
+worktree /home/ds/projects/scix_experiments-ir2h
+HEAD 1ba83b1656a5005f621255d85cc0fb3bddf15815
+detached
+
+worktree /home/ds/projects/scix_experiments-lq32
+HEAD 1ba83b1656a5005f621255d85cc0fb3bddf15815
+detached
+
+worktree /home/ds/projects/scix_experiments-o9ib
+HEAD ab85bc4926974ae7d318cc676a717f2c527b86c5
+branch refs/heads/bd/o9ib-qdrant-recall-canary
+
+worktree /home/ds/projects/scix_experiments-oahz
+HEAD a7cd41a4463932d6b26d17de0a65bed0ae9f1288
+branch refs/heads/bd/oahz-decompose-mcp-server
+
+worktree /home/ds/projects/scix_experiments-ppw5
+HEAD 82f4cbf018bff25f1c172c26cbd58d40e4468399
+branch refs/heads/bd/ppw5-dataset-mention
+
+worktree /home/ds/projects/scix_experiments-r96m
+HEAD 1ba83b1656a5005f621255d85cc0fb3bddf15815
+detached
+
+worktree /home/ds/projects/scix_experiments-rglt
+HEAD 0ae776184bd9cebf313b7ef00d4ce99d7aee1a79
+branch refs/heads/bd/rglt-generic-phrase-policy
+
+worktree /home/ds/projects/scix_experiments-tqg4
+HEAD 1ba83b1656a5005f621255d85cc0fb3bddf15815
+detached
+
+worktree /home/ds/projects/scix_experiments-uq28
+HEAD 1ba83b1656a5005f621255d85cc0fb3bddf15815
+detached
+
+worktree /home/ds/projects/scix_experiments-vzh5
+HEAD 1ba83b1656a5005f621255d85cc0fb3bddf15815
+detached
+
+worktree /home/ds/projects/scix_experiments-x2dp
+HEAD 1ba83b1656a5005f621255d85cc0fb3bddf15815
+detached
+
+worktree /home/ds/projects/scix_experiments-xh28
+HEAD 1ba83b1656a5005f621255d85cc0fb3bddf15815
+detached
+
+worktree /home/ds/projects/scix_experiments-xz4.9
+HEAD 63c2803ceb96f76592d4b0742af0c7f8e839baab
+branch refs/heads/bd/xz4.9-designation-anchored
+

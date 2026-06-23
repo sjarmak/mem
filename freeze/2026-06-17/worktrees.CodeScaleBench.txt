@@ -1,0 +1,4 @@
+worktree /home/ds/projects/CodeScaleBench
+HEAD c3f009f720be38aa2cbb707fb5e26e2be3cf6533
+branch refs/heads/sjarmak/mcp-lift-study-explorer
+

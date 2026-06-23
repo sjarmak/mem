@@ -1,0 +1,77 @@
+worktree /home/ds/projects/migration-evals
+HEAD b19d9b42473c3762264f5aa8b78822d14c8af061
+branch refs/heads/main
+
+worktree /home/ds/projects/migration-evals-79h
+HEAD a66eee628e14e8e30c19db689af02aeeecdc3d6d
+detached
+
+worktree /home/ds/projects/migration-evals-9rg
+HEAD 381e29214ace1323866beeb337c7ba046234af95
+detached
+
+worktree /home/ds/projects/migration-evals-a8j
+HEAD 381e29214ace1323866beeb337c7ba046234af95
+detached
+
+worktree /home/ds/projects/migration-evals-ajq
+HEAD 381e29214ace1323866beeb337c7ba046234af95
+detached
+
+worktree /home/ds/projects/migration-evals-cut
+HEAD d51cd0765b878b493ae71baa1dfea89266047baf
+detached
+
+worktree /home/ds/projects/migration-evals-ebg
+HEAD a66eee628e14e8e30c19db689af02aeeecdc3d6d
+detached
+
+worktree /home/ds/projects/migration-evals-egg
+HEAD b135abcfd36078ce77c14b717847f768dfd568a8
+branch refs/heads/egg
+
+worktree /home/ds/projects/migration-evals-qmv
+HEAD a66eee628e14e8e30c19db689af02aeeecdc3d6d
+detached
+
+worktree /home/ds/projects/migration-evals-tdp
+HEAD a66eee628e14e8e30c19db689af02aeeecdc3d6d
+detached
+
+worktree /home/ds/projects/migration-evals-v5u
+HEAD 381e29214ace1323866beeb337c7ba046234af95
+detached
+
+worktree /home/ds/projects/migration-evals-wf2
+HEAD a66eee628e14e8e30c19db689af02aeeecdc3d6d
+detached
+
+worktree /home/ds/projects/migration-evals-wxp
+HEAD a66eee628e14e8e30c19db689af02aeeecdc3d6d
+detached
+
+worktree /home/ds/projects/migration-evals/.claude/worktrees/agent-a80e36b2f4014d0a7
+HEAD 03dac2c2ba7c71a6643a44a149650c37baa88d07
+branch refs/heads/worktree-agent-a80e36b2f4014d0a7
+locked claude agent agent-a80e36b2f4014d0a7 (pid 1714373)
+
+worktree /home/ds/projects/migration-evals/.claude/worktrees/agent-aa71d3f52d8772322
+HEAD 44ee41128509c00606cc402df5f5a4fa500b1a30
+branch refs/heads/worktree-agent-aa71d3f52d8772322
+locked claude agent agent-aa71d3f52d8772322 (pid 1714373)
+
+worktree /home/ds/projects/migration-evals/.claude/worktrees/agent-ab37156d13f7a2609
+HEAD 60f6928f701296eb120e9a63d68cfd7d8d9aa5e2
+branch refs/heads/worktree-agent-ab37156d13f7a2609
+locked claude agent agent-ab37156d13f7a2609 (pid 1529329)
+
+worktree /home/ds/projects/migration-evals/.claude/worktrees/agent-ab8c7e43f24525c9a
+HEAD b8a26a0c90e8d1616b6cd6a87b999f70292363a3
+branch refs/heads/worktree-agent-ab8c7e43f24525c9a
+locked claude agent agent-ab8c7e43f24525c9a (pid 1529329)
+
+worktree /home/ds/projects/migration-evals/.claude/worktrees/agent-ad44913a21bb43db4
+HEAD 0db2ec4a0455f5aec6c259c1f2d873cd5a1b8a4f
+branch refs/heads/worktree-agent-ad44913a21bb43db4
+locked claude agent agent-ad44913a21bb43db4 (pid 1714373)
+

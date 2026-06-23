@@ -1,0 +1,13 @@
+worktree /home/ds/projects/zeldascension
+HEAD 89e1a2f27fabe692a29be968a9db1d4a1c93d061
+branch refs/heads/master
+
+worktree /home/ds/projects/zeldascension/.claude/worktrees/3z4v-yexe
+HEAD 8e6f27f08c1bc81a1debf4c54cba8fca77821507
+branch refs/heads/bd-3z4v-yexe-bg-tiers-art-audit
+
+worktree /home/ds/projects/zeldascension/.claude/worktrees/agent-aa1ceeeb1cb765191
+HEAD b2755946a7b35febc1a88e20061157dc0dcffcd5
+branch refs/heads/worktree-agent-aa1ceeeb1cb765191
+locked claude agent agent-aa1ceeeb1cb765191 (pid 2543511)
+

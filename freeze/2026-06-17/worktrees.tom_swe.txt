@@ -1,0 +1,4 @@
+worktree /home/ds/projects/tom-swe
+HEAD ec856c7ccda283187e51f717995e6d5b3139d844
+branch refs/heads/main
+

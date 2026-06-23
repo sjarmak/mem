@@ -1,0 +1,76 @@
+worktree /home/ds/projects/mem
+HEAD 98c83096a928782217a46d248a0e3faf7223d46a
+branch refs/heads/main
+
+worktree /home/ds/projects/mem-0mb
+HEAD 0563a0a13f9aedfbf368c90292ff382872c474b5
+detached
+
+worktree /home/ds/projects/mem-1eph
+HEAD f93310fc957f8e9e6f4d8ad0d4099b71b32d75d5
+branch refs/heads/mem-1eph-oracle-soundness-gate
+
+worktree /home/ds/projects/mem-75t.12
+HEAD b11efde7f783100dcdd38bf2b4a0c129bb91eb71
+branch refs/heads/mem-75t.12-identity-sha-attribution
+
+worktree /home/ds/projects/mem-75t.13
+HEAD 361f8e2e48e95b7a71ac506e48b2328f7c411093
+branch refs/heads/mem-75t.13-landed-diff-validation
+
+worktree /home/ds/projects/mem-75t.14
+HEAD 02ed6d6c8befc0884eca92f3a72cda2702c171e2
+branch refs/heads/mem-75t.14-rig-map-longtail
+
+worktree /home/ds/projects/mem-75t.15
+HEAD ad09afcfd7e3d0eb05469add4d7a9ae6c4f616e4
+branch refs/heads/mem-75t.15-ingest-sha-capture
+
+worktree /home/ds/projects/mem-7q6e
+HEAD ec969a248c1100c729894a81731c3aff13c96605
+branch refs/heads/mem-7q6e-replay-engine
+
+worktree /home/ds/projects/mem-apg.10
+HEAD c9c7c45a9e61810cf8ec461e6e74a95e02a9d1f9
+branch refs/heads/mem-apg.10-landed-base-probe
+
+worktree /home/ds/projects/mem-apg.11
+HEAD 7a12d4bc35bd88cf0c05eff43af067a1943b7deb
+branch refs/heads/mem-apg.11-truebase-gate-rerun
+
+worktree /home/ds/projects/mem-apg.12
+HEAD fc0a6f4e8b71b0c345a9aae04d7560ffabc8e523
+branch refs/heads/mem-apg.12-headline-writeup
+
+worktree /home/ds/projects/mem-dsu
+HEAD 2f3fd6eb566d8cd19b085dc3260534d0e87d5d33
+branch refs/heads/mem-dsu-interruption-generator
+
+worktree /home/ds/projects/mem-e3h2
+HEAD 22b5ace81418cce492a33df6703bbfd3983b7b17
+branch refs/heads/mem-e3h2-csb-eb-robustness-arm
+
+worktree /home/ds/projects/mem-lobt
+HEAD 37d88b07a5f70515e19437398c152e14c634fdd0
+branch refs/heads/mem-lobt-distill-mcp-isolation
+
+worktree /home/ds/projects/mem-qarg
+HEAD 33d9c4308bbcbffaa4c2c8d909f9b6485f303df1
+branch refs/heads/mem-qarg-oracle-repair-wave2
+
+worktree /home/ds/projects/mem-z2c2
+HEAD 12ff88a4d1d0508c47a6e7b79a0627998c94d804
+branch refs/heads/mem-z2c2-scix-pep668-retest
+
+worktree /home/ds/projects/mem/.claude/worktrees/cozy-waddling-dolphin
+HEAD f2ef5a398a78c260455ca727dd209b6808d10aeb
+branch refs/heads/worktree-cozy-waddling-dolphin
+
+worktree /home/ds/projects/mem/.claude/worktrees/wf_98e66cc4-e26-1
+HEAD 86757a05f28f4b017e9764d87db718edb5ee0f48
+branch refs/heads/worktree-wf_98e66cc4-e26-1
+
+worktree /home/ds/projects/mem/.claude/worktrees/wf_98e66cc4-e26-2
+HEAD 86757a05f28f4b017e9764d87db718edb5ee0f48
+branch refs/heads/worktree-wf_98e66cc4-e26-2
+

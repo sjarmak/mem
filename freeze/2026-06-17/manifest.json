@@ -1,0 +1,531 @@
+{
+  "date": "2026-06-17",
+  "captured_by": "sjarmak",
+  "git_version": "git version 2.43.0",
+  "stores": [
+    {
+      "store": "gascity",
+      "commonDir": "/home/ds/gascity/.git",
+      "dir": "/home/ds/gascity-main",
+      "rigs": [
+        "gascity"
+      ],
+      "refs": {
+        "total": 2869,
+        "heads": 345,
+        "tags": 52
+      },
+      "detached_heads": [
+        "500711af43b59ce5d2f525222226adf575b58337",
+        "dba0e44a19bad9c23a0802dcadfaa79dc3661945",
+        "48d37ba0c2a26db284ad090017b8219d38b54454",
+        "cdcf685f54e956737941a7ca4654a76b545c8c9d",
+        "cdcf685f54e956737941a7ca4654a76b545c8c9d",
+        "cdcf685f54e956737941a7ca4654a76b545c8c9d",
+        "88be26e273ece9654281de88401684e030975c7a",
+        "70519347fde7944f1aafb0e6792b64a6b24d34a8",
+        "b4ca71e19ddca1353518d687d9a50002699e9977",
+        "60393d57337ce7751dd58e1efdb8c7bac8c86d6f",
+        "60393d57337ce7751dd58e1efdb8c7bac8c86d6f",
+        "bcafa665f4cb23801193603a817d0877ae977eeb",
+        "58cf12eb21ec2082a8ce97c31e99817e4b86ec9b",
+        "c41b280266f6f9b66953868b8547042dd7f00837",
+        "bff0396cbee252ce75634d97ab507925b18284aa",
+        "ba483b9735276a7141619c14d81562fb62543377"
+      ],
+      "session_store": true,
+      "bundle": {
+        "path": "bundles/gascity.bundle",
+        "sha256": "aabb7d3ab9b9842afef968f721af0fb16564018a4a591d507b77548527aafa06",
+        "bytes": 80066347,
+        "list_heads": 395,
+        "parity": {
+          "ok": true,
+          "expected": 395,
+          "actual": 395,
+          "heads": 345,
+          "tags": 52,
+          "collisions": 1
+        },
+        "floor": {
+          "applicable": true,
+          "ok": true,
+          "floorKey": "gascity",
+          "floor": 83,
+          "count": 345
+        },
+        "detached_recovered": 16
+      }
+    },
+    {
+      "store": "gascity_dashboard",
+      "commonDir": "/home/ds/gascity-dashboard/.git",
+      "dir": "/home/ds/gascity-dashboard",
+      "rigs": [
+        "gascity_dashboard"
+      ],
+      "refs": {
+        "total": 348,
+        "heads": 158,
+        "tags": 0
+      },
+      "detached_heads": [
+        "ab634bc291f6924574c2c902335f545bf38557d2",
+        "ab634bc291f6924574c2c902335f545bf38557d2",
+        "ab634bc291f6924574c2c902335f545bf38557d2",
+        "ab634bc291f6924574c2c902335f545bf38557d2",
+        "ab634bc291f6924574c2c902335f545bf38557d2",
+        "4e547fd03f6bd745b47a94635d976104fcd63a21",
+        "4be6c79e16b5eb53a904fb056567c9442222c3f7",
+        "5056eece483f75477bd43ad5040bd9fac068f9d5",
+        "002e3b26d1f3edf285b6d501218f7a89ec30f429"
+      ],
+      "session_store": false,
+      "bundle": null
+    },
+    {
+      "store": "mem",
+      "commonDir": "/home/ds/projects/mem/.git",
+      "dir": "/home/ds/projects/mem",
+      "rigs": [
+        "mem"
+      ],
+      "refs": {
+        "total": 31,
+        "heads": 29,
+        "tags": 0
+      },
+      "detached_heads": [
+        "0563a0a13f9aedfbf368c90292ff382872c474b5"
+      ],
+      "session_store": false,
+      "bundle": null
+    },
+    {
+      "store": "GEO",
+      "commonDir": "/home/ds/projects/GEO/.git",
+      "dir": "/home/ds/projects/GEO",
+      "rigs": [
+        "GEO"
+      ],
+      "refs": {
+        "total": 2,
+        "heads": 1,
+        "tags": 0
+      },
+      "detached_heads": [],
+      "session_store": false,
+      "bundle": null
+    },
+    {
+      "store": "codeprobe",
+      "commonDir": "/home/ds/projects/codeprobe/.git",
+      "dir": "/home/ds/projects/codeprobe",
+      "rigs": [
+        "codeprobe"
+      ],
+      "refs": {
+        "total": 57,
+        "heads": 14,
+        "tags": 39
+      },
+      "detached_heads": [],
+      "session_store": false,
+      "bundle": null
+    },
+    {
+      "store": "packs",
+      "commonDir": "/home/ds/gascity-packs/.git",
+      "dir": "/home/ds/gascity-packs",
+      "rigs": [
+        "gpk"
+      ],
+      "refs": {
+        "total": 148,
+        "heads": 90,
+        "tags": 3
+      },
+      "detached_heads": [
+        "f9b70a5d9f5d5b8d4a73594cb20b4532cf097b50",
+        "d5459ffb81a213ea3afd34bbffa698e4b0888131",
+        "c0894a3e9fa98d0211109062f117df2685b50da8",
+        "c0894a3e9fa98d0211109062f117df2685b50da8",
+        "c0894a3e9fa98d0211109062f117df2685b50da8",
+        "c0894a3e9fa98d0211109062f117df2685b50da8",
+        "c0894a3e9fa98d0211109062f117df2685b50da8",
+        "c0894a3e9fa98d0211109062f117df2685b50da8",
+        "c0894a3e9fa98d0211109062f117df2685b50da8",
+        "c0894a3e9fa98d0211109062f117df2685b50da8",
+        "c0894a3e9fa98d0211109062f117df2685b50da8",
+        "c0894a3e9fa98d0211109062f117df2685b50da8",
+        "c0894a3e9fa98d0211109062f117df2685b50da8",
+        "c0894a3e9fa98d0211109062f117df2685b50da8",
+        "c0894a3e9fa98d0211109062f117df2685b50da8",
+        "c0894a3e9fa98d0211109062f117df2685b50da8",
+        "c0894a3e9fa98d0211109062f117df2685b50da8",
+        "c0894a3e9fa98d0211109062f117df2685b50da8",
+        "c0894a3e9fa98d0211109062f117df2685b50da8",
+        "d386e846bafdafe1d54d3fcf98520854f602bdf1",
+        "8bab728adc6210f3116e37a4d92443117835bd52"
+      ],
+      "session_store": true,
+      "bundle": {
+        "path": "bundles/packs.bundle",
+        "sha256": "9520c7da55fd781cad5d0ab8210dae9f6837462b45ce5b8c28da0118d0855afe",
+        "bytes": 3821088,
+        "list_heads": 93,
+        "parity": {
+          "ok": true,
+          "expected": 93,
+          "actual": 93,
+          "heads": 90,
+          "tags": 3,
+          "collisions": 0
+        },
+        "floor": {
+          "applicable": true,
+          "ok": true,
+          "floorKey": "packs",
+          "floor": 50,
+          "count": 90
+        },
+        "detached_recovered": 21
+      }
+    },
+    {
+      "store": "scix",
+      "commonDir": "/home/ds/projects/scix_experiments/.git",
+      "dir": "/home/ds/projects/scix_experiments",
+      "rigs": [
+        "scix_experiments"
+      ],
+      "refs": {
+        "total": 83,
+        "heads": 24,
+        "tags": 2
+      },
+      "detached_heads": [
+        "1ba83b1656a5005f621255d85cc0fb3bddf15815",
+        "1ba83b1656a5005f621255d85cc0fb3bddf15815",
+        "1ba83b1656a5005f621255d85cc0fb3bddf15815",
+        "1ba83b1656a5005f621255d85cc0fb3bddf15815",
+        "1ba83b1656a5005f621255d85cc0fb3bddf15815",
+        "1ba83b1656a5005f621255d85cc0fb3bddf15815",
+        "1ba83b1656a5005f621255d85cc0fb3bddf15815",
+        "1ba83b1656a5005f621255d85cc0fb3bddf15815",
+        "1ba83b1656a5005f621255d85cc0fb3bddf15815",
+        "1ba83b1656a5005f621255d85cc0fb3bddf15815",
+        "1ba83b1656a5005f621255d85cc0fb3bddf15815"
+      ],
+      "session_store": true,
+      "bundle": {
+        "path": "bundles/scix.bundle",
+        "sha256": "923c7c7cf2d806e2c1d4c20b533fa8b06412cdbe6842edbb1f573a30ba208b93",
+        "bytes": 20358950,
+        "list_heads": 26,
+        "parity": {
+          "ok": true,
+          "expected": 26,
+          "actual": 26,
+          "heads": 24,
+          "tags": 2,
+          "collisions": 0
+        },
+        "floor": {
+          "applicable": true,
+          "ok": true,
+          "floorKey": "scix",
+          "floor": 19,
+          "count": 24
+        },
+        "detached_recovered": 11
+      }
+    },
+    {
+      "store": "zelda",
+      "commonDir": "/home/ds/projects/zeldascension/.git",
+      "dir": "/home/ds/projects/zeldascension",
+      "rigs": [
+        "zeldascension"
+      ],
+      "refs": {
+        "total": 12,
+        "heads": 4,
+        "tags": 2
+      },
+      "detached_heads": [],
+      "session_store": true,
+      "bundle": {
+        "path": "bundles/zelda.bundle",
+        "sha256": "2b64be8e1bca8d4032bf06f62843490f88e89ebacbdb14a83abb1b3d2661d6be",
+        "bytes": 384905424,
+        "list_heads": 6,
+        "parity": {
+          "ok": true,
+          "expected": 6,
+          "actual": 6,
+          "heads": 4,
+          "tags": 2,
+          "collisions": 0
+        },
+        "floor": {
+          "applicable": true,
+          "ok": true,
+          "floorKey": "zelda",
+          "floor": 1,
+          "count": 4
+        },
+        "detached_recovered": 0
+      }
+    },
+    {
+      "store": "CodeScaleBench",
+      "commonDir": "/home/ds/projects/CodeScaleBench/.git",
+      "dir": "/home/ds/projects/CodeScaleBench",
+      "rigs": [
+        "CodeScaleBench"
+      ],
+      "refs": {
+        "total": 27,
+        "heads": 18,
+        "tags": 0
+      },
+      "detached_heads": [],
+      "session_store": false,
+      "bundle": null
+    },
+    {
+      "store": "EnterpriseBench",
+      "commonDir": "/home/ds/projects/EnterpriseBench/.git",
+      "dir": "/home/ds/projects/EnterpriseBench",
+      "rigs": [
+        "EnterpriseBench"
+      ],
+      "refs": {
+        "total": 10,
+        "heads": 7,
+        "tags": 0
+      },
+      "detached_heads": [
+        "28e45645e79419e409604253d030484c81b018ca",
+        "28e45645e79419e409604253d030484c81b018ca",
+        "28e45645e79419e409604253d030484c81b018ca",
+        "28e45645e79419e409604253d030484c81b018ca",
+        "28e45645e79419e409604253d030484c81b018ca"
+      ],
+      "session_store": false,
+      "bundle": null
+    },
+    {
+      "store": "migration_evals",
+      "commonDir": "/home/ds/projects/migration-evals/.git",
+      "dir": "/home/ds/projects/migration-evals",
+      "rigs": [
+        "migration_evals"
+      ],
+      "refs": {
+        "total": 12,
+        "heads": 9,
+        "tags": 0
+      },
+      "detached_heads": [
+        "a66eee628e14e8e30c19db689af02aeeecdc3d6d",
+        "381e29214ace1323866beeb337c7ba046234af95",
+        "381e29214ace1323866beeb337c7ba046234af95",
+        "381e29214ace1323866beeb337c7ba046234af95",
+        "d51cd0765b878b493ae71baa1dfea89266047baf",
+        "a66eee628e14e8e30c19db689af02aeeecdc3d6d",
+        "a66eee628e14e8e30c19db689af02aeeecdc3d6d",
+        "a66eee628e14e8e30c19db689af02aeeecdc3d6d",
+        "381e29214ace1323866beeb337c7ba046234af95",
+        "a66eee628e14e8e30c19db689af02aeeecdc3d6d",
+        "a66eee628e14e8e30c19db689af02aeeecdc3d6d"
+      ],
+      "session_store": false,
+      "bundle": null
+    },
+    {
+      "store": "code_intel_digest",
+      "commonDir": "/home/ds/projects/code-intelligence-digest/.git",
+      "dir": "/home/ds/projects/code-intelligence-digest",
+      "rigs": [
+        "code_intel_digest"
+      ],
+      "refs": {
+        "total": 20,
+        "heads": 15,
+        "tags": 0
+      },
+      "detached_heads": [
+        "e8dae979966c0e66b19224b20893b06d1ffedf20"
+      ],
+      "session_store": true,
+      "bundle": {
+        "path": "bundles/code_intel_digest.bundle",
+        "sha256": "2ec3c67e1f4faa0577d6f7a96a99f397da618ad8977c1e1ccde3b0ce039a4e0e",
+        "bytes": 3221629,
+        "list_heads": 15,
+        "parity": {
+          "ok": true,
+          "expected": 15,
+          "actual": 15,
+          "heads": 15,
+          "tags": 0,
+          "collisions": 0
+        },
+        "floor": {
+          "applicable": false,
+          "ok": true,
+          "floorKey": null,
+          "floor": null,
+          "count": 15
+        },
+        "detached_recovered": 1
+      }
+    },
+    {
+      "store": "website",
+      "commonDir": "/home/ds/projects/website/.git",
+      "dir": "/home/ds/projects/website",
+      "rigs": [
+        "website"
+      ],
+      "refs": {
+        "total": 3,
+        "heads": 1,
+        "tags": 1
+      },
+      "detached_heads": [],
+      "session_store": false,
+      "bundle": null
+    },
+    {
+      "store": "mcp_ax",
+      "commonDir": "/home/ds/projects/mcp-ax/.git",
+      "dir": "/home/ds/projects/mcp-ax",
+      "rigs": [
+        "mcp_ax"
+      ],
+      "refs": {
+        "total": 4,
+        "heads": 2,
+        "tags": 0
+      },
+      "detached_heads": [],
+      "session_store": true,
+      "bundle": {
+        "path": "bundles/mcp_ax.bundle",
+        "sha256": "ae62b3495e8a0603de95d1be19b8647ed96ac3a780f0c7cc6537acdf2a7b36e8",
+        "bytes": 118943,
+        "list_heads": 2,
+        "parity": {
+          "ok": true,
+          "expected": 2,
+          "actual": 2,
+          "heads": 2,
+          "tags": 0,
+          "collisions": 0
+        },
+        "floor": {
+          "applicable": false,
+          "ok": true,
+          "floorKey": null,
+          "floor": null,
+          "count": 2
+        },
+        "detached_recovered": 0
+      }
+    },
+    {
+      "store": "agent_diagnostics",
+      "commonDir": "/home/ds/projects/agent-diagnostics/.git",
+      "dir": "/home/ds/projects/agent-diagnostics",
+      "rigs": [
+        "agent_diagnostics"
+      ],
+      "refs": {
+        "total": 4,
+        "heads": 1,
+        "tags": 2
+      },
+      "detached_heads": [],
+      "session_store": false,
+      "bundle": null
+    },
+    {
+      "store": "live_docs",
+      "commonDir": "/home/ds/projects/live_docs/.git",
+      "dir": "/home/ds/projects/live_docs",
+      "rigs": [
+        "live_docs"
+      ],
+      "refs": {
+        "total": 16,
+        "heads": 3,
+        "tags": 3
+      },
+      "detached_heads": [],
+      "session_store": false,
+      "bundle": null
+    },
+    {
+      "store": "background_agents",
+      "commonDir": "/home/ds/projects/background-agents/.git",
+      "dir": "/home/ds/projects/background-agents",
+      "rigs": [
+        "background_agents"
+      ],
+      "refs": {
+        "total": 4,
+        "heads": 2,
+        "tags": 0
+      },
+      "detached_heads": [],
+      "session_store": false,
+      "bundle": null
+    },
+    {
+      "store": "brains",
+      "commonDir": "/home/ds/projects/brains/.git",
+      "dir": "/home/ds/projects/brains",
+      "rigs": [
+        "brains"
+      ],
+      "refs": {
+        "total": 3,
+        "heads": 2,
+        "tags": 0
+      },
+      "detached_heads": [],
+      "session_store": false,
+      "bundle": null
+    },
+    {
+      "store": "tom_swe",
+      "commonDir": "/home/ds/projects/tom-swe/.git",
+      "dir": "/home/ds/projects/tom-swe",
+      "rigs": [
+        "tom_swe"
+      ],
+      "refs": {
+        "total": 4,
+        "heads": 1,
+        "tags": 1
+      },
+      "detached_heads": [],
+      "session_store": false,
+      "bundle": null
+    }
+  ],
+  "dashboard": {
+    "repo": "gastownhall/gascity-dashboard",
+    "summary": {
+      "total": 118,
+      "success": 109,
+      "failure": 3,
+      "UNKNOWN": 6
+    },
+    "rows_file": "dashboard-ci.txt",
+    "raw_file": "dashboard-ci.raw.json"
+  }
+}

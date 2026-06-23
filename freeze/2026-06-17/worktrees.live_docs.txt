@@ -1,0 +1,14 @@
+worktree /home/ds/projects/live_docs
+HEAD 1b046f8c4cf2df1af288de99d6b4ff9fd9e2b4c2
+branch refs/heads/main
+
+worktree /home/ds/projects/live_docs/.claude/worktrees/agent-a8a732df
+HEAD 02b140570f933af59c3d291e3dee2cab1b9abf41
+branch refs/heads/worktree-agent-a8a732df
+locked claude agent agent-a8a732df (pid 2223408)
+
+worktree /home/ds/projects/live_docs/.claude/worktrees/agent-aa00f3e6
+HEAD 02b140570f933af59c3d291e3dee2cab1b9abf41
+branch refs/heads/worktree-agent-aa00f3e6
+locked claude agent agent-aa00f3e6 (pid 2223408)
+

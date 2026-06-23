@@ -1,0 +1,14 @@
+count: 2542
+size: 11.68 MiB
+in-pack: 3
+packs: 1
+size-pack: 5.83 KiB
+prune-packable: 0
+garbage: 0
+size-garbage: 0 bytes
+
+--- gc config ---
+gc.auto=(unset)
+gc.pruneExpire=(unset)
+gc.reflogExpire=(unset)
+gc.reflogExpireUnreachable=(unset)

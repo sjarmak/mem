@@ -1,0 +1,1736 @@
+[
+  {
+    "number": 137,
+    "mergeCommit": {
+      "oid": "46f51a0e91a338166c5a5ccc485f91afa60a8e41"
+    },
+    "headRefName": "fix/3i31-graphv2-partial-shortcircuit",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 136,
+    "mergeCommit": {
+      "oid": "66bbac54a48a06b0917b50a4ed7a60e3f77b91ca"
+    },
+    "headRefName": "fix/xk7u-runcounts-visible-erosion",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 135,
+    "mergeCommit": {
+      "oid": "a8080f3eca24cf2dc5d6b6002a3439eb493566f8"
+    },
+    "headRefName": "fix/dh7t-log-feed-session-degradation",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 134,
+    "mergeCommit": {
+      "oid": "c147579f60131e94ae9c43268b7c93e4c0e85dbe"
+    },
+    "headRefName": "fix/jy3d-convoy-subtree-partial",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 133,
+    "mergeCommit": {
+      "oid": "74babcdd2368289e7c383b133bc52d97fd359b92"
+    },
+    "headRefName": "feat/caag-convoy-page",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 132,
+    "mergeCommit": {
+      "oid": "849edd0be365fad3cb83a07f01c22c3c86627cab"
+    },
+    "headRefName": "fix/s36w-stranded-detail-copy",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 131,
+    "mergeCommit": {
+      "oid": "447c73f25916e419b7ec3baefc4dd0052ec241ed"
+    },
+    "headRefName": "fix/pxvb-stranded-census-attention",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 130,
+    "mergeCommit": {
+      "oid": "112efce8f29d2b96ee63d148b7a66c26dbabc177"
+    },
+    "headRefName": "fix/esbuild-override-to-vite8",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 129,
+    "mergeCommit": {
+      "oid": "3977e105d0711fe7e30761f8e09c88977b4728e1"
+    },
+    "headRefName": "fix/esbuild-audit-override",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 128,
+    "mergeCommit": {
+      "oid": "632c21bab532cf804b7974d030566758e47bc563"
+    },
+    "headRefName": "perf/header-first-run-lanes",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 127,
+    "mergeCommit": {
+      "oid": "3728ee819bd5d1a85de9ef1c3f5d5f27d70f1d34"
+    },
+    "headRefName": "fix/run-detail-timeout-budget",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 126,
+    "mergeCommit": {
+      "oid": "2a59ffe6485b41acb2d4266d5d1b87e7ffaea7a6"
+    },
+    "headRefName": "fix/session-link-id-extraction",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 125,
+    "mergeCommit": {
+      "oid": "eec36167173a120f90d975de4f12029ebd2dbece"
+    },
+    "headRefName": "fix/formula-identity-routed-to",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 124,
+    "mergeCommit": {
+      "oid": "318d5fbf885d98d53e10c592baf43c0da71c88a2"
+    },
+    "headRefName": "fix/run-phase-active-vocabulary",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 123,
+    "mergeCommit": {
+      "oid": "541ca8f21d66f23804a8579e11ae599809f0311e"
+    },
+    "headRefName": "fix/scope-check-badge-aliases",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 122,
+    "mergeCommit": {
+      "oid": "97b982f335cd434b54a2cd4375e13e531a0a5510"
+    },
+    "headRefName": "fix/run-diff-work-dir",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 121,
+    "mergeCommit": {
+      "oid": "318b53276f3b35719fabfaa4246675fbd44202d3"
+    },
+    "headRefName": "fix/workflow-finalize-badge",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 120,
+    "mergeCommit": {
+      "oid": "a9cb215d26778da61047169bf8916b71e91a0cc5"
+    },
+    "headRefName": "fix/blocked-styling-distinct",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 119,
+    "mergeCommit": {
+      "oid": "e78c24640fa1939017b840cafbc96ba4733066b2"
+    },
+    "headRefName": "fix/visible-instance-tiebreak",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 118,
+    "mergeCommit": {
+      "oid": "638545f378f2e6cf8358d1d1b99cbd943426701a"
+    },
+    "headRefName": "fix/uxvk-stranded-run-false-alive",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 116,
+    "mergeCommit": {
+      "oid": "a015f435bb560dd1116c6e642343d88d8f23798d"
+    },
+    "headRefName": "fix/k0cr-decision-slug-dedup",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 115,
+    "mergeCommit": {
+      "oid": "0295193d2629d84148ee58d5de77dabad7cb136b"
+    },
+    "headRefName": "fix/i3dz-refresh-cache-bypass",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 114,
+    "mergeCommit": {
+      "oid": "d8b1ec83705a80049ac353f801556635f656f4b5"
+    },
+    "headRefName": "fix/0gww-runs-partial-live-test",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 113,
+    "mergeCommit": {
+      "oid": "bf9a09d1476045a592a109d00f5ae8b38e59a2a2"
+    },
+    "headRefName": "chore/yt5m-remove-dead-alert-envelope",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 112,
+    "mergeCommit": {
+      "oid": "0b61ba4ba282aed2879096c555fed40afe2f7865"
+    },
+    "headRefName": "fix/tdxk-runs-test-timer-isolation",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 110,
+    "mergeCommit": {
+      "oid": "4e547fd03f6bd745b47a94635d976104fcd63a21"
+    },
+    "headRefName": "fix/i60u-coldload-stopgap-9etyp",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 109,
+    "mergeCommit": {
+      "oid": "fcd37f8e2f2c942869accf9df2c78f1df27052c0"
+    },
+    "headRefName": "fix/runs-perf-and-lane-expander",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 108,
+    "mergeCommit": {
+      "oid": "8ce1bafffaa422500687a179140b5c40838891eb"
+    },
+    "headRefName": "fix/runs-detail-resilience",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 107,
+    "mergeCommit": {
+      "oid": "136023b76b389e4bb816881b856bdd620b0dffe2"
+    },
+    "headRefName": "fix/runs-fetch-resilience",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 106,
+    "mergeCommit": {
+      "oid": "4a53a5914ad3e14f197ce45375e5736f0d35934d"
+    },
+    "headRefName": "fix/runs-view-detail-phase-scope",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 105,
+    "mergeCommit": {
+      "oid": "3b945afcfcc9a467bcc2848b66ca5a54df6fa790"
+    },
+    "headRefName": "feat/runs-v1-and-recency",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 104,
+    "mergeCommit": {
+      "oid": "ab634bc291f6924574c2c902335f545bf38557d2"
+    },
+    "headRefName": "fix/2j8e7-unify-nav-attention-sse",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 103,
+    "mergeCommit": {
+      "oid": "e0f97fe3927bc95270ade413f3157e729e1c852d"
+    },
+    "headRefName": "feat/mail-bulk-select-mark-read-mp3g",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 102,
+    "mergeCommit": {
+      "oid": "ec161aa8cda4ed16198155e96e9b948b60cff6ea"
+    },
+    "headRefName": "fix/mail-badge-operator-unread-2j8e",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 101,
+    "mergeCommit": {
+      "oid": "f54950203040f029750fec7a508dd7e5d81a9228"
+    },
+    "headRefName": "fix/runs-nav-badge-parity-2j8e",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 100,
+    "mergeCommit": {
+      "oid": "fb5ecdba6735cb5213cf7cbada80eaafdcce7f3b"
+    },
+    "headRefName": "fix/dehardcode-runtime-config-bhvn",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 99,
+    "mergeCommit": {
+      "oid": "4fe2e4473e4d3d734af678eec07bb299acfb5cf4"
+    },
+    "headRefName": "fix/2j8e8-beads-claim-no-operator-assignee",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 98,
+    "mergeCommit": {
+      "oid": "5a2ac7d071fd06c28774645f33f71944b27c7de6"
+    },
+    "headRefName": "fix/health-tool-versions-passthrough-trim-k4dr",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 97,
+    "mergeCommit": {
+      "oid": "3c3e72a391e70a05315f509fc9bf2b01b87981fe"
+    },
+    "headRefName": "fix/agents-badge-needs-you-2j8e",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 96,
+    "mergeCommit": {
+      "oid": "3aaa3598876d44ea57197698ed255a6f5228fcb6"
+    },
+    "headRefName": "fix/beads-badge-attention-2j8e",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 95,
+    "mergeCommit": {
+      "oid": "b16f1e36ea4d09518dd4300f037263a42d25a2c9"
+    },
+    "headRefName": "fix/runs-badge-blocked-only-2j8e",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 94,
+    "mergeCommit": {
+      "oid": "5864d62a66b2516fbd8cb43f2bdc92e8936f7313"
+    },
+    "headRefName": "claude/node-react-version-bump-hVGLu",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 24)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 92,
+    "mergeCommit": {
+      "oid": "794a74bc6af7a51deee13c097858714a4be18f7c"
+    },
+    "headRefName": "fix/workers-active-clickable-o3km",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 91,
+    "mergeCommit": {
+      "oid": "84fabb9658ccae9e44e0950be67768d24d2bebbc"
+    },
+    "headRefName": "dash-ygj-attention-unavailable-tier",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 90,
+    "mergeCommit": {
+      "oid": "55cab5b5ba9e31bb19428fd371f3c03344c0134b"
+    },
+    "headRefName": "feat/uzhr-readonly-spa-controls",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 89,
+    "mergeCommit": {
+      "oid": "3f3fc12be11d8491dc3a44f140a579ffe467e87c"
+    },
+    "headRefName": "fix/health-cached-sampler-status-4bol",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 87,
+    "mergeCommit": {
+      "oid": "2f5c9aec7a705a9447c90705461fa72251a71b02"
+    },
+    "headRefName": "fix/runs-demote-dangling-root-s4rp",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 86,
+    "mergeCommit": {
+      "oid": "88c327857a12162bf496d45624f78b94cc6e26db"
+    },
+    "headRefName": "fix/rig-store-health-status-timeout-nyln",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 85,
+    "mergeCommit": {
+      "oid": "ea49b74c29178f023e04d049804724e0e8cd7b0c"
+    },
+    "headRefName": "fix/agents-maintenance-pool-not-rig-jj2z",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 84,
+    "mergeCommit": {
+      "oid": "578d1df5ff0fda346839bcb8e7968d8efb1a63ee"
+    },
+    "headRefName": "fix/formula-detail-versionless-3eo8-regression",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 83,
+    "mergeCommit": {
+      "oid": "dd5aaf8c40d13442d4854398db07c4c684cf62fd"
+    },
+    "headRefName": "fix/strip-ansi-rig-names-5e5v",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 82,
+    "mergeCommit": {
+      "oid": "bd9c3c38585032fc0a4a2cffede49280be8affba"
+    },
+    "headRefName": "fix/pre-exposure-polish-q89b",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 81,
+    "mergeCommit": {
+      "oid": "62ed9bd522e9e57547239116a66f56597d4a2c46"
+    },
+    "headRefName": "feat/test-city-supervisor-fixture",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 80,
+    "mergeCommit": {
+      "oid": "2d5d43f5b2ae0e2a0403a211cfd5bb50c682a890"
+    },
+    "headRefName": "fix/decision-deeplink-404-sg9o",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 79,
+    "mergeCommit": {
+      "oid": "809ae2aa7a31cb036ac86c594709f1ecbc11e495"
+    },
+    "headRefName": "feat/health-recommended-tool-versions-nfyw",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 78,
+    "mergeCommit": {
+      "oid": "b155e6e7139dd4243cc57ef22d1abdda41ab2761"
+    },
+    "headRefName": "fix/runs-tab-4xcv",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 77,
+    "mergeCommit": {
+      "oid": "ee83bc04d1bb8c127fb7727ea460c3e138e51baa"
+    },
+    "headRefName": "fix/readonly-proxy-gate-z8n7",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 76,
+    "mergeCommit": {
+      "oid": "0c181f4ee1138b8d7ef3c026a4655783231e13a8"
+    },
+    "headRefName": "feat/health-rig-store-monitor-u6d0",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 75,
+    "mergeCommit": {
+      "oid": "d675136b4d442625c7faf530a2cda7fd34b19326"
+    },
+    "headRefName": "feat/transcript-expand-overlay",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 74,
+    "mergeCommit": {
+      "oid": "8acb318542e4f6158ce3d728eb60cc5833993aaa"
+    },
+    "headRefName": "fix/history-toggle-regression-l9q9",
+    "headRefDeleted": false,
+    "checkRuns": []
+  },
+  {
+    "number": 73,
+    "mergeCommit": {
+      "oid": "ff15d9583b1733465026c014c1fa2e3b4e30402e"
+    },
+    "headRefName": "fix/rig-dropdown-names-kquq",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 72,
+    "mergeCommit": {
+      "oid": "428f5cd4eb1437b2c9170c66cfc20a4e9d46a822"
+    },
+    "headRefName": "fix/run-session-invalid-id-0kkn",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 70,
+    "mergeCommit": {
+      "oid": "114ad3431deb7f45fec4f865204b8a29099342c0"
+    },
+    "headRefName": "main",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 69,
+    "mergeCommit": {
+      "oid": "7f81f876e84b4f83a61b874bbf038ae8a8f83919"
+    },
+    "headRefName": "feat/dashboard-tester-5h02-v2",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 67,
+    "mergeCommit": {
+      "oid": "0d95c95069ae0722614596b20c010102c2f7807a"
+    },
+    "headRefName": "fix/beads-board-coalesce-9f4l",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 66,
+    "mergeCommit": {
+      "oid": "c285ca873ec2c3b0fa7a9dcf3952f3685e37ef84"
+    },
+    "headRefName": "fix/needs-you-stall-timebomb-qy6x",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 65,
+    "mergeCommit": {
+      "oid": "2085dab96a82edc5d60e493a39359f46e63921eb"
+    },
+    "headRefName": "fix/runs-test-async-render-fc3k",
+    "headRefDeleted": true,
+    "checkRuns": []
+  },
+  {
+    "number": 64,
+    "mergeCommit": {
+      "oid": "4656e2dde5a770cdb7b78be2028654c125e4f39e"
+    },
+    "headRefName": "fix/r43k-supervisor-response-validation",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "failure",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 63,
+    "mergeCommit": {
+      "oid": "e1a94ff6ec01556698e8ecc1568d21e17676d6d4"
+    },
+    "headRefName": "fix/run-diffs-regression-3ozw",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "failure",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 62,
+    "mergeCommit": {
+      "oid": "541f4f7ec92adcb8058eb8cba8153c36c181ba18"
+    },
+    "headRefName": "feat/shared-gc-supervisor-client-rlnw",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 61,
+    "mergeCommit": {
+      "oid": "7ab63b9eed2ff61948d179bbcb98eae979faec10"
+    },
+    "headRefName": "fix/browser-validated-dashboard-gaps",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 60,
+    "mergeCommit": {
+      "oid": "53f13d64bb083a0e854ab1bb3cbbc55102435300"
+    },
+    "headRefName": "feat/work-in-flight-signal",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "failure",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 59,
+    "mergeCommit": {
+      "oid": "69cf379a9737fadd852908d22dd877dfb1fe2801"
+    },
+    "headRefName": "fix/runs-diff-and-deeplink-resilience",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 58,
+    "mergeCommit": {
+      "oid": "3462da719616c96270e8e5ac58cffd1c6785c20e"
+    },
+    "headRefName": "fix/agents-revert-and-visual-prefs",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 57,
+    "mergeCommit": {
+      "oid": "77068addd95ed8967e54b3dbcdf8d7453e28548d"
+    },
+    "headRefName": "fix/beads-board-open-by-default",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 56,
+    "mergeCommit": {
+      "oid": "f45ab446035ba959d6c5a256b9c00ecb952644bd"
+    },
+    "headRefName": "fix/beads-board-drop-invalid-docs-type",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 55,
+    "mergeCommit": {
+      "oid": "543de097cb56c0020ae4349715694d98efdaf8ed"
+    },
+    "headRefName": "fix/beads-board-empty-rescue-and-agents-active-default",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 54,
+    "mergeCommit": {
+      "oid": "609b0bd6d991b85b068cd16098425ef22400c98f"
+    },
+    "headRefName": "feat/home-alerts-operator-mail-mpfx",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 53,
+    "mergeCommit": {
+      "oid": "214d4a65b43435f1162f41e0a53be3006d6667f8"
+    },
+    "headRefName": "feat/home-alerts-mayor-decision-k0cr",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 52,
+    "mergeCommit": {
+      "oid": "ccb5119c011e918664f3458afc21220ec104a512"
+    },
+    "headRefName": "fix/run-session-id-normalize",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 51,
+    "mergeCommit": {
+      "oid": "d706ea68e293c9849016b8bc6877f8bd03ec11a6"
+    },
+    "headRefName": "fix/tui-companion-focus-hint",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 50,
+    "mergeCommit": {
+      "oid": "c056d1a91f3bd717e11be2c3480403f49d09a60b"
+    },
+    "headRefName": "fix/home-deeplink-city-basename",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 49,
+    "mergeCommit": {
+      "oid": "51a57dffb9d930bfa82aad200a277a473fc00bb6"
+    },
+    "headRefName": "fix/agents-flat-table-restore",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 48,
+    "mergeCommit": {
+      "oid": "e988f8e9ea5d4aa22593f0c194d4d83971f1e2d1"
+    },
+    "headRefName": "fix/mail-compose-neutral-tone",
+    "headRefDeleted": false,
+    "checkRuns": []
+  },
+  {
+    "number": 47,
+    "mergeCommit": {
+      "oid": "108893eac451b0234e71a7ab9f4396276f1597cb"
+    },
+    "headRefName": "fix/tui-companion-keep-focus",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 46,
+    "mergeCommit": {
+      "oid": "97820d2a7af1bb7fe0feeae8d6c84a688701d45b"
+    },
+    "headRefName": "fix/esm-import-extensions",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 45,
+    "mergeCommit": {
+      "oid": "bad2a2b38fd48df43b553b2b8b99a8735c162366"
+    },
+    "headRefName": "tui/mayor-companion-view",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 44,
+    "mergeCommit": {
+      "oid": "29992a7fdf63296b7aa284866ce12ab631a26ebb"
+    },
+    "headRefName": "direct-supervisor-specs",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 43,
+    "mergeCommit": {
+      "oid": "ef3fd17854e5380a1e7aca1bbcb48b0622156e16"
+    },
+    "headRefName": "fix/home-pending-provenance-c1",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 42,
+    "mergeCommit": {
+      "oid": "4fc3905083f5a646af9f9013b197c407ca34fd20"
+    },
+    "headRefName": "feat/home-alerts-aggregator-wiring",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 41,
+    "mergeCommit": {
+      "oid": "188abe2793715f24cc3cc666e8d2fb1b3be3cfe8"
+    },
+    "headRefName": "feat/home-alerts-alertitem-dto",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 40,
+    "mergeCommit": {
+      "oid": "7925c62c6b9c40aa68b789458ccd61bc27971996"
+    },
+    "headRefName": "fix/work-in-progress-snapshot-aw75",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 39,
+    "mergeCommit": {
+      "oid": "efb479b3569bbea6ab8c5773d47105231a3497b0"
+    },
+    "headRefName": "tui/city-board-matrix",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 38,
+    "mergeCommit": {
+      "oid": "3eb095a51dd157ece6db87a80f065f0f59f1fe17"
+    },
+    "headRefName": "fix/beads-detail-popout-modal",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 37,
+    "mergeCommit": {
+      "oid": "c854b8054b956692477145698d0c51bf1a626412"
+    },
+    "headRefName": "fix/beads-server-side-type-filter-rig-dropdown",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 36,
+    "mergeCommit": {
+      "oid": "760fa52553dbeb956a5b4a04589d93e30ab06e90"
+    },
+    "headRefName": "fix/runs-diff-cache-and-skeleton",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 35,
+    "mergeCommit": {
+      "oid": "e772af8e6af296d643acd2df7f3c73851aac79c5"
+    },
+    "headRefName": "fix-dashboard-33-ready-count",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 34,
+    "mergeCommit": {
+      "oid": "e63edcdf265ab0c2e99c87ad7e9da49a0b39fc33"
+    },
+    "headRefName": "fix/runs-detail-swr-cache",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 32,
+    "mergeCommit": {
+      "oid": "3aadb02629289904f0dcd42277d0f9ce27f83f71"
+    },
+    "headRefName": "chore/remove-activity-tab",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 31,
+    "mergeCommit": {
+      "oid": "eae37364117f51b5c59bd3800317636066c9f633"
+    },
+    "headRefName": "chore/upgrade-vitest-9d77",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 30,
+    "mergeCommit": {
+      "oid": "fd44fb2321ff51cdf213f7e03755e1d9ef48f9ea"
+    },
+    "headRefName": "wave-dash-ui-perf-review",
+    "headRefDeleted": true,
+    "checkRuns": []
+  },
+  {
+    "number": 29,
+    "mergeCommit": {
+      "oid": "20791de226d958d173787a0437b846bc40c5ddb2"
+    },
+    "headRefName": "feat/history-expand-in-place",
+    "headRefDeleted": false,
+    "checkRuns": []
+  },
+  {
+    "number": 28,
+    "mergeCommit": {
+      "oid": "d81f5f2b61e5fe7507635657dc2adeacdd357962"
+    },
+    "headRefName": "fix/sourcecache-swr",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 27,
+    "mergeCommit": {
+      "oid": "d78488db440854d0f1127312f0f394e4b16bd7a0"
+    },
+    "headRefName": "feat/tui-agent-filter-kinds",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 14,
+    "mergeCommit": {
+      "oid": "fd8a76e43a215edd0021d167c07b529d431786a8"
+    },
+    "headRefName": "fix/runs-parallel-fetch",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 13,
+    "mergeCommit": {
+      "oid": "6faba74057234d9d723d59b5bf18c8442763b84c"
+    },
+    "headRefName": "fix/rig-store-routed-to-resolution",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 12,
+    "mergeCommit": {
+      "oid": "1ec1f250d2d7cda47c49a39fa5e50a39f2691ec2"
+    },
+    "headRefName": "fix/maintainer-config-leak",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 11,
+    "mergeCommit": {
+      "oid": "c422b750c1c47d99a44467c8dc0bb7870b497440"
+    },
+    "headRefName": "feat/modules-core-only-default",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 10,
+    "mergeCommit": {
+      "oid": "ef95ec717e608f2a14cf69fec1d53ccb5aa05508"
+    },
+    "headRefName": "feat/tui-dashboard",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 9,
+    "mergeCommit": {
+      "oid": "8cf06f66bf8b2cdea33eadc9df62ab2fa4b3b760"
+    },
+    "headRefName": "wave-td3-review",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 8,
+    "mergeCommit": {
+      "oid": "ec44845a147314f9fdfb7040de38fff1e9370514"
+    },
+    "headRefName": "fix/supervisor-offset-datetime-9lvq",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 7,
+    "mergeCommit": {
+      "oid": "b6fabf821556b7b37d14161a481c0e1373ff5c55"
+    },
+    "headRefName": "docs/code-quality-remediation-plan",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 6,
+    "mergeCommit": {
+      "oid": "a79f07e76c97438e740f9c5d4095193d3882f967"
+    },
+    "headRefName": "sling/xk8x-writecache-mutex",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 5,
+    "mergeCommit": {
+      "oid": "6fc0ce78ad2d9bb0cd773853c89ca9819750752b"
+    },
+    "headRefName": "sling/wplw-decouple-contributor-stats",
+    "headRefDeleted": false,
+    "checkRuns": []
+  },
+  {
+    "number": 4,
+    "mergeCommit": {
+      "oid": "d045e8b67548edfe306032be98ac853a6dffde11"
+    },
+    "headRefName": "sling/htrz-strip-control-chars",
+    "headRefDeleted": true,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 3,
+    "mergeCommit": {
+      "oid": "7dd52434907c0539f7de61e16cf72d09c215ae4d"
+    },
+    "headRefName": "fix/snapshot-progress-marks-monotonic-7u5a",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 22)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 2,
+    "mergeCommit": {
+      "oid": "db47064e385f64417d2c8eac27d6f11e11fa65e5"
+    },
+    "headRefName": "fix/k2b8-cwd-allowlist",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 20)",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "number": 1,
+    "mergeCommit": {
+      "oid": "67592dc014d9f18ffec3bfef70e8ec14a4944454"
+    },
+    "headRefName": "feat/beads-board-graph",
+    "headRefDeleted": false,
+    "checkRuns": [
+      {
+        "conclusion": "success",
+        "name": "typecheck + tests (node 20)",
+        "status": "completed"
+      }
+    ]
+  }
+]

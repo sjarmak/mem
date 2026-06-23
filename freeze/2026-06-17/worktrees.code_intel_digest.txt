@@ -1,0 +1,12 @@
+worktree /home/ds/projects/code-intelligence-digest
+HEAD 0b7ede0f12d2408d69a68180ed20e96d71570ae5
+branch refs/heads/production
+
+worktree /home/ds/projects/code-intelligence-digest-intel-digest-0hw
+HEAD e8dae979966c0e66b19224b20893b06d1ffedf20
+detached
+
+worktree /home/ds/projects/code-intelligence-digest/code-intel-digest-worker-1
+HEAD 710ce98ad614a6077500d79054907290522b8585
+branch refs/heads/feat/cache-ranked-items-5xx
+
