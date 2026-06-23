@@ -46,6 +46,7 @@ from membench.grading.judge import (
     score_completion,
 )
 from membench.grading.leak_guard import (
+    IDENTIFYING_KEYS,
     OutcomeLeakError,
     assert_no_outcome_leak,
     outcome_labels,
@@ -68,6 +69,7 @@ __all__ = [
     "DEFAULT_MIN_RECURRENCE_LB",
     "DEFAULT_RUNGS",
     "DEFAULT_SATURATION_TOL",
+    "IDENTIFYING_KEYS",
     "AblationDesign",
     "AblationSource",
     "Calibration",

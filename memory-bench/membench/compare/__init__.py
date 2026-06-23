@@ -19,6 +19,17 @@ Retrieval-quality only — NO agent re-run, NO outcome lift, so it is free/local
 outcome-lift comparison is the paid Harbor path and is deliberately out of scope.
 """
 
+from membench.compare.relevance_judge import (
+    SIGNATURE_FIELD_NAMES,
+    RelevanceInputs,
+    RelevanceJudgeError,
+    RelevanceResult,
+    RelevanceVerdict,
+    build_relevance_prompt,
+    parse_relevance_verdict,
+    relevance_cache_key,
+    score_relevance,
+)
 from membench.compare.retrieval_compare import (
     ArmComparison,
     ArmHarvest,
@@ -34,15 +45,24 @@ from membench.compare.retrieval_compare import (
 )
 
 __all__ = [
+    "SIGNATURE_FIELD_NAMES",
     "ArmComparison",
     "ArmHarvest",
     "ComparisonResult",
+    "RelevanceInputs",
+    "RelevanceJudgeError",
+    "RelevanceResult",
+    "RelevanceVerdict",
+    "build_relevance_prompt",
     "compare_arms",
     "harvest_ours",
     "harvest_semantic",
     "ours_replay",
+    "parse_relevance_verdict",
     "pool_candidates",
+    "relevance_cache_key",
     "score_harvest",
+    "score_relevance",
     "seed_semantic_arm",
     "semantic_replay",
 ]
