@@ -187,6 +187,27 @@ export const LinksSchema = z.object({
 
 export type Links = z.infer<typeof LinksSchema>;
 
+/** Each session's OWN local commit SHAs, recovered from its trace at ingest
+ * (mem-75t.15). `commits` are the `[branch <sha>]` success-output SHAs in trace order
+ * (first local commit first); the corpus commits through a wrapper, so the `git commit`
+ * COMMAND is not in the trace, but git's success line — emitted only when a commit is
+ * actually created — is. The session's TRUE per-worktree base is `parent(commits[0])`,
+ * recoverable from the rig clone independent of the upstream squash-merge that erases
+ * per-session identity (mem-75t.12, mem-apg.10). `true_base` is set only when the first
+ * commit still exists in the clone (`base_state: 'resolved'`); when it was squashed or
+ * rebased away it is left absent (`base_state: 'commit-absent'`) — never guessed. */
+export const SessionCommitsSchema = z.object({
+  commits: z.array(z.string().regex(/^[0-9a-f]{7,40}$/)).min(1),
+  first_commit: z.string().regex(/^[0-9a-f]{7,40}$/),
+  true_base: z
+    .string()
+    .regex(/^[0-9a-f]{40}$/)
+    .optional(),
+  base_state: z.enum(['resolved', 'commit-absent']),
+});
+
+export type SessionCommits = z.infer<typeof SessionCommitsSchema>;
+
 export const WorkRecordSchema = z.object({
   work_id: z.string().min(1),
   rig: z.string().min(1),
@@ -217,6 +238,11 @@ export const WorkRecordSchema = z.object({
   outcome: OutcomeSchema.optional(),
   provenance: ProvenanceSchema.optional(),
   landed: LandedSchema.optional(),
+  // Per-session local commit SHAs + the TRUE per-worktree replay base recovered
+  // from the trace at ingest (mem-75t.15). Absent until the session-commits stage
+  // runs (needs --with-traces for the transcript text and --with-provenance for
+  // the rig clone); stays absent when the session made no local commit.
+  session_commits: SessionCommitsSchema.optional(),
   signal: SignalSchema.optional(),
   // Factory form: a literal default would share one array instance across
   // every parsed record (zod does not deep-clone nested defaults).

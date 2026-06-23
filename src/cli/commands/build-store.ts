@@ -23,6 +23,7 @@ import { attachProvenance } from '../../ingest/provenance.js';
 import { type RecordedBaseLookup, loadRecordedBases } from '../../ingest/provenance-from-log.js';
 import { attachCommitOutcomes } from '../../ingest/commitLinkage.js';
 import { attachLanded } from '../../ingest/landed.js';
+import { attachSessionCommits } from '../../ingest/sessionCommits.js';
 import { attachRepo } from '../../ingest/repo-resolve.js';
 import {
   type SessionJoin,
@@ -74,6 +75,15 @@ export interface BuildStoreResult {
    * (cut/claim/land) across the build. Idempotent: a rebuild of the same corpus
    * re-derives the same deterministic ids, so the count reflects new rows. */
   records_provenance_events: number;
+  /** Records that recovered a TRUE per-worktree replay base from their trace's
+   * own local commit SHAs (`session_commits.base_state === 'resolved'`,
+   * mem-75t.15) — the contested-window recovery count, independent of the
+   * upstream squash. 0 unless both `--with-traces` and `--with-provenance` are on. */
+  records_with_session_base: number;
+  /** Records carrying ≥1 parsed local commit SHA from their trace, whether or
+   * not the base resolved (`session_commits` present). The base-resolved subset
+   * above is the recovered prize; the remainder were squashed/rebased out. */
+  records_with_session_commits: number;
 }
 
 /** Options for {@link attachAndParse} — injectable so the P1.3→P1.6 wiring is
@@ -229,6 +239,8 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
   let recordsWithCommitSha = 0;
   let recordsLanded = 0;
   let recordsMultiSession = 0;
+  let recordsWithSessionBase = 0;
+  let recordsWithSessionCommits = 0;
 
   for (const name of rigs) {
     const spine = await readRig(run, name);
@@ -252,9 +264,15 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     // same checkout; landed is its forward mirror (session-close branch tip +
     // survival). All three need the rig's git checkout, so they run together
     // behind --with-provenance, after the leak-safe session-start baseline.
+    // Session-commit capture (mem-75t.15) recovers each session's TRUE per-worktree
+    // base from its own trace SHAs; it needs the rig checkout (provenance) for the
+    // `rev-parse` and the transcript text (traces) for the SHAs, so it joins the
+    // provenance bundle and is a no-op for any record missing either.
     const records = withProvenance
-      ? attachLanded(
-          attachCommitOutcomes(attachProvenance(traced, recordedBase ? { recordedBase } : {}))
+      ? attachSessionCommits(
+          attachLanded(
+            attachCommitOutcomes(attachProvenance(traced, recordedBase ? { recordedBase } : {}))
+          )
         )
       : traced;
 
@@ -273,6 +291,10 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     recordsMultiSession += records.filter(
       r => r.agents.filter(a => a.suspect !== true).length >= 2
     ).length;
+    recordsWithSessionCommits += records.filter(r => r.session_commits !== undefined).length;
+    recordsWithSessionBase += records.filter(
+      r => r.session_commits?.base_state === 'resolved'
+    ).length;
   }
 
   if (!ctx.options.json) {
@@ -281,8 +303,12 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     const traceNote = withTraces ? `; ${recordsWithErrors} carry trace errors` : '';
     const recordedNote =
       recordsRecordedBase > 0 ? ` (${recordsRecordedBase} read from the log)` : '';
+    const sessionNote =
+      withProvenance && withTraces
+        ? `, ${recordsWithSessionBase} recovered a true per-worktree base from ${recordsWithSessionCommits} with session commits`
+        : '';
     const provNote = withProvenance
-      ? `; ${recordsWithProvenance} carry a work_dir, ${recordsWithCommit} resolved a base commit${recordedNote}, ${recordsWithCommitSha} resolved a landing commit, ${recordsLanded} landed on the branch`
+      ? `; ${recordsWithProvenance} carry a work_dir, ${recordsWithCommit} resolved a base commit${recordedNote}, ${recordsWithCommitSha} resolved a landing commit, ${recordsLanded} landed on the branch${sessionNote}`
       : '';
     const joinNote = join !== null ? `; ${recordsMultiSession} are multi-session` : '';
     const provEventsNote = `; ${provenanceEvents} provenance events`;
@@ -304,5 +330,7 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     records_landed: recordsLanded,
     records_multi_session: recordsMultiSession,
     records_provenance_events: provenanceEvents,
+    records_with_session_base: recordsWithSessionBase,
+    records_with_session_commits: recordsWithSessionCommits,
   };
 }
