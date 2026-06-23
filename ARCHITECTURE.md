@@ -7,7 +7,7 @@ rate, iterations, and cost on new work?
 
 This document is the synthesized current-state overview. Two companions go deeper:
 
-- **The *why* behind every choice** — [`docs/architecture-decisions.md`](docs/architecture-decisions.md), the chronological decision log (Decisions 1–17 + literature grounding).
+- **The *why* behind every choice** — [`docs/architecture-decisions.md`](docs/architecture-decisions.md), the chronological decision log (Decisions 1–22 + literature grounding).
 - **The authoritative eval contract** — `.gc/memory-eval-harness-spec.md` (the *Agentic Memory Evaluation Harness* spec). Where it and the decision log conflict, the spec governs.
 
 The thesis in one line: **work records beat session prose as a memory corpus**,
@@ -27,8 +27,12 @@ tasks* — is computable directly from trace output.
 | `mem` CLI (`--json` envelope, progressive-disclosure retrieve) | **Built** | `bin/mem`, `src/cli/` |
 | memory-bench harness — replay, oracle bundles, metrics, arms | **Built, evolving** | `memory-bench/membench/` |
 | Temporal leave-one-out + exclusions + dual-track + precision guard | **Built (eval contract)** | `src/store/reader.ts`, `src/retrieve/exclusions.ts` |
+| Synthetic corpus SHARE schema — records ARE WorkRecords; one firewall/reader/LOO | **Phase-0 contracts merged (@bbc4f9a); wiring in progress** | Decision 19, `mem-ifm2`/`mem-3zos` |
 | Learned 6-stage memory controller (MCP server) | **Designed; v1 = heuristic/judge per stage** | spec §1, Decision 14 |
-| Competitive arms (mem0 / A-MEM / NAT / Graphiti) | **Adapters landing** | `memory-bench/membench/memory_systems/` |
+| Competitive arms (mem0 / A-MEM / NAT / Graphiti) | **Built** | `memory-bench/membench/memory_systems/` |
+| NeMo-embed dense **baseline** arm (not an `ours` upgrade) | **Branch-ready (`mem-sikg`)** | Decision 21 |
+| Builtin no-store native-memory arm + forward-capture firewall | **Branch-ready (`mem-mor1`)** | Decision 22 (D-E/D-F) |
+| OpenRath projecting read-model over `memory_events` | **Phase-0 merged; adapter in progress** | Decision 20 |
 | Multi-session sequence eval object | **Planned** | spec / Decision 16 |
 | Fine-tuning / RL reranker + retrieval behavior | **Research track** | `research/` PRDs |
 

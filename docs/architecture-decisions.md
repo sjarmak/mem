@@ -292,6 +292,53 @@ makes the "outcome lift" number real. Grounded in the literature pass (see
     re-frames the limitation from "structurally uncomputable" to "diagnosed +
     partially wired + concurrency-gated."
 
+19. **SHARE the schema: synthetic records ARE WorkRecords (Stephanie, 2026-06-23, "D-J").**
+    The synthetic-world track does not get a bespoke loader, store, or eval path.
+    A synthetic record is a `WorkRecord` with an `origin` / provenance marker
+    distinguishing it from real audit; it flows through the **one** firewall, the
+    **one** reader, and the **one** temporal-leave-one-out path that real records
+    do. The alternative (a parallel synthetic loader + synthetic-only LOO) was
+    rejected: two code paths means two places for a leak to hide and two things to
+    keep in sync, and it would let the synthetic track silently diverge from the
+    eval contract Decisions 6/10 pin. Consequence: the generator emits records the
+    existing ingest/store accepts, the origin marker is the only synthetic-specific
+    field, and every validity gate already written applies unchanged. The Phase-0
+    contracts that lock this in (synthetic-corpus firewall / LOO / loadability red
+    tests, `mem-ifm2`, `mem-3zos`) are **merged to main (@bbc4f9a)**; the Phase-1
+    generator→corpus wiring that produces the records is in progress.
+20. **OpenRath (arXiv 2606.19409) incorporated as a projecting read-model, not a
+    control plane (Stephanie, 2026-06-23).** OpenRath maps onto mem as a
+    **mem-owned read model over `memory_events`** — a detector that projects the
+    blackboard onto the work-audit graph, measured by ΔR = R(off) − R(on) (the
+    blackboard-spike framing, `mem-31xp`). It is not adopted as an orchestration /
+    control layer. Phase-0 (the firewall / LOO / loadability contracts the
+    projection must satisfy, shared with Decision 19's SHARE schema) is **merged to
+    main (@bbc4f9a)**; the Phase-1 OpenRath projecting adapter (`mem-m0ak`) is in
+    progress on its branch. Incorporation analysis:
+    `docs/research-openrath-2606.19409-incorporation.md`.
+21. **NeMo dense embedder is a BASELINE retrieval arm, not an `ours` upgrade
+    (Stephanie, 2026-06-23).** The NeMo retriever spike (`mem-i54s`) is adopted as
+    a plain dense-retrieval **baseline arm** (`nemo-embed`), wired behind the
+    existing competitive-arm interface via the `SemanticMemoryClient` seam (the
+    same seam mem0 uses), scoring exact cosine top-k. It is explicitly **not** an
+    upgrade to the `ours` failure-triggered retriever, and the agentic NeMo
+    retrieval loop + ColBERT / vision-language reranking are **deferred**. License:
+    the NVIDIA-NC open-weight model is non-commercial, so the permissive
+    `llama-nemotron-embed-1b-v2` is the default. Built branch-ready (`mem-sikg`),
+    not yet merged.
+22. **Forward-capture firewall = post-close value re-scan; builtin arm wired
+    (Stephanie, 2026-06-23, "D-E path B" + "D-F").** Two forward-capture results.
+    (a) **D-E:** the firewall that prevents per-arm memory differentiation from
+    leaking the answer runs as a **post-close value re-scan** (`rescan_closed_work`,
+    resolving the validity-design fork escalated as gc-404620) on the LIVE write
+    path, not a structural-only filter — the earlier structural firewall was inert
+    on the live path. (b) **D-F:** `BuiltinMemory` is wired as a **no-store
+    native-memory arm** behind the uniform interface, so an agent-native-memory
+    condition is measurable without the mem store (superseding the earlier
+    "deferred, paid-Harbor-only" status). Both are branch-ready
+    (`mem-mtqi`→`mem-ymxp`→`mem-mor1`), not yet merged; the registration config
+    returned on close hands the arms to the harness.
+
 ## Literature grounding (`~/lit_explorers`, agentic-memory pass 2026-06-04)
 
 The eval/retrieval contract above is backed by the memory-systems literature

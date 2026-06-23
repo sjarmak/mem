@@ -59,7 +59,7 @@ model {
   mem = system 'mem' {
     description 'Turns the work spine + transcripts into a work-audit graph, then benchmarks memory on it'
     link ../ARCHITECTURE.md 'Architecture overview'
-    link ../docs/architecture-decisions.md 'Decision log (1–18)'
+    link ../docs/architecture-decisions.md 'Decision log (1–22)'
 
     // ── TypeScript half: builds and serves the store ───────────────────────
     store = container 'Store builder & server' {
@@ -191,17 +191,19 @@ model {
           #built
           description 'Stateless floor, failure-triggered ours, exact-memory ceiling, the filesystem baseline, and the deterministic lexical top-k arm that activates the Confusion + Staleness retrieval-quality metrics'
         }
-        armsExternal = component 'mem0 / A-MEM / NAT / Graphiti' {
+        armsExternal = component 'mem0 / A-MEM / NAT / Graphiti / NeMo-embed' {
           #built
-          description 'Third-party memory systems behind the same interface — real adapters, all on a local OSS stack (Qdrant / ChromaDB / Redis / FalkorDB + Ollama), no paid API'
+          description 'Third-party memory systems behind the same interface — real adapters, all on a local OSS stack (Qdrant / ChromaDB / Redis / FalkorDB + Ollama), no paid API. Includes nemo-embed (Decision 21, branch-ready mem-sikg): a plain dense-retrieval BASELINE arm via the SemanticMemoryClient seam, exact cosine top-k — a baseline, not an ours-upgrade; the agentic NeMo loop + ColBERT/VL reranking are deferred'
+          link ../docs/architecture-decisions.md 'Decision 21 — NeMo dense baseline arm'
         }
         armsConsolidating = component 'consolidating / retention-scheduled' {
           #built
           description 'Two-speed consolidation and TTL/retention-policy variants'
         }
-        armsDeferred = component 'builtin (agent-native memory)' {
-          #planned
-          description 'The agent’s own built-in memory; deferred — a paid Harbor path (mem-whi), explicitly not wired into the harness'
+        armsBuiltin = component 'builtin (agent-native memory)' {
+          #evolving
+          description 'The agent’s own built-in memory as a no-store native-memory arm (Decision 22 / D-F, branch-ready mem-mor1) — wired behind the uniform interface so a native-memory condition is measurable without the mem store. The per-arm forward-capture firewall that keeps it leak-safe runs as a post-close value re-scan (D-E)'
+          link ../docs/architecture-decisions.md 'Decision 22 — builtin arm + forward-capture firewall'
         }
       }
 
@@ -286,8 +288,9 @@ model {
       // real audit, materialized in-repo and seed-reproducible.
       worlds = datastore 'fixtures/worlds/ — frozen synthetic worlds' {
         #built
-        description 'Seed-keyed frozen NeMo worlds + determinism manifest; the synthetic corpus the harness replays from'
+        description 'Seed-keyed frozen NeMo worlds + determinism manifest; the synthetic corpus the harness replays from. SHARE schema (Decision 19 / D-J): a synthetic record IS a WorkRecord with an origin/provenance marker — no bespoke synthetic loader; it flows through the one firewall, one reader, one LOO path real records do. Phase-0 firewall/LOO/loadability contracts merged (@bbc4f9a); the generator→corpus wiring is in progress'
         link ../memory-bench/membench/generators/world_manifest.py 'world_manifest.py'
+        link ../docs/architecture-decisions.md 'Decision 19 — SHARE schema'
       }
 
       harborAdapter = component 'harbor/ — execution adapter' {
@@ -337,6 +340,12 @@ model {
       description 'Sequence / convoy-epic eval object — scales past the thin real task pool'
       link ../docs/architecture-decisions.md 'Decision 16 — eval object'
     }
+    openrath = container 'OpenRath projecting read-model' {
+      #evolving
+      description 'Decision 20: OpenRath (arXiv 2606.19409) incorporated as a mem-owned read model over memory_events — a detector projected onto the work-audit graph (metric ΔR = R(off) − R(on)), not a control plane. Phase-0 firewall/LOO/loadability contracts merged (@bbc4f9a); the Phase-1 projecting adapter (mem-m0ak) is in progress'
+      link ../docs/research-openrath-2606.19409-incorporation.md 'OpenRath incorporation analysis'
+      link ../docs/architecture-decisions.md 'Decision 20 — OpenRath read-model'
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -384,6 +393,9 @@ model {
   bench.generators.worldFreeze -> bench.worlds 'freezes worlds + determinism manifest'
   bench.generators -> bench.worlds 'materializes seed-reproducible worlds'
   bench.worlds -> bench.bundle 'frozen synthetic sequences feed the task pool'
+  bench.worlds -> store.graph 'synthetic records load as origin-marked WorkRecords — one firewall, one reader, one LOO (Decision 19 / D-J)' {
+    #evolving
+  }
   bench.generators.calibration -> bench.grading.soundness 'calibrates synthetic shapes against real fail-to-pass oracles'
 
   // Planned controller wiring
@@ -407,5 +419,8 @@ model {
   }
   sequenceEval -> bench.bundle 'multi-session task object' {
     #planned
+  }
+  openrath -> store.graph 'projects a blackboard read-model over memory_events' {
+    #evolving
   }
 }

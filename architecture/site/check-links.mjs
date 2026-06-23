@@ -12,7 +12,16 @@ import { join, dirname } from "node:path";
 function walk(dir) {
   let out = [];
   for (const e of readdirSync(dir, { withFileTypes: true })) {
-    if (e.name === "node_modules" || e.name === ".git" || e.name === "_site") continue;
+    // Skip build/session dirs (gitignored): node_modules/_site, git internals, and
+    // .claude/ (holds git-worktree copies of architecture/*.c4 whose relative links
+    // resolve against the worktree, not this repo root — false-positive dead links).
+    if (
+      e.name === "node_modules" ||
+      e.name === ".git" ||
+      e.name === "_site" ||
+      e.name === ".claude"
+    )
+      continue;
     const p = join(dir, e.name);
     if (e.isDirectory()) out = out.concat(walk(p));
     else if (e.name.endsWith(".c4")) out.push(p);
