@@ -11,7 +11,7 @@ field RAISES under the strict allow-list rather than being silently dropped.
 
 It reuses the two existing guards as the contract's enforcement layer:
 `grading.leak_guard` (`OutcomeLeakError`, `assert_no_outcome_leak`,
-`_IDENTIFYING_KEYS`) and `validity` (`loo_bounded` / `assert_no_leak`).
+`IDENTIFYING_KEYS`) and `validity` (`loo_bounded` / `assert_no_leak`).
 """
 
 from __future__ import annotations
@@ -139,3 +139,66 @@ def test_novel_session_field_raises_strict_allow_list() -> None:
     session["sneaky_sha"] = SENTINEL_COMMIT
     with pytest.raises(ForwardCaptureFieldError):
         project_session_to_record(session)
+
+
+def test_nested_payload_outcome_identifier_raises() -> None:
+    """mem-ymxp #1: an outcome identifier nested inside the allow-listed (free-form)
+    `payload` field RAISES — it cannot ride the label-side payload past the firewall
+    unscanned (the flat allow-list copied the payload unchanged before this fix)."""
+    event = {
+        "session": "sess-1",
+        "op": "write",
+        "backend": "kg",
+        "memory_ref": "work:mem-x",
+        "source": "forward-capture",
+        "payload": {"diff": {"commit_sha": SENTINEL_COMMIT}},
+    }
+    with pytest.raises(ForwardCaptureFieldError):
+        project_memory_event(event)
+
+
+def test_payload_dropped_from_worker_readable_projection() -> None:
+    """mem-ymxp #1: `payload` is label-side (PRD §Firewall — outcome-correlated
+    low-entropy signal a substring scan cannot catch). A clean payload projects but is
+    DROPPED from the worker-readable event, never surfaced to a worker."""
+    event = {
+        "session": "sess-1",
+        "op": "write",
+        "backend": "kg",
+        "memory_ref": "work:mem-x",
+        "source": "forward-capture",
+        "payload": {"bytes": 42, "lines": 3},
+    }
+    projected = project_memory_event(event)
+    assert "payload" not in projected
+    assert projected["memory_ref"] == "work:mem-x"
+    assert projected["op"] == "write"
+
+
+def test_session_unknown_outcome_subkey_raises() -> None:
+    """mem-ymxp #2: an unknown key inside the Session `outcome` dict RAISES instead of
+    being silently dropped by the routing comprehension — a novel outcome subfield
+    (e.g. `merge_sha`) may be outcome-correlated and must not pass unscanned."""
+    session = _leaky_session()
+    session["outcome"]["merge_sha"] = SENTINEL_COMMIT
+    with pytest.raises(ForwardCaptureFieldError):
+        project_session_to_record(session)
+
+
+def test_session_nested_outcome_identifier_outside_outcome_raises() -> None:
+    """mem-ymxp #2: an outcome identifier nested anywhere OTHER than the top-level
+    routed `outcome` dict (here inside the memory_event subfield) RAISES rather than
+    being silently dropped along with the rest of the memory_event payload."""
+    session = _leaky_session()
+    session["memory_event"]["payload"] = {"commit_sha": SENTINEL_COMMIT}
+    with pytest.raises(ForwardCaptureFieldError):
+        project_session_to_record(session)
+
+
+def test_outcome_keys_are_single_source_of_truth() -> None:
+    """mem-ymxp #5: the projector's outcome-key set IS the guard's identifying-key set
+    (one import), so the scan set and the projection set cannot drift apart."""
+    from membench.forward_capture import _OUTCOME_KEYS
+    from membench.grading.leak_guard import IDENTIFYING_KEYS
+
+    assert _OUTCOME_KEYS is IDENTIFYING_KEYS

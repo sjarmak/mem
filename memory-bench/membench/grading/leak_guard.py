@@ -21,9 +21,11 @@ this scan.
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-# The high-entropy outcome identifiers a held-out bead must never expose. Public so
-# downstream guards (the relevance-judge anti-circularity scan, mem-lvp.31) share one
-# source of truth for "which fields are answer-revealing" rather than re-listing them.
+# The high-entropy outcome identifiers a held-out bead must never expose — the
+# SINGLE SOURCE OF TRUTH for "which fields are answer-revealing", shared so the
+# downstream guards cannot drift from it: the relevance-judge anti-circularity scan
+# (mem-lvp.31) and the forward-capture projector's key-routing/scan
+# (`forward_capture._OUTCOME_KEYS` imports this; mem-ymxp #5).
 IDENTIFYING_KEYS = ("pr", "commit_sha", "base_commit")
 
 
