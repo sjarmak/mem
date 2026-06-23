@@ -49,6 +49,7 @@ from membench.grading.leak_guard import (
     IDENTIFYING_KEYS,
     OutcomeLeakError,
     assert_no_outcome_leak,
+    find_outcome_leaks,
     outcome_labels,
 )
 from membench.grading.merged_diff import MergedDiffSource
@@ -103,6 +104,7 @@ __all__ = [
     "coverage_table",
     "deterministic_term",
     "exact_recurrence",
+    "find_outcome_leaks",
     "min_useful_combo",
     "outcome_labels",
     "recommend_source",

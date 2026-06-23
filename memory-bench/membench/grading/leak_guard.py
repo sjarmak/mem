@@ -48,28 +48,39 @@ def outcome_labels(record: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple(str(outcome[key]) for key in IDENTIFYING_KEYS if outcome.get(key))
 
 
-def assert_no_outcome_leak(agent_readable: str | Mapping[str, str], labels: Iterable[str]) -> None:
-    """Assert no value in `labels` appears in `agent_readable` (a string, or a
+def find_outcome_leaks(
+    agent_readable: str | Mapping[str, str], labels: Iterable[str]
+) -> list[tuple[str, str]]:
+    """Every ``(where, label)`` outcome-label leak in `agent_readable` (a string, or a
     filename->content mapping). The match is case-insensitive and blank labels are
-    ignored so they cannot match every document. Errs toward over-catching — the
-    safe direction for a validity guard: a false positive fails the run loudly,
-    a false negative lets a leak through. Raises `OutcomeLeakError` listing every
-    (where, label) offender."""
+    ignored so they cannot match every document. Errs toward over-catching — the safe
+    direction for a validity scan. Returns an empty list when clean. This is the
+    non-raising core both `assert_no_outcome_leak` (raise on any leak) and the
+    forward-capture post-close re-scan (quarantine the leaking item) share, so the two
+    scan the same way and cannot drift."""
     # Dedupe while preserving order so a caller passing repeated labels does not
     # produce duplicate offenders.
     scan = list(dict.fromkeys(label for label in labels if label.strip()))
     if not scan:
-        return
+        return []
     docs = (
         list(agent_readable.items())
         if isinstance(agent_readable, Mapping)
         else [("<text>", agent_readable)]
     )
-    offenders = [
+    return [
         (where, label)
         for where, content in docs
         for label in scan
         if label.lower() in content.lower()
     ]
+
+
+def assert_no_outcome_leak(agent_readable: str | Mapping[str, str], labels: Iterable[str]) -> None:
+    """Assert no value in `labels` appears in `agent_readable` (a string, or a
+    filename->content mapping). Errs toward over-catching — the safe direction for a
+    validity guard: a false positive fails the run loudly, a false negative lets a leak
+    through. Raises `OutcomeLeakError` listing every (where, label) offender."""
+    offenders = find_outcome_leaks(agent_readable, labels)
     if offenders:
         raise OutcomeLeakError(offenders)

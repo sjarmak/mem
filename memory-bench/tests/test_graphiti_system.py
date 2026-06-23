@@ -231,7 +231,8 @@ def test_factory_builds_graphiti_arm_with_injected_client() -> None:
 
 
 def test_graphiti_no_longer_deferred() -> None:
-    # It used to raise as a deferred arm; now it is wired.
-    from membench.memory_systems import _DEFERRED
+    # It used to raise as a deferred arm; now it is wired (mem-mor1 retired the
+    # _DEFERRED machinery when builtin — the last deferred arm — was wired).
+    from membench.memory_systems import wired_memory_systems
 
-    assert "graphiti" not in _DEFERRED
+    assert "graphiti" in wired_memory_systems()

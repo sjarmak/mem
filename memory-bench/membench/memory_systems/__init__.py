@@ -7,8 +7,9 @@ First-run arm scope is `none` / `ours` / `builtin` (fork 4):
 - `filesystem` — the skeleton's id-based reference integrated system.
 - `ours` — retrieval-v1 (mem-di8) over the work-audit graph (condition C);
   failure-triggered/replay-only.
-- `builtin` — the agent's own opaque memory (Claude/Codex). Its audit is the
-  paid Harbor path owned by **mem-whi**, not implemented here.
+- `builtin` — the agent's own native Claude/Codex memory, the baseline-to-beat
+  (mem-whi). mem's store stays uninvolved (no surface, no capture); the agent's
+  native memory is the continuity channel, enabled at launch (mem-mor1 D-F).
 
 `mem0`, `a-mem`, `nat`, and `graphiti` are the wired competitive arms (mem-lvp.2 /
 mem-lvp.9 / mem-lvp.3 / mem-lvp.4), all `AbstractSemanticArm` subclasses behind an
@@ -26,6 +27,7 @@ from membench.memory_systems.base import (
     RetrievalRequest,
     RetrieveResult,
 )
+from membench.memory_systems.builtin_system import BuiltinMemory
 from membench.memory_systems.consolidating_system import ConsolidatingMemory
 from membench.memory_systems.filesystem_system import FilesystemMemory
 from membench.memory_systems.graphiti_system import GraphitiMemory
@@ -52,6 +54,7 @@ __all__ = [
     "AMemMemory",
     "AbstractSemanticArm",
     "AsyncClientBridge",
+    "BuiltinMemory",
     "ConsolidatingMemory",
     "FilesystemMemory",
     "GraphitiMemory",
@@ -75,13 +78,6 @@ __all__ = [
     "wired_memory_systems",
 ]
 
-# Arms whose implementation is owned by another bead — named here so the factory
-# rejects them with a precise pointer instead of a generic "unknown system",
-# keeping the uniform interface honest about what is wired vs pending.
-_DEFERRED = {
-    "builtin": "the built-in Claude/Codex memory audit is the paid Harbor path (mem-whi)",
-}
-
 
 def _systems_registry() -> dict[str, type[MemorySystem]]:
     """The single source of truth for the wired arm set (name → class)."""
@@ -94,6 +90,7 @@ def _systems_registry() -> dict[str, type[MemorySystem]]:
         "retention_scheduled": RetentionScheduledMemory,
         "ours": OursMemory,
         "ours-live": OursLiveMemory,
+        "builtin": BuiltinMemory,
         "mem0": Mem0Memory,
         "nemo-embed": NemoEmbedMemory,
         "a-mem": AMemMemory,
@@ -110,16 +107,10 @@ def wired_memory_systems() -> tuple[str, ...]:
 
 
 def build_memory_system(name: str, **kwargs: Any) -> MemorySystem:
-    """Factory over the wired arm set. Raises on unknown or deferred names rather
-    than silently substituting a default (an unknown memory system is a config
-    error, and a deferred one must not masquerade as wired)."""
+    """Factory over the wired arm set. Raises on an unknown name rather than silently
+    substituting a default (an unknown memory system is a config error)."""
     systems = _systems_registry()
     cls = systems.get(name)
     if cls is None:
-        if name in _DEFERRED:
-            raise ValueError(f"Memory system {name!r} is not wired here: {_DEFERRED[name]}.")
-        raise ValueError(
-            f"Unknown memory system {name!r}. Wired: {sorted(systems)}; "
-            f"deferred: {sorted(_DEFERRED)}."
-        )
+        raise ValueError(f"Unknown memory system {name!r}. Wired: {sorted(systems)}.")
     return cls(**kwargs)

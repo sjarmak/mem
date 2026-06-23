@@ -13,6 +13,7 @@ import pytest
 from membench.grading import (
     OutcomeLeakError,
     assert_no_outcome_leak,
+    find_outcome_leaks,
     outcome_labels,
 )
 
@@ -86,3 +87,21 @@ def test_empty_label_set_is_noop():
 def test_blank_labels_never_match():
     # An empty/whitespace label must not match every document.
     assert assert_no_outcome_leak("anything at all", ["", "   "]) is None
+
+
+def test_find_outcome_leaks_returns_offenders_without_raising():
+    # The non-raising core the post-close re-scan (mem-mor1 D-E) shares with the
+    # assert guard: it returns the (where, label) offenders instead of raising, so a
+    # caller can quarantine the leaking item rather than abort the whole run.
+    offenders = find_outcome_leaks("see commit abc123def456 here", ["abc123def456"])
+    assert offenders == [("<text>", "abc123def456")]
+
+
+def test_find_outcome_leaks_empty_when_clean():
+    assert find_outcome_leaks("fix the parser bug", ["abc123def456"]) == []
+
+
+def test_find_outcome_leaks_names_offending_file():
+    files = {"a.md": "clean", "b.md": "commit abc123def456"}
+    offenders = find_outcome_leaks(files, ["abc123def456"])
+    assert offenders == [("b.md", "abc123def456")]

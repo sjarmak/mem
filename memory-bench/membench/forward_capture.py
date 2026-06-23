@@ -22,16 +22,31 @@ This module is the ONLY projecting boundary that re-establishes the separation:
   `assert_no_outcome_leak` — the contract is enforced by the existing guard.
 - `assert_capture_firewalled` is the LIVE-path entry point: it runs both scans
   (structural + value) so a runtime write cannot bypass the projector (mem-ymxp #3).
+- `rescan_closed_work` is the POST-CLOSE value re-scan (mem-mor1 D-E, Stephanie's
+  design B): at in-flight capture the value scan is necessarily empty — the capturing
+  work's own outcome SHA does not exist yet — so leak-freeness cannot rest on the
+  at-capture value scan alone. Once the work CLOSES and its outcome identifiers are
+  known, this re-scans every captured event's worker-readable text against those
+  now-known labels and QUARANTINES any whose value carries an outcome label (the
+  surface a structural key-scan cannot catch: a raw SHA embedded in `memory_ref`),
+  BEFORE that memory is ever served to future work.
 
-ZFC: pure mechanism — key routing and allow-list filtering, no semantic judgment.
+ZFC: pure mechanism — key routing, allow-list filtering, substring scanning, no
+semantic judgment.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, field
 from typing import Any
 
-from membench.grading.leak_guard import IDENTIFYING_KEYS, assert_no_outcome_leak
+from membench.grading.leak_guard import (
+    IDENTIFYING_KEYS,
+    assert_no_outcome_leak,
+    find_outcome_leaks,
+    outcome_labels,
+)
 
 # The worker-readable memory-event fields — the leak-safe allow-list, drawn from
 # the canonical TS `MemoryEventSchema` (src/schemas/memory-event.ts). Outcome
@@ -194,3 +209,68 @@ def assert_capture_firewalled(event: dict[str, Any], outcome_labels: Iterable[st
          not yet exist) this is a no-op and the structural scan stands alone."""
     projected = project_memory_event(event)
     assert_no_outcome_leak(worker_readable_event_text(projected), outcome_labels)
+
+
+@dataclass(frozen=True)
+class QuarantinedCapture:
+    """A captured event the POST-CLOSE re-scan blocks from serving: it was
+    structurally clean at capture time but its value carries an outcome label that
+    only became known once the work closed. `offenders` is the list of
+    ``(where, label)`` matches that triggered the quarantine — surfaced, never a
+    silent drop."""
+
+    event: dict[str, Any]
+    offenders: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
+class PostCloseRescan:
+    """The result of `rescan_closed_work`: the events safe to SERVE (`clean`) and the
+    events QUARANTINED because a now-known outcome label appeared in their
+    worker-readable text. Only `clean` may be served to future work."""
+
+    clean: tuple[dict[str, Any], ...] = ()
+    quarantined: tuple[QuarantinedCapture, ...] = field(default_factory=tuple)
+
+    @property
+    def leaked(self) -> bool:
+        """True iff the re-scan quarantined at least one event — a post-close leak the
+        in-flight structural scan could not catch."""
+        return bool(self.quarantined)
+
+
+def rescan_closed_work(
+    events: Iterable[dict[str, Any]], outcome: Mapping[str, Any]
+) -> PostCloseRescan:
+    """Post-close VALUE re-scan of a work's forward-captured events (mem-mor1 D-E,
+    design B).
+
+    At in-flight capture the firewall's value scan is empty — the capturing work's own
+    outcome SHA does not exist yet — so a raw outcome value embedded in a non-outcome-
+    keyed field (e.g. `memory_ref`) passes the structural scan unguarded. Once the work
+    CLOSES, `outcome` (its `pr`/`commit_sha`/`base_commit`) is known; this re-scans each
+    captured event's worker-readable text against those labels and partitions the events
+    into the ones safe to SERVE and the ones to QUARANTINE — the serve-time gate that
+    makes the corpus's "outcome never leaks into input" claim defensible.
+
+    Each event is first run through `project_memory_event` (so the re-scan sees exactly
+    the worker-readable projection — label-side `payload` dropped, structural violations
+    still RAISING, since a structurally-bad stored event is a producer bug at any time).
+    A clean event is returned in `clean`; an event whose value carries an outcome label
+    is returned in `quarantined` with its offenders — surfaced, never silently dropped.
+    With an empty `outcome` (no identifiers known) every event is clean: the re-scan is
+    a no-op until there is a label to scan against.
+
+    ZFC: mechanical substring scan against the now-known labels (shared with the
+    `leak_guard` value scan via `find_outcome_leaks`), no semantic judgment."""
+    labels = outcome_labels({"outcome": dict(outcome)})
+    clean: list[dict[str, Any]] = []
+    quarantined: list[QuarantinedCapture] = []
+    for event in events:
+        projected = project_memory_event(event)
+        offenders = find_outcome_leaks(worker_readable_event_text(projected), labels)
+        if offenders:
+            quarantined.append(QuarantinedCapture(event=event, offenders=tuple(offenders)))
+        else:
+            clean.append(event)
+    return PostCloseRescan(clean=tuple(clean), quarantined=tuple(quarantined))
