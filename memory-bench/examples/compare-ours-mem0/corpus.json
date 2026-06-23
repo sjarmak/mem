@@ -1,0 +1,46 @@
+[
+  {
+    "work_id": "tls-cert-expiry-scix",
+    "rig": "scix",
+    "closed": "2026-01-10T00:00:00Z",
+    "text": "tls cert expiry: pytest AssertionError when the tls handshake cert had expired; renew the cert before the handshake to fix the failure"
+  },
+  {
+    "work_id": "handshake-timeout-dashboard",
+    "rig": "dashboard",
+    "closed": "2026-01-20T00:00:00Z",
+    "text": "tls handshake timeout: the handshake stalls on a slow peer; raise the connection timeout so the handshake completes"
+  },
+  {
+    "work_id": "qdrant-pool-scix",
+    "rig": "scix",
+    "closed": "2026-02-01T00:00:00Z",
+    "text": "qdrant connection pool exhausted under load; widen the pool size and add a connection backoff"
+  },
+  {
+    "work_id": "tls-fix-gascity",
+    "rig": "gascity",
+    "closed": "2026-02-05T00:00:00Z",
+    "text": "gascity tls handshake cert fix: same root cause, expired cert; renewed it in this rig already"
+  },
+  {
+    "work_id": "tls-handshake-sibling-scix",
+    "rig": "scix",
+    "closed": "2026-02-10T00:00:00Z",
+    "convoy_id": "cv-tls",
+    "text": "tls handshake convoy sibling: shipped alongside the query work in the same convoy; cert and handshake notes"
+  },
+  {
+    "work_id": "tls-followup-future-scix",
+    "rig": "scix",
+    "closed": "2026-04-01T00:00:00Z",
+    "text": "tls handshake follow-up closed AFTER the query work started; future cert hardening for the handshake"
+  },
+  {
+    "work_id": "tls-original-reopened-scix",
+    "rig": "scix",
+    "closed": "2026-01-05T00:00:00Z",
+    "supersedes": ["fix-tls-handshake-timeout"],
+    "text": "original tls handshake bead later reopened as the query work; cert handshake history"
+  }
+]

@@ -1,0 +1,9 @@
+[
+  {
+    "work_id": "fix-tls-handshake-timeout",
+    "rig": "gascity",
+    "started": "2026-03-01T09:00:00Z",
+    "convoy_id": "cv-tls",
+    "query_text": "tls handshake fails: pytest AssertionError cert expired, connection timeout on handshake"
+  }
+]
