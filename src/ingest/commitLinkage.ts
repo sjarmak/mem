@@ -1,6 +1,7 @@
 import type { GitRunner } from './provenance.js';
 import { defaultGitRunner, isNonZeroExit } from './provenance.js';
-import { OutcomeSchema, type Outcome } from '../schemas/workrecord.js';
+import { DEFAULT_BRANCH, RIG_REPOS } from './rig-repo-map.js';
+import { OutcomeSchema, type Outcome, type WorkRecord } from '../schemas/workrecord.js';
 
 /**
  * ingest/commitLinkage — recover the work→PR/commit OUTCOME that ingest dropped.
@@ -210,4 +211,48 @@ export function linkRigOutcomes(
     if (derived !== null) out.set(id, derived);
   }
   return out;
+}
+
+/**
+ * Attach the recovered work→landing-commit {@link Outcome} to every record whose
+ * id is named in its rig's integration-branch history — the build-stage that
+ * populates `work_records.commit_sha` (the writer projects `record.outcome
+ * .commit_sha`). Mirrors {@link attachProvenance}: a per-rig git-checkout stage
+ * over an injectable {@link GitRunner}, attaching immutably (records are copied,
+ * never mutated).
+ *
+ * The `git log` of each checkout runs ONCE per rig (records are grouped by rig
+ * first), not once per record. Only mapped single-repo rigs in {@link RIG_REPOS}
+ * are resolvable; a `multi`/unmapped rig, or one whose checkout is absent,
+ * contributes no linkage (`gitLogCommits` returns `[]` on a non-zero git exit)
+ * rather than aborting the build — exactly like a record that simply never landed.
+ * A resolved outcome merges over any outcome already on the record, so the
+ * verifiable landing commit wins without discarding other outcome fields.
+ */
+export function attachCommitOutcomes(
+  records: readonly WorkRecord[],
+  opts: LinkRigOptions = {}
+): WorkRecord[] {
+  const idsByRig = new Map<string, string[]>();
+  for (const record of records) {
+    const ids = idsByRig.get(record.rig);
+    if (ids === undefined) idsByRig.set(record.rig, [record.work_id]);
+    else ids.push(record.work_id);
+  }
+
+  const outcomeById = new Map<string, Outcome>();
+  for (const [rig, ids] of idsByRig) {
+    const mapped = RIG_REPOS[rig];
+    if (mapped === undefined || mapped.multi === true || mapped.dir === undefined) continue;
+    const branch = mapped.branch ?? DEFAULT_BRANCH;
+    for (const [id, { outcome }] of linkRigOutcomes(ids, mapped.dir, branch, opts)) {
+      outcomeById.set(id, outcome);
+    }
+  }
+
+  return records.map(record => {
+    const resolved = outcomeById.get(record.work_id);
+    if (resolved === undefined) return record;
+    return { ...record, outcome: { ...record.outcome, ...resolved } };
+  });
 }

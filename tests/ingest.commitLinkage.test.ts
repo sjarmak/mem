@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  attachCommitOutcomes,
   deriveCommitOutcome,
   extractPr,
   gitLogCommits,
@@ -11,6 +12,7 @@ import {
   type CommitMeta,
 } from '../src/ingest/commitLinkage.js';
 import type { GitRunner } from '../src/ingest/provenance.js';
+import { WorkRecordSchema, type WorkRecord } from '../src/schemas/workrecord.js';
 
 const SHA = (c: string): string => c.repeat(40);
 
@@ -210,5 +212,44 @@ describe('gitLogCommits + linkRigOutcomes', () => {
     });
     expect(out.get('mem-08k')?.outcome).toEqual({ commit_sha: SHA('b') });
     expect(out.has('mem-unlinked')).toBe(false);
+  });
+});
+
+describe('attachCommitOutcomes', () => {
+  const rec = (workId: string, rig: string): WorkRecord =>
+    WorkRecordSchema.parse({
+      work_id: workId,
+      rig,
+      title: `work ${workId}`,
+      lifecycle: { created: '2026-06-07T00:00:00Z', status: 'closed' },
+    });
+
+  it('attaches the landing commit to mapped-rig records and runs git once per rig', () => {
+    const stdout = block(SHA('a'), 'fix (mem-08k)', '', 'sjarmak');
+    const calls: string[] = [];
+    const run: GitRunner = (dir, args) => {
+      if (args[0] !== 'log') throw new Error(`unexpected git ${args.join(' ')}`);
+      calls.push(dir);
+      return stdout;
+    };
+
+    const records = [rec('mem-08k', 'mem'), rec('mem-nolink', 'mem'), rec('dec-1', 'dec')];
+    const out = attachCommitOutcomes(records, { run });
+
+    expect(out.find(r => r.work_id === 'mem-08k')?.outcome?.commit_sha).toBe(SHA('a'));
+    // A mapped rig with no matching commit, and an unmapped rig, gain no outcome.
+    expect(out.find(r => r.work_id === 'mem-nolink')?.outcome).toBeUndefined();
+    expect(out.find(r => r.work_id === 'dec-1')?.outcome).toBeUndefined();
+    // The git log of the (single) mapped rig runs exactly once for both its ids;
+    // the unmapped `dec` rig is never shelled.
+    expect(calls).toHaveLength(1);
+  });
+
+  it('does not mutate the input records', () => {
+    const stdout = block(SHA('a'), 'fix (mem-08k)', '', 'sjarmak');
+    const run: GitRunner = () => stdout;
+    const input = rec('mem-08k', 'mem');
+    attachCommitOutcomes([input], { run });
+    expect(input.outcome).toBeUndefined();
   });
 });
