@@ -37,7 +37,7 @@ from typing import Any
 import pytest
 
 from membench.grading import OutcomeLeakError, outcome_labels
-from membench.grading.leak_guard import _IDENTIFYING_KEYS
+from membench.grading.leak_guard import IDENTIFYING_KEYS
 from membench.harbor.workrecord_adapter import WorkRecordLadderAdapter
 
 # The planted outcome label. It is high-entropy and unique so any appearance in
@@ -123,7 +123,7 @@ def _record(
 def test_commit_sha_is_a_recognized_outcome_identifier() -> None:
     # The firewall's identifying-key set already covers commit_sha, so the sentinel
     # planted in lineage IS an outcome label the guard will scan for.
-    assert "commit_sha" in _IDENTIFYING_KEYS
+    assert "commit_sha" in IDENTIFYING_KEYS
     assert SENTINEL in outcome_labels({"outcome": {"commit_sha": SENTINEL}})
 
 
