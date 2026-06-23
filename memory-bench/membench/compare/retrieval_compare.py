@@ -44,7 +44,12 @@ DEFAULT_OURS_SCOPE = "cross_rig"
 class ArmComparison(BaseModel):
     """One arm's retrieval-quality readout for one query work. Metric fields are
     ``None`` when the relevant set is empty (not measured) — never a fabricated
-    ``0.0`` (mirrors `grading.retrieval_leg.RetrievalLeg`)."""
+    ``0.0`` (mirrors `grading.retrieval_leg.RetrievalLeg`).
+
+    HARD RULE (mem-lvp eval design, mem-lvp.29/.31): the relevant set these metrics
+    are scored against must come from a semantic judge over candidate TEXT, never
+    from any arm's id-set, failure signature, or structured match — deriving it from
+    `ours`'s own retrieval mechanism would make the comparison circular."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -54,6 +59,10 @@ class ArmComparison(BaseModel):
     # mapped back) so both arms are reported in the same id space.
     retrieved_ids: list[str]
     precision: float | None
+    # POOL-RELATIVE recall when the relevant set is a pooled+judged ground truth
+    # (mem-lvp.30/.32): an item NO arm retrieved is never pooled, never judged, and
+    # so absent from the denominator. It is recall-within-pool, not recall against
+    # the true (unknowable) relevant set — never report it as the latter.
     recall: float | None
     mrr: float | None
     ndcg: float | None
@@ -63,6 +72,10 @@ class ArmComparison(BaseModel):
     latency_ms: float
     # True once the arm's output passed the harness LOO re-check (`assert_no_leak`).
     leak_checked: bool
+    # The arm's retrieval hit its FTS candidate-scan cap (ours), so the retrieved set
+    # may be incomplete — surfaced per Decision 10, never scored as if complete. A
+    # vector arm's top_k is a deliberate bound, not a truncation, so it stays False.
+    retrieval_truncated: bool
 
 
 class ComparisonResult(BaseModel):
@@ -194,6 +207,7 @@ def semantic_replay(
         injected_context_chars=sum(len(v) for v in result.payloads.values()),
         latency_ms=result.event.latency_ms,
         leak_checked=True,
+        retrieval_truncated=result.fts_truncated,
     )
 
 
@@ -221,6 +235,7 @@ def ours_replay(
         injected_context_chars=r.injected_context_chars,
         latency_ms=r.latency_ms,
         leak_checked=True,
+        retrieval_truncated=r.fts_truncated,
     )
 
 
@@ -239,7 +254,11 @@ def compare_arms(
 ) -> ComparisonResult:
     """Compare `ours` against one semantic arm on a single query work, scoring both
     against the same relevant set, drawn from the same scope-filtered candidate pool,
-    under the same LOO boundary."""
+    under the same LOO boundary.
+
+    ``relevant_ids`` MUST be an authored / pooled+judged relevant set over candidate
+    TEXT (mem-lvp.31), never derived from any arm's signature or structured match —
+    the circularity HARD RULE."""
     pool = _scope_eligible(loo_bounded(corpus, query), query, scope)
     relevant = _relevant_within_pool(relevant_ids, pool)
     arms = [

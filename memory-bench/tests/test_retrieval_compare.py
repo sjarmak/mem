@@ -181,6 +181,7 @@ def test_ours_replay_scores() -> None:
     assert ac.recall == 1.0
     assert ac.scope == "cross_rig"
     assert ac.leak_checked is True
+    assert ac.retrieval_truncated is False  # stub runner reports no FTS cap hit
 
 
 def test_empty_relevant_set_yields_none_metrics() -> None:
