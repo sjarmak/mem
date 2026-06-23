@@ -14,14 +14,13 @@ Two test groups:
   `WorkRecordLadderAdapter` firewall recognizes that value as an outcome label and
   refuses to write it into any agent-readable file. No adapter needed; they pass now.
 
-* **Red (the Phase 1 adapter contract).** The `Session -> WorkRecord` / `cut` /
-  `MemoryEvent` projection does not exist yet, so these tests are committed as
-  `xfail(strict=True, raises=ModuleNotFoundError)`: today they fail because
-  `membench.openrath.adapter` is absent (the correct TDD red), and the suite stays
-  green. When Phase 1 ships the adapter the import resolves, the body runs for real,
-  and a strict xfail turns an XPASS into a hard failure — forcing whoever lands the
-  adapter to delete the marker and own the now-live contract. The assertions in these
-  bodies ARE the written spec.
+* **Adapter contract (Phase 1, now live).** The `Session -> WorkRecord` / `cut` /
+  `MemoryEvent` projection in `membench.openrath.adapter` ships in Phase 1 (mem-m0ak).
+  These tests were committed red-first as `xfail(strict=True, raises=ModuleNotFoundError)`
+  while the module was absent; landing the adapter resolved the import and made the
+  bodies run for real, so the markers were removed and the assertions are now
+  genuine, load-bearing passing checks. The assertions in these bodies ARE the
+  written spec the adapter satisfies.
 
 ZFC: every assertion is a deterministic firewall / structural check — no semantic
 judgment in code.
@@ -50,20 +49,13 @@ SENTINEL = "SENTINELLEAK0000"
 GOOD_FORK_SHA = "base0000feedfacecafe0000feedfacecafe0000"
 
 # Phase 1's projecting adapter (PRD Phase 1 — "Pure projecting adapter"). Resolved
-# dynamically so this module collects cleanly while the adapter is still absent; the
-# xfail backstop below pins "absent" as the expected red.
+# dynamically; it now exists (mem-m0ak), so the import resolves and the contract
+# bodies below run for real.
 ADAPTER_MODULE = "membench.openrath.adapter"
-
-phase1_adapter = pytest.mark.xfail(
-    reason=f"{ADAPTER_MODULE} ships in OpenRath Phase 1; mem-3zos is the failing-first contract",
-    strict=True,
-    raises=ModuleNotFoundError,
-)
 
 
 def _load_adapter() -> ModuleType:
-    """Import the Phase 1 projecting adapter. Raises `ModuleNotFoundError` today — the
-    TDD red the `phase1_adapter` marker expects."""
+    """Import the Phase 1 projecting adapter."""
     return importlib.import_module(ADAPTER_MODULE)
 
 
@@ -156,9 +148,8 @@ def test_existing_firewall_passes_when_sentinel_confined_to_outcome(tmp_path: An
 
 
 # --------------------------------------------------------------------------- #
-# Red — the Phase 1 projecting-adapter contract (xfail until the adapter ships)
+# The Phase 1 projecting-adapter contract (live now that the adapter has shipped)
 # --------------------------------------------------------------------------- #
-@phase1_adapter
 def test_project_routes_commit_sha_into_outcome_only() -> None:
     adapter = _load_adapter()
     record = adapter.project_session_to_record(_good_session())
@@ -170,7 +161,6 @@ def test_project_routes_commit_sha_into_outcome_only() -> None:
     assert SENTINEL not in json.dumps(non_outcome)
 
 
-@phase1_adapter
 def test_project_drops_memory_event_payload_from_record() -> None:
     adapter = _load_adapter()
     record = adapter.project_session_to_record(_good_session())
@@ -181,7 +171,6 @@ def test_project_drops_memory_event_payload_from_record() -> None:
     assert "mem-aaa" not in blob and "mem-bbb" not in blob
 
 
-@phase1_adapter
 def test_project_fork_point_into_cut_event_positive_path() -> None:
     adapter = _load_adapter()
     cuts = adapter.project_cut_events(_good_session())
@@ -194,7 +183,6 @@ def test_project_fork_point_into_cut_event_positive_path() -> None:
     assert cut["ref_kind"] == "git-sha"
 
 
-@phase1_adapter
 def test_project_memory_event_positive_path() -> None:
     from membench.schemas.memory_event import MemoryEvent
 
@@ -207,7 +195,6 @@ def test_project_memory_event_positive_path() -> None:
     assert events[0].retrieved_ids == ["mem-aaa", "mem-bbb"]
 
 
-@phase1_adapter
 def test_project_rejects_novel_session_field() -> None:
     adapter = _load_adapter()
     # Allow-list, not deny-list: an unrecognized top-level field is an unaudited
@@ -219,7 +206,6 @@ def test_project_rejects_novel_session_field() -> None:
         adapter.project_session_to_record(hostile)
 
 
-@phase1_adapter
 def test_projected_record_is_leak_safe_through_the_ladder(tmp_path: Any) -> None:
     adapter = _load_adapter()
     # End-to-end composition: the projected record must pass the EXISTING ladder
