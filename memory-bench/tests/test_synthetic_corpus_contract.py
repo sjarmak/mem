@@ -16,12 +16,12 @@ Two test groups:
   now and prove the existing machinery already enforces the contract on synthetic
   shapes.
 
-* **Red (the Phase-1 materializer wiring).** `generators.synthetic_corpus` does not
-  exist yet, so these are `xfail(strict=True, raises=ModuleNotFoundError)`: today they
-  fail because the materializer is absent (the correct TDD red) and the suite stays
-  green; when the wiring ships, the import resolves, the bodies run for real, and a
-  strict xfail turns an XPASS into a hard failure — forcing whoever lands it to delete
-  the marker and own the now-live contract. The assertion bodies ARE the written spec.
+* **The Phase-1 materializer wiring (live now that it has shipped).**
+  `generators.synthetic_corpus.materialize_record` ships in Phase 1 (mem-oy2v). These
+  tests were committed red-first as `xfail(strict=True, raises=ModuleNotFoundError)`
+  while the materializer was absent; landing it resolved the import and made the bodies
+  run for real, so the markers were removed and the assertion bodies are now genuine,
+  load-bearing passing checks — the written spec the materializer satisfies.
 
 HARD GUARD (reserved for Stephanie — NOT decided here): whether synthetic records
 SHARE the real WorkRecord schema/store or live in a SEPARATE synthetic corpus. This
@@ -59,17 +59,9 @@ SENTINEL = "SENTINELSYNTH000"
 # module collects cleanly while the wiring is still absent.
 MATERIALIZER_MODULE = "membench.generators.synthetic_corpus"
 
-phase1_wiring = pytest.mark.xfail(
-    reason=f"{MATERIALIZER_MODULE} (synthetic→corpus materializer) is Phase-1 wiring; "
-    "mem-ifm2 is the failing-first contract",
-    strict=True,
-    raises=ModuleNotFoundError,
-)
-
 
 def _load_materializer() -> ModuleType:
-    """Import the Phase-1 synthetic→corpus materializer. Raises `ModuleNotFoundError`
-    today — the TDD red the `phase1_wiring` marker expects."""
+    """Import the Phase-1 synthetic→corpus materializer (now shipped, mem-oy2v)."""
     return importlib.import_module(MATERIALIZER_MODULE)
 
 
@@ -151,9 +143,8 @@ def test_firewall_separates_synthetic_outcome_from_agent_readable(tmp_path: Any)
 
 
 # --------------------------------------------------------------------------- #
-# Red — the Phase-1 synthetic→corpus materializer (xfail until the wiring ships)
+# The Phase-1 synthetic→corpus materializer (live now that the wiring has shipped)
 # --------------------------------------------------------------------------- #
-@phase1_wiring
 def test_materialize_record_is_loo_boundable() -> None:
     mat = _load_materializer()
     seq = generate_synthetic_sequence(seed=0)
@@ -167,7 +158,6 @@ def test_materialize_record_is_loo_boundable() -> None:
     assert ref.work_id in {r.work_id for r in loo_bounded([ref], after)}
 
 
-@phase1_wiring
 def test_materialize_routes_outcome_label_into_outcome_only() -> None:
     mat = _load_materializer()
     seq = generate_synthetic_sequence(seed=0)
@@ -188,7 +178,6 @@ def test_materialize_routes_outcome_label_into_outcome_only() -> None:
     assert json.dumps(record["outcome"])  # non-empty outcome
 
 
-@phase1_wiring
 def test_materialize_positive_path_loads_through_the_same_reader() -> None:
     mat = _load_materializer()
     seq = generate_synthetic_sequence(seed=0)
@@ -202,7 +191,6 @@ def test_materialize_positive_path_loads_through_the_same_reader() -> None:
     assert [r.work_id for r in corpus] == [record["work_id"]]
 
 
-@phase1_wiring
 def test_materialized_record_is_leak_safe_through_the_ladder(tmp_path: Any) -> None:
     mat = _load_materializer()
     seq = generate_synthetic_sequence(seed=0)
