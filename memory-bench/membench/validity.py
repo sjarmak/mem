@@ -46,6 +46,10 @@ class WorkRef:
     # links.supersedes — the work_ids this record supersedes (edges are treated
     # as undirected for the closure).
     supersedes: tuple[str, ...] = ()
+    # Provenance marker: "real" for a city-ingested WorkRecord, "synthetic" for a
+    # generator-materialized one (D-J SHARE — one schema, distinguished only here).
+    # Defaults "real" so every existing record and inline WorkRef keeps its meaning.
+    origin: str = "real"
 
 
 @dataclass(frozen=True)
@@ -152,6 +156,9 @@ def work_ref_from_record(record: Mapping[str, Any]) -> WorkRef:
         pr=outcome.get("pr"),
         external_ref=record.get("external_ref"),
         supersedes=tuple(links.get("supersedes", ())),
+        # Carried through the SAME reader so synthetic and real work share one corpus;
+        # a record with no marker is real by construction.
+        origin=str(record.get("origin") or "real"),
     )
 
 
