@@ -34,3 +34,24 @@ verify/rig-checkouts.*.json
 # scripts/generate_worlds.py. Curated freezing + manifest is Phase 4 (mem-ge51);
 # until then these are local generation artifacts, not committed.
 memory-bench/fixtures/worlds/
+
+# Python tool caches + coverage artifacts: regenerated locally / in CI, never
+# committed. (Covered by a global excludesfile on dev machines too; pinned here
+# so a fresh checkout / CI is junk-free without relying on global git config.)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Agent-tooling dot-folders: deliberately untracked (chore 8311409 removed them
+# from the index but did not ignore them, so they kept resurfacing). Session-local.
+.claude/
+.codex/
+
+# PL deep-audit / status reports (mem-pl): local operating artifacts, not committed.
+.gc-reports/
