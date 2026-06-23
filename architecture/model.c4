@@ -310,7 +310,6 @@ model {
     controller = container '6-stage memory controller (MCP server)' {
       #planned
       description 'Designed; v1 fills each stage with a heuristic/judge and logs the decision so it is trainable'
-      link ../.gc/memory-eval-harness-spec.md 'Harness spec §1'
       link ../docs/architecture-decisions.md 'Decision 14 — controller-loop framing'
 
       classify = component 'need-classification → query-formation' {
