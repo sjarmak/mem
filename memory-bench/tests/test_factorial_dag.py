@@ -15,6 +15,7 @@ import pytest
 from membench.generators.factorial_dag import (
     DISTRACTOR_ON_COUNT,
     GENERATOR_VERSION,
+    NON_DEPTH_FACTORS,
     FactorCell,
     all_factor_cells,
     antichain_width,
@@ -45,6 +46,7 @@ def _structural_rewards(seq: BenchmarkSequence) -> tuple[float, float]:
     ``requires_memory`` checks — the property ``pilot_filter`` admits on."""
     checks = [c for st in seq.steps for c in st.outcome_checks]
     assert checks, "generated sequence must carry at least one outcome check"
+    assert all(c.requires_memory for c in checks), "every generated check must require memory"
     oracle = 1.0
     no_mem = sum(1 for c in checks if not c.requires_memory) / len(checks)
     return oracle, no_mem
@@ -72,7 +74,7 @@ def test_family_is_full_factorial_of_eight_unique_cells() -> None:
 
 def test_antichain_width_invariant_across_nondepth_toggles() -> None:
     # Isolation guarantee: every cell at a frozen K has the SAME topology width == K.
-    for width in (3, 4, 5):
+    for width in (3, 4, 5, 6):
         widths = {antichain_width(s.steps) for s in generate_factorial_family(seed=2, width=width)}
         assert widths == {width}
 
@@ -104,14 +106,16 @@ def test_consolidation_toggles_retention_labels_with_a_hurts_condition() -> None
     assert all(st.record_class is None and st.disposition is None for st in off.steps)
     est = _establish_steps(on)
     assert est and all(st.record_class is not None for st in est)
-    # the HURTS condition: a goal-required record scheduled for destruction.
-    assert "destroy" in {st.disposition for st in est}
+    # the HURTS condition is structural: branch 0 (a goal-required fact) is the destroy
+    # target, every other branch is kept live — not just "destroy exists somewhere".
+    assert est[0].disposition == "destroy"
+    assert all(st.disposition != "destroy" for st in est[1:])
     assert antichain_width(off.steps) == antichain_width(on.steps)
 
 
 def test_full_factorial_is_balanced() -> None:
     cells = all_factor_cells()
-    for name in ("interference", "supersession", "consolidation"):
+    for name in NON_DEPTH_FACTORS:
         assert sum(1 for c in cells if c.levels()[name]) == 4
 
 
@@ -147,6 +151,9 @@ def test_cost_grounding_is_optional_and_resampled_from_the_pool() -> None:
     # absent a pool, no cost keys leak into the trace (CI stays IO-free).
     plain = generate_cell(seed=1, width=4, cell=FactorCell(True, True, True))
     assert all("real_cost_turns" not in st.environment_state for st in plain.steps)
+    # an EMPTY pool is a caller mistake, not "no grounding" — fail fast, don't drop it.
+    with pytest.raises(ValueError):
+        generate_cell(seed=1, width=4, cell=_ALL_OFF, cost_pool=[])
 
 
 def test_width_must_be_positive() -> None:

@@ -24,6 +24,17 @@ appears in exactly four cells).
 Deterministic: same ``(seed, width)`` ⇒ byte-identical family. Real per-branch cost is
 resampled from a supplied recorded-corpus pool (grounding); with no pool the cost
 fields are omitted so CI stays model- and IO-free.
+
+Modelling simplifications (Gate 0a scope; revisit for Gate 0b realism):
+  - Supersession writes the stale v1 alongside the current v2 in the SAME establish
+    step (distinct ids), so the staleness signal is scored at the goal's retrieve where
+    both are in scope. This keeps the topology width-invariant — a separate earlier
+    v1-only step would add an antichain node and break isolation — at the cost of never
+    exercising a "v1-only retrieval window" before v2 exists.
+  - The consolidation HURTS condition schedules exactly ONE goal-required record (branch
+    0) for destruction, so the per-sequence hurt signal is 1/K — a fixed floor, not
+    scaled with width. Account for this in any power analysis of the consolidation main
+    effect.
 """
 
 from __future__ import annotations
@@ -145,11 +156,16 @@ def _cell_ordinal(cell: FactorCell) -> int:
 
 
 def _cost_for(rng: random.Random, cost_pool: Sequence[tuple[int, int]] | None) -> dict[str, Any]:
-    """Resample one real ``(turns, tool_calls)`` from the corpus pool (grounding). No
-    pool ⇒ empty state, so CI stays model- and IO-free."""
-    if not cost_pool:
+    """Resample one real ``(turns, tool_calls)`` from the corpus pool (grounding).
+
+    ``None`` ⇒ no grounding (empty state, so CI stays model- and IO-free). An EMPTY
+    pool is a caller mistake (the corpus failed to load), not "no grounding" — raise
+    rather than silently dropping it."""
+    if cost_pool is None:
         return {}
-    turns, tools = cost_pool[rng.randrange(len(cost_pool))]
+    if not cost_pool:
+        raise ValueError("cost_pool must be non-empty or None")
+    turns, tools = rng.choice(cost_pool)
     return {"real_cost_turns": turns, "real_cost_tool_calls": tools}
 
 
