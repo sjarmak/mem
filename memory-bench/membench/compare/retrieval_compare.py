@@ -73,8 +73,8 @@ class ComparisonResult(BaseModel):
 
     work_id: str
     retrieval_target: RetrievalTarget
-    # LOO-eligible records that existed — distinguishes an empty result from an
-    # empty corpus.
+    # Size of the scope-filtered candidate pool both arms drew from (LOO-eligible ∩
+    # the track's rig predicate) — distinguishes an empty result from an empty pool.
     eligible_count: int
     # Size of the authored relevant set after intersecting with the LOO set.
     relevant_count: int
@@ -83,15 +83,32 @@ class ComparisonResult(BaseModel):
     stack_telemetry: dict[str, str]
 
 
-def _relevant_within_loo(
-    relevant_ids: Iterable[str], eligible: Sequence[WorkRef]
-) -> tuple[str, ...]:
-    """Intersect the authored relevant set with the LOO-eligible ids. A relevant id
-    the boundary withholds is unreachable by construction, so counting it in the
-    recall denominator would understate every arm equally and falsely (mirrors
-    `grading.retrieval_leg.gold_relevant_ids` subtracting the excluded set)."""
-    eligible_ids = {ref.work_id for ref in eligible}
-    return tuple(sorted(set(relevant_ids) & eligible_ids))
+def _scope_eligible(eligible: Sequence[WorkRef], query: QueryWork, scope: str) -> list[WorkRef]:
+    """The candidate pool BOTH arms draw from under one Decision-7 track: the
+    LOO-eligible records filtered by the track's rig predicate, matching what `ours`
+    applies internally (retrieve.ts SCOPES). ``cross_rig`` = other rigs only (the
+    strict generalization track); ``same_rig_temporal`` = the query's rig only.
+
+    Seeding the semantic arm from THIS pool — not the full LOO set — is what keeps the
+    comparison fair: a same-rig record `ours` could never surface on ``cross_rig`` must
+    not be reachable by the semantic arm either, or the two arms would be answering
+    over different candidate sets and the retrieval-mechanism question is confounded
+    with a candidate-pool difference."""
+    if scope == "cross_rig":
+        return [ref for ref in eligible if ref.rig != query.rig]
+    if scope == "same_rig_temporal":
+        return [ref for ref in eligible if ref.rig == query.rig]
+    raise ValueError(f"unknown scope {scope!r}; expected cross_rig or same_rig_temporal")
+
+
+def _relevant_within_pool(relevant_ids: Iterable[str], pool: Sequence[WorkRef]) -> tuple[str, ...]:
+    """Intersect the authored relevant set with the candidate pool. A relevant id
+    outside the pool — LOO-withheld, or the wrong rig for this track — is unreachable
+    by construction, so counting it in the recall denominator would understate every
+    arm equally and falsely (mirrors `grading.retrieval_leg.gold_relevant_ids`
+    subtracting the excluded set)."""
+    pool_ids = {ref.work_id for ref in pool}
+    return tuple(sorted(set(relevant_ids) & pool_ids))
 
 
 def seed_semantic_arm(
@@ -132,15 +149,17 @@ def semantic_replay(
     corpus_text: Mapping[str, str],
     *,
     relevant_ids: Sequence[str],
+    scope: str = DEFAULT_OURS_SCOPE,
     target: RetrievalTarget = "canonical",
     clock: IdClock | None = None,
 ) -> ArmComparison:
-    """Seed ``arm`` with the LOO set, query it with ``query_text``, translate its
-    backend-keyed hits to work_ids, re-check the boundary, and score against
-    ``relevant_ids``. ``relevant_ids`` is taken as already LOO-intersected by the
-    caller (`compare_arms`)."""
-    eligible = loo_bounded(corpus, query)
-    trial_id = f"{query.work_id}-{arm.name}"
+    """Seed ``arm`` with the scope-filtered candidate pool (the same pool `ours` draws
+    from under ``scope``), query it with ``query_text``, translate its backend-keyed
+    hits to work_ids, re-check the boundary, and score against ``relevant_ids``.
+    ``relevant_ids`` is taken as already pool-intersected by the caller
+    (`compare_arms`)."""
+    pool = _scope_eligible(loo_bounded(corpus, query), query, scope)
+    trial_id = f"{query.work_id}-{arm.name}-{scope}"
     arm.reset(trial_id)
 
     # Separate clock for seeding so the seed writes never perturb the retrieve event's
@@ -148,7 +167,7 @@ def semantic_replay(
     seed_ctx = StepContext(
         trial_id=trial_id, session_id=query.work_id, step_id="seed", clock=IdClock()
     )
-    backend_to_work = seed_semantic_arm(arm, eligible, corpus_text, seed_ctx)
+    backend_to_work = seed_semantic_arm(arm, pool, corpus_text, seed_ctx)
 
     ctx = StepContext(
         trial_id=trial_id,
@@ -166,7 +185,7 @@ def semantic_replay(
     leg = score_retrieval_leg(retrieved_work_ids, relevant_ids, target=target)
     return ArmComparison(
         arm=arm.name,
-        scope=None,
+        scope=scope,
         retrieved_ids=retrieved_work_ids,
         precision=leg.precision,
         recall=leg.recall,
@@ -219,9 +238,10 @@ def compare_arms(
     stack_telemetry: Mapping[str, str] | None = None,
 ) -> ComparisonResult:
     """Compare `ours` against one semantic arm on a single query work, scoring both
-    against the same LOO-intersected relevant set under the same LOO boundary."""
-    eligible = loo_bounded(corpus, query)
-    relevant = _relevant_within_loo(relevant_ids, eligible)
+    against the same relevant set, drawn from the same scope-filtered candidate pool,
+    under the same LOO boundary."""
+    pool = _scope_eligible(loo_bounded(corpus, query), query, scope)
+    relevant = _relevant_within_pool(relevant_ids, pool)
     arms = [
         ours_replay(ours, query, corpus, relevant_ids=relevant, scope=scope, target=target),
         semantic_replay(
@@ -231,13 +251,14 @@ def compare_arms(
             corpus,
             corpus_text,
             relevant_ids=relevant,
+            scope=scope,
             target=target,
         ),
     ]
     return ComparisonResult(
         work_id=query.work_id,
         retrieval_target=target,
-        eligible_count=len(eligible),
+        eligible_count=len(pool),
         relevant_count=len(relevant),
         arms=arms,
         stack_telemetry=dict(stack_telemetry or {}),
