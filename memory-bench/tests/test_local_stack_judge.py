@@ -124,12 +124,18 @@ def test_score_action_impact_accepts_the_local_judge_unchanged() -> None:
 
 def test_compare_attempts_accepts_the_local_judge_unchanged() -> None:
     left = Attempt(
-        id=deterministic_id({"arm": "cold"}), work_id="w", arm="cold",
-        status="failed", result={"total_tokens": 900},  # type: ignore[arg-type]
+        id=deterministic_id({"arm": "cold"}),
+        work_id="w",
+        arm="cold",
+        status="failed",
+        result={"total_tokens": 900},  # type: ignore[arg-type]
     )
     right = Attempt(
-        id=deterministic_id({"arm": "warm"}), work_id="w", arm="warm",
-        status="completed", result={"total_tokens": 300},  # type: ignore[arg-type]
+        id=deterministic_id({"arm": "warm"}),
+        work_id="w",
+        arm="warm",
+        status="completed",
+        result={"total_tokens": 300},  # type: ignore[arg-type]
     )
     diff = generate_narrative_diff(left, right, [], [])
     judge = LocalStackComparativeJudge(

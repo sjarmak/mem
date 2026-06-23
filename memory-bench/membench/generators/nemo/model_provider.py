@@ -26,9 +26,7 @@ DEFAULT_NIM_MODEL = "meta/llama-3.1-8b-instruct"
 DEFAULT_NIM_PROVIDER_NAME = "local-nim"
 
 
-def local_nim_provider(
-    *, endpoint: str = DEFAULT_NIM_ENDPOINT, api_key: str | None = None
-) -> Any:
+def local_nim_provider(*, endpoint: str = DEFAULT_NIM_ENDPOINT, api_key: str | None = None) -> Any:
     """A ``ModelProvider`` pointing at a local NIM's OpenAI-compatible endpoint. A
     local NIM needs no key; ``api_key`` is accepted for endpoints that gate on a
     placeholder token."""

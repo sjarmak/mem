@@ -61,12 +61,12 @@ def test_continuity_needs_the_shared_store(tmp_path) -> None:
     # A cross-task project: filesystem reaches oracle under run_project (charter
     # carried across tasks) but falls short when each task is run independently.
     seqs = materialize_project(_world(), _project(), n_tasks=3)
-    indep = _by_arm(
-        eval_arms_over_sequences(seqs, ["filesystem"], fs_base_dir=tmp_path / "indep")
-    )["filesystem"]
-    proj = _by_arm(
-        eval_arms_over_project(seqs, ["filesystem"], fs_base_dir=tmp_path / "proj")
-    )["filesystem"]
+    indep = _by_arm(eval_arms_over_sequences(seqs, ["filesystem"], fs_base_dir=tmp_path / "indep"))[
+        "filesystem"
+    ]
+    proj = _by_arm(eval_arms_over_project(seqs, ["filesystem"], fs_base_dir=tmp_path / "proj"))[
+        "filesystem"
+    ]
     # Under the shared store the arm recalls the charter task 0 wrote, so it scores
     # higher than when each task is isolated. (oracle_gap is ~0 in both: filesystem
     # matches oracle by id-retrieval — the honest ScriptedAgent ceiling.)

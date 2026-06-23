@@ -96,9 +96,7 @@ def _load_arm(jobs_dir: Path, grid_dir: Path, work_id: str, arm: str) -> _ArmLoa
     repro_passed = _load_repro_passed(grid_dir, work_id, condition)
     attempt_id = deterministic_id({"arm": arm, "work_id": work_id, "condition": condition})
     steps = steps_from_stream(stream, attempt_id)
-    status = (
-        "completed" if repro_passed else "failed" if repro_passed is False else None
-    )
+    status = "completed" if repro_passed else "failed" if repro_passed is False else None
     traj = ArmStepTrajectory(
         arm=arm,
         sequence_id=_GRID_SEQUENCE,
@@ -183,9 +181,7 @@ def score_grid_action_impact(
             paired[arm].append(work_id)
         treated_pass_rate[arm] = _pass_rate(treated_oracle)
         if treated_traj:
-            scored = run_action_impact(
-                {CONTROL_ARM: control_traj, arm: treated_traj}, judge=judge
-            )
+            scored = run_action_impact({CONTROL_ARM: control_traj, arm: treated_traj}, judge=judge)
             action_impact[arm] = scored[arm]
 
     return GridActionImpact(

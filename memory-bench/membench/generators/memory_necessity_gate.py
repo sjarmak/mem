@@ -72,7 +72,5 @@ def memory_necessity_gate(
     summaries = build_comparison(run).summaries
     oracle = summaries[Condition.ORACLE_MEMORY.value].mean_reward
     no_memory = summaries[Condition.NO_MEMORY.value].mean_reward
-    verdict = pilot_filter(
-        oracle_reward=oracle, no_memory_reward=no_memory, epsilon=epsilon
-    )
+    verdict = pilot_filter(oracle_reward=oracle, no_memory_reward=no_memory, epsilon=epsilon)
     return NecessityResult(sequence_id=seq.sequence_id, verdict=verdict)

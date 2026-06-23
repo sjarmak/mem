@@ -57,9 +57,7 @@ def run_step_trajectory(
         clock=IdClock(),
     )
     result = agent.run_step(step, memory, ctx)
-    attempt_id = deterministic_id(
-        {"arm": arm, "sequence_id": sequence_id, "step_id": step.step_id}
-    )
+    attempt_id = deterministic_id({"arm": arm, "sequence_id": sequence_id, "step_id": step.step_id})
     steps = steps_from_stream(result.raw_stream, attempt_id)
     status = "failed" if result.errors else "completed"
     return ArmStepTrajectory(

@@ -54,9 +54,7 @@ def _exp(system: str = "none") -> ExperimentConfig:
 
 def _goal_trial(run, sequence_id: str):
     return next(
-        t
-        for t in run.trials
-        if t.sequence_id == sequence_id and t.step_id.endswith("-goal")
+        t for t in run.trials if t.sequence_id == sequence_id and t.step_id.endswith("-goal")
     )
 
 

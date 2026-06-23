@@ -72,9 +72,7 @@ class ArmStepTrajectory:
         return (self.sequence_id, self.step_id)
 
 
-def pair_trajectories(
-    control: ArmStepTrajectory, treated: ArmStepTrajectory
-) -> ActionImpactInputs:
+def pair_trajectories(control: ArmStepTrajectory, treated: ArmStepTrajectory) -> ActionImpactInputs:
     """Build the `ActionImpactInputs` for one paired step: ``on`` = the memory-enabled
     (treated) arm, ``off`` = the no-memory control. Raises if the two are not the same
     sequence step — pairing mismatched steps would silently compare unrelated work."""
@@ -142,9 +140,7 @@ class ArmActionImpact:
         }
 
 
-def aggregate_metrics(
-    arm: str, metrics: Sequence[ActionImpactMetrics]
-) -> ArmActionImpact:
+def aggregate_metrics(arm: str, metrics: Sequence[ActionImpactMetrics]) -> ArmActionImpact:
     """Tally a sequence of per-pair `ActionImpactMetrics` into one arm's raw 5-axis
     vector. For each axis, ``decided`` counts the pairs whose value is not ``None`` and
     ``true`` counts those that are ``True`` — so a ``None`` (undecided) axis lowers
@@ -213,9 +209,7 @@ def run_action_impact(
     ``none`` control. Treated arms are every other key (e.g. ``ours``, ``builtin``),
     each scored independently — there is no cross-arm composite (§4.2)."""
     if CONTROL_ARM not in arms:
-        raise ValueError(
-            f"arms must include the '{CONTROL_ARM}' control; got {sorted(arms)}"
-        )
+        raise ValueError(f"arms must include the '{CONTROL_ARM}' control; got {sorted(arms)}")
     control = arms[CONTROL_ARM]
     return {
         name: score_arm_run(control, trajectories, treated_name=name, judge=judge)

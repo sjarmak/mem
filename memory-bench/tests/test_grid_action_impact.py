@@ -17,8 +17,7 @@ from membench.harbor.grid_action_impact import (
 
 def _stream(*tools: str) -> str:
     content = [
-        {"type": "tool_use", "id": f"t{i}", "name": t, "input": {}}
-        for i, t in enumerate(tools)
+        {"type": "tool_use", "id": f"t{i}", "name": t, "input": {}} for i, t in enumerate(tools)
     ]
     return (
         json.dumps({"type": "assistant", "message": {"role": "assistant", "content": content}})
@@ -67,21 +66,27 @@ def _setup(tmp_path: Path, bundles: dict[str, dict[str, Any]]) -> tuple[Path, Pa
 
 def _verdict(**ov: Any) -> str:
     p = {
-        "memory_changed_tool_choice": False, "memory_changed_plan": False,
-        "memory_changed_output": False, "memory_prevented_known_failure": False,
-        "memory_improved_verification": False, "rationale": "stub",
+        "memory_changed_tool_choice": False,
+        "memory_changed_plan": False,
+        "memory_changed_output": False,
+        "memory_prevented_known_failure": False,
+        "memory_improved_verification": False,
+        "rationale": "stub",
     }
     p.update(ov)
     return json.dumps(p)
 
 
 def test_pairs_and_scores_ours_vs_none(tmp_path: Path) -> None:
-    grid_dir, jobs_dir = _setup(tmp_path, {
-        "bundle-a": {
-            "none": (_stream("Bash"), False),
-            "ours": (_stream("Write"), True),   # memory → different tool + it passes
+    grid_dir, jobs_dir = _setup(
+        tmp_path,
+        {
+            "bundle-a": {
+                "none": (_stream("Bash"), False),
+                "ours": (_stream("Write"), True),  # memory → different tool + it passes
+            },
         },
-    })
+    )
     judge = StubComparativeJudge(fn=lambda _p: _verdict(memory_changed_tool_choice=True))
     res = score_grid_action_impact(
         grid_dir, jobs_dir, ["bundle-a"], treated_arms=("ours",), judge=judge
@@ -98,10 +103,13 @@ def test_pairs_and_scores_ours_vs_none(tmp_path: Path) -> None:
 
 def test_skips_bundle_missing_treated_arm(tmp_path: Path) -> None:
     # bundle-b has only the control (ours job dir absent) → skipped for ours, not faked.
-    grid_dir, jobs_dir = _setup(tmp_path, {
-        "bundle-a": {"none": (_stream("Bash"), False), "ours": (_stream("Write"), True)},
-        "bundle-b": {"none": (_stream("Bash"), False)},
-    })
+    grid_dir, jobs_dir = _setup(
+        tmp_path,
+        {
+            "bundle-a": {"none": (_stream("Bash"), False), "ours": (_stream("Write"), True)},
+            "bundle-b": {"none": (_stream("Bash"), False)},
+        },
+    )
     res = score_grid_action_impact(
         grid_dir, jobs_dir, ["bundle-a", "bundle-b"], treated_arms=("ours",), judge=None
     )
@@ -111,12 +119,15 @@ def test_skips_bundle_missing_treated_arm(tmp_path: Path) -> None:
 
 def test_builtin_arm_uses_none_condition(tmp_path: Path) -> None:
     # builtin's stream comes from the grid 'none' condition; control from 'none-clean'.
-    grid_dir, jobs_dir = _setup(tmp_path, {
-        "bundle-a": {
-            "none": (_stream("Read"), True),      # none-clean control
-            "builtin": (_stream("Read"), True),   # grid 'none' condition
+    grid_dir, jobs_dir = _setup(
+        tmp_path,
+        {
+            "bundle-a": {
+                "none": (_stream("Read"), True),  # none-clean control
+                "builtin": (_stream("Read"), True),  # grid 'none' condition
+            },
         },
-    })
+    )
     res = score_grid_action_impact(
         grid_dir, jobs_dir, ["bundle-a"], treated_arms=("builtin",), judge=None
     )
@@ -128,9 +139,12 @@ def test_builtin_arm_uses_none_condition(tmp_path: Path) -> None:
 
 
 def test_outcome_lift_none_when_oracle_absent(tmp_path: Path) -> None:
-    grid_dir, jobs_dir = _setup(tmp_path, {
-        "bundle-a": {"none": (_stream("Bash"), None), "ours": (_stream("Write"), None)},
-    })
+    grid_dir, jobs_dir = _setup(
+        tmp_path,
+        {
+            "bundle-a": {"none": (_stream("Bash"), None), "ours": (_stream("Write"), None)},
+        },
+    )
     res = score_grid_action_impact(
         grid_dir, jobs_dir, ["bundle-a"], treated_arms=("ours",), judge=None
     )

@@ -58,8 +58,13 @@ def _traj(arm: str, seq: str, step: str, steps: list[AttemptStep], **kw: Any) ->
 def test_pair_trajectories_maps_on_off_and_context() -> None:
     control = _traj("none", "s1", "k1", [_step(0, "Read")], status="completed")
     treated = _traj(
-        "ours", "s1", "k1", [_step(0, "Grep")], status="completed",
-        work_id="mem-x", known_failure="flaky import",
+        "ours",
+        "s1",
+        "k1",
+        [_step(0, "Grep")],
+        status="completed",
+        work_id="mem-x",
+        known_failure="flaky import",
     )
     inp = pair_trajectories(control, treated)
     assert inp.on_steps == treated.steps  # on == treated (memory-enabled)

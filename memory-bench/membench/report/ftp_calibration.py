@@ -179,9 +179,7 @@ def calibrate(
     anc = {canonical_arm(a): v for a, v in anchor_lifts.items()}
     baseline = canonical_arm(anchor.baseline_arm)
     # Shared arms that carry rank information: present in both suites, not the baseline.
-    shared = tuple(
-        sorted(a for a in syn.keys() & anc.keys() if a != baseline)
-    )
+    shared = tuple(sorted(a for a in syn.keys() & anc.keys() if a != baseline))
 
     if anchor_flat:
         return CalibrationVerdict(

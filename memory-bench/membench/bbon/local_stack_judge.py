@@ -123,9 +123,7 @@ class LocalStackComparativeJudge:
         try:
             payload = json.loads(raw)
         except json.JSONDecodeError as exc:
-            raise ComparativeJudgeError(
-                f"Ollama reply is not valid JSON: {exc}"
-            ) from exc
+            raise ComparativeJudgeError(f"Ollama reply is not valid JSON: {exc}") from exc
         if not isinstance(payload, dict) or not isinstance(payload.get("response"), str):
             raise ComparativeJudgeError(
                 f"Ollama reply missing a string 'response' field: {payload!r}"
