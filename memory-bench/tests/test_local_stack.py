@@ -15,10 +15,12 @@ import pytest
 
 from membench.memory_systems.local_stack import (
     DEFAULT_CHAT_MODEL,
+    DEFAULT_NEMO_EMBEDDING_MODEL,
     DEFAULT_OLLAMA_BASE_URL,
     DEFAULT_OLLAMA_EMBEDDING_MODEL,
     DEFAULT_SENTENCE_TRANSFORMER_MODEL,
     ENV_CHAT_MODEL,
+    ENV_NEMO_EMBEDDING_MODEL,
     ENV_OLLAMA_BASE_URL,
     ENV_OLLAMA_EMBEDDING_MODEL,
     ENV_SENTENCE_TRANSFORMER_MODEL,
@@ -41,6 +43,12 @@ def test_from_env_uses_pinned_defaults_when_unset():
     assert stack.chat_model == DEFAULT_CHAT_MODEL
     assert stack.ollama_embedding_model == DEFAULT_OLLAMA_EMBEDDING_MODEL
     assert stack.sentence_transformer_model == DEFAULT_SENTENCE_TRANSFORMER_MODEL
+    assert stack.nemo_embedding_model == DEFAULT_NEMO_EMBEDDING_MODEL
+
+
+def test_nemo_default_is_the_permissive_nvidia_embedder():
+    # PL default (mem-sikg): permissive license, not the NVIDIA-Non-Commercial backend.
+    assert DEFAULT_NEMO_EMBEDDING_MODEL == "nvidia/llama-nemotron-embed-1b-v2"
 
 
 def test_from_env_overrides_every_field():
@@ -50,12 +58,14 @@ def test_from_env_overrides_every_field():
             ENV_CHAT_MODEL: "qwen2",
             ENV_OLLAMA_EMBEDDING_MODEL: "mxbai-embed-large",
             ENV_SENTENCE_TRANSFORMER_MODEL: "all-mpnet-base-v2",
+            ENV_NEMO_EMBEDDING_MODEL: "nvidia/llama-nv-embed-reasoning-3b",
         }
     )
     assert stack.ollama_base_url == "http://gpu-box:11434"
     assert stack.chat_model == "qwen2"
     assert stack.ollama_embedding_model == "mxbai-embed-large"
     assert stack.sentence_transformer_model == "all-mpnet-base-v2"
+    assert stack.nemo_embedding_model == "nvidia/llama-nv-embed-reasoning-3b"
 
 
 # --- telemetry pin (V2) ----------------------------------------------------------
@@ -67,6 +77,7 @@ def test_telemetry_dict_pins_models_and_version_but_not_base_url():
     assert pin["stack_version"] == STACK_VERSION
     assert pin["chat_model"] == "c"
     assert pin["ollama_embedding_model"] == DEFAULT_OLLAMA_EMBEDDING_MODEL
+    assert pin["nemo_embedding_model"] == DEFAULT_NEMO_EMBEDDING_MODEL
     # base_url is a deployment detail, not model identity.
     assert "ollama_base_url" not in pin
 

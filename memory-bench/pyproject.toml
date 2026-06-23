@@ -70,6 +70,8 @@ module = [
     "graphiti_core.*",
     "data_designer",
     "data_designer.*",
+    "sentence_transformers",
+    "sentence_transformers.*",
 ]
 ignore_missing_imports = true
 
