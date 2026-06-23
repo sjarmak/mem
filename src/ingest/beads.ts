@@ -226,12 +226,45 @@ const LABELS_SQL = 'select issue_id, label from labels';
 const RIGS_SQL =
   "select table_schema as rig from information_schema.tables where table_name = 'issues'";
 
-/** List every rig on the server (any database that has an `issues` table). */
+/** dolt/MySQL system schemas. They have no `issues` table so RIGS_SQL already
+ * skips them, but they are listed for defence-in-depth (and clarity). */
+const SYSTEM_SCHEMAS = new Set(['information_schema', 'mysql', 'sys', 'performance_schema']);
+
+/** Exact non-rig databases on the shared server: a dolt probe and an empty
+ * shared-package store. Both can carry an `issues` table but hold no work. */
+const NON_RIG_DATABASES = new Set(['__gc_probe', 'dolt_pkg_shared']);
+
+/** Name prefixes of the ephemeral databases gascity's test suites create on the
+ * shared dolt server and routinely leak (e.g. `testdb_8212308f205f_shared`,
+ * `test_cloud_auth_route_0_32819`, `fixdepkeys_489f1e277a97`). Many carry a
+ * schema-conformant `issues` table, so schema alone cannot tell them apart from
+ * a real rig — they are excluded by their stable naming convention. */
+const TEST_DATABASE_PREFIXES = [
+  'testdb_',
+  'test_cloud_auth_',
+  'test_federation_',
+  'test_guard_',
+  'fixdepkeys_',
+];
+
+/** True for a real work rig: not a system schema, not a known non-rig, and not
+ * an ephemeral test-suite database. The dolt server is an external boundary, so
+ * its database list is untrusted input — a test fixture's beads must never be
+ * projected into the canonical store. Hence an explicit exclusion rather than
+ * "any database with an issues table". */
+function isWorkRig(name: string): boolean {
+  if (SYSTEM_SCHEMAS.has(name) || NON_RIG_DATABASES.has(name)) return false;
+  return !TEST_DATABASE_PREFIXES.some(prefix => name.startsWith(prefix));
+}
+
+/** List every work rig on the server: a database with an `issues` table that is
+ * neither a system schema nor an ephemeral gascity test-suite database. */
 export async function listRigs(run: SqlRunner): Promise<string[]> {
   const rows = await run('information_schema', RIGS_SQL);
   return rows
     .map(row => row.rig)
     .filter((rig): rig is string => rig !== undefined)
+    .filter(isWorkRig)
     .sort();
 }
 

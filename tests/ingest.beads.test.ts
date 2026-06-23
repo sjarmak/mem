@@ -246,6 +246,31 @@ describe('listRigs', () => {
     });
     expect(await listRigs(run)).toEqual(['codeprobe', 'gascity', 'mem']);
   });
+
+  it('excludes system schemas and gascity test-suite leak databases', async () => {
+    // The shared dolt server accumulates ephemeral databases from gascity's
+    // test suites (testdb_<hex>, test_<feature>_<port>, fixdepkeys_<hex>) plus
+    // dolt/MySQL system schemas. They carry an `issues` table — sometimes a
+    // schema-conformant one — so they must be excluded structurally, not
+    // trusted: projecting their fixture beads would corrupt the eval corpus.
+    const run = fakeRunner({
+      'information_schema::rigs': [
+        { rig: 'mem' },
+        { rig: 'gascity' },
+        { rig: 'mysql' },
+        { rig: 'sys' },
+        { rig: 'testdb_8212308f205f_shared' },
+        { rig: 'testdb_ae2dea539651_a' },
+        { rig: 'test_cloud_auth_route_0_32819' },
+        { rig: 'test_federation_credentials_32825' },
+        { rig: 'test_guard_both_32819' },
+        { rig: 'fixdepkeys_489f1e277a97' },
+        { rig: '__gc_probe' },
+        { rig: 'dolt_pkg_shared' },
+      ],
+    });
+    expect(await listRigs(run)).toEqual(['gascity', 'mem']);
+  });
 });
 
 describe('readAllRigs', () => {
