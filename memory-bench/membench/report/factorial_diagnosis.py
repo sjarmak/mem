@@ -14,8 +14,12 @@ positive effect HELPS and a negative effect HURTS.
 The estimator is the standard 2^k factorial contrast, computed per matched group
 (remaining factors fixed at one corner, same replicate) so it reuses the existing
 matched-pair paired-bootstrap seam (``handoff_efficiency.bootstrap_median_ci``). The
-``shuffle_responses`` negative control is the other half of Gate 0a recovery: real
-effects must collapse (CI spans 0) when the cell→response link is destroyed.
+reported effect is the **median** of the per-group contrasts (not the textbook ANOVA
+mean) — robust to an outlier group, at the cost of a small bias when the contrast
+distribution is skewed; in symmetric noise it equals the mean. The
+``shuffle_responses`` negative control is the other half of Gate 0a recovery: once the
+cell→response link is destroyed there is no effect in expectation, so across shuffles
+the recovered effect collapses (CI spans 0) — any single shuffle is one random draw.
 
 ZFC: every response is the model's (the graded judge); this module is pure arithmetic
 over those scores — contrast sums, bootstrap resampling, sign of the CI. No semantic
@@ -33,7 +37,11 @@ from membench.generators.factorial_dag import NON_DEPTH_FACTORS
 from membench.handoff_efficiency import bootstrap_median_ci
 
 
-@dataclass(frozen=True)
+# Intentionally NOT frozen: ``levels`` holds a plain mapping, which a frozen dataclass
+# could not hash (its generated ``__hash__`` would raise), so freezing would advertise a
+# hashability contract it cannot keep. Treat instances as immutable DTOs — never mutate;
+# derive a new one with ``dataclasses.replace``.
+@dataclass
 class Observation:
     """One graded response for a factorial cell in one replicate. ``levels`` maps every
     factor name to its ON/OFF level; ``replicate`` is the matched key the paired
@@ -67,7 +75,11 @@ class FactorEffect:
 class FactorialDiagnosis:
     """The failure/benefit-mode map: every main effect and interaction over the
     factors, plus the count of incomplete matched groups that were skipped (surfaced,
-    never silently dropped — a fractional design loses contrasts here)."""
+    never silently dropped — a fractional design loses contrasts here).
+
+    ``skipped_incomplete_groups`` counts ``(effect-subset, matched-group)`` pairs, NOT
+    unique dropped observations: one missing corner of a full 3-factor factorial leaves
+    seven effects each missing one group, so it increments by seven."""
 
     effects: tuple[FactorEffect, ...]
     n_observations: int
@@ -226,8 +238,10 @@ def benefit_observations(
 
 def shuffle_responses(observations: Sequence[Observation], *, seed: int) -> list[Observation]:
     """The Gate 0a negative control: permute responses across observations, destroying
-    the cell→response link. Real effects must collapse (CI spans 0) under this; an
-    effect that survives the shuffle is an artifact, not signal. Seeded ⇒ reproducible."""
+    the cell→response link. With no link, there is no effect in expectation, so across
+    shuffles the recovered effects collapse (CI spans 0) — judge the control in
+    aggregate over several seeds, since any single shuffle is one random draw that can
+    still show a spurious effect. Seeded ⇒ reproducible."""
     responses = [o.response for o in observations]
     rng = random.Random(seed)
     rng.shuffle(responses)

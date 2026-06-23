@@ -77,15 +77,23 @@ def test_positive_effect_reads_as_helps() -> None:
     assert eff.ci_low > 0.0
 
 
-def test_shuffle_control_collapses_a_real_effect() -> None:
+def test_shuffle_control_collapses_a_real_effect_in_aggregate() -> None:
     # A strong real main effect with noise so the shuffle has range to destroy.
-    obs = _planted(lambda c: -0.3 if c.interference else 0.0, noise=0.05, seed=1)
-    assert diagnose(obs).effect_for("interference").direction == "hurts"
-    shuffled = shuffle_responses(obs, seed=7)
-    eff = diagnose(shuffled).effect_for("interference")
-    # the cell→response link is gone, so the effect must no longer clear 0.
-    assert eff.direction == "inconclusive"
-    assert eff.ci_low <= 0.0 <= eff.ci_high
+    obs = _planted(lambda c: -0.4 if c.interference else 0.0, noise=0.05, seed=1)
+    true = diagnose(obs).effect_for("interference")
+    assert true.direction == "hurts"
+    # The negative control is an AGGREGATE claim: any single shuffle is one random
+    # draw, but destroying the cell→response link must collapse the effect across
+    # shuffles. (Observed 38/40; assert with margin so it is not seed-cherry-picked.)
+    mags: list[float] = []
+    inconclusive = 0
+    for s in range(40):
+        eff = diagnose(shuffle_responses(obs, seed=s)).effect_for("interference")
+        inconclusive += eff.direction == "inconclusive"
+        mags.append(abs(eff.effect))
+    assert inconclusive >= 32
+    median_shuffled = sorted(mags)[len(mags) // 2]
+    assert median_shuffled < abs(true.effect) / 4  # shuffled effect is a fraction of the real one
 
 
 def test_all_seven_effects_are_estimated_for_a_full_factorial() -> None:
@@ -112,6 +120,14 @@ def test_benefit_observations_raises_on_unmatched_cell() -> None:
         benefit_observations(arm, baseline)
 
 
+def test_benefit_observations_raises_on_duplicate_arm_cell() -> None:
+    baseline = _planted(lambda c: 0.0, replicates=1)
+    arm = _planted(lambda c: 0.5, replicates=1)
+    arm.append(arm[0])  # a duplicated arm cell must raise, not silently overwrite
+    with pytest.raises(ValueError):
+        benefit_observations(arm, baseline)
+
+
 def test_incomplete_group_is_skipped_and_counted() -> None:
     # Drop one corner from one replicate: its main-effect group is incomplete.
     obs = _planted(lambda c: 0.0, replicates=2)
@@ -121,7 +137,8 @@ def test_incomplete_group_is_skipped_and_counted() -> None:
         if not (o.replicate == "0" and o.levels == FactorCell(True, True, True).levels())
     ]
     diag = diagnose(dropped)
-    assert diag.skipped_incomplete_groups > 0
+    # one dropped corner leaves each of the 7 effects missing exactly one matched group.
+    assert diag.skipped_incomplete_groups == 7
 
 
 def test_diagnose_raises_on_missing_factor_level() -> None:
