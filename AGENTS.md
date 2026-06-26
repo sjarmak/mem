@@ -4,6 +4,12 @@
 > It holds only what lives nowhere else; everything general is referenced, not copied.
 > Keep it under ~120 lines.
 
+## Architecture orientation (LikeC4-derived)
+
+@architecture/exports/orient.md
+
+_A mechanically-derived high-altitude map of this rig's subsystems (from the LikeC4 model). Orient off it — names every container/component, its purpose, delivery state, and exact source path — then targeted-read the files it points at instead of grep-walking. Regenerated daily by the city `likec4-orient-refresh` order; for symbol-level depth hand a source link to an Explore/CodeGraph agent._
+
 ## What this project is
 
 `mem` turns the dolt bead spine plus agent transcripts into a queryable
