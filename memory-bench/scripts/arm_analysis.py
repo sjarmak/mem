@@ -45,7 +45,9 @@ from membench.armcompare import (
     ARMS,
     BeadMetrics,
     extract_bead_metrics,
+    fork_boundary_for,
     load_arm_assignment,
+    load_brain_built_at,
     load_scope_files,
     summarize_arms,
 )
@@ -93,12 +95,20 @@ def analyze(
     assignment: Mapping[str, str],
     store_path: Path,
     scope_files: Sequence[str] | None,
+    fork_built_at: datetime | None = None,
 ) -> dict[str, Any]:
     """The full analysis product: per-bead metric rows (with their arm), typed
-    skips, and the unpaired summary (None when no bead resolved at all)."""
+    skips, and the unpaired summary (None when no bead resolved at all).
+
+    ``fork_built_at`` is the brain manifest's ``builtAt`` -- the shared fork
+    boundary for the warm arm (mem-0ut.1). Each warm record's inherited brain
+    prefix is trimmed before its metrics are computed (a per-record ``fork.fork_ts``
+    stamp overrides it); a warm record with NO boundary source is measured raw and
+    recorded as a ``fork_unmeasured`` warning, since the headline metric inverts."""
     per_arm: dict[str, list[BeadMetrics]] = {arm: [] for arm in ARMS}
     per_bead: list[dict[str, Any]] = []
     skips: list[dict[str, str]] = []
+    warnings: list[dict[str, str]] = []
     con = open_store_readonly(store_path)
 
     def skip(work_id: str, arm: str, reason: str, detail: str) -> None:
@@ -121,7 +131,14 @@ def analyze(
                 skip(work_id, arm, SKIP_TRACE_FILE_MISSING, trace_path)
                 continue
             stream_text = trace_file.read_text(encoding="utf-8")
-            metrics = extract_bead_metrics(record, stream_text, scope_files)
+            boundary = fork_boundary_for(record, arm, fork_built_at)
+            if arm == "warm" and boundary is None:
+                warnings.append({"work_id": work_id, "reason": "fork_unmeasured"})
+                print(
+                    f"WARN  {work_id:<28} {arm:<5} fork_unmeasured  "
+                    "no brain builtAt / fork_ts -> warm measured RAW (metric inverts)"
+                )
+            metrics = extract_bead_metrics(record, stream_text, scope_files, fork_boundary=boundary)
             per_arm[arm].append(metrics)
             per_bead.append({"arm": arm, **metrics.model_dump()})
             print(
@@ -140,6 +157,7 @@ def analyze(
         "n_extracted": len(per_bead),
         "per_bead": per_bead,
         "skips": skips,
+        "fork_warnings": warnings,
         "summary": summarize_arms(per_arm) if extracted else None,
     }
 
@@ -212,7 +230,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     assignment = load_arm_assignment(args.arms)
     scope_files = load_scope_files(args.scope_manifest) if args.scope_manifest else None
-    payload = analyze(assignment, args.store, scope_files)
+    # The brain's builtAt is the warm arm's fork boundary (mem-0ut.1): warm
+    # transcripts inherit the brain-build prefix, which is trimmed before metrics.
+    fork_built_at = load_brain_built_at(args.scope_manifest) if args.scope_manifest else None
+    payload = analyze(assignment, args.store, scope_files, fork_built_at)
     payload["arms_file"] = str(args.arms)
     payload["scope_manifest"] = str(args.scope_manifest) if args.scope_manifest else None
 

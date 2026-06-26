@@ -6,6 +6,7 @@ of the five metric axes is exercised individually, then end-to-end through
 """
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -15,11 +16,14 @@ from membench.armcompare import (
     BeadMetrics,
     distractor_read_rate,
     extract_bead_metrics,
+    fork_boundary_for,
     iterations_to_green,
     load_arm_assignment,
+    load_brain_built_at,
     load_scope_files,
     summarize_arms,
     tool_calls_before_first_edit,
+    trim_inherited_events,
     wall_clock_seconds,
 )
 
@@ -408,3 +412,123 @@ def test_summarize_arms_rejects_no_results() -> None:
 
 def test_arms_constant() -> None:
     assert ARMS == ("warm", "cold")
+
+
+# --- fork-aware measurement (mem-0ut.1) -------------------------------------------
+#
+# A `--fork-session` warm transcript PHYSICALLY contains the brain session's
+# inherited build events. Measured raw, the warm arm's headline metric INVERTS
+# (the pilot saw tool_calls_before_first_edit 4.0 vs cold 3.5) because the brain
+# prefix's reads are counted as the fork's own pre-edit work. The fix trims events
+# with ts <= brain.builtAt before computing the stream-derived axes.
+
+BUILT_AT = datetime.fromisoformat("2026-06-26T02:48:24.798+00:00")
+
+# Brain-build prefix: three reads, all stamped at/▽before builtAt (inherited).
+_BRAIN_PREFIX = [
+    _assistant(
+        [_tool_use("Read", file_path="/brain/a.ts")],
+        ts="2026-06-26T02:48:00.000Z",
+        usage={"input_tokens": 1000, "output_tokens": 400},
+    ),
+    _assistant(
+        [_tool_use("Read", file_path="/brain/b.ts")],
+        ts="2026-06-26T02:48:10.000Z",
+        usage={"input_tokens": 1000, "output_tokens": 400},
+    ),
+    _assistant(
+        [_tool_use("Read", file_path="/brain/c.ts")],
+        ts="2026-06-26T02:48:20.000Z",
+        usage={"input_tokens": 1000, "output_tokens": 400},
+    ),
+]
+# Fork's own work: one read, then an edit (all strictly after builtAt).
+_FORK_WORK = [
+    _assistant(
+        [_tool_use("Read", file_path="/fork/x.ts")],
+        ts="2026-06-26T02:50:00.000Z",
+        usage={"input_tokens": 200, "output_tokens": 100},
+    ),
+    _assistant(
+        [EDIT_A], ts="2026-06-26T02:50:10.000Z", usage={"input_tokens": 200, "output_tokens": 100}
+    ),
+]
+
+
+def _warm_stream() -> str:
+    return _stream(*_BRAIN_PREFIX, *_FORK_WORK)
+
+
+def _warm_record(work_id: str = "t1-warm") -> dict:
+    return {"work_id": work_id, "trace": {"jsonl_path": "/x.jsonl", "tool_outcomes": []}}
+
+
+def test_raw_warm_metric_inverts_brain_prefix_counted_as_forks_own() -> None:
+    # The bug this bead fixes: untrimmed, the 3 brain reads + the 1 fork read are
+    # all counted before the fork's first edit -> 4 (the inverting headline).
+    raw = extract_bead_metrics(_warm_record(), _warm_stream())
+    assert raw.tool_calls_before_first_edit == 4
+    assert raw.files_read == 4
+
+
+def test_fork_boundary_trims_inherited_prefix_from_all_stream_axes() -> None:
+    # Fork-aware: only the fork's own read precedes its edit -> 1 (the true value
+    # the pilot recovered). files_read and tokens likewise drop the brain prefix.
+    trimmed = extract_bead_metrics(_warm_record(), _warm_stream(), fork_boundary=BUILT_AT)
+    assert trimmed.tool_calls_before_first_edit == 1
+    assert trimmed.files_read == 1
+    # tokens: only the two fork events (2*(200+100)=600), brain prefix excluded.
+    assert trimmed.total_tokens == 600
+
+
+def test_fork_trim_recovers_correct_distractor_rate() -> None:
+    # /fork/x.ts is out of a scope listing only brain files -> 1/1 distractor on
+    # the fork's own read; raw would dilute with 3 in-scope brain reads (1/4).
+    scope = ["fork/y.ts"]
+    raw = extract_bead_metrics(_warm_record(), _warm_stream(), scope, fork_boundary=None)
+    trimmed = extract_bead_metrics(_warm_record(), _warm_stream(), scope, fork_boundary=BUILT_AT)
+    assert raw.distractor_read_rate == pytest.approx(1.0)  # all 4 reads out of scope here
+    assert trimmed.distractor_read_rate == pytest.approx(1.0)
+    assert raw.files_read == 4 and trimmed.files_read == 1
+
+
+def test_trim_inherited_events_drops_only_pre_boundary_timestamped_lines() -> None:
+    out = trim_inherited_events(_warm_stream(), BUILT_AT)
+    kept = [json.loads(line) for line in out.splitlines() if line.strip()]
+    assert len(kept) == 2  # only the two fork events survive
+    # non-JSON and timestamp-less lines are KEPT (trim only excludes provable inheritance)
+    mixed = "garbage\n" + _assistant([READ_A]) + "\n" + _BRAIN_PREFIX[0]
+    out2 = trim_inherited_events(mixed, BUILT_AT)
+    assert "garbage" in out2  # non-JSON kept
+    assert "/brain/a.ts" not in out2  # the pre-boundary brain read dropped
+
+
+def test_load_brain_built_at_reads_manifest(tmp_path: Path) -> None:
+    manifest = tmp_path / "brain.json"
+    manifest.write_text(
+        json.dumps(
+            {"name": "b", "builtAt": "2026-06-26T02:48:24.798Z", "fileHashes": {"src/a.ts": "h"}}
+        )
+    )
+    assert load_brain_built_at(manifest) == BUILT_AT
+    no_built = tmp_path / "nb.json"
+    no_built.write_text(json.dumps({"fileHashes": {"src/a.ts": "h"}}))
+    assert load_brain_built_at(no_built) is None
+
+
+def test_fork_boundary_for_only_trims_warm_with_manifest_or_stamp() -> None:
+    rec = _warm_record()
+    # cold is never trimmed
+    assert fork_boundary_for(rec, "cold", BUILT_AT) is None
+    # warm falls back to the manifest builtAt
+    assert fork_boundary_for(rec, "warm", BUILT_AT) == BUILT_AT
+    # a per-record stamped fork_ts (option 2) takes precedence over the manifest
+    stamped = {
+        "work_id": "t1-warm",
+        "fork": {"parent_sid": "s", "fork_ts": "2026-06-26T03:00:00.000Z"},
+    }
+    assert fork_boundary_for(stamped, "warm", BUILT_AT) == datetime.fromisoformat(
+        "2026-06-26T03:00:00.000+00:00"
+    )
+    # warm with neither a stamp nor a manifest builtAt -> None (caller must warn)
+    assert fork_boundary_for(rec, "warm", None) is None

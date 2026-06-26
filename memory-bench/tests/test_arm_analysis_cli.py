@@ -221,3 +221,115 @@ def test_store_is_opened_read_only(tmp_path: Path, store: Path) -> None:
     with pytest.raises(sqlite3.OperationalError, match="readonly"):
         con.execute("INSERT INTO record_agents VALUES ('x','y',NULL,NULL,NULL)")
     con.close()
+
+
+# --- fork-aware measurement (mem-0ut.1) -------------------------------------------
+
+_BUILT_AT = "2026-06-26T02:48:24.798Z"
+
+
+def _warm_stream_text() -> str:
+    """A forked warm transcript: 3 inherited brain reads (<= builtAt) then the
+    fork's own read + edit (> builtAt). Raw -> 4 calls before first edit (inverts);
+    trimmed at builtAt -> 1."""
+    brain = [
+        _assistant_line(
+            [{"type": "tool_use", "name": "Read", "input": {"file_path": f"/brain/{n}.ts"}}],
+            ts,
+            usage={"input_tokens": 1000, "output_tokens": 400},
+        )
+        for n, ts in (
+            ("a", "2026-06-26T02:48:00Z"),
+            ("b", "2026-06-26T02:48:10Z"),
+            ("c", "2026-06-26T02:48:20Z"),
+        )
+    ]
+    fork = [
+        _assistant_line(
+            [{"type": "tool_use", "name": "Read", "input": {"file_path": "/fork/x.ts"}}],
+            "2026-06-26T02:50:00Z",
+            usage={"input_tokens": 200, "output_tokens": 100},
+        ),
+        _assistant_line(
+            [
+                {
+                    "type": "tool_use",
+                    "name": "Edit",
+                    "input": {"file_path": "/fork/x.ts", "old_string": "x", "new_string": "y"},
+                }
+            ],
+            "2026-06-26T02:50:10Z",
+            usage={"input_tokens": 200, "output_tokens": 100},
+        ),
+    ]
+    return "\n".join(brain + fork) + "\n"
+
+
+def _fork_store(tmp_path: Path) -> Path:
+    db = tmp_path / "fork-store.db"
+    con = sqlite3.connect(db)
+    con.execute(
+        "CREATE TABLE work_records (work_id TEXT PRIMARY KEY, rig TEXT, status TEXT, "
+        "trace_path TEXT, record TEXT NOT NULL)"
+    )
+    con.execute(
+        "CREATE TABLE record_agents (work_id TEXT, agent_id TEXT, role TEXT, "
+        "account TEXT, trace_ref TEXT)"
+    )
+    warm = tmp_path / "warm.jsonl"
+    warm.write_text(_warm_stream_text(), encoding="utf-8")
+    con.execute(
+        "INSERT INTO work_records VALUES (?,?,?,?,?)",
+        ("t1-warm", "rig", "closed", str(warm), _record_json("t1-warm")),
+    )
+    con.commit()
+    con.close()
+    return db
+
+
+def _manifest(tmp_path: Path, *, with_built_at: bool) -> Path:
+    path = tmp_path / "brain.json"
+    body: dict = {"name": "b", "fileHashes": {"fork/x.ts": "h"}}
+    if with_built_at:
+        body["builtAt"] = _BUILT_AT
+    path.write_text(json.dumps(body), encoding="utf-8")
+    return path
+
+
+def test_cli_warm_arm_is_fork_trimmed_via_manifest_built_at(tmp_path: Path) -> None:
+    store = _fork_store(tmp_path)
+    arms = _arms_file(tmp_path, {"t1-warm": "warm"})
+    out = tmp_path / "out.json"
+    rc = arm_analysis.main(
+        [
+            "--arms",
+            str(arms),
+            "--store",
+            str(store),
+            "--out-json",
+            str(out),
+            "--scope-manifest",
+            str(_manifest(tmp_path, with_built_at=True)),
+        ]
+    )
+    assert rc == 0
+    payload = json.loads(out.read_text())
+    (warm,) = payload["per_bead"]
+    # fork-aware: only the fork's own read precedes its edit (NOT the 3 brain reads).
+    assert warm["tool_calls_before_first_edit"] == 1
+    assert warm["files_read"] == 1
+    assert payload["fork_warnings"] == []
+
+
+def test_cli_warm_arm_inverts_and_warns_without_a_boundary(tmp_path: Path) -> None:
+    # No --scope-manifest -> no builtAt -> the warm arm is measured RAW (the bug):
+    # all 4 reads counted before the first edit, and the gap is recorded as a warning.
+    store = _fork_store(tmp_path)
+    arms = _arms_file(tmp_path, {"t1-warm": "warm"})
+    out = tmp_path / "out-raw.json"
+    rc = arm_analysis.main(["--arms", str(arms), "--store", str(store), "--out-json", str(out)])
+    assert rc == 0
+    payload = json.loads(out.read_text())
+    (warm,) = payload["per_bead"]
+    assert warm["tool_calls_before_first_edit"] == 4  # the inversion, unmeasured
+    assert payload["fork_warnings"] == [{"work_id": "t1-warm", "reason": "fork_unmeasured"}]

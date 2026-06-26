@@ -162,6 +162,88 @@ def load_scope_files(path: Path) -> tuple[str, ...]:
     raise ValueError(f"{path}: expected a 'files' list or a brains-manifest 'fileHashes' map")
 
 
+# --- fork boundary (mem-0ut.1) ----------------------------------------------------------
+#
+# A ``--fork-session`` warm transcript PHYSICALLY contains the brain session's
+# inherited build events. Measured raw, the warm arm's headline metric INVERTS
+# (the pilot saw tool_calls_before_first_edit 4.0 vs cold 3.5) because the brain
+# prefix's reads are counted as the fork's own pre-edit work. Faithful measurement
+# excludes the inherited prefix -- events with ``timestamp <= brain.builtAt`` belong
+# to the brain, not the fork -- from the stream-derived axes before the metrics are
+# computed. The outcomes-derived axis (``iterations_to_green``) needs no trim: the
+# brain is a READ-ONLY exploration, so it fires no test/build runners and contributes
+# no ``tool_outcomes`` (which carry no timestamp to trim by in any case).
+
+
+def _parse_iso_ts(value: str) -> datetime:
+    """ISO-8601 to a datetime, tolerating the trailing ``Z`` Claude Code stamps
+    (``datetime.fromisoformat`` accepts ``+00:00`` on every supported runtime)."""
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def load_brain_built_at(path: Path) -> datetime | None:
+    """The brain manifest's ``builtAt`` as the fork boundary every warm transcript
+    inherits up to. ``None`` when the manifest carries no ``builtAt`` -- the caller
+    then falls back to a per-record stamp or measures the arm raw (and warns). A
+    present-but-unparseable ``builtAt`` raises (a corrupt boundary must not pass)."""
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, Mapping):
+        raise ValueError(f"{path}: manifest must be a JSON object")
+    built_at = raw.get("builtAt")
+    if built_at is None:
+        return None
+    if not isinstance(built_at, str):
+        raise ValueError(f"{path}: 'builtAt' must be an ISO-8601 string, got {type(built_at)}")
+    return _parse_iso_ts(built_at)
+
+
+def trim_inherited_events(stream_text: str, boundary: datetime) -> str:
+    """The stream with every event whose ``timestamp`` is ``<= boundary`` removed --
+    the inherited brain-build prefix of a forked warm transcript (mem-0ut.1).
+
+    A line is KEPT when it is non-JSON, carries no ``timestamp``, or its timestamp
+    cannot be parsed/compared to the boundary: the trim only excludes provably-
+    inherited events, never guesses one away."""
+    kept: list[str] = []
+    for line in stream_text.splitlines():
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            kept.append(line)
+            continue
+        stamp = event.get("timestamp") if isinstance(event, Mapping) else None
+        if isinstance(stamp, str):
+            try:
+                if _parse_iso_ts(stamp) <= boundary:
+                    continue  # inherited brain-prefix event
+            except (ValueError, TypeError):
+                pass  # unparseable / naive-vs-aware -> keep (never guess inheritance)
+        kept.append(line)
+    return "\n".join(kept) + "\n" if kept else ""
+
+
+def fork_boundary_for(
+    record: Mapping[str, Any], arm: str, manifest_built_at: datetime | None
+) -> datetime | None:
+    """The fork boundary to trim a record's stream by, or ``None`` (no trim).
+
+    Cold records are never trimmed. A warm record prefers a per-record stamp
+    (``record['fork']['fork_ts']`` -- the dispatch-hook fork-boundary stamp, option
+    2, the deterministic source) over the shared manifest ``builtAt`` (option 1,
+    inferred). A warm record with neither source returns ``None`` -- the caller
+    measures it raw and must warn, since the headline metric then inverts."""
+    if arm != "warm":
+        return None
+    fork = record.get("fork")
+    if isinstance(fork, Mapping):
+        stamped = fork.get("fork_ts")
+        if isinstance(stamped, str):
+            return _parse_iso_ts(stamped)
+    return manifest_built_at
+
+
 # --- per-axis extraction ----------------------------------------------------------------
 
 
@@ -267,16 +349,27 @@ def extract_bead_metrics(
     record: Mapping[str, Any],
     stream_text: str,
     scope_files: Sequence[str] | None = None,
+    *,
+    fork_boundary: datetime | None = None,
 ) -> BeadMetrics:
     """One bead's full metric vector from its canonical record + raw trace stream.
 
     ``record`` is the store's ``record`` JSON (``work_id`` required;
     ``trace.tool_outcomes`` defaults to none-recorded); ``stream_text`` is the
     resolved trace .jsonl; ``scope_files`` is the brain scope (None -> no
-    distractor rate)."""
+    distractor rate).
+
+    ``fork_boundary`` (mem-0ut.1): when set, the inherited brain-build prefix
+    (events with ``timestamp <= fork_boundary``) is trimmed from the stream before
+    the stream-derived axes are computed, so a forked warm transcript is measured
+    from its OWN work and the headline metric does not invert. Cold arms pass
+    ``None`` (no trim). ``iterations_to_green`` is unaffected -- a read-only brain
+    contributes no ``tool_outcomes``."""
     work_id = record.get("work_id")
     if not isinstance(work_id, str) or not work_id:
         raise ValueError(f"record carries no work_id: keys {sorted(record)}")
+    if fork_boundary is not None:
+        stream_text = trim_inherited_events(stream_text, fork_boundary)
     trace = record.get("trace")
     outcomes = trace.get("tool_outcomes", []) if isinstance(trace, Mapping) else []
     if not isinstance(outcomes, list):
