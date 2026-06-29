@@ -10,6 +10,7 @@ export {
   type LessonInput,
   appendLesson,
   importLessons,
+  linkProjection,
   writeRecords,
 } from './writer.js';
 export {

@@ -47,6 +47,9 @@ ON CONFLICT(work_id) DO UPDATE SET
   task_type = excluded.task_type, task_type_source = excluded.task_type_source,
   molecule_id = excluded.molecule_id, record = excluded.record
 `;
+// link_tier/link_source are deliberately absent above: they project the links
+// written later in the same transaction, so writeRecords sets them with a
+// separate UPDATE (linkProjection) once a record's PROV-O edges exist.
 
 const CHILD_TABLES = [
   'record_agents',
@@ -166,6 +169,45 @@ function prLinkRow(record: WorkRecord, prLink: PrLink): Record<string, string | 
   };
 }
 
+/** Soundness ordering of the provenance tiers: T1 (CI/merge oracle) is best,
+ * then T2 (PR reference), then T3 (session-association floor). */
+const TIER_RANK: Record<string, number> = { T1: 1, T2: 2, T3: 3 };
+
+/**
+ * The `work_records.link_tier`/`link_source` projection (mem-0rrf.3): a record's
+ * best soundness tier across its provenance links and the '+'-joined distinct
+ * sources that established that tier (the record_agents convention). Both null
+ * when the record has no links. Derived from the very link rows the writer wrote
+ * to the `links` table, so the columns stay a faithful projection of it — a
+ * later T1 CI-rollup stage refreshes them by re-running this over the table.
+ */
+export function linkProjection(links: ReadonlyArray<Record<string, string | number | null>>): {
+  link_tier: string | null;
+  link_source: string | null;
+} {
+  let bestTier: string | null = null;
+  let bestRank = Infinity;
+  for (const link of links) {
+    const tier = String(link.tier);
+    const rank = TIER_RANK[tier];
+    // Only ranked tiers (T1|T2|T3) compete — an unknown value never wins by
+    // poisoning the comparison (number < undefined is false).
+    if (rank !== undefined && rank < bestRank) {
+      bestTier = tier;
+      bestRank = rank;
+    }
+  }
+  if (bestTier === null) return { link_tier: null, link_source: null };
+  const sources = [
+    ...new Set(
+      links
+        .filter(l => String(l.tier) === bestTier && l.provenance != null && l.provenance !== '')
+        .map(l => String(l.provenance))
+    ),
+  ].sort();
+  return { link_tier: bestTier, link_source: sources.length > 0 ? sources.join('+') : null };
+}
+
 /** The molecule grouping id, projected from generator metadata: gc molecules
  * write `molecule_id`, older workflow runs `workflow_id`. */
 function moleculeId(record: WorkRecord): string | null {
@@ -209,6 +251,9 @@ export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
       'key_type, tier, confidence, provenance, suspect, created_at) ' +
       'VALUES (@work_id, @session_uuid, @relation, @entity_ref, @entity_kind, ' +
       '@key_type, @tier, @confidence, @provenance, @suspect, @created_at)'
+  );
+  const updateLinkProjection = db.prepare(
+    'UPDATE work_records SET link_tier = ?, link_source = ? WHERE work_id = ?'
   );
 
   db.transaction(() => {
@@ -258,6 +303,9 @@ export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
           error.message
         );
       }
+      // Collect this record's PROV-O edges so the link_tier/link_source
+      // projection below derives from exactly what lands in the links table.
+      const provLinks: Record<string, string | number>[] = [];
       const run = record.trace?.run;
       if (run) {
         insertRun.run(
@@ -277,13 +325,18 @@ export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
           run.ended_at ?? null,
           run.outcome ?? null
         );
-        insertProvLink.run(t3AssociationLink(record, run.session_uuid, run.started_at));
+        provLinks.push(t3AssociationLink(record, run.session_uuid, run.started_at));
       }
       // The transcript→GitHub outcome edges (mem-wanz.7). Already de-duped by PR
       // url in the parser, so each is a distinct entity_ref under the unique key.
       for (const prLink of record.trace?.pr_links ?? []) {
-        insertProvLink.run(prLinkRow(record, prLink));
+        provLinks.push(prLinkRow(record, prLink));
       }
+      for (const link of provLinks) insertProvLink.run(link);
+      // Refresh the projection every record — including to NULL for a record
+      // with no links — so a re-ingest never leaves a stale tier behind.
+      const projection = linkProjection(provLinks);
+      updateLinkProjection.run(projection.link_tier, projection.link_source, record.work_id);
     }
   })();
 }

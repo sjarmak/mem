@@ -10,6 +10,7 @@ import {
   getRecord,
   importLessons,
   lessonsFor,
+  linkProjection,
   linksFor,
   openStore,
   queryRecords,
@@ -848,5 +849,103 @@ describe('mem-wanz.7 — pr-link outcome edges (links)', () => {
     writeRecords(db, [withPrLinks([prLink])]);
     writeRecords(db, [withPrLinks([prLink])]);
     expect(linksFor(db, 'demo-1a2b')).toHaveLength(1);
+  });
+});
+
+describe('mem-0rrf.3 — link_tier/link_source projection (writer link stage)', () => {
+  const run = {
+    session_uuid: 'sess-proj',
+    input_tokens: 1,
+    output_tokens: 1,
+    cache_creation_tokens: 0,
+    cache_read_tokens: 0,
+    n_tool_calls: 0,
+    tool_calls_by_type: {},
+    n_turns: 1,
+    started_at: '2026-06-01T03:00:00Z',
+  };
+  const prLink = {
+    session_uuid: 'sess-proj',
+    pr_number: 66,
+    pr_url: 'https://github.com/sjarmak/gascity-dashboard/pull/66',
+    pr_repository: 'sjarmak/gascity-dashboard',
+    timestamp: '2026-06-17T13:14:43.142Z',
+  };
+  const projectionOf = (db: ReturnType<typeof openStore>, workId: string) =>
+    db.prepare('SELECT link_tier, link_source FROM work_records WHERE work_id = ?').get(workId) as {
+      link_tier: string | null;
+      link_source: string | null;
+    };
+
+  describe('linkProjection (pure)', () => {
+    it('returns null/null for a record with no links', () => {
+      expect(linkProjection([])).toEqual({ link_tier: null, link_source: null });
+    });
+
+    it('takes the best (lowest) tier and its source', () => {
+      expect(
+        linkProjection([
+          { tier: 'T3', provenance: 'session_uuid' },
+          { tier: 'T2', provenance: 'pr-link' },
+        ])
+      ).toEqual({ link_tier: 'T2', link_source: 'pr-link' });
+    });
+
+    it("'+'-joins distinct best-tier sources, sorted and deduped", () => {
+      expect(
+        linkProjection([
+          { tier: 'T1', provenance: 'ci' },
+          { tier: 'T1', provenance: 'pr-link' },
+          { tier: 'T1', provenance: 'ci' },
+          { tier: 'T2', provenance: 'pr-link' }, // a lower tier never feeds the source
+        ])
+      ).toEqual({ link_tier: 'T1', link_source: 'ci+pr-link' });
+    });
+
+    it('yields a tier with a null source when best-tier links carry no provenance', () => {
+      expect(linkProjection([{ tier: 'T3', provenance: null }])).toEqual({
+        link_tier: 'T3',
+        link_source: null,
+      });
+    });
+  });
+
+  it('projects T3 onto a record whose only edge is the session floor', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [fullRecord({ trace: { jsonl_path: '/traces/x.jsonl', run } })]);
+    expect(projectionOf(db, 'demo-1a2b')).toEqual({
+      link_tier: 'T3',
+      link_source: 'session_uuid',
+    });
+    db.close();
+  });
+
+  it('projects the best T2 tier when a record has both a run and a PR', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [
+      fullRecord({ trace: { jsonl_path: '/traces/x.jsonl', run, pr_links: [prLink] } }),
+    ]);
+    expect(projectionOf(db, 'demo-1a2b')).toEqual({
+      link_tier: 'T2',
+      link_source: 'pr-link',
+    });
+    db.close();
+  });
+
+  it('leaves the projection NULL for a record with no links', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [fullRecord()]); // fullRecord's trace carries no run/pr-links
+    expect(projectionOf(db, 'demo-1a2b')).toEqual({ link_tier: null, link_source: null });
+    db.close();
+  });
+
+  it('clears a stale projection on re-ingest when the links disappear', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [fullRecord({ trace: { jsonl_path: '/traces/x.jsonl', run } })]);
+    expect(projectionOf(db, 'demo-1a2b').link_tier).toBe('T3');
+    // Re-ingest the same id with no run → no links → the projection must reset.
+    writeRecords(db, [fullRecord()]);
+    expect(projectionOf(db, 'demo-1a2b')).toEqual({ link_tier: null, link_source: null });
+    db.close();
   });
 });
