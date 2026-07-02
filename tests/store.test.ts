@@ -10,7 +10,6 @@ import {
   getRecord,
   importLessons,
   lessonsFor,
-  linkProjection,
   linksFor,
   openStore,
   queryRecords,
@@ -21,6 +20,7 @@ import {
   writeRecords,
 } from '../src/store/index.js';
 import { failureSignature } from '../src/parse/index.js';
+import { linkProjection } from '../src/store/writer.js';
 import type { TraceError } from '../src/schemas/trace.js';
 import { WorkRecordSchema, type WorkRecord } from '../src/schemas/workrecord.js';
 

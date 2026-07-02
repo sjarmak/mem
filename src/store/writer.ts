@@ -171,7 +171,7 @@ function prLinkRow(record: WorkRecord, prLink: PrLink): LinkRow {
 /** A `links`-table row as the writer builds it and as {@link linkProjection}
  * reads it — the named-parameter object bound straight into the INSERT. */
 interface LinkRow extends Record<string, string | number | null> {
-  tier: string;
+  tier: Tier;
   provenance: string | null;
 }
 
@@ -189,7 +189,8 @@ function provLinkRows(record: WorkRecord): LinkRow[] {
 
 /** Soundness ordering of the provenance tiers: T1 (CI/merge oracle) is best,
  * then T2 (PR reference), then T3 (session-association floor). */
-const TIER_RANK: Record<string, number> = { T1: 1, T2: 2, T3: 3 };
+type Tier = 'T1' | 'T2' | 'T3';
+const TIER_RANK: Record<Tier, number> = { T1: 1, T2: 2, T3: 3 };
 
 /**
  * The `work_records.link_tier`/`link_source` projection (mem-0rrf.3): a record's
@@ -200,29 +201,21 @@ const TIER_RANK: Record<string, number> = { T1: 1, T2: 2, T3: 3 };
  * it — a later T1 CI-rollup stage refreshes them by re-running this over the
  * table's rows.
  */
-export function linkProjection(links: ReadonlyArray<Pick<LinkRow, 'tier' | 'provenance'>>): {
+export function linkProjection(links: ReadonlyArray<{ tier: Tier; provenance: string | null }>): {
   link_tier: string | null;
   link_source: string | null;
 } {
-  let bestTier: string | null = null;
-  let bestRank = Infinity;
+  let best: Tier | null = null;
   for (const link of links) {
-    const rank = TIER_RANK[link.tier];
-    // Only ranked tiers (T1|T2|T3) compete — an unknown value never wins.
-    if (rank !== undefined && rank < bestRank) {
-      bestTier = link.tier;
-      bestRank = rank;
-    }
+    if (best === null || TIER_RANK[link.tier] < TIER_RANK[best]) best = link.tier;
   }
-  if (bestTier === null) return { link_tier: null, link_source: null };
+  if (best === null) return { link_tier: null, link_source: null };
   const sources = [
     ...new Set(
-      links
-        .map(l => (l.tier === bestTier ? l.provenance : null))
-        .filter((p): p is string => p !== null && p !== '')
+      links.flatMap(l => (l.tier === best && l.provenance !== null ? [l.provenance] : []))
     ),
   ].sort();
-  return { link_tier: bestTier, link_source: sources.length > 0 ? sources.join('+') : null };
+  return { link_tier: best, link_source: sources.join('+') || null };
 }
 
 /** The molecule grouping id, projected from generator metadata: gc molecules
@@ -269,6 +262,7 @@ export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
       'VALUES (@work_id, @session_uuid, @relation, @entity_ref, @entity_kind, ' +
       '@key_type, @tier, @confidence, @provenance, @suspect, @created_at)'
   );
+
   db.transaction(() => {
     // Old child rows are cleared for the whole batch up front, then rebuilt
     // per record below. A validation failure mid-loop rolls the clear back
@@ -282,10 +276,9 @@ export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
       // JSON, so readers can parse it back without defensive handling.
       const record = WorkRecordSchema.parse(candidate);
 
-      // The PROV-O edges derive purely from the record's trace, so the
-      // link_tier/link_source projection rides the upsert like every other
-      // projected column — including back to NULL for a record with no links,
-      // so a re-ingest never leaves a stale tier behind.
+      // Projection and `links` rows come from the same array, so the
+      // link_tier/link_source columns cannot drift from the table — and a
+      // re-ingest with no links resets them to NULL like any other upsert.
       const provLinks = provLinkRows(record);
       upsert.run({ ...toRow(record), ...linkProjection(provLinks) });
 
