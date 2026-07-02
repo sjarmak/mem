@@ -23,14 +23,14 @@ INSERT INTO work_records (
   pr, pr_state, commit_sha, ci, trace_path, n_turns,
   repo, repo_source, base_commit, commit_state,
   landed_state, landed_commit, n_commits,
-  task_type, task_type_source, molecule_id, record
+  task_type, task_type_source, molecule_id, link_tier, link_source, record
 ) VALUES (
   @work_id, @rig, @title, @status, @priority, @external_ref,
   @created_at, @started_at, @closed_at, @convoy_id,
   @pr, @pr_state, @commit_sha, @ci, @trace_path, @n_turns,
   @repo, @repo_source, @base_commit, @commit_state,
   @landed_state, @landed_commit, @n_commits,
-  @task_type, @task_type_source, @molecule_id, @record
+  @task_type, @task_type_source, @molecule_id, @link_tier, @link_source, @record
 )
 ON CONFLICT(work_id) DO UPDATE SET
   rig = excluded.rig, title = excluded.title, status = excluded.status,
@@ -45,11 +45,10 @@ ON CONFLICT(work_id) DO UPDATE SET
   landed_state = excluded.landed_state, landed_commit = excluded.landed_commit,
   n_commits = excluded.n_commits,
   task_type = excluded.task_type, task_type_source = excluded.task_type_source,
-  molecule_id = excluded.molecule_id, record = excluded.record
+  molecule_id = excluded.molecule_id,
+  link_tier = excluded.link_tier, link_source = excluded.link_source,
+  record = excluded.record
 `;
-// link_tier/link_source are deliberately absent above: they project the links
-// written later in the same transaction, so writeRecords sets them with a
-// separate UPDATE (linkProjection) once a record's PROV-O edges exist.
 
 const CHILD_TABLES = [
   'record_agents',
@@ -130,7 +129,7 @@ function t3AssociationLink(
   record: WorkRecord,
   sessionUuid: string,
   startedAt: string | undefined
-): Record<string, string | number> {
+): LinkRow {
   return {
     work_id: record.work_id,
     session_uuid: sessionUuid,
@@ -153,7 +152,7 @@ function t3AssociationLink(
  * rollup elevates it to T1); `confidence` 0.98 is the bridge's measured precision
  * (PRD §3 key #1). `created_at` derives from the entry (else the record) so a
  * re-ingest stays byte-identical. */
-function prLinkRow(record: WorkRecord, prLink: PrLink): Record<string, string | number> {
+function prLinkRow(record: WorkRecord, prLink: PrLink): LinkRow {
   return {
     work_id: record.work_id,
     session_uuid: prLink.session_uuid,
@@ -169,6 +168,25 @@ function prLinkRow(record: WorkRecord, prLink: PrLink): Record<string, string | 
   };
 }
 
+/** A `links`-table row as the writer builds it and as {@link linkProjection}
+ * reads it — the named-parameter object bound straight into the INSERT. */
+interface LinkRow extends Record<string, string | number | null> {
+  tier: string;
+  provenance: string | null;
+}
+
+/** This record's PROV-O edges, derived purely from its trace: the T3
+ * session-association floor (one per run) plus the T2 pr-link outcome edges. */
+function provLinkRows(record: WorkRecord): LinkRow[] {
+  const rows: LinkRow[] = [];
+  const run = record.trace?.run;
+  if (run) rows.push(t3AssociationLink(record, run.session_uuid, run.started_at));
+  // The transcript→GitHub outcome edges (mem-wanz.7). Already de-duped by PR
+  // url in the parser, so each is a distinct entity_ref under the unique key.
+  for (const prLink of record.trace?.pr_links ?? []) rows.push(prLinkRow(record, prLink));
+  return rows;
+}
+
 /** Soundness ordering of the provenance tiers: T1 (CI/merge oracle) is best,
  * then T2 (PR reference), then T3 (session-association floor). */
 const TIER_RANK: Record<string, number> = { T1: 1, T2: 2, T3: 3 };
@@ -177,23 +195,22 @@ const TIER_RANK: Record<string, number> = { T1: 1, T2: 2, T3: 3 };
  * The `work_records.link_tier`/`link_source` projection (mem-0rrf.3): a record's
  * best soundness tier across its provenance links and the '+'-joined distinct
  * sources that established that tier (the record_agents convention). Both null
- * when the record has no links. Derived from the very link rows the writer wrote
- * to the `links` table, so the columns stay a faithful projection of it — a
- * later T1 CI-rollup stage refreshes them by re-running this over the table.
+ * when the record has no links. The writer computes it from the same rows it
+ * inserts into the `links` table, so the columns stay a faithful projection of
+ * it — a later T1 CI-rollup stage refreshes them by re-running this over the
+ * table's rows.
  */
-export function linkProjection(links: ReadonlyArray<Record<string, string | number | null>>): {
+export function linkProjection(links: ReadonlyArray<Pick<LinkRow, 'tier' | 'provenance'>>): {
   link_tier: string | null;
   link_source: string | null;
 } {
   let bestTier: string | null = null;
   let bestRank = Infinity;
   for (const link of links) {
-    const tier = String(link.tier);
-    const rank = TIER_RANK[tier];
-    // Only ranked tiers (T1|T2|T3) compete — an unknown value never wins by
-    // poisoning the comparison (number < undefined is false).
+    const rank = TIER_RANK[link.tier];
+    // Only ranked tiers (T1|T2|T3) compete — an unknown value never wins.
     if (rank !== undefined && rank < bestRank) {
-      bestTier = tier;
+      bestTier = link.tier;
       bestRank = rank;
     }
   }
@@ -201,8 +218,8 @@ export function linkProjection(links: ReadonlyArray<Record<string, string | numb
   const sources = [
     ...new Set(
       links
-        .filter(l => String(l.tier) === bestTier && l.provenance != null && l.provenance !== '')
-        .map(l => String(l.provenance))
+        .map(l => (l.tier === bestTier ? l.provenance : null))
+        .filter((p): p is string => p !== null && p !== '')
     ),
   ].sort();
   return { link_tier: bestTier, link_source: sources.length > 0 ? sources.join('+') : null };
@@ -252,10 +269,6 @@ export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
       'VALUES (@work_id, @session_uuid, @relation, @entity_ref, @entity_kind, ' +
       '@key_type, @tier, @confidence, @provenance, @suspect, @created_at)'
   );
-  const updateLinkProjection = db.prepare(
-    'UPDATE work_records SET link_tier = ?, link_source = ? WHERE work_id = ?'
-  );
-
   db.transaction(() => {
     // Old child rows are cleared for the whole batch up front, then rebuilt
     // per record below. A validation failure mid-loop rolls the clear back
@@ -269,7 +282,12 @@ export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
       // JSON, so readers can parse it back without defensive handling.
       const record = WorkRecordSchema.parse(candidate);
 
-      upsert.run(toRow(record));
+      // The PROV-O edges derive purely from the record's trace, so the
+      // link_tier/link_source projection rides the upsert like every other
+      // projected column — including back to NULL for a record with no links,
+      // so a re-ingest never leaves a stale tier behind.
+      const provLinks = provLinkRows(record);
+      upsert.run({ ...toRow(record), ...linkProjection(provLinks) });
 
       for (const agent of record.agents) {
         insertAgent.run(
@@ -303,9 +321,6 @@ export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
           error.message
         );
       }
-      // Collect this record's PROV-O edges so the link_tier/link_source
-      // projection below derives from exactly what lands in the links table.
-      const provLinks: Record<string, string | number>[] = [];
       const run = record.trace?.run;
       if (run) {
         insertRun.run(
@@ -325,18 +340,8 @@ export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
           run.ended_at ?? null,
           run.outcome ?? null
         );
-        provLinks.push(t3AssociationLink(record, run.session_uuid, run.started_at));
-      }
-      // The transcript→GitHub outcome edges (mem-wanz.7). Already de-duped by PR
-      // url in the parser, so each is a distinct entity_ref under the unique key.
-      for (const prLink of record.trace?.pr_links ?? []) {
-        provLinks.push(prLinkRow(record, prLink));
       }
       for (const link of provLinks) insertProvLink.run(link);
-      // Refresh the projection every record — including to NULL for a record
-      // with no links — so a re-ingest never leaves a stale tier behind.
-      const projection = linkProjection(provLinks);
-      updateLinkProjection.run(projection.link_tier, projection.link_source, record.work_id);
     }
   })();
 }

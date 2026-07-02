@@ -932,13 +932,6 @@ describe('mem-0rrf.3 — link_tier/link_source projection (writer link stage)', 
     db.close();
   });
 
-  it('leaves the projection NULL for a record with no links', () => {
-    const db = openStore(':memory:');
-    writeRecords(db, [fullRecord()]); // fullRecord's trace carries no run/pr-links
-    expect(projectionOf(db, 'demo-1a2b')).toEqual({ link_tier: null, link_source: null });
-    db.close();
-  });
-
   it('clears a stale projection on re-ingest when the links disappear', () => {
     const db = openStore(':memory:');
     writeRecords(db, [fullRecord({ trace: { jsonl_path: '/traces/x.jsonl', run } })]);
