@@ -93,9 +93,11 @@ const fakeBuild = (path: string) => (): Promise<BuildStoreResult> => {
     records_with_commit_sha: 0,
     records_landed: 0,
     records_multi_session: 0,
+    records_multiple_linkage: 0,
     records_provenance_events: built.provenance_events,
     records_with_session_base: 0,
     records_with_session_commits: 0,
+    record_links: 0,
   });
 };
 
