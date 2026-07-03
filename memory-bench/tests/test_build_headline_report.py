@@ -206,6 +206,56 @@ def test_curated_and_other_non_default_rungs_are_not_dropped_from_coverage():
     assert "degenerate: collapses to oracle" in md
 
 
+def test_paired_deltas_are_additive_and_label_their_population():
+    # mem-lp24: the artifact gains a `paired_deltas` block (additive — every
+    # pre-existing key is untouched) carrying delta+CI on labeled populations.
+    art = builder.assemble(_two_rung_summary())
+    paired = art["paired_deltas"]
+    assert paired["population_primary"] == "itt"
+    # floor_lift / ceiling_gap need `ours`, absent from this run -> None, surfaced.
+    assert paired["floor_lift"] == {"itt": None, "matched": None}
+    assert paired["ceiling_gap"] == {"itt": None, "matched": None}
+    # efficiency paired deltas recomputed from the per-bundle cells:
+    # output_tokens oracle-none deltas = [-300, +300] -> median 0, CI in range.
+    eff = paired["efficiency"]["output_tokens"]
+    assert eff["from_rung"] == "none"
+    assert eff["to_rung"] == "oracle"
+    assert eff["population"] == "matched"
+    assert eff["n_pairs"] == 2
+    assert eff["delta"] == pytest.approx(0.0)
+    assert -300.0 <= eff["ci_low"] <= eff["delta"] <= eff["ci_high"] <= 300.0
+
+
+def test_paired_floor_lift_resolves_on_a_ladder_with_ours():
+    summary = {
+        "conditions": ["none", "ours"],
+        "per_bundle": [
+            {
+                "work_id": f"demo-rig-{i}",
+                "none": _cell(0.0, 0.0),
+                "ours": _cell(1.0, 1.0),
+            }
+            for i in range(3)
+        ],
+        "gaps": {},
+        "quality_guard": {},
+        "rung_availability": {},
+    }
+    paired = builder.assemble(summary)["paired_deltas"]
+    itt = paired["floor_lift"]["itt"]
+    assert itt["delta"] == pytest.approx(1.0)
+    assert itt["n_pairs"] == 3
+    assert itt["n_imputed_zero"] == 0
+    assert itt["population"] == "itt"
+    assert paired["floor_lift"]["matched"]["population"] == "matched"
+
+
+def test_markdown_states_the_itt_population_policy():
+    md = builder.render_markdown(builder.assemble(_two_rung_summary()))
+    assert "ITT" in md
+    assert "matched" in md
+
+
 def test_absent_efficiency_metric_surfaces_as_not_reported():
     # the two-rung fixture supplies only output_tokens + turns; the other two canonical
     # metrics must appear as explicit "(not reported)" rows, never silently vanish.

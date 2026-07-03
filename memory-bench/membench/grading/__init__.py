@@ -53,6 +53,13 @@ from membench.grading.leak_guard import (
     outcome_labels,
 )
 from membench.grading.merged_diff import MergedDiffSource
+from membench.grading.paired_ci import (
+    POPULATION_PRIMARY,
+    PairedDeltaCI,
+    Population,
+    paired_delta_ci,
+    paired_deltas,
+)
 from membench.grading.trace_score import (
     RewardComponents,
     RewardRecord,
@@ -71,6 +78,7 @@ __all__ = [
     "DEFAULT_RUNGS",
     "DEFAULT_SATURATION_TOL",
     "IDENTIFYING_KEYS",
+    "POPULATION_PRIMARY",
     "AblationDesign",
     "AblationSource",
     "Calibration",
@@ -85,6 +93,8 @@ __all__ = [
     "OssLlmJudge",
     "OutcomeLeakError",
     "OutcomeSource",
+    "PairedDeltaCI",
+    "Population",
     "RewardComponents",
     "RewardRecord",
     "Rubric",
@@ -107,6 +117,8 @@ __all__ = [
     "find_outcome_leaks",
     "min_useful_combo",
     "outcome_labels",
+    "paired_delta_ci",
+    "paired_deltas",
     "recommend_source",
     "relaxed_signature",
     "saturation_point",
