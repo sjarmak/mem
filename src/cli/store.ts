@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 
-import { openStore, type StoreDatabase } from '../store/index.js';
+import { openStore, openStoreForExport, type StoreDatabase } from '../store/index.js';
 import type { CliOptions } from './index.js';
 
 /**
@@ -50,4 +50,25 @@ export function withReadStore<T>(options: CliOptions, fn: (db: StoreDatabase) =>
  */
 export function withWriteStore<T>(options: CliOptions, fn: (db: StoreDatabase) => T): T {
   return withReadStore(options, fn);
+}
+
+/**
+ * Open the resolved store for an export read. Unlike {@link withReadStore},
+ * this deliberately bypasses the schema-version gate (read-only handle):
+ * exporting the append-only, non-regenerable tables must work precisely when
+ * the version mismatches — rescuing rows out of a store HEAD refuses to open
+ * is the round-trip's reason to exist. Rows are still re-validated through
+ * their schemas on the way out, so shape drift fails loudly.
+ */
+export function withExportStore<T>(options: CliOptions, fn: (db: StoreDatabase) => T): T {
+  const path = storePath(options);
+  if (!existsSync(path)) {
+    throw new Error(`No store at ${path}. Build one first, or pass --store <path>.`);
+  }
+  const db = openStoreForExport(path);
+  try {
+    return fn(db);
+  } finally {
+    db.close();
+  }
 }

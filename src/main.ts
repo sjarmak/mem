@@ -19,6 +19,9 @@ import { provenanceCommand } from './cli/commands/provenance.js';
 import { memoryEventCommand } from './cli/commands/memory-event.js';
 import { exportMemoryEventsCommand } from './cli/commands/export-memory-events.js';
 import { importMemoryEventsCommand } from './cli/commands/import-memory-events.js';
+import { exportProvenanceEventsCommand } from './cli/commands/export-provenance-events.js';
+import { importProvenanceEventsCommand } from './cli/commands/import-provenance-events.js';
+import { rebuildCommand } from './cli/commands/rebuild.js';
 
 /** Registers all commands and runs the CLI. The bin entrypoint calls this. */
 export function main(argv: string[]): Promise<void> {
@@ -42,6 +45,9 @@ export function main(argv: string[]): Promise<void> {
   registerCommand('memory-event', memoryEventCommand);
   registerCommand('export-memory-events', exportMemoryEventsCommand);
   registerCommand('import-memory-events', importMemoryEventsCommand);
+  registerCommand('export-provenance-events', exportProvenanceEventsCommand);
+  registerCommand('import-provenance-events', importProvenanceEventsCommand);
+  registerCommand('rebuild', rebuildCommand);
 
   return runCli(argv);
 }

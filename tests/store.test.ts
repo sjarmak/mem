@@ -91,15 +91,25 @@ describe('openStore', () => {
     reopened.close();
   });
 
-  it('fails loudly on a schema version mismatch', () => {
+  it('fails loudly on a schema version mismatch, inventorying the non-regenerable tables', () => {
     dir = mkdtempSync(join(tmpdir(), 'mem-store-'));
     const path = join(dir, 'mem.db');
 
     const db = openStore(path);
+    appendLesson(db, {
+      work_id: 'demo-1a2b',
+      extracted_at: '2026-06-03T00:00:00Z',
+      payload: { root_cause: 'missing flag' },
+    });
     db.pragma('user_version = 99');
     db.close();
 
     expect(() => openStore(path)).toThrow(/schema version/i);
+    // The refusal names what a blind delete would strand, and the way out.
+    expect(() => openStore(path)).toThrow(/lessons: 1 row/);
+    expect(() => openStore(path)).toThrow(/memory_events: 0 row/);
+    expect(() => openStore(path)).toThrow(/provenance_events: 0 row/);
+    expect(() => openStore(path)).toThrow(/mem rebuild/);
   });
 });
 
