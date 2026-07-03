@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   assertIdentifier,
   beadToWorkRecord,
+  epicParent,
   groupLabels,
+  groupLinks,
   listRigs,
   parseAssignee,
   parseDoltRows,
@@ -97,6 +99,82 @@ describe('groupLabels', () => {
   });
 });
 
+describe('epicParent', () => {
+  it('derives the epic parent from a dotted child id', () => {
+    expect(epicParent('mem-lvp.1')).toBe('mem-lvp');
+    expect(epicParent('mem-lvp.12')).toBe('mem-lvp');
+    expect(epicParent('mem-0rrf.3')).toBe('mem-0rrf');
+  });
+
+  it('returns undefined for an undotted id (the epic itself)', () => {
+    expect(epicParent('mem-lvp')).toBeUndefined();
+    expect(epicParent('gc-05qle')).toBeUndefined();
+  });
+
+  it('only strips a numeric child suffix (the beads epic convention)', () => {
+    expect(epicParent('mem-x.final')).toBeUndefined();
+    expect(epicParent('mem-a.1.2')).toBe('mem-a.1');
+  });
+});
+
+describe('groupLinks', () => {
+  it('maps parent-child edges to the child links.parent', () => {
+    const links = groupLinks([
+      { issue_id: 'mem-lvp.4', type: 'parent-child', depends_on_issue_id: 'mem-lvp' },
+    ]);
+    expect(links.get('mem-lvp.4')).toEqual({ deps: [], supersedes: [], parent: 'mem-lvp' });
+  });
+
+  it('maps tracks edges to the tracked member links.convoy_id', () => {
+    // (issue_id = the convoy bead, depends_on = the member it tracks)
+    const links = groupLinks([
+      { issue_id: 'mem-blas', type: 'tracks', depends_on_issue_id: 'mem-bxhh.3' },
+    ]);
+    expect(links.get('mem-bxhh.3')).toEqual({ deps: [], supersedes: [], convoy_id: 'mem-blas' });
+    expect(links.has('mem-blas')).toBe(false);
+  });
+
+  it('maps supersedes edges to links.supersedes', () => {
+    const links = groupLinks([
+      { issue_id: 'mem-new', type: 'supersedes', depends_on_issue_id: 'mem-old' },
+    ]);
+    expect(links.get('mem-new')).toEqual({ deps: [], supersedes: ['mem-old'] });
+  });
+
+  it('maps every other dependency type to links.deps, sorted and deduped', () => {
+    const links = groupLinks([
+      { issue_id: 'mem-a', type: 'blocks', depends_on_issue_id: 'mem-z' },
+      { issue_id: 'mem-a', type: 'discovered-from', depends_on_issue_id: 'mem-b' },
+      { issue_id: 'mem-a', type: 'related', depends_on_issue_id: 'mem-z' },
+    ]);
+    expect(links.get('mem-a')).toEqual({ deps: ['mem-b', 'mem-z'], supersedes: [] });
+  });
+
+  it('skips rows missing a column', () => {
+    const links = groupLinks([
+      { issue_id: 'mem-a', type: 'blocks' },
+      { type: 'blocks', depends_on_issue_id: 'mem-b' },
+    ]);
+    expect(links.size).toBe(0);
+  });
+
+  it('keeps the sorted-first value and warns when parent or convoy conflict', () => {
+    const warnings: string[] = [];
+    const links = groupLinks(
+      [
+        { issue_id: 'mem-c', type: 'parent-child', depends_on_issue_id: 'mem-p2' },
+        { issue_id: 'mem-c', type: 'parent-child', depends_on_issue_id: 'mem-p1' },
+        { issue_id: 'cv-2', type: 'tracks', depends_on_issue_id: 'mem-m' },
+        { issue_id: 'cv-1', type: 'tracks', depends_on_issue_id: 'mem-m' },
+      ],
+      message => warnings.push(message)
+    );
+    expect(links.get('mem-c')?.parent).toBe('mem-p1');
+    expect(links.get('mem-m')?.convoy_id).toBe('cv-1');
+    expect(warnings).toHaveLength(2);
+  });
+});
+
 describe('parseDoltRows', () => {
   it('extracts the rows array', () => {
     expect(parseDoltRows('{"rows": [{"id":"gc-1"},{"id":"gc-2"}]}')).toEqual([
@@ -164,10 +242,46 @@ describe('beadToWorkRecord', () => {
     ).toThrow();
   });
 
+  it('carries explicit dependency links into record.links', () => {
+    const record = beadToWorkRecord(fullRow, 'gascity', [], {
+      deps: ['gc-aaa'],
+      supersedes: ['gc-old'],
+      convoy_id: 'gc-cv',
+    });
+    expect(record.links).toEqual({
+      deps: ['gc-aaa'],
+      supersedes: ['gc-old'],
+      convoy_id: 'gc-cv',
+    });
+  });
+
+  it('derives the epic parent from a dotted id when no explicit parent edge exists', () => {
+    const record = beadToWorkRecord({ ...fullRow, id: 'mem-lvp.12' }, 'mem', []);
+    expect(record.links.parent).toBe('mem-lvp');
+  });
+
+  it('prefers an explicit parent-child edge over the dotted-id derivation', () => {
+    const record = beadToWorkRecord({ ...fullRow, id: 'mem-lvp.12' }, 'mem', [], {
+      deps: [],
+      supersedes: [],
+      parent: 'mem-other',
+    });
+    expect(record.links.parent).toBe('mem-other');
+  });
+
+  it('leaves links empty for an undotted id with no dependency rows', () => {
+    const record = beadToWorkRecord(fullRow, 'gascity', []);
+    expect(record.links).toEqual({ deps: [], supersedes: [] });
+  });
+
   it('degrades malformed metadata to {} with a warning instead of throwing', () => {
     const warnings: string[] = [];
-    const record = beadToWorkRecord({ ...fullRow, metadata: '{not json' }, 'gascity', [], message =>
-      warnings.push(message)
+    const record = beadToWorkRecord(
+      { ...fullRow, metadata: '{not json' },
+      'gascity',
+      [],
+      undefined,
+      message => warnings.push(message)
     );
     expect(record.work_id).toBe('gc-05qle');
     expect(record.metadata).toEqual({});
@@ -178,8 +292,12 @@ describe('beadToWorkRecord', () => {
 
   it('degrades non-object metadata to {} with a warning', () => {
     const warnings: string[] = [];
-    const record = beadToWorkRecord({ ...fullRow, metadata: '[1,2]' }, 'gascity', [], message =>
-      warnings.push(message)
+    const record = beadToWorkRecord(
+      { ...fullRow, metadata: '[1,2]' },
+      'gascity',
+      [],
+      undefined,
+      message => warnings.push(message)
     );
     expect(record.metadata).toEqual({});
     expect(warnings).toHaveLength(1);
@@ -193,7 +311,9 @@ function fakeRunner(fixtures: Record<string, DoltRow[]>): SqlRunner {
       ? 'rigs'
       : sql.includes('from labels')
         ? 'labels'
-        : 'issues';
+        : sql.includes('from dependencies')
+          ? 'dependencies'
+          : 'issues';
     return Promise.resolve(fixtures[`${database}::${table}`] ?? []);
   };
 }
@@ -214,6 +334,30 @@ describe('readRig', () => {
     expect(records).toHaveLength(2);
     expect(records[0].labels).toEqual(['phase1', 'epic']);
     expect(records[1].labels).toEqual([]);
+  });
+
+  it('joins the dependencies table into record.links', async () => {
+    const run = fakeRunner({
+      'mem::issues': [
+        { id: 'mem-cv', title: 'convoy', status: 'open', priority: '2', created_at: '2026-06-01' },
+        { id: 'mem-a', title: 'a', status: 'open', priority: '2', created_at: '2026-06-01' },
+        { id: 'mem-b', title: 'b', status: 'closed', priority: '1', created_at: '2026-06-02' },
+      ],
+      'mem::dependencies': [
+        { issue_id: 'mem-a', type: 'blocks', depends_on_issue_id: 'mem-b' },
+        { issue_id: 'mem-cv', type: 'tracks', depends_on_issue_id: 'mem-a' },
+        { issue_id: 'mem-b', type: 'supersedes', depends_on_issue_id: 'mem-z' },
+      ],
+    });
+    const records = await readRig(run, 'mem');
+    const byId = new Map(records.map(r => [r.work_id, r]));
+    expect(byId.get('mem-a')?.links).toEqual({
+      deps: ['mem-b'],
+      supersedes: [],
+      convoy_id: 'mem-cv',
+    });
+    expect(byId.get('mem-b')?.links).toEqual({ deps: [], supersedes: ['mem-z'] });
+    expect(byId.get('mem-cv')?.links).toEqual({ deps: [], supersedes: [] });
   });
 
   it('survives a single bead with malformed metadata (warns, keeps the rest)', async () => {

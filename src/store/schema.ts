@@ -11,13 +11,13 @@
  * Eval-contract support (Decisions 6–10): this schema *provisions* the
  * exclusion keys — `started_at`/`closed_at` (temporal leave-one-out),
  * `convoy_id`, `pr` AND `external_ref` (a branch-sibling without a PR yet must
- * still be excludable), and `record_links` supersedes adjacency. The functional
- * LOO queries (NULL-safe pr-or-branch sibling match, recursive-CTE supersedes
- * closure) belong to the Phase-2 retrieve/bench layers; today's ingest does not
- * yet populate convoy/supersedes, so those columns carry data only when
- * upstream provides it.
+ * still be excludable), and `record_links` dep/supersedes/epic-parent
+ * adjacency, populated by the beads ingest from the dolt `dependencies` table
+ * (mem-qgdz). The functional LOO queries (NULL-safe convoy/pr-or-branch/epic
+ * sibling match, recursive-CTE supersedes closure) belong to the Phase-2
+ * retrieve/bench layers.
  */
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 export const SCHEMA_DDL = `
 CREATE TABLE work_records (
@@ -123,7 +123,7 @@ CREATE INDEX idx_labels_work ON record_labels(work_id);
 
 CREATE TABLE record_links (
   work_id   TEXT NOT NULL REFERENCES work_records(work_id),
-  kind      TEXT NOT NULL CHECK (kind IN ('dep', 'supersedes')),
+  kind      TEXT NOT NULL CHECK (kind IN ('dep', 'supersedes', 'parent')),
   target_id TEXT NOT NULL
 );
 CREATE INDEX idx_links_work   ON record_links(work_id);

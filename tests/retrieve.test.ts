@@ -133,6 +133,38 @@ describe('retrieve — D6 temporal leave-one-out', () => {
     expect(result.items.map(i => i.work_id)).toEqual(['rigA-other']);
   });
 
+  it('excludes an epic sibling (shared links.parent) closed before the query start', () => {
+    // The mem-qgdz confirmed leak: mem-lvp.1 (closed) retrievable by
+    // mem-lvp.12 — both children of epic mem-lvp.
+    writeRecords(db, [
+      priorRecord('rigA-epic.1', 'rigA', {
+        links: { deps: [], supersedes: [], parent: 'rigA-epic' },
+      }),
+      priorRecord('rigA-other', 'rigA'),
+    ]);
+
+    const result = retrieve(db, baseQuery({ work_id: 'rigA-epic.12', parent: 'rigA-epic' }), {
+      scope: 'same_rig_temporal',
+    });
+
+    expect(result.items.map(i => i.work_id)).toEqual(['rigA-other']);
+  });
+
+  it('excludes the epic parent itself and the query work children', () => {
+    writeRecords(db, [
+      priorRecord('rigA-epic', 'rigA'), // the parent bead
+      priorRecord('rigA-b.1', 'rigA', {
+        links: { deps: [], supersedes: [], parent: 'rigA-b' }, // child of the query work
+      }),
+    ]);
+
+    const result = retrieve(db, baseQuery({ work_id: 'rigA-b', parent: 'rigA-epic' }), {
+      scope: 'same_rig_temporal',
+    });
+
+    expect(result.items).toEqual([]);
+  });
+
   it('excludes records sharing the query work PR or branch (external_ref)', () => {
     writeRecords(db, [
       priorRecord('rigA-prsib', 'rigA', {
@@ -432,7 +464,7 @@ describe('queryFromRecord', () => {
     writeRecords(db, [
       priorRecord('rigA-b', 'rigA', {
         external_ref: 'feat/x',
-        links: { deps: [], convoy_id: 'c1', supersedes: [] },
+        links: { deps: [], convoy_id: 'c1', supersedes: [], parent: 'rigA-epic' },
       }),
     ]);
 
@@ -444,6 +476,7 @@ describe('queryFromRecord', () => {
       started: '2026-06-01T01:00:00Z',
       errors: [tsError()],
       convoy_id: 'c1',
+      parent: 'rigA-epic',
       pr: '#rigA-b',
       external_ref: 'feat/x',
     });

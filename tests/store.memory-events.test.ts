@@ -45,8 +45,8 @@ afterEach(() => {
 });
 
 describe('memory_events store surface (mem-31kz)', () => {
-  it('the schema is bumped to v10 for the memory_events table', () => {
-    expect(SCHEMA_VERSION).toBe(10);
+  it('the schema is at v11 (memory_events landed in v10, mem-qgdz bumped to 11)', () => {
+    expect(SCHEMA_VERSION).toBe(11);
   });
 
   it('records and reads back events by work_id and by session', () => {

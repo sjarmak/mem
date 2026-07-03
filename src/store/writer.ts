@@ -301,6 +301,9 @@ export function writeRecords(db: StoreDatabase, records: WorkRecord[]): void {
       for (const target of record.links.supersedes) {
         insertLink.run(record.work_id, 'supersedes', target);
       }
+      if (record.links.parent !== undefined) {
+        insertLink.run(record.work_id, 'parent', record.links.parent);
+      }
       for (const error of record.trace?.errors ?? []) {
         insertError.run(
           record.work_id,

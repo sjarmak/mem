@@ -178,11 +178,18 @@ export const SignalSchema = z.object({
 
 export type Signal = z.infer<typeof SignalSchema>;
 
-/** Graph edges to other work. */
+/** Graph edges to other work, populated by the beads ingest from the dolt
+ * `dependencies` table (mem-qgdz): `deps` carries the generic edge types
+ * (blocks / discovered-from / related / …), `convoy_id` the convoy bead that
+ * `tracks` this record, `supersedes` the explicit supersedes edges, and
+ * `parent` the epic parent — from an explicit `parent-child` edge, else
+ * derived at ingest from the dotted-id convention (`mem-lvp.12` → `mem-lvp`).
+ * All four feed the Decision-6 non-temporal exclusions. */
 export const LinksSchema = z.object({
   deps: z.array(z.string()).default([]),
   convoy_id: z.string().optional(),
   supersedes: z.array(z.string()).default([]),
+  parent: z.string().optional(),
 });
 
 export type Links = z.infer<typeof LinksSchema>;

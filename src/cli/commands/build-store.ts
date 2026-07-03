@@ -84,6 +84,47 @@ export interface BuildStoreResult {
    * not the base resolved (`session_commits` present). The base-resolved subset
    * above is the recovered prize; the remainder were squashed/rebased out. */
   records_with_session_commits: number;
+  /** `record_links` edges the batch projects (dep + supersedes + epic parent) —
+   * the mem-qgdz D6 exclusion substrate. Zero on a real corpus means the
+   * dependency ingest broke; see {@link checkRecordLinks}. */
+  record_links: number;
+}
+
+/** The `record_links` rows a record projects on upsert: its dep and supersedes
+ * edges plus the epic-parent edge. (`convoy_id` projects onto `work_records`
+ * itself, so it is not counted here.) */
+export function recordLinkCount(record: WorkRecord): number {
+  return (
+    record.links.deps.length +
+    record.links.supersedes.length +
+    (record.links.parent !== undefined ? 1 : 0)
+  );
+}
+
+/**
+ * mem-qgdz sanity check: a real corpus always yields link edges (the mem rig
+ * alone carries hundreds of dependency rows, and the dotted-id epic convention
+ * derives parents besides), so a build that wrote records but zero
+ * `record_links` means the dependency ingest silently broke — exactly the
+ * regression that left the D6 non-temporal exclusions inert corpus-wide. A
+ * full-corpus build (`rig === null`) fails loudly; a single `--rig` build only
+ * warns, because a small or fresh rig can legitimately have no links yet.
+ */
+export function checkRecordLinks(
+  records: number,
+  links: number,
+  rig: string | null,
+  warn: (message: string) => void = message => console.error(message)
+): void {
+  if (records === 0 || links > 0) return;
+  const message =
+    `built ${records} records but zero record_links — ` +
+    'the dependency ingest produced no dep/supersedes/parent edges, so the ' +
+    'D6 non-temporal exclusions would be inert (mem-qgdz)';
+  if (rig === null) {
+    throw new Error(message);
+  }
+  warn(`warning: ${message}`);
 }
 
 /** Options for {@link attachAndParse} — injectable so the P1.3→P1.6 wiring is
@@ -241,6 +282,7 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
   let recordsMultiSession = 0;
   let recordsWithSessionBase = 0;
   let recordsWithSessionCommits = 0;
+  let recordLinks = 0;
 
   for (const name of rigs) {
     const spine = await readRig(run, name);
@@ -295,7 +337,12 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     recordsWithSessionBase += records.filter(
       r => r.session_commits?.base_state === 'resolved'
     ).length;
+    recordLinks += records.reduce((n, r) => n + recordLinkCount(r), 0);
   }
+
+  // A real corpus with zero link edges means the dependency ingest broke —
+  // fail a full build loudly, warn on a single --rig build. Never silent.
+  checkRecordLinks(count, recordLinks, rig);
 
   if (!ctx.options.json) {
     const scope = rig === null ? 'all rigs' : rig;
@@ -312,8 +359,9 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
       : '';
     const joinNote = join !== null ? `; ${recordsMultiSession} are multi-session` : '';
     const provEventsNote = `; ${provenanceEvents} provenance events`;
+    const linksNote = `; ${recordLinks} record links`;
     console.error(
-      `built ${count} work records from ${scope} into ${path}${repoNote}${traceNote}${provNote}${joinNote}${provEventsNote}`
+      `built ${count} work records from ${scope} into ${path}${repoNote}${traceNote}${provNote}${joinNote}${provEventsNote}${linksNote}`
     );
   }
 
@@ -332,5 +380,6 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     records_provenance_events: provenanceEvents,
     records_with_session_base: recordsWithSessionBase,
     records_with_session_commits: recordsWithSessionCommits,
+    record_links: recordLinks,
   };
 }

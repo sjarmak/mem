@@ -11,14 +11,19 @@ import type { RetrievalQuery } from './retrieval.js';
 
 /**
  * NULL-safe sibling test: a record is the query work's sibling when it shares
- * the query's convoy, PR, or branch (`external_ref`). Each comparison only
- * fires when the query side names a value — absence on either side never
- * matches absence.
+ * the query's convoy, PR, branch (`external_ref`), or epic parent — or sits on
+ * the parent-child axis itself (the record IS the query's epic, or a child of
+ * the query work). The parent key is ingest-derived data (`record.links.parent`,
+ * mem-qgdz), never re-parsed here. Each comparison only fires when the query
+ * side names a value — absence on either side never matches absence.
  */
 export function isSibling(record: WorkRecord, query: RetrievalQuery): boolean {
   return (
     (query.convoy_id !== undefined && record.links.convoy_id === query.convoy_id) ||
     (query.pr !== undefined && record.outcome?.pr === query.pr) ||
-    (query.external_ref !== undefined && record.external_ref === query.external_ref)
+    (query.external_ref !== undefined && record.external_ref === query.external_ref) ||
+    (query.parent !== undefined &&
+      (record.links.parent === query.parent || record.work_id === query.parent)) ||
+    record.links.parent === query.work_id
   );
 }

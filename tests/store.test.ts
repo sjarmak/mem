@@ -104,8 +104,8 @@ describe('openStore', () => {
 });
 
 describe('mem-wanz.3 — PROV-O links schema (v10)', () => {
-  it('bumped SCHEMA_VERSION to 10 (provenance_events + mem-31kz memory_events)', () => {
-    expect(SCHEMA_VERSION).toBe(10);
+  it('bumped SCHEMA_VERSION to 11 (record_links parent kind, mem-qgdz)', () => {
+    expect(SCHEMA_VERSION).toBe(11);
   });
 
   it('projects link_tier + link_source onto work_records', () => {
@@ -479,6 +479,32 @@ describe('queryRecords', () => {
       'demo-1a2b',
       'other-9z9z',
     ]);
+  });
+});
+
+describe('record_links projection (mem-qgdz)', () => {
+  it('projects deps, supersedes and the epic parent from the record JSON', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [
+      fullRecord({
+        links: {
+          deps: ['demo-0f0f'],
+          supersedes: ['demo-dead'],
+          convoy_id: 'convoy-7',
+          parent: 'demo-1a2b-epic',
+        },
+      }),
+    ]);
+
+    const rows = db
+      .prepare('SELECT kind, target_id FROM record_links WHERE work_id = ? ORDER BY kind')
+      .all('demo-1a2b') as { kind: string; target_id: string }[];
+    expect(rows).toEqual([
+      { kind: 'dep', target_id: 'demo-0f0f' },
+      { kind: 'parent', target_id: 'demo-1a2b-epic' },
+      { kind: 'supersedes', target_id: 'demo-dead' },
+    ]);
+    db.close();
   });
 });
 

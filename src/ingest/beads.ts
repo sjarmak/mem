@@ -12,7 +12,7 @@ import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { z } from 'zod';
-import { AgentRef, WorkRecord, WorkRecordSchema } from '../schemas/workrecord.js';
+import { AgentRef, Links, WorkRecord, WorkRecordSchema } from '../schemas/workrecord.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -176,7 +176,92 @@ export function groupLabels(rows: DoltRow[]): Map<string, string[]> {
   return byIssue;
 }
 
-/** Map one issues row + its labels to a validated WorkRecord spine.
+/** The beads epic convention: children of epic `mem-lvp` are `mem-lvp.1`,
+ * `mem-lvp.12`, … — a numeric dotted suffix. Derive the parent id from it so
+ * epic siblings are excludable (Decision 6) even when the rig recorded no
+ * explicit `parent-child` dependency row. Data derivation at ingest, per the
+ * projection invariant — the reader never re-parses ids. */
+export function epicParent(workId: string): string | undefined {
+  const match = /^(.+)\.\d+$/.exec(workId);
+  return match ? match[1] : undefined;
+}
+
+/**
+ * Group `dependencies` rows into {@link Links} per issue. Edge mapping:
+ * `parent-child` sets the child's `parent`; `tracks` (a convoy bead tracking a
+ * member) sets the member's `convoy_id`; `supersedes` accumulates on the
+ * superseding issue; every other type (blocks / discovered-from / related / …)
+ * is a generic `deps` edge. `parent`/`convoy_id` are single-valued: on
+ * conflicting rows the sorted-first value wins, with a warning — deterministic,
+ * never silent.
+ */
+export function groupLinks(rows: DoltRow[], warn: WarnFn = stderrWarn): Map<string, Links> {
+  interface Edges {
+    deps: Set<string>;
+    supersedes: Set<string>;
+    convoys: Set<string>;
+    parents: Set<string>;
+  }
+  const byIssue = new Map<string, Edges>();
+  const edgesFor = (id: string): Edges => {
+    const existing = byIssue.get(id);
+    if (existing) return existing;
+    const fresh: Edges = {
+      deps: new Set(),
+      supersedes: new Set(),
+      convoys: new Set(),
+      parents: new Set(),
+    };
+    byIssue.set(id, fresh);
+    return fresh;
+  };
+
+  for (const { issue_id, type, depends_on_issue_id } of rows) {
+    if (issue_id === undefined || type === undefined || depends_on_issue_id === undefined) {
+      continue;
+    }
+    switch (type) {
+      case 'parent-child':
+        edgesFor(issue_id).parents.add(depends_on_issue_id);
+        break;
+      case 'tracks':
+        edgesFor(depends_on_issue_id).convoys.add(issue_id);
+        break;
+      case 'supersedes':
+        edgesFor(issue_id).supersedes.add(depends_on_issue_id);
+        break;
+      default:
+        edgesFor(issue_id).deps.add(depends_on_issue_id);
+    }
+  }
+
+  const links = new Map<string, Links>();
+  for (const [id, edges] of byIssue) {
+    const parents = [...edges.parents].sort();
+    const convoys = [...edges.convoys].sort();
+    if (parents.length > 1) {
+      warn(
+        `warning: ${id}: multiple parent-child edges (${parents.join(', ')}); keeping ${parents[0]}`
+      );
+    }
+    if (convoys.length > 1) {
+      warn(
+        `warning: ${id}: tracked by multiple convoys (${convoys.join(', ')}); keeping ${convoys[0]}`
+      );
+    }
+    links.set(id, {
+      deps: [...edges.deps].sort(),
+      supersedes: [...edges.supersedes].sort(),
+      ...(convoys[0] !== undefined && { convoy_id: convoys[0] }),
+      ...(parents[0] !== undefined && { parent: parents[0] }),
+    });
+  }
+  return links;
+}
+
+/** Map one issues row + its labels and dependency links to a validated
+ * WorkRecord spine. The epic parent falls back to the dotted-id derivation
+ * ({@link epicParent}) when no explicit `parent-child` edge named one.
  * Malformed metadata is external producer data we don't control, so it degrades
  * to `{}` with a warning rather than aborting the rig read; every other shape
  * violation still throws (a broken spine is not ingestible). */
@@ -184,6 +269,7 @@ export function beadToWorkRecord(
   row: DoltRow,
   rig: string,
   labels: string[],
+  links?: Links,
   warn: WarnFn = stderrWarn
 ): WorkRecord {
   const agent = row.assignee ? parseAssignee(row.assignee) : null;
@@ -195,11 +281,18 @@ export function beadToWorkRecord(
     warn(`warning: ${rig}/${row.id ?? '<no id>'}: malformed bead metadata ignored (${detail})`);
     metadata = {};
   }
+  const parent = links?.parent ?? (row.id === undefined ? undefined : epicParent(row.id));
   const candidate = {
     work_id: row.id,
     rig,
     title: row.title ?? '',
     labels,
+    links: {
+      deps: links?.deps ?? [],
+      supersedes: links?.supersedes ?? [],
+      ...(links?.convoy_id !== undefined && { convoy_id: links.convoy_id }),
+      ...(parent !== undefined && { parent }),
+    },
     metadata,
     priority: row.priority === undefined ? undefined : Number(row.priority),
     external_ref: row.external_ref,
@@ -222,6 +315,8 @@ const ISSUES_SQL =
   'created_at, started_at, closed_at, metadata from issues';
 
 const LABELS_SQL = 'select issue_id, label from labels';
+
+const DEPENDENCIES_SQL = 'select issue_id, type, depends_on_issue_id from dependencies';
 
 const RIGS_SQL =
   "select table_schema as rig from information_schema.tables where table_name = 'issues'";
@@ -274,11 +369,18 @@ export async function readRig(
   rig: string,
   warn: WarnFn = stderrWarn
 ): Promise<WorkRecord[]> {
-  const [issues, labels] = await Promise.all([run(rig, ISSUES_SQL), run(rig, LABELS_SQL)]);
+  const [issues, labels, dependencies] = await Promise.all([
+    run(rig, ISSUES_SQL),
+    run(rig, LABELS_SQL),
+    run(rig, DEPENDENCIES_SQL),
+  ]);
   const labelsByIssue = groupLabels(labels);
+  const linksByIssue = groupLinks(dependencies, warn);
   return issues
     .filter((row): row is DoltRow & { id: string } => row.id !== undefined)
-    .map(row => beadToWorkRecord(row, rig, labelsByIssue.get(row.id) ?? [], warn));
+    .map(row =>
+      beadToWorkRecord(row, rig, labelsByIssue.get(row.id) ?? [], linksByIssue.get(row.id), warn)
+    );
 }
 
 /** Read WorkRecord spines across every rig on the server. */
