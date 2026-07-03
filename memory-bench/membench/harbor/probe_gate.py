@@ -68,17 +68,23 @@ from membench.harbor.control_conditions import (
 from membench.harbor.env_recon import DEFAULT_RIG_REPOS, reconstruct_env
 from membench.harbor.harbor_exec import _locate_one, run_harbor_job
 from membench.harbor.memory_inject import inject_context
+from membench.harbor.shuffled_condition import SHUFFLED, ShuffledSelection
 from membench.harbor.task_env import NetworkMode, environment_network
 from membench.schemas.bundle import TaskBundle
 
 # The gate's two conditions (plan §9.2): the stateless floor and the cheap ceiling.
 CONDITIONS: tuple[str, ...] = ("none", "oracle")
 
-# Clean-room conditions (mem-p3w): the SAME task with the agent's native project
-# memory removed from the image, so the only memory variable is the injected one.
-# ``none-clean`` is the clean-room floor; ``ours`` additionally injects retrieval-v1's
-# citation+lessons payload (D9) through the same `memory_inject` path as the oracle.
-CLEAN_CONDITIONS: tuple[str, ...] = ("none-clean", "ours")
+# Clean-room conditions (mem-p3w + mem-hhto): the SAME task with the agent's native
+# project memory removed from the image, so the only memory variable is the injected
+# one. ``none-clean`` is the clean-room floor; ``ours`` additionally injects
+# retrieval-v1's citation+lessons payload (D9) through the same `memory_inject` path
+# as the oracle; ``shuffled`` (mem-hhto) is the ours arm's content-attribution
+# placebo — the SAME rendering and leak guards, but the payload is the ours payload
+# retrieved for a DIFFERENT bundle (deterministic other-repo, volume-matched donor;
+# `shuffled_condition.select_donor`). If shuffled moves the metric like ours does,
+# the win was volume, not content.
+CLEAN_CONDITIONS: tuple[str, ...] = ("none-clean", "ours", SHUFFLED)
 
 # Brute-force control conditions (M3/M4): the distilled-memory arm's opposites,
 # injected on the native (non-clean) base like ``oracle``. ``raw-trajectory`` bakes
@@ -185,19 +191,32 @@ def oracle_context_payload(bundle: TaskBundle) -> str:
     return f"Files likely relevant to this task:\n\n{listing}\n"
 
 
-def _task_toml(bundle: TaskBundle, condition: str, network: NetworkMode) -> str:
+def _task_toml(
+    bundle: TaskBundle,
+    condition: str,
+    network: NetworkMode,
+    donor: ShuffledSelection | None = None,
+) -> str:
+    metadata = {
+        "work_id": bundle.work_id,
+        "rig": bundle.rig,
+        "condition": condition,
+        "source": "task-bundle",
+    }
+    # The donor bundle id travels with the run conditions (mem-hhto) so analysis
+    # can verify the injected placebo's irrelevance; a same-repo fallback is
+    # flagged here too, never silent.
+    if donor is not None:
+        metadata["shuffled_donor_work_id"] = donor.donor_work_id
+        if donor.fallback_reason is not None:
+            metadata["shuffled_fallback_reason"] = donor.fallback_reason
     config = {
         "schema_version": "1.1",
         "task": {
             "name": f"membench-probe/{bundle.work_id}-{condition}",
             "description": f"{bundle.issue_title} [{condition}]",
         },
-        "metadata": {
-            "work_id": bundle.work_id,
-            "rig": bundle.rig,
-            "condition": condition,
-            "source": "task-bundle",
-        },
+        "metadata": metadata,
         # Real runs need the network (the installed claude-code agent fetches its
         # CLI + the rig's deps) but never public egress: the landed gold fix is
         # publicly fetchable from the rig's GitHub repo (mem-yeoz), so the caller
@@ -269,6 +288,8 @@ def build_probe_task(
     rig_repos: Mapping[str, Path] = DEFAULT_RIG_REPOS,
     runner: Runner = subprocess.run,
     ours_payloads: Mapping[str, str] | None = None,
+    shuffled_payloads: Mapping[str, str] | None = None,
+    shuffled_donor: ShuffledSelection | None = None,
     raw_transcript: str | None = None,
     in_scope_payloads: Mapping[str, str] | None = None,
     control_max_chars: int = DEFAULT_CONTROL_MAX_CHARS,
@@ -288,6 +309,10 @@ def build_probe_task(
       (``ours_payloads``, source-id -> rendered citation+lessons) baked in. An
       empty payload is a caller bug: the empty-retrieval case reuses the
       ``none-clean`` run instead of burning an agent run on an identical task.
+    - ``shuffled``   -- stripped + a DIFFERENT bundle's ours payload
+      (``shuffled_payloads``) baked through the same path; ``shuffled_donor``
+      (`shuffled_condition.select_donor`'s record) is persisted as provenance
+      (``shuffled-donor.json`` + task.toml metadata).
 
     Every agent-readable text is leak-checked BEFORE any write."""
     if condition not in ALL_CONDITIONS:
@@ -299,6 +324,23 @@ def build_probe_task(
         )
     if condition != "ours" and ours_payloads:
         raise ValueError(f"condition {condition!r} takes no ours_payloads")
+    if condition == SHUFFLED and not shuffled_payloads:
+        raise ValueError(
+            "the shuffled condition needs non-empty shuffled_payloads (the donor "
+            "bundle's ours payload, picked by shuffled_condition.select_donor)"
+        )
+    if condition == SHUFFLED and shuffled_donor is None:
+        raise ValueError(
+            "the shuffled condition needs shuffled_donor (the selection provenance "
+            "record) so analysis can verify the placebo's irrelevance"
+        )
+    if shuffled_donor is not None and shuffled_donor.work_id != bundle.work_id:
+        raise ValueError(
+            f"shuffled_donor records recipient {shuffled_donor.work_id!r}, "
+            f"but the bundle is {bundle.work_id!r}"
+        )
+    if condition != SHUFFLED and (shuffled_payloads or shuffled_donor is not None):
+        raise ValueError(f"condition {condition!r} takes no shuffled donor payload")
     if condition == RAW_TRAJECTORY and raw_transcript is None:
         raise ValueError(
             f"the {RAW_TRAJECTORY!r} condition needs raw_transcript (the bundle's raw trace)"
@@ -321,13 +363,15 @@ def build_probe_task(
         )
 
     instruction = probe_instruction(bundle)
-    task_toml = _task_toml(bundle, condition, network)
+    task_toml = _task_toml(bundle, condition, network, donor=shuffled_donor)
     injected: dict[str, str] | None = None
     control_truncation: PayloadTruncation | None = None
     if condition == "oracle":
         injected = {"oracle-files": oracle_context_payload(bundle)}
     elif condition == "ours":
         injected = dict(ours_payloads or ())  # non-empty: guarded above
+    elif condition == SHUFFLED:
+        injected = dict(shuffled_payloads or ())  # non-empty: guarded above
     elif condition == RAW_TRAJECTORY:
         payload = raw_trajectory_payload(bundle, raw_transcript or "", max_chars=control_max_chars)
         injected = {RAW_TRAJECTORY: payload.text}
@@ -361,6 +405,12 @@ def build_probe_task(
     if control_truncation is not None and control_truncation.truncated:
         (task_dir / "truncation.json").write_text(
             control_truncation.model_dump_json(indent=2), encoding="utf-8"
+        )
+    # The donor selection is the shuffled run's irrelevance provenance (mem-hhto):
+    # which bundle's payload was injected, its repo, and the volume-match accounting.
+    if shuffled_donor is not None:
+        (task_dir / "shuffled-donor.json").write_text(
+            shuffled_donor.model_dump_json(indent=2) + "\n", encoding="utf-8"
         )
     return task_dir
 
