@@ -4,6 +4,8 @@ Aggregates mem-apg.3's per-rung grid scores (`.mem/grid/summary.json`) into the 
 
 **Held-out N = 9 bundles**, gascity-dashboard (9), 1 repeat each. Executable rungs this run: **none < oracle** (information increasing left→right).
 
+> **Contamination note (2026-07-03):** the `zhy00` oracle run fetched its own gold PR mid-run (WebFetch of the landed PR + `/files`) and is invalid; evidence and method in [`audits/2026-07-03-headline-network-fetch-audit.md`](audits/2026-07-03-headline-network-fetch-audit.md). Excluding that pair, the clean n=8 reward span (oracle − none) is **−0.020** (published: −0.007) — the flat-curve read is unchanged. All other runs in this grid, the mem-n9 graded headline, and the gate probes scanned clean. Real replay runs now default to allowlist networking (mem-yeoz).
+
 ## Score-vs-information curve (aggregate reward)
 
 Per-rung reward = mean over held-out tasks of the run's `combined_reward` (the established D17 contract: deterministic gold-test term + artifact term, repeats collapsed within task). The two legs are broken out below so nothing hides behind the weighting.
