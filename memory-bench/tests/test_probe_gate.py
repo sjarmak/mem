@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 
 import pytest
+import toml
 
 from membench.bundle.replay import CallReplay, ReplayOutcome, ReplayResult
 from membench.grading import OutcomeLeakError
@@ -36,6 +37,7 @@ from membench.harbor.probe_gate import (
     stale_probe_worktrees,
     summarize_pairs,
 )
+from membench.harbor.task_env import REPLAY_ALLOWED_HOSTS
 from membench.schemas.bundle import BundleEnv, TaskBundle
 from tests.helpers import git as _git
 
@@ -137,6 +139,25 @@ def test_build_probe_task_both_conditions(clone: Path, tmp_path: Path) -> None:
     assert (dirs["oracle"] / "environment" / "MEMORY.md").is_file()
     oracle_dockerfile = (dirs["oracle"] / "environment" / "Dockerfile").read_text(encoding="utf-8")
     assert f"COPY MEMORY.md {ORACLE_MEMORY_CONTAINER_PATH}" in oracle_dockerfile
+
+
+def test_probe_task_network_defaults_to_allowlist(clone: Path, tmp_path: Path) -> None:
+    # Real probe runs must never default to public egress: the landed gold fix is
+    # publicly fetchable from the rig's GitHub repo (mem-yeoz). Default = harbor's
+    # allowlist mode (agent hosts + package registries); "public" stays an explicit
+    # escape hatch.
+    bundle = _bundle(clone)
+    task_dir = build_probe_task(bundle, "none", tmp_path / "t", rig_repos={"demo": clone})
+    env = toml.load(task_dir / "task.toml")["environment"]
+    assert env["network_mode"] == "allowlist"
+    assert env["allowed_hosts"] == list(REPLAY_ALLOWED_HOSTS)
+
+    hatch = build_probe_task(
+        bundle, "none", tmp_path / "t-pub", rig_repos={"demo": clone}, network="public"
+    )
+    hatch_env = toml.load(hatch / "task.toml")["environment"]
+    assert hatch_env["network_mode"] == "public"
+    assert "allowed_hosts" not in hatch_env
 
 
 def test_build_probe_task_rejects_unknown_condition_and_rig(clone: Path, tmp_path: Path) -> None:

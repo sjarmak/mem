@@ -32,6 +32,7 @@ from membench.grading.trace_score import deterministic_term
 from membench.harbor.env_recon import reconstruct_env_for_record
 from membench.harbor.grid import AgentRunner, ErrorExtractor, HarborRunner, run_grid
 from membench.harbor.harbor_exec import harbor_exec
+from membench.harbor.task_env import NetworkMode
 
 RecordLoader = Callable[[str], Mapping[str, Any]]
 HeldErrorsLoader = Callable[[str], list[TraceErrorRef]]
@@ -147,15 +148,17 @@ def run_base_rate_spike(
     repeats: int = 1,
     rung: str = "none",
     base_ref: str = "origin/main",
-    allow_internet: bool = False,
+    network: NetworkMode = "no-network",
 ) -> SpikeResult:
     """Run the none-rung base-rate spike over ``work_ids`` and gate the result.
 
     Each bead is run ``repeats`` times (within-task repeats the gate collapses by
     majority vote). ``reconstruct`` bakes each bead's environment in before the run; set
-    False under the StubRunner (no Docker/git). ``allow_internet`` must be True for real
-    Harbor runs (the installed agent fetches its CLI + deps over the network). Raises if
-    ``work_ids`` is empty -- the gate cannot speak to a rung it never saw."""
+    False under the StubRunner (no Docker/git). ``network`` must be "allowlist" for real
+    Harbor runs (the installed agent fetches its CLI + deps, but public egress would let
+    it fetch the landed gold fix from the rig's GitHub repo -- mem-yeoz); "public" is
+    the explicit escape hatch. Raises if ``work_ids`` is empty -- the gate cannot speak
+    to a rung it never saw."""
     if not work_ids:
         raise ValueError("run_base_rate_spike needs at least one work_id")
     output_dir = Path(output_dir)
@@ -182,7 +185,7 @@ def run_base_rate_spike(
                     repeat_idx=repeat_idx,
                     overwrite=True,
                     env_reconstructor=reconstructor,
-                    allow_internet=allow_internet,
+                    network=network,
                 )
             )
         records.extend(bead_records)
@@ -207,11 +210,15 @@ def run_real_spike(
     output_dir: str | Path,
     model: str | None = None,
     repeats: int = 1,
+    network: NetworkMode = "allowlist",
 ) -> SpikeResult:
     """Production entry: wire the real HarborRunner + CLI extractor + store loaders.
 
     Requires Docker up and ``CLAUDE_CODE_OAUTH_TOKEN`` in the environment (Harbor reads
-    it from the host). Reconstructs each bead's environment and runs the agent for real."""
+    it from the host). Reconstructs each bead's environment and runs the agent for real.
+    ``network`` defaults to "allowlist" (agent hosts + package registries only -- the
+    landed gold fix is publicly fetchable, mem-yeoz); pass "public" as the explicit
+    escape hatch for unrestricted egress."""
     runner = HarborRunner(
         extractor=make_cli_extractor(mem_bin),
         exec_task=partial(harbor_exec, model=model),
@@ -224,5 +231,5 @@ def run_real_spike(
         load_held_errors=partial(load_held_errors_from_store, store_path),
         reconstruct=True,
         repeats=repeats,
-        allow_internet=True,
+        network=network,
     )

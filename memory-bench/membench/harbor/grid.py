@@ -45,6 +45,7 @@ from membench.harbor.memory_inject import (
     inject_rung_memory,
     validate_rungs,
 )
+from membench.harbor.task_env import NetworkMode
 from membench.harbor.workrecord_adapter import WorkRecordLadderAdapter
 
 # Turns a fresh run's combined build/test/lint output into trace_errors-shaped
@@ -151,7 +152,7 @@ def run_grid(
     repeat_idx: int = 0,
     overwrite: bool = False,
     env_reconstructor: Callable[[Path], object] | None = None,
-    allow_internet: bool = False,
+    network: NetworkMode = "no-network",
 ) -> list[RewardRecord]:
     """Run the ablation grid for one held-out WorkRecord and score every rung.
 
@@ -186,7 +187,7 @@ def run_grid(
 
     source = AblationSource(rungs=rungs)
     adapter = WorkRecordLadderAdapter(
-        record, output_dir, source=source, overwrite=overwrite, allow_internet=allow_internet
+        record, output_dir, source=source, overwrite=overwrite, network=network
     )
     # The adapter returns the task dirs in rung order, so the driver locates them
     # by the adapter's own naming rather than re-deriving the slug (no coupling to

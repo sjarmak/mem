@@ -129,7 +129,7 @@ class SequenceAdapter:
             # thing that may vary across conditions is memory, else the oracle ceiling
             # is contaminated by web lookups. Off by default in the skeleton (tools are
             # local fs/git; memory persists via a mount).
-            "environment": environment_network(False),
+            "environment": environment_network("no-network"),
             "verifier": {"timeout_sec": 300.0},
             "agent": {"timeout_sec": 600.0},
         }
