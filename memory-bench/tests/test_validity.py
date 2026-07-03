@@ -200,6 +200,13 @@ def test_unparseable_timestamp_raises():
     # Date-only is not a boundary instant — reject, don't guess midnight.
     with pytest.raises(ValueError):
         canonical_ts("2026-01-10")
+    # Calendar-invalid day: V8's Date.parse rolls 2026-02-30 forward to
+    # 2026-03-02; the TS side must reject it too (parity contract, both pinned).
+    with pytest.raises(ValueError):
+        canonical_ts("2026-02-30T00:00:00Z")
+    # Hour 24 rolls to next-day midnight in V8; rejected on both sides.
+    with pytest.raises(ValueError):
+        canonical_ts("2026-01-10T24:00:00Z")
 
 
 def test_canonical_ts_shapes():

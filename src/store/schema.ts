@@ -17,7 +17,11 @@
  * yet populate convoy/supersedes, so those columns carry data only when
  * upstream provides it.
  */
-export const SCHEMA_VERSION = 10;
+// v11: created_at/started_at/closed_at are projected through toIsoUtc
+// (mem-0rrf.15). A pre-fix store holds raw producer-shaped values, so its
+// TEXT boundary comparison is lexicographic, not chronological — force a
+// rebuild rather than silently retain the ' '<'T' leak.
+export const SCHEMA_VERSION = 11;
 
 export const SCHEMA_DDL = `
 CREATE TABLE work_records (

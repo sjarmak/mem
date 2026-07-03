@@ -103,11 +103,7 @@ describe('openStore', () => {
   });
 });
 
-describe('mem-wanz.3 — PROV-O links schema (v10)', () => {
-  it('bumped SCHEMA_VERSION to 10 (provenance_events + mem-31kz memory_events)', () => {
-    expect(SCHEMA_VERSION).toBe(10);
-  });
-
+describe('mem-wanz.3 — PROV-O links schema', () => {
   it('projects link_tier + link_source onto work_records', () => {
     const db = openStore(':memory:');
     const cols = db.prepare('PRAGMA table_info(work_records)').all() as { name: string }[];
@@ -497,6 +493,10 @@ describe('mem-0rrf.15 — canonical lifecycle timestamps (format-free D6 boundar
       links: { deps: [], supersedes: [] },
     });
 
+  it('bumped SCHEMA_VERSION to 11 (canonical lifecycle projections force a rebuild of pre-fix stores)', () => {
+    expect(SCHEMA_VERSION).toBe(11);
+  });
+
   it('normalizes every producer shape to one canonical ISO-8601 UTC column value', () => {
     const db = openStore(':memory:');
     writeRecords(db, [
@@ -567,6 +567,21 @@ describe('mem-0rrf.15 — canonical lifecycle timestamps (format-free D6 boundar
     );
     // Date-only is not a boundary instant either — reject, don't guess midnight.
     expect(() => writeRecords(db, [timedRecord('bad-bbbb', '2026-06-02')])).toThrow(/timestamp/i);
+    db.close();
+  });
+
+  it('rejects calendar-invalid days instead of rolling them (parity with Python canonical_ts)', () => {
+    const db = openStore(':memory:');
+    // V8's Date.parse rolls day overflow forward (2026-02-30 → 2026-03-02);
+    // the Python mirror raises ValueError. Guessing a different instant would
+    // silently reorder the boundary AND diverge the parity contract.
+    expect(() => writeRecords(db, [timedRecord('bad-cccc', '2026-02-30T00:00:00Z')])).toThrow(
+      /timestamp/i
+    );
+    // Hour 24 rolls to next-day midnight in V8 too; Python rejects it.
+    expect(() => writeRecords(db, [timedRecord('bad-dddd', '2026-06-02T24:00:00Z')])).toThrow(
+      /timestamp/i
+    );
     db.close();
   });
 

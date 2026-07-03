@@ -33,9 +33,18 @@ export function toIsoUtc(value: string): string {
   const [, date, time, zone] = match;
   const offset =
     zone === undefined || zone === 'Z' ? 'Z' : zone.replace(/^([+-]\d{2})(\d{2})$/, '$1:$2');
-  // The regex constrains shape, not ranges — Date.parse rejects a month 13.
+  // The regex constrains shape, not ranges. Date.parse rejects some overflow
+  // as NaN (month 13, minute 60) but ROLLS calendar overflow forward — day 30
+  // of February parses as March 2, hour 24 as next-day midnight — while the
+  // Python mirror's `fromisoformat` raises on both. Guessing an instant would
+  // silently reorder the boundary and diverge the parity contract, so
+  // round-trip the wall-clock components and reject anything that lands on a
+  // different day.
   const ms = Date.parse(`${date}T${time}${offset}`);
-  if (Number.isNaN(ms)) {
+  if (
+    Number.isNaN(ms) ||
+    new Date(Date.parse(`${date}T${time}Z`)).toISOString().slice(0, 10) !== date
+  ) {
     throw new Error(`not a recognizable lifecycle timestamp: ${JSON.stringify(value)}`);
   }
   return new Date(ms).toISOString();

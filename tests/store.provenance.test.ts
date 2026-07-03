@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
-  SCHEMA_VERSION,
   deriveProvenanceEvents,
   openStore,
   provenanceEventsByRef,
@@ -78,8 +77,7 @@ afterEach(() => {
 });
 
 describe('provenance event log', () => {
-  it('provisions the table at schema v10', () => {
-    expect(SCHEMA_VERSION).toBe(10);
+  it('provisions the provenance_events table', () => {
     const db = store();
     const row = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='provenance_events'")
