@@ -150,3 +150,36 @@ def test_spike_empty_work_ids_raises(tmp_path: Path):
             load_held_errors=lambda w: [_held()],
             reconstruct=False,
         )
+
+
+# --- run_real_spike network default (mem-yeoz) -----------------------------------
+
+
+def test_run_real_spike_defaults_to_allowlist_network(monkeypatch, tmp_path: Path):
+    # Real replay runs must default to harbor's allowlist mode, never public: the
+    # landed gold fix is publicly fetchable from the rig's GitHub repo. "public"
+    # stays available only as the explicit escape hatch parameter.
+    from membench.harbor import base_rate_spike as brs
+
+    captured: dict = {}
+    sentinel = object()
+
+    def fake_spike(work_ids, **kwargs):
+        captured.update(kwargs)
+        return sentinel
+
+    monkeypatch.setattr(brs, "run_base_rate_spike", fake_spike)
+    result = brs.run_real_spike(
+        ["b-1"], store_path=tmp_path / "s.db", mem_bin="mem", output_dir=tmp_path / "out"
+    )
+    assert result is sentinel
+    assert captured["network"] == "allowlist"
+
+    brs.run_real_spike(
+        ["b-1"],
+        store_path=tmp_path / "s.db",
+        mem_bin="mem",
+        output_dir=tmp_path / "out",
+        network="public",
+    )
+    assert captured["network"] == "public"

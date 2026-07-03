@@ -68,7 +68,7 @@ from membench.harbor.control_conditions import (
 from membench.harbor.env_recon import DEFAULT_RIG_REPOS, reconstruct_env
 from membench.harbor.harbor_exec import _locate_one, run_harbor_job
 from membench.harbor.memory_inject import inject_context
-from membench.harbor.task_env import environment_network
+from membench.harbor.task_env import NetworkMode, environment_network
 from membench.schemas.bundle import TaskBundle
 
 # The gate's two conditions (plan §9.2): the stateless floor and the cheap ceiling.
@@ -185,7 +185,7 @@ def oracle_context_payload(bundle: TaskBundle) -> str:
     return f"Files likely relevant to this task:\n\n{listing}\n"
 
 
-def _task_toml(bundle: TaskBundle, condition: str) -> str:
+def _task_toml(bundle: TaskBundle, condition: str, network: NetworkMode) -> str:
     config = {
         "schema_version": "1.1",
         "task": {
@@ -198,9 +198,11 @@ def _task_toml(bundle: TaskBundle, condition: str) -> str:
             "condition": condition,
             "source": "task-bundle",
         },
-        # Real runs need the network: the installed claude-code agent fetches its
-        # CLI + the rig's deps (the spike's internet-on precedent).
-        "environment": environment_network(True),
+        # Real runs need the network (the installed claude-code agent fetches its
+        # CLI + the rig's deps) but never public egress: the landed gold fix is
+        # publicly fetchable from the rig's GitHub repo (mem-yeoz), so the caller
+        # default is "allowlist" (agent hosts + package registries only).
+        "environment": environment_network(network),
         "verifier": {"timeout_sec": 300.0},
         "agent": {"timeout_sec": AGENT_TIMEOUT_SEC},
     }
@@ -270,6 +272,7 @@ def build_probe_task(
     raw_transcript: str | None = None,
     in_scope_payloads: Mapping[str, str] | None = None,
     control_max_chars: int = DEFAULT_CONTROL_MAX_CHARS,
+    network: NetworkMode = "allowlist",
 ) -> Path:
     """Write one (bundle, condition) Harbor task dir; return it.
 
@@ -318,7 +321,7 @@ def build_probe_task(
         )
 
     instruction = probe_instruction(bundle)
-    task_toml = _task_toml(bundle, condition)
+    task_toml = _task_toml(bundle, condition, network)
     injected: dict[str, str] | None = None
     control_truncation: PayloadTruncation | None = None
     if condition == "oracle":

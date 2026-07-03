@@ -19,7 +19,7 @@ from typing import Any
 import toml
 
 from membench.grading import AblationSource, assert_no_outcome_leak, outcome_labels
-from membench.harbor.task_env import environment_network
+from membench.harbor.task_env import NetworkMode, environment_network
 from membench.validity import query_from_record
 
 # The stateless baseline rung surfaces no prior-session memory; every other rung
@@ -62,7 +62,7 @@ class WorkRecordLadderAdapter:
         *,
         source: AblationSource | None = None,
         overwrite: bool = False,
-        allow_internet: bool = False,
+        network: NetworkMode = "no-network",
     ) -> None:
         # Snapshot so a caller mutating its dict between construction and run()
         # cannot change what the leak guard sees vs what gets written. Shallow is
@@ -73,11 +73,12 @@ class WorkRecordLadderAdapter:
         self.source = source or AblationSource()
         self.overwrite = overwrite
         # Offline by default (deterministic, leak-safe scoring). The real-exec spike
-        # must set this True: Harbor's installed `claude-code` agent fetches its CLI
+        # must set "allowlist": Harbor's installed `claude-code` agent fetches its CLI
         # over the network (native installer on Debian) and most rigs' build/test step
-        # needs to resolve dependencies. The held task text carries no outcome, so
-        # enabling the network does not by itself leak the answer.
-        self.allow_internet = allow_internet
+        # needs its package registry — but the landed gold fix is publicly fetchable
+        # from the rig's GitHub repo, so full egress would leak the answer into every
+        # arm (mem-yeoz). "public" stays available only as an explicit escape hatch.
+        self.network: NetworkMode = network
 
     def _task_toml(self, name: str, rung: str, loo_boundary: str) -> str:
         config = {
@@ -95,7 +96,7 @@ class WorkRecordLadderAdapter:
                 "loo_boundary": loo_boundary,
                 "source": "workrecord",
             },
-            "environment": environment_network(self.allow_internet),
+            "environment": environment_network(self.network),
             "verifier": {"timeout_sec": 300.0},
             "agent": {"timeout_sec": 600.0},
         }
