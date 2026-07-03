@@ -49,14 +49,14 @@ def _ours_runner(work_ids: list[str]) -> Callable[[OursQuery], dict[str, object]
 
 def _corpus() -> list[WorkRef]:
     return [
-        WorkRef(work_id="A", rig="r2", closed="2024-01-01"),
-        WorkRef(work_id="C", rig="r2", closed="2024-02-01"),
-        WorkRef(work_id="G", rig="r1", closed="2024-02-15"),
+        WorkRef(work_id="A", rig="r2", closed="2024-01-01 00:00:00"),
+        WorkRef(work_id="C", rig="r2", closed="2024-02-01 00:00:00"),
+        WorkRef(work_id="G", rig="r1", closed="2024-02-15 00:00:00"),
     ]
 
 
 def _query() -> QueryWork:
-    return QueryWork(work_id="B", rig="r1", started="2024-06-01")
+    return QueryWork(work_id="B", rig="r1", started="2024-06-01 00:00:00")
 
 
 _CORPUS_TEXT = {

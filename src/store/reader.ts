@@ -1,6 +1,7 @@
 import type { TraceRun } from '../schemas/trace.js';
 import { WorkRecordSchema, type WorkRecord } from '../schemas/workrecord.js';
 import type { StoreDatabase } from './sqlite.js';
+import { toIsoUtc } from './timestamp.js';
 import type { LessonInput } from './writer.js';
 
 /**
@@ -70,7 +71,9 @@ export function queryRecords(db: StoreDatabase, filter: RecordFilter = {}): Work
   }
   if (filter.closedBefore !== undefined) {
     where.push('closed_at IS NOT NULL AND closed_at < ?');
-    params.push(filter.closedBefore);
+    // Same canonical shape as the writer projects (mem-0rrf.15) — a TEXT
+    // comparison is only chronological when both sides share one format.
+    params.push(toIsoUtc(filter.closedBefore));
   }
   if (filter.agent !== undefined) {
     where.push(

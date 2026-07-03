@@ -11,6 +11,7 @@ from membench.validity import (
     QueryWork,
     WorkRef,
     assert_no_leak,
+    canonical_ts,
     is_sibling,
     loo_bounded,
     query_from_record,
@@ -151,3 +152,59 @@ def test_query_from_record_raises_without_boundary():
     record = {"work_id": "B", "rig": "rigA", "lifecycle": {"status": "open"}}
     with pytest.raises(ValueError, match="leak-safe"):
         query_from_record(record)
+
+
+# mem-0rrf.15 — the D6 cut must be chronological, not lexicographic. The corpus
+# mixes producers: dolt emits space-separated zoneless timestamps, the synthetic
+# generators (Decision 19) emit ISO 'T'/'Z' — and ' ' < 'T', so a raw TEXT
+# comparison passes records that closed AFTER the boundary. Parity contract with
+# the TS writer's canonicalization (src/store/timestamp.ts `toIsoUtc`).
+
+
+def test_mixed_format_leak_closed():
+    # Raw comparison: "2026-01-10 23:59:59" < "2026-01-10T00:00:00Z" (' ' < 'T'),
+    # so the record closing ~24h AFTER the boundary would leak. Canonical
+    # comparison excludes it and keeps the genuinely-earlier record.
+    corpus = [
+        _ref("leak", closed="2026-01-10 23:59:59"),
+        _ref("ok", closed="2026-01-09 12:00:00"),
+    ]
+    q = _query(started="2026-01-10T00:00:00Z")
+    assert [r.work_id for r in loo_bounded(corpus, q)] == ["ok"]
+
+
+def test_mixed_format_reverse_not_overexcluded():
+    # ISO record vs dolt-shape boundary: raw comparison would exclude ('T' > ' ')
+    # even though 01:00 < 12:00 on the same day.
+    corpus = [_ref("a", closed="2026-01-10T01:00:00Z")]
+    assert [r.work_id for r in loo_bounded(corpus, _query(started="2026-01-10 12:00:00"))] == ["a"]
+
+
+def test_mixed_format_ties_excluded():
+    # The same instant in three producer shapes: all boundary-equal → excluded.
+    corpus = [
+        _ref("tie-space", closed="2026-01-10 00:00:00"),
+        _ref("tie-isoz", closed="2026-01-10T00:00:00Z"),
+        _ref("tie-offset", closed="2026-01-10T02:00:00+02:00"),
+    ]
+    assert loo_bounded(corpus, _query(started="2026-01-10T00:00:00Z")) == []
+
+
+def test_unparseable_timestamp_raises():
+    # A producer emitting a malformed timestamp must fail loudly, never silently
+    # reorder the boundary.
+    with pytest.raises(ValueError):
+        loo_bounded([_ref("a", closed="yesterday-ish")], _query())
+    with pytest.raises(ValueError):
+        loo_bounded([_ref("a", closed="2026-01-01T00:00:00Z")], _query(started="not-a-time"))
+    # Date-only is not a boundary instant — reject, don't guess midnight.
+    with pytest.raises(ValueError):
+        canonical_ts("2026-01-10")
+
+
+def test_canonical_ts_shapes():
+    # Byte-parallel to the TS `toIsoUtc`: one canonical ISO-8601 UTC shape.
+    assert canonical_ts("2026-01-10 00:00:00") == "2026-01-10T00:00:00.000Z"
+    assert canonical_ts("2026-01-10T00:00:00Z") == "2026-01-10T00:00:00.000Z"
+    assert canonical_ts("2026-01-10T02:00:00+02:00") == "2026-01-10T00:00:00.000Z"
+    assert canonical_ts("2026-01-10T02:00:00+0200") == "2026-01-10T00:00:00.000Z"
