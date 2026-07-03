@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import pytest
 
-from membench.generators.enterprise_workflow import materialize_world
+from membench.generators.enterprise_workflow import SUPERSESSION_DEPTH, materialize_world
 from membench.generators.memory_necessity_gate import memory_necessity_gate
 from membench.report.comparison import EPSILON
-from membench.runner.conditions import _oracle_pool
+from membench.runner.agent import ScriptedAgent
+from membench.runner.conditions import _assert_superseded_written, _oracle_pool
+from membench.runtime import IdClock, StepContext
 from membench.schemas.world import Channel, EnterpriseWorld, Persona, Project, Team
 
 
@@ -67,13 +69,55 @@ def test_confusion_and_staleness_fields_are_populated() -> None:
     assert goal.distractor_memories
     written = {mid for step in seq.steps for mid in step.expected_memory_writes}
     assert set(goal.distractor_memories).isdisjoint(written)
-    # Staleness: the superseding step annotates the stale v1 id, and that id IS a
-    # real earlier write (modeled as distinct v1/v2 ids).
+    # Staleness: every superseding step annotates its predecessor, and each stale id
+    # IS a real earlier write (modeled as distinct version ids).
     superseding = [s for s in seq.steps if s.superseded_memory_ids]
     assert superseding, "expected a superseding step"
-    stale_id = superseding[0].superseded_memory_ids[0]
-    assert stale_id in written
-    assert stale_id not in goal.expected_memory_reads  # goal depends on v2, not v1
+    for stale_id in goal.superseded_memory_ids:
+        assert stale_id in written
+        assert stale_id not in goal.expected_memory_reads  # goal depends on the final version
+
+
+def test_supersession_chain_has_depth_and_satisfies_runner_contract() -> None:
+    # mem-z3gi: the chain is v1..vD with D >= 3 — each superseding step marks its
+    # predecessor, the goal marks every earlier version stale, and the runner's
+    # prior-write assertion accepts the whole chain.
+    assert SUPERSESSION_DEPTH >= 3
+    for seq in materialize_world(_world(), _project(), n_tasks=3):
+        goal = seq.steps[-1]
+        assert len(goal.superseded_memory_ids) == SUPERSESSION_DEPTH - 1
+        chain_steps = [s for s in seq.steps[:-1] if s.superseded_memory_ids]
+        assert len(chain_steps) == SUPERSESSION_DEPTH - 1
+        _assert_superseded_written(seq)
+
+
+def test_superseded_subject_position_varies_by_seed() -> None:
+    # A fixed chain position (the old i==0) would let position stand in for the
+    # staleness label; across seeds the superseding steps must not all sit at one
+    # index. Step ids are harness-side, so reading the position off them is safe.
+    def chain_start_index(seed: int) -> int:
+        seq = materialize_world(_world(seed), _project(seed), n_tasks=1)[0]
+        return next(i for i, s in enumerate(seq.steps) if s.superseded_memory_ids) - 1
+
+    assert len({chain_start_index(seed) for seed in range(12)}) > 1
+
+
+def test_goal_forbids_the_superseded_values_and_staleness_is_reward_bearing() -> None:
+    seq = materialize_world(_world(), _project(), n_tasks=1, facts_per_task=3)[0]
+    goal = seq.steps[-1]
+    check = goal.outcome_checks[0]
+    # The authored stale values ride the check (mem-z3gi item 4).
+    assert len(check.forbidden_values) == SUPERSESSION_DEPTH - 1
+    pool = _oracle_pool(seq)
+    required = {mid: pool[mid] for mid in check.requires_memory}
+    stale = {mid: pool[mid] for mid in goal.superseded_memory_ids}
+    ctx = StepContext(trial_id="t", session_id="s", step_id=goal.step_id, clock=IdClock())
+    # Exact recall (the oracle surface) passes.
+    clean = ScriptedAgent().run_step(goal, required, ctx)
+    assert clean.check_results[check.check_id] is True
+    # Surfacing a stale version FAILS the goal — reward-bearing, not just diagnostic.
+    confused = ScriptedAgent().run_step(goal, {**required, **stale}, ctx)
+    assert confused.check_results[check.check_id] is False
 
 
 def test_oracle_pool_has_no_conflict() -> None:

@@ -17,6 +17,8 @@ recall, miss counts) are order-independent.
 from __future__ import annotations
 
 import math
+import re
+from collections.abc import Collection
 from dataclasses import dataclass, field
 
 from membench.schemas.handoff import (
@@ -34,6 +36,7 @@ from membench.schemas.metrics import (
     RetrievalMetrics,
     SynthesisMetrics,
 )
+from membench.schemas.sequence import OutcomeCheck
 
 # DIV-4 frozen vocabulary (phase-2.5-plan §A): the model-classified sensitivity
 # buckets, and the cross-rig isolation leak a strict cross_rig run must never produce.
@@ -49,6 +52,34 @@ OFF_FAILURE = "off_failure"
 
 def _ratio(num: int, denom: int) -> float:
     return num / denom if denom else 0.0
+
+
+# --------------------------------------------------------------------------- #
+# Outcome-check grading (mem-z3gi — reward-bearing staleness)
+# --------------------------------------------------------------------------- #
+def states_value(text: str, value: str) -> bool:
+    """True when ``text`` states the authored ``value`` as a standalone token run.
+
+    Word-boundary anchored (a value never matches inside a larger identifier, e.g.
+    ``v2`` does not match ``checkout_v2``) — a format-anchored mechanical match on an
+    authored ground-truth string, not a semantic heuristic (the ZFC boundary)."""
+    return re.search(rf"(?<!\w){re.escape(value)}(?!\w)", text) is not None
+
+
+def outcome_check_passes(
+    check: OutcomeCheck, *, available_ids: Collection[str], stated_text: str
+) -> bool:
+    """Deterministic grade for one ``OutcomeCheck``: every required memory id must be
+    available AND the answer must not state any forbidden (superseded) value.
+
+    The second clause is what makes staleness reward-bearing (mem-z3gi): an arm that
+    surfaces a stale version FAILS the goal instead of only ticking the diagnostic
+    ``stale_memory_retrieval_rate``. Shared by the ``ScriptedAgent`` self-grade and
+    any external scorer of a real agent's final answer (the values are authored, so
+    the grade is mechanical either way)."""
+    if not set(check.requires_memory).issubset(available_ids):
+        return False
+    return not any(states_value(stated_text, value) for value in check.forbidden_values)
 
 
 # --------------------------------------------------------------------------- #

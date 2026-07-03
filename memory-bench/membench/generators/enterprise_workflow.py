@@ -5,19 +5,26 @@ memory-dependent ``BenchmarkSequence``s. Mirrors ``synthetic_task`` but draws it
 cast (personas, channels) from the world and authors a richer fact graph:
 
 * establishing steps write authored "decision facts" attributed to world personas;
-* one subject per task is SUPERSEDED — an earlier value (v1) is made stale by a
-  newer value (v2) under a distinct id; the v2 step carries ``superseded_memory_ids``
-  (the Staleness signal) and the goal depends on v2 only;
+* one subject per task — its position varied by seed — is SUPERSEDED through a chain
+  of ``SUPERSESSION_DEPTH`` versions under distinct ids; each superseding step marks
+  its predecessor (the Staleness signal) and the goal depends on the FINAL version
+  only;
 * the goal step carries ``distractor_memories`` — plausible-but-wrong values for the
   same subjects (the Confusion signal);
-* the goal's ``OutcomeCheck`` requires every current id, so the task is memory-
-  dependent by construction (oracle passes, no-memory cannot) and clears
-  ``memory_necessity_gate``.
+* the goal's ``OutcomeCheck`` requires every current id AND forbids stating any
+  superseded value (``forbidden_values``), so staleness is reward-bearing: an arm
+  that surfaces a stale version fails the goal instead of only ticking the
+  ``stale_memory_retrieval_rate`` diagnostic (mem-z3gi);
+* no agent-visible string separates the classes (mem-z3gi): memory ids are opaque
+  content-keyed hashes (``opaque_memory_id``), and truth / stale / distractor all
+  render through the SAME ``_fact`` template — only the value (and the drawn
+  attribution) differs. Labels live in harness-side fields only (step ids, probe
+  descriptions), which the runner never shows the agent.
 
 ZFC boundary (the generators policy): NeMo supplied only the cast and prose; every
 fact, value, dependency, distractor and supersession here is authored in pure
 Python and is seed-reproducible. ``distractor_memories`` / ``superseded_memory_ids``
-are the authored ground truth the runner now seeds + scores Confusion/Staleness
+are the authored ground truth the runner seeds + scores Confusion/Staleness
 against (mem-zt1c); the values are deliberately absent from the goal query, so a
 naive top-k retriever cannot rank the truth above a distractor — that hardness is
 the point.
@@ -28,6 +35,8 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 
+from membench.generators.opaque_ids import opaque_memory_id
+from membench.metrics.scorers import states_value
 from membench.schemas.sequence import (
     BenchmarkSequence,
     MemoryProbe,
@@ -36,14 +45,24 @@ from membench.schemas.sequence import (
 )
 from membench.schemas.world import EnterpriseWorld, Persona, Project
 
-GENERATOR_VERSION = "enterprise-workflow.v1"
+GENERATOR_VERSION = "enterprise-workflow.v2"
+
+# Supersession chain length for the one superseded subject (mem-z3gi): versions
+# v1..vD under distinct opaque ids, each superseding step marking its predecessor;
+# only vD is goal-required. Depth >= 3 exercises multi-hop staleness.
+SUPERSESSION_DEPTH = 3
+
+# The ONE establishing request template. Every establishing step — including each
+# link of the supersession chain — uses it verbatim, so the request wording cannot
+# mark the superseded subject to the agent ("initial"/"corrected" would).
+_RECORD_REQUEST = "Record the current value of {prompt}."
 
 
 @dataclass(frozen=True)
 class _Subject:
     """A decision a task must recall. ``values`` are the authored ground-truth
-    candidates; the materialiser picks the current one (and a distinct stale/wrong
-    one) deterministically per task."""
+    candidates; the materialiser picks the current one (and distinct stale/wrong
+    ones) deterministically per task."""
 
     key: str
     prompt: str
@@ -51,8 +70,9 @@ class _Subject:
 
 
 # Authored decision subjects — domain-agnostic operational facts an enterprise task
-# would need to recall. Each has >=3 distinct values so current/stale/distractor can
-# differ.
+# would need to recall. Each has > SUPERSESSION_DEPTH distinct values so a full
+# supersession chain plus a distinct distractor value always exist, and no value is
+# a word-boundary substring of another (the ``states_value`` grading contract).
 _SUBJECTS: tuple[_Subject, ...] = (
     _Subject("deploy-timeout", "the production deploy timeout", ("15s", "30s", "45s", "60s")),
     _Subject(
@@ -75,11 +95,18 @@ _SUBJECTS: tuple[_Subject, ...] = (
         "the checkout_v2 feature flag state",
         ("enabled", "disabled", "canary-10%", "canary-50%"),
     ),
-    _Subject("api-version", "the supported API version", ("v1", "v2", "v3", "v2-beta")),
+    _Subject("api-version", "the supported API version", ("v1", "v2", "v3", "v4")),
     _Subject(
         "retention-window", "the data retention window", ("30 days", "90 days", "1 year", "7 years")
     ),
 )
+
+_SHALLOW = [s.key for s in _SUBJECTS if len(set(s.values)) <= SUPERSESSION_DEPTH]
+if _SHALLOW:
+    raise ValueError(
+        f"every subject needs > {SUPERSESSION_DEPTH} distinct values (chain + distractor); "
+        f"too few on {_SHALLOW}"
+    )
 
 
 def _attribution(persona: Persona, channel_name: str | None) -> str:
@@ -88,9 +115,27 @@ def _attribution(persona: Persona, channel_name: str | None) -> str:
     return f"{persona.name}{role}{where}"
 
 
-def _fact(prompt: str, verb: str, value: str, persona: Persona, channel: str | None) -> str:
-    """One authored decision-fact memory content line, attributed to a world persona."""
-    return f"{prompt} {verb} {value} — by {_attribution(persona, channel)}"
+def _fact(prompt: str, value: str, persona: Persona, channel: str | None) -> str:
+    """THE memory content template — shared verbatim by truth, stale and distractor
+    entries so no verb tense or attribution shape separates the classes; only the
+    value (and the drawn attribution) differs (mem-z3gi)."""
+    return f"{prompt} is {value} — by {_attribution(persona, channel)}"
+
+
+def _assert_no_forbidden_value_leak(
+    forbidden_values: list[str], surfaced_contents: list[str]
+) -> None:
+    """Authoring guard: a stale (forbidden) value must never appear in a REQUIRED or
+    distractor content, or the goal would fail even when no stale memory was
+    surfaced. Holds by construction (values are distinct within a subject, disjoint
+    across subjects); raises loudly on subject-bank drift."""
+    for value in forbidden_values:
+        for content in surfaced_contents:
+            if states_value(content, value):
+                raise ValueError(
+                    f"authored stale value {value!r} appears in non-stale content "
+                    f"{content!r}; fix the subject bank"
+                )
 
 
 def _materialize_task(
@@ -105,60 +150,71 @@ def _materialize_task(
 ) -> BenchmarkSequence:
     rng = random.Random((seed << 16) ^ (task_index * 2654435761))
     subjects = rng.sample(_SUBJECTS, facts_per_task)
+    # The superseded subject's position is seed-varied (mem-z3gi) — a fixed i==0
+    # would let position stand in for the staleness label.
+    chain_position = rng.randrange(facts_per_task)
     seq_id = f"{world.world_id}-task{task_index}"
+
+    def draw_persona() -> Persona:
+        return world.personas[rng.randrange(len(world.personas))]
+
+    def draw_channel() -> str | None:
+        if not world.channels:
+            return None
+        return world.channels[rng.randrange(len(world.channels))].name
 
     steps: list[SequenceStep] = []
     required_ids: list[str] = []
+    required_contents: list[str] = []
     probes: list[MemoryProbe] = []
     distractors: dict[str, str] = {}
     superseded: list[str] = []
+    forbidden_values: list[str] = []
 
     for i, subject in enumerate(subjects):
-        persona = world.personas[rng.randrange(len(world.personas))]
-        channel = (
-            world.channels[rng.randrange(len(world.channels))].name if world.channels else None
-        )
-        current_value = rng.choice(subject.values)
-
-        if i == 0:
-            # The superseded subject: an earlier value (v1) then the current (v2).
-            stale_value = rng.choice([v for v in subject.values if v != current_value])
-            v1_id = f"{seq_id}-{subject.key}-v1"
-            v2_id = f"{seq_id}-{subject.key}-v2"
-            steps.append(
-                SequenceStep(
-                    step_id=f"{seq_id}-s{i}a-{subject.key}-old",
-                    user_request=f"Record the initial value of {subject.prompt}.",
-                    expected_memory_writes={
-                        v1_id: _fact(subject.prompt, "was", stale_value, persona, channel)
-                    },
+        if i == chain_position:
+            # The supersession chain: v1 → … → vD, distinct ids, each superseding
+            # step marking its predecessor; the goal depends on vD only and must
+            # not state any earlier value.
+            chain_values = rng.sample(list(subject.values), SUPERSESSION_DEPTH)
+            version_ids = [
+                opaque_memory_id(seq_id, f"{subject.key}-v{v}")
+                for v in range(1, SUPERSESSION_DEPTH + 1)
+            ]
+            for v, (version_id, value) in enumerate(zip(version_ids, chain_values, strict=True)):
+                steps.append(
+                    SequenceStep(
+                        step_id=f"{seq_id}-s{i}v{v + 1}-{subject.key}",
+                        user_request=_RECORD_REQUEST.format(prompt=subject.prompt),
+                        expected_memory_writes={
+                            version_id: _fact(subject.prompt, value, draw_persona(), draw_channel())
+                        },
+                        superseded_memory_ids=[version_ids[v - 1]] if v else [],
+                    )
                 )
-            )
-            steps.append(
-                SequenceStep(
-                    step_id=f"{seq_id}-s{i}b-{subject.key}-new",
-                    user_request=f"Record the corrected value of {subject.prompt}.",
-                    expected_memory_writes={
-                        v2_id: _fact(subject.prompt, "is now", current_value, persona, channel)
-                    },
-                    superseded_memory_ids=[v1_id],
-                )
-            )
-            current_id = v2_id
-            superseded.append(v1_id)
+            current_id = version_ids[-1]
+            current_value = chain_values[-1]
+            superseded.extend(version_ids[:-1])
+            forbidden_values.extend(chain_values[:-1])
+            taken_values = list(chain_values)
         else:
-            current_id = f"{seq_id}-{subject.key}"
+            current_value = rng.choice(subject.values)
+            current_id = opaque_memory_id(seq_id, subject.key)
             steps.append(
                 SequenceStep(
                     step_id=f"{seq_id}-s{i}-{subject.key}",
-                    user_request=f"Record {subject.prompt}.",
+                    user_request=_RECORD_REQUEST.format(prompt=subject.prompt),
                     expected_memory_writes={
-                        current_id: _fact(subject.prompt, "is", current_value, persona, channel)
+                        current_id: _fact(
+                            subject.prompt, current_value, draw_persona(), draw_channel()
+                        )
                     },
                 )
             )
+            taken_values = [current_value]
 
         required_ids.append(current_id)
+        required_contents.append(steps[-1].expected_memory_writes[current_id])
         probes.append(
             MemoryProbe(
                 probe_id=f"{seq_id}-probe-{subject.key}",
@@ -166,12 +222,13 @@ def _materialize_task(
                 description=f"{subject.prompt} must be recalled at the goal",
             )
         )
-        # A plausible-but-wrong value for the same subject, attributed to a different
-        # persona — the Confusion stressor the goal must not be fooled by.
-        wrong_value = rng.choice([v for v in subject.values if v != current_value])
-        other = world.personas[rng.randrange(len(world.personas))]
-        distractors[f"{seq_id}-{subject.key}-distractor"] = (
-            f"{other.name} recalled {subject.prompt} as {wrong_value}"
+        # A plausible-but-wrong value for the same subject, same template, attributed
+        # to a freshly drawn persona — the Confusion stressor the goal must not be
+        # fooled by. The value is distinct from the current AND every stale value, so
+        # surfacing a distractor is never mis-scored as staleness.
+        wrong_value = rng.choice([v for v in subject.values if v not in taken_values])
+        distractors[opaque_memory_id(seq_id, f"{subject.key}-distractor")] = _fact(
+            subject.prompt, wrong_value, draw_persona(), draw_channel()
         )
 
     # Cross-task continuity: a project charter established in an EARLIER task that
@@ -190,6 +247,7 @@ def _materialize_task(
                 ),
             )
         required_ids.append(charter_id)
+        required_contents.append(charter_content)
         probes.append(
             MemoryProbe(
                 probe_id=f"{seq_id}-probe-charter",
@@ -197,6 +255,10 @@ def _materialize_task(
                 description="the project charter (set in an earlier task) must be recalled",
             )
         )
+
+    _assert_no_forbidden_value_leak(
+        forbidden_values, required_contents + list(distractors.values())
+    )
 
     prompts = ", ".join(s.prompt for s in subjects)
     steps.append(
@@ -207,8 +269,12 @@ def _materialize_task(
             outcome_checks=[
                 OutcomeCheck(
                     check_id=f"{seq_id}-goal-check",
-                    description="goal requires the current value of each established subject",
+                    description=(
+                        "goal requires the current value of each established subject "
+                        "and must not state a superseded value"
+                    ),
                     requires_memory=required_ids,
+                    forbidden_values=list(forbidden_values),
                 )
             ],
             memory_probes=probes,
@@ -285,9 +351,12 @@ def materialize_project(
     missing memory, so the metric is for real agents under test."""
     _validate(world, project, facts_per_task=facts_per_task, n_tasks=n_tasks)
     base_seed = world.seed if seed is None else seed
-    charter_id = f"{world.world_id}-charter"
+    charter_id = opaque_memory_id(world.world_id, "charter")
     charter_content = _fact(
-        "the project charter decision", "is", "freeze scope at v3", world.personas[0], None
+        "the project charter decision",
+        "freeze scope at the phase-3 milestone",
+        world.personas[0],
+        None,
     )
     charter = (charter_id, charter_content)
     return [

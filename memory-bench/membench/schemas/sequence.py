@@ -20,6 +20,14 @@ class OutcomeCheck(BaseModel):
     # not require memory (passes statelessly). Non-empty => the step is
     # memory-sensitive: the agent must have the listed memory available to pass.
     requires_memory: list[str] = Field(default_factory=list)
+    # Authored values the step's stated answer must NOT contain (mem-z3gi): the
+    # superseded (stale) values of the subjects this check requires. Grading is
+    # mechanical — a word-boundary match of an authored value
+    # (``metrics.scorers.states_value``) — which makes staleness reward-bearing:
+    # stating a stale value FAILS the check instead of only ticking the
+    # ``stale_memory_retrieval_rate`` diagnostic. Defaults empty so existing
+    # fixtures stay valid.
+    forbidden_values: list[str] = Field(default_factory=list)
 
 
 class MemoryProbe(BaseModel):

@@ -40,6 +40,7 @@ from membench.generators.factorial_dag import (
     all_factor_cells,
     generate_factorial_family,
 )
+from membench.generators.opaque_ids import opaque_memory_id
 from membench.memory_systems.retention_scheduled_system import RetentionScheduledMemory
 from membench.report.factorial_diagnosis import Observation
 from membench.runner.conditions import StepTrial, run_sequence
@@ -111,10 +112,11 @@ def _mean_rates(trials: Sequence[StepTrial]) -> tuple[float, float]:
 
 
 def _branch_zero_id(seq: BenchmarkSequence) -> str:
-    """The goal-required branch-0 record id — ``<sequence_id>-fact0`` by construction
-    (``generate_cell`` names the first establishing fact this way). The consolidation
-    HURTS condition schedules exactly this record for destruction."""
-    return f"{seq.sequence_id}-fact0"
+    """The goal-required branch-0 record id — ``opaque_memory_id(sequence_id, "fact0")``
+    by construction (``generate_cell`` derives every agent-visible id through the
+    opaque hash; the label→id mapping is recomputed on demand, never stored). The
+    consolidation HURTS condition schedules exactly this record for destruction."""
+    return opaque_memory_id(seq.sequence_id, "fact0")
 
 
 def _destruction_indicator(arm: RetentionScheduledMemory, seq: BenchmarkSequence) -> float:

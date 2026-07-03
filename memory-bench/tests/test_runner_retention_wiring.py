@@ -13,6 +13,7 @@ non-retention arm (filesystem) must be completely unaffected.
 """
 
 from membench.generators.factorial_dag import FactorCell, generate_cell
+from membench.generators.opaque_ids import opaque_memory_id
 from membench.memory_systems.retention_scheduled_system import RetentionScheduledMemory
 from membench.runner.conditions import run_sequence
 from membench.schemas.conditions import Condition
@@ -29,9 +30,11 @@ def _retention_experiment() -> ExperimentConfig:
     )
 
 
-def _branch_zero_id(width: int, cell: FactorCell, seed: int) -> str:
+def _fact_id(width: int, cell: FactorCell, seed: int, label: str) -> str:
+    # Ids are opaque agent-visible hashes (mem-z3gi); the label→id mapping is a pure
+    # function of (sequence prefix, label), recomputed here exactly as grading does.
     prefix = f"factorial-seed{seed}-w{width}-{cell.cell_id}"
-    return f"{prefix}-fact0"
+    return opaque_memory_id(prefix, label)
 
 
 def test_consolidation_on_cell_destroys_goal_required_branch_zero_record() -> None:
@@ -51,14 +54,14 @@ def test_consolidation_on_cell_destroys_goal_required_branch_zero_record() -> No
 
     # The offline consolidate() sweep ran once after the write loop.
     assert Condition.MEMORY_ENABLED.value in run.consolidations
-    branch0 = _branch_zero_id(width, cell, seed)
+    branch0 = _fact_id(width, cell, seed, "fact0")
     # The wiring delivered the destroy-eligible class, so the sweep actually
     # tombstoned the goal-required branch-0 record (the consolidation factor is live).
     assert arm.applied_disposition(branch0) == "destroy"
     assert branch0 not in arm.live_ids()
     # The other branches carry the keep class and stay live.
     for k in range(1, width):
-        keep_id = branch0.replace("-fact0", f"-fact{k}")
+        keep_id = _fact_id(width, cell, seed, f"fact{k}")
         assert arm.applied_disposition(keep_id) == "permanent"
         assert keep_id in arm.live_ids()
 
@@ -78,7 +81,7 @@ def test_consolidation_off_cell_retains_branch_zero_record() -> None:
         conditions=[Condition.MEMORY_ENABLED],
     )
 
-    branch0 = _branch_zero_id(width, cell, seed)
+    branch0 = _fact_id(width, cell, seed, "fact0")
     assert arm.applied_disposition(branch0) == "permanent"
     assert branch0 in arm.live_ids()
 
@@ -98,8 +101,7 @@ def test_supersession_writes_apply_class_to_each_written_id() -> None:
         conditions=[Condition.MEMORY_ENABLED],
     )
 
-    prefix = f"factorial-seed{seed}-w{width}-{cell.cell_id}"
     # Branch 0 establish step writes both fact0 (current) and fact0-v1 (stale) under the
     # destroy class; both must carry the swept destroy disposition, not just the current one.
-    assert arm.applied_disposition(f"{prefix}-fact0") == "destroy"
-    assert arm.applied_disposition(f"{prefix}-fact0-v1") == "destroy"
+    assert arm.applied_disposition(_fact_id(width, cell, seed, "fact0")) == "destroy"
+    assert arm.applied_disposition(_fact_id(width, cell, seed, "fact0-v1")) == "destroy"
