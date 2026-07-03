@@ -100,9 +100,11 @@ def test_lexical_arm_trips_confusion_and_staleness_exact_arms_do_not(tmp_path) -
     assert res["lexical"].arm_staleness > 0.0
     # the rate is averaged over real retrieving trials, surfaced as rate_n.
     assert res["lexical"].rate_n > 0
-    # honest ceiling: recall stays perfect at the default top-k, so reward still == oracle
-    # (this path does NOT claim reward-level differentiation, only Confusion/Staleness).
-    assert res["lexical"].oracle_gap == 0.0
+    # Staleness is reward-bearing (mem-z3gi): surfacing the superseded value fails the
+    # goal, so the confused arm now trails the oracle at the REWARD level too — not
+    # just on the diagnostic rates.
+    assert res["lexical"].oracle_gap > 0.0
+    assert res["lexical"].arm_reward < res["oracle"].oracle_reward
 
 
 def test_lexical_confusion_persists_under_shared_store(tmp_path) -> None:

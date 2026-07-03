@@ -18,12 +18,14 @@ from membench.metrics.scorers import (
     RetentionInputs,
     RetrievalInputs,
     SynthesisInputs,
+    outcome_check_passes,
     score_efficiency,
     score_interruption,
     score_privacy,
     score_retention,
     score_retrieval,
     score_synthesis,
+    states_value,
 )
 from membench.schemas.handoff import (
     FIRST_POST_FAILURE_EDIT,
@@ -36,6 +38,7 @@ from membench.schemas.handoff import (
     PredecessorEvent,
 )
 from membench.schemas.memory_event import MemoryBackend, MemoryEvent, MemoryOperation
+from membench.schemas.sequence import OutcomeCheck
 
 
 def _event(latency: float = 0.0) -> MemoryEvent:
@@ -404,3 +407,47 @@ def test_interruption_end_to_end_against_generator_views_share_timing():
     # Every point resolved to exactly one timing across its 4 views.
     assert by_point  # the generator emitted at least one point
     assert all(len(timings) == 1 for timings in by_point.values())
+
+
+# --------------------------------------------------------------------------- #
+# Outcome-check grading: reward-bearing staleness (mem-z3gi)
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    "text,value,expected",
+    [
+        ("the timeout is 30s — by Ada", "30s", True),
+        ("the timeout is 30s — by Ada", "45s", False),
+        # word-boundary: a value never matches inside a larger identifier.
+        ("the checkout_v2 flag is enabled", "v2", False),
+        ("the supported API version is v2-beta", "v2", True),
+        ("fact 0 is 042", "042", True),
+        ("fact 0 is 204", "042", False),
+    ],
+)
+def test_states_value_is_word_boundary_anchored(text: str, value: str, expected: bool) -> None:
+    assert states_value(text, value) is expected
+
+
+def test_outcome_check_fails_when_required_memory_is_missing() -> None:
+    check = OutcomeCheck(check_id="c", requires_memory=["m1", "m2"])
+    assert outcome_check_passes(check, available_ids={"m1"}, stated_text="") is False
+    assert outcome_check_passes(check, available_ids={"m1", "m2"}, stated_text="") is True
+
+
+def test_outcome_check_fails_when_a_forbidden_value_is_stated() -> None:
+    # Staleness is reward-bearing: stating the superseded value fails the check
+    # even though every required id is available.
+    check = OutcomeCheck(check_id="c", requires_memory=["m1"], forbidden_values=["30s"])
+    ok = outcome_check_passes(
+        check, available_ids={"m1"}, stated_text="the timeout is 45s — by Ada"
+    )
+    stale = outcome_check_passes(
+        check, available_ids={"m1"}, stated_text="the timeout is 45s\nthe timeout is 30s"
+    )
+    assert ok is True
+    assert stale is False
+
+
+def test_outcome_check_with_no_requirements_and_no_forbidden_values_passes() -> None:
+    # Backward compat: existing fixtures (no forbidden_values) grade exactly as before.
+    assert outcome_check_passes(OutcomeCheck(check_id="c"), available_ids=set(), stated_text="")

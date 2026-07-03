@@ -25,12 +25,21 @@ Deterministic: same ``(seed, width)`` ⇒ byte-identical family. Real per-branch
 resampled from a supplied recorded-corpus pool (grounding); with no pool the cost
 fields are omitted so CI stays model- and IO-free.
 
+Label opacity + reward-bearing staleness (mem-z3gi): every agent-visible memory id is
+an opaque content-keyed hash (``opaque_memory_id``) and truth / stale / distractor
+contents share ONE template ("fact {k} is {value}") with authored, globally-distinct
+values — no id suffix or verb tense separates the classes. Under supersession the
+goal's check carries the stale values as ``forbidden_values``, so an arm that
+surfaces (and thus states) a stale value FAILS the goal rather than only ticking the
+diagnostic rate.
+
 Modelling simplifications (Gate 0a scope; revisit for Gate 0b realism):
   - Supersession writes the stale v1 alongside the current v2 in the SAME establish
     step (distinct ids), so the staleness signal is scored at the goal's retrieve where
     both are in scope. This keeps the topology width-invariant — a separate earlier
     v1-only step would add an antichain node and break isolation — at the cost of never
-    exercising a "v1-only retrieval window" before v2 exists.
+    exercising a "v1-only retrieval window" before v2 exists. Depth-≥3 supersession
+    chains live in the enterprise materialiser, whose multi-step topology owns them.
   - The consolidation HURTS condition schedules exactly ONE goal-required record (branch
     0) for destruction, so the per-sequence hurt signal is 1/K — a fixed floor, not
     scaled with width. Account for this in any power analysis of the consolidation main
@@ -45,6 +54,7 @@ from dataclasses import dataclass
 from itertools import combinations, product
 from typing import Any
 
+from membench.generators.opaque_ids import opaque_memory_id
 from membench.memory_systems.retention_scheduled_system import RETENTION_POLICY
 from membench.schemas.sequence import (
     BenchmarkSequence,
@@ -53,7 +63,7 @@ from membench.schemas.sequence import (
     SequenceStep,
 )
 
-GENERATOR_VERSION = "factorial-dag.v1"
+GENERATOR_VERSION = "factorial-dag.v2"
 
 # The three binary non-depth factors layered onto a frozen-K skeleton (2^3 cells).
 NON_DEPTH_FACTORS: tuple[str, ...] = ("interference", "supersession", "consolidation")
@@ -169,19 +179,46 @@ def _cost_for(rng: random.Random, cost_pool: Sequence[tuple[int, int]] | None) -
     return {"real_cost_turns": turns, "real_cost_tool_calls": tools}
 
 
-def _distractors(prefix: str, interference: bool) -> dict[str, str]:
-    """The Confusion competitors planted at the goal (OFF ⇒ none). A distractor is only
-    *plausible* — and thus only surfaceable by a token-overlap arm — if its content
-    resembles the goal's target memories ("the current value of every fact"). Earlier
-    content ("plausible-but-wrong note N") shared NO tokens with the goal query, so a
-    lexical/top-k arm provably never surfaced it and the interference factor read flat;
-    the wording here keeps "value of fact" so the competitor lands in the arm's top-k
-    (the actual Confusion stressor) while still naming a wrong value. An id-exact arm
-    never requests these ids, so its ``distractor_retrieval_rate`` stays 0 regardless."""
+def _fact_content(branch: int, value: str) -> str:
+    """THE memory content template — shared verbatim by truth, stale and distractor
+    entries so nothing but the value separates the classes (mem-z3gi). The shared
+    "fact" token is also what keeps every class inside a token-overlap arm's top-k
+    against the goal query ("...the current value of every fact")."""
+    return f"fact {branch} is {value}"
+
+
+def _fact_values(seed: int, width: int) -> tuple[list[str], list[str]]:
+    """Authored (current, stale) values per branch: zero-padded 3-digit tokens.
+
+    Drawn from a FAMILY rng keyed on (seed, width) only — never the cell — so all 8
+    cells of a family share the same truth surface and a factor toggle moves nothing
+    but its own observable (single-factor isolation). Globally distinct within the
+    family (one ``sample``), so a stale ``forbidden_values`` entry can never
+    word-match a current content and the staleness grade stays mechanical."""
+    family_rng = random.Random((seed << 24) ^ (width << 4) ^ 0x5EED)
+    values = [f"{v:03d}" for v in family_rng.sample(range(1000), 2 * width)]
+    return values[:width], values[width:]
+
+
+def _distractors(
+    prefix: str,
+    rng: random.Random,
+    *,
+    width: int,
+    taken_values: frozenset[str],
+    interference: bool,
+) -> dict[str, str]:
+    """The Confusion competitors planted at the goal (OFF ⇒ none). Each names a real
+    branch through the SAME content template as the truth — so a token-overlap arm
+    ranks it beside the truth (the actual Confusion stressor) — but with a wrong
+    value distinct from every current AND stale value, so surfacing a distractor is
+    never mis-scored as staleness. Ids are opaque; an id-exact arm never requests
+    them, so its ``distractor_retrieval_rate`` stays 0 regardless."""
     if not interference:
         return {}
+    candidates = [v for v in (f"{n:03d}" for n in range(1000)) if v not in taken_values]
     return {
-        f"{prefix}-distractor{j}": f"plausible but wrong value of fact (note {j})"
+        opaque_memory_id(prefix, f"distractor{j}"): _fact_content(j % width, rng.choice(candidates))
         for j in range(DISTRACTOR_ON_COUNT)
     }
 
@@ -216,21 +253,22 @@ def generate_cell(
 
     rng = random.Random((seed << 20) ^ (width << 8) ^ _cell_ordinal(cell))
     prefix = f"factorial-seed{seed}-w{width}-{cell.cell_id}"
+    current_values, stale_values = _fact_values(seed, width)
 
     steps: list[SequenceStep] = []
     current_ids: list[str] = []
     superseded_ids: list[str] = []
 
     for k in range(width):
-        current_id = f"{prefix}-fact{k}"
+        current_id = opaque_memory_id(prefix, f"fact{k}")
         current_ids.append(current_id)
-        writes: dict[str, str] = {current_id: f"current value of fact {k}"}
+        writes: dict[str, str] = {current_id: _fact_content(k, current_values[k])}
 
         if cell.supersession:
-            stale_id = f"{prefix}-fact{k}-v1"
+            stale_id = opaque_memory_id(prefix, f"fact{k}-v1")
             # v1 is written here — an EARLIER step than the goal that marks it stale —
             # but never read, so it adds no read/write edge: the width is unchanged.
-            writes[stale_id] = f"stale (superseded) value of fact {k}"
+            writes[stale_id] = _fact_content(k, stale_values[k])
             superseded_ids.append(stale_id)
 
         record_class, disposition = _consolidation_labels(cell.consolidation, branch=k)
@@ -253,8 +291,14 @@ def generate_cell(
             outcome_checks=[
                 OutcomeCheck(
                     check_id=f"{prefix}-goal-check",
-                    description="goal requires the current value of every established fact",
+                    description=(
+                        "goal requires the current value of every established fact "
+                        "and must not state a superseded value"
+                    ),
                     requires_memory=list(current_ids),
+                    # Reward-bearing staleness (mem-z3gi): stating a stale value
+                    # fails the goal; empty when the supersession factor is OFF.
+                    forbidden_values=list(stale_values) if cell.supersession else [],
                 )
             ],
             memory_probes=[
@@ -265,7 +309,13 @@ def generate_cell(
                 )
                 for i, mid in enumerate(current_ids)
             ],
-            distractor_memories=_distractors(prefix, cell.interference),
+            distractor_memories=_distractors(
+                prefix,
+                rng,
+                width=width,
+                taken_values=frozenset(current_values) | frozenset(stale_values),
+                interference=cell.interference,
+            ),
             superseded_memory_ids=list(superseded_ids),
             environment_state=_cost_for(rng, cost_pool),
         )

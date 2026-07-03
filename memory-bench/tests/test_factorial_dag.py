@@ -100,6 +100,37 @@ def test_supersession_toggles_stale_observable_without_moving_topology() -> None
     assert antichain_width(off.steps) == antichain_width(on.steps)
 
 
+def test_supersession_makes_staleness_reward_bearing() -> None:
+    # mem-z3gi item 4: the goal check carries the authored stale values, so an arm
+    # that surfaces (and thus states) a stale value fails the goal. OFF ⇒ empty.
+    off = generate_cell(seed=3, width=4, cell=_ALL_OFF)
+    on = generate_cell(seed=3, width=4, cell=FactorCell(False, True, False))
+    assert off.steps[-1].outcome_checks[0].forbidden_values == []
+    forbidden = on.steps[-1].outcome_checks[0].forbidden_values
+    assert len(forbidden) == 4  # one stale value per branch
+    # Each forbidden value IS a stale write's value and never a current one — the
+    # family's values are globally distinct, so the grade cannot misfire.
+    contents = [c for st in on.steps for c in st.expected_memory_writes.values()]
+    stale_contents = [c for c in contents if any(c.endswith(f" is {v}") for v in forbidden)]
+    assert len(stale_contents) == 4
+    current_contents = [c for c in contents if c not in stale_contents]
+    assert all(not c.endswith(f" is {v}") for c in current_contents for v in forbidden)
+
+
+def test_truth_surface_is_invariant_across_factor_toggles() -> None:
+    # Single-factor isolation extends to the CONTENT surface: the authored fact
+    # values come from a family rng keyed on (seed, width) only, so toggling a
+    # factor changes nothing about the current facts.
+    def current_contents(cell: FactorCell) -> list[str]:
+        seq = generate_cell(seed=3, width=4, cell=cell)
+        pool = {mid: c for st in seq.steps for mid, c in st.expected_memory_writes.items()}
+        return [pool[mid] for mid in seq.steps[-1].outcome_checks[0].requires_memory]
+
+    baseline = current_contents(_ALL_OFF)
+    for cell in all_factor_cells():
+        assert current_contents(cell) == baseline
+
+
 def test_consolidation_toggles_retention_labels_with_a_hurts_condition() -> None:
     off = generate_cell(seed=3, width=4, cell=_ALL_OFF)
     on = generate_cell(seed=3, width=4, cell=FactorCell(False, False, True))

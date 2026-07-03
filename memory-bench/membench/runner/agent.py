@@ -14,6 +14,7 @@ test/reference infrastructure, not a stand-in for production agent logic.
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
+from membench.metrics.scorers import outcome_check_passes
 from membench.runtime import StepContext
 from membench.schemas.sequence import SequenceStep
 from membench.schemas.trace import ToolCall, TraceMessage
@@ -52,9 +53,13 @@ class Agent(Protocol):
 class ScriptedAgent:
     """Deterministic reference agent.
 
-    A step's outcome check passes iff every memory id the check requires is present
-    in `available_memory` (what the harness surfaced this step). Checks that require
-    no memory pass statelessly. The agent persists the step's
+    A step's outcome check is graded by `outcome_check_passes`: every memory id the
+    check requires must be present in `available_memory` (what the harness surfaced
+    this step), and the agent's stated answer must not state a forbidden
+    (superseded) value. The reference agent "states" every memory it recalled — the
+    surfaced contents ARE its answer material — so surfacing a stale value fails a
+    check that forbids it (reward-bearing staleness, mem-z3gi). Checks that require
+    no memory and forbid nothing pass statelessly. The agent persists the step's
     `expected_memory_writes` — its (skeleton) write decision is write-all; a learned
     write policy replaces this later.
     """
@@ -69,9 +74,12 @@ class ScriptedAgent:
         ctx: StepContext,
     ) -> AgentStepResult:
         have = set(available_memory)
+        recalled_text = "\n".join(available_memory.values())
         check_results: dict[str, bool] = {}
         for check in step.outcome_checks:
-            check_results[check.check_id] = set(check.requires_memory).issubset(have)
+            check_results[check.check_id] = outcome_check_passes(
+                check, available_ids=have, stated_text=recalled_text
+            )
 
         messages = [
             TraceMessage(role="user", content=step.user_request),
