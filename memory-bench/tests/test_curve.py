@@ -16,15 +16,19 @@ Repeats collapse within task (M2) before the across-task mean + CI; the per-rung
 value is the mean of the combined reward, NOT a pooled task*repeat count.
 """
 
+from statistics import fmean, stdev
+
 import pytest
 
 from membench.grading import (
     InsufficientLadderError,
+    PairedDeltaCI,
     RewardComponents,
     RewardRecord,
     ScoreInformationCurve,
     build_curve,
     min_useful_combo,
+    paired_delta_ci,
     saturation_point,
 )
 
@@ -152,6 +156,97 @@ def test_single_task_rung_has_defined_but_zero_width_interval():
     assert rung.n_tasks == 1
     assert rung.lower_bound == pytest.approx(rung.mean_reward)
     assert rung.upper_bound == pytest.approx(rung.mean_reward)
+
+
+def test_mean_ci_uses_t_quantile_not_normal_z():
+    # n=9 tasks -> df=8 -> the 95% half-width is t_{8,.975}=2.3060 sems, NOT the
+    # anti-conservative z=1.96 the old normal approximation emitted (mem-lp24).
+    rubrics = [0.40 + 0.05 * i for i in range(9)]  # rewards 0.20..0.40
+    records = [
+        _rec(f"w{i}", "ours", det="reach", resolved=False, rubric=r) for i, r in enumerate(rubrics)
+    ]
+    rung = build_curve(records, rungs=("ours",)).rung("ours")
+    values = [r / 2.0 for r in rubrics]
+    sem = stdev(values) / 3.0  # sqrt(n) = 3
+    assert rung.mean_reward == pytest.approx(fmean(values))
+    half = rung.upper_bound - rung.mean_reward
+    assert half == pytest.approx(2.3060041350333704 * sem, rel=1e-6)
+    assert half > 1.9599639845400545 * sem  # strictly wider than the old z interval
+    assert rung.lower_bound == pytest.approx(rung.mean_reward - half)
+
+
+# --- paired deltas: bootstrap CI + ITT/matched populations (mem-lp24) ---------
+
+
+def test_paired_delta_ci_shared_helper_known_input():
+    base = {"a": 0.0, "b": 0.0, "c": 0.0}
+    treat = {"a": 0.1, "b": 0.3, "c": 0.5}
+    ci = paired_delta_ci(base, treat, population="matched", seed=3)
+    assert isinstance(ci, PairedDeltaCI)
+    assert ci.delta == pytest.approx(0.3)  # median of [0.1, 0.3, 0.5]
+    assert ci.n_pairs == 3
+    assert ci.n_imputed_zero == 0
+    # A percentile bootstrap of the median can never leave the observed range.
+    assert 0.1 - 1e-12 <= ci.ci_low <= ci.delta <= ci.ci_high <= 0.5 + 1e-12
+
+
+def test_paired_delta_ci_empty_population_is_a_caller_error():
+    with pytest.raises(ValueError):
+        paired_delta_ci({"a": 1.0}, {"b": 1.0}, population="matched")
+
+
+def test_paired_delta_ci_is_deterministic_for_a_seed():
+    base = {f"w{i}": 0.0 for i in range(6)}
+    treat = {f"w{i}": 0.2 * i for i in range(6)}
+    a = paired_delta_ci(base, treat, population="matched", seed=7)
+    b = paired_delta_ci(base, treat, population="matched", seed=7)
+    assert a == b
+    assert a.ci_low <= a.delta <= a.ci_high
+
+
+def test_floor_lift_ci_itt_vs_matched_population_accounting():
+    # `none` observed on w1..w4; `ours` only on w1/w2 (retrieval fired nothing on
+    # w3/w4). Matched = the 2 retrieval-fired pairs; ITT = all 4 admitted tasks
+    # with the empty-retrieval tasks contributing delta 0 (the primary).
+    records = [_rec(f"w{i}", "none", det="reach", resolved=False) for i in range(1, 5)] + [
+        _rec(f"w{i}", "ours", det="reach", resolved=True) for i in range(1, 3)
+    ]
+    curve = build_curve(records, rungs=("none", "ours"))
+    matched = curve.floor_lift_ci(population="matched", seed=1)
+    itt = curve.floor_lift_ci(population="itt", seed=1)
+    assert matched is not None and itt is not None
+    assert matched.population == "matched"
+    assert matched.n_pairs == 2
+    assert matched.n_imputed_zero == 0
+    assert matched.delta == pytest.approx(1.0)
+    assert itt.population == "itt"
+    assert itt.n_pairs == 4
+    assert itt.n_imputed_zero == 2
+    assert itt.delta == pytest.approx(0.5)  # median of [1, 1, 0, 0]
+    # The imputed zeros pull ITT toward 0 — it can never overstate the matched read.
+    assert itt.delta < matched.delta
+
+
+def test_ceiling_gap_ci_direction_and_default_population_is_itt():
+    records = [
+        _rec("w1", "ours", det="reach", resolved=False),  # 0.0
+        _rec("w1", "oracle", det="reach", resolved=True),  # 1.0
+    ]
+    curve = build_curve(records, rungs=("ours", "oracle"))
+    gap = curve.ceiling_gap_ci()
+    assert gap is not None
+    assert gap.population == "itt"  # the pre-registered primary is the default
+    assert gap.delta == pytest.approx(1.0)  # oracle - ours
+    # n=1 -> no resample spread; bounds collapse to the point.
+    assert gap.ci_low == pytest.approx(gap.delta)
+    assert gap.ci_high == pytest.approx(gap.delta)
+
+
+def test_paired_delta_readouts_are_none_when_a_rung_is_absent():
+    records = [_rec("w1", "none", det="reach", resolved=False)]
+    curve = build_curve(records, rungs=("none",))
+    assert curve.floor_lift_ci() is None
+    assert curve.ceiling_gap_ci() is None
 
 
 # --- saturation / min-useful-combo refuse below 4 rungs (architect H2) --------

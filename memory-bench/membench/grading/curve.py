@@ -2,8 +2,15 @@
 
 Aggregates per-rung ``combined_reward`` across the held-out set into the curve the
 mem-apg headline is read off (ARCHITECTURE.md D17). Pure deterministic aggregation
-(ZFC): grouping, arithmetic means, and a normal-approximation confidence interval —
-no semantic judgment.
+(ZFC): grouping, arithmetic means, a Student-t confidence interval, and a seeded
+paired bootstrap for the delta readouts — no semantic judgment.
+
+The design is fully paired (every rung replays the same tasks), so the delta
+readouts (``floor_lift_ci`` / ``ceiling_gap_ci``) are inferred per task via the
+shared ``paired_ci`` helper on an explicitly labeled population: ``itt`` (all
+admitted tasks, an empty-retrieval task contributing delta 0) is the pre-registered
+primary; the retrieval-fired ``matched`` set is the mechanism-conditional secondary
+(mem-lp24).
 
 **What the live 3-rung ladder supports (architect H2).** With the combinatorial rungs
 (`builtin`, `ours+builtin`) deferred to mem-whi, the executable ladder is only
@@ -26,12 +33,17 @@ contributes one mean-reward value to its rung's sample.
 """
 
 from collections import defaultdict
-from collections.abc import Sequence
-from dataclasses import dataclass
-from math import fsum, sqrt
-from statistics import NormalDist
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from math import atan, cos, fsum, pi, sin, sqrt
 
 from membench.grading.ablation import DEFAULT_RUNGS
+from membench.grading.paired_ci import (
+    POPULATION_PRIMARY,
+    PairedDeltaCI,
+    Population,
+    paired_delta_ci,
+)
 from membench.grading.trace_score import RewardRecord
 
 # Below four rungs the curve has no interior resolution, so the saturation /
@@ -53,8 +65,8 @@ _TOL_EPS = 1e-9
 @dataclass(frozen=True)
 class RungReward:
     """One rung's aggregate reward over the held-out set. ``lower_bound`` /
-    ``upper_bound`` are the normal-approximation CI clamped to ``[0, 1]``; for a single
-    task they collapse to the mean (no across-task spread to estimate)."""
+    ``upper_bound`` are the Student-t CI clamped to ``[0, 1]``; for a single task
+    they collapse to the mean (no across-task spread to estimate)."""
 
     rung: str
     mean_reward: float
@@ -67,9 +79,15 @@ class RungReward:
 class ScoreInformationCurve:
     """The per-rung reward curve in ladder order. ``floor_lift`` and ``ceiling_gap``
     are the two readouts the 3-rung ladder supports; both are ``None`` when the
-    rung they need is absent (a partial run), surfaced rather than guessed."""
+    rung they need is absent (a partial run), surfaced rather than guessed.
+
+    ``task_rewards`` carries the per-task means the aggregates were formed from
+    (rung → work_id → task mean reward, repeats collapsed) so the paired-delta
+    readouts (``floor_lift_ci`` / ``ceiling_gap_ci``) can be inferred on the paired
+    design instead of shipped as bare point estimates (mem-lp24)."""
 
     rungs: tuple[RungReward, ...]
+    task_rewards: Mapping[str, Mapping[str, float]] = field(default_factory=dict)
 
     def rung(self, name: str) -> RungReward | None:
         """The aggregate for ``name``, or None if that rung is not in the curve."""
@@ -96,6 +114,55 @@ class ScoreInformationCurve:
             return None
         return oracle.mean_reward - ours.mean_reward
 
+    def paired_delta(
+        self,
+        baseline: str,
+        treatment: str,
+        *,
+        population: Population = POPULATION_PRIMARY,
+        n_resamples: int = 5000,
+        conf: float = 0.95,
+        seed: int = 0,
+    ) -> PairedDeltaCI | None:
+        """The per-task paired delta (``treatment`` - ``baseline``) with its
+        seeded bootstrap CI, on the explicitly labeled population (``itt`` is the
+        pre-registered primary; ``matched`` the mechanism-conditional secondary).
+        None when either rung is absent from the per-task data — surfaced rather
+        than guessed, mirroring ``floor_lift`` / ``ceiling_gap``."""
+        base = self.task_rewards.get(baseline)
+        treat = self.task_rewards.get(treatment)
+        if not base or not treat:
+            return None
+        return paired_delta_ci(
+            base, treat, population=population, n_resamples=n_resamples, conf=conf, seed=seed
+        )
+
+    def floor_lift_ci(
+        self,
+        *,
+        population: Population = POPULATION_PRIMARY,
+        n_resamples: int = 5000,
+        conf: float = 0.95,
+        seed: int = 0,
+    ) -> PairedDeltaCI | None:
+        """``floor_lift`` as a paired per-task delta (``ours`` - ``none``) + CI."""
+        return self.paired_delta(
+            "none", "ours", population=population, n_resamples=n_resamples, conf=conf, seed=seed
+        )
+
+    def ceiling_gap_ci(
+        self,
+        *,
+        population: Population = POPULATION_PRIMARY,
+        n_resamples: int = 5000,
+        conf: float = 0.95,
+        seed: int = 0,
+    ) -> PairedDeltaCI | None:
+        """``ceiling_gap`` as a paired per-task delta (``oracle`` - ``ours``) + CI."""
+        return self.paired_delta(
+            "ours", "oracle", population=population, n_resamples=n_resamples, conf=conf, seed=seed
+        )
+
 
 class InsufficientLadderError(Exception):
     """Raised when a readout needs more rungs than the curve has (architect H2):
@@ -103,12 +170,48 @@ class InsufficientLadderError(Exception):
     3-rung subset."""
 
 
-def _mean_ci(values: list[float], conf: float) -> tuple[float, float, float]:
-    """Mean and normal-approximation CI of ``values``, clamped to ``[0, 1]``.
+def _t_cdf(t: float, df: int) -> float:
+    """Student-t CDF for integer ``df``, via the exact closed-form finite sums
+    (Abramowitz & Stegun 26.7.3 / 26.7.4) — pure ``math``, no scipy. Exact for the
+    integer degrees of freedom a task sample always has."""
+    theta = atan(t / sqrt(df))
+    c, s = cos(theta), sin(theta)
+    if df % 2 == 1:
+        acc = term = c if df > 1 else 0.0
+        for j in range(2, df - 1, 2):
+            term *= j / (j + 1) * c * c
+            acc += term
+        return 0.5 + (theta + s * acc) / pi
+    acc = term = 1.0
+    for j in range(1, df - 1, 2):
+        term *= j / (j + 1) * c * c
+        acc += term
+    return 0.5 + s * acc / 2.0
 
-    A single value has no across-task variance to interval, so its bounds collapse to
-    the mean. Normal approximation (mean ± z·sem) is deliberate: transparent arithmetic
-    over a small sample, no scipy dependency for an inverse-t."""
+
+def _t_quantile(p: float, df: int) -> float:
+    """The upper Student-t quantile: the ``t ≥ 0`` with ``CDF(t) = p`` for
+    ``p ∈ [0.5, 1)``, by bisection on the exact CDF. Deterministic arithmetic."""
+    lo, hi = 0.0, 2.0
+    while _t_cdf(hi, df) < p:
+        hi *= 2.0
+    for _ in range(80):
+        mid = (lo + hi) / 2.0
+        if _t_cdf(mid, df) < p:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2.0
+
+
+def _mean_ci(values: list[float], conf: float) -> tuple[float, float, float]:
+    """Mean and Student-t CI of ``values``, clamped to ``[0, 1]``.
+
+    A single value has no across-task variance to interval, so its bounds collapse
+    to the mean. The interval is mean ± t_{n-1}·sem — the normal-z approximation the
+    module used to emit was anti-conservative at held-out-set sizes (z = 1.96 where
+    n = 9 wants t₈ = 2.306; mem-lp24). Still scipy-free: the t quantile comes from
+    the exact integer-df CDF above."""
     n = len(values)
     if n == 0:
         # build_curve never calls this with an empty rung, but make the invariant
@@ -119,8 +222,7 @@ def _mean_ci(values: list[float], conf: float) -> tuple[float, float, float]:
         return mean, mean, mean
     variance = fsum((x - mean) ** 2 for x in values) / (n - 1)
     sem = sqrt(variance / n)
-    z = NormalDist().inv_cdf(0.5 + conf / 2.0)
-    half = z * sem
+    half = _t_quantile(0.5 + conf / 2.0, n - 1) * sem
     return mean, max(0.0, mean - half), min(1.0, mean + half)
 
 
@@ -160,10 +262,11 @@ def build_curve(
         by_task[(record.rung, record.work_id)].append(record.reward)
         present.add(record.rung)
 
-    # rung -> per-task mean rewards (one value per task, repeats collapsed).
-    task_means: dict[str, list[float]] = defaultdict(list)
-    for (rung, _work_id), rewards in by_task.items():
-        task_means[rung].append(fsum(rewards) / len(rewards))
+    # rung -> work_id -> the task's mean reward (repeats collapsed). Kept per task
+    # (not flattened) so the paired-delta readouts can pair across rungs.
+    task_means: dict[str, dict[str, float]] = defaultdict(dict)
+    for (rung, work_id), rewards in by_task.items():
+        task_means[rung][work_id] = fsum(rewards) / len(rewards)
 
     order = _ladder_order(present, rungs)
     if not order:
@@ -173,7 +276,7 @@ def build_curve(
 
     built: list[RungReward] = []
     for rung in order:
-        values = task_means[rung]
+        values = list(task_means[rung].values())
         mean, lower, upper = _mean_ci(values, conf)
         built.append(
             RungReward(
@@ -184,7 +287,9 @@ def build_curve(
                 n_tasks=len(values),
             )
         )
-    return ScoreInformationCurve(rungs=tuple(built))
+    return ScoreInformationCurve(
+        rungs=tuple(built), task_rewards={rung: task_means[rung] for rung in order}
+    )
 
 
 def _require_full_ladder(curve: ScoreInformationCurve) -> None:

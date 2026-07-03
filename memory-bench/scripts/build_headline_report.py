@@ -53,6 +53,7 @@ from membench.grading.curve import (
     min_useful_combo,
     saturation_point,
 )
+from membench.grading.paired_ci import POPULATION_PRIMARY, PairedDeltaCI, paired_delta_ci
 from membench.grading.trace_score import RewardComponents, RewardRecord
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -213,6 +214,68 @@ def _efficiency_rollup(summary: dict[str, Any]) -> dict[str, dict[str, float]]:
     return {field: gaps[field] for field in EFFICIENCY_FIELDS if field in gaps}
 
 
+def _paired_json(ci: PairedDeltaCI | None) -> dict[str, Any] | None:
+    """A PairedDeltaCI as plain JSON, or None passed through (rung absent)."""
+    if ci is None:
+        return None
+    return {
+        "delta": ci.delta,
+        "ci_low": ci.ci_low,
+        "ci_high": ci.ci_high,
+        "n_pairs": ci.n_pairs,
+        "n_imputed_zero": ci.n_imputed_zero,
+        "population": ci.population,
+    }
+
+
+def _efficiency_paired(summary: dict[str, Any], curve: ScoreInformationCurve) -> dict[str, Any]:
+    """Paired bootstrap delta + CI per efficiency counter, recomputed from the
+    per-bundle cells between the ladder's bottom and top rungs (the same pair
+    ``reward_span`` reads). Matched population only — a bundle a rung never ran has
+    no cost to impute, unlike a reward delta — and labeled as such."""
+    if len(curve.rungs) < 2:
+        return {}
+    lo_rung, hi_rung = curve.rungs[0].rung, curve.rungs[-1].rung
+    out: dict[str, Any] = {}
+    for field in EFFICIENCY_FIELDS:
+        base = {
+            row["work_id"]: float(row[lo_rung][field])
+            for row in summary["per_bundle"]
+            if row[lo_rung].get(field) is not None
+        }
+        treat = {
+            row["work_id"]: float(row[hi_rung][field])
+            for row in summary["per_bundle"]
+            if row[hi_rung].get(field) is not None
+        }
+        if not base.keys() & treat.keys():
+            continue  # metric absent (or never paired) on this grid — no row to emit
+        ci = paired_delta_ci(base, treat, population="matched")
+        entry = _paired_json(ci)
+        assert entry is not None  # ci is never None here
+        out[field] = {**entry, "from_rung": lo_rung, "to_rung": hi_rung}
+    return out
+
+
+def _paired_deltas(summary: dict[str, Any], curve: ScoreInformationCurve) -> dict[str, Any]:
+    """The mem-lp24 paired-inference block: delta + seeded-bootstrap CI for the two
+    curve readouts on BOTH labeled populations (ITT pre-registered primary,
+    matched-set secondary), plus the efficiency counters' paired CIs. Additive to
+    the artifact schema — nothing pre-existing moves."""
+    return {
+        "population_primary": POPULATION_PRIMARY,
+        "floor_lift": {
+            "itt": _paired_json(curve.floor_lift_ci(population="itt")),
+            "matched": _paired_json(curve.floor_lift_ci(population="matched")),
+        },
+        "ceiling_gap": {
+            "itt": _paired_json(curve.ceiling_gap_ci(population="itt")),
+            "matched": _paired_json(curve.ceiling_gap_ci(population="matched")),
+        },
+        "efficiency": _efficiency_paired(summary, curve),
+    }
+
+
 def _source_coverage(summary: dict[str, Any]) -> dict[str, int]:
     """Held-out bundles grouped by rig (the ``<rig>-<hash>`` work-id prefix). One rig
     here is itself the finding — single-source external validity is a stated limit."""
@@ -247,6 +310,7 @@ def assemble(summary: dict[str, Any]) -> dict[str, Any]:
         "reward_span": _reward_span(readout.curve),
         "floor_lift": readout.floor_lift,
         "ceiling_gap": readout.ceiling_gap,
+        "paired_deltas": _paired_deltas(summary, readout.curve),
         "saturation_point": readout.saturation,
         "min_useful_combo": readout.min_useful,
         "ladder_refusal": readout.refusal,
@@ -338,8 +402,35 @@ def _render_curve_section(artifact: dict[str, Any]) -> list[str]:
         f"{_fmt(artifact['floor_lift'])} / {_fmt(artifact['ceiling_gap'])} — both need "
         "the `ours` rung, absent from this run (see coverage)."
     )
+    lines.append(
+        "- **Population policy (mem-lp24):** paired deltas are pre-registered on the "
+        "**ITT population** — every admitted bundle, a task whose retrieval returned "
+        "nothing contributing delta 0 — because the retrieval-fired matched set is "
+        "mechanism-conditional (its selection function moves as lesson coverage "
+        "grows, so successive matched reads are different populations). The "
+        "matched-set delta is reported alongside as a labeled secondary."
+    )
+    paired = artifact["paired_deltas"]
+    for name, label in (("floor_lift", "ours - none"), ("ceiling_gap", "oracle - ours")):
+        for population in ("itt", "matched"):
+            lines.extend(_paired_bullet(name, label, population, paired[name][population]))
     lines.append("")
     return lines
+
+
+def _paired_bullet(
+    name: str, label: str, population: str, entry: dict[str, Any] | None
+) -> list[str]:
+    """One paired-delta readout line; an absent readout (rung missing) emits nothing
+    — its absence is already narrated by the floor_lift/ceiling_gap bullet above."""
+    if entry is None:
+        return []
+    imputed = f", {entry['n_imputed_zero']} imputed 0" if entry["n_imputed_zero"] else ""
+    return [
+        f"- `{name}` ({label}, **{population}**): {_fmt(entry['delta'])} "
+        f"[{_fmt(entry['ci_low'])}, {_fmt(entry['ci_high'])}] "
+        f"(paired bootstrap, n={entry['n_pairs']}{imputed})"
+    ]
 
 
 def _render_per_task_section(artifact: dict[str, Any]) -> list[str]:
@@ -423,6 +514,22 @@ def _render_efficiency_section(artifact: dict[str, Any]) -> list[str]:
             f"| {field} | {_fmt(g['median_delta'], 1)} | {_fmt(g['mean_delta'], 1)} | "
             f"{g['n_oracle_gt_none']} | {g['n_pairs']} |"
         )
+    paired_eff = artifact["paired_deltas"]["efficiency"]
+    if paired_eff:
+        lines += [
+            "",
+            "Paired-bootstrap 95% CIs on the per-bundle deltas (matched bundles, "
+            "top rung - bottom rung; mem-lp24):",
+            "",
+        ]
+        for field in EFFICIENCY_FIELDS:
+            e = paired_eff.get(field)
+            if e is None:
+                continue
+            lines.append(
+                f"- `{field}` ({e['to_rung']} - {e['from_rung']}): {_fmt(e['delta'], 1)} "
+                f"[{_fmt(e['ci_low'], 1)}, {_fmt(e['ci_high'], 1)}] (n={e['n_pairs']})"
+            )
     lines += [
         "",
         "The efficiency effect is **bundle-conditional in both sign and magnitude** — "
