@@ -64,6 +64,11 @@ export interface BuildStoreResult {
    * the recovered squash/landing commit; the `with_commit_sha` coverage axis).
    * 0 when `--with-provenance` is off. */
   records_with_commit_sha: number;
+  /** Ids whose commit linkage resolved `multiple` (several non-canonical commits
+   * reference the id) — dropped from outcome attribution rather than stored as a
+   * newest-commit guess (mem-ahb2). The ambiguity residual; 0 when
+   * `--with-provenance` is off. */
+  records_multiple_linkage: number;
   /** Records whose work landed on the integration branch and survived
    * (`landed.landed_state === 'landed'`); the forward outcome signal for the
    * direct-to-main corpus (0 when `--with-provenance` is off). */
@@ -237,6 +242,7 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
   let recordsWithCommit = 0;
   let recordsRecordedBase = 0;
   let recordsWithCommitSha = 0;
+  let recordsMultipleLinkage = 0;
   let recordsLanded = 0;
   let recordsMultiSession = 0;
   let recordsWithSessionBase = 0;
@@ -268,13 +274,11 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     // base from its own trace SHAs; it needs the rig checkout (provenance) for the
     // `rev-parse` and the transcript text (traces) for the SHAs, so it joins the
     // provenance bundle and is a no-op for any record missing either.
-    const records = withProvenance
-      ? attachSessionCommits(
-          attachLanded(
-            attachCommitOutcomes(attachProvenance(traced, recordedBase ? { recordedBase } : {}))
-          )
-        )
-      : traced;
+    const linked = withProvenance
+      ? attachCommitOutcomes(attachProvenance(traced, recordedBase ? { recordedBase } : {}))
+      : null;
+    const records = linked === null ? traced : attachSessionCommits(attachLanded(linked.records));
+    recordsMultipleLinkage += linked?.multiple ?? 0;
 
     const built = buildStoreFromRecords(path, records);
     count += built.records;
@@ -308,7 +312,7 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
         ? `, ${recordsWithSessionBase} recovered a true per-worktree base from ${recordsWithSessionCommits} with session commits`
         : '';
     const provNote = withProvenance
-      ? `; ${recordsWithProvenance} carry a work_dir, ${recordsWithCommit} resolved a base commit${recordedNote}, ${recordsWithCommitSha} resolved a landing commit, ${recordsLanded} landed on the branch${sessionNote}`
+      ? `; ${recordsWithProvenance} carry a work_dir, ${recordsWithCommit} resolved a base commit${recordedNote}, ${recordsWithCommitSha} resolved a landing commit (${recordsMultipleLinkage} ambiguous multiple-commit linkages dropped), ${recordsLanded} landed on the branch${sessionNote}`
       : '';
     const joinNote = join !== null ? `; ${recordsMultiSession} are multi-session` : '';
     const provEventsNote = `; ${provenanceEvents} provenance events`;
@@ -327,6 +331,7 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     records_with_commit: recordsWithCommit,
     records_recorded_base: recordsRecordedBase,
     records_with_commit_sha: recordsWithCommitSha,
+    records_multiple_linkage: recordsMultipleLinkage,
     records_landed: recordsLanded,
     records_multi_session: recordsMultiSession,
     records_provenance_events: provenanceEvents,

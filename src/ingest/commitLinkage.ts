@@ -18,8 +18,9 @@ import { OutcomeSchema, type Outcome, type WorkRecord } from '../schemas/workrec
  * (the squash/landing commit, and the PR number when the rig used one). ZFC: git
  * reports the commits; we match ids as exact tokens and map them onto the schema
  * with no semantic guessing. Where an id resolves to more than one commit with no
- * canonical landing trailer, the linkage is reported `multiple` and the caller
- * decides whether to trust it — it is never silently collapsed.
+ * canonical landing trailer, the linkage is reported `multiple` and never stored
+ * as an outcome — {@link attachCommitOutcomes} drops it from attribution and
+ * counts it as a build residual instead of silently collapsing it.
  */
 
 /** One commit on the integration branch, with its PR number parsed out. `pr` is
@@ -213,6 +214,16 @@ export function linkRigOutcomes(
   return out;
 }
 
+/** Result of {@link attachCommitOutcomes}: the (copied) records plus the count
+ * of ids whose linkage was ambiguous and therefore dropped, so the build can
+ * report the residual instead of collapsing it silently. */
+export interface AttachCommitOutcomesResult {
+  records: WorkRecord[];
+  /** Ids that resolved `multiple` — several non-canonical commits reference the
+   * id, so no landing commit is attributable. No outcome is attached for them. */
+  multiple: number;
+}
+
 /**
  * Attach the recovered work→landing-commit {@link Outcome} to every record whose
  * id is named in its rig's integration-branch history — the build-stage that
@@ -220,6 +231,12 @@ export function linkRigOutcomes(
  * .commit_sha`). Mirrors {@link attachProvenance}: a per-rig git-checkout stage
  * over an injectable {@link GitRunner}, attaching immutably (records are copied,
  * never mutated).
+ *
+ * Only sound linkage is stored: `canonical` (the `(<work_id>)` trailer) and
+ * `unique` (the sole referencing commit). A `multiple` linkage is an ambiguous
+ * attribution — the newest-commit guess can be a revert or an unrelated mention
+ * — so it attaches NO outcome and is counted in the returned `multiple`
+ * residual instead (mem-ahb2; the same gate the mem-bxhh.4 link stage applies).
  *
  * The `git log` of each checkout runs ONCE per rig (records are grouped by rig
  * first), not once per record. Only mapped single-repo rigs in {@link RIG_REPOS}
@@ -232,7 +249,7 @@ export function linkRigOutcomes(
 export function attachCommitOutcomes(
   records: readonly WorkRecord[],
   opts: LinkRigOptions = {}
-): WorkRecord[] {
+): AttachCommitOutcomesResult {
   const idsByRig = new Map<string, string[]>();
   for (const record of records) {
     const ids = idsByRig.get(record.rig);
@@ -241,18 +258,24 @@ export function attachCommitOutcomes(
   }
 
   const outcomeById = new Map<string, Outcome>();
+  let multiple = 0;
   for (const [rig, ids] of idsByRig) {
     const mapped = RIG_REPOS[rig];
     if (mapped === undefined || mapped.multi === true || mapped.dir === undefined) continue;
     const branch = mapped.branch ?? DEFAULT_BRANCH;
-    for (const [id, { outcome }] of linkRigOutcomes(ids, mapped.dir, branch, opts)) {
+    for (const [id, { outcome, linkage }] of linkRigOutcomes(ids, mapped.dir, branch, opts)) {
+      if (linkage === 'multiple') {
+        multiple += 1;
+        continue;
+      }
       outcomeById.set(id, outcome);
     }
   }
 
-  return records.map(record => {
+  const attached = records.map(record => {
     const resolved = outcomeById.get(record.work_id);
     if (resolved === undefined) return record;
     return { ...record, outcome: { ...record.outcome, ...resolved } };
   });
+  return { records: attached, multiple };
 }

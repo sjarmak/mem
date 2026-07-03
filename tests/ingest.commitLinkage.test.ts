@@ -234,15 +234,47 @@ describe('attachCommitOutcomes', () => {
     };
 
     const records = [rec('mem-08k', 'mem'), rec('mem-nolink', 'mem'), rec('dec-1', 'dec')];
-    const out = attachCommitOutcomes(records, { run });
+    const { records: out, multiple } = attachCommitOutcomes(records, { run });
 
     expect(out.find(r => r.work_id === 'mem-08k')?.outcome?.commit_sha).toBe(SHA('a'));
     // A mapped rig with no matching commit, and an unmapped rig, gain no outcome.
     expect(out.find(r => r.work_id === 'mem-nolink')?.outcome).toBeUndefined();
     expect(out.find(r => r.work_id === 'dec-1')?.outcome).toBeUndefined();
+    expect(multiple).toBe(0);
     // The git log of the (single) mapped rig runs exactly once for both its ids;
     // the unmapped `dec` rig is never shelled.
     expect(calls).toHaveLength(1);
+  });
+
+  it("drops a 'multiple' linkage from outcome attribution and counts it as a residual", () => {
+    // Two non-canonical commits both reference mem-08k → linkage 'multiple'.
+    const stdout =
+      block(SHA('f'), 'mentions mem-08k', '', 'sjarmak', '2026-06-01T00:00:00Z') +
+      '\n' +
+      block(SHA('g'), 'also mentions mem-08k', '', 'sjarmak', '2026-06-03T00:00:00Z') +
+      '\n' +
+      block(SHA('b'), 'feat(mem): done (mem-ztcw0)', '', 'sjarmak');
+    const run: GitRunner = () => stdout;
+
+    const { records: out, multiple } = attachCommitOutcomes(
+      [rec('mem-08k', 'mem'), rec('mem-ztcw0', 'mem')],
+      { run }
+    );
+
+    // The ambiguous id gains NO outcome — the newest-commit guess is never
+    // written into commit_sha as if it were a verified landing.
+    expect(out.find(r => r.work_id === 'mem-08k')?.outcome).toBeUndefined();
+    // The canonical linkage in the same rig still attaches.
+    expect(out.find(r => r.work_id === 'mem-ztcw0')?.outcome?.commit_sha).toBe(SHA('b'));
+    expect(multiple).toBe(1);
+  });
+
+  it("still attaches a sole non-canonical ('unique') linkage", () => {
+    const stdout = block(SHA('c'), 'wip: touches mem-08k somewhere', '', 'sjarmak');
+    const run: GitRunner = () => stdout;
+    const { records: out, multiple } = attachCommitOutcomes([rec('mem-08k', 'mem')], { run });
+    expect(out.find(r => r.work_id === 'mem-08k')?.outcome?.commit_sha).toBe(SHA('c'));
+    expect(multiple).toBe(0);
   });
 
   it('does not mutate the input records', () => {
