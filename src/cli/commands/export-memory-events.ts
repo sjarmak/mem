@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 
 import { CommandContext } from '../index.js';
-import { withReadStore } from '../store.js';
+import { withExportStore } from '../store.js';
 import { allMemoryEvents } from '../../store/index.js';
 import type { MemoryEvent } from '../../schemas/memory-event.js';
 
@@ -27,7 +27,7 @@ export function exportMemoryEventsCommand(ctx: CommandContext): ExportMemoryEven
     throw new Error('--out requires a path: mem export-memory-events --out FILE');
   }
 
-  const events = withReadStore(ctx.options, db => allMemoryEvents(db));
+  const events = withExportStore(ctx.options, db => allMemoryEvents(db));
 
   let out: string | null = null;
   if (outOpt !== undefined) {

@@ -18,6 +18,9 @@ import type { StoreDatabase } from './sqlite.js';
  *  - {@link provenanceEventsFor} — the `log <work_id>` read.
  *  - {@link provenanceEventsByRef} — the `by-ref <ref>` read (which work bound
  *    to this SHA / PR / transcript).
+ *  - {@link producerProvenanceEvents} / {@link importProvenanceEvents} — the
+ *    schema-bump round-trip (producer rows cannot be regenerated from the
+ *    spine; backfilled rows re-derive on every build and are never carried).
  *
  * {@link deriveProvenanceEvents} is the *consumer/backfill* path: it projects
  * the facts mem already reconstructs (provenance.base_commit, the agents list,
@@ -137,6 +140,52 @@ export function provenanceEventsByRef(db: StoreDatabase, ref: string): Provenanc
     )
     .all(ref) as ProvenanceRow[];
   return rows.map(parseRow);
+}
+
+/** Every PRODUCER-recorded event (source ≠ {@link BACKFILL_SOURCE}) in
+ * event-time order — the export side of the schema-bump round-trip. Backfilled
+ * rows are deliberately excluded: a rebuild re-derives them deterministically
+ * from the records it writes, so only producer rows are non-regenerable. */
+export function producerProvenanceEvents(db: StoreDatabase): ProvenanceEvent[] {
+  const rows = db
+    .prepare(
+      `SELECT * FROM provenance_events WHERE source != ?
+       ORDER BY occurred_at IS NULL, occurred_at, id`
+    )
+    .all(BACKFILL_SOURCE) as ProvenanceRow[];
+  return rows.map(parseRow);
+}
+
+/** Outcome of {@link importProvenanceEvents}: appended vs already-present (by id). */
+export interface ImportProvenanceEventsResult {
+  appended: number;
+  skipped: number;
+}
+
+/**
+ * Append exported producer events into this store — the import side of the
+ * schema-bump round-trip. INSERT OR IGNORE on the `id` PK, so importing the
+ * same export twice is idempotent (duplicates skipped, never rewritten).
+ * Refuses {@link BACKFILL_SOURCE} rows: build-store re-derives those from the
+ * current corpus, and importing a stale copy could resurrect a reconstruction
+ * the corpus no longer supports (the same source guard the producer CLI
+ * enforces at record time).
+ */
+export function importProvenanceEvents(
+  db: StoreDatabase,
+  events: ProvenanceEvent[]
+): ImportProvenanceEventsResult {
+  const backfilled = events.find(ev => ev.source.trim().toLowerCase() === BACKFILL_SOURCE);
+  if (backfilled !== undefined) {
+    throw new Error(
+      `refusing to import backfilled provenance event '${backfilled.id}': ` +
+        `source '${BACKFILL_SOURCE}' rows are re-derived by build-store, never round-tripped`
+    );
+  }
+  // recordProvenanceEvents counts NEW rows; everything else (pre-existing rows
+  // AND duplicate ids within this batch) was IGNOREd, hence skipped.
+  const appended = recordProvenanceEvents(db, events);
+  return { appended, skipped: events.length - appended };
 }
 
 /**

@@ -17,15 +17,18 @@ work-audit graph, so retrieval and the memory-bench eval can learn from past
 work without leaking answers. Invariants that must hold:
 
 - **The work-audit graph is the source of truth.** SQLite + FTS5 sidecar at
-  `.mem/store.db` (`src/cli/store.ts`), schema version 6
+  `.mem/store.db` (`src/cli/store.ts`), schema version `SCHEMA_VERSION`
   (`src/store/schema.ts`). Every projected column is rebuilt from the
   `work_records.record` JSON on upsert; never write projections directly.
-- **The `lessons` table is append-only**, deliberately no foreign key to
-  `work_records`; citations are snapshotted at append time, never joined live
-  (`src/store/schema.ts`). There is no in-place schema migration: a version
-  bump means rebuilding from the bead spine, and lessons are the one thing a
-  rebuild cannot regenerate. Always round-trip them:
-  `mem export-lessons` before the rebuild, `mem import-lessons` after
+- **Three tables are append-only and non-regenerable** — `lessons`,
+  `memory_events`, and producer-source `provenance_events` — deliberately no
+  foreign key to `work_records`; lesson citations are snapshotted at append
+  time, never joined live (`src/store/schema.ts`). There is no in-place schema
+  migration: a version bump means rebuilding from the bead spine, and a rebuild
+  cannot regenerate these tables. Rebuild with `mem rebuild`, which round-trips
+  all three mechanically (export-all → fresh build → import-all); the manual
+  pairs `export/import-lessons`, `export/import-memory-events`, and
+  `export/import-provenance-events` remain for surgical use
   (README §Building the store).
 - **Deterministic signal is mechanical, never model judgment.** Build/test/lint
   outcomes are parsed from tool output by runner matching

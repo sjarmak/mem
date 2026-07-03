@@ -4,7 +4,13 @@
  * spine, this store holds the joined audit graph + trace-derived signal.
  */
 export { SCHEMA_VERSION } from './schema.js';
-export { type StoreDatabase, openStore } from './sqlite.js';
+export {
+  type StoreDatabase,
+  NON_REGENERABLE_TABLES,
+  openStore,
+  openStoreForExport,
+  tableExists,
+} from './sqlite.js';
 export {
   type ImportLessonsResult,
   type LessonInput,
@@ -32,7 +38,10 @@ export {
   workIdsBySignature,
 } from './reader.js';
 export {
+  type ImportProvenanceEventsResult,
   deriveProvenanceEvents,
+  importProvenanceEvents,
+  producerProvenanceEvents,
   provenanceEventsByRef,
   provenanceEventsFor,
   recordProvenanceEvents,

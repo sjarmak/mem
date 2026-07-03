@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 
 import { CommandContext } from '../index.js';
-import { withReadStore } from '../store.js';
+import { withExportStore } from '../store.js';
 import { allLessons, type StoredLesson } from '../../store/index.js';
 
 export interface ExportLessonsResult {
@@ -26,7 +26,7 @@ export function exportLessonsCommand(ctx: CommandContext): ExportLessonsResult {
     throw new Error('--out requires a path: mem export-lessons --out FILE');
   }
 
-  const lessons = withReadStore(ctx.options, db => allLessons(db));
+  const lessons = withExportStore(ctx.options, db => allLessons(db));
 
   let out: string | null = null;
   if (outOpt !== undefined) {
