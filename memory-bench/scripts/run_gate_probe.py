@@ -56,6 +56,7 @@ from membench.harbor.probe_gate import (
     summarize_pairs,
     sweep_probe_worktrees,
 )
+from membench.harbor.shuffled_condition import SHUFFLED, ShuffledSelection
 from membench.schemas.bundle import TaskBundle
 
 DEFAULT_BUNDLES_DIR = Path("/home/ds/projects/mem/.mem/bundles")
@@ -97,6 +98,7 @@ def run_probe_batch(
     worktree_root: Path = Path("/tmp"),
     dry_run: bool = False,
     ours_payloads_for: Callable[[TaskBundle], Mapping[str, str]] | None = None,
+    shuffled_for: Callable[[TaskBundle], tuple[ShuffledSelection, Mapping[str, str]]] | None = None,
 ) -> dict[str, int]:
     """The resumable bundle x condition loop. Each scored result persists to
     ``<probe_dir>/<work_id>.<condition>.json`` IMMEDIATELY; existing result files
@@ -104,7 +106,9 @@ def run_probe_batch(
     Used clones are exit-swept for leftover probe worktrees (leftovers raise).
 
     ``ours_payloads_for`` resolves the injected retrieval payload per bundle for the
-    ``ours`` condition (mem-p3w); other conditions never consult it.
+    ``ours`` condition (mem-p3w); other conditions never consult it. ``shuffled_for``
+    resolves the (donor selection, donor payload) pair per bundle for the ``shuffled``
+    placebo condition (mem-hhto) -- see `shuffled_condition.select_donor`.
 
     A dead run (`EmptyRunError` -- auth/usage-limit failure or zero-output transcript)
     is FATAL: no result file is written (so a rerun re-executes it) and the batch
@@ -135,6 +139,11 @@ def run_probe_batch(
                     if condition == "ours" and ours_payloads_for is not None
                     else None
                 )
+                shuffled = (
+                    shuffled_for(bundle)
+                    if condition == SHUFFLED and shuffled_for is not None
+                    else None
+                )
                 build_probe_task(
                     bundle,
                     condition,
@@ -142,6 +151,8 @@ def run_probe_batch(
                     rig_repos=rig_repos,
                     runner=runner,
                     ours_payloads=payloads,
+                    shuffled_donor=shuffled[0] if shuffled is not None else None,
+                    shuffled_payloads=shuffled[1] if shuffled is not None else None,
                 )
                 if dry_run:
                     planned += 1

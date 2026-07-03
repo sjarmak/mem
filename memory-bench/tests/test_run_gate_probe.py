@@ -294,3 +294,48 @@ def test_batch_clean_room_conditions_with_payload_seam(
         assert "gc-prior-1" in memory.read_text(encoding="utf-8")
         for condition in ("none-clean", "ours"):
             assert (probe_dir / f"{work_id}.{condition}.json").is_file()
+
+
+def test_batch_shuffled_condition_wiring(bundles_dir: Path, clone: Path, tmp_path: Path) -> None:
+    """mem-hhto: the batch routes a per-bundle (selection, donor payload) pair into
+    the ``shuffled`` condition through `shuffled_for`, and the donor provenance
+    lands next to the task."""
+    from membench.harbor.shuffled_condition import SHUFFLED, ShuffledSelection
+
+    bundles = probe_cli.load_bundles(bundles_dir)
+    probe_dir = tmp_path / "probe"
+    payload = json.dumps({"citation": {"work_id": "donor-prior-1"}, "lessons": [{"f": "y"}]})
+
+    def shuffled_for(bundle: TaskBundle) -> tuple[ShuffledSelection, dict[str, str]]:
+        donor = "demo-b" if bundle.work_id == "demo-a" else "demo-a"
+        selection = ShuffledSelection(
+            work_id=bundle.work_id,
+            donor_work_id=donor,
+            recipient_repo="demo",
+            donor_repo="demo",
+            recipient_chars=len(payload),
+            donor_chars=len(payload),
+            fallback_reason="no other-repo donor in the two-bundle test set",
+        )
+        return selection, {"donor-prior-1": payload}
+
+    tally = probe_cli.run_probe_batch(
+        bundles,
+        (SHUFFLED,),
+        probe_dir=probe_dir,
+        tasks_dir=probe_dir / "tasks",
+        rig_repos={"demo": clone},
+        exec_stream=_exec_stream_stub([]),
+        worktree_root=tmp_path / "wt",
+        shuffled_for=shuffled_for,
+    )
+    assert tally == {"executed": 2, "skipped": 0, "planned": 0}
+    for work_id, donor in (("demo-a", "demo-b"), ("demo-b", "demo-a")):
+        task_dir = probe_dir / "tasks" / f"{work_id}.{SHUFFLED}"
+        assert "rm -rf" in (task_dir / "environment" / "Dockerfile").read_text(encoding="utf-8")
+        assert "donor-prior-1" in (task_dir / "memory" / "MEMORY.md").read_text(encoding="utf-8")
+        selection = ShuffledSelection.model_validate_json(
+            (task_dir / "shuffled-donor.json").read_text(encoding="utf-8")
+        )
+        assert selection.donor_work_id == donor
+        assert (probe_dir / f"{work_id}.{SHUFFLED}.json").is_file()

@@ -36,6 +36,7 @@ from membench.harbor.probe_gate import (
     stale_probe_worktrees,
     summarize_pairs,
 )
+from membench.harbor.shuffled_condition import SHUFFLED, ShuffledSelection
 from membench.schemas.bundle import BundleEnv, TaskBundle
 from tests.helpers import git as _git
 
@@ -543,6 +544,124 @@ def test_leak_guard_fires_on_planted_gold_in_ours_payload(clone: Path, tmp_path:
             tmp_path / "t",
             rig_repos={"demo": clone},
             ours_payloads={"gc-prior-1": f"prior diff: {GOLD_DIFF}"},
+        )
+    assert not (tmp_path / "t").exists()
+
+
+def _donor_selection(work_id: str = "demo-1") -> "ShuffledSelection":
+    return ShuffledSelection(
+        work_id=work_id,
+        donor_work_id="other-9",
+        recipient_repo="demo",
+        donor_repo="other-repo",
+        recipient_chars=len(OURS_PAYLOAD),
+        donor_chars=len(DONOR_PAYLOAD),
+    )
+
+
+DONOR_PAYLOAD = json.dumps(
+    {
+        "citation": {"work_id": "other-prior-1", "rig": "other"},
+        "lessons": [{"subtitle": "pin the CLI version", "facts": ["drift confounds arms"]}],
+    },
+    sort_keys=True,
+)
+
+
+def test_build_probe_task_shuffled_mirrors_ours_with_donor_payload(
+    clone: Path, tmp_path: Path
+) -> None:
+    """mem-hhto: the placebo runs on the SAME clean-room base + injection path as
+    ``ours``; only the payload content (a different bundle's retrieval) differs,
+    and the donor selection is persisted as provenance."""
+    bundle = _bundle_via_json_roundtrip(clone, tmp_path)
+    rig_repos = {"demo": clone}
+    none_dir = build_probe_task(bundle, "none", tmp_path / "t-none", rig_repos=rig_repos)
+    shuffled_dir = build_probe_task(
+        bundle,
+        SHUFFLED,
+        tmp_path / "t-shuffled",
+        rig_repos=rig_repos,
+        shuffled_payloads={"other-prior-1": DONOR_PAYLOAD},
+        shuffled_donor=_donor_selection(),
+    )
+
+    # Clean room + the donor payload baked into the image at the oracle's path.
+    dockerfile = (shuffled_dir / "environment" / "Dockerfile").read_text(encoding="utf-8")
+    assert "rm -rf" in dockerfile
+    assert f"COPY MEMORY.md {ORACLE_MEMORY_CONTAINER_PATH}" in dockerfile
+    memory = (shuffled_dir / "memory" / "MEMORY.md").read_text(encoding="utf-8")
+    assert "other-prior-1" in memory
+    assert (shuffled_dir / "instruction.md").read_bytes() == (
+        none_dir / "instruction.md"
+    ).read_bytes()
+
+    # The donor bundle id lands in the run conditions (task.toml metadata) AND the
+    # full selection record persists as the task's provenance sidecar.
+    assert 'shuffled_donor_work_id = "other-9"' in (shuffled_dir / "task.toml").read_text(
+        encoding="utf-8"
+    )
+    sidecar = ShuffledSelection.model_validate_json(
+        (shuffled_dir / "shuffled-donor.json").read_text(encoding="utf-8")
+    )
+    assert sidecar == _donor_selection()
+
+
+def test_build_probe_task_shuffled_requires_payload_and_selection(
+    clone: Path, tmp_path: Path
+) -> None:
+    bundle = _bundle(clone)
+    rig_repos = {"demo": clone}
+    for empty in (None, {}):
+        with pytest.raises(ValueError, match=r"shuffled.*payload"):
+            build_probe_task(
+                bundle,
+                SHUFFLED,
+                tmp_path / "t",
+                rig_repos=rig_repos,
+                shuffled_payloads=empty,
+                shuffled_donor=_donor_selection(),
+            )
+    with pytest.raises(ValueError, match="shuffled_donor"):
+        build_probe_task(
+            bundle,
+            SHUFFLED,
+            tmp_path / "t",
+            rig_repos=rig_repos,
+            shuffled_payloads={"other-prior-1": DONOR_PAYLOAD},
+        )
+    # A selection recorded for a different recipient is a caller bug.
+    with pytest.raises(ValueError, match="recipient"):
+        build_probe_task(
+            bundle,
+            SHUFFLED,
+            tmp_path / "t",
+            rig_repos=rig_repos,
+            shuffled_payloads={"other-prior-1": DONOR_PAYLOAD},
+            shuffled_donor=_donor_selection(work_id="someone-else"),
+        )
+    # Non-shuffled conditions reject the shuffled arguments.
+    with pytest.raises(ValueError, match="shuffled"):
+        build_probe_task(
+            bundle,
+            "none-clean",
+            tmp_path / "t",
+            rig_repos=rig_repos,
+            shuffled_payloads={"other-prior-1": DONOR_PAYLOAD},
+            shuffled_donor=_donor_selection(),
+        )
+
+
+def test_leak_guard_fires_on_planted_gold_in_shuffled_payload(clone: Path, tmp_path: Path) -> None:
+    bundle = _bundle(clone)
+    with pytest.raises(OutcomeLeakError):
+        build_probe_task(
+            bundle,
+            SHUFFLED,
+            tmp_path / "t",
+            rig_repos={"demo": clone},
+            shuffled_payloads={"other-prior-1": f"donor diff: {GOLD_DIFF}"},
+            shuffled_donor=_donor_selection(),
         )
     assert not (tmp_path / "t").exists()
 
