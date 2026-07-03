@@ -56,13 +56,7 @@ from membench.harbor.bundle_grid import (
     three_arm_row,
 )
 from membench.harbor.env_recon import DEFAULT_RIG_REPOS
-from membench.harbor.probe_gate import (
-    EmptyRunError,
-    assert_run_pins,
-    detect_run_failure,
-    harbor_stream_exec,
-    touches_native_memory,
-)
+from membench.harbor.probe_gate import pinned_stream_exec, touches_native_memory
 from membench.memory_systems.ours_system import (
     OursQuery,
     RetrieveRunner,
@@ -109,9 +103,7 @@ def resolve_payloads(
             OursQuery(work_id=bundle.work_id, scope=RETRIEVAL_SCOPE, store_path=str(store_path))
         )
         items = [item for item in result.get("items", []) if item.get("lessons")]
-        leaked = sorted(
-            {item["work_id"] for item in items} & set(bundle.loo_excluded_work_ids)
-        )
+        leaked = sorted({item["work_id"] for item in items} & set(bundle.loo_excluded_work_ids))
         if leaked:
             raise RuntimeError(
                 f"{bundle.work_id}: retrieval returned LOO-excluded work id(s) {leaked} -- "
@@ -201,9 +193,7 @@ def assemble_rows(
             if retrieval_empty
             else load_grid_result(grid_dir, bundle.work_id, "ours")
         )
-        rows.append(
-            three_arm_row(none_clean, ours, builtin, ours_retrieval_empty=retrieval_empty)
-        )
+        rows.append(three_arm_row(none_clean, ours, builtin, ours_retrieval_empty=retrieval_empty))
     return rows
 
 
@@ -249,29 +239,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.dry_run:
         scrub_unfinished_jobs(bundles, ("none-clean", "ours"), probe_dir=args.probe_dir)
 
-    def exec_stream(task_dir: Path) -> str:
-        """`harbor_stream_exec` pinned to the cached arm's instrument, plus the
-        post-run pin assertion: a drifted run raises BEFORE the batch can persist
-        its result. Dead runs are classified FIRST -- a 401/usage-limit stream
-        carries an init event without model fields, which would otherwise raise a
-        misleading `PinMismatchError` instead of the batch-handled `EmptyRunError`."""
-        stream = harbor_stream_exec(
-            task_dir,
-            jobs_dir=args.probe_dir / "jobs",
-            model=args.model,
-            timeout_sec=args.timeout_sec,
-            agent_version=args.cli_version,
-        )
-        failure = detect_run_failure(stream)
-        if failure is not None:
-            raise EmptyRunError(f"{task_dir.name}: {failure}")
-        assert_run_pins(stream, model=args.model, cli_version=args.cli_version)
-        return stream
-
     batch_kwargs = {
         "probe_dir": args.probe_dir,
         "tasks_dir": args.probe_dir / "tasks",
-        "exec_stream": exec_stream,
+        # Pinned to the cached arm's instrument (`pinned_stream_exec`): dead runs
+        # raise the batch-handled EmptyRunError, pin drift raises before persist.
+        "exec_stream": pinned_stream_exec(
+            jobs_dir=args.probe_dir / "jobs",
+            model=args.model,
+            cli_version=args.cli_version,
+            timeout_sec=args.timeout_sec,
+        ),
         "dry_run": args.dry_run,
     }
     tally_clean = run_probe_batch(bundles, ("none-clean",), **batch_kwargs)
