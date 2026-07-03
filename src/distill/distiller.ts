@@ -1,8 +1,12 @@
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
 import { z } from 'zod';
 
+import { defaultGitRunner, isNonZeroExit, type GitRunner } from '../ingest/provenance.js';
+import { RIG_REPOS } from '../ingest/rig-repo-map.js';
 import { LessonPayloadSchema, ConceptTagSchema, type LessonPayload } from '../schemas/lesson.js';
+import type { TraceError } from '../schemas/trace.js';
 import type { WorkRecord } from '../schemas/workrecord.js';
 import type { LessonInput } from '../store/index.js';
 import { lessonsFor, queryRecords, type StoreDatabase } from '../store/index.js';
@@ -48,16 +52,176 @@ export function selectCandidates(db: StoreDatabase, filter: CandidateFilter): Wo
   return picked;
 }
 
+// --- Resolution evidence -------------------------------------------------------------
+
+/** Character budget for the resolution-evidence block. Diffs are HEAD-truncated
+ * (the file headers + leading hunks orient the model); transcript tails are
+ * TAIL-truncated (the resolution sits at session close). */
+const RESOLUTION_CHAR_BUDGET = 6_000;
+
+/** What resolved the record's failures: the diff that landed for its
+ * `outcome.commit_sha`, or — when no commit resolved — the transcript slice from
+ * the last recorded failure to session close. Truncation is always explicit
+ * (`truncated` + `total_chars`) so the prompt can say what was cut. */
+export type ResolutionEvidence =
+  | {
+      kind: 'landed-diff';
+      commit_sha: string;
+      text: string;
+      truncated: boolean;
+      total_chars: number;
+    }
+  | { kind: 'transcript-tail'; text: string; truncated: boolean; total_chars: number };
+
+/** IO seams for evidence resolution, injectable so the distiller stays testable
+ * without a git checkout or a transcript on disk. */
+export interface EvidenceOptions {
+  /** work_dir + args → stdout runner. Defaults to the real git CLI. */
+  run?: GitRunner;
+  /** jsonl_path → transcript text. Defaults to a filesystem read. */
+  readTranscript?: (path: string) => string;
+}
+
+/** Cut `text` to the budget at a line boundary, keeping the HEAD. */
+function truncateHead(text: string): { text: string; truncated: boolean } {
+  if (text.length <= RESOLUTION_CHAR_BUDGET) return { text, truncated: false };
+  const cut = text.lastIndexOf('\n', RESOLUTION_CHAR_BUDGET);
+  return { text: text.slice(0, cut > 0 ? cut : RESOLUTION_CHAR_BUDGET), truncated: true };
+}
+
+/** Cut `text` to the budget at a line boundary, keeping the TAIL. */
+function truncateTail(text: string): { text: string; truncated: boolean } {
+  if (text.length <= RESOLUTION_CHAR_BUDGET) return { text, truncated: false };
+  const cut = text.indexOf('\n', text.length - RESOLUTION_CHAR_BUDGET);
+  return {
+    text: text.slice(cut >= 0 ? cut + 1 : text.length - RESOLUTION_CHAR_BUDGET),
+    truncated: true,
+  };
+}
+
+/** The rig's canonical checkout dir, when it is mapped 1:1 with a repo. */
+function rigDir(rig: string): string | undefined {
+  const mapped = RIG_REPOS[rig];
+  return mapped !== undefined && mapped.multi !== true ? mapped.dir : undefined;
+}
+
+/** The landed diff for the record's `outcome.commit_sha`, shown from its
+ * provenance work_dir (or the rig's canonical checkout). Null — degrade to the
+ * transcript, never abort — when no sha/work_dir exists or git exits non-zero
+ * (sha absent from this clone, checkout gone), mirroring ingest/landed. */
+function landedDiff(record: WorkRecord, run: GitRunner): ResolutionEvidence | null {
+  const sha = record.outcome?.commit_sha;
+  if (sha === undefined) return null;
+  const work_dir = record.provenance?.work_dir ?? rigDir(record.rig);
+  if (work_dir === undefined) return null;
+  let diff: string;
+  try {
+    // `--end-of-options` pins the DB-sourced sha as a revision, so a hostile
+    // value cannot inject a git flag (same guard as ingest/provenance).
+    diff = run(work_dir, ['show', '--no-color', '--format=%s', '--end-of-options', sha]);
+  } catch (err) {
+    if (isNonZeroExit(err)) return null;
+    throw err; // a missing git binary is a misconfiguration, not absent evidence
+  }
+  if (diff.trim() === '') return null;
+  const { text, truncated } = truncateHead(diff);
+  return { kind: 'landed-diff', commit_sha: sha, text, truncated, total_chars: diff.length };
+}
+
+/** Offset of the LAST occurrence of any recorded error message in the raw
+ * transcript — exact-substring matching of already-extracted evidence (raw and
+ * JSON-escaped forms, since JSONL escapes quotes/newlines), not a keyword
+ * heuristic. -1 when no message is found. */
+function lastFailureIndex(content: string, errors: readonly TraceError[]): number {
+  let best = -1;
+  for (const error of errors) {
+    for (const needle of [error.message, JSON.stringify(error.message).slice(1, -1)]) {
+      const at = content.lastIndexOf(needle);
+      if (at > best) best = at;
+    }
+  }
+  return best;
+}
+
+/** The transcript slice from the last recorded failure to session close — the
+ * span where the fix happened. Null when the record has no trace, the file is
+ * unreadable (moved/archived since ingest: an expected degraded case, recognized
+ * by the fs error `code`), or the transcript is empty. */
+function transcriptTail(
+  record: WorkRecord,
+  read: (path: string) => string
+): ResolutionEvidence | null {
+  const path = record.trace?.jsonl_path;
+  if (path === undefined) return null;
+  let content: string;
+  try {
+    content = read(path);
+  } catch (err) {
+    if (typeof (err as NodeJS.ErrnoException).code !== 'string') throw err;
+    return null;
+  }
+  if (content.trim() === '') return null;
+  const from = lastFailureIndex(content, record.trace?.errors ?? []);
+  const slice = from >= 0 ? content.slice(from) : content;
+  const { text, truncated } = truncateTail(slice);
+  return { kind: 'transcript-tail', text, truncated, total_chars: slice.length };
+}
+
+/**
+ * Resolve the record's resolution evidence: the landed diff when a commit_sha
+ * resolved against a checkout, else the transcript tail, else null. Pure IO +
+ * mechanical truncation (ZFC) — what the evidence MEANS is the model's job.
+ */
+export function resolveResolutionEvidence(
+  record: WorkRecord,
+  opts: EvidenceOptions = {}
+): ResolutionEvidence | null {
+  const diff = landedDiff(record, opts.run ?? defaultGitRunner);
+  if (diff !== null) return diff;
+  return transcriptTail(record, opts.readTranscript ?? (path => readFileSync(path, 'utf8')));
+}
+
 // --- Prompt assembly -----------------------------------------------------------------
 
 const MAX_PROMPT_ERRORS = 20;
 
+/** The prompt's resolution-evidence block, truncation stated explicitly. */
+function evidenceLines(evidence: ResolutionEvidence | null): string[] {
+  if (evidence === null) {
+    return ['Resolution evidence: none available (no landed diff, no readable transcript).'];
+  }
+  if (evidence.kind === 'landed-diff') {
+    return [
+      `Resolution evidence — the landed diff for commit ${evidence.commit_sha}:`,
+      evidence.text,
+      ...(evidence.truncated
+        ? [
+            `(diff truncated: first ${evidence.text.length} of ${evidence.total_chars} characters; later hunks omitted)`,
+          ]
+        : []),
+    ];
+  }
+  return [
+    'Resolution evidence — transcript tail from the last recorded failure to session close:',
+    evidence.text,
+    ...(evidence.truncated
+      ? [
+          `(transcript truncated: final ${evidence.text.length} of ${evidence.total_chars} characters)`,
+        ]
+      : []),
+  ];
+}
+
 /**
- * The distillation prompt: everything the record knows about the failure and
- * its toolchain context, plus the exact payload contract. The model judges
- * what the lesson is; this function only formats evidence.
+ * The distillation prompt: everything the record knows about the failure, its
+ * toolchain context, and the resolution evidence, plus the exact payload
+ * contract. The model judges what the lesson is; this function only formats
+ * evidence — resolving it is {@link resolveResolutionEvidence}'s job.
  */
-export function buildDistillPrompt(record: WorkRecord): string {
+export function buildDistillPrompt(
+  record: WorkRecord,
+  evidence: ResolutionEvidence | null
+): string {
   const allErrors = record.trace?.errors ?? [];
   const errors = allErrors.slice(0, MAX_PROMPT_ERRORS);
   const omitted = allErrors.length - errors.length;
@@ -78,7 +242,9 @@ export function buildDistillPrompt(record: WorkRecord): string {
     ...errors.map(e => `- [${e.tool}] ${e.file}:${e.line} ${e.message}`),
     ...(omitted > 0 ? [`- (${omitted} further errors omitted)`] : []),
     ``,
-    `The work CLOSED successfully, so these errors were overcome. Distill the durable lesson: what went wrong, why, and what a future agent should do differently or watch out for. Be concrete and codebase-specific — name the real files, types, flags, and error codes from the evidence. Do not invent facts the evidence does not support.`,
+    ...evidenceLines(evidence),
+    ``,
+    `The work CLOSED successfully, so these errors were overcome. Distill the durable lesson: the root cause, what actually resolved it, and what a future agent should do differently or watch out for. Be concrete and codebase-specific — name the real files, types, flags, and error codes from the evidence. Do not invent facts the evidence does not support; when the evidence does not show what resolved the errors, say so instead of guessing.`,
     ``,
     `Respond with ONLY a JSON object (no markdown fence, no prose) of this exact shape:`,
     `{`,
@@ -168,13 +334,15 @@ export interface DistillOutcome {
 export function distillLessons(
   records: readonly WorkRecord[],
   runner: DistillRunner,
-  extractedAt: string
+  extractedAt: string,
+  evidence: EvidenceOptions = {}
 ): DistillOutcome {
   const lessons: LessonInput[] = [];
   const failures: DistillFailure[] = [];
   for (const record of records) {
     try {
-      const payload = parseDistilledPayload(runner(buildDistillPrompt(record)));
+      const prompt = buildDistillPrompt(record, resolveResolutionEvidence(record, evidence));
+      const payload = parseDistilledPayload(runner(prompt));
       lessons.push({
         work_id: record.work_id,
         extracted_at: extractedAt,
