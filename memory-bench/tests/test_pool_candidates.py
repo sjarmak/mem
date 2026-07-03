@@ -31,16 +31,16 @@ from membench.validity import QueryWork, WorkRef, loo_bounded
 # --------------------------------------------------------------------------- #
 def _corpus() -> list[WorkRef]:
     return [
-        WorkRef(work_id="A", rig="r2", closed="2024-01-01"),
-        WorkRef(work_id="C", rig="r2", closed="2024-02-01"),
-        WorkRef(work_id="G", rig="r1", closed="2024-02-15"),
-        WorkRef(work_id="E", rig="r2", closed="2024-03-01", convoy_id="cv1"),
-        WorkRef(work_id="D", rig="r2", closed="2024-12-01"),
+        WorkRef(work_id="A", rig="r2", closed="2024-01-01 00:00:00"),
+        WorkRef(work_id="C", rig="r2", closed="2024-02-01 00:00:00"),
+        WorkRef(work_id="G", rig="r1", closed="2024-02-15 00:00:00"),
+        WorkRef(work_id="E", rig="r2", closed="2024-03-01 00:00:00", convoy_id="cv1"),
+        WorkRef(work_id="D", rig="r2", closed="2024-12-01 00:00:00"),
     ]
 
 
 def _query() -> QueryWork:
-    return QueryWork(work_id="B", rig="r1", started="2024-06-01", convoy_id="cv1")
+    return QueryWork(work_id="B", rig="r1", started="2024-06-01 00:00:00", convoy_id="cv1")
 
 
 _CORPUS_TEXT = {

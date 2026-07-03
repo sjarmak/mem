@@ -17,6 +17,14 @@
  * sibling match, recursive-CTE supersedes closure) belong to the Phase-2
  * retrieve/bench layers.
  */
+// v11 forces a rebuild for two projection changes that land together:
+// (a) record_links dep/supersedes/epic-parent adjacency + the parent column,
+//     now populated by the beads ingest from the dolt `dependencies` table
+//     (mem-qgdz) — a pre-fix store has empty link projections;
+// (b) created_at/started_at/closed_at are projected through toIsoUtc
+//     (mem-0rrf.15) — a pre-fix store holds raw producer-shaped values, so
+//     its TEXT boundary comparison is lexicographic, not chronological;
+//     rebuild rather than silently retain the ' '<'T' leak.
 export const SCHEMA_VERSION = 11;
 
 export const SCHEMA_DDL = `

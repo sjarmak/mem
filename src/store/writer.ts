@@ -3,6 +3,7 @@ import { LessonPayloadSchema } from '../schemas/lesson.js';
 import type { PrLink } from '../schemas/trace.js';
 import { WorkRecordSchema, type WorkRecord } from '../schemas/workrecord.js';
 import type { StoreDatabase } from './sqlite.js';
+import { toIsoUtc } from './timestamp.js';
 
 /**
  * Store writer (P1.5). `writeRecords` wires the ingest/parse pipeline output
@@ -92,9 +93,13 @@ function toRow(record: WorkRecord): Record<string, string | number | null> {
     status: record.lifecycle.status,
     priority: record.priority ?? null,
     external_ref: record.external_ref ?? null,
-    created_at: record.lifecycle.created,
-    started_at: record.lifecycle.started ?? null,
-    closed_at: record.lifecycle.closed ?? null,
+    // Lifecycle instants are canonicalized (mem-0rrf.15): the reader's
+    // closedBefore is a lexicographic TEXT comparison, so the projected columns
+    // must share one shape across producers (dolt space-separated vs synthetic
+    // ISO T/Z). The record JSON keeps the producer's original bytes.
+    created_at: toIsoUtc(record.lifecycle.created),
+    started_at: record.lifecycle.started !== undefined ? toIsoUtc(record.lifecycle.started) : null,
+    closed_at: record.lifecycle.closed !== undefined ? toIsoUtc(record.lifecycle.closed) : null,
     convoy_id: record.links.convoy_id ?? null,
     pr: record.outcome?.pr ?? null,
     pr_state: record.outcome?.pr_state ?? null,

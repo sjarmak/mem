@@ -113,11 +113,7 @@ describe('openStore', () => {
   });
 });
 
-describe('mem-wanz.3 — PROV-O links schema (v10)', () => {
-  it('bumped SCHEMA_VERSION to 11 (record_links parent kind, mem-qgdz)', () => {
-    expect(SCHEMA_VERSION).toBe(11);
-  });
-
+describe('mem-wanz.3 — PROV-O links schema', () => {
   it('projects link_tier + link_source onto work_records', () => {
     const db = openStore(':memory:');
     const cols = db.prepare('PRAGMA table_info(work_records)').all() as { name: string }[];
@@ -514,6 +510,120 @@ describe('record_links projection (mem-qgdz)', () => {
       { kind: 'parent', target_id: 'demo-1a2b-epic' },
       { kind: 'supersedes', target_id: 'demo-dead' },
     ]);
+    db.close();
+  });
+});
+
+describe('mem-0rrf.15 — canonical lifecycle timestamps (format-free D6 boundary)', () => {
+  const timedRecord = (workId: string, closed?: string): WorkRecord =>
+    WorkRecordSchema.parse({
+      work_id: workId,
+      rig: 'demo',
+      title: workId,
+      lifecycle: {
+        created: '2026-06-01 00:00:00', // dolt shape, deliberately
+        ...(closed !== undefined && { closed }),
+        status: closed !== undefined ? 'closed' : 'open',
+        status_history: [],
+      },
+      links: { deps: [], supersedes: [] },
+    });
+
+  it('bumped SCHEMA_VERSION to 11 (canonical lifecycle projections force a rebuild of pre-fix stores)', () => {
+    expect(SCHEMA_VERSION).toBe(11);
+  });
+
+  it('normalizes every producer shape to one canonical ISO-8601 UTC column value', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [
+      timedRecord('dolt-aaaa', '2026-06-02 00:00:00'), // dolt space-separated, zoneless
+      timedRecord('isoz-bbbb', '2026-06-02T00:00:00Z'), // synthetic ISO T/Z (Decision 19)
+      timedRecord('offs-cccc', '2026-06-02T02:00:00+02:00'), // explicit offset
+    ]);
+    const closedAt = (id: string): string =>
+      (
+        db.prepare('SELECT closed_at FROM work_records WHERE work_id = ?').get(id) as {
+          closed_at: string;
+        }
+      ).closed_at;
+    // All three name the same instant — the projected column must be one shape.
+    expect(closedAt('dolt-aaaa')).toBe('2026-06-02T00:00:00.000Z');
+    expect(closedAt('isoz-bbbb')).toBe('2026-06-02T00:00:00.000Z');
+    expect(closedAt('offs-cccc')).toBe('2026-06-02T00:00:00.000Z');
+    // The stored record JSON keeps the producer's original bytes.
+    expect(getRecord(db, 'dolt-aaaa')?.lifecycle.closed).toBe('2026-06-02 00:00:00');
+    db.close();
+  });
+
+  it("closes the ' '<'T' leak: a dolt-shape record closing AFTER an ISO boundary is excluded", () => {
+    const db = openStore(':memory:');
+    // Raw lexicographic TEXT comparison: '2026-06-02 23:59:59' < '2026-06-02T00:00:00Z'
+    // (' ' < 'T'), so this record — closing ~24h after the boundary — would leak.
+    writeRecords(db, [timedRecord('leak-aaaa', '2026-06-02 23:59:59')]);
+    expect(queryRecords(db, { closedBefore: '2026-06-02T00:00:00Z' })).toEqual([]);
+    db.close();
+  });
+
+  it('does not over-exclude the reverse mix (ISO record, dolt-shape boundary)', () => {
+    const db = openStore(':memory:');
+    // Raw comparison would exclude ('T' > ' '), but 01:00 < 12:00 on the same day.
+    writeRecords(db, [timedRecord('okay-aaaa', '2026-06-02T01:00:00Z')]);
+    expect(queryRecords(db, { closedBefore: '2026-06-02 12:00:00' }).map(r => r.work_id)).toEqual([
+      'okay-aaaa',
+    ]);
+    db.close();
+  });
+
+  it('boundary ties are excluded across formats (strict <)', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [
+      timedRecord('tie-space', '2026-06-02 00:00:00'),
+      timedRecord('tie-offset', '2026-06-02T02:00:00+02:00'),
+    ]);
+    expect(queryRecords(db, { closedBefore: '2026-06-02T00:00:00Z' })).toEqual([]);
+    // One tick past the boundary admits both.
+    expect(
+      queryRecords(db, { closedBefore: '2026-06-02T00:00:00.001Z' }).map(r => r.work_id)
+    ).toEqual(['tie-offset', 'tie-space']);
+    db.close();
+  });
+
+  it('never-closed records never match, whatever the boundary shape', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [timedRecord('open-aaaa')]);
+    expect(queryRecords(db, { closedBefore: '2099-01-01 00:00:00' })).toEqual([]);
+    expect(queryRecords(db, { closedBefore: '2099-01-01T00:00:00Z' })).toEqual([]);
+    db.close();
+  });
+
+  it('the writer fails loudly on an unparseable lifecycle timestamp', () => {
+    const db = openStore(':memory:');
+    expect(() => writeRecords(db, [timedRecord('bad-aaaa', 'yesterday-ish')])).toThrow(
+      /timestamp/i
+    );
+    // Date-only is not a boundary instant either — reject, don't guess midnight.
+    expect(() => writeRecords(db, [timedRecord('bad-bbbb', '2026-06-02')])).toThrow(/timestamp/i);
+    db.close();
+  });
+
+  it('rejects calendar-invalid days instead of rolling them (parity with Python canonical_ts)', () => {
+    const db = openStore(':memory:');
+    // V8's Date.parse rolls day overflow forward (2026-02-30 → 2026-03-02);
+    // the Python mirror raises ValueError. Guessing a different instant would
+    // silently reorder the boundary AND diverge the parity contract.
+    expect(() => writeRecords(db, [timedRecord('bad-cccc', '2026-02-30T00:00:00Z')])).toThrow(
+      /timestamp/i
+    );
+    // Hour 24 rolls to next-day midnight in V8 too; Python rejects it.
+    expect(() => writeRecords(db, [timedRecord('bad-dddd', '2026-06-02T24:00:00Z')])).toThrow(
+      /timestamp/i
+    );
+    db.close();
+  });
+
+  it('the reader fails loudly on an unparseable closedBefore', () => {
+    const db = openStore(':memory:');
+    expect(() => queryRecords(db, { closedBefore: 'not-a-time' })).toThrow(/timestamp/i);
     db.close();
   });
 });

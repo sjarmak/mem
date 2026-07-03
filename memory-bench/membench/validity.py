@@ -15,6 +15,10 @@ substrate agree:
 - `closedBefore` is strict and null-safe: a record with no `closed` timestamp is
   never eligible (`store/reader.ts` `queryRecords`: `closed_at IS NOT NULL AND
   closed_at < ?`).
+- the cut compares CANONICAL timestamps (`canonical_ts`, mirroring the TS
+  writer's `toIsoUtc`): the corpus mixes dolt space-separated and synthetic ISO
+  `T`/`Z` shapes, and a raw string comparison orders those lexicographically,
+  not chronologically (mem-0rrf.15).
 - the supersedes closure is **undirected** and transitive — ancestors *and*
   descendants are "the same work" for the LOO exclusion (`store/reader.ts`
   `supersedesClosure`).
@@ -26,9 +30,41 @@ Pure mechanism (ZFC): deterministic set arithmetic with explicit ordering, no
 semantic judgment. No outcome label can enter an arm's input through this path.
 """
 
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
+
+# `YYYY-MM-DD` + `T`/space separator + `HH:MM[:SS[.fff]]` + optional zone
+# (`Z`, `±HH:MM`, `±HHMM`) — the exact acceptance grammar of the TS side's
+# `toIsoUtc` (src/store/timestamp.ts). Date-only values are rejected: a
+# boundary is an instant, not a day to guess midnight for.
+_TIMESTAMP_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:?\d{2})?$"
+)
+
+
+def canonical_ts(value: str) -> str:
+    """Canonicalize a lifecycle timestamp to `YYYY-MM-DDTHH:MM:SS.sssZ` — the
+    byte-for-byte mirror of the TS writer's `toIsoUtc` (src/store/timestamp.ts;
+    parity contract, change both). The D6 cut is a string comparison, which is
+    only chronological when every compared value shares one shape; the corpus
+    mixes dolt space-separated zoneless timestamps with synthetic ISO `T`/`Z`
+    (Decision 19), and `' ' < 'T'` orders those lexicographically against the
+    clock. Zoneless values are UTC (the city convention). Raises `ValueError`
+    on anything unparseable — a malformed producer timestamp must fail loudly,
+    never silently reorder the boundary."""
+    if _TIMESTAMP_RE.match(value) is None:
+        raise ValueError(f"not a recognizable lifecycle timestamp: {value!r}")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:  # shape-conformant but out of range, e.g. month 13
+        raise ValueError(f"not a recognizable lifecycle timestamp: {value!r}") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    utc = parsed.astimezone(UTC)
+    return utc.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 @dataclass(frozen=True)
@@ -108,10 +144,10 @@ def is_sibling(ref: WorkRef, query: QueryWork) -> bool:
     )
 
 
-def _is_eligible(ref: WorkRef, query: QueryWork, chain: set[str]) -> bool:
+def _is_eligible(ref: WorkRef, query: QueryWork, chain: set[str], boundary: str) -> bool:
     return (
         ref.closed is not None  # null closed → never eligible (strict, null-safe)
-        and ref.closed < query.started  # D6 strict temporal cut
+        and canonical_ts(ref.closed) < boundary  # D6 strict temporal cut (canonical UTC)
         and ref.work_id != query.work_id  # self-exclusion
         and ref.work_id not in chain  # supersedes-chain exclusion
         and not is_sibling(ref, query)  # convoy / pr / branch exclusion
@@ -124,7 +160,8 @@ def loo_bounded(corpus: Iterable[WorkRef], query: QueryWork) -> list[WorkRef]:
     corpus for an arm."""
     refs = list(corpus)
     chain = supersedes_closure(refs, query.work_id)
-    eligible = [ref for ref in refs if _is_eligible(ref, query, chain)]
+    boundary = canonical_ts(query.started)
+    eligible = [ref for ref in refs if _is_eligible(ref, query, chain, boundary)]
     return sorted(eligible, key=lambda r: r.work_id)
 
 

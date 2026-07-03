@@ -4,6 +4,7 @@
  * spine, this store holds the joined audit graph + trace-derived signal.
  */
 export { SCHEMA_VERSION } from './schema.js';
+export { toIsoUtc } from './timestamp.js';
 export {
   type StoreDatabase,
   NON_REGENERABLE_TABLES,

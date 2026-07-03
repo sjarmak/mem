@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  SCHEMA_VERSION,
   allMemoryEvents,
   importMemoryEvents,
   memoryEventsBySession,
@@ -45,10 +44,6 @@ afterEach(() => {
 });
 
 describe('memory_events store surface (mem-31kz)', () => {
-  it('the schema is at v11 (memory_events landed in v10, mem-qgdz bumped to 11)', () => {
-    expect(SCHEMA_VERSION).toBe(11);
-  });
-
   it('records and reads back events by work_id and by session', () => {
     expect(recordMemoryEvents(db, [ev()])).toBe(1);
     expect(memoryEventsFor(db, 'mem-31kz').map(e => e.memory_ref)).toEqual([
