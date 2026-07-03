@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from membench.grading.leak_guard import OutcomeLeakError
-from membench.harbor.control_conditions import FULL_CONTEXT, RAW_TRAJECTORY
+from membench.harbor.control_conditions import FULL_CONTEXT, RAW_TRAJECTORY, InScopeWork
 from membench.harbor.env_recon import DEFAULT_RIG_REPOS
 from membench.harbor.probe_gate import DEFAULT_CONTROL_MAX_CHARS, build_probe_task
 from membench.schemas.bundle import TaskBundle
@@ -57,7 +57,7 @@ def build_one(
     *,
     rig_repos: Mapping[str, Path] = DEFAULT_RIG_REPOS,
     raw_transcript: str | None = None,
-    in_scope_payloads: Mapping[str, str] | None = None,
+    in_scope_payloads: Mapping[str, InScopeWork] | None = None,
     max_chars: int = DEFAULT_CONTROL_MAX_CHARS,
     builder: TaskBuilder = build_probe_task,
 ) -> ControlTaskOutcome:
@@ -127,7 +127,7 @@ def run_control_build(
     *,
     rig_repos: Mapping[str, Path] = DEFAULT_RIG_REPOS,
     transcript_resolver: Callable[[TaskBundle], str | None] = resolve_raw_transcript,
-    in_scope_resolver: Callable[[TaskBundle], Mapping[str, str]] | None = None,
+    in_scope_resolver: Callable[[TaskBundle], Mapping[str, InScopeWork]] | None = None,
     max_chars: int = DEFAULT_CONTROL_MAX_CHARS,
     builder: TaskBuilder = build_probe_task,
 ) -> list[ControlTaskOutcome]:

@@ -15,6 +15,7 @@ import pytest
 
 from membench.bundle.replay import CallReplay, ReplayOutcome, ReplayResult
 from membench.grading import OutcomeLeakError
+from membench.harbor.control_conditions import InScopeWork
 from membench.harbor.probe_gate import ORACLE_MEMORY_CONTAINER_PATH, build_probe_task
 from membench.schemas.bundle import BundleEnv, TaskBundle
 from tests.helpers import git as _git
@@ -113,6 +114,9 @@ def test_raw_trajectory_truncation_persisted(clone: Path, tmp_path: Path):
     assert rec["truncated"] is True
     assert rec["kept_chars"] == 1000
     assert rec["original_chars"] == 5000
+    # Kept-span offsets are persisted too: M3 keeps the transcript TAIL.
+    assert rec["kept_start"] == 4000
+    assert rec["kept_end"] == 5000
 
 
 def test_raw_trajectory_requires_transcript(clone: Path, tmp_path: Path):
@@ -125,6 +129,10 @@ def test_raw_trajectory_requires_transcript(clone: Path, tmp_path: Path):
 # --------------------------------------------------------------------------- #
 # M4 full-context
 # --------------------------------------------------------------------------- #
+def _in_scope(text: str, closed_at: str = "2026-01-01T00:00:00+00:00") -> InScopeWork:
+    return InScopeWork(text=text, closed_at=closed_at)
+
+
 def test_full_context_is_loo_bounded_in_baked_payload(clone: Path, tmp_path: Path):
     bundle = _bundle(clone)  # loo = demo-1, sibling-2
     task_dir = build_probe_task(
@@ -133,9 +141,9 @@ def test_full_context_is_loo_bounded_in_baked_payload(clone: Path, tmp_path: Pat
         tmp_path / "fc",
         rig_repos={"demo": clone},
         in_scope_payloads={
-            "demo-1": "OWN WORK should be withheld",
-            "sibling-2": "SIBLING should be withheld",
-            "prior-9": "legit prior work to inject",
+            "demo-1": _in_scope("OWN WORK should be withheld"),
+            "sibling-2": _in_scope("SIBLING should be withheld"),
+            "prior-9": _in_scope("legit prior work to inject"),
         },
     )
     memory = (task_dir / "memory" / "MEMORY.md").read_text(encoding="utf-8")

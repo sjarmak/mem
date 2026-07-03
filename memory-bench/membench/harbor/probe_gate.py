@@ -61,6 +61,7 @@ from membench.grading.probe_direct import (
 from membench.harbor.control_conditions import (
     FULL_CONTEXT,
     RAW_TRAJECTORY,
+    InScopeWork,
     PayloadTruncation,
     full_context_payload,
     raw_trajectory_payload,
@@ -291,7 +292,7 @@ def build_probe_task(
     shuffled_payloads: Mapping[str, str] | None = None,
     shuffled_donor: ShuffledSelection | None = None,
     raw_transcript: str | None = None,
-    in_scope_payloads: Mapping[str, str] | None = None,
+    in_scope_payloads: Mapping[str, InScopeWork] | None = None,
     control_max_chars: int = DEFAULT_CONTROL_MAX_CHARS,
     network: NetworkMode = "allowlist",
 ) -> Path:
