@@ -4,7 +4,12 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { attachAndParse, buildStoreFromRecords } from '../src/cli/commands/build-store.js';
+import {
+  attachAndParse,
+  buildStoreFromRecords,
+  checkRecordLinks,
+  recordLinkCount,
+} from '../src/cli/commands/build-store.js';
 import { attachProvenance } from '../src/ingest/provenance.js';
 import { attachRepo } from '../src/ingest/repo-resolve.js';
 import {
@@ -36,6 +41,36 @@ beforeEach(() => {
 
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
+});
+
+describe('record-links sanity check (mem-qgdz)', () => {
+  it('recordLinkCount counts the record_links rows a record will project', () => {
+    expect(recordLinkCount(record('b-1', 'rigA'))).toBe(0);
+    const linked = WorkRecordSchema.parse({
+      ...record('b-2', 'rigA'),
+      links: { deps: ['b-x', 'b-y'], supersedes: ['b-old'], parent: 'b', convoy_id: 'cv-1' },
+    });
+    // convoy_id projects onto work_records, not record_links — not counted here.
+    expect(recordLinkCount(linked)).toBe(4);
+  });
+
+  it('throws on a full-corpus build that produced zero record_links', () => {
+    expect(() => checkRecordLinks(10, 0, null)).toThrow(/zero record_links/);
+  });
+
+  it('only warns on a zero-link single-rig build', () => {
+    const warnings: string[] = [];
+    checkRecordLinks(10, 0, 'freshrig', message => warnings.push(message));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/zero record_links/);
+  });
+
+  it('is silent when links exist or the corpus is empty', () => {
+    const warnings: string[] = [];
+    checkRecordLinks(10, 42, null, message => warnings.push(message));
+    checkRecordLinks(0, 0, null, message => warnings.push(message));
+    expect(warnings).toEqual([]);
+  });
 });
 
 describe('buildStoreFromRecords', () => {

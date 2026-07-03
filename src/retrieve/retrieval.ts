@@ -45,6 +45,8 @@ export const RetrievalQuerySchema = z.object({
   started: z.string().min(1),
   errors: z.array(TraceErrorSchema).default(() => []),
   convoy_id: z.string().optional(),
+  /** The epic parent (record.links.parent) — the mem-qgdz sibling-exclusion key. */
+  parent: z.string().optional(),
   pr: z.string().optional(),
   external_ref: z.string().optional(),
 });
@@ -317,6 +319,7 @@ export function queryFromRecord(db: StoreDatabase, workId: string): RetrievalQue
     started: record.lifecycle.started ?? record.lifecycle.created,
     errors: record.trace?.errors ?? [],
     ...(record.links.convoy_id !== undefined && { convoy_id: record.links.convoy_id }),
+    ...(record.links.parent !== undefined && { parent: record.links.parent }),
     ...(record.outcome?.pr !== undefined && { pr: record.outcome.pr }),
     ...(record.external_ref !== undefined && { external_ref: record.external_ref }),
   };
