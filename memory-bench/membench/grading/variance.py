@@ -20,6 +20,7 @@ ZFC: pure deterministic arithmetic — no semantic judgment, no thresholds.
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from math import fsum, sqrt
+from statistics import fmean, stdev
 
 # Same-package reuse of the exact integer-df Student-t quantile (mem-lp24): the
 # z-approximation is anti-conservative at grid pool sizes (N = 2-5).
@@ -50,11 +51,10 @@ def within_task_stats(values: Sequence[float]) -> MetricStats:
     n = len(values)
     if n == 0:
         raise ValueError("within_task_stats requires at least one value")
-    mean = fsum(values) / n
+    mean = fmean(values)
     if n < 2:
         return MetricStats(mean=mean, sd=None, n=n, values=tuple(values))
-    variance = fsum((x - mean) ** 2 for x in values) / (n - 1)
-    return MetricStats(mean=mean, sd=sqrt(variance), n=n, values=tuple(values))
+    return MetricStats(mean=mean, sd=stdev(values), n=n, values=tuple(values))
 
 
 def metric_stats_by_key(
