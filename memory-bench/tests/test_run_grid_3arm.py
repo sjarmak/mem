@@ -160,3 +160,58 @@ def test_scrub_unfinished_jobs_removes_only_resultless_pilot_dirs(tmp_path: Path
     assert not (jobs / "demo-a.ours").exists()  # corpse: scrubbed
     assert not (jobs / "demo-a.ours.job.json").exists()
     assert (jobs / "demo-a.none").is_dir()  # cached gate job: never touched
+
+
+# --- mem-tnyo: issue-text trigger resolution + held-signature covariate input ---------
+
+
+def test_resolve_payloads_passes_no_trace_query_through() -> None:
+    seen: list[OursQuery] = []
+
+    def runner(query: OursQuery) -> dict:
+        seen.append(query)
+        return {"items": []}
+
+    three_arm_cli.resolve_payloads([_bundle("demo-a")], store_path=Path("/tmp/s.db"), runner=runner)
+    three_arm_cli.resolve_payloads(
+        [_bundle("demo-a")], store_path=Path("/tmp/s.db"), runner=runner, no_trace_query=True
+    )
+
+    assert seen[0].no_trace_query is False
+    assert seen[1].no_trace_query is True
+
+
+def test_resolve_held_signatures_reads_the_retrieval_envelope() -> None:
+    """The held record's canonical full+relaxed signatures come from the TS
+    retrieval result's query_signatures fields -- never recomputed in Python."""
+
+    def runner(query: OursQuery) -> dict:
+        assert query.no_trace_query is False  # the trace-triggered call carries them
+        return {
+            "items": [],
+            "query_signatures": ["tsc:src/a.ts:12:TS2345"],
+            "query_signatures_relaxed": ["tsc:a.ts:TS2345"],
+        }
+
+    signatures = three_arm_cli.resolve_held_signatures(
+        [_bundle("demo-a")], store_path=Path("/tmp/s.db"), runner=runner
+    )
+    assert signatures == {"demo-a": ("tsc:src/a.ts:12:TS2345", "tsc:a.ts:TS2345")}
+
+
+def test_issue_trigger_summary_pairs_against_none_clean(tmp_path: Path) -> None:
+    grid_dir = tmp_path / "grid"
+    _write(grid_dir, _result("demo-a", "none-clean", turns=20))
+    _write(grid_dir, _result("demo-a", "ours-issue-trigger", turns=14))
+    _write(grid_dir, _result("demo-b", "none-clean", turns=10))
+
+    block = three_arm_cli.issue_trigger_summary(
+        [_bundle("demo-a"), _bundle("demo-b")],
+        {"demo-a": {"prior-1": "payload"}, "demo-b": {}},
+        grid_dir,
+    )
+
+    assert block["trigger"] == "issue-text"
+    assert block["n_attempted"] == 1
+    assert block["not_attempted_empty_retrieval"] == ["demo-b"]
+    assert block["per_bundle"]["demo-a"]["deltas_vs_none_clean"]["turns"] == -6.0

@@ -53,13 +53,19 @@ from run_grid import load_admitted_bundles, score_runs
 from run_grid_3arm import (
     assemble_rows,
     builtin_surface_evidence,
+    resolve_held_signatures,
     resolve_payloads,
     scrub_unfinished_jobs,
 )
 
 from membench.grading.graded import DEFAULT_JUDGE_ROUNDS, ClaudeRubricJudge
 from membench.grading.validity_gate import ValidityResult, validity_gate
-from membench.harbor.bundle_grid import OursRungEvidence, ours_rung_evidence, summarize_grid_3arm
+from membench.harbor.bundle_grid import (
+    OursRungEvidence,
+    ours_rung_evidence,
+    signature_overlap_summary,
+    summarize_grid_3arm,
+)
 from membench.harbor.probe_gate import (
     EmptyRunError,
     assert_run_pins,
@@ -93,9 +99,7 @@ DEFAULT_CLI_VERSION = "2.1.173"
 BUILTIN_CONDITION = "none"
 
 
-def run_validity_gates(
-    bundles: Sequence[TaskBundle], *, grid_dir: Path
-) -> list[ValidityResult]:
+def run_validity_gates(bundles: Sequence[TaskBundle], *, grid_dir: Path) -> list[ValidityResult]:
     """CSB oracle-validity gate per bundle (mem-g6a): gold diff must reproduce,
     empty diff must fail. Runs the SAME LiveReproRunner the graded scoring uses, so
     its judgment is the test runner's. A bundle whose oracle is broken (gold does
@@ -215,14 +219,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     # CSB validity gate PRECEDES the grid (mem-g6a doctrine): a broken oracle is
     # excluded BEFORE any agent run, never silently scored, and the agent budget is
     # not spent on a bundle whose anchored read would be meaningless.
-    validity = (
-        [] if args.skip_validity else run_validity_gates(candidates, grid_dir=args.grid_dir)
-    )
+    validity = [] if args.skip_validity else run_validity_gates(candidates, grid_dir=args.grid_dir)
     # --skip-validity admits every candidate (validity is empty -> no exclusions).
     valid_ids = (
-        {v.work_id for v in validity if v.valid}
-        if validity
-        else {b.work_id for b in candidates}
+        {v.work_id for v in validity if v.valid} if validity else {b.work_id for b in candidates}
     )
     bundles = [b for b in candidates if b.work_id in valid_ids]
     excluded = [b.work_id for b in candidates if b.work_id not in valid_ids]
@@ -249,12 +249,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     # none-clean and builtin (fresh `none`) run every valid bundle; ours runs only
     # payload-bearing bundles -- an empty retrieval makes the ours task byte-
     # identical to none-clean, so assemble_rows reuses that leg (delta 0).
+    # The held record's canonical full+relaxed signatures -- the mem-tnyo H3
+    # signature-overlap covariate input, read from the retrieval envelope.
+    held_signatures = resolve_held_signatures(bundles, store_path=args.store, runner=retrieve)
     tally_clean = run_probe_batch(bundles, ("none-clean",), **batch_kwargs)
     tally_builtin = run_probe_batch(bundles, (BUILTIN_CONDITION,), **batch_kwargs)
     tally_ours = run_probe_batch(
         with_payload,
         ("ours",),
         ours_payloads_for=lambda bundle: payloads[bundle.work_id],
+        held_signatures_for=lambda bundle: held_signatures[bundle.work_id],
         **batch_kwargs,
     )
     print(
@@ -302,6 +306,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         "excluded_by_validity": excluded,
     }
     summary["builtin_surface_evidence"] = surface_evidence
+    # mem-tnyo H3 parity: the per-payload signature-overlap covariate (report
+    # column) for the ours (oracle-triggered) payloads this grid injected.
+    summary["signature_overlap"] = signature_overlap_summary(
+        {"ours": {b.work_id: payloads[b.work_id] for b in bundles}}, held_signatures
+    )
     out = args.grid_dir / "summary-3arm-graded.json"
     out.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(f"summary -> {out}  (bundles={summary['n_bundles']})")

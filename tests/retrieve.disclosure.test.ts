@@ -28,7 +28,10 @@ const result = (
 ): RetrievalResult => ({
   scope: 'cross_rig',
   work_id: 'query-1',
+  trigger: 'trace',
   trigger_count: 2,
+  query_signatures: ['sig-1', 'sig-2'],
+  query_signatures_relaxed: ['relaxed-1', 'relaxed-2'],
   total_matched: items.length,
   near_duplicate_top: items[0]?.match === 'signature',
   fts_truncated: false,

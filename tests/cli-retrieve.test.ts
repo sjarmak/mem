@@ -208,3 +208,46 @@ describe('retrieveCommand — argument validation', () => {
     ).toThrow();
   });
 });
+
+describe('retrieveCommand — --no-trace-query (mem-tnyo issue-text trigger)', () => {
+  it('forms the query from the record title instead of its stored trace errors', () => {
+    // The trace trigger retrieves rigA-prior on the exact signature; the
+    // issue-text trigger sees only the title "Work rigA-query", which shares
+    // no token with the prior's error message — the trigger information is
+    // separable by construction.
+    const traceResult = retrieveCommand(ctx(storePath, ['rigA-query'], { scope: 'same-rig' }));
+    expect(traceResult).toMatchObject({ trigger: 'trace', total_matched: 1 });
+
+    const result = retrieveCommand(
+      ctx(storePath, ['rigA-query'], { scope: 'same-rig', 'no-trace-query': true })
+    );
+    expect(result).toMatchObject({ trigger: 'issue-text', trigger_count: 0, total_matched: 0 });
+  });
+
+  it('rejects a value after the flag', () => {
+    expect(() =>
+      retrieveCommand(
+        ctx(storePath, ['rigA-query'], { scope: 'same-rig', 'no-trace-query': 'yes' })
+      )
+    ).toThrow(/takes no value/);
+  });
+
+  it('rejects the flag in query-file mode', () => {
+    const queryPath = join(dir, 'query.json');
+    writeFileSync(
+      queryPath,
+      JSON.stringify({
+        work_id: 'live-1',
+        rig: 'rigA',
+        started: '2026-06-10T00:00:00Z',
+        errors: [tsError()],
+      })
+    );
+
+    expect(() =>
+      retrieveCommand(
+        ctx(storePath, [], { scope: 'cross-rig', query: queryPath, 'no-trace-query': true })
+      )
+    ).toThrow(/replay mode only/);
+  });
+});

@@ -9,10 +9,19 @@ harness re-checks the arm's output against its LOO-bounded set
 (`validity.assert_no_leak`). That is how "no arm touches the raw store directly"
 holds even though retrieval physically reads the shared sidecar.
 
-`ours` is **failure-triggered and replay-only** (Decision 8): it runs over the
-work-audit graph for a query work `B`, not over the convention-sequence fixture
-(which carries no errors and no WorkRecords). Calling it from the id-based
-sequence runner is a configuration error and raises.
+`ours` is **replay-only** (Decision 8): it runs over the work-audit graph for a
+query work `B`, not over the convention-sequence fixture (which carries no errors
+and no WorkRecords). Calling it from the id-based sequence runner is a
+configuration error and raises.
+
+**Trigger labeling (mem-tnyo).** In replay, the default query is built by
+`queryFromRecord` from the held record's OWN stored trace errors -- failures the
+fresh agent has not yet produced, i.e. an ORACLE trigger, not the deployed
+failure-triggered flow. That is made explicit: `OursMemory.trigger == "oracle"`.
+The separable control `OursIssueTriggerMemory` (`trigger == "issue-text"`) forms
+the query WITHOUT the trace errors (`mem retrieve --no-trace-query`: title /
+task-type text only -- the fields available at dispatch time), so the
+trigger-information contribution is measurable on its own.
 """
 
 import json
@@ -38,12 +47,15 @@ _CLI_SCOPE = {"cross_rig": "cross-rig", "same_rig_temporal": "same-rig"}
 class OursQuery:
     """The minimal call the runner needs: replay a closed work under one scope.
     `work_id` is resolved to its full query context (errors, boundary) inside
-    retrieval-v1 via `queryFromRecord` — the P2.2 replay path."""
+    retrieval-v1 via `queryFromRecord` — the P2.2 replay path. With
+    `no_trace_query` the CLI forms the query WITHOUT the record's stored trace
+    errors (title/task-type text only — the mem-tnyo issue-text trigger)."""
 
     work_id: str
     scope: str
     store_path: str
     limit: int | None = None
+    no_trace_query: bool = False
 
 
 # A runner returns retrieval-v1's `RetrievalResult` (the CLI `--json` envelope's
@@ -82,6 +94,8 @@ def _default_runner(mem_bin: str) -> RetrieveRunner:
         ]
         if query.limit is not None:
             argv += ["--limit", str(query.limit)]
+        if query.no_trace_query:
+            argv.append("--no-trace-query")
         return run_mem_json(argv)
 
     return run
@@ -91,6 +105,11 @@ class OursMemory(MemorySystem):
     name = "ours"
     backend = MemoryBackend.KG
     uses_scope = True
+    # How the replay query is formed (mem-tnyo condition metadata): "oracle" —
+    # from the held record's OWN stored trace errors (queryFromRecord), an
+    # information source the fresh agent does not have before failing. The
+    # issue-text control overrides this in its subclass.
+    trigger: str = "oracle"
     # The post-task write/reflect interface is append-only to a per-run scratch
     # store (D14, mem-lvp) — never this LOO-bounded corpus. Out of scope here.
     supports_write = False
@@ -144,6 +163,7 @@ class OursMemory(MemorySystem):
                 scope=request.scope,
                 store_path=self._store_path,
                 limit=self._limit,
+                no_trace_query=self.trigger == "issue-text",
             )
         )
         items = result.get("items", [])
@@ -176,3 +196,14 @@ class OursMemory(MemorySystem):
             "`ours` retrieval arm does not write; the post-task write/reflect "
             "interface (append-only scratch store, D14) lands in mem-lvp."
         )
+
+
+class OursIssueTriggerMemory(OursMemory):
+    """The mem-tnyo separable trigger control: identical retrieval surface, leak
+    guards, and payload rendering as `ours`, but the query is formed WITHOUT the
+    held record's stored trace errors (`mem retrieve --no-trace-query`) — from
+    the issue/bead text only (title + task-type, the fields available at
+    dispatch time). Condition metadata records `trigger = "issue-text"`."""
+
+    name = "ours-issue-trigger"
+    trigger = "issue-text"

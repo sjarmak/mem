@@ -122,6 +122,17 @@ embeddings are gated behind it underperforming.
   cross-rig; the claim is *cuts iterations-to-green and raises eventual pass rate*,
   not *prevents the first failure*. Task-start semantic retrieval is a Phase-2 item
   (needs embeddings + respects the no-paid-API constraint).
+- **Replay's trigger is an oracle, and it is labeled as such (mem-tnyo,
+  Decision 23).** In the replay eval, the `ours` arm's query is built by
+  `queryFromRecord` from the held record's **own stored trace errors** — failures
+  the fresh agent has not yet produced — and the payload is baked into the image
+  pre-run. That is an oracle-informed trigger, not the deployed failure-triggered
+  flow; the eval measures *payload value given a perfect trigger*. Every emitted
+  artifact says so: run conditions carry `trigger: "oracle"`, reports label the
+  arm oracle-triggered. The separable control `ours-issue-trigger` forms the query
+  WITHOUT the trace errors (`mem retrieve --no-trace-query`: title/task-type only,
+  the fields available at dispatch time; `trigger: "issue-text"`), so the
+  trigger-information contribution is measured on its own.
 - **Distilled payload, never the raw trace.** The default payload is the
   model-extracted root-cause + resolution + dep links, **plus a citation**
   (`mem://lesson/<work_id>[/<commit_sha>]`) so it is auditable and the agent can
@@ -148,6 +159,12 @@ enforce that, and weakening any one leaks:
   answer-quality evals, so outcome-lift alone is gameable by over-injection. The
   bench measures injected-context volume + retrieval precision as a first-class
   guard on every lift run.
+- **Self-leak scan parity (H3, mem-tnyo)** — the oracle payload is hard-guarded
+  against containing the held bead's own failure signature (full or relaxed).
+  The `ours` payloads (both triggers) run the same relaxed-signature scan as a
+  recorded **covariate** (`signature-overlap.json` per task + a report column),
+  not a guard: a retrieved prior sharing the held signature is the D8 exact-match
+  tier working as designed, and nuking it would delete the arm's mechanism.
 
 ---
 

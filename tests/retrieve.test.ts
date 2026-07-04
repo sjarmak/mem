@@ -517,3 +517,103 @@ describe('RetrievalQuerySchema', () => {
     expect(() => RetrievalQuerySchema.parse({ work_id: 'w1', rig: 'r1' })).toThrow();
   });
 });
+
+describe('retrieve — issue-text trigger (mem-tnyo)', () => {
+  it('matches the message tier from dispatch-time text when the query has no errors', () => {
+    writeRecords(db, [priorRecord('rigA-old', 'rigA')]);
+
+    const result = retrieve(db, baseQuery({ errors: [], text: 'bad argument in the CLI' }), {
+      scope: 'same_rig_temporal',
+    });
+
+    expect(result.trigger).toBe('issue-text');
+    expect(result.trigger_count).toBe(0);
+    expect(result.items.map(i => i.work_id)).toEqual(['rigA-old']);
+    expect(result.items[0]?.match).toBe('message');
+    expect(result.items[0]?.matched_signatures).toEqual([]);
+  });
+
+  it('returns nothing when the query has neither errors nor text', () => {
+    writeRecords(db, [priorRecord('rigA-old', 'rigA')]);
+
+    const result = retrieve(db, baseQuery({ errors: [], text: '   ' }), {
+      scope: 'same_rig_temporal',
+    });
+
+    expect(result.items).toEqual([]);
+    expect(result.total_matched).toBe(0);
+    expect(result.trigger).toBe('issue-text');
+  });
+
+  it('still honors the D6 boundary and exclusions on the text path', () => {
+    writeRecords(db, [
+      priorRecord('rigA-late', 'rigA', {
+        lifecycle: {
+          created: '2026-06-11T00:00:00Z',
+          closed: '2026-06-12T00:00:00Z',
+          status: 'closed',
+          status_history: [],
+        },
+      }),
+      priorRecord('rigA-sibling', 'rigA', {
+        links: { deps: [], convoy_id: 'c1', supersedes: [] },
+      }),
+    ]);
+
+    const result = retrieve(db, baseQuery({ errors: [], text: 'bad argument', convoy_id: 'c1' }), {
+      scope: 'same_rig_temporal',
+    });
+
+    expect(result.items).toEqual([]); // late = after boundary; sibling = convoy-excluded
+  });
+
+  it('labels a failure-triggered query as the trace trigger', () => {
+    const result = retrieve(db, baseQuery(), { scope: 'same_rig_temporal' });
+
+    expect(result.trigger).toBe('trace');
+    expect(result.trigger_count).toBe(1);
+  });
+
+  it('emits the query signatures (full + relaxed) as the H3-parity covariate input', () => {
+    const result = retrieve(db, baseQuery(), { scope: 'same_rig_temporal' });
+
+    expect(result.query_signatures).toEqual(['tsc:src/a.ts:12:TS2345']);
+    expect(result.query_signatures_relaxed).toEqual(['tsc:a.ts:TS2345']);
+  });
+
+  it('emits no signatures for an issue-text query (it carries no errors)', () => {
+    const result = retrieve(db, baseQuery({ errors: [], text: 'bad argument' }), {
+      scope: 'same_rig_temporal',
+    });
+
+    expect(result.query_signatures).toEqual([]);
+    expect(result.query_signatures_relaxed).toEqual([]);
+  });
+});
+
+describe('queryFromRecord — issue-text trigger (mem-tnyo)', () => {
+  it('drops the stored trace errors and carries title + task_type as text', () => {
+    writeRecords(db, [priorRecord('rigA-b', 'rigA', { task_type: 'fix' })]);
+
+    const query = queryFromRecord(db, 'rigA-b', { trigger: 'issue-text' });
+
+    expect(query.errors).toEqual([]);
+    expect(query.text).toBe('Prior work rigA-b\nfix');
+    // The boundary and exclusion keys are the record's, unchanged.
+    expect(query.started).toBe('2026-06-01T01:00:00Z');
+    expect(query.pr).toBe('#rigA-b');
+  });
+
+  it('uses the title alone when the record was never task-typed', () => {
+    writeRecords(db, [priorRecord('rigA-b', 'rigA')]);
+
+    expect(queryFromRecord(db, 'rigA-b', { trigger: 'issue-text' }).text).toBe('Prior work rigA-b');
+  });
+
+  it('defaults to the trace trigger (the oracle-triggered replay path)', () => {
+    writeRecords(db, [priorRecord('rigA-b', 'rigA')]);
+
+    expect(queryFromRecord(db, 'rigA-b').errors).toEqual([tsError()]);
+    expect(queryFromRecord(db, 'rigA-b').text).toBeUndefined();
+  });
+});

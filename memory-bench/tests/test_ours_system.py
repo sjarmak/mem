@@ -123,3 +123,71 @@ def test_write_not_supported():
     assert arm.supports_write is False
     with pytest.raises(NotImplementedError, match="mem-lvp"):
         arm.write("m", "c", _ctx())
+
+
+# --- mem-tnyo: trigger labeling + the issue-text control arm ------------------------
+
+
+def test_ours_arm_is_labeled_oracle_triggered():
+    """Replay resolution goes through queryFromRecord over the held record's OWN
+    stored trace errors -- an oracle trigger, labeled explicitly (mem-tnyo)."""
+    assert OursMemory.trigger == "oracle"
+
+
+def test_default_runner_appends_no_trace_query_flag(monkeypatch):
+    import membench.memory_systems.ours_system as mod
+    from membench.memory_systems.ours_system import OursQuery, _default_runner
+
+    captured: list[list[str]] = []
+
+    def fake_run(argv, **_kwargs):
+        captured.append(argv)
+        return {"items": []}
+
+    monkeypatch.setattr(mod, "run_mem_json", fake_run)
+    run = _default_runner("/bin/mem")
+    run(OursQuery(work_id="B", scope="cross_rig", store_path="/s.db"))
+    run(OursQuery(work_id="B", scope="cross_rig", store_path="/s.db", no_trace_query=True))
+
+    assert "--no-trace-query" not in captured[0]
+    assert captured[1][-1] == "--no-trace-query"
+
+
+def test_issue_trigger_arm_queries_without_trace_errors():
+    from membench.memory_systems.ours_system import OursIssueTriggerMemory, OursQuery
+
+    seen: list[OursQuery] = []
+
+    def runner(query: OursQuery):
+        seen.append(query)
+        return dict(_DATA)
+
+    arm = OursIssueTriggerMemory(store_path="/s.db", runner=runner)
+    assert arm.name == "ours-issue-trigger"
+    assert arm.trigger == "issue-text"
+
+    result = arm.retrieve(_req(), _ctx())
+
+    assert seen[0].no_trace_query is True
+    assert set(result.payloads) == {"prior-1", "prior-2"}
+
+
+def test_oracle_triggered_arm_keeps_trace_query():
+    from membench.memory_systems.ours_system import OursQuery
+
+    seen: list[OursQuery] = []
+
+    def runner(query: OursQuery):
+        seen.append(query)
+        return dict(_DATA)
+
+    OursMemory(store_path="/s.db", runner=runner).retrieve(_req(), _ctx())
+    assert seen[0].no_trace_query is False
+
+
+def test_issue_trigger_arm_is_wired_in_the_registry():
+    from membench.memory_systems import build_memory_system, wired_memory_systems
+
+    assert "ours-issue-trigger" in wired_memory_systems()
+    arm = build_memory_system("ours-issue-trigger", store_path="/s.db", runner=lambda q: _DATA)
+    assert arm.name == "ours-issue-trigger"

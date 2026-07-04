@@ -113,14 +113,32 @@ function printDetails(details: RetrievalDetails): void {
   console.error(`${details.items.length} item(s) hydrated [${details.scope}]`);
 }
 
+/** Parse the bare `--no-trace-query` flag (mem-tnyo): replay-mode-only switch
+ * to the `issue-text` trigger — the query is formed WITHOUT the held record's
+ * stored trace errors, from its title/task_type instead. */
+function parseNoTraceQuery(value: OptionValue, workId: string | undefined): boolean {
+  if (value === undefined) return false;
+  if (value !== true) throw new Error('--no-trace-query takes no value');
+  if (workId === undefined) {
+    throw new Error('--no-trace-query applies to replay mode only (needs a work_id)');
+  }
+  return true;
+}
+
 /**
- * `mem retrieve (<work_id> | --query FILE) --scope cross-rig|same-rig
+ * `mem retrieve (<work_id> [--no-trace-query] | --query FILE)
+ *  --scope cross-rig|same-rig
  *  [--limit N] [--format full|index|details] [--pick a,b] [--store PATH]`
  *
  * Retrieval-v1 (contract D6–D10). Two query sources, exactly one required:
  * a stored `work_id` (replay mode — derive the query from the closed record,
  * the P2.2 harness path) or `--query FILE` (a live query context as JSON).
  * Returns the ranked prior memories + distilled lessons under the chosen scope.
+ *
+ * Replay mode defaults to the `trace` trigger — the held record's own stored
+ * errors, an ORACLE trigger (mem-tnyo). `--no-trace-query` switches to the
+ * `issue-text` trigger (title/task_type only, the dispatch-time fields), the
+ * separable control; the boundary and D6 exclusions are unchanged.
  *
  * `--format` selects the progressive-disclosure layer (P2.5): `index` is the
  * L1 listing with per-item hydration token costs, `details` is the L2
@@ -141,10 +159,13 @@ export function retrieveCommand(
   if ((workId === undefined) === (queryFile === undefined)) {
     throw new Error('retrieve takes exactly one of a work_id or --query FILE');
   }
+  const noTraceQuery = parseNoTraceQuery(ctx.options['no-trace-query'], workId);
 
   const result = withReadStore(ctx.options, db => {
     const query =
-      workId !== undefined ? queryFromRecord(db, workId) : readQueryFile(queryFile as string);
+      workId !== undefined
+        ? queryFromRecord(db, workId, { trigger: noTraceQuery ? 'issue-text' : 'trace' })
+        : readQueryFile(queryFile as string);
     return retrieve(db, query, { scope, ...(limit !== undefined && { limit }) });
   });
 

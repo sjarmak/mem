@@ -25,9 +25,11 @@ export {
   type Citation,
   type LiteralRef,
   type MatchTier,
+  type QueryFromRecordOptions,
   type RetrievalQuery,
   type RetrievalResult,
   type RetrievalScope,
+  type RetrievalTrigger,
   type RetrieveOptions,
   type RetrievedItem,
 } from './retrieval.js';

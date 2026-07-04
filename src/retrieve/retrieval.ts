@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { errorClass, failureSignature, normalizePath } from '../parse/recurrence.js';
-import { TraceErrorSchema } from '../schemas/trace.js';
+import { TraceErrorSchema, type TraceError } from '../schemas/trace.js';
 import type { WorkRecord } from '../schemas/workrecord.js';
 import {
   getRecord,
@@ -36,6 +36,14 @@ import { isSibling } from './exclusions.js';
  *   position, work_id) — nothing else.
  */
 
+/** How the query was formed (mem-tnyo): `trace` — failure-triggered from trace
+ * errors (in replay mode these are the held record's OWN stored errors, i.e. an
+ * ORACLE trigger: information a fresh agent does not have before failing);
+ * `issue-text` — formed from the fields available at dispatch time (title /
+ * task_type), carrying no trace errors, so the trigger-information contribution
+ * is separable from the payload's value. */
+export type RetrievalTrigger = 'trace' | 'issue-text';
+
 /** The query work context — what the retrieving side knows about the work
  * that just hit a failure. `started` is the D6 boundary and is deliberately
  * required: the caller must state when "memory as it existed" is measured. */
@@ -44,6 +52,10 @@ export const RetrievalQuerySchema = z.object({
   rig: z.string().min(1),
   started: z.string().min(1),
   errors: z.array(TraceErrorSchema).default(() => []),
+  /** Free-text trigger (issue title / task type) — the `issue-text` mode's FTS
+   * input. Mechanical field selection only: the text feeds the same message
+   * tier {@link buildFtsQuery} tokenizes; no keyword heuristics. */
+  text: z.string().optional(),
   convoy_id: z.string().optional(),
   /** The epic parent (record.links.parent) — the mem-qgdz sibling-exclusion key. */
   parent: z.string().optional(),
@@ -100,8 +112,21 @@ export interface RetrievedItem {
 export interface RetrievalResult {
   scope: RetrievalScope;
   work_id: string;
-  /** Number of query errors — 0 means retrieval had no trigger (D8). */
+  /** Which trigger formed the query: `trace` when it carried errors,
+   * `issue-text` when only dispatch-time text did (mem-tnyo). */
+  trigger: RetrievalTrigger;
+  /** Number of query errors — 0 means retrieval had no failure trigger (D8);
+   * an `issue-text` query legitimately runs with 0. */
   trigger_count: number;
+  /** Canonical signatures of the query errors ({@link failureSignature}),
+   * sorted. Harness-side covariate input for the H3 self-leak parity scan
+   * (mem-tnyo) — emitted in the JSON envelope, never injected into an agent. */
+  query_signatures: string[];
+  /** The line-invariant, basename-scoped keys `tool:basename:error_class`,
+   * mirroring the scorer's `relaxed_signature` (memory-bench trace_score.py —
+   * parity contract, change both). Same covariate role as
+   * {@link RetrievalResult.query_signatures}. */
+  query_signatures_relaxed: string[];
   /** Eligible matches before the limit cap. */
   total_matched: number;
   /** D6 duplicate audit: the top item matched on an exact fix signature. */
@@ -141,6 +166,14 @@ function buildFtsQuery(messages: string[]): string | undefined {
 /** `tool:error_class` — the tier-2 match key (rig-agnostic: no file path). */
 function classKey(tool: string, cls: string): string {
   return `${tool}:${cls}`;
+}
+
+/** The relaxed failure key `tool:basename:error_class` — byte-for-byte the
+ * scorer's `relaxed_signature` (memory-bench grading/trace_score.py; parity
+ * contract, change both): the stored-normalized path's basename, line dropped. */
+function relaxedSignature(error: TraceError): string {
+  const file = normalizePath(error.file);
+  return `${error.tool}:${file.slice(file.lastIndexOf('/') + 1)}:${errorClass(error)}`;
 }
 
 interface RankedCandidate {
@@ -188,16 +221,25 @@ export function retrieve(
     throw new Error(`limit must be a non-negative integer, got ${String(opts.limit)}`);
   }
 
+  // D8 match keys from the query failure (also the H3-parity covariate output).
+  const querySignatures = new Set(q.errors.map(failureSignature));
+  const queryClasses = new Set(q.errors.map(e => classKey(e.tool, errorClass(e))));
+  const text = q.text?.trim() ?? '';
+
   const empty: RetrievalResult = {
     scope: opts.scope,
     work_id: q.work_id,
+    trigger: q.errors.length > 0 ? 'trace' : 'issue-text',
     trigger_count: q.errors.length,
+    query_signatures: [...querySignatures].sort(),
+    query_signatures_relaxed: [...new Set(q.errors.map(relaxedSignature))].sort(),
     total_matched: 0,
     near_duplicate_top: false,
     fts_truncated: false,
     items: [],
   };
-  if (q.errors.length === 0) return empty; // no failure, no trigger (D8)
+  // No failure and no dispatch-time text — nothing to trigger on (D8).
+  if (q.errors.length === 0 && text === '') return empty;
 
   // D6 temporal boundary via the store's strict closedBefore; D7 scope.
   const eligible = queryRecords(db, {
@@ -211,12 +253,9 @@ export function retrieve(
     record => record.work_id !== q.work_id && !chain.has(record.work_id) && !isSibling(record, q)
   );
 
-  // D8 match keys from the query failure.
-  const querySignatures = new Set(q.errors.map(failureSignature));
-  const queryClasses = new Set(q.errors.map(e => classKey(e.tool, errorClass(e))));
-
   // FTS scan: defines the message tier and tiebreaks the structured tiers.
-  const ftsQuery = buildFtsQuery(q.errors.map(e => e.message));
+  // The `issue-text` trigger feeds the same mechanical tokenizer (mem-tnyo).
+  const ftsQuery = buildFtsQuery([...q.errors.map(e => e.message), ...(text === '' ? [] : [text])]);
   const hits = ftsQuery === undefined ? [] : searchErrorMessages(db, ftsQuery, FTS_CANDIDATE_LIMIT);
   const ftsPos = new Map<string, number>();
   const ftsSignatures = new Map<string, Set<string>>();
@@ -301,23 +340,44 @@ export function retrieve(
   };
 }
 
+/** Options for {@link queryFromRecord} (mem-tnyo). */
+export interface QueryFromRecordOptions {
+  /** `trace` (default): the query errors are the held record's OWN stored trace
+   * errors — an ORACLE trigger in replay (the fresh agent has not produced them
+   * yet). `issue-text`: no trace errors; the trigger is the record's title
+   * (+ `task_type` when typed) — the fields available at dispatch time — so the
+   * trigger-information contribution is separable. Either way the boundary and
+   * every D6 exclusion key come from the record unchanged. */
+  trigger?: RetrievalTrigger;
+}
+
 /**
  * Build the query context from a stored record — replay mode, for evaluating
  * a closed historical bead (Decision 5). The boundary is the record's
  * `started`, falling back to `created` (earlier, so strictly leak-safe) when
  * the work never recorded a start.
  */
-export function queryFromRecord(db: StoreDatabase, workId: string): RetrievalQuery {
+export function queryFromRecord(
+  db: StoreDatabase,
+  workId: string,
+  opts: QueryFromRecordOptions = {}
+): RetrievalQuery {
   const record = getRecord(db, workId);
   if (record === null) {
     throw new Error(`No record for work_id ${workId} — cannot build a retrieval query from it.`);
   }
+  const trigger = opts.trigger ?? 'trace';
 
   return {
     work_id: record.work_id,
     rig: record.rig,
     started: record.lifecycle.started ?? record.lifecycle.created,
-    errors: record.trace?.errors ?? [],
+    errors: trigger === 'trace' ? (record.trace?.errors ?? []) : [],
+    // Mechanical field selection, no keyword heuristics: the dispatch-time text
+    // is the title plus the task_type label when one was assigned.
+    ...(trigger === 'issue-text' && {
+      text: [record.title, record.task_type].filter(part => part !== undefined).join('\n'),
+    }),
     ...(record.links.convoy_id !== undefined && { convoy_id: record.links.convoy_id }),
     ...(record.links.parent !== undefined && { parent: record.links.parent }),
     ...(record.outcome?.pr !== undefined && { pr: record.outcome.pr }),

@@ -338,6 +338,31 @@ makes the "outcome lift" number real. Grounded in the literature pass (see
     "deferred, paid-Harbor-only" status). Both are branch-ready
     (`mem-mtqi`→`mem-ymxp`→`mem-mor1`), not yet merged; the registration config
     returned on close hands the arms to the harness.
+23. **Oracle-triggered `ours` relabel + issue-text trigger control (Stephanie,
+    2026-07-04, bead `mem-tnyo`).** Every replay path resolves the `ours` arm's
+    payload via `queryFromRecord` from the held record's OWN stored trace errors
+    — failures the fresh agent has not yet produced, baked into the image
+    pre-run. That construct was reported under the implicit "failure-triggered"
+    label ARCHITECTURE.md disclaims; this decision **supersedes the implicit
+    labeling**. Resolution (option b of the mem-tnyo fork): keep pre-run
+    injection, but (a) **relabel** — the arm is `ours-oracle-triggered`
+    everywhere it is reported; additively, so existing readers keep the `ours`
+    condition key and a `trigger: "oracle"` field rides the run conditions
+    (task.toml metadata), arm provenance, and summaries (`arm_trigger`);
+    (b) **separable control** — a new `ours-issue-trigger` condition whose
+    retrieval query is formed WITHOUT the held trace errors
+    (`mem retrieve --no-trace-query` → title/task-type text feeding the same
+    mechanical FTS tier; `trigger: "issue-text"`), running the identical
+    clean-room strip, injection, and leak guards, so the trigger-information
+    contribution is measurable on its own; (c) **H3 scan parity** — the
+    relaxed-signature self-leak scan extends to BOTH ours payloads as a
+    persisted per-payload **signature-overlap covariate**
+    (`signature-overlap.json` + a summary report column), not a hard guard,
+    because signature-sharing priors are the D8 exact-match tier working as
+    designed (the oracle payload keeps its hard guard). Held signatures are the
+    canonical TS-computed strings, surfaced through the retrieval envelope
+    (`query_signatures` / `query_signatures_relaxed`), never recomputed in
+    Python. Blocks the Option A grid (mem-bxhh.3 / mem-lvp.24) until applied.
 
 ## Literature grounding (`~/lit_explorers`, agentic-memory pass 2026-06-04)
 

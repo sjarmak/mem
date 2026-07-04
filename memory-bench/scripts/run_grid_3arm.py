@@ -42,6 +42,7 @@ import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from run_gate_probe import run_probe_batch
 from run_grid import load_admitted_bundles, score_runs
@@ -52,15 +53,18 @@ from membench.harbor.bundle_grid import (
     ThreeArmRow,
     as_condition,
     ours_rung_evidence,
+    signature_overlap_summary,
     summarize_grid_3arm,
     three_arm_row,
 )
 from membench.harbor.env_recon import DEFAULT_RIG_REPOS
 from membench.harbor.probe_gate import (
+    OURS_ISSUE_TRIGGER,
     EmptyRunError,
     assert_run_pins,
     detect_run_failure,
     harbor_stream_exec,
+    paired_deltas,
     touches_native_memory,
 )
 from membench.memory_systems.ours_system import (
@@ -95,6 +99,7 @@ def resolve_payloads(
     *,
     store_path: Path,
     runner: RetrieveRunner,
+    no_trace_query: bool = False,
 ) -> dict[str, dict[str, str]]:
     """work_id -> (source work_id -> rendered citation+lessons payload) via the
     ours ARM's own retrieval runner, so the injected text is exactly what the arm
@@ -102,16 +107,23 @@ def resolve_payloads(
     content is the lesson payload (D9); a bare citation carries none. Every item
     is checked against the bundle's LOO exclusion set (D6): retrieval-v1 is
     contracted to enforce that boundary, but a leak here would hand the agent its
-    own work record, so the driver re-asserts rather than assumes."""
+    own work record, so the driver re-asserts rather than assumes.
+
+    ``no_trace_query`` resolves the mem-tnyo issue-text-trigger payloads instead:
+    the query is formed WITHOUT the held record's stored trace errors (title /
+    task-type text only -- `mem retrieve --no-trace-query`)."""
     payloads: dict[str, dict[str, str]] = {}
     for bundle in bundles:
         result = runner(
-            OursQuery(work_id=bundle.work_id, scope=RETRIEVAL_SCOPE, store_path=str(store_path))
+            OursQuery(
+                work_id=bundle.work_id,
+                scope=RETRIEVAL_SCOPE,
+                store_path=str(store_path),
+                no_trace_query=no_trace_query,
+            )
         )
         items = [item for item in result.get("items", []) if item.get("lessons")]
-        leaked = sorted(
-            {item["work_id"] for item in items} & set(bundle.loo_excluded_work_ids)
-        )
+        leaked = sorted({item["work_id"] for item in items} & set(bundle.loo_excluded_work_ids))
         if leaked:
             raise RuntimeError(
                 f"{bundle.work_id}: retrieval returned LOO-excluded work id(s) {leaked} -- "
@@ -119,6 +131,28 @@ def resolve_payloads(
             )
         payloads[bundle.work_id] = {item["work_id"]: _render_payload(item) for item in items}
     return payloads
+
+
+def resolve_held_signatures(
+    bundles: Sequence[TaskBundle],
+    *,
+    store_path: Path,
+    runner: RetrieveRunner,
+) -> dict[str, tuple[str, ...]]:
+    """work_id -> the held record's full + relaxed trace-error signatures, read
+    from the trace-triggered retrieval result's ``query_signatures`` /
+    ``query_signatures_relaxed`` fields -- canonical TS-computed strings, never
+    recomputed in Python (the trace_score parity rule). Input to the mem-tnyo H3
+    signature-overlap covariate."""
+    signatures: dict[str, tuple[str, ...]] = {}
+    for bundle in bundles:
+        result = runner(
+            OursQuery(work_id=bundle.work_id, scope=RETRIEVAL_SCOPE, store_path=str(store_path))
+        )
+        full = result.get("query_signatures", [])
+        relaxed = result.get("query_signatures_relaxed", [])
+        signatures[bundle.work_id] = tuple(dict.fromkeys([*full, *relaxed]))
+    return signatures
 
 
 def builtin_surface_evidence(
@@ -201,10 +235,46 @@ def assemble_rows(
             if retrieval_empty
             else load_grid_result(grid_dir, bundle.work_id, "ours")
         )
-        rows.append(
-            three_arm_row(none_clean, ours, builtin, ours_retrieval_empty=retrieval_empty)
-        )
+        rows.append(three_arm_row(none_clean, ours, builtin, ours_retrieval_empty=retrieval_empty))
     return rows
+
+
+def issue_trigger_summary(
+    bundles: Sequence[TaskBundle],
+    issue_payloads: dict[str, dict[str, str]],
+    grid_dir: Path,
+) -> dict[str, Any]:
+    """The additive mem-tnyo control block: per-bundle metrics + deltas vs the
+    none-clean baseline for the ``ours-issue-trigger`` condition. Bundles whose
+    issue-text retrieval was empty are listed as not attempted (the control only
+    measures where the dispatch-time query retrieved something; there is no
+    reuse leg -- coverage itself is part of the trigger comparison)."""
+    per_bundle: dict[str, Any] = {}
+    not_attempted: list[str] = []
+    for bundle in bundles:
+        if not issue_payloads.get(bundle.work_id):
+            not_attempted.append(bundle.work_id)
+            continue
+        none_clean = load_grid_result(grid_dir, bundle.work_id, "none-clean")
+        issue = load_grid_result(grid_dir, bundle.work_id, OURS_ISSUE_TRIGGER)
+        per_bundle[bundle.work_id] = {
+            "metrics": issue.metrics(),
+            "deltas_vs_none_clean": dict(paired_deltas(none_clean.metrics(), issue.metrics())),
+        }
+    return {
+        "trigger": "issue-text",
+        "provenance": (
+            "fresh clean-room agent runs + retrieval-v1 citation+lessons injected "
+            "through the same strip/injection/leak-guard path as `ours`, but the "
+            "retrieval query is formed WITHOUT the held record's trace errors "
+            "(`mem retrieve --no-trace-query`: title/task-type text only -- the "
+            "fields available at dispatch time; mem-tnyo)"
+        ),
+        "n_bundles": len(bundles),
+        "n_attempted": len(per_bundle),
+        "not_attempted_empty_retrieval": not_attempted,
+        "per_bundle": per_bundle,
+    }
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -225,6 +295,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--timeout-sec", type=float, default=None, help="per-run harbor subprocess timeout"
     )
     parser.add_argument(
+        "--issue-trigger",
+        action="store_true",
+        help=(
+            "also run the mem-tnyo `ours-issue-trigger` control: same clean-room "
+            "path as ours, retrieval query formed from issue text only (no trace errors)"
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="construct + leak-validate all tasks, print the plan, execute nothing",
@@ -241,13 +319,32 @@ def main(argv: Sequence[str] | None = None) -> int:
     retrieve = _default_runner(args.mem_bin)
     payloads = resolve_payloads(bundles, store_path=args.store, runner=retrieve)
     with_payload = [bundle for bundle in bundles if payloads[bundle.work_id]]
+    # The held record's canonical full+relaxed signatures -- the H3-parity
+    # covariate input (mem-tnyo), read from the retrieval envelope.
+    held_signatures = resolve_held_signatures(bundles, store_path=args.store, runner=retrieve)
+    issue_payloads: dict[str, dict[str, str]] = {}
+    with_issue_payload: list[TaskBundle] = []
+    if args.issue_trigger:
+        issue_payloads = resolve_payloads(
+            bundles, store_path=args.store, runner=retrieve, no_trace_query=True
+        )
+        with_issue_payload = [b for b in bundles if issue_payloads[b.work_id]]
     print(
         f"retrieval coverage: {len(with_payload)}/{len(bundles)} bundle(s) with a "
         f"non-empty ours payload ({', '.join(b.work_id for b in with_payload) or 'none'})"
     )
+    if args.issue_trigger:
+        print(
+            f"issue-trigger coverage: {len(with_issue_payload)}/{len(bundles)} bundle(s) "
+            f"({', '.join(b.work_id for b in with_issue_payload) or 'none'})"
+        )
 
     if not args.dry_run:
-        scrub_unfinished_jobs(bundles, ("none-clean", "ours"), probe_dir=args.probe_dir)
+        scrub_unfinished_jobs(
+            bundles,
+            ("none-clean", "ours", *((OURS_ISSUE_TRIGGER,) if args.issue_trigger else ())),
+            probe_dir=args.probe_dir,
+        )
 
     def exec_stream(task_dir: Path) -> str:
         """`harbor_stream_exec` pinned to the cached arm's instrument, plus the
@@ -274,27 +371,41 @@ def main(argv: Sequence[str] | None = None) -> int:
         "exec_stream": exec_stream,
         "dry_run": args.dry_run,
     }
+
+    def signatures_for(bundle: TaskBundle) -> tuple[str, ...]:
+        return held_signatures[bundle.work_id]
+
     tally_clean = run_probe_batch(bundles, ("none-clean",), **batch_kwargs)
     tally_ours = run_probe_batch(
         with_payload,
         ("ours",),
         ours_payloads_for=lambda bundle: payloads[bundle.work_id],
+        held_signatures_for=signatures_for,
         **batch_kwargs,
     )
-    if args.dry_run:
-        print(
-            f"\nDRY RUN: {tally_clean['planned'] + tally_ours['planned']} task(s) "
-            "constructed + leak-validated; nothing executed."
+    tally_issue = {"executed": 0, "skipped": 0, "planned": 0}
+    if args.issue_trigger:
+        tally_issue = run_probe_batch(
+            with_issue_payload,
+            (OURS_ISSUE_TRIGGER,),
+            ours_payloads_for=lambda bundle: issue_payloads[bundle.work_id],
+            held_signatures_for=signatures_for,
+            **batch_kwargs,
         )
+    if args.dry_run:
+        planned = tally_clean["planned"] + tally_ours["planned"] + tally_issue["planned"]
+        print(f"\nDRY RUN: {planned} task(s) constructed + leak-validated; nothing executed.")
         return 0
     print(
         f"agent runs: none-clean executed={tally_clean['executed']} "
         f"skipped={tally_clean['skipped']}; ours executed={tally_ours['executed']} "
-        f"skipped={tally_ours['skipped']}"
+        f"skipped={tally_ours['skipped']}; ours-issue-trigger "
+        f"executed={tally_issue['executed']} skipped={tally_issue['skipped']}"
     )
 
     pending = [(bundle, "none-clean") for bundle in bundles]
     pending += [(bundle, "ours") for bundle in with_payload]
+    pending += [(bundle, OURS_ISSUE_TRIGGER) for bundle in with_issue_payload]
     _, tally_scored = score_runs(
         pending, probe_jobs_dir=args.probe_dir / "jobs", grid_dir=args.grid_dir
     )
@@ -310,6 +421,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     # cached `none` runs carried native memory (the builtin relabel's evidence).
     summary["pins"] = {"model": args.model, "cli_version": args.cli_version}
     summary["builtin_surface_evidence"] = surface_evidence
+    # mem-tnyo H3 parity: the per-payload signature-overlap covariate (report
+    # column), for every ours-family condition this invocation resolved.
+    payloads_by_condition: dict[str, dict[str, dict[str, str]]] = {"ours": payloads}
+    if args.issue_trigger:
+        payloads_by_condition[OURS_ISSUE_TRIGGER] = issue_payloads
+    summary["signature_overlap"] = signature_overlap_summary(payloads_by_condition, held_signatures)
+    if args.issue_trigger:
+        summary["ours_issue_trigger"] = issue_trigger_summary(
+            bundles, issue_payloads, args.grid_dir
+        )
     out = args.grid_dir / "summary-3arm.json"
     out.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(f"summary -> {out}  (bundles={summary['n_bundles']})")

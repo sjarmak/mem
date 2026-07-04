@@ -403,6 +403,13 @@ def _render_curve_section(artifact: dict[str, Any]) -> list[str]:
         "the `ours` rung, absent from this run (see coverage)."
     )
     lines.append(
+        "- **Trigger labeling (mem-tnyo):** the `ours` rung is ORACLE-TRIGGERED — its "
+        "retrieval query is formed from the held record's own stored trace errors "
+        "(`queryFromRecord`), trigger information a fresh agent does not have before "
+        "failing. The issue-text-trigger control (`ours-issue-trigger`, query from "
+        "dispatch-time title/task-type only) separates the trigger's contribution."
+    )
+    lines.append(
         "- **Population policy (mem-lp24):** paired deltas are pre-registered on the "
         "**ITT population** — every admitted bundle, a task whose retrieval returned "
         "nothing contributing delta 0 — because the retrieval-fired matched set is "

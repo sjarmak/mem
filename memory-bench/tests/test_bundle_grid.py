@@ -295,6 +295,7 @@ def test_summarize_grid_paired_deltas_and_rung_availability() -> None:
     assert summary["quality_guard"]["repro_passed"] == {"none": 0, "oracle": 1}
     ours = summary["rung_availability"]["ours"]
     assert ours["status"] == "not_executable"
+    assert ours["trigger"] == "oracle"  # mem-tnyo: the rung's query trigger is explicit
     assert "0 lesson-bearing item(s)" in ours["reason"]
     assert ours["evidence"][0]["items_with_lessons"] == 0
     assert "mem-whi" in summary["rung_availability"]["builtin"]
@@ -445,6 +446,41 @@ def test_summarize_grid_3arm_shape() -> None:
     assert "stripped" in provenance["none-clean"]
     assert "reuse" in provenance["ours"]
     assert "cached" in provenance["builtin"]
+    # mem-tnyo relabel: the ours arm's oracle trigger is explicit in both the
+    # provenance prose and the additive arm_trigger block.
+    assert "ORACLE-TRIGGERED" in provenance["ours"]
+    assert summary["arm_trigger"] == {"none-clean": None, "ours": "oracle", "builtin": None}
+
+
+def test_signature_overlap_summary_reports_per_payload_covariate() -> None:
+    from membench.harbor.bundle_grid import signature_overlap_summary
+
+    held = {"demo-1": ("tsc:src/a.ts:12:TS2345", "tsc:a.ts:TS2345"), "demo-2": ()}
+    payloads = {
+        "ours": {
+            "demo-1": {
+                "prior-1": "recurrence of tsc:a.ts:TS2345 fixed by pinning",
+                "prior-2": "unrelated lesson",
+            },
+            "demo-2": {},
+        },
+        "ours-issue-trigger": {
+            "demo-1": {"prior-3": "mentions tsc:src/a.ts:12:TS2345 verbatim"},
+            "demo-2": {},
+        },
+    }
+
+    summary = signature_overlap_summary(payloads, held)
+
+    assert summary["held_signature_count"] == {"demo-1": 2, "demo-2": 0}
+    assert summary["overlap"]["ours"]["demo-1"] == {
+        "prior-1": ["tsc:a.ts:TS2345"],
+        "prior-2": [],
+    }
+    assert summary["overlap"]["ours-issue-trigger"]["demo-1"] == {
+        "prior-3": ["tsc:src/a.ts:12:TS2345"]
+    }
+    assert summary["overlap"]["ours"]["demo-2"] == {}
 
 
 def test_summarize_grid_3arm_rejects_empty() -> None:
