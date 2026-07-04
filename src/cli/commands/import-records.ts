@@ -64,11 +64,14 @@ export async function importRecordsCommand(
 
   const records = parseRecordLines(input);
   const path = storePath(ctx.options);
-  const imported = buildStoreFromRecords(path, records);
+  const counts = buildStoreFromRecords(path, records);
 
   if (!ctx.options.json) {
-    console.error(`imported ${imported} work record(s) into ${path}`);
+    console.error(
+      `imported ${counts.records} work record(s) into ${path} ` +
+        `(${counts.provenance_events} provenance event(s) derived)`
+    );
   }
 
-  return { imported, store: path };
+  return { imported: counts.records, store: path };
 }
