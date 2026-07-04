@@ -16,7 +16,8 @@ checked-in fixture is manifest-frozen (``fixtures/external_anchor/manifest.json`
 so the real-anchor leg runs in CI with no network and no model call (the no-paid-API
 posture). Rows where the latent rule appears verbatim — whitespace-normalized — in
 an episode OR the probe are REJECTED: an anchor that hands the oracle to the reader
-measures recall, not induction.
+measures recall, not induction. Rows with a blank (whitespace-only) latent_rule are
+rejected too — an empty needle would trivially satisfy the leak check and bypass it.
 """
 
 from __future__ import annotations
@@ -47,8 +48,13 @@ def _sequence_from_record(record: dict[str, Any]) -> BenchmarkSequence:
         raise ValueError(f"task {task_id!r}: need >= 2 episodes to induce a rule")
     probe = record.get("probe", "What convention do the prior records share?")
     rule_needle = _normalized(latent_rule)
+    if not rule_needle:
+        raise ValueError(
+            f"task {task_id!r}: latent_rule is blank — an empty needle bypasses the "
+            "verbatim-leak check, so the loader refuses it (recall-not-induction, mem-z9g6)"
+        )
     for text in [*episodes, probe]:
-        if rule_needle and rule_needle in _normalized(text):
+        if rule_needle in _normalized(text):
             raise ValueError(
                 f"task {task_id!r}: latent_rule appears verbatim in an episode or the "
                 "probe — the anchor would measure recall, not induction (mem-mmuu)"
