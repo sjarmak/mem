@@ -20,8 +20,11 @@ full cross-language path through the REAL `mem` CLI binary:
 The seam this protects: the two halves agreeing on failure signatures
 (normalizePath/errorClass/failureSignature), the CLI JSON envelope contract, and
 the D6 boundary fields (started/closed/external_ref) surviving the store
-round-trip. convoy/supersedes are NOT plantable through this path — the dolt
-ingest does not populate links yet (see store/schema.ts).
+round-trip. The dolt ingest populates links from the `dependencies` table
+(mem-qgdz, ingest/beads.ts groupLinks); the fixture plants one generic dep edge
+(B -> prior-same) so that path is exercised — deliberately NOT a
+parent-child/tracks/supersedes edge, which would change the D6 exclusion
+expectations below.
 
 Skips when node or the TS build is unavailable, like test_ours_integration, so
 the hermetic unit suite still runs everywhere.
@@ -119,6 +122,11 @@ def test_d6_boundary_fields_survive_store_round_trip(store: Path) -> None:
     assert b["lifecycle"]["closed"] == "2026-06-11T00:00:00Z"
     assert b["external_ref"] == "branch/feat-x"
     assert b["labels"] == ["golden"]  # the labels join (groupLabels) round-trips
+    # The dependencies join (mem-qgdz groupLinks): the planted generic 'blocks'
+    # edge lands on B as a deps link and round-trips through the store.
+    assert b["links"]["deps"] == ["prior-same"]
+    assert b["links"]["supersedes"] == []
+    assert records["prior-same"]["links"]["deps"] == []
     assert records["sibling"]["external_ref"] == "branch/feat-x"
     assert "external_ref" not in records["prior-cross"]
 
@@ -129,6 +137,15 @@ def test_d6_boundary_fields_survive_store_round_trip(store: Path) -> None:
     assert len(errors) == 1
     assert errors[0]["file"] == PLANTED_FILE
     assert errors[0]["line"] == 12
+
+    # The record_links projection (store/writer.ts) carries the same planted
+    # edge — the adjacency the reader's supersedes closure walks.
+    con = sqlite3.connect(f"file:{store}?mode=ro", uri=True)
+    try:
+        links = con.execute("SELECT work_id, kind, target_id FROM record_links").fetchall()
+    finally:
+        con.close()
+    assert links == [("B", "dep", "prior-same")]
 
 
 def test_failure_signature_parity(store: Path) -> None:

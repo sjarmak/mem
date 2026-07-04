@@ -87,8 +87,8 @@ def _cmd_run_sequence(args: argparse.Namespace) -> int:
 
 def _build_arm(name: str, store: str, mem_bin: str, limit: int | None) -> MemorySystem:
     """Construct one arm by name. `ours` takes the store + CLI binding; the rest
-    go through the factory unchanged (so `builtin` raises its mem-whi pointer and
-    competitive arms their mem-lvp pointer — never a silent skip)."""
+    go through the factory unchanged (so an unknown name raises the factory's
+    wired-arm-set ValueError — never a silent skip)."""
     if name == "ours":
         return build_memory_system("ours", store_path=store, mem_bin=mem_bin, limit=limit)
     return build_memory_system(name)

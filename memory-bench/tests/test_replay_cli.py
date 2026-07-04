@@ -66,8 +66,10 @@ def test_replay_cli_end_to_end(tmp_path):
 
 def test_replay_cli_unknown_arm_surfaces_pointer(tmp_path):
     db = _build_store(tmp_path)
-    # `builtin` must fail loudly with its mem-whi pointer, not silently skip.
-    with pytest.raises(ValueError, match="mem-whi"):
+    # An unregistered arm must fail loudly with the wired-arm-set pointer, not
+    # silently skip. (`builtin` no longer works here: it graduated to a
+    # registered arm in Decision 22.)
+    with pytest.raises(ValueError, match=r"Unknown memory system 'no-such-arm'.*Wired:"):
         cli.main(
             [
                 "replay",
@@ -76,7 +78,7 @@ def test_replay_cli_unknown_arm_surfaces_pointer(tmp_path):
                 "--work-id",
                 "B",
                 "--arms",
-                "builtin",
+                "no-such-arm",
                 "--mem-bin",
                 str(MEM_BIN),
                 "--out",
