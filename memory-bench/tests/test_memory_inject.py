@@ -211,3 +211,71 @@ def test_validate_rungs_accepts_default_ladder():
 
     # The published default ladder must always be a valid config.
     assert validate_rungs(DEFAULT_RUNGS) == ("builtin", "ours+builtin")
+
+
+# --- mem-tnyo H3 parity: the ours-payload signature-overlap COVARIATE ----------
+
+
+def test_signature_overlap_matches_case_insensitively_in_order():
+    from membench.harbor.memory_inject import signature_overlap
+
+    payload = "saw TSC:SRC/A.TS:12:ts2345 and tsc:a.ts:TS2345 again"
+    sigs = ("tsc:src/a.ts:12:TS2345", "tsc:a.ts:TS2345", "ruff:b.py:F401")
+    assert signature_overlap(payload, sigs) == ("tsc:src/a.ts:12:TS2345", "tsc:a.ts:TS2345")
+
+
+def test_held_signatures_pairs_full_and_relaxed_deduplicated():
+    from membench.harbor.memory_inject import held_signatures
+
+    held = _err(tool="tsc", file="src/sub/a.ts", line=12, error_class="TS2345")
+    assert held_signatures([held, held]) == (
+        "tsc:src/sub/a.ts:12:TS2345",
+        "tsc:a.ts:TS2345",
+    )
+
+
+def test_ours_rung_records_overlap_covariate_instead_of_raising(tmp_path):
+    """An ours payload that shares the held signature is retrieval-v1's D8 exact-
+    signature tier WORKING AS DESIGNED -- it must NOT be nuked by a hard guard
+    (that would delete exactly the items the arm exists to return). The overlap
+    is persisted as a run-conditions covariate instead."""
+    import json
+
+    from membench.harbor.memory_inject import SIGNATURE_OVERLAP_FILENAME
+
+    held = _err(tool="tsc", file="src/a.ts", line=12, error_class="TS2345")
+    inject_rung_memory(
+        tmp_path,
+        "ours",
+        held_errors=[held],
+        ours_payloads={
+            "w-match": f"prior work also hit {held.signature}; fix the cursor",
+            "w-clean": "unrelated lesson about schema validation",
+        },
+    )
+    assert (tmp_path / MEMORY_FILENAME).exists()  # NOT rejected
+    record = json.loads((tmp_path / SIGNATURE_OVERLAP_FILENAME).read_text(encoding="utf-8"))
+    assert record["condition"] == "ours"
+    assert record["trigger"] == "oracle"
+    assert record["held_signature_count"] == 2  # full + relaxed
+    assert record["overlap"]["w-match"] == [held.signature]
+    assert record["overlap"]["w-clean"] == []
+
+
+def test_ours_overlap_covariate_is_not_agent_readable(tmp_path):
+    """The covariate lands at the task-dir ROOT (run provenance), never inside
+    the memory file the agent reads -- writing held signatures into agent-
+    readable text would itself be the leak the scan exists to measure."""
+    from membench.harbor.memory_inject import SIGNATURE_OVERLAP_FILENAME
+
+    held = _err()
+    inject_rung_memory(
+        tmp_path,
+        "ours",
+        held_errors=[held],
+        ours_payloads={"w": f"recurrence of {held.signature}"},
+    )
+    # The covariate file sits at the task-dir root, outside the memory/ area
+    # the rung injects (only environment/ + the memory file reach the agent).
+    assert (tmp_path / SIGNATURE_OVERLAP_FILENAME).exists()
+    assert not (tmp_path / "memory" / SIGNATURE_OVERLAP_FILENAME).exists()

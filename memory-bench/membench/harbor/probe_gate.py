@@ -68,7 +68,7 @@ from membench.harbor.control_conditions import (
 )
 from membench.harbor.env_recon import DEFAULT_RIG_REPOS, reconstruct_env
 from membench.harbor.harbor_exec import _locate_one, run_harbor_job
-from membench.harbor.memory_inject import inject_context
+from membench.harbor.memory_inject import inject_context, write_signature_overlap
 from membench.harbor.shuffled_condition import SHUFFLED, ShuffledSelection
 from membench.harbor.task_env import NetworkMode, environment_network
 from membench.schemas.bundle import TaskBundle
@@ -76,16 +76,33 @@ from membench.schemas.bundle import TaskBundle
 # The gate's two conditions (plan §9.2): the stateless floor and the cheap ceiling.
 CONDITIONS: tuple[str, ...] = ("none", "oracle")
 
-# Clean-room conditions (mem-p3w + mem-hhto): the SAME task with the agent's native
-# project memory removed from the image, so the only memory variable is the injected
-# one. ``none-clean`` is the clean-room floor; ``ours`` additionally injects
-# retrieval-v1's citation+lessons payload (D9) through the same `memory_inject` path
-# as the oracle; ``shuffled`` (mem-hhto) is the ours arm's content-attribution
-# placebo — the SAME rendering and leak guards, but the payload is the ours payload
-# retrieved for a DIFFERENT bundle (deterministic other-repo, volume-matched donor;
-# `shuffled_condition.select_donor`). If shuffled moves the metric like ours does,
-# the win was volume, not content.
-CLEAN_CONDITIONS: tuple[str, ...] = ("none-clean", "ours", SHUFFLED)
+# Clean-room conditions (mem-p3w + mem-hhto + mem-tnyo): the SAME task with the
+# agent's native project memory removed from the image, so the only memory variable
+# is the injected one. ``none-clean`` is the clean-room floor; ``ours`` additionally
+# injects retrieval-v1's citation+lessons payload (D9) through the same
+# `memory_inject` path as the oracle — its retrieval query is formed from the held
+# record's OWN stored trace errors (an ORACLE trigger: information a fresh agent
+# does not have pre-failure), recorded as ``trigger = "oracle"`` in the run
+# conditions; ``ours-issue-trigger`` (mem-tnyo) is the separable trigger control —
+# the SAME strip, injection, and leak guards, but the retrieval query is formed
+# WITHOUT the held record's trace errors (`mem retrieve --no-trace-query`:
+# title/task-type text only, the fields available at dispatch time), recorded as
+# ``trigger = "issue-text"``; ``shuffled`` (mem-hhto) is the ours arm's
+# content-attribution placebo — the SAME rendering and leak guards, but the payload
+# is the ours payload retrieved for a DIFFERENT bundle (deterministic other-repo,
+# volume-matched donor; `shuffled_condition.select_donor`). If shuffled moves the
+# metric like ours does, the win was volume, not content.
+OURS_ISSUE_TRIGGER = "ours-issue-trigger"
+# The ours-family conditions: identical build path, differing only in how the
+# retrieval query was formed (the payload mapping the caller resolves).
+OURS_CONDITIONS: tuple[str, ...] = ("ours", OURS_ISSUE_TRIGGER)
+CLEAN_CONDITIONS: tuple[str, ...] = ("none-clean", *OURS_CONDITIONS, SHUFFLED)
+
+# How each ours-family condition's retrieval query was formed — persisted into
+# the run conditions (task.toml metadata) so the trigger is explicit in every
+# emitted artifact (mem-tnyo relabel; the condition KEY stays stable for
+# existing readers, the trigger field is additive).
+CONDITION_TRIGGER: dict[str, str] = {"ours": "oracle", OURS_ISSUE_TRIGGER: "issue-text"}
 
 # Brute-force control conditions (M3/M4): the distilled-memory arm's opposites,
 # injected on the native (non-clean) base like ``oracle``. ``raw-trajectory`` bakes
@@ -204,6 +221,11 @@ def _task_toml(
         "condition": condition,
         "source": "task-bundle",
     }
+    # The explicit trigger label (mem-tnyo): how an ours-family condition's
+    # retrieval query was formed. Additive — the condition key is unchanged.
+    trigger = CONDITION_TRIGGER.get(condition)
+    if trigger is not None:
+        metadata["trigger"] = trigger
     # The donor bundle id travels with the run conditions (mem-hhto) so analysis
     # can verify the injected placebo's irrelevance; a same-repo fallback is
     # flagged here too, never silent.
@@ -289,6 +311,7 @@ def build_probe_task(
     rig_repos: Mapping[str, Path] = DEFAULT_RIG_REPOS,
     runner: Runner = subprocess.run,
     ours_payloads: Mapping[str, str] | None = None,
+    held_signatures: Sequence[str] = (),
     shuffled_payloads: Mapping[str, str] | None = None,
     shuffled_donor: ShuffledSelection | None = None,
     raw_transcript: str | None = None,
@@ -310,21 +333,36 @@ def build_probe_task(
       (``ours_payloads``, source-id -> rendered citation+lessons) baked in. An
       empty payload is a caller bug: the empty-retrieval case reuses the
       ``none-clean`` run instead of burning an agent run on an identical task.
+      The retrieval query behind these payloads is ORACLE-triggered (the held
+      record's own stored trace errors) and labeled so in task.toml (mem-tnyo).
+    - ``ours-issue-trigger`` -- the mem-tnyo trigger control: byte-identical
+      build path to ``ours``, but the caller resolved ``ours_payloads`` from an
+      issue-text query (`mem retrieve --no-trace-query` -- no trace errors);
+      labeled ``trigger = "issue-text"`` in task.toml.
     - ``shuffled``   -- stripped + a DIFFERENT bundle's ours payload
       (``shuffled_payloads``) baked through the same path; ``shuffled_donor``
       (`shuffled_condition.select_donor`'s record) is persisted as provenance
       (``shuffled-donor.json`` + task.toml metadata).
 
+    ``held_signatures`` (ours-family conditions only): the held record's full +
+    relaxed trace-error signatures (canonical TS-computed strings, read from the
+    retrieval result's ``query_signatures`` fields). When supplied, the
+    per-payload H3 signature-overlap COVARIATE is persisted to the task dir
+    (`memory_inject.write_signature_overlap` -- covariate, not guard: overlap is
+    the D8 exact-signature retrieval working as designed).
+
     Every agent-readable text is leak-checked BEFORE any write."""
     if condition not in ALL_CONDITIONS:
         raise ValueError(f"unknown probe condition {condition!r}; known: {list(ALL_CONDITIONS)}")
-    if condition == "ours" and not ours_payloads:
+    if condition in OURS_CONDITIONS and not ours_payloads:
         raise ValueError(
-            "the ours condition needs non-empty ours_payloads; an empty retrieval "
+            f"the {condition} condition needs non-empty ours_payloads; an empty retrieval "
             "reuses the none-clean run instead of executing an identical task"
         )
-    if condition != "ours" and ours_payloads:
+    if condition not in OURS_CONDITIONS and ours_payloads:
         raise ValueError(f"condition {condition!r} takes no ours_payloads")
+    if condition not in OURS_CONDITIONS and held_signatures:
+        raise ValueError(f"condition {condition!r} takes no held_signatures")
     if condition == SHUFFLED and not shuffled_payloads:
         raise ValueError(
             "the shuffled condition needs non-empty shuffled_payloads (the donor "
@@ -369,7 +407,7 @@ def build_probe_task(
     control_truncation: PayloadTruncation | None = None
     if condition == "oracle":
         injected = {"oracle-files": oracle_context_payload(bundle)}
-    elif condition == "ours":
+    elif condition in OURS_CONDITIONS:
         injected = dict(ours_payloads or ())  # non-empty: guarded above
     elif condition == SHUFFLED:
         injected = dict(shuffled_payloads or ())  # non-empty: guarded above
@@ -412,6 +450,17 @@ def build_probe_task(
     if shuffled_donor is not None:
         (task_dir / "shuffled-donor.json").write_text(
             shuffled_donor.model_dump_json(indent=2) + "\n", encoding="utf-8"
+        )
+    # H3 parity covariate for the ours-family payloads (mem-tnyo): recorded run
+    # provenance (task-dir root, never in the image), not a guard -- see
+    # `write_signature_overlap` for why a hard guard is wrong for these payloads.
+    if condition in OURS_CONDITIONS and held_signatures:
+        write_signature_overlap(
+            task_dir,
+            condition=condition,
+            trigger=CONDITION_TRIGGER[condition],
+            payloads=dict(ours_payloads or ()),
+            signatures=list(held_signatures),
         )
     return task_dir
 

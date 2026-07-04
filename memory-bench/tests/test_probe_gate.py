@@ -769,3 +769,118 @@ def test_touches_native_memory_is_root_anchored(clone: Path) -> None:
     )
     nested = _bundle(clone).model_copy(update={"output": nested_output})
     assert_strip_disjoint_from_gold(nested)  # nested copy: no conflict
+
+
+# --- mem-tnyo: trigger labeling + the ours-issue-trigger control ---------------------
+
+
+def test_ours_task_toml_records_the_oracle_trigger(clone: Path, tmp_path: Path) -> None:
+    """The `ours` condition's retrieval query is formed from the held record's
+    own stored trace errors -- an oracle trigger, labeled explicitly in the run
+    conditions (additive: the condition key is unchanged)."""
+    bundle = _bundle(clone)
+    task = build_probe_task(
+        bundle,
+        "ours",
+        tmp_path / "t-ours",
+        rig_repos={"demo": clone},
+        ours_payloads={"gc-prior-1": OURS_PAYLOAD},
+    )
+    metadata = toml.loads((task / "task.toml").read_text(encoding="utf-8"))["metadata"]
+    assert metadata["condition"] == "ours"
+    assert metadata["trigger"] == "oracle"
+
+
+def test_non_ours_conditions_carry_no_trigger(clone: Path, tmp_path: Path) -> None:
+    bundle = _bundle(clone)
+    task = build_probe_task(bundle, "none-clean", tmp_path / "t-nc", rig_repos={"demo": clone})
+    metadata = toml.loads((task / "task.toml").read_text(encoding="utf-8"))["metadata"]
+    assert "trigger" not in metadata
+
+
+def test_build_probe_task_issue_trigger_mirrors_ours(clone: Path, tmp_path: Path) -> None:
+    """`ours-issue-trigger` runs the SAME clean-room strip, injection path, and
+    leak guards as `ours`; only the payload provenance (the retrieval query's
+    trigger) differs, and task.toml records it."""
+    from membench.harbor.probe_gate import OURS_ISSUE_TRIGGER
+
+    bundle = _bundle_via_json_roundtrip(clone, tmp_path)
+    rig_repos = {"demo": clone}
+    none_dir = build_probe_task(bundle, "none", tmp_path / "t-none", rig_repos=rig_repos)
+    task = build_probe_task(
+        bundle,
+        OURS_ISSUE_TRIGGER,
+        tmp_path / "t-it",
+        rig_repos=rig_repos,
+        ours_payloads={"gc-prior-1": OURS_PAYLOAD},
+    )
+
+    dockerfile = (task / "environment" / "Dockerfile").read_text(encoding="utf-8")
+    assert "rm -rf" in dockerfile  # clean-room strip
+    assert f"COPY MEMORY.md {ORACLE_MEMORY_CONTAINER_PATH}" in dockerfile
+    assert "gc-prior-1" in (task / "memory" / "MEMORY.md").read_text(encoding="utf-8")
+    # Byte-identical prompt: the trigger is a payload-provenance variable only.
+    assert (task / "instruction.md").read_bytes() == (none_dir / "instruction.md").read_bytes()
+    metadata = toml.loads((task / "task.toml").read_text(encoding="utf-8"))["metadata"]
+    assert metadata["condition"] == OURS_ISSUE_TRIGGER
+    assert metadata["trigger"] == "issue-text"
+
+
+def test_issue_trigger_requires_payloads(clone: Path, tmp_path: Path) -> None:
+    from membench.harbor.probe_gate import OURS_ISSUE_TRIGGER
+
+    bundle = _bundle(clone)
+    with pytest.raises(ValueError, match="payload"):
+        build_probe_task(bundle, OURS_ISSUE_TRIGGER, tmp_path / "t", rig_repos={"demo": clone})
+
+
+def test_leak_guard_fires_on_planted_gold_in_issue_trigger_payload(
+    clone: Path, tmp_path: Path
+) -> None:
+    from membench.harbor.probe_gate import OURS_ISSUE_TRIGGER
+
+    bundle = _bundle(clone)
+    with pytest.raises(OutcomeLeakError):
+        build_probe_task(
+            bundle,
+            OURS_ISSUE_TRIGGER,
+            tmp_path / "t",
+            rig_repos={"demo": clone},
+            ours_payloads={"gc-prior-1": f"lesson quoting the fix:\n{GOLD_DIFF}"},
+        )
+
+
+def test_ours_family_persists_signature_overlap_covariate(clone: Path, tmp_path: Path) -> None:
+    """H3 parity (mem-tnyo): with held signatures supplied, the build persists
+    the per-payload overlap covariate at the task-dir root (run provenance,
+    outside the Docker build context) -- and does NOT reject the payload."""
+    from membench.harbor.memory_inject import SIGNATURE_OVERLAP_FILENAME
+    from membench.harbor.probe_gate import OURS_ISSUE_TRIGGER
+
+    bundle = _bundle(clone)
+    held = ("tsc:src/app.ts:1:TS2345", "tsc:app.ts:TS2345")
+    task = build_probe_task(
+        bundle,
+        OURS_ISSUE_TRIGGER,
+        tmp_path / "t-it",
+        rig_repos={"demo": clone},
+        ours_payloads={"gc-prior-1": "prior work hit tsc:app.ts:TS2345 and fixed it"},
+        held_signatures=held,
+    )
+    record = json.loads((task / SIGNATURE_OVERLAP_FILENAME).read_text(encoding="utf-8"))
+    assert record["trigger"] == "issue-text"
+    assert record["overlap"]["gc-prior-1"] == ["tsc:app.ts:TS2345"]
+    # Outside the image build context: never agent-readable.
+    assert not (task / "environment" / SIGNATURE_OVERLAP_FILENAME).exists()
+
+
+def test_non_ours_conditions_reject_held_signatures(clone: Path, tmp_path: Path) -> None:
+    bundle = _bundle(clone)
+    with pytest.raises(ValueError, match="held_signatures"):
+        build_probe_task(
+            bundle,
+            "none-clean",
+            tmp_path / "t",
+            rig_repos={"demo": clone},
+            held_signatures=("tsc:app.ts:TS2345",),
+        )

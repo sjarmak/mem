@@ -44,6 +44,7 @@ from pathlib import Path
 from membench.harbor.env_recon import DEFAULT_RIG_REPOS
 from membench.harbor.probe_gate import (
     CONDITIONS,
+    OURS_CONDITIONS,
     EmptyRunError,
     ProbeConditionResult,
     ProbePair,
@@ -98,6 +99,7 @@ def run_probe_batch(
     worktree_root: Path = Path("/tmp"),
     dry_run: bool = False,
     ours_payloads_for: Callable[[TaskBundle], Mapping[str, str]] | None = None,
+    held_signatures_for: Callable[[TaskBundle], Sequence[str]] | None = None,
     shuffled_for: Callable[[TaskBundle], tuple[ShuffledSelection, Mapping[str, str]]] | None = None,
 ) -> dict[str, int]:
     """The resumable bundle x condition loop. Each scored result persists to
@@ -106,9 +108,14 @@ def run_probe_batch(
     Used clones are exit-swept for leftover probe worktrees (leftovers raise).
 
     ``ours_payloads_for`` resolves the injected retrieval payload per bundle for the
-    ``ours`` condition (mem-p3w); other conditions never consult it. ``shuffled_for``
-    resolves the (donor selection, donor payload) pair per bundle for the ``shuffled``
-    placebo condition (mem-hhto) -- see `shuffled_condition.select_donor`.
+    ours-family conditions (``ours`` -- oracle-triggered, mem-p3w -- and
+    ``ours-issue-trigger`` -- the mem-tnyo issue-text control; the caller resolves
+    each condition's payloads with the matching trigger); other conditions never
+    consult it. ``held_signatures_for`` resolves the held record's full + relaxed
+    trace-error signatures per bundle so the ours-family builds persist the H3
+    signature-overlap covariate (mem-tnyo). ``shuffled_for`` resolves the (donor
+    selection, donor payload) pair per bundle for the ``shuffled`` placebo
+    condition (mem-hhto) -- see `shuffled_condition.select_donor`.
 
     A dead run (`EmptyRunError` -- auth/usage-limit failure or zero-output transcript)
     is FATAL: no result file is written (so a rerun re-executes it) and the batch
@@ -134,10 +141,16 @@ def run_probe_batch(
                 task_dir = tasks_dir / f"{bundle.work_id}.{condition}"
                 if task_dir.exists():  # rebuild fresh -- bundles are the source of truth
                     shutil.rmtree(task_dir)
+                is_ours_family = condition in OURS_CONDITIONS
                 payloads = (
                     ours_payloads_for(bundle)
-                    if condition == "ours" and ours_payloads_for is not None
+                    if is_ours_family and ours_payloads_for is not None
                     else None
+                )
+                signatures = (
+                    held_signatures_for(bundle)
+                    if is_ours_family and held_signatures_for is not None
+                    else ()
                 )
                 shuffled = (
                     shuffled_for(bundle)
@@ -151,6 +164,7 @@ def run_probe_batch(
                     rig_repos=rig_repos,
                     runner=runner,
                     ours_payloads=payloads,
+                    held_signatures=signatures,
                     shuffled_donor=shuffled[0] if shuffled is not None else None,
                     shuffled_payloads=shuffled[1] if shuffled is not None else None,
                 )

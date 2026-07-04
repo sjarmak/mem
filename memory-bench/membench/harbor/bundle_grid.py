@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import json
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +42,7 @@ from membench.grading.graded import DEFAULT_JUDGE_ROUNDS, RubricJudge, judge_gra
 from membench.grading.probe_direct import ProbeEfficiency
 from membench.grading.retrieval_leg import RetrievalLeg
 from membench.grading.validity_gate import ValidityResult
+from membench.harbor.memory_inject import signature_overlap
 from membench.harbor.probe_gate import (
     CONDITIONS,
     Runner,
@@ -303,6 +304,9 @@ def summarize_grid(
     lesson_items = sum(e.items_with_lessons for e in ours_evidence)
     ours_rung: dict[str, Any] = {
         "status": "not_executable" if lesson_items == 0 else "payload_available",
+        # mem-tnyo: the rung's retrieval query is formed from the held record's
+        # own stored trace errors (queryFromRecord) -- an oracle trigger.
+        "trigger": "oracle",
         "reason": (
             f"retrieval-v1 returned {lesson_items} lesson-bearing item(s) across "
             f"{len(ours_evidence)} bundle(s); the ours arm injects citation+lessons only"
@@ -367,7 +371,10 @@ ARM_PROVENANCE: dict[str, str] = {
         "(CLAUDE.md, AGENTS.md, .claude, .agents); no injected memory"
     ),
     "ours": (
-        "fresh clean-room agent runs + retrieval-v1 citation+lessons injected (D9, "
+        "ORACLE-TRIGGERED (`ours-oracle-triggered`, mem-tnyo): the retrieval query is "
+        "formed from the held record's OWN stored trace errors (queryFromRecord) -- "
+        "trigger information a fresh agent does not have before failing. Fresh "
+        "clean-room agent runs + retrieval-v1 citation+lessons injected (D9, "
         "D6 LOO-bounded); bundles whose retrieval is EMPTY reuse the none-clean run "
         "(the task would be byte-identical, so the delta is 0 by construction and a "
         "fresh run would only measure sampling noise)"
@@ -377,6 +384,15 @@ ARM_PROVENANCE: dict[str, str] = {
         "repo-shipped native project memory (CLAUDE.md, AGENTS.md, .claude, .agents) "
         "was present in the image -- native memory ON, no injected memory"
     ),
+}
+
+# The mem-tnyo trigger label per arm, surfaced verbatim in the summary so no
+# reader has to infer it from prose. None = the arm injects no retrieval payload,
+# so no query was formed.
+ARM_TRIGGER: dict[str, str | None] = {
+    "none-clean": None,
+    "ours": "oracle",
+    "builtin": None,
 }
 
 
@@ -559,12 +575,47 @@ def summarize_grid_3arm(
             "evidence": [e.model_dump() for e in ours_evidence],
         },
         "arm_provenance": dict(ARM_PROVENANCE),
+        # mem-tnyo: the explicit trigger label per arm (additive; the arm keys
+        # stay stable for existing readers).
+        "arm_trigger": dict(ARM_TRIGGER),
         "validity_gates": _validity_block(validity),
         # M1: the declared TIAP scoring target per retrieval-bearing arm (raw / source
         # / canonical). Empty when no arm computed a retrieval leg.
         "scoring_target": scoring_target,
         # M5: the genuine-attempt-matched bundle set + its deltas, vs the full set.
         "coverage_matched": _coverage_matched_block(rows),
+    }
+
+
+def signature_overlap_summary(
+    payloads_by_condition: Mapping[str, Mapping[str, Mapping[str, str]]],
+    held_signatures: Mapping[str, Sequence[str]],
+) -> dict[str, Any]:
+    """The mem-tnyo H3-parity report column: per bundle, per ours-family
+    condition, which of the held record's full/relaxed trace-error signatures
+    each injected payload contains (`memory_inject.signature_overlap`).
+
+    A COVARIATE, not a guard: for the ours payloads, sharing the held failure
+    signature is retrieval-v1's D8 tier-1 mechanism working as designed, so the
+    overlap is recorded for analysis (and compared across the oracle-triggered
+    and issue-text-triggered conditions) rather than nuked. Shape:
+    ``{condition: {work_id: {source_id: [signatures]}}}`` plus the per-bundle
+    held-signature counts."""
+    overlap: dict[str, Any] = {
+        condition: {
+            work_id: {
+                source_id: list(signature_overlap(content, held_signatures.get(work_id, ())))
+                for source_id, content in payloads.items()
+            }
+            for work_id, payloads in by_work.items()
+        }
+        for condition, by_work in payloads_by_condition.items()
+    }
+    return {
+        "held_signature_count": {
+            work_id: len(signatures) for work_id, signatures in held_signatures.items()
+        },
+        "overlap": overlap,
     }
 
 

@@ -42,7 +42,7 @@ from membench.memory_systems.nemo_embed_system import NemoEmbedMemory
 from membench.memory_systems.none_system import NoneMemory
 from membench.memory_systems.oracle_system import OracleMemory
 from membench.memory_systems.ours_live_system import OursLiveMemory
-from membench.memory_systems.ours_system import OursMemory
+from membench.memory_systems.ours_system import OursIssueTriggerMemory, OursMemory
 from membench.memory_systems.retention_scheduled_system import RetentionScheduledMemory
 from membench.memory_systems.semantic_base import (
     AbstractSemanticArm,
@@ -67,6 +67,7 @@ __all__ = [
     "NemoEmbedMemory",
     "NoneMemory",
     "OracleMemory",
+    "OursIssueTriggerMemory",
     "OursLiveMemory",
     "OursMemory",
     "RetentionScheduledMemory",
@@ -89,6 +90,7 @@ def _systems_registry() -> dict[str, type[MemorySystem]]:
         "consolidating": ConsolidatingMemory,
         "retention_scheduled": RetentionScheduledMemory,
         "ours": OursMemory,
+        "ours-issue-trigger": OursIssueTriggerMemory,
         "ours-live": OursLiveMemory,
         "builtin": BuiltinMemory,
         "mem0": Mem0Memory,
