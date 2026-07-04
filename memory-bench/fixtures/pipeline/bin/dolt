@@ -35,6 +35,7 @@ function rowsFor() {
   }
   if (trimmed === fixture.queries.issues) return fixture.issues[database] ?? [];
   if (trimmed === fixture.queries.labels) return fixture.labels[database] ?? [];
+  if (trimmed === fixture.queries.dependencies) return fixture.dependencies[database] ?? [];
   return null;
 }
 

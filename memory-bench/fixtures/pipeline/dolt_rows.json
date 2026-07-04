@@ -15,7 +15,8 @@
     "comment": "The exact SQL ingest/beads.ts sends (RIGS_SQL/ISSUES_SQL/LABELS_SQL), byte-pinned like PLANTED_SIGNATURE: dolt's NULL-omission makes a missing column shape-valid, so a looser match would let an ingest SQL change silently decay e2e coverage. An ingest-side query change costs a one-line bump here — deliberately.",
     "rigs": "select table_schema as rig from information_schema.tables where table_name = 'issues'",
     "issues": "select id, title, status, assignee, external_ref, priority, created_at, started_at, closed_at, metadata from issues",
-    "labels": "select issue_id, label from labels"
+    "labels": "select issue_id, label from labels",
+    "dependencies": "select issue_id, type, depends_on_issue_id from dependencies"
   },
   "rigs": ["rigA", "rigB"],
   "issues": {
@@ -73,6 +74,11 @@
   },
   "labels": {
     "rigA": [{ "issue_id": "B", "label": "golden" }],
+    "rigB": []
+  },
+  "dependencies": {
+    "comment": "One generic dep edge (type 'blocks' -> links.deps, record_links kind 'dep') so the mem-qgdz dependencies ingest is exercised. Deliberately NOT parent-child/tracks/supersedes: those drive D6 exclusions and would change the planted retrieval expectations above.",
+    "rigA": [{ "issue_id": "B", "type": "blocks", "depends_on_issue_id": "prior-same" }],
     "rigB": []
   }
 }
