@@ -8,7 +8,8 @@ Ties the wave-1 Track-2 pieces together:
   S2 sequence — recombine recovers the rule, dedupe does not;
 * the **never-synthetic-only** discipline as an executable assertion: the summary
   REFUSES to produce a headline without a real-anchor leg (B-1 — the corpus can't
-  carry the signal, so SEA-Eval-as-BenchmarkSequence is the real anchor);
+  carry the signal, so the external anchor — BIG-bench ``list_functions``,
+  manifest-frozen, see ``anchor_adaptation.py`` — is loaded as ``BenchmarkSequence``s);
 * the headline reported as the per-mode ``(Δrecall, confabulation_rate)`` PAIR;
 * confabulation wired into the run-level safety_gates (flag-and-quarantine, B-2).
 """
@@ -39,7 +40,10 @@ from membench.schemas.conditions import Condition
 from membench.schemas.config import AgentConfig, ExperimentConfig, MemoryConfig
 
 ANCHOR = (
-    Path(__file__).resolve().parents[1] / "fixtures" / "sequences" / "sea_eval_schema_anchor.jsonl"
+    Path(__file__).resolve().parents[1]
+    / "fixtures"
+    / "sequences"
+    / "list_functions_schema_anchor.jsonl"
 )
 
 

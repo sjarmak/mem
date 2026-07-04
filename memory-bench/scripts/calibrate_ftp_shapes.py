@@ -63,7 +63,11 @@ def main() -> int:
     header = (
         f"Real ftp shapes catalogued: {len(FTP_SHAPES)} "
         f"({len(memory_dependent_shapes())} memory-dependent; [x] = a synthetic blueprint "
-        f"reproduces it)\n" + "\n".join(shape_lines) + "\n"
+        f"reproduces it)\n" + "\n".join(shape_lines) + "\n\n"
+        "Scope (mem-mmuu / Decision 23): this calibration attaches to the blueprint bank\n"
+        "(SHAPE_BLUEPRINTS) only. The NeMo world-builder / enterprise-workflow track\n"
+        "carries no shape_id linkage, so its worlds and lift are NOT covered by this\n"
+        "Gate-0 readout.\n"
     )
     print(header)
     print(report)
