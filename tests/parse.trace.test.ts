@@ -43,6 +43,18 @@ describe('matchRunner', () => {
     expect(matchRunner('cargo clippy')).toBe('cargo');
   });
 
+  it('does not mislabel hyphen-suffixed *lint tools as eslint', () => {
+    // `\blint\b` matches the `lint` in `golangci-lint` (a hyphen is a word
+    // boundary), which corrupted the runner dimension for Go rigs. pylint has
+    // no boundary before `lint` so it was already unmatched; pin both.
+    expect(matchRunner('golangci-lint run')).not.toBe('eslint');
+    expect(matchRunner('golangci-lint run')).toBeNull();
+    expect(matchRunner('pylint src')).not.toBe('eslint');
+    // a real bare-`lint` script and eslint itself still classify as eslint
+    expect(matchRunner('npm run lint')).toBe('eslint');
+    expect(matchRunner('npx eslint .')).toBe('eslint');
+  });
+
   it('returns null for non-build commands', () => {
     expect(matchRunner('ls -la')).toBeNull();
     expect(matchRunner('git status')).toBeNull();

@@ -20,7 +20,7 @@
  * are used with `.test()`, which is stateful only on global regexes. */
 const RUNNER_RULES: ReadonlyArray<{ readonly re: RegExp; readonly name: string }> = [
   { re: /\btsc\b|\btypecheck\b/, name: 'tsc' },
-  { re: /\beslint\b|\blint\b/, name: 'eslint' },
+  { re: /\beslint\b|(?<!-)\blint\b/, name: 'eslint' },
   { re: /\b(vitest|jest)\b/, name: 'vitest' },
   { re: /\bpytest\b/, name: 'pytest' },
   { re: /\bmypy\b/, name: 'mypy' },

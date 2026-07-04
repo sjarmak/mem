@@ -150,13 +150,17 @@ function t3AssociationLink(
   };
 }
 
+/** The pr-link bridge's measured precision (PRD §3 key #1), stamped as
+ * `confidence` on every T2 pr-link edge. */
+const PR_LINK_CONFIDENCE = 0.98;
+
 /** The pr-link outcome edge (mem-wanz.7, PRD §5.3): the GitHub PR (a PROV-O
  * Entity — the outcome) `wasGeneratedBy` this work (the Activity), bridged by the
  * transcript's explicit `pr-link` entry. `entity_ref` is the canonical PR url.
  * tier T2 — a verifiable PR reference, not yet a CI/merge oracle (a later CI
- * rollup elevates it to T1); `confidence` 0.98 is the bridge's measured precision
- * (PRD §3 key #1). `created_at` derives from the entry (else the record) so a
- * re-ingest stays byte-identical. */
+ * rollup elevates it to T1); confidence is {@link PR_LINK_CONFIDENCE}.
+ * `created_at` derives from the entry (else the record) so a re-ingest stays
+ * byte-identical. */
 function prLinkRow(record: WorkRecord, prLink: PrLink): LinkRow {
   return {
     work_id: record.work_id,
@@ -166,7 +170,7 @@ function prLinkRow(record: WorkRecord, prLink: PrLink): LinkRow {
     entity_kind: 'pull_request',
     key_type: 'pr-link',
     tier: 'T2',
-    confidence: 0.98,
+    confidence: PR_LINK_CONFIDENCE,
     provenance: 'pr-link',
     suspect: 0,
     created_at: prLink.timestamp ?? record.lifecycle.created,
