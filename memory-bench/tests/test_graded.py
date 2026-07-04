@@ -24,6 +24,11 @@ from membench.grading.graded import (
     parse_criteria,
     weighted_score,
 )
+from membench.grading.judge_config import (
+    ENV_CLAUDE_CONFIG_DIR,
+    FORBIDDEN_CONFIG_ENTRIES,
+    prepare_isolated_judge,
+)
 
 GOLD = {"src/app.ts": "@@\n-const value = 1\n+const value = 2\n"}
 CANDIDATE = {"src/app.ts": "@@\n-const value = 1\n+const value = 2\n"}
@@ -196,6 +201,63 @@ def test_claude_judge_nonzero_exit_raises() -> None:
 
 def test_claude_judge_defaults_to_locked_sonnet() -> None:
     assert ClaudeRubricJudge().model == "claude-sonnet-4-6"
+
+
+# --- config isolation (mem-9ld4: judge must never load a host code-reviewer) ------
+# The graded judge shells `claude -p`. Under the host CLAUDE_CONFIG_DIR it
+# intermittently loads a code-reviewer agent and answers as a reviewer
+# ({"findings": ...}) instead of the rubric ({"criteria": ...}). The invocation
+# must instead run under a clean EMPTY config dir + --strict-mcp-config + a neutral
+# cwd, so no host/project agent can hijack it. These assert on the invocation
+# env/argv/cwd -- no live model call.
+
+
+def _capturing_runner(reply_text: str, captured: dict):  # type: ignore[no-untyped-def]
+    def runner(argv, **kwargs):  # type: ignore[no-untyped-def]
+        captured["argv"] = argv
+        captured["env"] = kwargs.get("env")
+        captured["cwd"] = kwargs.get("cwd")
+        return subprocess.CompletedProcess(
+            argv, 0, stdout=json.dumps({"result": reply_text}), stderr=""
+        )
+
+    return runner
+
+
+def test_claude_judge_invokes_under_isolated_config(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # Host env carries a contaminating account config + an OAuth token.
+    monkeypatch.setenv(ENV_CLAUDE_CONFIG_DIR, "/home/ds/.claude-homes/account3/.claude")
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "secret-token")
+    captured: dict = {}
+    isolation = prepare_isolated_judge(base=tmp_path)
+    judge = ClaudeRubricJudge(runner=_capturing_runner(_reply(), captured), isolation=isolation)
+
+    judge.score("t", "c", graded_rubric())
+
+    argv, env, cwd = captured["argv"], captured["env"], captured["cwd"]
+    # MCP disabled (boot-hang + agent-load guard).
+    assert "--strict-mcp-config" in argv
+    # Config surface redirected AWAY from the host account, to the clean dir.
+    assert env[ENV_CLAUDE_CONFIG_DIR] == str(isolation.config_dir)
+    assert "account3" not in env[ENV_CLAUDE_CONFIG_DIR]
+    # Auth preserved -- isolation changes config, not credentials.
+    assert env["CLAUDE_CODE_OAUTH_TOKEN"] == "secret-token"
+    # Neutral cwd, outside the repo and distinct from the config dir (so `claude`'s
+    # upward CLAUDE.md/.claude walk finds nothing).
+    assert cwd == isolation.cwd
+    assert cwd != isolation.config_dir
+    # The clean config dir carries no host/project agent surface.
+    for forbidden in FORBIDDEN_CONFIG_ENTRIES:
+        assert not (isolation.config_dir / forbidden).exists()
+
+
+def test_claude_judge_default_isolation_marker_is_on() -> None:
+    # Even with no injected isolation, a constructed judge is isolated and exposes an
+    # attributable marker (echoed into a run's pins) pointing away from any host account.
+    marker = ClaudeRubricJudge().isolation_marker
+    assert marker["isolated_config"] is True
+    assert marker["strict_mcp_config"] is True
+    assert "account3" not in str(marker["config_dir"])
 
 
 # --- judge_graded orchestration (vote + divergence) -------------------------------
