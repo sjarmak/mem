@@ -126,6 +126,26 @@ def test_loader_rejects_a_whitespace_variant_verbatim_leak(tmp_path):
         load_external_schema_sequences(path)
 
 
+def test_loader_rejects_a_blank_latent_rule(tmp_path):
+    # A blank rule makes the leak-check needle empty, so the verbatim check would
+    # silently short-circuit and admit a probe that hands the reader the answer —
+    # the exact recall-not-induction failure mode the check exists to prevent.
+    leaky = {
+        "task_id": "blank-rule",
+        "source": "test",
+        "latent_rule": "   ",
+        "episodes": [
+            "the users endpoint returns a status field",
+            "the orders endpoint returns a status field",
+        ],
+        "probe": "the answer is: responses wrap data in an envelope",
+    }
+    path = tmp_path / "blank-rule.jsonl"
+    path.write_text(json.dumps(leaky) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="blank"):
+        load_external_schema_sequences(path)
+
+
 # --------------------------------------------------------------------------- #
 # Adaptation: deterministic, mechanical rule extraction
 # --------------------------------------------------------------------------- #
