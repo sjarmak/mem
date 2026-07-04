@@ -597,6 +597,33 @@ def harbor_stream_exec(
     return load_stream(job_dir)
 
 
+def pinned_stream_exec(
+    *, jobs_dir: Path, model: str, cli_version: str, timeout_sec: float | None = None
+) -> StreamExec:
+    """A `StreamExec` pinned to one instrument (model + in-container CLI version),
+    shared by the grid/probe drivers so every arm and rep stays comparable. Dead
+    runs (401 / usage-limit / zero-output) are classified FIRST -- their streams
+    carry an init event without model fields, which would otherwise raise a
+    misleading `PinMismatchError` instead of the batch-handled `EmptyRunError` --
+    and pin drift raises before the batch can persist a result."""
+
+    def exec_stream(task_dir: Path) -> str:
+        stream = harbor_stream_exec(
+            task_dir,
+            jobs_dir=jobs_dir,
+            model=model,
+            timeout_sec=timeout_sec,
+            agent_version=cli_version,
+        )
+        failure = detect_run_failure(stream)
+        if failure is not None:
+            raise EmptyRunError(f"{task_dir.name}: {failure}")
+        assert_run_pins(stream, model=model, cli_version=cli_version)
+        return stream
+
+    return exec_stream
+
+
 # --- candidate harvest ----------------------------------------------------------------
 
 

@@ -53,6 +53,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from statistics import median
@@ -67,6 +68,16 @@ GRADED_DIVERGENCE_THRESHOLD = 0.3
 
 # Per-run judge calls; the median is the score, the spread the confidence.
 DEFAULT_JUDGE_ROUNDS = 3
+
+# A single judge draw occasionally returns a wrong-schema reply -- most often a
+# code-review {"findings": [...], "level": ...} object instead of the rubric
+# {"criteria": [...]} -- when the host `claude -p` session picks up review-shaped
+# framing from a reviewable candidate diff. That is an unparseable draw, not a
+# score of record: re-take it up to this many times before failing loud. Bounded
+# so a persistently-broken judge still surfaces (RubricParseError) rather than
+# looping. Only RubricParseError is retried; a [0,1] contract breach (plain
+# ValueError) is a judge bug and fails on the first draw.
+GRADED_JUDGE_MAX_ATTEMPTS = 4
 
 # Bumping this invalidates any cached verdict and is recorded on the judgment.
 GRADED_PROMPT_VERSION = "v1"
@@ -365,6 +376,32 @@ class GradedJudgment:
     prompt_version: str = GRADED_PROMPT_VERSION
 
 
+def _score_round_retrying_parse(
+    judge: RubricJudge, task: str, run_output: str, rubric: Rubric
+) -> float:
+    """One judge round, re-taking a wrong-schema (unparseable) draw up to
+    ``GRADED_JUDGE_MAX_ATTEMPTS`` times. Only ``RubricParseError`` is transient
+    here -- every other failure (a [0,1] contract breach, a ``claude -p`` process
+    error) propagates on the first draw. If all attempts are unparseable the last
+    error is re-raised, so a persistently-broken judge fails loud rather than
+    looping. Re-draws are noted on stderr so the batch log carries the
+    wrong-schema rate."""
+    last_exc: RubricParseError | None = None
+    for attempt in range(1, GRADED_JUDGE_MAX_ATTEMPTS + 1):
+        try:
+            return score_completion(judge, task, run_output, rubric)
+        except RubricParseError as exc:
+            last_exc = exc
+            if attempt < GRADED_JUDGE_MAX_ATTEMPTS:
+                print(
+                    f"graded judge: unparseable reply on attempt "
+                    f"{attempt}/{GRADED_JUDGE_MAX_ATTEMPTS}, re-drawing ({exc})",
+                    file=sys.stderr,
+                )
+    assert last_exc is not None  # MAX_ATTEMPTS >= 1, so the loop raised at least once
+    raise last_exc
+
+
 def judge_graded(
     judge: RubricJudge,
     *,
@@ -394,7 +431,9 @@ def judge_graded(
         candidate_diff=candidate_diff,
         gold_diff=gold_diff,
     )
-    scores = tuple(score_completion(judge, task, run_output, rubric) for _ in range(rounds))
+    scores = tuple(
+        _score_round_retrying_parse(judge, task, run_output, rubric) for _ in range(rounds)
+    )
     judge_score = median(scores)
     confidence = 1.0 - (max(scores) - min(scores))  # tight round agreement -> high
     divergence = None if mechanical_reference is None else abs(judge_score - mechanical_reference)

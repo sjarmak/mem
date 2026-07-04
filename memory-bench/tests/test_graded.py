@@ -14,6 +14,7 @@ import pytest
 from membench.grading.graded import (
     ALLOWED_CRITERION_SCORES,
     GRADED_DIVERGENCE_THRESHOLD,
+    GRADED_JUDGE_MAX_ATTEMPTS,
     ClaudeRubricJudge,
     RubricParseError,
     StubRubricJudge,
@@ -286,3 +287,77 @@ def test_judge_graded_propagates_out_of_range_judge_score() -> None:
             gold_diff=GOLD,
             mechanical_reference=None,
         )
+
+
+# --- transient-parse-error retry (mem-eacq: host-config-contaminated judge reply) --
+# The `claude -p` judge occasionally returns a wrong-schema reply (e.g. a
+# code-review {"findings": [...], "level": ...} object instead of the rubric
+# {"criteria": [...]}), which raises RubricParseError. A single such transient
+# draw must not abort a whole batch when the design is median-of-`rounds`; the
+# draw is re-taken up to GRADED_JUDGE_MAX_ATTEMPTS times. This does NOT change the
+# judge's identity -- a parseable reply is scored exactly as before.
+
+
+def test_judge_graded_retries_transient_rubric_parse_error() -> None:
+    # Fail to parse twice, then return a clean 0.5 on every subsequent draw.
+    calls = {"n": 0}
+
+    def flaky(task: str, out: str, rubric) -> float:  # type: ignore[no-untyped-def]
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            raise RubricParseError("judge reply has no 'criteria' list: {'findings': []}")
+        return 0.5
+
+    g = judge_graded(
+        StubRubricJudge(fn=flaky),
+        issue_title="t",
+        issue_body="",
+        candidate_diff=CANDIDATE,
+        gold_diff=GOLD,
+        mechanical_reference=None,
+        rounds=1,
+    )
+    assert g.judge_score == 0.5
+    assert calls["n"] == 3  # 2 failed draws + 1 that parsed
+
+
+def test_judge_graded_raises_after_exhausting_parse_retries() -> None:
+    calls = {"n": 0}
+
+    def always_bad(task: str, out: str, rubric) -> float:  # type: ignore[no-untyped-def]
+        calls["n"] += 1
+        raise RubricParseError("judge reply has no 'criteria' list: {'findings': []}")
+
+    with pytest.raises(RubricParseError):
+        judge_graded(
+            StubRubricJudge(fn=always_bad),
+            issue_title="t",
+            issue_body="",
+            candidate_diff=CANDIDATE,
+            gold_diff=GOLD,
+            mechanical_reference=None,
+            rounds=1,
+        )
+    assert calls["n"] == GRADED_JUDGE_MAX_ATTEMPTS  # exhausted, no infinite loop
+
+
+def test_judge_graded_does_not_retry_out_of_range() -> None:
+    # An out-of-range score is a judge bug (plain ValueError from _require_unit),
+    # NOT a transient parse failure -- it must fail loud on the first draw.
+    calls = {"n": 0}
+
+    def out_of_range(task: str, out: str, rubric) -> float:  # type: ignore[no-untyped-def]
+        calls["n"] += 1
+        return 1.5
+
+    with pytest.raises(ValueError):
+        judge_graded(
+            StubRubricJudge(fn=out_of_range),
+            issue_title="t",
+            issue_body="",
+            candidate_diff=CANDIDATE,
+            gold_diff=GOLD,
+            mechanical_reference=None,
+            rounds=1,
+        )
+    assert calls["n"] == 1  # no retry on a contract violation

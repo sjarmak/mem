@@ -363,6 +363,38 @@ makes the "outcome lift" number real. Grounded in the literature pass (see
     canonical TS-computed strings, surfaced through the retrieval envelope
     (`query_signatures` / `query_signatures_relaxed`), never recomputed in
     Python. Blocks the Option A grid (mem-bxhh.3 / mem-lvp.24) until applied.
+24. **Ftp-shape calibration is SCOPED to the blueprint track; the external anchor
+    is a real, manifest-frozen `list_functions` adaptation (mem-mmuu, 2026-07-04).**
+    The ultracode audit (2026-07-03) flagged two honesty gaps in the calibration
+    story. (a) The checked-in "external anchor" was 2 hand-written rows whose
+    `latent_rule` appeared verbatim in every episode — recovering the rule required
+    zero induction — and no actual SEA-Eval/AgingBench adaptation existed in-repo.
+    Replaced: the real-anchor leg is now an offline adaptation of BIG-bench
+    `list_functions` (Apache-2.0) — 32 stride-sampled subtasks frozen byte-for-byte
+    at upstream commit `092b196c1f8f14a54bbc62f24759d43bde46dd3b`, 8 numeric
+    input→output examples per task as episodes, the natural-language target
+    function as the latent rule. The rule text structurally cannot appear in an
+    episode, so the anchor measures induction, not recall. The adaptation is
+    deterministic and manifest-verified (`anchor_adaptation.py`: raw-file hashes,
+    fixture hash, a full re-adaptation round-trip, a ≥24-task floor, and manifest
+    metadata consistency all fail closed), and the loader REJECTS any row whose
+    rule leaks verbatim — whitespace-normalized — into an episode or the probe;
+    `verify_anchor` re-checks that rejection at verify time, so the toy-anchor
+    failure mode cannot be reintroduced by a future re-adaptation either. SEA-Eval/AgingBench were named
+    in the original B-1 mandate but never adapted, and neither carries the
+    episodes→latent-rule shape; the substitution is recorded here rather than
+    silently renamed. (b) `shape_id` calibration links only the blueprint bank
+    (`SHAPE_BLUEPRINTS`: 2 blueprints covering the 2 memory-dependent shapes of
+    the 6 catalogued). The NeMo world-builder / enterprise-workflow track — the
+    track producing the frozen worlds and the held synthetic lift — references no
+    `FtpShape`, and no mechanical derivation exists (its planted subjects are
+    continuity/staleness-shaped, not aggregation/exclusion-shaped). Rather than
+    invent a semantic mapping in code (a ZFC violation), the calibration claim is
+    scoped: Gate-0 shape calibration speaks for the blueprint track only, and the
+    enterprise-workflow track's lift is uncalibrated against real ftp shapes until
+    a shape-bearing linkage is designed. The generated calibration report
+    (`docs/mem-bxhh5-calibration.md`) and the architecture model state this scope
+    explicitly.
 
 ## Literature grounding (`~/lit_explorers`, agentic-memory pass 2026-06-04)
 

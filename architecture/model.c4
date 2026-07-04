@@ -274,8 +274,10 @@ model {
         calibration = component 'real-anchor / ftp-shape calibration' {
           #evolving
           #risk
-          description 'Calibrates the synthetic generator against real fail-to-pass shapes (mem-bxhh.5). RISK: the open validity question is whether a synthetic lift generalizes to real city work — Gate-0 rank-correlation against a real anchor is currently flat / NO-GO'
+          description 'Calibrates the synthetic generator against real fail-to-pass shapes (mem-bxhh.5). SCOPE (mem-mmuu / Decision 23): shape_id calibration attaches to the blueprint bank ONLY (2 blueprints covering the 2 memory-dependent shapes of the 6 catalogued) — the NeMo/enterprise-workflow track that produces the frozen worlds and the held synthetic lift carries no FtpShape linkage and is NOT shape-calibrated. The schema-induction real anchor is a manifest-frozen BIG-bench list_functions adaptation (anchor_adaptation.py); the loader and the manifest verify both reject rows whose latent rule leaks verbatim into an episode or the probe. RISK: the open validity question is whether a synthetic lift generalizes to real city work — Gate-0 rank-correlation against a real anchor is currently flat / NO-GO'
           link ../memory-bench/membench/generators/external_anchor.py 'external_anchor.py'
+          link ../memory-bench/membench/generators/anchor_adaptation.py 'anchor_adaptation.py'
+          link ../docs/architecture-decisions.md 'Decision 23 — calibration scope + real anchor'
         }
         worldFreeze = component 'world freeze + determinism manifest' {
           #built

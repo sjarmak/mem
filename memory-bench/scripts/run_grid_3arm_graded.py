@@ -31,6 +31,20 @@ score is a reported side signal, never a gate or a composite. NO pooled means, N
 single composite -- the per-signal paired per-bundle deltas are the headline shape
 (the mem-75t.7.6 reporting doctrine, inherited from ``summarize_grid_3arm``).
 
+Repeats doctrine (mem-eacq): anything called a headline runs every arm
+``--repeats`` >= 3 times -- a single draw per (bundle, arm) has unknown within-task
+noise, and the variance pilot exists precisely because no task had ever run twice
+under the same condition. Rep 1 lives at the legacy probe/grid paths so prior
+single-run artifacts resume as rep 1 (their instrument pins were asserted when
+they executed; any cross-day drift is visible in the repeats block's per-rep
+values); reps 2..k live under ``rep<i>/`` subdirs. The headline per-bundle deltas
+are read from ``summary["repeats"]`` -- repeats collapsed within task first (the
+curve.py M2 doctrine), deltas of arm means with their standard errors -- while the
+top-level ``per_bundle``/``gaps`` blocks keep the schema-stable single-rep (rep 1)
+view. Reps execute strictly sequentially: the agent-leg harvest and the repro
+scorer sweep the shared rig clone's worktrees by global prefix, so a concurrent
+rep would be swept mid-replay.
+
 ZFC: pure plumbing. Real run (from memory-bench/, Docker up, valid OAuth token):
 
     CLAUDE_CODE_OAUTH_TOKEN=... uv run python scripts/run_grid_3arm_graded.py
@@ -47,6 +61,7 @@ import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from run_gate_probe import run_probe_batch
 from run_grid import load_admitted_bundles, score_runs
@@ -60,18 +75,15 @@ from run_grid_3arm import (
 
 from membench.grading.graded import DEFAULT_JUDGE_ROUNDS, ClaudeRubricJudge
 from membench.grading.validity_gate import ValidityResult, validity_gate
+from membench.grading.variance import delta_of_means, metric_stats_by_key
 from membench.harbor.bundle_grid import (
     OursRungEvidence,
+    ThreeArmRow,
     ours_rung_evidence,
     signature_overlap_summary,
     summarize_grid_3arm,
 )
-from membench.harbor.probe_gate import (
-    EmptyRunError,
-    assert_run_pins,
-    detect_run_failure,
-    harbor_stream_exec,
-)
+from membench.harbor.probe_gate import StreamExec, pinned_stream_exec
 from membench.harbor.repro_live import LiveReproRunner
 from membench.memory_systems.ours_system import _default_runner
 from membench.schemas.bundle import TaskBundle
@@ -97,6 +109,81 @@ DEFAULT_CLI_VERSION = "2.1.173"
 # The builtin arm IS the `none` condition (native memory present, our system off)
 # run fresh; assemble_rows relabels the scored `none` leg to `builtin`.
 BUILTIN_CONDITION = "none"
+
+# The headline repeat floor (mem-eacq): below 3 repeats a per-bundle delta has no
+# within-task spread estimate and cannot be told from single-draw noise.
+MIN_HEADLINE_REPEATS = 3
+
+# (baseline arm, treatment arm, comparison name) -- the same three comparisons
+# summarize_grid_3arm reports, collapsed across repeats here.
+_REPEAT_COMPARISONS = (
+    ("none-clean", "ours", "ours_vs_none_clean"),
+    ("none-clean", "builtin", "builtin_vs_none_clean"),
+    ("builtin", "ours", "ours_vs_builtin"),
+)
+
+
+def legacy_rep_dir(base: Path, rep: int) -> Path:
+    """Rep 1 stays at the legacy path (prior single-run artifacts resume as rep
+    1); reps 2..k get ``rep<i>/`` subdirs."""
+    return base if rep == 1 else base / f"rep{rep}"
+
+
+def repeats_block(rows_by_rep: Sequence[Sequence[ThreeArmRow]]) -> dict[str, Any]:
+    """The headline read: per-bundle per-arm repeat statistics and the
+    repeats-collapsed paired deltas (within-task collapse first, curve.py M2).
+    Deltas are of arm MEANS with a standard error -- rep indices are arbitrary,
+    so per-rep pairing across arms would be false pairing. Every rep must carry
+    the same bundle set; a bundle missing from one rep means the run is
+    incomplete and collapsing over it would silently change the sample."""
+    if not rows_by_rep:
+        raise ValueError("repeats_block needs at least one rep's rows")
+    bundle_order = [row.work_id for row in rows_by_rep[0]]
+    for rep_rows in rows_by_rep:
+        if [row.work_id for row in rep_rows] != bundle_order:
+            raise ValueError(
+                f"inconsistent bundle sets across reps: {bundle_order} vs "
+                f"{[row.work_id for row in rep_rows]}"
+            )
+    per_bundle: list[dict[str, Any]] = []
+    for index, work_id in enumerate(bundle_order):
+        rows = [rep_rows[index] for rep_rows in rows_by_rep]
+        arm_results = {
+            "none-clean": [row.none_clean for row in rows],
+            "ours": [row.ours for row in rows],
+            "builtin": [row.builtin for row in rows],
+        }
+        arm_stats = {
+            arm: metric_stats_by_key([result.metrics() for result in results])
+            for arm, results in arm_results.items()
+        }
+        deltas: dict[str, dict[str, dict[str, float | None]]] = {}
+        for base_arm, treat_arm, name in _REPEAT_COMPARISONS:
+            base, treat = arm_stats[base_arm], arm_stats[treat_arm]
+            deltas[name] = {}
+            for key in sorted(base.keys() & treat.keys()):
+                delta, se = delta_of_means(base[key], treat[key])
+                deltas[name][key] = {"delta": delta, "se": se}
+        per_bundle.append(
+            {
+                "work_id": work_id,
+                "arms": {
+                    arm: {key: stat.as_dict() for key, stat in stats.items()}
+                    for arm, stats in arm_stats.items()
+                },
+                "deltas": deltas,
+                "ours_retrieval_empty": rows[0].ours_retrieval_empty,
+            }
+        )
+    return {
+        "k": len(rows_by_rep),
+        "per_bundle": per_bundle,
+        "doctrine": (
+            "headline per-bundle deltas are read HERE (repeats collapsed within task, "
+            "curve.py M2; deltas of arm means +/- se); the top-level per_bundle/gaps "
+            "blocks are the schema-stable rep-1 view"
+        ),
+    }
 
 
 def run_validity_gates(bundles: Sequence[TaskBundle], *, grid_dir: Path) -> list[ValidityResult]:
@@ -159,6 +246,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--judge-rounds", type=int, default=DEFAULT_JUDGE_ROUNDS, help="median-vote rounds"
     )
     parser.add_argument(
+        "--repeats",
+        type=int,
+        default=MIN_HEADLINE_REPEATS,
+        help=(
+            "identical runs per (bundle, arm); headline floor is "
+            f"{MIN_HEADLINE_REPEATS} (mem-eacq), rep 1 resumes from the legacy dirs"
+        ),
+    )
+    parser.add_argument(
         "--timeout-sec", type=float, default=None, help="per-run harbor subprocess timeout"
     )
     parser.add_argument(
@@ -172,38 +268,36 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="construct + leak-validate all tasks, print the plan, execute nothing",
     )
     args = parser.parse_args(argv)
+    if args.repeats < MIN_HEADLINE_REPEATS:
+        parser.error(
+            f"--repeats must be >= {MIN_HEADLINE_REPEATS} for a headline run "
+            f"(mem-eacq repeats doctrine), got {args.repeats}"
+        )
 
     candidates = load_admitted_bundles(args.bundles_dir, args.manifest)
     retrieve = _default_runner(args.mem_bin)
     payloads = resolve_payloads(candidates, store_path=args.store, runner=retrieve)
 
-    def exec_stream(task_dir: Path) -> str:
-        """All three arms pinned to one instrument; dead runs (401 / usage-limit /
-        zero-output) classified FIRST so they raise the batch-handled EmptyRunError
-        rather than a misleading PinMismatchError, and drift raises before persist."""
-        stream = harbor_stream_exec(
-            task_dir,
-            jobs_dir=args.probe_dir / "jobs",
+    # All arms and reps share one pinned instrument (`pinned_stream_exec`: dead
+    # runs raise the batch-handled EmptyRunError, pin drift raises before persist).
+    def make_exec_stream(jobs_dir: Path) -> StreamExec:
+        return pinned_stream_exec(
+            jobs_dir=jobs_dir,
             model=args.model,
+            cli_version=args.cli_version,
             timeout_sec=args.timeout_sec,
-            agent_version=args.cli_version,
         )
-        failure = detect_run_failure(stream)
-        if failure is not None:
-            raise EmptyRunError(f"{task_dir.name}: {failure}")
-        assert_run_pins(stream, model=args.model, cli_version=args.cli_version)
-        return stream
-
-    batch_kwargs = {
-        "probe_dir": args.probe_dir,
-        "tasks_dir": args.probe_dir / "tasks",
-        "exec_stream": exec_stream,
-        "dry_run": args.dry_run,
-    }
 
     if args.dry_run:
-        # Construct + leak-validate every arm's task for every candidate; the
+        # Construct + leak-validate every arm's task for every candidate (tasks are
+        # byte-identical across reps, so one construction pass validates all); the
         # Docker-backed validity gate and agent runs are skipped (no token needed).
+        batch_kwargs = {
+            "probe_dir": args.probe_dir,
+            "tasks_dir": args.probe_dir / "tasks",
+            "exec_stream": make_exec_stream(args.probe_dir / "jobs"),
+            "dry_run": True,
+        }
         with_payload = [b for b in candidates if payloads[b.work_id]]
         planned = run_probe_batch(candidates, ("none-clean",), **batch_kwargs)["planned"]
         planned += run_probe_batch(candidates, (BUILTIN_CONDITION,), **batch_kwargs)["planned"]
@@ -213,7 +307,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             ours_payloads_for=lambda bundle: payloads[bundle.work_id],
             **batch_kwargs,
         )["planned"]
-        print(f"\nDRY RUN: {planned} task(s) constructed + leak-validated; nothing executed.")
+        print(
+            f"\nDRY RUN: {planned} task(s) constructed + leak-validated "
+            f"(x {args.repeats} repeats at execution); nothing executed."
+        )
         return 0
 
     # CSB validity gate PRECEDES the grid (mem-g6a doctrine): a broken oracle is
@@ -243,48 +340,69 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"({', '.join(b.work_id for b in with_payload) or 'none'})"
     )
 
-    scrub_unfinished_jobs(
-        bundles, ("none-clean", BUILTIN_CONDITION, "ours"), probe_dir=args.probe_dir
-    )
-    # none-clean and builtin (fresh `none`) run every valid bundle; ours runs only
-    # payload-bearing bundles -- an empty retrieval makes the ours task byte-
-    # identical to none-clean, so assemble_rows reuses that leg (delta 0).
     # The held record's canonical full+relaxed signatures -- the mem-tnyo H3
     # signature-overlap covariate input, read from the retrieval envelope.
+    # Deterministic, so resolved once and shared across reps.
     held_signatures = resolve_held_signatures(bundles, store_path=args.store, runner=retrieve)
-    tally_clean = run_probe_batch(bundles, ("none-clean",), **batch_kwargs)
-    tally_builtin = run_probe_batch(bundles, (BUILTIN_CONDITION,), **batch_kwargs)
-    tally_ours = run_probe_batch(
-        with_payload,
-        ("ours",),
-        ours_payloads_for=lambda bundle: payloads[bundle.work_id],
-        held_signatures_for=lambda bundle: held_signatures[bundle.work_id],
-        **batch_kwargs,
-    )
-    print(
-        f"agent runs: none-clean executed={tally_clean['executed']} "
-        f"builtin executed={tally_builtin['executed']} ours executed={tally_ours['executed']}"
-    )
-
+    # Reps execute strictly sequentially (shared-clone worktree sweeps are
+    # prefix-global). Rep 1 uses the legacy dirs so prior single-run artifacts
+    # resume as rep 1; the deterministic stages above (validity, payloads,
+    # surface evidence) ran once -- only the agent legs and the judge sample.
     judge = ClaudeRubricJudge(model=args.judge_model)
-    pending = [(bundle, "none-clean") for bundle in bundles]
-    pending += [(bundle, BUILTIN_CONDITION) for bundle in bundles]
-    pending += [(bundle, "ours") for bundle in with_payload]
-    _, tally_scored = score_runs(
-        pending,
-        probe_jobs_dir=args.probe_dir / "jobs",
-        grid_dir=args.grid_dir,
-        judge=judge,
-        judge_rounds=args.judge_rounds,
-    )
-    print(f"scoring: executed={tally_scored['executed']} skipped={tally_scored['skipped']}")
+    rows_by_rep: list[list[ThreeArmRow]] = []
+    for rep in range(1, args.repeats + 1):
+        probe_rep = legacy_rep_dir(args.probe_dir, rep)
+        grid_rep = legacy_rep_dir(args.grid_dir, rep)
+        batch_kwargs = {
+            "probe_dir": probe_rep,
+            "tasks_dir": probe_rep / "tasks",
+            "exec_stream": make_exec_stream(probe_rep / "jobs"),
+            "dry_run": False,
+        }
+        scrub_unfinished_jobs(
+            bundles, ("none-clean", BUILTIN_CONDITION, "ours"), probe_dir=probe_rep
+        )
+        # none-clean and builtin (fresh `none`) run every valid bundle; ours runs
+        # only payload-bearing bundles -- an empty retrieval makes the ours task
+        # byte-identical to none-clean, so assemble_rows reuses that leg (delta 0).
+        tally_clean = run_probe_batch(bundles, ("none-clean",), **batch_kwargs)
+        tally_builtin = run_probe_batch(bundles, (BUILTIN_CONDITION,), **batch_kwargs)
+        tally_ours = run_probe_batch(
+            with_payload,
+            ("ours",),
+            ours_payloads_for=lambda bundle: payloads[bundle.work_id],
+            held_signatures_for=lambda bundle: held_signatures[bundle.work_id],
+            **batch_kwargs,
+        )
+        print(
+            f"agent runs rep {rep}/{args.repeats}: "
+            f"none-clean executed={tally_clean['executed']} "
+            f"builtin executed={tally_builtin['executed']} ours executed={tally_ours['executed']}"
+        )
 
-    rows = assemble_rows(bundles, payloads, args.grid_dir)
+        pending = [(bundle, "none-clean") for bundle in bundles]
+        pending += [(bundle, BUILTIN_CONDITION) for bundle in bundles]
+        pending += [(bundle, "ours") for bundle in with_payload]
+        _, tally_scored = score_runs(
+            pending,
+            probe_jobs_dir=probe_rep / "jobs",
+            grid_dir=grid_rep,
+            judge=judge,
+            judge_rounds=args.judge_rounds,
+        )
+        print(
+            f"scoring rep {rep}/{args.repeats}: executed={tally_scored['executed']} "
+            f"skipped={tally_scored['skipped']}"
+        )
+        rows_by_rep.append(assemble_rows(bundles, payloads, grid_rep))
+
+    rows = rows_by_rep[0]
     evidence: list[OursRungEvidence] = [
         ours_rung_evidence(bundle, mem_bin=args.mem_bin, store_path=args.store, runner=retrieve)
         for bundle in bundles
     ]
     summary = summarize_grid_3arm(rows, evidence, validity=validity)
+    summary["repeats"] = repeats_block(rows_by_rep)
     # The builtin arm here is FRESH -- override the shared cached-relabel provenance
     # string (the pilot's, asserted by test_bundle_grid) for this graded summary.
     summary["arm_provenance"]["builtin"] = (
@@ -299,6 +417,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "judge_model": args.judge_model,
         "judge_rounds": args.judge_rounds,
         "builtin_arm": "fresh",
+        "repeats": args.repeats,
     }
     summary["pool"] = {
         "candidates": [b.work_id for b in candidates],

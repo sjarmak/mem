@@ -751,6 +751,47 @@ def test_assert_run_pins_rejects_stream_without_init_event() -> None:
             assert_run_pins(stream, model="claude-sonnet-4-6", cli_version="2.1.173")
 
 
+def _live_pinned_stream(model: str = "claude-sonnet-4-6", version: str = "2.1.173") -> str:
+    """A billed (non-dead) stream carrying the init pins — passes
+    detect_run_failure so the pin assertion is actually reached."""
+    init = {"type": "system", "subtype": "init", "model": model, "claude_code_version": version}
+    billed = {
+        "type": "assistant",
+        "message": {"content": [], "usage": {"input_tokens": 100, "output_tokens": 40}},
+    }
+    return "\n".join(json.dumps(event) for event in (init, billed)) + "\n"
+
+
+def test_pinned_stream_exec_composes_dead_run_check_before_pins(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The shared driver seam's ordering is load-bearing: a dead run's init has
+    no model fields, so asserting pins first would raise a misleading
+    PinMismatchError instead of the batch-handled EmptyRunError."""
+    import membench.harbor.probe_gate as probe_gate_module
+    from membench.harbor.probe_gate import pinned_stream_exec
+
+    exec_stream = pinned_stream_exec(
+        jobs_dir=tmp_path, model="claude-sonnet-4-6", cli_version="2.1.173"
+    )
+
+    monkeypatch.setattr(probe_gate_module, "harbor_stream_exec", lambda *a, **k: _DEAD_RUN_401)
+    with pytest.raises(EmptyRunError, match=r"demo\.none-clean"):
+        exec_stream(tmp_path / "demo.none-clean")
+
+    monkeypatch.setattr(
+        probe_gate_module,
+        "harbor_stream_exec",
+        lambda *a, **k: _live_pinned_stream(model="claude-haiku-4-5"),
+    )
+    with pytest.raises(PinMismatchError, match="model"):
+        exec_stream(tmp_path / "demo.none-clean")
+
+    live = _live_pinned_stream()
+    monkeypatch.setattr(probe_gate_module, "harbor_stream_exec", lambda *a, **k: live)
+    assert exec_stream(tmp_path / "demo.none-clean") == live
+
+
 def test_touches_native_memory_is_root_anchored(clone: Path) -> None:
     """The strip removes only /app/<name>, so nested copies neither conflict with
     the strip nor count as native-memory surface."""
