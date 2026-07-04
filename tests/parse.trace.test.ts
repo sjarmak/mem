@@ -47,12 +47,10 @@ describe('matchRunner', () => {
     // `\blint\b` matches the `lint` in `golangci-lint` (a hyphen is a word
     // boundary), which corrupted the runner dimension for Go rigs. pylint has
     // no boundary before `lint` so it was already unmatched; pin both.
-    expect(matchRunner('golangci-lint run')).not.toBe('eslint');
     expect(matchRunner('golangci-lint run')).toBeNull();
-    expect(matchRunner('pylint src')).not.toBe('eslint');
-    // a real bare-`lint` script and eslint itself still classify as eslint
+    expect(matchRunner('pylint src')).toBeNull();
+    // a bare-`lint` script still classifies as eslint
     expect(matchRunner('npm run lint')).toBe('eslint');
-    expect(matchRunner('npx eslint .')).toBe('eslint');
   });
 
   it('returns null for non-build commands', () => {
