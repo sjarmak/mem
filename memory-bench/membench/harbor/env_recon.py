@@ -115,19 +115,18 @@ def render_dockerfile(base_image: str, *, install_steps: Sequence[str] = ()) -> 
     """A Dockerfile that lands the archived repo at ``/app`` (the Harbor workdir).
 
     The archive is COPYed from the build context (the task's ``environment/`` dir) and
-    extracted -- so the agent starts in the reconstructed tree. Each ``install_steps``
-    entry becomes a ``RUN`` layer AFTER the extract (so ``/app`` already holds the tree),
-    in the given order. The default empty tuple renders no install layer, leaving the
-    base-rate Dockerfile byte-for-byte unchanged."""
-    dockerfile = (
-        f"FROM {base_image}\n"
-        "WORKDIR /app\n"
-        f"COPY {_ARCHIVE_NAME} /tmp/{_ARCHIVE_NAME}\n"
-        f"RUN tar -xf /tmp/{_ARCHIVE_NAME} -C /app && rm /tmp/{_ARCHIVE_NAME}\n"
-    )
-    for step in install_steps:
-        dockerfile += f"RUN {step}\n"
-    return dockerfile
+    extracted -- so the agent starts in the reconstructed tree. ``install_steps`` are
+    appended as ``RUN`` layers AFTER the extract (so they run in the populated ``/app``);
+    a cached base image (mem-bxhh.3.1) uses this to bake a rig's dependency closure into
+    site-packages. Empty by default -- the env-reconstruction path stays a pure checkout."""
+    lines = [
+        f"FROM {base_image}\n",
+        "WORKDIR /app\n",
+        f"COPY {_ARCHIVE_NAME} /tmp/{_ARCHIVE_NAME}\n",
+        f"RUN tar -xf /tmp/{_ARCHIVE_NAME} -C /app && rm /tmp/{_ARCHIVE_NAME}\n",
+    ]
+    lines.extend(f"RUN {step}\n" for step in install_steps)
+    return "".join(lines)
 
 
 def reconstruct_env(

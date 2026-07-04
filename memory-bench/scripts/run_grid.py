@@ -21,9 +21,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from contextlib import AbstractContextManager
 from pathlib import Path
 
+from membench.grading.dual_verifier import ReproRunner
 from membench.grading.graded import DEFAULT_JUDGE_ROUNDS, RubricJudge
 from membench.harbor.bundle_grid import (
     GRID_CONDITIONS,
@@ -49,6 +51,10 @@ DEFAULT_GRID_DIR = PROJECT_ROOT / ".mem/grid"
 DEFAULT_STORE = PROJECT_ROOT / ".mem/store.db"
 DEFAULT_MEM_BIN = str(PROJECT_ROOT / "bin/mem")
 
+# A `ReproRunner` that is also a context manager (close() reclaims its worktree
+# cache) -- the shape `score_runs` opens around the scoring loop.
+ReproRunnerCM = AbstractContextManager[ReproRunner]
+
 
 def load_admitted_bundles(bundles_dir: Path, manifest: Path) -> list[TaskBundle]:
     """The admitted bundles, in manifest order. A missing bundle JSON is a pool
@@ -69,6 +75,8 @@ def score_runs(
     grid_dir: Path,
     judge: RubricJudge | None = None,
     judge_rounds: int = DEFAULT_JUDGE_ROUNDS,
+    runner_factory: Callable[[], ReproRunnerCM] = LiveReproRunner,
+    worktree_prefix: str = WORKTREE_PREFIX,
 ) -> tuple[dict[tuple[str, str], GridConditionResult], dict[str, int]]:
     """Dual-score every pending (bundle, condition) run from its persisted job
     dir, resumable: an existing scored result under ``grid_dir`` is loaded, never
@@ -79,9 +87,14 @@ def score_runs(
     (mem-r5y); left None (the default) only the mechanical S1/S2 signals ride
     along -- the offline path run_grid's own CLI takes.
 
+    ``runner_factory`` builds the injected `ReproRunner` (default `LiveReproRunner`,
+    host gold-test files); the ftp-corpus driver passes `FtpReproRunner` to score the
+    curated node-id subset in the rig container. ``worktree_prefix`` is the matching
+    sweep prefix so a killed run's stranded checkouts are reclaimed for THAT runner.
+
     Used clones are swept BEFORE starting (worktrees stranded by a previously
     KILLED run would otherwise sit on the clone for this whole run) and on exit
-    (the run_gate_probe discipline -- LiveReproRunner.close() only covers this
+    (the run_gate_probe discipline -- the runner's close() only covers this
     process's own worktrees)."""
     grid_dir.mkdir(parents=True, exist_ok=True)
     executed = skipped = 0
@@ -89,11 +102,11 @@ def score_runs(
 
     clones = {DEFAULT_RIG_REPOS[b.rig] for b, _ in pending if b.rig in DEFAULT_RIG_REPOS}
     for swept in sorted(clones):
-        sweep_probe_worktrees(swept, prefix=WORKTREE_PREFIX)
+        sweep_probe_worktrees(swept, prefix=worktree_prefix)
 
     used_clones: set[Path] = set()
     try:
-        with LiveReproRunner() as test_runner:
+        with runner_factory() as test_runner:
             for bundle, condition in pending:
                 out = grid_dir / f"{bundle.work_id}.{condition}.json"
                 if out.exists():
@@ -132,7 +145,7 @@ def score_runs(
                 )
     finally:
         for clone in sorted(used_clones):
-            sweep_probe_worktrees(clone, prefix=WORKTREE_PREFIX)
+            sweep_probe_worktrees(clone, prefix=worktree_prefix)
     return results, {"executed": executed, "skipped": skipped}
 
 

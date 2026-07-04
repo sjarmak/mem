@@ -59,7 +59,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Any
 
@@ -73,6 +74,7 @@ from run_grid_3arm import (
     scrub_unfinished_jobs,
 )
 
+from membench.grading.dual_verifier import ReproRunner
 from membench.grading.graded import DEFAULT_JUDGE_ROUNDS, ClaudeRubricJudge
 from membench.grading.validity_gate import ValidityResult, validity_gate
 from membench.grading.variance import delta_of_means, metric_stats_by_key
@@ -186,12 +188,18 @@ def repeats_block(rows_by_rep: Sequence[Sequence[ThreeArmRow]]) -> dict[str, Any
     }
 
 
-def run_validity_gates(bundles: Sequence[TaskBundle], *, grid_dir: Path) -> list[ValidityResult]:
+def run_validity_gates(
+    bundles: Sequence[TaskBundle],
+    *,
+    grid_dir: Path,
+    runner_factory: Callable[[], AbstractContextManager[ReproRunner]] = LiveReproRunner,
+) -> list[ValidityResult]:
     """CSB oracle-validity gate per bundle (mem-g6a): gold diff must reproduce,
-    empty diff must fail. Runs the SAME LiveReproRunner the graded scoring uses, so
-    its judgment is the test runner's. A bundle whose oracle is broken (gold does
-    not reproduce, or a gold test passes without the fix) is reported invalid and
-    excluded from the anchored read rather than silently scored.
+    empty diff must fail. Runs the SAME repro runner the graded scoring uses
+    (``runner_factory`` -- `LiveReproRunner` for the native pool, `FtpReproRunner`
+    for the ftp corpus), so its judgment is the test runner's. A bundle whose oracle
+    is broken (gold does not reproduce, or a gold test passes without the fix) is
+    reported invalid and excluded from the anchored read rather than silently scored.
 
     Resumable: each result persists to ``<grid_dir>/<work_id>.validity.json`` and an
     existing file is loaded, never re-executed -- a resume after a token-expiry abort
@@ -199,7 +207,7 @@ def run_validity_gates(bundles: Sequence[TaskBundle], *, grid_dir: Path) -> list
     grid_dir.mkdir(parents=True, exist_ok=True)
     pending = [b for b in bundles if not (grid_dir / f"{b.work_id}.validity.json").is_file()]
     results: list[ValidityResult] = []
-    runner_cm = LiveReproRunner() if pending else None
+    runner_cm = runner_factory() if pending else None
     test_runner = runner_cm.__enter__() if runner_cm is not None else None
     try:
         for bundle in bundles:

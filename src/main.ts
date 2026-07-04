@@ -9,6 +9,7 @@ import { queryCommand } from './cli/commands/query.js';
 import { lessonsCommand } from './cli/commands/lessons.js';
 import { exportLessonsCommand } from './cli/commands/export-lessons.js';
 import { importLessonsCommand } from './cli/commands/import-lessons.js';
+import { importRecordsCommand } from './cli/commands/import-records.js';
 import { signatureCommand } from './cli/commands/signature.js';
 import { searchErrorsCommand } from './cli/commands/search-errors.js';
 import { extractErrorsCommand } from './cli/commands/extract-errors.js';
@@ -35,6 +36,7 @@ export function main(argv: string[]): Promise<void> {
   registerCommand('lessons', lessonsCommand);
   registerCommand('export-lessons', exportLessonsCommand);
   registerCommand('import-lessons', importLessonsCommand);
+  registerCommand('import-records', importRecordsCommand);
   registerCommand('signature', signatureCommand);
   registerCommand('search-errors', searchErrorsCommand);
   registerCommand('extract-errors', extractErrorsCommand);

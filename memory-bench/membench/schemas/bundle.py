@@ -29,12 +29,63 @@ imports this module, keeping the import graph acyclic.
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from membench.bundle.replay import ReplayResult
 
 # Plan §9.5's scoring-policy vocabulary; "direct" is the current probe-grade leg.
 ScoringPolicy = Literal["direct", "min", "mean", "weighted"]
+
+# The fail-to-pass headline (mirrors harbor.ftp_curate.FtpType). A structural fact --
+# behavioral (a red->green nodeid that ran at the parent), feature-presence (only
+# new-test collection errors at the parent), or none -- not a quality judgment.
+FtpType = Literal["behavioral", "feature-presence", "none"]
+
+
+class FtpOracle(BaseModel):
+    """A landing commit's curated fail-to-pass test set (mem-bxhh.3.2), the
+    test-reproduction leg's ground truth for a real landing-commit anchor bundle.
+
+    Carries the same split `harbor.ftp_curate.CommitFtp` produces -- ``ftp_tests``
+    (passes at landing, not at parent) partitioned into ``behavioral`` (the test
+    ran red at the parent -- the strong discriminator) and ``feature_presence`` (a
+    new test that only collection-errored at the parent). ``behavioral`` may be
+    empty for a feature-presence commit; absence of behavioral tests is a real
+    property, not missing data. Defined HERE rather than imported from harbor so
+    the schema package stays an import leaf (no schema -> harbor edge); the
+    materializer maps the harbor dataclass onto this model."""
+
+    model_config = ConfigDict(frozen=True)
+
+    commit: str = Field(min_length=1)
+    parent: str = Field(min_length=1)
+    ftp_tests: tuple[str, ...] = ()
+    behavioral: tuple[str, ...] = ()
+    feature_presence: tuple[str, ...] = ()
+    type: FtpType = "none"
+
+    @model_validator(mode="after")
+    def _coherent_split(self) -> "FtpOracle":
+        """Enforce `ftp_curate.classify_ftp`'s contract at the schema boundary, so a
+        drifted or hand-edited oracle cannot materialize an incoherent bundle that
+        scores the wrong discriminator: ``behavioral``/``feature_presence`` are a
+        DISJOINT partition of ``ftp_tests``, and ``type`` is the structural headline
+        (behavioral if any behavioral, else feature-presence if any of those, else
+        none)."""
+        behavioral, feature = set(self.behavioral), set(self.feature_presence)
+        if behavioral & feature:
+            raise ValueError(
+                f"behavioral and feature_presence overlap: {sorted(behavioral & feature)}"
+            )
+        if behavioral | feature != set(self.ftp_tests):
+            raise ValueError(
+                "behavioral | feature_presence must equal ftp_tests "
+                f"(got {len(behavioral | feature)} vs {len(set(self.ftp_tests))})"
+            )
+        expected = "behavioral" if behavioral else "feature-presence" if feature else "none"
+        if self.type != expected:
+            raise ValueError(f"type {self.type!r} disagrees with the split (expected {expected!r})")
+        return self
 
 
 class CuratedOracle(BaseModel):
@@ -66,6 +117,10 @@ class BundleVerification(BaseModel):
     weight_artifact: float = 0.5
     score_direct: float | None = Field(default=None, ge=0.0, le=1.0)
     score_artifact: float | None = Field(default=None, ge=0.0, le=1.0)
+    # The direct leg's fail-to-pass ground truth for a real landing-commit anchor
+    # bundle (mem-bxhh.3.2): the curated red->green test set the graded arm runs.
+    # None for trace-replayed bundles, which have no per-commit ftp oracle.
+    ftp_oracle: FtpOracle | None = None
 
 
 class BundleEnv(BaseModel):
