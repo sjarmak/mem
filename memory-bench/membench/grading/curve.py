@@ -45,7 +45,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from math import atan, cos, fsum, pi, sin, sqrt
 
-from membench.grading.ablation import DEFAULT_RUNGS
+from membench.grading.ablation import COMBINATION_RUNGS, DEFAULT_RUNGS
 from membench.grading.paired_ci import (
     POPULATION_PRIMARY,
     PairedDeltaCI,
@@ -57,12 +57,6 @@ from membench.grading.trace_score import RewardRecord
 # Below four rungs the curve has no interior resolution, so the saturation /
 # minimum-useful-combination readouts cannot be computed (architect H2).
 MIN_LADDER_FOR_SATURATION = 4
-
-# The rungs that constitute the COMBINATION axis the saturation / min-useful-combo
-# readouts measure (the agent's opaque memory, layered with `ours`; mem-whi). Kept a
-# local literal rather than imported from `harbor.memory_inject.DEFERRED_RUNGS`:
-# `harbor` depends on `grading`, so importing the other way would cycle.
-COMBINATION_RUNGS = frozenset({"builtin", "ours+builtin"})
 
 # Reward-scale tolerance for "stopped improving" / "reached the ceiling". A
 # calibrated-threshold ZFC exception (transparent arithmetic against a documented
@@ -307,13 +301,8 @@ def build_curve(
 
 
 def _require_full_ladder(curve: ScoreInformationCurve) -> None:
-    # Axis check, not a raw count. These two readouts measure the COMBINATION axis
-    # (how memory sources stack), so they need a combination rung present -- not merely
-    # four rungs of any kind. The recall ladder (none < vector-rag < ours <= oracle,
-    # mem-do8r) also reaches four rungs but varies the RECALL policy, a different axis;
-    # computing a combination readout over it would be a category error, so it refuses
-    # here rather than silently emitting a number. Its own saturation semantics are
-    # pending (mem-do8r.2). Gating on the count alone let that slip through.
+    # Axis gate, not a raw count: a 4-rung recall-only ladder must still refuse
+    # (see the "Recall ladder (mem-do8r)" note in the module docstring).
     present = {r.rung for r in curve.rungs}
     if len(curve.rungs) < MIN_LADDER_FOR_SATURATION or present.isdisjoint(COMBINATION_RUNGS):
         raise InsufficientLadderError(

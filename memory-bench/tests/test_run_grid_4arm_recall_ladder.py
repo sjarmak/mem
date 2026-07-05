@@ -182,15 +182,14 @@ def test_run_grid_vector_rag_injects_the_vector_payload(tmp_path):
 # --- build_curve auto-detect places vector-rag between none and ours ------------
 
 
-def _reward(rung, reward):
+def _reward(rung):
     # A rung's mean reward is read off path_reached+resolved; pin it directly here so
     # the order assertion doesn't depend on the scorer (that is exercised above).
-    resolved = reward >= 1.0
     return RewardRecord(
         work_id="w1",
         rung=rung,
         repeat_idx=0,
-        components=RewardComponents(path_reached=resolved, trace_error_resolved=resolved),
+        components=RewardComponents(path_reached=True, trace_error_resolved=True),
     )
 
 
@@ -202,7 +201,7 @@ def test_build_curve_orders_vector_rag_between_none_and_ours():
     # Scrambled input order, so a pass proves the ladder is REORDERED to canonical, not
     # merely that input order was preserved.
     scrambled = ("oracle", "none", "ours", "vector-rag")
-    curve = build_curve([_reward(rung, 1.0) for rung in scrambled])
+    curve = build_curve([_reward(rung) for rung in scrambled])
     assert [r.rung for r in curve.rungs] == ["none", "vector-rag", "ours", "oracle"]
 
 
@@ -213,7 +212,7 @@ def test_recall_only_ladder_refuses_combination_readouts():
     # ladder are a category error (pending mem-do8r.2). The 4-rung must-not-raise
     # pins in test_curve.py all include `builtin`, so they pass under the old
     # count-only gate too; this recall-only ladder is what tells the gates apart.
-    curve = build_curve([_reward(rung, 1.0) for rung in FOUR_RUNGS])
+    curve = build_curve([_reward(rung) for rung in FOUR_RUNGS])
     with pytest.raises(InsufficientLadderError):
         saturation_point(curve)
     with pytest.raises(InsufficientLadderError):
