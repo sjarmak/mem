@@ -44,8 +44,10 @@ from run_grid import score_runs
 from run_grid_3arm import (
     assemble_rows,
     builtin_surface_evidence,
+    resolve_held_signatures,
     resolve_payloads,
     scrub_unfinished_jobs,
+    tier1_mechanism_gate,
 )
 from run_grid_3arm_graded import run_validity_gates
 
@@ -117,6 +119,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="construct + leak-validate all tasks, print the plan, execute nothing",
     )
+    parser.add_argument(
+        "--override-mechanism-gate",
+        metavar="REASON",
+        default=None,
+        help=(
+            "run the grid even though the pre-run mechanism-fires gate failed; "
+            "the reason is required and recorded in the summary (mem-xe2p)"
+        ),
+    )
     args = parser.parse_args(argv)
 
     candidates = load_ftp_bundles(args.bundles_dir, limit=args.limit)
@@ -162,6 +173,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(
         f"retrieval coverage: {len(with_payload)}/{len(bundles)} bundle(s) with a "
         f"non-empty ours payload ({', '.join(b.work_id for b in with_payload) or 'none'})"
+    )
+    held_signatures = resolve_held_signatures(bundles, store_path=args.store, runner=retrieve)
+    # Pre-run mechanism-fires gate (mem-xe2p): this is the PAID grid -- refuse it,
+    # dry runs included, before any agent token if tier-1 retrieval never engages.
+    mechanism_gate = tier1_mechanism_gate(
+        payloads, held_signatures, override_reason=args.override_mechanism_gate
     )
 
     def exec_stream(task_dir: Path) -> str:
@@ -209,6 +226,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         with_payload,
         ("ours",),
         ours_payloads_for=lambda bundle: payloads[bundle.work_id],
+        held_signatures_for=lambda bundle: held_signatures[bundle.work_id],
         **batch_kwargs,
     )
     print(
@@ -257,6 +275,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "excluded_by_validity": excluded,
     }
     summary["builtin_surface_evidence"] = surface_evidence
+    # mem-xe2p: the pre-run gate's verdict (and any explicit override) is run
+    # provenance -- it rides the summary, never metrics().
+    summary["mechanism_fires"] = mechanism_gate.model_dump(mode="json")
     out = args.grid_dir / "summary-3arm-ftp.json"
     out.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(f"summary -> {out}  (bundles={summary['n_bundles']})")

@@ -483,6 +483,43 @@ def test_signature_overlap_summary_reports_per_payload_covariate() -> None:
     assert summary["overlap"]["ours"]["demo-2"] == {}
 
 
+def test_signature_overlap_observations_counts_distinct_signatures_per_anchor() -> None:
+    """The mechanism-fires gate's per-anchor covariate (mem-xe2p): distinct held
+    signatures matched across ALL of the anchor's payload sources — the same
+    scan the summary records, collapsed to the number the gate thresholds."""
+    from membench.harbor.bundle_grid import signature_overlap_observations
+
+    held = {
+        "demo-1": ("tsc:src/a.ts:12:TS2345", "tsc:a.ts:TS2345"),
+        "demo-2": ("eslint:b.ts:1:no-x",),
+        "demo-3": (),
+    }
+    payloads = {
+        "demo-1": {
+            # Case-insensitive full-signature hit in one source...
+            "prior-1": "recurrence of TSC:SRC/A.TS:12:TS2345 fixed by pinning",
+            # ...relaxed hit twice in another: distinct signatures count once each.
+            "prior-2": "tsc:a.ts:TS2345 seen again as tsc:a.ts:TS2345",
+        },
+        "demo-2": {"prior-3": "unrelated lesson"},
+        "demo-3": {},
+    }
+
+    observations = signature_overlap_observations(payloads, held)
+
+    assert observations == {"demo-1": 2.0, "demo-2": 0.0, "demo-3": 0.0}
+
+
+def test_signature_overlap_observations_refuses_misaligned_anchor_pools() -> None:
+    """A payload anchor with no held-signature entry means the two dicts were
+    resolved over different bundle pools — a wiring bug. A silent zero would
+    misattribute 'mechanism never fired' to a substrate that was never scanned."""
+    from membench.harbor.bundle_grid import signature_overlap_observations
+
+    with pytest.raises(ValueError, match="demo-9"):
+        signature_overlap_observations({"demo-9": {"prior-1": "x"}}, {})
+
+
 def test_summarize_grid_3arm_rejects_empty() -> None:
     with pytest.raises(ValueError, match="at least one"):
         summarize_grid_3arm([], [])

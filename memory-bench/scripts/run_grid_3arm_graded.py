@@ -72,6 +72,7 @@ from run_grid_3arm import (
     resolve_held_signatures,
     resolve_payloads,
     scrub_unfinished_jobs,
+    tier1_mechanism_gate,
 )
 
 from membench.grading.dual_verifier import ReproRunner
@@ -275,6 +276,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="construct + leak-validate all tasks, print the plan, execute nothing",
     )
+    parser.add_argument(
+        "--override-mechanism-gate",
+        metavar="REASON",
+        default=None,
+        help=(
+            "run the grid even though the pre-run mechanism-fires gate failed; "
+            "the reason is required and recorded in the summary (mem-xe2p)"
+        ),
+    )
     args = parser.parse_args(argv)
     if args.repeats < MIN_HEADLINE_REPEATS:
         parser.error(
@@ -297,6 +307,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
 
     if args.dry_run:
+        # Pre-run mechanism-fires gate (mem-xe2p): the dry run is the free
+        # preflight, so the gate rides it too -- anchors are the CANDIDATE pool
+        # (the Docker-backed validity gate below is also skipped here); the real
+        # run re-gates on the admitted pool.
+        tier1_mechanism_gate(
+            payloads,
+            resolve_held_signatures(candidates, store_path=args.store, runner=retrieve),
+            override_reason=args.override_mechanism_gate,
+        )
         # Construct + leak-validate every arm's task for every candidate (tasks are
         # byte-identical across reps, so one construction pass validates all); the
         # Docker-backed validity gate and agent runs are skipped (no token needed).
@@ -352,6 +371,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     # signature-overlap covariate input, read from the retrieval envelope.
     # Deterministic, so resolved once and shared across reps.
     held_signatures = resolve_held_signatures(bundles, store_path=args.store, runner=retrieve)
+    # Pre-run mechanism-fires gate (mem-xe2p): anchors are the ADMITTED pool --
+    # refuse every rep's agent legs if tier-1 retrieval never engages on any.
+    mechanism_gate = tier1_mechanism_gate(
+        {b.work_id: payloads[b.work_id] for b in bundles},
+        held_signatures,
+        override_reason=args.override_mechanism_gate,
+    )
     # Reps execute strictly sequentially (shared-clone worktree sweeps are
     # prefix-global). Rep 1 uses the legacy dirs so prior single-run artifacts
     # resume as rep 1; the deterministic stages above (validity, payloads,
@@ -438,6 +464,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     summary["signature_overlap"] = signature_overlap_summary(
         {"ours": {b.work_id: payloads[b.work_id] for b in bundles}}, held_signatures
     )
+    # mem-xe2p: the pre-run gate's verdict (and any explicit override) is run
+    # provenance -- it rides the summary, never metrics().
+    summary["mechanism_fires"] = mechanism_gate.model_dump(mode="json")
     out = args.grid_dir / "summary-3arm-graded.json"
     out.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(f"summary -> {out}  (bundles={summary['n_bundles']})")

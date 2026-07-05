@@ -40,19 +40,21 @@ import json
 import shutil
 import subprocess
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 from run_gate_probe import run_probe_batch
 from run_grid import load_admitted_bundles, score_runs
 
+from membench.grading.mechanism_gate import MechanismFiresGate, enforce_mechanism_fires
 from membench.harbor.bundle_grid import (
     GridConditionResult,
     OursRungEvidence,
     ThreeArmRow,
     as_condition,
     ours_rung_evidence,
+    signature_overlap_observations,
     signature_overlap_summary,
     summarize_grid_3arm,
     three_arm_row,
@@ -89,6 +91,35 @@ DEFAULT_CLI_VERSION = "2.1.173"
 
 # The realistic dual-track scope (D7) -- same-rig prior work, temporally bounded.
 RETRIEVAL_SCOPE = "same_rig_temporal"
+
+# The Option-A mechanism under test and its mechanical covariate (mem-xe2p). The
+# gate itself is mechanism-parameterized -- a grid testing a different mechanism
+# passes its own names + observations to `enforce_mechanism_fires`.
+TIER1_MECHANISM = "tier1_exact_signature_retrieval"
+TIER1_COVARIATE = "signature_overlap"
+
+
+def tier1_mechanism_gate(
+    payloads: Mapping[str, Mapping[str, str]],
+    held_signatures: Mapping[str, Sequence[str]],
+    *,
+    override_reason: str | None = None,
+) -> MechanismFiresGate:
+    """The pre-run mechanism-fires gate for the Option-A shape (mem-xe2p, CSB
+    validity discipline): tier-1 exact-signature retrieval must show
+    signature-overlap > 0 on at least one anchor BEFORE any agent leg burns.
+    The smoke costs zero agent runs -- a mechanical scan of the already-resolved
+    payloads. Raises `MechanismNeverFiredError` unless the mechanism fired or an
+    explicit override reason was given; the returned gate block belongs in the
+    grid summary either way."""
+    gate = enforce_mechanism_fires(
+        mechanism=TIER1_MECHANISM,
+        covariate=TIER1_COVARIATE,
+        observations=signature_overlap_observations(payloads, held_signatures),
+        override_reason=override_reason,
+    )
+    print(f"mechanism-fires gate: {gate.reason}")
+    return gate
 
 
 def resolve_payloads(
@@ -304,6 +335,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="construct + leak-validate all tasks, print the plan, execute nothing",
     )
+    parser.add_argument(
+        "--override-mechanism-gate",
+        metavar="REASON",
+        default=None,
+        help=(
+            "run the grid even though the pre-run mechanism-fires gate failed; "
+            "the reason is required and recorded in the summary (mem-xe2p)"
+        ),
+    )
     args = parser.parse_args(argv)
 
     bundles = load_admitted_bundles(args.bundles_dir, args.manifest)
@@ -319,6 +359,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     # The held record's canonical full+relaxed signatures -- the H3-parity
     # covariate input (mem-tnyo), read from the retrieval envelope.
     held_signatures = resolve_held_signatures(bundles, store_path=args.store, runner=retrieve)
+    # Pre-run mechanism-fires gate (mem-xe2p): refuse the whole grid -- dry runs
+    # included -- before any leg burns if tier-1 retrieval never engages.
+    mechanism_gate = tier1_mechanism_gate(
+        payloads, held_signatures, override_reason=args.override_mechanism_gate
+    )
     issue_payloads: dict[str, dict[str, str]] = {}
     with_issue_payload: list[TaskBundle] = []
     if args.issue_trigger:
@@ -412,6 +457,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.issue_trigger:
         payloads_by_condition[OURS_ISSUE_TRIGGER] = issue_payloads
     summary["signature_overlap"] = signature_overlap_summary(payloads_by_condition, held_signatures)
+    # mem-xe2p: the pre-run gate's verdict (and any explicit override) is run
+    # provenance -- it rides the summary, never metrics().
+    summary["mechanism_fires"] = mechanism_gate.model_dump(mode="json")
     if args.issue_trigger:
         summary["ours_issue_trigger"] = issue_trigger_summary(
             bundles, issue_payloads, args.grid_dir

@@ -199,6 +199,49 @@ def test_resolve_held_signatures_reads_the_retrieval_envelope() -> None:
     assert signatures == {"demo-a": ("tsc:src/a.ts:12:TS2345", "tsc:a.ts:TS2345")}
 
 
+# --- mem-xe2p: pre-run mechanism-fires gate at the grid entrypoint --------------------
+
+
+def test_tier1_mechanism_gate_passes_when_signature_overlap_fires() -> None:
+    payloads = {
+        "demo-a": {"prior-1": "recurrence of tsc:src/a.ts:12:TS2345 fixed by pinning"},
+        "demo-b": {},
+    }
+    held = {"demo-a": ("tsc:src/a.ts:12:TS2345",), "demo-b": ()}
+
+    gate = three_arm_cli.tier1_mechanism_gate(payloads, held)
+
+    assert gate.fired is True
+    assert gate.mechanism == "tier1_exact_signature_retrieval"
+    assert gate.covariate == "signature_overlap"
+    assert gate.fired_anchor_ids == ("demo-a",)
+
+
+def test_tier1_mechanism_gate_refuses_the_grid_when_the_mechanism_never_fires() -> None:
+    """The mem-lvp.24 shape: payloads resolved, but no anchor's payload shares a
+    held signature — the mechanism under test never engages, so the grid must
+    refuse before a single leg burns."""
+    from membench.grading.mechanism_gate import MechanismNeverFiredError
+
+    payloads = {"demo-a": {"prior-1": "unrelated lesson"}, "demo-b": {}}
+    held = {"demo-a": ("tsc:src/a.ts:12:TS2345",), "demo-b": ()}
+
+    with pytest.raises(MechanismNeverFiredError) as exc:
+        three_arm_cli.tier1_mechanism_gate(payloads, held)
+    message = str(exc.value)
+    for token in ("tier1_exact_signature_retrieval", "signature_overlap", "demo-a", "demo-b"):
+        assert token in message
+
+
+def test_tier1_mechanism_gate_override_is_recorded_never_silent() -> None:
+    gate = three_arm_cli.tier1_mechanism_gate(
+        {"demo-a": {}}, {"demo-a": ()}, override_reason="diagnosing an empty substrate"
+    )
+    assert gate.fired is False
+    assert gate.overridden is True
+    assert gate.override_reason == "diagnosing an empty substrate"
+
+
 def test_issue_trigger_summary_pairs_against_none_clean(tmp_path: Path) -> None:
     grid_dir = tmp_path / "grid"
     _write(grid_dir, _result("demo-a", "none-clean", turns=20))

@@ -13,8 +13,11 @@ from pathlib import Path
 
 import pytest
 
+from membench.bundle.replay import ReplayResult
+from membench.grading.mechanism_gate import MechanismNeverFiredError
 from membench.grading.probe_direct import ProbeEfficiency
 from membench.harbor.bundle_grid import GridConditionResult, three_arm_row
+from membench.schemas.bundle import BundleEnv, TaskBundle
 
 _SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 
@@ -63,6 +66,72 @@ def _row(work_id: str, *, none_sim: float, ours_sim: float):
 def test_repeats_floor_rejects_below_three() -> None:
     with pytest.raises(SystemExit):
         graded_cli.main(["--repeats", "2"])
+
+
+# --- mem-xe2p: the dry-run preflight rides the mechanism-fires gate -------------------
+
+
+def _bundle(work_id: str) -> TaskBundle:
+    return TaskBundle(
+        work_id=work_id,
+        rig="demo",
+        issue_title="t",
+        issue_body="",
+        trace_ref="/tmp/t.jsonl",
+        output=ReplayResult(calls=(), file_diffs=(("src/app.ts", "x"),), replay_success_rate=0.0),
+        env=BundleEnv(repo="demo", base_commit="0" * 40, base_image="node:22-bookworm"),
+        loo_excluded_work_ids=(work_id,),
+    )
+
+
+def _patch_dry_run_seams(monkeypatch: pytest.MonkeyPatch, batch_calls: list[str]) -> None:
+    """Stub every IO seam `main(["--dry-run"])` crosses before task construction,
+    with a substrate where tier-1 retrieval never fires (no signature overlap)."""
+    monkeypatch.setattr(graded_cli, "load_admitted_bundles", lambda d, m: [_bundle("demo-a")])
+    monkeypatch.setattr(graded_cli, "_default_runner", lambda mem_bin: (lambda q: {"items": []}))
+    monkeypatch.setattr(
+        graded_cli,
+        "resolve_payloads",
+        lambda bundles, *, store_path, runner: {"demo-a": {"prior-1": "unrelated lesson"}},
+    )
+    monkeypatch.setattr(
+        graded_cli,
+        "resolve_held_signatures",
+        lambda bundles, *, store_path, runner: {"demo-a": ("tsc:src/a.ts:12:TS2345",)},
+    )
+
+    def fake_batch(*args: object, **kwargs: object) -> dict[str, int]:
+        batch_calls.append("run_probe_batch")
+        return {"planned": 1, "executed": 0, "skipped": 0}
+
+    monkeypatch.setattr(graded_cli, "run_probe_batch", fake_batch)
+
+
+def test_dry_run_refuses_when_the_mechanism_never_fires(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The composition-gap regression (mem-xe2p): the graded dry run must hit the
+    mechanism-fires gate BEFORE any task construction — a reordering that lets
+    the free preflight (or the paid run behind it) proceed gate-less is exactly
+    what this pins."""
+    batch_calls: list[str] = []
+    _patch_dry_run_seams(monkeypatch, batch_calls)
+
+    with pytest.raises(MechanismNeverFiredError):
+        graded_cli.main(["--dry-run"])
+    assert batch_calls == []  # refused before constructing a single task
+
+
+def test_dry_run_override_threads_through_the_cli(monkeypatch: pytest.MonkeyPatch) -> None:
+    batch_calls: list[str] = []
+    _patch_dry_run_seams(monkeypatch, batch_calls)
+
+    exit_code = graded_cli.main(
+        ["--dry-run", "--override-mechanism-gate", "diagnosing an empty substrate"]
+    )
+
+    assert exit_code == 0
+    assert batch_calls == ["run_probe_batch"] * 3  # none-clean, builtin, ours
 
 
 def test_legacy_rep_dir_keeps_rep1_at_base() -> None:

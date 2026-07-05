@@ -619,6 +619,42 @@ def signature_overlap_summary(
     }
 
 
+def signature_overlap_observations(
+    payloads_by_work: Mapping[str, Mapping[str, str]],
+    held_signatures: Mapping[str, Sequence[str]],
+) -> dict[str, float]:
+    """Per-anchor input to the pre-run mechanism-fires gate (mem-xe2p): for each
+    bundle, the count of DISTINCT held full/relaxed signatures its injected
+    payloads contain, across all payload sources — the same
+    `memory_inject.signature_overlap` scan the summary records, collapsed to the
+    number the gate thresholds. Zero on every anchor means tier-1
+    exact-signature retrieval never engaged: exactly the substrate the gate
+    exists to refuse before a leg burns.
+
+    A payload anchor missing from ``held_signatures`` is a wiring bug (the two
+    dicts were resolved over different bundle pools) and is refused loudly — a
+    silent zero would misattribute "mechanism never fired" to a substrate that
+    was never scanned."""
+    missing = sorted(set(payloads_by_work) - set(held_signatures))
+    if missing:
+        raise ValueError(
+            f"signature_overlap_observations: no held signatures resolved for anchor(s) "
+            f"{missing} -- payloads and held_signatures must be resolved over the same bundles"
+        )
+    return {
+        work_id: float(
+            len(
+                {
+                    signature
+                    for content in payloads.values()
+                    for signature in signature_overlap(content, held_signatures[work_id])
+                }
+            )
+        )
+        for work_id, payloads in payloads_by_work.items()
+    }
+
+
 def load_grid_ready_work_ids(manifest_path: Path) -> tuple[str, ...]:
     """The admitted work_ids from the two-stage admission manifest
     (``.mem/grid-ready-pool.json``, schema v2). ``admitted`` means the bundle cleared
