@@ -24,7 +24,12 @@ import json
 import pytest
 
 from membench.grading import RewardComponents, RewardRecord, RunTrace, TraceErrorRef
-from membench.grading.curve import build_curve
+from membench.grading.curve import (
+    InsufficientLadderError,
+    build_curve,
+    min_useful_combo,
+    saturation_point,
+)
 from membench.harbor.grid import StubRunner, run_grid
 from membench.harbor.memory_inject import (
     MEMORY_FILENAME,
@@ -199,3 +204,17 @@ def test_build_curve_orders_vector_rag_between_none_and_ours():
     scrambled = ("oracle", "none", "ours", "vector-rag")
     curve = build_curve([_reward(rung, 1.0) for rung in scrambled])
     assert [r.rung for r in curve.rungs] == ["none", "vector-rag", "ours", "oracle"]
+
+
+def test_recall_only_ladder_refuses_combination_readouts():
+    # Regression for _require_full_ladder's AXIS gate (curve.py): the recall ladder
+    # reaches four rungs but contains no combination rung (builtin / ours+builtin),
+    # so the combination readouts must refuse -- their semantics over a recall-only
+    # ladder are a category error (pending mem-do8r.2). The 4-rung must-not-raise
+    # pins in test_curve.py all include `builtin`, so they pass under the old
+    # count-only gate too; this recall-only ladder is what tells the gates apart.
+    curve = build_curve([_reward(rung, 1.0) for rung in FOUR_RUNGS])
+    with pytest.raises(InsufficientLadderError):
+        saturation_point(curve)
+    with pytest.raises(InsufficientLadderError):
+        min_useful_combo(curve)
