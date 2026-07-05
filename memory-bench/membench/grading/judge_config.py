@@ -60,24 +60,25 @@ STRICT_MCP_CONFIG_FLAG = "--strict-mcp-config"
 
 
 def _default_isolation_base() -> Path:
-    """The default per-user base dir for the isolated judge config, under the temp
-    root. User-scoped (``getuid``) so it never collides with another account's dir
-    on a shared host; stable so repeated judge calls reuse one clean root instead
-    of littering the temp dir."""
+    """A fresh, unique base dir for one isolated judge config. ``mkdtemp`` guarantees
+    the path is exclusive to this call -- concurrent judge invocations (grid runs,
+    variance pilots, parallel bundles) never share a base dir, so the
+    mkdir -> forbidden-entries-check -> settings.json write below needs no lock."""
     uid = os.getuid() if hasattr(os, "getuid") else os.getpid()
-    return Path(tempfile.gettempdir()) / f"membench-graded-judge-{uid}"
+    return Path(tempfile.mkdtemp(prefix=f"membench-graded-judge-{uid}-"))
 
 
 @dataclass(frozen=True)
 class IsolatedJudgeConfig:
     """The isolation surface for one judge subprocess: the clean ``config_dir``
-    (redirected ``CLAUDE_CONFIG_DIR``), a neutral ``cwd`` outside any project, the
-    ``env`` the subprocess runs under, and the ``extra_argv`` flags it must carry.
-    ``marker`` is the attributable record echoed into a run's pins."""
+    (redirected ``CLAUDE_CONFIG_DIR``), a neutral ``cwd`` outside any project, and the
+    ``extra_argv`` flags it must carry. ``marker`` is the attributable record echoed
+    into a run's pins. There is no cached ``env`` here -- the subprocess env is
+    assembled fresh per call (`isolated_judge_env`) so a mid-run credential refresh
+    (e.g. ``CLAUDE_CODE_OAUTH_TOKEN``) is never shipped stale."""
 
     config_dir: Path
     cwd: Path
-    env: dict[str, str]
     extra_argv: tuple[str, ...]
 
     @property
@@ -92,18 +93,23 @@ class IsolatedJudgeConfig:
         }
 
 
-def ensure_isolated_config_dir(config_dir: Path) -> Path:
-    """Materialize (idempotently) the minimal clean config dir and assert it carries
-    NO host/project agent surface. Writes only ``settings.json``; if a forbidden
-    entry (`FORBIDDEN_CONFIG_ENTRIES`) is somehow present, raises rather than run a
-    judge that could load it — isolation fails LOUD, never open."""
-    config_dir.mkdir(parents=True, exist_ok=True)
-    present = [name for name in FORBIDDEN_CONFIG_ENTRIES if (config_dir / name).exists()]
+def _assert_no_forbidden_entries(directory: Path) -> None:
+    """Fail-loud cleanliness check shared by every isolation-surface dir (config AND
+    cwd): if a forbidden entry (`FORBIDDEN_CONFIG_ENTRIES`) is somehow present, raise
+    rather than run a judge that could load it -- isolation fails LOUD, never open."""
+    present = [name for name in FORBIDDEN_CONFIG_ENTRIES if (directory / name).exists()]
     if present:
         raise RuntimeError(
-            f"isolated judge config dir {config_dir} is not clean: {present} present -- "
+            f"isolated judge dir {directory} is not clean: {present} present -- "
             "refusing to run the judge under a config surface that could load a host agent"
         )
+
+
+def ensure_isolated_config_dir(config_dir: Path) -> Path:
+    """Materialize (idempotently) the minimal clean config dir and assert it carries
+    NO host/project agent surface. Writes only ``settings.json``."""
+    config_dir.mkdir(parents=True, exist_ok=True)
+    _assert_no_forbidden_entries(config_dir)
     (config_dir / "settings.json").write_text(_MINIMAL_SETTINGS, encoding="utf-8")
     return config_dir
 
@@ -111,10 +117,13 @@ def ensure_isolated_config_dir(config_dir: Path) -> Path:
 def isolated_judge_env(
     config_dir: Path, base_env: Mapping[str, str] | None = None
 ) -> dict[str, str]:
-    """A copy of ``base_env`` (default ``os.environ``) with ``CLAUDE_CONFIG_DIR``
-    redirected to ``config_dir``. Everything else is preserved verbatim -- notably
-    ``CLAUDE_CODE_OAUTH_TOKEN`` (headless auth), ``PATH`` (locating ``claude``), and
-    ``HOME`` -- so isolation changes the config surface WITHOUT breaking auth."""
+    """A copy of ``base_env`` (default ``os.environ``, read FRESH on every call) with
+    ``CLAUDE_CONFIG_DIR`` redirected to ``config_dir``. Everything else is preserved
+    verbatim -- notably ``CLAUDE_CODE_OAUTH_TOKEN`` (headless auth), ``PATH``
+    (locating ``claude``), and ``HOME`` -- so isolation changes the config surface
+    WITHOUT breaking auth. Call this at subprocess-launch time, not once at judge
+    construction -- a cached snapshot would ship a stale token if credentials are
+    refreshed mid-run."""
     env = dict(os.environ if base_env is None else base_env)
     env[ENV_CLAUDE_CONFIG_DIR] = str(config_dir)
     return env
@@ -123,18 +132,19 @@ def isolated_judge_env(
 def prepare_isolated_judge(base: Path | None = None) -> IsolatedJudgeConfig:
     """Assemble the full isolation surface for a graded-judge subprocess. Creates a
     clean ``config`` dir (redirected ``CLAUDE_CONFIG_DIR``) and a distinct neutral
-    ``cwd`` dir (both under ``base``, default `_default_isolation_base`); the two are
-    separate so the judge never treats its own config dir as a project checkout.
-    Returns the config dir, neutral cwd, isolated env, and the ``--strict-mcp-config``
-    flag to append to argv."""
+    ``cwd`` dir (both under ``base``, default `_default_isolation_base` -- a fresh
+    unique dir per call, so concurrent invocations never race); the two are separate
+    so the judge never treats its own config dir as a project checkout. Both dirs get
+    the same fail-loud cleanliness check. Returns the config dir, neutral cwd, and the
+    ``--strict-mcp-config`` flag to append to argv."""
     root = base if base is not None else _default_isolation_base()
     config_dir = ensure_isolated_config_dir(root / "config")
     cwd = root / "cwd"
     cwd.mkdir(parents=True, exist_ok=True)
+    _assert_no_forbidden_entries(cwd)
     return IsolatedJudgeConfig(
         config_dir=config_dir,
         cwd=cwd,
-        env=isolated_judge_env(config_dir),
         extra_argv=(STRICT_MCP_CONFIG_FLAG,),
     )
 

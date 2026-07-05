@@ -252,10 +252,14 @@ def test_claude_judge_invokes_under_isolated_config(tmp_path, monkeypatch) -> No
         assert not (isolation.config_dir / forbidden).exists()
 
 
-def test_claude_judge_default_isolation_marker_is_on() -> None:
-    # Even with no injected isolation, a constructed judge is isolated and exposes an
-    # attributable marker (echoed into a run's pins) pointing away from any host account.
-    marker = ClaudeRubricJudge().isolation_marker
+def test_claude_judge_default_isolation_marker_is_on(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # A judge's isolation marker reports isolated_config=True and a config_dir that
+    # points away from any host account. Inject a tmp_path-scoped isolation (per this
+    # module's own test convention) rather than letting the judge fall through to the
+    # real default base -- that base is the same one a live production judge run
+    # would use, so exercising it here would be non-hermetic I/O against shared state.
+    isolation = prepare_isolated_judge(base=tmp_path)
+    marker = ClaudeRubricJudge(isolation=isolation).isolation_marker
     assert marker["isolated_config"] is True
     assert marker["strict_mcp_config"] is True
     assert "account3" not in str(marker["config_dir"])

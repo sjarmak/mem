@@ -48,6 +48,17 @@ def test_ensure_fails_loud_on_contaminating_surface(tmp_path, forbidden: str) ->
         ensure_isolated_config_dir(d)
 
 
+@pytest.mark.parametrize("forbidden", FORBIDDEN_CONFIG_ENTRIES)
+def test_prepare_fails_loud_on_contaminating_cwd(tmp_path, forbidden: str) -> None:  # type: ignore[no-untyped-def]
+    # The forbidden-entries check applies to cwd too, not just config_dir -- a
+    # contaminating surface left in the neutral cwd must abort the same way.
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    (cwd / forbidden).mkdir() if forbidden != "CLAUDE.md" else (cwd / forbidden).write_text("x")
+    with pytest.raises(RuntimeError, match="not clean"):
+        prepare_isolated_judge(base=tmp_path)
+
+
 def test_env_redirects_config_dir_and_preserves_auth(tmp_path) -> None:  # type: ignore[no-untyped-def]
     base = {
         ENV_CLAUDE_CONFIG_DIR: "/home/ds/.claude-homes/account3/.claude",

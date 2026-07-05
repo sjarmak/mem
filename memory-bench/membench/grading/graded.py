@@ -61,7 +61,11 @@ from typing import Protocol
 
 from membench._claude_cli import first_json_object, unwrap_cli_json
 from membench.grading.judge import Rubric, RubricCriterion, score_completion
-from membench.grading.judge_config import IsolatedJudgeConfig, prepare_isolated_judge
+from membench.grading.judge_config import (
+    IsolatedJudgeConfig,
+    isolated_judge_env,
+    prepare_isolated_judge,
+)
 
 # Judge score and the mechanical reference disagree by more than this -> flag the run
 # for review (EB rescore comparator's 0.3 threshold).
@@ -324,8 +328,11 @@ class ClaudeRubricJudge:
     neutral cwd, so no host/project agent (notably a ``code-reviewer``) can hijack the
     judge into answering as a reviewer. Left ``None`` it is materialized lazily on
     first use (`prepare_isolated_judge`) and cached, so mere construction touches no
-    disk; tests inject a ``tmp_path``-scoped one. The MODEL and round count are
-    unchanged -- only the config surface the judge loads is."""
+    disk; tests inject a ``tmp_path``-scoped one. The subprocess env is NOT part of
+    that cache -- `_complete` assembles it fresh (`isolated_judge_env`) on every call,
+    so a credential refreshed mid-run (e.g. ``CLAUDE_CODE_OAUTH_TOKEN``) is never
+    shipped stale. The MODEL and round count are unchanged -- only the config surface
+    the judge loads is."""
 
     model: str = ""
     timeout_s: float = DEFAULT_TIMEOUT_S
@@ -384,7 +391,7 @@ class ClaudeRubricJudge:
                 text=True,
                 check=False,
                 timeout=self.timeout_s,
-                env=isolation.env,
+                env=isolated_judge_env(isolation.config_dir),
                 cwd=isolation.cwd,
             )
         except FileNotFoundError as exc:
