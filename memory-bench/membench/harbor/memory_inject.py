@@ -49,7 +49,11 @@ MEMORY_FILENAME = "memory/MEMORY.md"
 DEFERRED_RUNGS = ("builtin", "ours+builtin")
 
 # Rungs this module can inject today (the runnable subset of the ladder).
-RUNNABLE_RUNGS = ("none", "ours", "oracle")
+# `vector-rag` is the Sakana recall-ladder rung-2 (mem-do8r): a semantic-arm
+# retrieval whose payloads are resolved by the driver (e.g. the `nemo-embed` arm)
+# and injected through the SAME leak-guard path as `ours`, so the two retrieval
+# rungs differ only in recall policy, never in how their memory reaches the agent.
+RUNNABLE_RUNGS = ("none", "vector-rag", "ours", "oracle")
 
 # The full ladder vocabulary (grading/ablation.py's DEFAULT_RUNGS draws from it).
 KNOWN_RUNGS = RUNNABLE_RUNGS + DEFERRED_RUNGS
@@ -209,6 +213,7 @@ def inject_rung_memory(
     rung: str,
     *,
     held_errors: Sequence[TraceErrorRef],
+    vector_payloads: dict[str, str] | None = None,
     ours_payloads: dict[str, str] | None = None,
     oracle_payload: str | None = None,
     outcome_labels: Iterable[str] = (),
@@ -216,11 +221,21 @@ def inject_rung_memory(
     """Write `rung`'s memory content into `task_dir`; return the file written.
 
     - `none` -> writes nothing, returns None (the stateless control).
+    - `vector-rag` -> writes the semantic-arm retrieval payloads (`vector_payloads`,
+      resolved by the driver from a dense-embedding arm) and records the same H3
+      signature-overlap covariate as `ours` -- both are retrieval rungs, so a
+      cosine-nearest prior may legitimately share the held failure signature
+      (mem-tnyo): a covariate, never a guard.
     - `ours` -> writes the distilled retrieval payloads (`ours_payloads`) and
       records the H3 signature-overlap covariate (`write_signature_overlap`,
       mem-tnyo -- a covariate, not a guard: see that function's rationale).
     - `oracle` -> writes `oracle_payload`, guarded by the H3 self-leak check.
     - `builtin` / `ours+builtin` -> `DeferredRungError` (owned by mem-whi).
+
+    Both `vector_payloads` and `ours_payloads` MUST already be bounded to the task's
+    LOO boundary by the caller (retrieval-v1 excludes the held item; the semantic arm
+    scopes its candidate set per trial) -- this module injects them verbatim and does
+    not re-filter.
 
     All payloads are leak-checked for outcome labels before any write; the oracle
     rung additionally runs the self-leak guard. `held_errors` is required and must
@@ -235,6 +250,22 @@ def inject_rung_memory(
 
     if rung == "none":
         return None
+
+    if rung == "vector-rag":
+        payloads = vector_payloads or {}
+        target = inject_context(task_path, payloads, outcome_labels=labels)
+        # H3 parity with `ours`: record the signature overlap as a covariate. The
+        # vector arm retrieves by query text, so its trigger differs from the
+        # oracle-triggered `ours` path -- recording it lets analysis compare overlap
+        # rates across recall policies instead of silently biasing either.
+        write_signature_overlap(
+            task_path,
+            condition="vector-rag",
+            trigger="query_text",
+            payloads=payloads,
+            signatures=held_signatures(held),
+        )
+        return target
 
     if rung == "ours":
         payloads = ours_payloads or {}

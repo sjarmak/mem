@@ -146,6 +146,7 @@ def run_grid(
     held_errors: Sequence[TraceErrorRef],
     runner: AgentRunner,
     rungs: tuple[str, ...] = ("none", "ours", "oracle"),
+    vector_payloads: dict[str, str] | None = None,
     ours_payloads: dict[str, str] | None = None,
     oracle_payload: str | None = None,
     outcome_labels: Sequence[str] = (),
@@ -166,9 +167,10 @@ def run_grid(
     'beads with >=1 trace_error', and the scorer rejects an empty held set.
 
     Two caller preconditions (this driver does not enforce them):
-    - `ours_payloads` MUST already be bounded to the task's D6 LOO boundary by the
-      caller (e.g. via `validity.loo_bounded`); `run_grid` injects them verbatim and
-      does not re-filter by `loo_boundary`.
+    - `ours_payloads` (and `vector_payloads`, the recall-ladder rung-2 semantic-arm
+      retrieval) MUST already be bounded to the task's D6 LOO boundary by the caller
+      (e.g. via `validity.loo_bounded`, or the semantic arm's per-trial scope);
+      `run_grid` injects them verbatim and does not re-filter by `loo_boundary`.
     - the returned `RewardComponents.rubric_score` is always `None` -- the judge
       (mem-apg.3b) is a separate post-harvest step; a caller wanting the combined
       semantic reward must run the judge over each rung's run output and set
@@ -205,6 +207,7 @@ def run_grid(
                 task_dir,
                 rung,
                 held_errors=held,
+                vector_payloads=vector_payloads,
                 ours_payloads=ours_payloads,
                 oracle_payload=oracle_payload,
                 outcome_labels=outcome_labels,

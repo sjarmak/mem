@@ -21,6 +21,7 @@ from membench.grading.base import Feasibility, OutcomeSource
 # is label-free by construction.
 DEFAULT_RUNGS: tuple[str, ...] = (
     "none",
+    "vector-rag",
     "ours",
     "builtin",
     "ours+builtin",

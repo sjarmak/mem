@@ -12,20 +12,28 @@ admitted tasks, an empty-retrieval task contributing delta 0) is the pre-registe
 primary; the retrieval-fired ``matched`` set is the mechanism-conditional secondary
 (mem-lp24).
 
-**What the live 3-rung ladder supports (architect H2).** With the combinatorial rungs
-(`builtin`, `ours+builtin`) deferred to mem-whi, the executable ladder is only
-``none < ours < oracle`` — three points with no interior resolution and no
-*combination* axis. Three points cannot LOCATE a saturation point or a
-minimum-useful-information COMBINATION, so this module reports what they genuinely
-support:
+**What the reward readouts support today (architect H2).** With the combinatorial
+rungs (`builtin`, `ours+builtin`) deferred to mem-whi, the name-based delta readouts
+report what the ``none``/``ours``/``oracle`` points genuinely support:
 
 - ``floor_lift`` — how far ``ours`` lifts reward above the zero-memory ``none`` floor.
 - ``ceiling_gap`` — how far ``ours`` still trails the ``oracle`` ceiling.
 
 ``saturation_point`` and ``min_useful_combo`` are the D17 readouts that need the full
 ladder; they REFUSE (raise ``InsufficientLadderError``) below four rungs rather than
-fabricate a vacuous "saturation at the only interior rung". They become meaningful
-once mem-whi lands the builtin rungs.
+fabricate a vacuous "saturation at the only interior rung". They were designed for the
+mem-whi *combination* axis and become meaningful once the builtin rungs land.
+
+**Recall ladder (mem-do8r), NOT yet reconciled here.** The ``vector-rag`` rung is now
+runnable (``harbor.memory_inject.RUNNABLE_RUNGS``) and sits between ``none`` and ``ours``
+in ``DEFAULT_RUNGS`` (canonical order ``none < vector-RAG < ours ≤ oracle``), so
+``_ladder_order`` places it correctly. But a 4-rung RECALL ladder now satisfies
+``MIN_LADDER_FOR_SATURATION`` — which means feeding vector-ladder records to
+``saturation_point`` / ``min_useful_combo`` makes them COMPUTE with a semantics built for
+the combination axis, not a recall-policy sweep. Reconciling those two readouts (and
+whether ``floor_lift`` should baseline against ``vector-rag`` rather than ``none``) is
+tracked in mem-do8r.2; until then, read only ``floor_lift`` / ``ceiling_gap`` off a
+recall-ladder curve.
 
 Repeats collapse within task (architect M2) before the across-task mean + CI: ``k``
 repeats of a task are correlated, not independent observations, so each task
