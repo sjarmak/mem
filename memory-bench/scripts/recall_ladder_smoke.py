@@ -341,6 +341,9 @@ def main() -> None:
 
     scored = {rec.rung for rec, _ in rows}
     assert scored == set(RUNGS), f"expected every rung scored, got {sorted(scored)}"
+    assert len(rows) == len(TASKS) * len(
+        RUNGS
+    ), f"expected one record per work_id x rung ({len(TASKS)}x{len(RUNGS)}), got {len(rows)}"
     print(
         f"\nOK: all {len(RUNGS)} rungs wired through run_grid over {len(TASKS)} fixture tasks; "
         f"{len(rows)} comparable RewardRecords emitted (one per work_id x rung)."

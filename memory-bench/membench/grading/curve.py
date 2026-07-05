@@ -26,7 +26,7 @@ mem-whi *combination* axis and become meaningful once the builtin rungs land.
 
 **Recall ladder (mem-do8r).** The ``vector-rag`` rung is now runnable
 (``harbor.memory_inject.RUNNABLE_RUNGS``) and sits between ``none`` and ``ours`` in
-``DEFAULT_RUNGS`` (canonical order ``none < vector-RAG < ours ≤ oracle``), so
+``DEFAULT_RUNGS`` (canonical order ``none < vector-rag < ours ≤ oracle``), so
 ``_ladder_order`` places it correctly. A 4-rung RECALL ladder varies the recall policy,
 a different axis from the ``saturation_point`` / ``min_useful_combo`` COMBINATION readouts
 — so ``_require_full_ladder`` gates on a combination rung being present, not on rung count

@@ -92,6 +92,7 @@ def test_inject_vector_rag_writes_payloads_and_covariate(tmp_path):
     # H3 parity with ours: the signature-overlap covariate is recorded (mem-tnyo).
     overlap = json.loads((tmp_path / SIGNATURE_OVERLAP_FILENAME).read_text(encoding="utf-8"))
     assert overlap["condition"] == "vector-rag"
+    assert overlap["trigger"] == "query_text"  # vs ours' oracle trigger: the ONLY other delta
     assert "prior-7" in overlap["overlap"]
 
 
@@ -112,6 +113,8 @@ def test_inject_vector_rag_leak_guards_outcome_labels(tmp_path):
             vector_payloads={"leaky": "root cause was commit deadbeefcafe"},
             outcome_labels=["deadbeefcafe"],
         )
+    # The guard runs BEFORE the write: the leaky payload never reaches disk.
+    assert not (tmp_path / MEMORY_FILENAME).exists()
 
 
 def test_inject_vector_rag_defaults_to_empty_when_payloads_none(tmp_path):
@@ -148,7 +151,9 @@ def test_run_grid_four_rung_ladder_scores_every_rung(tmp_path):
     )
     by_rung = {r.rung: r for r in records}
     assert set(by_rung) == set(FOUR_RUNGS)
-    # Every rung emits one comparable RewardRecord keyed by (work_id, rung, repeat).
+    # Every rung emits ONE comparable RewardRecord keyed by (work_id, rung, repeat) —
+    # the length pin catches a double-emitted rung the dict collapse would hide.
+    assert len(records) == len(FOUR_RUNGS)
     for rec in records:
         assert rec.work_id == "w1"
         assert rec.repeat_idx == 0
@@ -177,6 +182,10 @@ def test_run_grid_vector_rag_injects_the_vector_payload(tmp_path):
     vec = (tmp_path / "w1-vector-rag" / MEMORY_FILENAME).read_text(encoding="utf-8")
     assert "cosine-nearest prior lesson" in vec
     assert "ranked-ledger lesson" not in vec  # rungs don't cross-contaminate
+    # ...in either direction: the vector payload must not bleed into ours/oracle.
+    for rung in ("ours", "oracle"):
+        other = (tmp_path / f"w1-{rung}" / MEMORY_FILENAME).read_text(encoding="utf-8")
+        assert "cosine-nearest prior lesson" not in other
 
 
 # --- build_curve auto-detect places vector-rag between none and ours ------------

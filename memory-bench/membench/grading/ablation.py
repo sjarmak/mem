@@ -32,7 +32,7 @@ DEFAULT_RUNGS: tuple[str, ...] = (
 # readouts measure (the agent's opaque memory, layered with `ours`; mem-whi). Lives
 # here beside the rung vocabulary; `harbor.memory_inject.DEFERRED_RUNGS` names the
 # same rungs for the separate runnability concept (they coincide until mem-whi).
-COMBINATION_RUNGS = frozenset({"builtin", "ours+builtin"})
+COMBINATION_RUNGS: frozenset[str] = frozenset({"builtin", "ours+builtin"})
 
 
 @dataclass(frozen=True)
