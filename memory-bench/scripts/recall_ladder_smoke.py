@@ -293,16 +293,16 @@ def run_task(
 # --- reporting -------------------------------------------------------------------
 
 
-def _print_table(rows: list[tuple[str, RewardRecord, int]]) -> None:
+def _print_table(rows: list[tuple[RewardRecord, int]]) -> None:
     header = (
         f"{'work_id':<14} {'rung':<11} {'reached':<8} {'resolved':<9} {'reward':<7} {'#prior':<6}"
     )
     print(header)
     print("-" * len(header))
-    for work_id, rec, n_prior in rows:
+    for rec, n_prior in rows:
         c = rec.components
         print(
-            f"{work_id:<14} {rec.rung:<11} "
+            f"{rec.work_id:<14} {rec.rung:<11} "
             f"{c.path_reached!s:<8} {c.trace_error_resolved!s:<9} "
             f"{rec.reward:<7.3f} {n_prior:<6}"
         )
@@ -314,7 +314,7 @@ def main() -> None:
         "deterministic: fake embedder + stub ours runner + StubRunner (no Docker/model/paid API)\n"
     )
 
-    rows: list[tuple[str, RewardRecord, int]] = []
+    rows: list[tuple[RewardRecord, int]] = []
     with TemporaryDirectory(prefix="recall-ladder-smoke-") as tmp:
         output_dir = Path(tmp)
         for task in TASKS:
@@ -335,11 +335,11 @@ def main() -> None:
                 ours_payloads=ours_payloads,
             )
             for rec in records:
-                rows.append((task.work_id, rec, counts[rec.rung]))
+                rows.append((rec, counts[rec.rung]))
 
     _print_table(rows)
 
-    scored = {rec.rung for _, rec, _ in rows}
+    scored = {rec.rung for rec, _ in rows}
     assert scored == set(RUNGS), f"expected every rung scored, got {sorted(scored)}"
     print(
         f"\nOK: all {len(RUNGS)} rungs wired through run_grid over {len(TASKS)} fixture tasks; "

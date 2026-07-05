@@ -58,6 +58,13 @@ RUNNABLE_RUNGS = ("none", "vector-rag", "ours", "oracle")
 # The full ladder vocabulary (grading/ablation.py's DEFAULT_RUNGS draws from it).
 KNOWN_RUNGS = RUNNABLE_RUNGS + DEFERRED_RUNGS
 
+# The two retrieval rungs inject identically -- inject_context + the H3 signature-
+# overlap covariate -- and differ ONLY in recall policy: which payloads reach the
+# agent, and the `trigger` label recording how the query was formed (`vector-rag`
+# retrieves by query text; `ours` replays from the held record, an oracle trigger).
+# `oracle` is NOT a peer: it injects one curated payload under a hard self-leak guard.
+_RETRIEVAL_TRIGGERS = {"vector-rag": "query_text", "ours": "oracle"}
+
 
 def validate_rungs(rungs: Sequence[str]) -> tuple[str, ...]:
     """Validate a rung list against the ladder vocabulary BEFORE any execution.
@@ -251,29 +258,18 @@ def inject_rung_memory(
     if rung == "none":
         return None
 
-    if rung == "vector-rag":
-        payloads = vector_payloads or {}
-        target = inject_context(task_path, payloads, outcome_labels=labels)
-        # H3 parity with `ours`: record the signature overlap as a covariate. The
-        # vector arm retrieves by query text, so its trigger differs from the
-        # oracle-triggered `ours` path -- recording it lets analysis compare overlap
-        # rates across recall policies instead of silently biasing either.
-        write_signature_overlap(
-            task_path,
-            condition="vector-rag",
-            trigger="query_text",
-            payloads=payloads,
-            signatures=held_signatures(held),
-        )
-        return target
-
-    if rung == "ours":
-        payloads = ours_payloads or {}
+    if rung in _RETRIEVAL_TRIGGERS:
+        # One injection path for both retrieval rungs (H3 parity, mem-tnyo): write the
+        # payloads, then record the signature-overlap COVARIATE -- a retrieved prior
+        # may legitimately share the held failure signature, so overlap is recorded for
+        # analysis (comparable across recall policies), never used as a guard. Recall
+        # policy is the only thing that varies: the payload source and the trigger label.
+        payloads = {"vector-rag": vector_payloads, "ours": ours_payloads}[rung] or {}
         target = inject_context(task_path, payloads, outcome_labels=labels)
         write_signature_overlap(
             task_path,
-            condition="ours",
-            trigger="oracle",
+            condition=rung,
+            trigger=_RETRIEVAL_TRIGGERS[rung],
             payloads=payloads,
             signatures=held_signatures(held),
         )

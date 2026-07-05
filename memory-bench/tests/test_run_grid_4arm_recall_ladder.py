@@ -20,7 +20,6 @@ real grid — that gate is out of scope here and deliberately not hidden by the 
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
 
 import pytest
 
@@ -126,7 +125,7 @@ def test_run_grid_four_rung_ladder_scores_every_rung(tmp_path):
     # fixture-authored to exercise the SCORING wiring per rung, NOT a real curve.
     runner = StubRunner(
         {
-            "none": RunTrace(errors=held_tuple(held), files_touched=frozenset()),
+            "none": RunTrace(errors=tuple(held), files_touched=frozenset()),
             "vector-rag": RunTrace(errors=(), files_touched=touched),
             "ours": RunTrace(errors=(), files_touched=touched),
             "oracle": RunTrace(errors=(), files_touched=touched),
@@ -173,10 +172,6 @@ def test_run_grid_vector_rag_injects_the_vector_payload(tmp_path):
     vec = (tmp_path / "w1-vector-rag" / MEMORY_FILENAME).read_text(encoding="utf-8")
     assert "cosine-nearest prior lesson" in vec
     assert "ranked-ledger lesson" not in vec  # rungs don't cross-contaminate
-
-
-def held_tuple(held: Sequence[TraceErrorRef]) -> tuple[TraceErrorRef, ...]:
-    return tuple(held)
 
 
 # --- build_curve auto-detect places vector-rag between none and ours ------------

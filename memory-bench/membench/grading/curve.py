@@ -24,16 +24,16 @@ ladder; they REFUSE (raise ``InsufficientLadderError``) below four rungs rather 
 fabricate a vacuous "saturation at the only interior rung". They were designed for the
 mem-whi *combination* axis and become meaningful once the builtin rungs land.
 
-**Recall ladder (mem-do8r), NOT yet reconciled here.** The ``vector-rag`` rung is now
-runnable (``harbor.memory_inject.RUNNABLE_RUNGS``) and sits between ``none`` and ``ours``
-in ``DEFAULT_RUNGS`` (canonical order ``none < vector-RAG < ours ≤ oracle``), so
-``_ladder_order`` places it correctly. But a 4-rung RECALL ladder now satisfies
-``MIN_LADDER_FOR_SATURATION`` — which means feeding vector-ladder records to
-``saturation_point`` / ``min_useful_combo`` makes them COMPUTE with a semantics built for
-the combination axis, not a recall-policy sweep. Reconciling those two readouts (and
-whether ``floor_lift`` should baseline against ``vector-rag`` rather than ``none``) is
-tracked in mem-do8r.2; until then, read only ``floor_lift`` / ``ceiling_gap`` off a
-recall-ladder curve.
+**Recall ladder (mem-do8r).** The ``vector-rag`` rung is now runnable
+(``harbor.memory_inject.RUNNABLE_RUNGS``) and sits between ``none`` and ``ours`` in
+``DEFAULT_RUNGS`` (canonical order ``none < vector-RAG < ours ≤ oracle``), so
+``_ladder_order`` places it correctly. A 4-rung RECALL ladder varies the recall policy,
+a different axis from the ``saturation_point`` / ``min_useful_combo`` COMBINATION readouts
+— so ``_require_full_ladder`` gates on a combination rung being present, not on rung count
+alone, and REFUSES a recall-only ladder rather than emit a combination number over it.
+``floor_lift`` / ``ceiling_gap`` remain valid (name-based). Defining real saturation
+semantics for the recall axis (and whether ``floor_lift`` should baseline against
+``vector-rag`` rather than ``none``) is tracked in mem-do8r.2.
 
 Repeats collapse within task (architect M2) before the across-task mean + CI: ``k``
 repeats of a task are correlated, not independent observations, so each task
@@ -57,6 +57,12 @@ from membench.grading.trace_score import RewardRecord
 # Below four rungs the curve has no interior resolution, so the saturation /
 # minimum-useful-combination readouts cannot be computed (architect H2).
 MIN_LADDER_FOR_SATURATION = 4
+
+# The rungs that constitute the COMBINATION axis the saturation / min-useful-combo
+# readouts measure (the agent's opaque memory, layered with `ours`; mem-whi). Kept a
+# local literal rather than imported from `harbor.memory_inject.DEFERRED_RUNGS`:
+# `harbor` depends on `grading`, so importing the other way would cycle.
+COMBINATION_RUNGS = frozenset({"builtin", "ours+builtin"})
 
 # Reward-scale tolerance for "stopped improving" / "reached the ceiling". A
 # calibrated-threshold ZFC exception (transparent arithmetic against a documented
@@ -301,11 +307,20 @@ def build_curve(
 
 
 def _require_full_ladder(curve: ScoreInformationCurve) -> None:
-    if len(curve.rungs) < MIN_LADDER_FOR_SATURATION:
+    # Axis check, not a raw count. These two readouts measure the COMBINATION axis
+    # (how memory sources stack), so they need a combination rung present -- not merely
+    # four rungs of any kind. The recall ladder (none < vector-rag < ours <= oracle,
+    # mem-do8r) also reaches four rungs but varies the RECALL policy, a different axis;
+    # computing a combination readout over it would be a category error, so it refuses
+    # here rather than silently emitting a number. Its own saturation semantics are
+    # pending (mem-do8r.2). Gating on the count alone let that slip through.
+    present = {r.rung for r in curve.rungs}
+    if len(curve.rungs) < MIN_LADDER_FOR_SATURATION or present.isdisjoint(COMBINATION_RUNGS):
         raise InsufficientLadderError(
-            f"need ≥{MIN_LADDER_FOR_SATURATION} rungs to read this off, have "
-            f"{len(curve.rungs)} ({[r.rung for r in curve.rungs]}); the builtin / "
-            f"ours+builtin rungs (mem-whi) must land first"
+            f"need ≥{MIN_LADDER_FOR_SATURATION} rungs including a combination rung "
+            f"({' / '.join(sorted(COMBINATION_RUNGS))}, mem-whi) to read this off; have "
+            f"{[r.rung for r in curve.rungs]}. A recall-only ladder has no combination "
+            f"axis -- its saturation semantics are pending (mem-do8r.2)."
         )
 
 
