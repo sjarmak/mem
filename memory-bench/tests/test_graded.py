@@ -27,6 +27,7 @@ from membench.grading.graded import (
 from membench.grading.judge_config import (
     ENV_CLAUDE_CONFIG_DIR,
     FORBIDDEN_CONFIG_ENTRIES,
+    STRICT_MCP_CONFIG_FLAG,
     prepare_isolated_judge,
 )
 
@@ -236,7 +237,7 @@ def test_claude_judge_invokes_under_isolated_config(tmp_path, monkeypatch) -> No
 
     argv, env, cwd = captured["argv"], captured["env"], captured["cwd"]
     # MCP disabled (boot-hang + agent-load guard).
-    assert "--strict-mcp-config" in argv
+    assert STRICT_MCP_CONFIG_FLAG in argv
     # Config surface redirected AWAY from the host account, to the clean dir.
     assert env[ENV_CLAUDE_CONFIG_DIR] == str(isolation.config_dir)
     assert "account3" not in env[ENV_CLAUDE_CONFIG_DIR]

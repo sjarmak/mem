@@ -11,6 +11,7 @@ import pytest
 from membench.grading.judge_config import (
     ENV_CLAUDE_CONFIG_DIR,
     FORBIDDEN_CONFIG_ENTRIES,
+    STRICT_MCP_CONFIG_FLAG,
     ensure_isolated_config_dir,
     isolated_judge_env,
     prepare_isolated_judge,
@@ -26,7 +27,7 @@ def test_prepare_materializes_clean_empty_config(tmp_path) -> None:  # type: ign
     # Neutral cwd, distinct from the config dir (so the upward CLAUDE.md walk is empty).
     assert iso.cwd.is_dir()
     assert iso.cwd != iso.config_dir
-    assert "--strict-mcp-config" in iso.extra_argv
+    assert STRICT_MCP_CONFIG_FLAG in iso.extra_argv
 
 
 def test_ensure_is_idempotent(tmp_path) -> None:  # type: ignore[no-untyped-def]

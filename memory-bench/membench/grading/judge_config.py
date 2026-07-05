@@ -55,8 +55,11 @@ FORBIDDEN_CONFIG_ENTRIES = ("agents", "skills", "rules", "commands", "CLAUDE.md"
 # empty) config root. It enables nothing — no hooks, no MCP, no plugins.
 _MINIMAL_SETTINGS = "{}\n"
 
+# Disables every MCP server (matches the headless-agent boot-hang guard).
+STRICT_MCP_CONFIG_FLAG = "--strict-mcp-config"
 
-def default_isolation_base() -> Path:
+
+def _default_isolation_base() -> Path:
     """The default per-user base dir for the isolated judge config, under the temp
     root. User-scoped (``getuid``) so it never collides with another account's dir
     on a shared host; stable so repeated judge calls reuse one clean root instead
@@ -85,7 +88,7 @@ class IsolatedJudgeConfig:
         return {
             "isolated_config": True,
             "config_dir": str(self.config_dir),
-            "strict_mcp_config": "--strict-mcp-config" in self.extra_argv,
+            "strict_mcp_config": STRICT_MCP_CONFIG_FLAG in self.extra_argv,
         }
 
 
@@ -120,11 +123,11 @@ def isolated_judge_env(
 def prepare_isolated_judge(base: Path | None = None) -> IsolatedJudgeConfig:
     """Assemble the full isolation surface for a graded-judge subprocess. Creates a
     clean ``config`` dir (redirected ``CLAUDE_CONFIG_DIR``) and a distinct neutral
-    ``cwd`` dir (both under ``base``, default `default_isolation_base`); the two are
+    ``cwd`` dir (both under ``base``, default `_default_isolation_base`); the two are
     separate so the judge never treats its own config dir as a project checkout.
     Returns the config dir, neutral cwd, isolated env, and the ``--strict-mcp-config``
     flag to append to argv."""
-    root = base if base is not None else default_isolation_base()
+    root = base if base is not None else _default_isolation_base()
     config_dir = ensure_isolated_config_dir(root / "config")
     cwd = root / "cwd"
     cwd.mkdir(parents=True, exist_ok=True)
@@ -132,7 +135,7 @@ def prepare_isolated_judge(base: Path | None = None) -> IsolatedJudgeConfig:
         config_dir=config_dir,
         cwd=cwd,
         env=isolated_judge_env(config_dir),
-        extra_argv=("--strict-mcp-config",),
+        extra_argv=(STRICT_MCP_CONFIG_FLAG,),
     )
 
 
