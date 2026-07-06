@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from membench.bundle.replay import CallReplay, ReplayOutcome, ReplayResult
+from membench.harbor.agent_memory import AGENT_NATIVE_MEMORY_PATH
 from membench.harbor.probe_gate import EmptyRunError
 from membench.schemas.bundle import BundleEnv, TaskBundle
 from tests.helpers import git as _git
@@ -94,7 +95,43 @@ def bundles_dir(clone: Path, tmp_path: Path) -> Path:
 
 def _exec_stream_stub(calls_log: list[Path]):
     """An injectable exec that records which task dirs ran and returns a fixed
-    perfect-candidate transcript."""
+    perfect-candidate transcript. It reads the injected memory (the native path) so
+    memory-injected conditions clear the consumption gate; the Read is inert for
+    non-injected conditions (harvest replays only Edit/Write, and their gate is skipped)."""
+    event = {
+        "type": "assistant",
+        "message": {
+            "content": [
+                {
+                    "type": "tool_use",
+                    "name": "Read",
+                    "input": {"file_path": AGENT_NATIVE_MEMORY_PATH},
+                },
+                {
+                    "type": "tool_use",
+                    "name": "Edit",
+                    "input": {
+                        "file_path": "/app/src/app.ts",
+                        "old_string": "const value = 1",
+                        "new_string": "const value = 2",
+                    },
+                },
+            ],
+            "usage": {"input_tokens": 100, "output_tokens": 40},
+        },
+    }
+    stream = json.dumps(event)
+
+    def exec_stream(task_dir: Path) -> str:
+        calls_log.append(task_dir)
+        return stream
+
+    return exec_stream
+
+
+def _exec_stream_stub_no_memory(calls_log: list[Path]):
+    """Like `_exec_stream_stub` but the agent NEVER reads the injected memory (no native
+    Read, no header) -- so injected conditions must fail the consumption gate."""
     event = {
         "type": "assistant",
         "message": {
@@ -142,7 +179,7 @@ def test_batch_runs_persists_and_summarizes(bundles_dir: Path, clone: Path, tmp_
         exec_stream=_exec_stream_stub(executed),
         worktree_root=tmp_path / "wt",
     )
-    assert tally == {"executed": 4, "skipped": 0, "planned": 0}
+    assert tally == {"executed": 4, "skipped": 0, "planned": 0, "not_consumed": 0}
     assert len(executed) == 4
     for work_id in ("demo-a", "demo-b"):
         for condition in ("none", "oracle"):
@@ -160,6 +197,40 @@ def test_batch_runs_persists_and_summarizes(bundles_dir: Path, clone: Path, tmp_
     assert summary["gaps"]["combined"]["deltas"] == [0.0, 0.0]
     assert summary["gap_positive_majority"] is False
     # No checkout left behind.
+    assert probe_cli.sweep_probe_worktrees(clone) is None
+
+
+def test_unconsumed_injected_leg_writes_no_result_and_does_not_abort_batch(
+    bundles_dir: Path, clone: Path, tmp_path: Path
+) -> None:
+    # The deliverable this whole change exists for (0/50 consumption incident): an injected
+    # leg whose agent never read the memory is NOT scored. Unlike EmptyRunError it does not
+    # cascade -- the batch continues, so a later bundle still executes.
+    bundles = probe_cli.load_bundles(bundles_dir)  # demo-a, demo-b
+    probe_dir = tmp_path / "probe"
+    ran: list[Path] = []
+    tally = probe_cli.run_probe_batch(
+        bundles,
+        ("none", "oracle"),
+        probe_dir=probe_dir,
+        tasks_dir=probe_dir / "tasks",
+        rig_repos={"demo": clone},
+        exec_stream=_exec_stream_stub_no_memory(ran),
+        worktree_root=tmp_path / "wt",
+    )
+    # none legs (gate skipped) execute; oracle legs (gate fires) are counted, not scored.
+    assert tally == {"executed": 2, "skipped": 0, "planned": 0, "not_consumed": 2}
+    for work_id in ("demo-a", "demo-b"):
+        assert (probe_dir / f"{work_id}.none.json").is_file()  # non-injected scored
+        assert not (probe_dir / f"{work_id}.oracle.json").exists()  # unconsumed: no result
+    # All 4 legs reached exec (exec_stream runs before the gate); demo-b's ran AFTER
+    # demo-a's oracle failed -> non-cascading (an EmptyRunError would have aborted at leg 2).
+    assert [p.name for p in ran] == [
+        "demo-a.none",
+        "demo-a.oracle",
+        "demo-b.none",
+        "demo-b.oracle",
+    ]
     assert probe_cli.sweep_probe_worktrees(clone) is None
 
 
@@ -186,7 +257,7 @@ def test_existing_result_files_are_skipped_on_rerun(
     tally = probe_cli.run_probe_batch(
         bundles, ("none", "oracle"), exec_stream=_exec_stream_stub(second), **kwargs
     )
-    assert tally == {"executed": 1, "skipped": 3, "planned": 0}
+    assert tally == {"executed": 1, "skipped": 3, "planned": 0, "not_consumed": 0}
     assert [p.name for p in second] == ["demo-b.oracle"]
     assert (probe_dir / "demo-b.oracle.json").is_file()
 
@@ -206,7 +277,7 @@ def test_dry_run_constructs_validates_and_executes_nothing(
         exec_stream=_exec_stream_stub(executed),
         dry_run=True,
     )
-    assert tally == {"executed": 0, "skipped": 0, "planned": 4}
+    assert tally == {"executed": 0, "skipped": 0, "planned": 4, "not_consumed": 0}
     assert executed == []  # nothing ran
     assert list(probe_dir.glob("*.json")) == []  # no results, no summary
     # The tasks themselves WERE constructed + validated.
@@ -286,7 +357,7 @@ def test_batch_clean_room_conditions_with_payload_seam(
         worktree_root=tmp_path / "wt",
         ours_payloads_for=lambda b: {"gc-prior-1": payload},
     )
-    assert tally == {"executed": 4, "skipped": 0, "planned": 0}
+    assert tally == {"executed": 4, "skipped": 0, "planned": 0, "not_consumed": 0}
     for work_id in ("demo-a", "demo-b"):
         clean_df = probe_dir / "tasks" / f"{work_id}.none-clean" / "environment" / "Dockerfile"
         assert "rm -rf" in clean_df.read_text(encoding="utf-8")
@@ -329,7 +400,7 @@ def test_batch_shuffled_condition_wiring(bundles_dir: Path, clone: Path, tmp_pat
         worktree_root=tmp_path / "wt",
         shuffled_for=shuffled_for,
     )
-    assert tally == {"executed": 2, "skipped": 0, "planned": 0}
+    assert tally == {"executed": 2, "skipped": 0, "planned": 0, "not_consumed": 0}
     for work_id, donor in (("demo-a", "demo-b"), ("demo-b", "demo-a")):
         task_dir = probe_dir / "tasks" / f"{work_id}.{SHUFFLED}"
         assert "rm -rf" in (task_dir / "environment" / "Dockerfile").read_text(encoding="utf-8")

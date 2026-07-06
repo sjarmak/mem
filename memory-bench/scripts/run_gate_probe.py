@@ -46,6 +46,7 @@ from membench.harbor.probe_gate import (
     CONDITIONS,
     OURS_CONDITIONS,
     EmptyRunError,
+    MemoryNotConsumedError,
     ProbeConditionResult,
     ProbePair,
     Runner,
@@ -123,7 +124,7 @@ def run_probe_batch(
     session -- persisting them as 0.0 silently corrupted the gate (mem-75t.7.6
     incident). Results already on disk survive; rerun with a fresh token to resume."""
     probe_dir.mkdir(parents=True, exist_ok=True)
-    executed = skipped = planned = 0
+    executed = skipped = planned = not_consumed = 0
     used_clones: set[Path] = set()
     try:
         for bundle in bundles:
@@ -192,6 +193,20 @@ def run_probe_batch(
                         file=sys.stderr,
                     )
                     raise
+                except MemoryNotConsumedError as exc:
+                    # Non-cascading, per-run: the agent didn't read the injected memory, so
+                    # this leg is NOT a valid memory-arm measurement. Write no result (re-runs
+                    # on resume) and continue -- a SYSTEMIC delivery break surfaces as a high
+                    # not_consumed tally, isolated agent variance as a small one.
+                    not_consumed += 1
+                    print(
+                        f"\n*** MEMORY NOT CONSUMED -- {exc}\n"
+                        f"*** No result file written ({out}); the leg re-executes on resume. "
+                        f"A high not_consumed count means delivery is broken -- verify the "
+                        f"injected memory reaches the agent's native path before trusting the arm.",
+                        file=sys.stderr,
+                    )
+                    continue
                 out.write_text(result.model_dump_json(indent=2) + "\n", encoding="utf-8")
                 executed += 1
                 print(
@@ -202,7 +217,12 @@ def run_probe_batch(
     finally:
         for clone in sorted(used_clones):
             sweep_probe_worktrees(clone, runner=runner)
-    return {"executed": executed, "skipped": skipped, "planned": planned}
+    return {
+        "executed": executed,
+        "skipped": skipped,
+        "planned": planned,
+        "not_consumed": not_consumed,
+    }
 
 
 def load_pairs(probe_dir: Path, bundles: Sequence[TaskBundle]) -> list[ProbePair]:
@@ -279,8 +299,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"({len(bundles)} bundle(s) x {len(conditions)} condition(s)); nothing executed."
         )
         return 0
-    print(f"\nexecuted={tally['executed']} skipped={tally['skipped']}")
+    print(
+        f"\nexecuted={tally['executed']} skipped={tally['skipped']} "
+        f"not_consumed={tally['not_consumed']}"
+    )
     write_summary(args.probe_dir, bundles)
+    if tally["not_consumed"]:
+        print(
+            f"*** {tally['not_consumed']} leg(s) never consumed the injected memory -- "
+            "no result written for those; verify memory delivery before trusting the arm.",
+            file=sys.stderr,
+        )
+        # Systemic delivery break (nothing consumed the memory) is a nonzero exit so an
+        # unattended/CI wrapper sees failure -- the exact regression this gate guards.
+        # A mix (some legs executed) is isolated variance: warn, but exit 0.
+        if tally["executed"] == 0:
+            return 1
     return 0
 
 

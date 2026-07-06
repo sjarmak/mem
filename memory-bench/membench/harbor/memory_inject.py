@@ -44,6 +44,12 @@ from membench.grading import (
 # injected prior reads the same as a built-in memory would.
 MEMORY_FILENAME = "memory/MEMORY.md"
 
+# The fixed first line of every rendered memory file. Distinctive and uniform across
+# all injected conditions, so its presence in an agent transcript is a reliable
+# consumption signal (`probe_gate.assert_memory_consumed`): a fresh agent never emits
+# this verbatim unless a cat/Read/auto-load surfaced the injected file.
+MEMORY_HEADER = "# Prior-session memory"
+
 # Rungs whose memory is the agent's opaque built-in store -- owned by mem-whi's
 # paid Harbor path, not constructible here.
 DEFERRED_RUNGS = ("builtin", "ours+builtin")
@@ -183,8 +189,8 @@ def _render(payloads: dict[str, str]) -> str:
     prior, keyed by its source id so the agent can cite it. An empty mapping
     yields an explicit 'no relevant prior memory' body -- the rung was tried."""
     if not payloads:
-        return "# Prior-session memory\n\nNo relevant prior memory was retrieved.\n"
-    parts = ["# Prior-session memory", ""]
+        return f"{MEMORY_HEADER}\n\nNo relevant prior memory was retrieved.\n"
+    parts = [MEMORY_HEADER, ""]
     for source_id, content in payloads.items():
         parts += [f"## {source_id}", "", content, ""]
     return "\n".join(parts)

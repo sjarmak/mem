@@ -195,6 +195,7 @@ def build_job_config(
     model: str | None = None,
     agent: str = DEFAULT_AGENT,
     agent_version: str | None = None,
+    agent_env: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """The minimal Harbor `JobConfig` to run one local task with the OAuth agent.
 
@@ -208,6 +209,12 @@ def build_job_config(
     ``agent.env`` unset keeps no secret on disk and lets the real token through unmodified.
     ``ANTHROPIC_API_KEY`` stays unset so Claude Code uses subscription auth (D16).
 
+    ``agent_env`` is the ONE sanctioned use of ``agent.env``: LITERAL, non-secret vars the
+    probe path relocates ``CLAUDE_CONFIG_DIR`` with, so the agent's native-memory block
+    reads the injected file (`agent_memory`). It is merged over the adapter env exactly
+    like the token warning above, so the OAuth token key is REFUSED here — it must keep
+    flowing from the process env. Absent ``agent_env``, ``agent.env`` stays unset.
+
     ``agent_version`` pins the in-container CLI install (harbor's installed-agent
     ``version`` constructor kwarg, reached via ``AgentConfig.kwargs``); without it
     every container installs whatever is latest — a silent instrument drift across
@@ -217,6 +224,14 @@ def build_job_config(
         agent_cfg["model_name"] = model
     if agent_version is not None:
         agent_cfg["kwargs"] = {"version": agent_version}
+    if agent_env:
+        if "CLAUDE_CODE_OAUTH_TOKEN" in agent_env:
+            raise ValueError(
+                "agent_env must not carry CLAUDE_CODE_OAUTH_TOKEN: agent.env is merged OVER "
+                "the adapter's real token, so setting it here clobbers auth -> 401. The token "
+                "flows from the harbor process env; keep it out of agent.env."
+            )
+        agent_cfg["env"] = dict(agent_env)
     return {
         "job_name": job_name,
         "jobs_dir": str(jobs_dir),
@@ -274,16 +289,24 @@ def run_harbor_job(
     harbor_bin: str = "harbor",
     timeout_sec: float | None = None,
     agent_version: str | None = None,
+    agent_env: Mapping[str, str] | None = None,
 ) -> Path:
     """Run one local task through ``harbor run`` and return its job dir.
 
     Writes the job config under ``jobs_dir``, then shells
     ``harbor run --config <cfg> -q -y``. ``-y`` auto-confirms the host-env-var prompt
     (the OAuth token) that would otherwise block on stdin; ``-q`` suppresses the live
-    UI. A non-zero exit raises -- a failed run is never silently a clean trace."""
+    UI. A non-zero exit raises -- a failed run is never silently a clean trace.
+
+    ``agent_env`` relocates ``CLAUDE_CONFIG_DIR`` for the probe path (`build_job_config`)."""
     jobs_dir.mkdir(parents=True, exist_ok=True)
     config = build_job_config(
-        task_dir, job_name=job_name, jobs_dir=jobs_dir, model=model, agent_version=agent_version
+        task_dir,
+        job_name=job_name,
+        jobs_dir=jobs_dir,
+        model=model,
+        agent_version=agent_version,
+        agent_env=agent_env,
     )
     config_path = jobs_dir / f"{job_name}.job.json"
     config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
