@@ -252,6 +252,29 @@ def test_claude_judge_invokes_under_isolated_config(tmp_path, monkeypatch) -> No
         assert not (isolation.config_dir / forbidden).exists()
 
 
+def test_claude_judge_lazy_isolation_materializes_once(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # judge_graded drives `rounds` sequential score() calls on ONE judge instance;
+    # the lazy default isolation must materialize on the first call and be reused,
+    # not re-created per call (each re-creation would be a fresh on-disk surface and
+    # would splinter the pins' attributable config_dir).
+    calls = {"n": 0}
+
+    def counting_prepare() -> object:
+        calls["n"] += 1
+        return prepare_isolated_judge(base=tmp_path / str(calls["n"]))
+
+    monkeypatch.setattr("membench.grading.graded.prepare_isolated_judge", counting_prepare)
+    captured: dict = {}
+    judge = ClaudeRubricJudge(runner=_capturing_runner(_reply(), captured))
+
+    judge.score("t", "c", graded_rubric())
+    first_config_dir = captured["env"][ENV_CLAUDE_CONFIG_DIR]
+    judge.score("t", "c", graded_rubric())
+
+    assert calls["n"] == 1
+    assert captured["env"][ENV_CLAUDE_CONFIG_DIR] == first_config_dir
+
+
 def test_claude_judge_default_isolation_marker_is_on(tmp_path) -> None:  # type: ignore[no-untyped-def]
     # A judge's isolation marker reports isolated_config=True and a config_dir that
     # points away from any host account. Inject a tmp_path-scoped isolation (per this

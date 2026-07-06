@@ -349,7 +349,12 @@ class ClaudeRubricJudge:
     def _resolved_isolation(self) -> IsolatedJudgeConfig:
         """The clean-config surface, materialized (and cached) on first use. Deferred
         out of ``__post_init__`` so constructing a judge -- e.g. to read ``model`` or
-        drive a fake ``runner`` -- writes no clean-config dir to disk."""
+        drive a fake ``runner`` -- writes no clean-config dir to disk.
+
+        The check-then-set below is NOT thread-safe: a judge instance is
+        sequential-use only (every current driver runs rounds in a plain ``for``
+        loop). Parallelizing rounds across threads on one instance would need a
+        lock here, or one judge per thread."""
         if self.isolation is None:
             object.__setattr__(self, "isolation", prepare_isolated_judge())
         assert self.isolation is not None  # just set above

@@ -35,7 +35,6 @@ grading.
 
 from __future__ import annotations
 
-import json
 import os
 import tempfile
 from collections.abc import Mapping
@@ -63,7 +62,14 @@ def _default_isolation_base() -> Path:
     """A fresh, unique base dir for one isolated judge config. ``mkdtemp`` guarantees
     the path is exclusive to this call -- concurrent judge invocations (grid runs,
     variance pilots, parallel bundles) never share a base dir, so the
-    mkdir -> forbidden-entries-check -> settings.json write below needs no lock."""
+    mkdir -> forbidden-entries-check -> settings.json write below needs no lock.
+
+    Deliberately never cleaned up: the judge's ``claude -p`` writes its session
+    transcripts under ``config/projects/``, and a run's pins reference this dir by
+    path (`IsolatedJudgeConfig.marker`) -- together they are the post-hoc audit
+    trail that proves what the judge actually did (the mem-eacq contamination was
+    diagnosed from exactly this evidence). Retention is bounded by the system
+    temp-dir lifecycle."""
     uid = os.getuid() if hasattr(os, "getuid") else os.getpid()
     return Path(tempfile.mkdtemp(prefix=f"membench-graded-judge-{uid}-"))
 
@@ -147,8 +153,3 @@ def prepare_isolated_judge(base: Path | None = None) -> IsolatedJudgeConfig:
         cwd=cwd,
         extra_argv=(STRICT_MCP_CONFIG_FLAG,),
     )
-
-
-# Round-trip guard: settings we write must stay valid JSON (a malformed settings.json
-# would make claude ignore the dir and could fall back to defaults).
-assert json.loads(_MINIMAL_SETTINGS) == {}

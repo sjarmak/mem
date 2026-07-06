@@ -6,6 +6,8 @@ contaminating agent surface makes it fail LOUD, the env redirects
 model call anywhere.
 """
 
+import shutil
+
 import pytest
 
 from membench.grading.judge_config import (
@@ -79,3 +81,19 @@ def test_marker_is_attributable(tmp_path) -> None:  # type: ignore[no-untyped-de
     assert marker["isolated_config"] is True
     assert marker["strict_mcp_config"] is True
     assert marker["config_dir"] == str(tmp_path / "config")
+
+
+def test_default_base_is_fresh_per_prepare() -> None:
+    # Regression (3ca1989): the default base must be a NEW dir on every call. A
+    # stable per-uid path let concurrent judge invocations share (and race on) one
+    # base. Production retains these dirs deliberately (they hold the judge's audit
+    # trail); the test owns the two it creates, so it removes them.
+    a = prepare_isolated_judge()
+    b = prepare_isolated_judge()
+    try:
+        assert a.config_dir != b.config_dir
+        assert a.cwd != b.cwd
+        assert a.config_dir.parent != b.config_dir.parent
+    finally:
+        shutil.rmtree(a.config_dir.parent, ignore_errors=True)
+        shutil.rmtree(b.config_dir.parent, ignore_errors=True)
