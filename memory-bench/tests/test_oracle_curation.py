@@ -5,9 +5,7 @@ subprocess backend is exercised through an injected runner."""
 
 from __future__ import annotations
 
-import json
 import subprocess
-from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
@@ -692,21 +690,12 @@ def test_build_curator_isolation_none_when_no_llm_fired():
 
 def test_build_curator_isolation_threaded_through_when_llm_fires(tmp_path):
     # A Tier-2 candidate routes through the curator; its isolation_marker must be
-    # captured onto the built oracle (mem-x5d3).
-    marker = {"isolated_config": True, "config_dir": "/tmp/fake-curator", "strict_mcp_config": True}
+    # captured onto the built oracle (mem-x5d3). Real ClaudeOracleCurator with an
+    # injected runner, not a hand-rolled fake, so this pins the actual marker shape.
+    def runner(argv, **kw):
+        return _completed(stdout='{"result": "{\\"keep\\": true, \\"rationale\\": \\"ok\\"}"}')
 
-    @dataclass(frozen=True)
-    class _FakeIsolatedCurator:
-        model: str = "fake"
-        _marker: dict = field(default_factory=lambda: marker)
-
-        def complete(self, prompt: str) -> str:
-            return json.dumps({"keep": True, "rationale": "ok"})
-
-        @property
-        def isolation_marker(self):
-            return self._marker
-
+    curator = ClaudeOracleCurator(runner=runner, isolation=prepare_isolated_judge(base=tmp_path))
     repo = _repo_with(tmp_path, "src/store/writer.ts", "helper.ts")
     resolvers = _two_resolvers(
         {"writer": frozenset({"src/store/writer.ts", "helper.ts"})},
@@ -716,11 +705,11 @@ def test_build_curator_isolation_threaded_through_when_llm_fires(tmp_path):
         modified_files=["src/store/writer.ts"],
         repo_root=repo,
         resolvers=resolvers,
-        curator=_FakeIsolatedCurator(),
+        curator=curator,
         threshold=0.4,
     )
     assert dict(ob.oracle.oracle_tiers)["helper.ts"] == "supplementary"
-    assert ob.oracle.curator_isolation == marker
+    assert ob.oracle.curator_isolation == curator.isolation_marker
 
 
 def test_build_curator_isolation_none_when_curator_lacks_attr(tmp_path):
@@ -731,15 +720,16 @@ def test_build_curator_isolation_none_when_curator_lacks_attr(tmp_path):
         {"writer": frozenset({"src/store/writer.ts", "helper.ts"})},
         {"writer": frozenset({"src/store/writer.ts"})},
     )
+    curator = StubOracleCurator(keep=True)
     ob = build_oracle_context(
         modified_files=["src/store/writer.ts"],
         repo_root=repo,
         resolvers=resolvers,
-        curator=StubOracleCurator(keep=True),
+        curator=curator,
         threshold=0.4,
     )
     assert dict(ob.oracle.oracle_tiers)["helper.ts"] == "supplementary"
-    assert not hasattr(StubOracleCurator(keep=True), "isolation_marker")
+    assert not hasattr(curator, "isolation_marker")
     assert ob.oracle.curator_isolation is None
 
 

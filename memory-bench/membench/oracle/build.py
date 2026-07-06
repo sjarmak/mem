@@ -178,10 +178,8 @@ def build_oracle_context(
     # Truncation is a drop -- record which paths so the audit trail is complete.
     for path in dropped:
         file_quarantines.append((path, f"volume_guard: truncated (cap={max_oracle_files})"))
-    # Captured once, after the fact -- `isolation_marker` reflects whatever surface
-    # the curator actually ran its call(s) under, never a surface minted just to
-    # populate this field. None when the curator never fired (llm_used_any False)
-    # or has no isolation_marker attribute (e.g. StubOracleCurator).
+    # None when the curator never fired this build or has no isolation_marker
+    # attribute (e.g. StubOracleCurator).
     curator_isolation = getattr(curator, "isolation_marker", None) if llm_used_any else None
     oracle = CuratedOracle(
         oracle_answer=oracle_answer,
