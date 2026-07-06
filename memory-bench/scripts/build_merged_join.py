@@ -236,8 +236,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             entry.transcript_path
             for bead in merged.values()
             for entry in bead.entries
-            if entry.transcript_path
-            and not entry.transcript_path.startswith(archive_root + "/")
+            if entry.transcript_path and not entry.transcript_path.startswith(archive_root + "/")
         }
         report = archive_transcripts(sorted(linked_paths), args.archive_dir)
         archive_report = report.to_json()
@@ -254,9 +253,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             "content_join": args.content_join,
             "skip_dolt": args.skip_dolt,
             "archive_dir": None if args.skip_archive else args.archive_dir,
-            "restored_transcripts": None
-            if args.skip_restore
-            else {"on_disk": n_restored, "added_to_corpus": n_restored_added},
+            "restored_transcripts": (
+                None
+                if args.skip_restore
+                else {"on_disk": n_restored, "added_to_corpus": n_restored_added}
+            ),
         },
         "events": {
             "pairs": len(events.pairs),

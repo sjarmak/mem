@@ -24,7 +24,7 @@ from membench.grading.graded import (
     parse_criteria,
     weighted_score,
 )
-from membench.grading.judge_config import (
+from membench.judge_config import (
     ENV_CLAUDE_CONFIG_DIR,
     FORBIDDEN_CONFIG_ENTRIES,
     STRICT_MCP_CONFIG_FLAG,

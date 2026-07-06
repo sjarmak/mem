@@ -7,11 +7,12 @@ beads already in the cache, and classifies the rest in batches via headless
 `claude -p` on the OAuth runtime (routine classification -> Haiku tier).
 
 Output artifact (default `/home/ds/projects/mem/.mem/task-types.json`):
-`{entries: {work_id: {task_type, model, classified_at}}}` — consumed by
-`mem build-store --task-types <path>`, which writes the labels with
+`{entries: {work_id: {task_type, model, classified_at}}, judge_isolation: {...}}`
+— consumed by `mem build-store --task-types <path>`, which writes the labels with
 `task_type_source='model'` so model-tagged types are always distinguishable
-from mechanical ones. The cache is incremental: nightly runs only classify
-beads that are new since the last run.
+from mechanical ones. `judge_isolation` is the RUN-LEVEL mem-9ld4 clean-config
+marker (mem-hv9l); the TS loader reads only `entries{}`. The cache is
+incremental: nightly runs only classify beads that are new since the last run.
 
 ZFC: the judgment is the model call; this script is batching + validation.
 """
@@ -21,7 +22,6 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
-import subprocess
 import sys
 import time
 from collections.abc import Sequence
@@ -30,12 +30,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from membench.task_types import BeadItem, classify, mechanical_task_type
+from membench.judge_config import prepare_isolated_judge
+from membench.task_types import BeadItem, classify, claude_model_runner, mechanical_task_type
 
 DEFAULT_STORE = "/home/ds/projects/mem/.mem/store.db"
 DEFAULT_OUT = "/home/ds/projects/mem/.mem/task-types.json"
 DEFAULT_MODEL = "haiku"
-CLAUDE_TIMEOUT_S = 300.0
 
 
 def load_unclassified(store_path: str, cached: set[str]) -> list[BeadItem]:
@@ -53,22 +53,6 @@ def load_unclassified(store_path: str, cached: set[str]) -> list[BeadItem]:
             continue
         items.append(BeadItem(work_id=str(work_id), rig=str(rig), title=str(title)))
     return items
-
-
-def claude_runner(model: str) -> callable:
-    def run(prompt: str) -> str:
-        completed = subprocess.run(
-            ["claude", "-p", prompt, "--model", model],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=CLAUDE_TIMEOUT_S,
-        )
-        if completed.returncode != 0:
-            raise RuntimeError(f"claude -p failed: {completed.stderr.strip()[:200]}")
-        return completed.stdout
-
-    return run
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -95,10 +79,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.dry_run or not items:
         return 0
 
+    # mem-hv9l: the classifier shells `claude -p` under the mem-9ld4 clean-config
+    # isolation surface. The marker is stamped RUN-LEVEL on the artifact (the TS
+    # loadTaskTypes reads only entries{}, so the extra key is inert there): entries
+    # written before this key existed are pre-isolation and only distinguishable
+    # wholesale, not per-entry — see the mem-hv9l re-run decision flag.
+    isolation = prepare_isolated_judge(label="task-types")
+
     t0 = time.monotonic()
     entries, counters = classify(
         items,
-        claude_runner(args.model),
+        claude_model_runner(args.model, isolation),
         model=args.model,
         classified_at=datetime.now(UTC).isoformat(),
         batch_size=args.batch_size,
@@ -107,6 +98,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"classified {len(entries)}/{len(items)} in {time.monotonic() - t0:.0f}s; {counters}")
 
     cache["entries"].update(entries)
+    cache["judge_isolation"] = isolation.marker
     cache["updated_at"] = datetime.now(UTC).isoformat()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(cache, indent=1, sort_keys=True), encoding="utf-8")

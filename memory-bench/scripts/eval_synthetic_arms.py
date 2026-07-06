@@ -35,9 +35,11 @@ def main() -> int:
     independent = materialize_world(world, project, n_tasks=args.tasks, facts_per_task=args.facts)
     cross_task = materialize_project(world, project, n_tasks=args.tasks, facts_per_task=args.facts)
 
-    with tempfile.TemporaryDirectory() as d1, tempfile.TemporaryDirectory() as d2, (
-        tempfile.TemporaryDirectory()
-    ) as d3:
+    with (
+        tempfile.TemporaryDirectory() as d1,
+        tempfile.TemporaryDirectory() as d2,
+        tempfile.TemporaryDirectory() as d3,
+    ):
         print(
             format_report(
                 "Independent tasks (run_sequence)",

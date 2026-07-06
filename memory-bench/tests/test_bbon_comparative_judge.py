@@ -21,6 +21,7 @@ from membench.bbon.comparative_judge import (
 )
 from membench.bbon.models import Attempt, NarrativeDiff, deterministic_id
 from membench.bbon.narrative_diff import generate_narrative_diff
+from membench.judge_config import prepare_isolated_judge
 
 
 def _attempt(arm: str, status: str = "completed", **result: object) -> Attempt:
@@ -185,17 +186,22 @@ def test_claude_unwraps_cli_json_result() -> None:
     assert "--output-format" in captured["argv"]
 
 
-def test_claude_passes_explicit_model_flag() -> None:
+def test_claude_passes_explicit_model_flag(tmp_path: Any) -> None:
     captured: dict[str, Any] = {}
 
     def runner(argv: list[str], **kwargs: Any) -> Any:
         captured["argv"] = argv
         return _fake_completed("raw text reply")
 
-    judge = ClaudeComparativeJudge(model="claude-haiku-4-5", runner=runner)
+    judge = ClaudeComparativeJudge(
+        model="claude-haiku-4-5", runner=runner, isolation=prepare_isolated_judge(base=tmp_path)
+    )
     judge.complete("p")
     assert judge.model == "claude-haiku-4-5"
-    assert captured["argv"][-2:] == ["--model", "claude-haiku-4-5"]
+    # --model rides immediately before its value; the isolation argv follows it
+    # (mem-hv9l), so the pair is no longer the argv tail.
+    i = captured["argv"].index("--model")
+    assert captured["argv"][i + 1] == "claude-haiku-4-5"
 
 
 def test_claude_raw_stdout_passed_through_when_not_wrapper() -> None:
@@ -229,7 +235,7 @@ def test_claude_timeout_raises() -> None:
         judge.complete("p")
 
 
-def test_claude_env_model_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_claude_env_model_is_used(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
     monkeypatch.setenv("MEMBENCH_COMPARATIVE_JUDGE_MODEL", "env-model")
     captured: dict[str, Any] = {}
 
@@ -237,7 +243,8 @@ def test_claude_env_model_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
         captured["argv"] = argv
         return _fake_completed("x")
 
-    judge = ClaudeComparativeJudge(runner=runner)
+    judge = ClaudeComparativeJudge(runner=runner, isolation=prepare_isolated_judge(base=tmp_path))
     assert judge.model == "env-model"
     judge.complete("p")
-    assert captured["argv"][-2:] == ["--model", "env-model"]
+    i = captured["argv"].index("--model")
+    assert captured["argv"][i + 1] == "env-model"

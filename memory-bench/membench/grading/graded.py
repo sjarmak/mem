@@ -61,7 +61,7 @@ from typing import Protocol
 
 from membench._claude_cli import first_json_object, unwrap_cli_json
 from membench.grading.judge import Rubric, RubricCriterion, score_completion
-from membench.grading.judge_config import (
+from membench.judge_config import (
     IsolatedJudgeConfig,
     isolated_judge_env,
     prepare_isolated_judge,

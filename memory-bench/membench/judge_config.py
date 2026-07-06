@@ -1,4 +1,4 @@
-"""Config isolation for the graded ``claude -p`` rubric judge (mem-9ld4).
+"""Config isolation for every headless ``claude -p`` model callsite (mem-9ld4).
 
 The graded S3 judge shells a headless ``claude -p``. Left to inherit the host
 ``CLAUDE_CONFIG_DIR`` (an operator account carrying skills / rules / *agents* —
@@ -7,6 +7,14 @@ hijacks the session into CODE-REVIEW mode: the reply comes back as a
 ``{"findings": [...], "level": ...}`` object instead of the rubric
 ``{"criteria": [...]}``. That contaminated every graded number to date
 (mem-eacq variance pilot; Stephanie ruled ISOLATE + RE-SCORE, mem-9ld4).
+
+The hijack vector is not specific to the graded judge — it applies to ANY model
+call that shells ``claude -p`` with the host config surface, so this module is
+the shared isolation seam for all of them: the graded rubric judge, the bbon
+comparative judge, the oracle curator, and the task-type classifier (mem-hv9l).
+It lives at the package root — like `membench._claude_cli` — so no subpackage
+imports another to reach it. ``label`` names the callsite in the retained
+isolation dir's prefix, keeping the per-callsite audit trail attributable.
 
 The fix is config/mechanism only — the judge MODEL and round count are unchanged
 (``claude-sonnet-4-6`` x3). This module materializes a minimal, EMPTY
@@ -58,11 +66,13 @@ _MINIMAL_SETTINGS = "{}\n"
 STRICT_MCP_CONFIG_FLAG = "--strict-mcp-config"
 
 
-def _default_isolation_base() -> Path:
+def _default_isolation_base(label: str) -> Path:
     """A fresh, unique base dir for one isolated judge config. ``mkdtemp`` guarantees
     the path is exclusive to this call -- concurrent judge invocations (grid runs,
     variance pilots, parallel bundles) never share a base dir, so the
     mkdir -> forbidden-entries-check -> settings.json write below needs no lock.
+    ``label`` is the callsite name baked into the prefix, so a retained dir is
+    attributable to the judge that produced it, not just "some judge".
 
     Deliberately never cleaned up: the judge's ``claude -p`` writes its session
     transcripts under ``config/projects/``, and a run's pins reference this dir by
@@ -71,7 +81,7 @@ def _default_isolation_base() -> Path:
     diagnosed from exactly this evidence). Retention is bounded by the system
     temp-dir lifecycle."""
     uid = os.getuid() if hasattr(os, "getuid") else os.getpid()
-    return Path(tempfile.mkdtemp(prefix=f"membench-graded-judge-{uid}-"))
+    return Path(tempfile.mkdtemp(prefix=f"membench-{label}-judge-{uid}-"))
 
 
 @dataclass(frozen=True)
@@ -135,15 +145,18 @@ def isolated_judge_env(
     return env
 
 
-def prepare_isolated_judge(base: Path | None = None) -> IsolatedJudgeConfig:
-    """Assemble the full isolation surface for a graded-judge subprocess. Creates a
-    clean ``config`` dir (redirected ``CLAUDE_CONFIG_DIR``) and a distinct neutral
+def prepare_isolated_judge(
+    base: Path | None = None, *, label: str = "graded"
+) -> IsolatedJudgeConfig:
+    """Assemble the full isolation surface for one ``claude -p`` subprocess. Creates
+    a clean ``config`` dir (redirected ``CLAUDE_CONFIG_DIR``) and a distinct neutral
     ``cwd`` dir (both under ``base``, default `_default_isolation_base` -- a fresh
     unique dir per call, so concurrent invocations never race); the two are separate
     so the judge never treats its own config dir as a project checkout. Both dirs get
     the same fail-loud cleanliness check. Returns the config dir, neutral cwd, and the
-    ``--strict-mcp-config`` flag to append to argv."""
-    root = base if base is not None else _default_isolation_base()
+    ``--strict-mcp-config`` flag to append to argv. ``label`` names the callsite in
+    the retained dir's prefix (ignored when ``base`` is supplied)."""
+    root = base if base is not None else _default_isolation_base(label)
     config_dir = ensure_isolated_config_dir(root / "config")
     cwd = root / "cwd"
     cwd.mkdir(parents=True, exist_ok=True)
