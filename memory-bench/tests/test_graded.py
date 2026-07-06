@@ -265,11 +265,14 @@ def test_claude_judge_lazy_isolation_materializes_once(tmp_path, monkeypatch) ->
     # would splinter the pins' attributable config_dir).
     calls = {"n": 0}
 
-    def counting_prepare() -> object:
+    def counting_prepare(base=None, *, label=None):  # type: ignore[no-untyped-def]
         calls["n"] += 1
+        assert label == "graded"  # the retained dir stays attributable to this callsite
         return prepare_isolated_judge(base=tmp_path / str(calls["n"]))
 
-    monkeypatch.setattr("membench.grading.graded.prepare_isolated_judge", counting_prepare)
+    # The lazy prepare fires through the shared IsolatedClaudeCallsite mixin, so the
+    # seam module is the patch target (mirrors test_judge_isolation_callsites).
+    monkeypatch.setattr("membench.judge_config.prepare_isolated_judge", counting_prepare)
     captured: dict = {}
     judge = ClaudeRubricJudge(runner=_capturing_runner(_reply(), captured))
 

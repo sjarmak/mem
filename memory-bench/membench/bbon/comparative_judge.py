@@ -21,6 +21,7 @@ subprocess IO, JSON parsing, and structural validation.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -29,9 +30,10 @@ from typing import Any, Protocol
 from membench._claude_cli import first_json_object, unwrap_cli_json
 from membench.bbon.models import Attempt, Judgment, NarrativeDiff, deterministic_id
 from membench.judge_config import (
+    IsolatedClaudeCallsite,
     IsolatedJudgeConfig,
-    isolated_judge_env,
-    prepare_isolated_judge,
+    Runner,
+    run_isolated_claude,
 )
 
 DEFAULT_PROMPT_VERSION = "v1"
@@ -44,9 +46,6 @@ DEFAULT_TIMEOUT_S = 90.0
 # is used (no --model flag passed). Overridable via the env var below.
 CLI_DEFAULT_MODEL = "cli-default"
 ENV_MODEL = "MEMBENCH_COMPARATIVE_JUDGE_MODEL"
-
-# A subprocess.run-shaped callable, injectable so tests never spawn a real claude.
-Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 
 
 class ComparativeJudgeError(RuntimeError):
@@ -93,7 +92,7 @@ class StubComparativeJudge:
 
 
 @dataclass(frozen=True)
-class ClaudeComparativeJudge:
+class ClaudeComparativeJudge(IsolatedClaudeCallsite):
     """A judge backed by headless ``claude -p ... --output-format json``.
 
     ``model`` pins the CLI model; left empty it reads ``MEMBENCH_COMPARATIVE_JUDGE_MODEL``
@@ -101,15 +100,13 @@ class ClaudeComparativeJudge:
     ``cli-default``). ``runner`` is injected so tests drive the parse path without
     spawning a real claude. Every failure raises `ComparativeJudgeError`.
 
-    ``isolation`` (mem-9ld4 / mem-hv9l) is the clean-config surface the ``claude -p``
-    subprocess runs under: a minimal EMPTY ``CLAUDE_CONFIG_DIR`` +
-    ``--strict-mcp-config`` + a neutral cwd, so no host/project agent (notably a
-    ``code-reviewer``) can hijack the judge — the NarrativeDiff content this judge
+    ``isolation`` (mem-9ld4 / mem-hv9l) is the clean-config surface the subprocess
+    runs under -- load-bearing here because the NarrativeDiff content this judge
     reads is exactly the reviewable-diff shape that triggered the original graded
-    hijack (mem-eacq). Left ``None`` it is materialized lazily on first use and
-    cached; tests inject a ``tmp_path``-scoped one. The subprocess env is assembled
-    FRESH per call (`isolated_judge_env`) so a credential refreshed mid-run is never
-    shipped stale."""
+    hijack (mem-eacq); lazy semantics and the marker contract live on
+    `IsolatedClaudeCallsite`."""
+
+    _isolation_label = "comparative"
 
     model: str = ""
     timeout_s: float = DEFAULT_TIMEOUT_S
@@ -118,61 +115,21 @@ class ClaudeComparativeJudge:
     _pass_model: bool = field(default=False, init=False)
 
     def __post_init__(self) -> None:
-        import os
-
         resolved = self.model or os.environ.get(ENV_MODEL, "")
         object.__setattr__(self, "_pass_model", bool(resolved))
         object.__setattr__(self, "model", resolved or CLI_DEFAULT_MODEL)
 
-    def _resolved_isolation(self) -> IsolatedJudgeConfig:
-        """The clean-config surface, materialized (and cached) on first use. Deferred
-        out of ``__post_init__`` so constructing a judge writes no clean-config dir to
-        disk. NOT thread-safe: a judge instance is sequential-use only (the
-        `ClaudeRubricJudge` convention)."""
-        if self.isolation is None:
-            object.__setattr__(self, "isolation", prepare_isolated_judge(label="comparative"))
-        assert self.isolation is not None  # just set above
-        return self.isolation
-
-    @property
-    def isolation_marker(self) -> dict[str, object] | None:
-        """The attributable isolation record echoed into a run's payload -- proves an
-        isolated (clean-config) verdict is distinguishable from a pre-isolation one.
-        None until an isolation surface exists (injected, or materialized by the
-        first ``complete``): the marker attests a surface a call actually ran under,
-        never one minted just to satisfy a report (mem-hv9l review)."""
-        return None if self.isolation is None else self.isolation.marker
-
     def complete(self, prompt: str) -> str:
-        isolation = self._resolved_isolation()
-        argv = ["claude", "-p", prompt, "--output-format", "json"]
-        if self._pass_model:
-            argv += ["--model", self.model]
-        argv += list(isolation.extra_argv)
-        try:
-            completed = self.runner(
-                argv,
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=self.timeout_s,
-                env=isolated_judge_env(isolation.config_dir),
-                cwd=isolation.cwd,
-            )
-        except FileNotFoundError as exc:
-            raise ComparativeJudgeError(
-                "'claude' CLI not found — install it to run the comparative judge"
-            ) from exc
-        except subprocess.TimeoutExpired as exc:
-            raise ComparativeJudgeError(
-                f"claude -p did not respond within {self.timeout_s:.0f}s"
-            ) from exc
-        if completed.returncode != 0:
-            raise ComparativeJudgeError(
-                f"claude -p failed (exit {completed.returncode}): "
-                f"{completed.stderr.strip() or completed.stdout.strip()}"
-            )
-        return unwrap_cli_json(completed.stdout)
+        reply = run_isolated_claude(
+            prompt,
+            isolation=self._resolved_isolation(),
+            runner=self.runner,
+            timeout_s=self.timeout_s,
+            model=self.model if self._pass_model else None,
+            callsite="comparative judge",
+            error=ComparativeJudgeError,
+        )
+        return unwrap_cli_json(reply)
 
 
 def judge_cache_key(

@@ -88,12 +88,22 @@ def test_default_base_is_fresh_per_prepare() -> None:
     # stable per-uid path let concurrent judge invocations share (and race on) one
     # base. Production retains these dirs deliberately (they hold the judge's audit
     # trail); the test owns the two it creates, so it removes them.
-    a = prepare_isolated_judge()
-    b = prepare_isolated_judge()
+    a = prepare_isolated_judge(label="freshness-check")
+    b = prepare_isolated_judge(label="freshness-check")
     try:
         assert a.config_dir != b.config_dir
         assert a.cwd != b.cwd
         assert a.config_dir.parent != b.config_dir.parent
+        # The label rides in the retained dir's prefix -- the audit trail names
+        # its callsite.
+        assert "freshness-check" in a.config_dir.parent.name
     finally:
         shutil.rmtree(a.config_dir.parent, ignore_errors=True)
         shutil.rmtree(b.config_dir.parent, ignore_errors=True)
+
+
+def test_default_base_requires_label() -> None:
+    # A retained default-base dir without a callsite label would be unattributable
+    # (or worse, silently mislabelled) audit evidence: fail loud instead.
+    with pytest.raises(ValueError, match="label is required"):
+        prepare_isolated_judge()

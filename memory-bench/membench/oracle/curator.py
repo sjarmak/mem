@@ -33,9 +33,10 @@ from typing import Any, Protocol
 
 from membench._claude_cli import unwrap_cli_json
 from membench.judge_config import (
+    IsolatedClaudeCallsite,
     IsolatedJudgeConfig,
-    isolated_judge_env,
-    prepare_isolated_judge,
+    Runner,
+    run_isolated_claude,
 )
 from membench.oracle.consensus import BackendResult
 
@@ -51,8 +52,6 @@ _MAX_SNIPPET_BYTES = 8000
 DEFAULT_CURATOR_TIMEOUT_S = 60.0
 CLI_DEFAULT_MODEL = "cli-default"
 ENV_CURATOR_MODEL = "MEMBENCH_ORACLE_CURATOR_MODEL"
-
-Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 
 
 @dataclass(frozen=True)
@@ -133,19 +132,17 @@ class StubOracleCurator:
 
 
 @dataclass(frozen=True)
-class ClaudeOracleCurator:
+class ClaudeOracleCurator(IsolatedClaudeCallsite):
     """A curator backed by headless ``claude -p ... --output-format json`` -- the
     OAuth seam, not a paid API. ``model`` pins the CLI model; left empty it reads
     ``MEMBENCH_ORACLE_CURATOR_MODEL`` and otherwise uses the CLI default. ``runner``
     is injected so tests drive the parse path without spawning a real claude.
 
-    ``isolation`` (mem-9ld4 / mem-hv9l) is the clean-config surface the ``claude -p``
-    subprocess runs under: a minimal EMPTY ``CLAUDE_CONFIG_DIR`` +
-    ``--strict-mcp-config`` + a neutral cwd, so no host/project agent can hijack the
-    keep/reject vote. Left ``None`` it is materialized lazily on first use and
-    cached; tests inject a ``tmp_path``-scoped one. The subprocess env is assembled
-    FRESH per call (`isolated_judge_env`) so a credential refreshed mid-run is never
-    shipped stale."""
+    ``isolation`` (mem-9ld4 / mem-hv9l) is the clean-config surface the subprocess
+    runs under, so no host/project agent can hijack the keep/reject vote; lazy
+    semantics and the marker contract live on `IsolatedClaudeCallsite`."""
+
+    _isolation_label = "curator"
 
     model: str = ""
     timeout_s: float = DEFAULT_CURATOR_TIMEOUT_S
@@ -158,55 +155,17 @@ class ClaudeOracleCurator:
         object.__setattr__(self, "_pass_model", bool(resolved))
         object.__setattr__(self, "model", resolved or CLI_DEFAULT_MODEL)
 
-    def _resolved_isolation(self) -> IsolatedJudgeConfig:
-        """The clean-config surface, materialized (and cached) on first use. Deferred
-        out of ``__post_init__`` so constructing a curator writes no clean-config dir
-        to disk. NOT thread-safe: a curator instance is sequential-use only (the
-        `ClaudeRubricJudge` convention)."""
-        if self.isolation is None:
-            object.__setattr__(self, "isolation", prepare_isolated_judge(label="curator"))
-        assert self.isolation is not None  # just set above
-        return self.isolation
-
-    @property
-    def isolation_marker(self) -> dict[str, object] | None:
-        """The attributable isolation record echoed into a run's manifest -- proves an
-        isolated (clean-config) vote is distinguishable from a pre-isolation one.
-        None until an isolation surface exists (injected, or materialized by the
-        first ``complete``): the marker attests a surface a call actually ran under,
-        never one minted just to satisfy a report (mem-hv9l review)."""
-        return None if self.isolation is None else self.isolation.marker
-
     def complete(self, prompt: str) -> str:
-        isolation = self._resolved_isolation()
-        argv = ["claude", "-p", prompt, "--output-format", "json"]
-        if self._pass_model:
-            argv += ["--model", self.model]
-        argv += list(isolation.extra_argv)
-        try:
-            completed = self.runner(
-                argv,
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=self.timeout_s,
-                env=isolated_judge_env(isolation.config_dir),
-                cwd=isolation.cwd,
-            )
-        except FileNotFoundError as exc:
-            raise OracleCuratorError(
-                "'claude' CLI not found -- install it to run the oracle curator"
-            ) from exc
-        except subprocess.TimeoutExpired as exc:
-            raise OracleCuratorError(
-                f"claude -p did not respond within {self.timeout_s:.0f}s"
-            ) from exc
-        if completed.returncode != 0:
-            raise OracleCuratorError(
-                f"claude -p failed (exit {completed.returncode}): "
-                f"{completed.stderr.strip() or completed.stdout.strip()}"
-            )
-        return unwrap_cli_json(completed.stdout)
+        reply = run_isolated_claude(
+            prompt,
+            isolation=self._resolved_isolation(),
+            runner=self.runner,
+            timeout_s=self.timeout_s,
+            model=self.model if self._pass_model else None,
+            callsite="oracle curator",
+            error=OracleCuratorError,
+        )
+        return unwrap_cli_json(reply)
 
 
 def curate_consensus(

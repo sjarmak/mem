@@ -62,9 +62,10 @@ from typing import Protocol
 from membench._claude_cli import first_json_object, unwrap_cli_json
 from membench.grading.judge import Rubric, RubricCriterion, score_completion
 from membench.judge_config import (
+    IsolatedClaudeCallsite,
     IsolatedJudgeConfig,
-    isolated_judge_env,
-    prepare_isolated_judge,
+    Runner,
+    run_isolated_claude,
 )
 
 # Judge score and the mechanical reference disagree by more than this -> flag the run
@@ -98,9 +99,6 @@ ENV_GRADED_JUDGE_MODEL = "MEMBENCH_GRADED_JUDGE_MODEL"
 # A graded-judge prompt resolves in seconds; a minute-plus bound means a wedged
 # subprocess, not slow inference (the comparative-judge convention).
 DEFAULT_TIMEOUT_S = 120.0
-
-# A subprocess.run-shaped callable, injected so tests never spawn a real claude.
-Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 
 
 def graded_rubric() -> Rubric:
@@ -311,7 +309,7 @@ Output STRICT JSON only, no prose:
 
 
 @dataclass(frozen=True)
-class ClaudeRubricJudge:
+class ClaudeRubricJudge(IsolatedClaudeCallsite):
     """A judge backed by headless ``claude -p ... --output-format json``.
 
     Defaults to the locked Sonnet 4.6 build, overridable via
@@ -323,16 +321,13 @@ class ClaudeRubricJudge:
     raises `RubricParseError` or
     `RuntimeError`, never a default score.
 
-    ``isolation`` (mem-9ld4) is the clean-config surface the ``claude -p`` subprocess
-    runs under: a minimal EMPTY ``CLAUDE_CONFIG_DIR`` + ``--strict-mcp-config`` + a
-    neutral cwd, so no host/project agent (notably a ``code-reviewer``) can hijack the
-    judge into answering as a reviewer. Left ``None`` it is materialized lazily on
-    first use (`prepare_isolated_judge`) and cached, so mere construction touches no
-    disk; tests inject a ``tmp_path``-scoped one. The subprocess env is NOT part of
-    that cache -- `_complete` assembles it fresh (`isolated_judge_env`) on every call,
-    so a credential refreshed mid-run (e.g. ``CLAUDE_CODE_OAUTH_TOKEN``) is never
-    shipped stale. The MODEL and round count are unchanged -- only the config surface
-    the judge loads is."""
+    ``isolation`` (mem-9ld4) is the clean-config surface the subprocess runs under,
+    so no host/project agent (notably a ``code-reviewer``) can hijack the judge into
+    answering as a reviewer; lazy semantics and the marker contract live on
+    `IsolatedClaudeCallsite`. The MODEL and round count are unchanged -- only the
+    config surface the judge loads is."""
+
+    _isolation_label = "graded"
 
     model: str = ""
     timeout_s: float = DEFAULT_TIMEOUT_S
@@ -346,31 +341,6 @@ class ClaudeRubricJudge:
             self.model or os.environ.get(ENV_GRADED_JUDGE_MODEL, DEFAULT_GRADED_JUDGE_MODEL),
         )
 
-    def _resolved_isolation(self) -> IsolatedJudgeConfig:
-        """The clean-config surface, materialized (and cached) on first use. Deferred
-        out of ``__post_init__`` so constructing a judge -- e.g. to read ``model`` or
-        drive a fake ``runner`` -- writes no clean-config dir to disk.
-
-        The check-then-set below is NOT thread-safe: a judge instance is
-        sequential-use only (every current driver runs rounds in a plain ``for``
-        loop). Parallelizing rounds across threads on one instance would need a
-        lock here, or one judge per thread."""
-        if self.isolation is None:
-            object.__setattr__(self, "isolation", prepare_isolated_judge())
-        assert self.isolation is not None  # just set above
-        return self.isolation
-
-    @property
-    def isolation_marker(self) -> dict[str, object] | None:
-        """The attributable isolation record echoed into a run's pins -- proves an
-        isolated (clean-judge) score is distinguishable from a pre-isolation one.
-        None until an isolation surface exists (injected, or materialized by the
-        first ``score``): the marker attests a surface a call actually ran under,
-        never one minted just to satisfy a report -- a dir with no session
-        transcripts proves nothing and would litter the retained audit trail
-        (mem-hv9l review)."""
-        return None if self.isolation is None else self.isolation.marker
-
     def build_prompt(self, task: str, run_output: str, rubric: Rubric) -> str:
         """The rubric-grounded judge prompt. Pure -- assembles the model input from
         the blinded view and the rubric criteria."""
@@ -383,37 +353,15 @@ class ClaudeRubricJudge:
         return weighted_score(parse_criteria(reply, rubric), rubric)
 
     def _complete(self, prompt: str) -> str:
-        isolation = self._resolved_isolation()
-        argv = [
-            "claude",
-            "-p",
+        reply = run_isolated_claude(
             prompt,
-            "--output-format",
-            "json",
-            "--model",
-            self.model,
-            *isolation.extra_argv,
-        ]
-        try:
-            completed = self.runner(
-                argv,
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=self.timeout_s,
-                env=isolated_judge_env(isolation.config_dir),
-                cwd=isolation.cwd,
-            )
-        except FileNotFoundError as exc:
-            raise RuntimeError("'claude' CLI not found -- install it to run the judge") from exc
-        except subprocess.TimeoutExpired as exc:
-            raise RuntimeError(f"claude -p did not respond within {self.timeout_s:.0f}s") from exc
-        if completed.returncode != 0:
-            raise RuntimeError(
-                f"claude -p failed (exit {completed.returncode}): "
-                f"{completed.stderr.strip() or completed.stdout.strip()}"
-            )
-        return unwrap_cli_json(completed.stdout)
+            isolation=self._resolved_isolation(),
+            runner=self.runner,
+            timeout_s=self.timeout_s,
+            model=self.model,
+            callsite="judge",
+        )
+        return unwrap_cli_json(reply)
 
 
 @dataclass(frozen=True)

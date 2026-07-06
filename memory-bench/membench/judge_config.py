@@ -15,6 +15,11 @@ comparative judge, the oracle curator, and the task-type classifier (mem-hv9l).
 It lives at the package root — like `membench._claude_cli` — so no subpackage
 imports another to reach it. ``label`` names the callsite in the retained
 isolation dir's prefix, keeping the per-callsite audit trail attributable.
+`run_isolated_claude` is the one spawn choke point every callsite goes through
+(argv, fresh env, neutral cwd, fail-loud error mapping), and
+`IsolatedClaudeCallsite` is the lazy materialize-and-cache contract the judge
+dataclasses share — a new callsite gets both for free instead of hand-rolling
+the incantation (the drift mem-hv9l existed to close).
 
 The fix is config/mechanism only — the judge MODEL and round count are unchanged
 (``claude-sonnet-4-6`` x3). This module materializes a minimal, EMPTY
@@ -44,10 +49,15 @@ grading.
 from __future__ import annotations
 
 import os
+import subprocess
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
+
+# A subprocess.run-shaped callable, injectable so tests never spawn a real claude.
+Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 
 # The env var that redirects the entire ``claude`` config surface (skills, rules,
 # agents, CLAUDE.md, settings) to a chosen directory.
@@ -146,7 +156,7 @@ def isolated_judge_env(
 
 
 def prepare_isolated_judge(
-    base: Path | None = None, *, label: str = "graded"
+    base: Path | None = None, *, label: str | None = None
 ) -> IsolatedJudgeConfig:
     """Assemble the full isolation surface for one ``claude -p`` subprocess. Creates
     a clean ``config`` dir (redirected ``CLAUDE_CONFIG_DIR``) and a distinct neutral
@@ -155,8 +165,18 @@ def prepare_isolated_judge(
     so the judge never treats its own config dir as a project checkout. Both dirs get
     the same fail-loud cleanliness check. Returns the config dir, neutral cwd, and the
     ``--strict-mcp-config`` flag to append to argv. ``label`` names the callsite in
-    the retained dir's prefix (ignored when ``base`` is supplied)."""
-    root = base if base is not None else _default_isolation_base(label)
+    the retained dir's prefix; it is REQUIRED when ``base`` is None (a retained
+    default-base dir must be attributable to the callsite that produced it, never
+    silently mislabelled) and unused when ``base`` is supplied."""
+    if base is None:
+        if label is None:
+            raise ValueError(
+                "prepare_isolated_judge: label is required when no base is supplied -- "
+                "the retained isolation dir must be attributable to its callsite"
+            )
+        root = _default_isolation_base(label)
+    else:
+        root = base
     config_dir = ensure_isolated_config_dir(root / "config")
     cwd = root / "cwd"
     cwd.mkdir(parents=True, exist_ok=True)
@@ -166,3 +186,85 @@ def prepare_isolated_judge(
         cwd=cwd,
         extra_argv=(STRICT_MCP_CONFIG_FLAG,),
     )
+
+
+def run_isolated_claude(
+    prompt: str,
+    *,
+    isolation: IsolatedJudgeConfig,
+    runner: Runner,
+    timeout_s: float,
+    model: str | None,
+    callsite: str,
+    error: Callable[[str], BaseException] = RuntimeError,
+    output_format_json: bool = True,
+) -> str:
+    """One headless ``claude -p`` spawn under the isolation surface -- the single
+    choke point every callsite shares (mem-hv9l), so an isolation change (a new
+    flag, a new env rule) lands everywhere at once instead of drifting per copy.
+    The subprocess env is assembled FRESH per call (`isolated_judge_env`) so a
+    credential refreshed mid-run is never shipped stale. ``model`` None omits the
+    ``--model`` flag (the CLI's own default). Every failure -- missing binary,
+    timeout, non-zero exit -- raises via ``error`` with the root cause attached,
+    never a default reply. Returns raw stdout; callers own reply parsing."""
+    argv = ["claude", "-p", prompt]
+    if output_format_json:
+        argv += ["--output-format", "json"]
+    if model is not None:
+        argv += ["--model", model]
+    argv += list(isolation.extra_argv)
+    try:
+        completed = runner(
+            argv,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout_s,
+            env=isolated_judge_env(isolation.config_dir),
+            cwd=isolation.cwd,
+        )
+    except FileNotFoundError as exc:
+        raise error(f"'claude' CLI not found -- install it to run the {callsite}") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise error(f"claude -p did not respond within {timeout_s:.0f}s") from exc
+    if completed.returncode != 0:
+        raise error(
+            f"claude -p failed (exit {completed.returncode}): "
+            f"{completed.stderr.strip() or completed.stdout.strip()}"
+        )
+    return completed.stdout
+
+
+class IsolatedClaudeCallsite:
+    """The lazy-isolation contract shared by every frozen-dataclass ``claude -p``
+    callsite (graded rubric judge, comparative judge, oracle curator). A subclass
+    declares the ``isolation: IsolatedJudgeConfig | None = None`` field and names
+    itself via ``_isolation_label`` -- the audit label baked into the retained
+    dir's prefix, so the trail stays attributable per callsite.
+
+    ``isolation`` left ``None`` is materialized on first use and cached, so mere
+    construction touches no disk; tests inject a ``tmp_path``-scoped one. The
+    check-then-set is NOT thread-safe: an instance is sequential-use only (every
+    current driver runs calls in a plain ``for`` loop); parallel use needs one
+    instance per thread."""
+
+    _isolation_label: ClassVar[str]
+    isolation: IsolatedJudgeConfig | None
+
+    def _resolved_isolation(self) -> IsolatedJudgeConfig:
+        isolation = self.isolation
+        if isolation is None:
+            isolation = prepare_isolated_judge(label=self._isolation_label)
+            object.__setattr__(self, "isolation", isolation)
+        return isolation
+
+    @property
+    def isolation_marker(self) -> dict[str, object] | None:
+        """The attributable isolation record echoed into a run's artifact -- proves
+        an isolated (clean-config) result is distinguishable from a pre-isolation
+        one. None until an isolation surface exists (injected, or materialized by
+        the first call): the marker attests a surface a call actually ran under,
+        never one minted just to satisfy a report -- a dir with no session
+        transcripts proves nothing and would litter the retained audit trail
+        (mem-hv9l review)."""
+        return None if self.isolation is None else self.isolation.marker

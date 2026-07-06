@@ -29,7 +29,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from membench.judge_config import IsolatedJudgeConfig, isolated_judge_env
+from membench.judge_config import IsolatedJudgeConfig, Runner, run_isolated_claude
 
 # Mirror of MODEL_TASK_TAXONOMY in src/ingest/task-type.ts — keep in sync.
 TAXONOMY = frozenset(
@@ -53,9 +53,6 @@ TAXONOMY = frozenset(
 # Runner seam: prompt in, raw model text out (production shells `claude -p`).
 ModelRunner = Callable[[str], str]
 
-# A subprocess.run-shaped callable, injectable so tests never spawn a real claude.
-SubprocessRunner = Callable[..., "subprocess.CompletedProcess[str]"]
-
 # A classification batch is bounded (batch_size items of one title line each); a
 # multi-minute bound means a wedged subprocess, not slow inference.
 DEFAULT_CLASSIFIER_TIMEOUT_S = 300.0
@@ -66,29 +63,26 @@ def claude_model_runner(
     isolation: IsolatedJudgeConfig,
     *,
     timeout_s: float = DEFAULT_CLASSIFIER_TIMEOUT_S,
-    runner: SubprocessRunner = subprocess.run,
+    runner: Runner = subprocess.run,
 ) -> ModelRunner:
-    """The production `ModelRunner`: headless ``claude -p`` under the mem-9ld4
-    clean-config isolation surface (mem-hv9l). ``isolation`` is REQUIRED — there is
-    deliberately no un-isolated variant of this runner, so a classifier can never
-    shell the host config surface (where a host/project agent could hijack the
-    reply). The subprocess env is assembled FRESH per call (`isolated_judge_env`)
-    so a credential refreshed mid-run is never shipped stale. ``runner`` is
+    """The production `ModelRunner`: headless ``claude -p`` through the shared
+    mem-9ld4 isolation choke point (`run_isolated_claude`, mem-hv9l). ``isolation``
+    is REQUIRED — there is deliberately no un-isolated variant of this runner, so a
+    classifier can never shell the host config surface (where a host/project agent
+    could hijack the reply). Raw stdout comes back unparsed
+    (`parse_classification`'s job), so no ``--output-format json``. ``runner`` is
     injectable so tests drive the seam without spawning a real claude."""
 
     def run(prompt: str) -> str:
-        completed = runner(
-            ["claude", "-p", prompt, "--model", model, *isolation.extra_argv],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=timeout_s,
-            env=isolated_judge_env(isolation.config_dir),
-            cwd=isolation.cwd,
+        return run_isolated_claude(
+            prompt,
+            isolation=isolation,
+            runner=runner,
+            timeout_s=timeout_s,
+            model=model,
+            callsite="task-type classifier",
+            output_format_json=False,
         )
-        if completed.returncode != 0:
-            raise RuntimeError(f"claude -p failed: {completed.stderr.strip()[:200]}")
-        return completed.stdout
 
     return run
 

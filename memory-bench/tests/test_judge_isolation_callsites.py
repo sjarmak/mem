@@ -11,7 +11,6 @@ callsite's own audit label, and the marker is echoed. All offline — injected
 runners, no real claude, no network.
 """
 
-import json
 import subprocess
 
 import pytest
@@ -26,18 +25,20 @@ from membench.judge_config import (
 from membench.oracle.curator import ClaudeOracleCurator
 from membench.task_types import claude_model_runner
 
-# (class, monkeypatch target for its lazy prepare, expected audit label, model env var)
+# Every callsite lazily materializes through the ONE seam in membench.judge_config
+# (the `IsolatedClaudeCallsite` mixin), so that module is the single patch target.
+LAZY_PREPARE_TARGET = "membench.judge_config.prepare_isolated_judge"
+
+# (class, expected audit label, model env var)
 CASES = [
     pytest.param(
         ClaudeComparativeJudge,
-        "membench.bbon.comparative_judge.prepare_isolated_judge",
         "comparative",
         "MEMBENCH_COMPARATIVE_JUDGE_MODEL",
         id="comparative-judge",
     ),
     pytest.param(
         ClaudeOracleCurator,
-        "membench.oracle.curator.prepare_isolated_judge",
         "curator",
         "MEMBENCH_ORACLE_CURATOR_MODEL",
         id="oracle-curator",
@@ -55,9 +56,9 @@ def _capturing_runner(captured: dict):  # type: ignore[no-untyped-def]
     return runner
 
 
-@pytest.mark.parametrize("cls, patch_target, label, env_model", CASES)
+@pytest.mark.parametrize("cls, label, env_model", CASES)
 def test_complete_invokes_under_isolated_config(  # type: ignore[no-untyped-def]
-    cls, patch_target, label, env_model, tmp_path, monkeypatch
+    cls, label, env_model, tmp_path, monkeypatch
 ) -> None:
     # Host env carries a contaminating account config + an OAuth token.
     monkeypatch.setenv(ENV_CLAUDE_CONFIG_DIR, "/home/ds/.claude-homes/account3/.claude")
@@ -84,22 +85,22 @@ def test_complete_invokes_under_isolated_config(  # type: ignore[no-untyped-def]
         assert not (isolation.config_dir / forbidden).exists()
 
 
-@pytest.mark.parametrize("cls, patch_target, label, env_model", CASES)
+@pytest.mark.parametrize("cls, label, env_model", CASES)
 def test_lazy_isolation_materializes_once_with_callsite_label(  # type: ignore[no-untyped-def]
-    cls, patch_target, label, env_model, tmp_path, monkeypatch
+    cls, label, env_model, tmp_path, monkeypatch
 ) -> None:
     # The lazy default must materialize on first complete() and be reused (a
     # re-creation per call would splinter the audit trail), and it must carry the
-    # CALLSITE's label -- a 'graded'-labelled dir would misattribute the retained
+    # CALLSITE's label -- a mislabelled dir would misattribute the retained
     # evidence the mem-eacq contamination was diagnosed from.
     calls: dict = {"n": 0, "label": None}
 
-    def counting_prepare(base=None, *, label="graded"):  # type: ignore[no-untyped-def]
+    def counting_prepare(base=None, *, label=None):  # type: ignore[no-untyped-def]
         calls["n"] += 1
         calls["label"] = label
         return prepare_isolated_judge(base=tmp_path / str(calls["n"]))
 
-    monkeypatch.setattr(patch_target, counting_prepare)
+    monkeypatch.setattr(LAZY_PREPARE_TARGET, counting_prepare)
     captured: dict = {}
     instance = cls(runner=_capturing_runner(captured))
 
@@ -112,9 +113,9 @@ def test_lazy_isolation_materializes_once_with_callsite_label(  # type: ignore[n
     assert captured["env"][ENV_CLAUDE_CONFIG_DIR] == first_config_dir
 
 
-@pytest.mark.parametrize("cls, patch_target, label, env_model", CASES)
+@pytest.mark.parametrize("cls, label, env_model", CASES)
 def test_isolation_marker_reports_isolated(  # type: ignore[no-untyped-def]
-    cls, patch_target, label, env_model, tmp_path
+    cls, label, env_model, tmp_path
 ) -> None:
     # tmp_path-scoped isolation (the test_graded.py convention): falling through to
     # the real default base would be non-hermetic I/O against shared temp state.
@@ -124,18 +125,18 @@ def test_isolation_marker_reports_isolated(  # type: ignore[no-untyped-def]
     assert "account3" not in str(marker["config_dir"])
 
 
-@pytest.mark.parametrize("cls, patch_target, label, env_model", CASES)
+@pytest.mark.parametrize("cls, label, env_model", CASES)
 def test_isolation_marker_is_none_until_a_call_materializes_it(  # type: ignore[no-untyped-def]
-    cls, patch_target, label, env_model, tmp_path, monkeypatch
+    cls, label, env_model, tmp_path, monkeypatch
 ) -> None:
     # A never-fired judge has no isolation surface to attest: reading the marker
     # must return None WITHOUT minting a temp dir (an empty audit dir proves
     # nothing and litters the retained trail — mem-hv9l review finding). After the
     # first complete() the marker reports the surface that call actually ran under.
-    def prepare_in_tmp(base=None, *, label="graded"):  # type: ignore[no-untyped-def]
+    def prepare_in_tmp(base=None, *, label=None):  # type: ignore[no-untyped-def]
         return prepare_isolated_judge(base=tmp_path / "materialized")
 
-    monkeypatch.setattr(patch_target, prepare_in_tmp)
+    monkeypatch.setattr(LAZY_PREPARE_TARGET, prepare_in_tmp)
     captured: dict = {}
     instance = cls(runner=_capturing_runner(captured))
 
@@ -148,9 +149,9 @@ def test_isolation_marker_is_none_until_a_call_materializes_it(  # type: ignore[
     assert marker["config_dir"] == captured["env"][ENV_CLAUDE_CONFIG_DIR]
 
 
-@pytest.mark.parametrize("cls, patch_target, label, env_model", CASES)
+@pytest.mark.parametrize("cls, label, env_model", CASES)
 def test_pinned_model_flag_rides_with_isolation_argv(  # type: ignore[no-untyped-def]
-    cls, patch_target, label, env_model, tmp_path, monkeypatch
+    cls, label, env_model, tmp_path, monkeypatch
 ) -> None:
     # Isolation must not disturb the conditional --model contract (unlike graded's
     # unconditional pin): pinned -> --model present alongside the isolation flags;
@@ -216,20 +217,3 @@ def test_claude_model_runner_nonzero_exit_raises(tmp_path) -> None:  # type: ign
     run = claude_model_runner("haiku", prepare_isolated_judge(base=tmp_path), runner=failing)
     with pytest.raises(RuntimeError, match="claude -p failed"):
         run("p")
-
-
-# --- ClaudeComparativeJudge end-to-end under isolation ------------------------------
-# One non-parametrized smoke: the wrapped-CLI-JSON unwrap still works with the
-# isolation argv/env in place (the reply path is unchanged by mem-hv9l).
-
-
-def test_comparative_judge_reply_path_unchanged_under_isolation(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    inner = '{"winner": "B", "confidence": 0.9, "rationale": "warm"}'
-
-    def runner(argv, **kwargs):  # type: ignore[no-untyped-def]
-        return subprocess.CompletedProcess(
-            argv, 0, stdout=json.dumps({"result": inner, "usage": {}}), stderr=""
-        )
-
-    judge = ClaudeComparativeJudge(runner=runner, isolation=prepare_isolated_judge(base=tmp_path))
-    assert json.loads(judge.complete("p"))["winner"] == "B"
