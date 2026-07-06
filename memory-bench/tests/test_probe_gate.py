@@ -15,18 +15,32 @@ import toml
 from membench.bundle.replay import CallReplay, ReplayOutcome, ReplayResult
 from membench.grading import OutcomeLeakError
 from membench.grading.probe_direct import ProbeDirectScore, ProbeEfficiency
+from membench.harbor import probe_gate as _pg
+from membench.harbor.agent_memory import (
+    AGENT_CONFIG_DIR,
+    AGENT_MEMORY_ENV,
+    AGENT_NATIVE_MEMORY_PATH,
+    DELIVERED_MEMORY_PATHS,
+    INSTRUCTION_MEMORY_PATH,
+)
+from membench.harbor.memory_inject import MEMORY_HEADER
 from membench.harbor.probe_gate import (
+    AGENT_ENV_FILENAME,
     CONDITIONS,
     NATIVE_MEMORY_PATHS,
     ORACLE_MEMORY_CONTAINER_PATH,
     EmptyRunError,
+    MemoryNotConsumedError,
     PinMismatchError,
     ProbeConditionResult,
+    _resolve_agent_env,
+    assert_memory_consumed,
     assert_probe_task_clean,
     assert_run_pins,
     assert_strip_disjoint_from_gold,
     build_probe_task,
     detect_run_failure,
+    harbor_stream_exec,
     harvest_candidate,
     oracle_context_payload,
     probe_instruction,
@@ -175,6 +189,88 @@ def test_oracle_payload_is_paths_only(clone: Path) -> None:
     assert "- src/app.ts" in payload
     assert "const value" not in payload  # never diff content
     assert bundle.env.base_commit not in payload
+
+
+# --- memory delivery: native path + config-dir relocation (trace-explorer audit) --------
+
+
+def test_injected_condition_bakes_native_path_and_config_dir_chmod(
+    clone: Path, tmp_path: Path
+) -> None:
+    # The fix: deliver the injected memory to the agent's NATIVE read path (not just the
+    # instruction path it ignored 0/50 times), and chmod the relocated config dir so the
+    # adapter's runtime mkdir (as the agent user) works.
+    bundle = _bundle(clone)
+    task_dir = build_probe_task(bundle, "oracle", tmp_path / "t", rig_repos={"demo": clone})
+    dockerfile = (task_dir / "environment" / "Dockerfile").read_text(encoding="utf-8")
+    assert f"COPY MEMORY.md {AGENT_NATIVE_MEMORY_PATH}" in dockerfile
+    assert f"COPY MEMORY.md {INSTRUCTION_MEMORY_PATH}" in dockerfile  # instruction fallback kept
+    assert f"RUN chmod -R 777 {AGENT_CONFIG_DIR}" in dockerfile
+
+
+def test_injected_condition_writes_agent_env_sidecar(clone: Path, tmp_path: Path) -> None:
+    # The CLAUDE_CONFIG_DIR relocation travels beside the task, applied by the exec layer.
+    bundle = _bundle(clone)
+    task_dir = build_probe_task(bundle, "oracle", tmp_path / "t", rig_repos={"demo": clone})
+    sidecar = task_dir / AGENT_ENV_FILENAME
+    assert json.loads(sidecar.read_text(encoding="utf-8")) == AGENT_MEMORY_ENV
+    # It is harness metadata, NEVER in the Docker build context (environment/ only).
+    assert not (task_dir / "environment" / AGENT_ENV_FILENAME).exists()
+
+
+def test_none_condition_has_no_native_bake_or_sidecar(clone: Path, tmp_path: Path) -> None:
+    # none/none-clean keep Harbor's default config dir untouched -- no injected file, so no
+    # relocation and no native COPY (minimal blast radius on the established arms).
+    bundle = _bundle(clone)
+    task_dir = build_probe_task(bundle, "none", tmp_path / "t", rig_repos={"demo": clone})
+    dockerfile = (task_dir / "environment" / "Dockerfile").read_text(encoding="utf-8")
+    assert AGENT_NATIVE_MEMORY_PATH not in dockerfile
+    assert AGENT_CONFIG_DIR not in dockerfile
+    assert not (task_dir / AGENT_ENV_FILENAME).exists()
+
+
+def test_resolve_agent_env_reads_sidecar_or_none(clone: Path, tmp_path: Path) -> None:
+    bundle = _bundle(clone)
+    injected = build_probe_task(bundle, "oracle", tmp_path / "inj", rig_repos={"demo": clone})
+    plain = build_probe_task(bundle, "none", tmp_path / "plain", rig_repos={"demo": clone})
+    assert _resolve_agent_env(injected) == AGENT_MEMORY_ENV
+    assert _resolve_agent_env(plain) is None
+
+
+def test_resolve_agent_env_rejects_wrong_shape_sidecar(tmp_path: Path) -> None:
+    (tmp_path / AGENT_ENV_FILENAME).write_text('{"CLAUDE_CONFIG_DIR": 5}', encoding="utf-8")
+    with pytest.raises(ValueError, match=r"malformed.*str->str"):
+        _resolve_agent_env(tmp_path)
+
+
+def test_resolve_agent_env_rejects_invalid_json_sidecar(tmp_path: Path) -> None:
+    # A truncated/corrupt sidecar raises the SAME "malformed" contract, not a raw
+    # JSONDecodeError with a mismatched message.
+    (tmp_path / AGENT_ENV_FILENAME).write_text("{not json", encoding="utf-8")
+    with pytest.raises(ValueError, match=r"malformed.*invalid JSON"):
+        _resolve_agent_env(tmp_path)
+
+
+def test_harbor_stream_exec_threads_sidecar_env_into_run_harbor_job(
+    clone: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The one line connecting delivery to execution: an injected task's sidecar env must
+    # reach run_harbor_job; a plain task passes None.
+    bundle = _bundle(clone)
+    injected = build_probe_task(bundle, "oracle", tmp_path / "inj", rig_repos={"demo": clone})
+    plain = build_probe_task(bundle, "none", tmp_path / "plain", rig_repos={"demo": clone})
+    seen: list[object] = []
+
+    def fake_run_harbor_job(task_dir: Path, **kwargs: object) -> Path:
+        seen.append(kwargs.get("agent_env"))
+        return task_dir
+
+    monkeypatch.setattr(_pg, "run_harbor_job", fake_run_harbor_job)
+    monkeypatch.setattr(_pg, "load_stream", lambda _job_dir: "")
+
+    harbor_stream_exec(injected, jobs_dir=tmp_path / "j")
+    harbor_stream_exec(plain, jobs_dir=tmp_path / "j")
+    assert seen == [AGENT_MEMORY_ENV, None]
 
 
 # --- leak guard ------------------------------------------------------------------------
@@ -358,6 +454,107 @@ def test_run_probe_raises_empty_run_error_on_dead_transcript(clone: Path, tmp_pa
         run_probe(bundle, "none", task_dir, clone=clone, exec_stream=lambda _td: _DEAD_RUN_401)
     # The guard fires BEFORE the candidate harvest -> no probe worktree was created.
     assert stale_probe_worktrees(clone) == ()
+
+
+# --- memory consumption gate (trace-explorer audit: 0/50 injected files were read) -------
+
+
+def _read_block(path: str) -> dict:
+    return {"type": "tool_use", "name": "Read", "input": {"file_path": path}}
+
+
+def _stream_with_result(*, tool_uses: tuple[dict, ...] = (), result_text: str | None = None) -> str:
+    """A stream carrying tool_use blocks and an optional tool observation (the text a
+    ``Read``/``cat`` returned) -- the two inputs the consumption gate reads."""
+    events: list[dict] = [
+        {
+            "type": "assistant",
+            "message": {
+                "content": list(tool_uses),
+                "usage": {"input_tokens": 100, "output_tokens": 40},
+            },
+        }
+    ]
+    if result_text is not None:
+        events.append(
+            {
+                "type": "user",
+                "message": {
+                    "content": [
+                        {"type": "tool_result", "content": [{"type": "text", "text": result_text}]}
+                    ]
+                },
+            }
+        )
+    return "\n".join(json.dumps(e) for e in events)
+
+
+def test_assert_memory_consumed_passes_when_header_in_transcript() -> None:
+    # A cat/Read observation (or a silent auto-load echoed in context) surfaces the header.
+    stream = _stream_with_result(result_text=f"{MEMORY_HEADER}\n\n## oracle-files\n- src/x.py")
+    assert_memory_consumed(stream, work_id="w", condition="oracle")
+
+
+def test_assert_memory_consumed_passes_on_structured_read_of_delivered_path() -> None:
+    # Read of a delivered path counts even if the observation was elided (no header text).
+    for path in DELIVERED_MEMORY_PATHS:
+        stream = _stream_with_result(tool_uses=(_read_block(path),))
+        assert_memory_consumed(stream, work_id="w", condition="oracle")
+
+
+def test_assert_memory_consumed_raises_on_wrong_native_path_check() -> None:
+    # The exact failure mode: the agent cats its own EMPTY native dir and moves on. No
+    # header, no delivered-path read -> the message names the wrong memory path it hit.
+    wrong = "/logs/agent/sessions/projects/-app/memory/MEMORY.md"
+    stream = _stream_with_result(
+        tool_uses=(_read_block(wrong),),
+        result_text="No memory file found",
+    )
+    with pytest.raises(MemoryNotConsumedError, match=r"never consumed.*logs/agent"):
+        assert_memory_consumed(stream, work_id="w", condition="oracle")
+
+
+def test_assert_memory_consumed_does_not_false_pass_on_oracle_file_path() -> None:
+    # MEDIUM-4 regression: oracle payloads are bare file paths the agent edits anyway.
+    # A run that edits the gold file but never reads memory must still fail the gate.
+    stream = _stream(_edit_block("/app/src/x.py", "a", "b"))
+    with pytest.raises(MemoryNotConsumedError):
+        assert_memory_consumed(stream, work_id="w", condition="oracle")
+
+
+def test_run_probe_passes_gate_when_injected_memory_is_read(clone: Path, tmp_path: Path) -> None:
+    bundle = _bundle(clone)
+    task_dir = build_probe_task(bundle, "oracle", tmp_path / "t", rig_repos={"demo": clone})
+    stream = _stream(
+        _read_block(AGENT_NATIVE_MEMORY_PATH),
+        _edit_block("/app/src/app.ts", "const value = 1", "const value = 2"),
+    )
+    result = run_probe(bundle, "oracle", task_dir, clone=clone, exec_stream=lambda _td: stream)
+    assert result.condition == "oracle"
+    assert result.score.file_f1 == 1.0
+
+
+def test_run_probe_raises_memory_not_consumed_for_injected_condition(
+    clone: Path, tmp_path: Path
+) -> None:
+    bundle = _bundle(clone)
+    task_dir = build_probe_task(bundle, "oracle", tmp_path / "t", rig_repos={"demo": clone})
+    # The agent works (edits app.ts) but never reads the injected memory -> the arm silently
+    # degenerated to none; the gate must refuse to score it.
+    stream = _stream(_edit_block("/app/src/app.ts", "const value = 1", "const value = 2"))
+    with pytest.raises(MemoryNotConsumedError, match=r"demo-1 \[oracle\]"):
+        run_probe(bundle, "oracle", task_dir, clone=clone, exec_stream=lambda _td: stream)
+    # The gate fires BEFORE the candidate harvest -> no probe worktree was created.
+    assert stale_probe_worktrees(clone) == ()
+
+
+def test_run_probe_skips_gate_for_non_injected_condition(clone: Path, tmp_path: Path) -> None:
+    # none has no injected memory, so the gate never runs even with no memory read.
+    bundle = _bundle(clone)
+    task_dir = build_probe_task(bundle, "none", tmp_path / "t", rig_repos={"demo": clone})
+    stream = _stream(_edit_block("/app/src/app.ts", "const value = 1", "const value = 2"))
+    result = run_probe(bundle, "none", task_dir, clone=clone, exec_stream=lambda _td: stream)
+    assert result.score.file_f1 == 1.0
 
 
 # --- pair scoring + summary/gap arithmetic ------------------------------------------------

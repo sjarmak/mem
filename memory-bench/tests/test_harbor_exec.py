@@ -352,6 +352,29 @@ def test_job_config_omits_agent_env_so_token_passes_through_unmodified():
     assert cfg["verifier"] == {"disable": True}
 
 
+def test_job_config_sets_agent_env_when_provided():
+    # The sanctioned use: relocate CLAUDE_CONFIG_DIR so the agent reads the injected memory.
+    cfg = build_job_config(
+        Path("/t/task"),
+        job_name="j",
+        jobs_dir=Path("/t/jobs"),
+        model="claude-x",
+        agent_env={"CLAUDE_CONFIG_DIR": "/agent-memory"},
+    )
+    assert cfg["agents"][0]["env"] == {"CLAUDE_CONFIG_DIR": "/agent-memory"}
+
+
+def test_job_config_refuses_oauth_token_in_agent_env():
+    # agent.env merges OVER the adapter's real token; the token must never travel here.
+    with pytest.raises(ValueError, match="CLAUDE_CODE_OAUTH_TOKEN"):
+        build_job_config(
+            Path("/t/task"),
+            job_name="j",
+            jobs_dir=Path("/t/jobs"),
+            agent_env={"CLAUDE_CODE_OAUTH_TOKEN": "secret"},
+        )
+
+
 def test_job_config_threads_agent_version_pin():
     """mem-p3w: `agent_version` must reach the installed-agent constructor via
     AgentConfig.kwargs (harbor's factory spreads **kwargs into the agent class) or

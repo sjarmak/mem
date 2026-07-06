@@ -58,6 +58,16 @@ from membench.grading.probe_direct import (
     gold_file_list,
     score_probe_direct,
 )
+from membench.harbor.agent_memory import (
+    AGENT_CONFIG_DIR,
+    AGENT_MEMORY_ENV,
+    AGENT_NATIVE_MEMORY_PATH,
+    DELIVERED_MEMORY_PATHS,
+    INSTRUCTION_MEMORY_PATH,
+)
+from membench.harbor.agent_memory import (
+    AGENT_WORKDIR as CONTAINER_WORKDIR,
+)
 from membench.harbor.control_conditions import (
     FULL_CONTEXT,
     RAW_TRAJECTORY,
@@ -67,8 +77,13 @@ from membench.harbor.control_conditions import (
     raw_trajectory_payload,
 )
 from membench.harbor.env_recon import DEFAULT_RIG_REPOS, reconstruct_env
-from membench.harbor.harbor_exec import _locate_one, run_harbor_job
-from membench.harbor.memory_inject import inject_context, write_signature_overlap
+from membench.harbor.harbor_exec import _locate_one, project_claude_stream, run_harbor_job
+from membench.harbor.memory_inject import (
+    MEMORY_FILENAME,
+    MEMORY_HEADER,
+    inject_context,
+    write_signature_overlap,
+)
 from membench.harbor.shuffled_condition import SHUFFLED, ShuffledSelection
 from membench.harbor.task_env import NetworkMode, environment_network
 from membench.schemas.bundle import TaskBundle
@@ -123,14 +138,21 @@ DEFAULT_CONTROL_MAX_CHARS: int = 200_000
 # ~/.claude memory needs no strip: every run is a fresh container, so it is empty.
 NATIVE_MEMORY_PATHS: tuple[str, ...] = ("CLAUDE.md", "AGENTS.md", ".claude", ".agents")
 
-# Where the env_recon Dockerfile lands the repo snapshot (its WORKDIR) -- the rebase
-# prefix for candidate replay AND the repo location the fixed instruction names.
-CONTAINER_WORKDIR = "/app"
+# ``CONTAINER_WORKDIR`` (= ``/app``, the env_recon Dockerfile WORKDIR and the rebase
+# prefix for candidate replay) is imported from `agent_memory` as its single source of
+# truth, since the native-memory sub-path is derived from the same workdir slug.
 
-# Where the oracle condition's context file lands in the container. OUTSIDE /app on
+# Where the injected context file lands for the fixed INSTRUCTION to name. OUTSIDE /app on
 # purpose: an agent write to it would rebase outside the checkout (classified
-# OUTSIDE_WORK_DIR) instead of polluting the candidate diff.
-ORACLE_MEMORY_CONTAINER_PATH = "/memory/MEMORY.md"
+# OUTSIDE_WORK_DIR) instead of polluting the candidate diff. The build ALSO delivers the
+# same file to the agent's native-memory path (`agent_memory.NATIVE_MEMORY_PATH`) — the
+# path the agent actually reads (trace-explorer audit 2026-07-05: the instruction path
+# alone was consumed 0/50 times). This alias keeps the instruction target one source.
+ORACLE_MEMORY_CONTAINER_PATH = INSTRUCTION_MEMORY_PATH
+
+# Per-task sidecar (task-dir root, NEVER in the image) carrying the agent env override the
+# exec layer applies. Only injected conditions write it; `harbor_stream_exec` reads it.
+AGENT_ENV_FILENAME = "agent_env.json"
 
 # Serialized bundle replay-stat / verification field markers that must never reach
 # agent-readable text -- their presence means bundle internals leaked into a prompt.
@@ -252,16 +274,29 @@ def _task_toml(
 
 
 def _bake_memory_into_env(task_dir: Path, memory_file: Path) -> None:
-    """Land the injected memory file in the image at `ORACLE_MEMORY_CONTAINER_PATH`.
+    """Land the injected memory file in the image at BOTH delivery paths.
 
     `inject_context` writes ``<task_dir>/memory/MEMORY.md``, but Harbor's Docker
-    build context is ``environment/`` only -- without this COPY the injected
-    context would never reach the agent."""
+    build context is ``environment/`` only -- without a COPY the injected context
+    would never reach the agent. Two targets (`agent_memory`):
+
+    - ``NATIVE_MEMORY_PATH`` -- the path the agent's own native-memory block reads
+      (``$CLAUDE_CONFIG_DIR/projects/-app/memory/MEMORY.md`` with the relocated config
+      dir). This is the one that actually gets consumed; the instruction path alone was
+      read 0/50 times (trace-explorer audit). ``chmod -R 777`` so Harbor's adapter runtime
+      ``mkdir -p $CLAUDE_CONFIG_DIR/...`` works whatever user it runs as -- forward
+      insurance: the base images set no ``USER`` and the task sets no ``agent.user``, so
+      both build and run are root today.
+    - ``ORACLE_MEMORY_CONTAINER_PATH`` -- the path the fixed instruction names (fallback
+      for an agent that follows the instruction literally)."""
     env_dir = task_dir / "environment"
     shutil.copyfile(memory_file, env_dir / "MEMORY.md")
     dockerfile = env_dir / "Dockerfile"
     dockerfile.write_text(
-        dockerfile.read_text(encoding="utf-8") + f"COPY MEMORY.md {ORACLE_MEMORY_CONTAINER_PATH}\n",
+        dockerfile.read_text(encoding="utf-8")
+        + f"COPY MEMORY.md {AGENT_NATIVE_MEMORY_PATH}\n"
+        + f"RUN chmod -R 777 {AGENT_CONFIG_DIR}\n"
+        + f"COPY MEMORY.md {ORACLE_MEMORY_CONTAINER_PATH}\n",
         encoding="utf-8",
     )
 
@@ -439,6 +474,13 @@ def build_probe_task(
     if injected:
         memory_file = inject_context(task_dir, injected, outcome_labels=probe_leak_labels(bundle))
         _bake_memory_into_env(task_dir, memory_file)
+        # Relocate CLAUDE_CONFIG_DIR so the agent's native-memory block reads the file baked
+        # at NATIVE_MEMORY_PATH. Carried beside the task (never in the image), applied by
+        # `harbor_stream_exec`; injected conditions only, so none/none-clean/builtin keep
+        # Harbor's default config dir unchanged (`agent_memory`).
+        (task_dir / AGENT_ENV_FILENAME).write_text(
+            json.dumps(dict(AGENT_MEMORY_ENV), indent=2) + "\n", encoding="utf-8"
+        )
     # Truncation of a control payload is persisted, never silent (premortem lens 5):
     # a reader of the task dir sees exactly how much of the source was dropped.
     if control_truncation is not None and control_truncation.truncated:
@@ -490,6 +532,60 @@ class EmptyRunError(RuntimeError):
     and resumability would then skip it forever. The gate must treat it as a FAILURE:
     write NO result file (so a rerun re-executes it) and log loudly, never a score of
     zero (mem-75t.7.6 run incident, 2026-06-11)."""
+
+
+class MemoryNotConsumedError(RuntimeError):
+    """A memory-injected run whose agent never READ the injected memory -- the arm
+    silently degenerated to ``none`` on the input side (trace-explorer audit 2026-07-05:
+    0/50 memory-bearing runs consumed the injected file; the agent checked its own empty
+    native-memory dir and proceeded). Scoring such a run as a memory-arm data point is
+    the exact invalidity the audit found, so the gate writes NO result and logs loudly.
+    Unlike `EmptyRunError` this does NOT cascade -- it re-runs on resume (the agent gets
+    another chance), so the batch skips the leg rather than aborting."""
+
+    def __init__(self, work_id: str, condition: str, files_read: Sequence[str]) -> None:
+        self.work_id = work_id
+        self.condition = condition
+        self.files_read = tuple(files_read)
+        # Surface only WRONG memory paths (e.g. the empty native dir the agent used to
+        # check) -- listing every source file it opened would just be noise.
+        wrong_memory = [
+            p for p in files_read if p not in DELIVERED_MEMORY_PATHS and "MEMORY.md" in p
+        ]
+        detail = f"; agent instead read memory at {wrong_memory}" if wrong_memory else ""
+        super().__init__(
+            f"{work_id} [{condition}]: injected memory never consumed -- the memory header "
+            f"{MEMORY_HEADER!r} never appeared in the transcript and no delivered path "
+            f"{list(DELIVERED_MEMORY_PATHS)} was read{detail}"
+        )
+
+
+def assert_memory_consumed(stream: str, *, work_id: str, condition: str) -> None:
+    """Raise `MemoryNotConsumedError` unless the run's ``stream`` shows the injected memory
+    reached the agent. Two mechanical signals, either sufficient:
+
+    - the render header `MEMORY_HEADER` appears anywhere in the raw transcript -- it heads
+      every injected file, so a ``cat``/``Read`` observation OR Claude Code's silent
+      native-memory auto-load into context surfaces it (the header carries no JSON-special
+      chars, so it matches verbatim inside the escaped stream); or
+    - a structured `Read` tool call targeted a delivered memory path -- covers a read whose
+      observation the transcript elided.
+
+    The failure mode (``cat`` of the empty native dir -> "No memory file found") produces
+    neither, so it correctly fails. Uniform across conditions (no per-payload fingerprint,
+    so oracle's file-path payloads cannot false-pass). ZFC-clean: substring presence + a
+    path-set membership test, no semantic judgment.
+
+    NOTE: this assumes consumption is observable in the transcript -- true for the visible
+    ``cat``/``Read`` the agent emits when instructed (the trace-explorer evidence), and for
+    an echoed context injection. Confirm on one real Harbor run before trusting the
+    ``not_consumed`` tally at grid scale."""
+    if MEMORY_HEADER in stream:
+        return
+    files_read = project_claude_stream(stream)["files_read"]
+    if set(files_read) & set(DELIVERED_MEMORY_PATHS):
+        return
+    raise MemoryNotConsumedError(work_id, condition, files_read)
 
 
 def detect_run_failure(stream: str) -> str | None:
@@ -569,6 +665,25 @@ def assert_run_pins(stream: str, *, model: str, cli_version: str) -> None:
     raise PinMismatchError("no system init event in stream -- cannot verify run pins")
 
 
+def _resolve_agent_env(task_dir: Path) -> dict[str, str] | None:
+    """The agent env override a build wrote beside the task (`AGENT_ENV_FILENAME`), or
+    None. Injected conditions carry the ``CLAUDE_CONFIG_DIR`` relocation here; other
+    conditions have no sidecar and run with Harbor's default. A malformed sidecar raises
+    -- a corrupt override must not silently fall back to the wrong config dir."""
+    sidecar = task_dir / AGENT_ENV_FILENAME
+    if not sidecar.exists():
+        return None
+    try:
+        data = json.loads(sidecar.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"malformed {AGENT_ENV_FILENAME} at {sidecar}: invalid JSON ({exc})")
+    if not isinstance(data, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in data.items()
+    ):
+        raise ValueError(f"malformed {AGENT_ENV_FILENAME} at {sidecar}: expected str->str map")
+    return data
+
+
 def harbor_stream_exec(
     task_dir: Path,
     *,
@@ -582,7 +697,10 @@ def harbor_stream_exec(
     """Production `StreamExec`: ``harbor run`` one task (the spike's exact invocation
     path -- OAuth token from the Harbor process env, jobs-dir layout, ``-q -y``),
     then return the raw stream transcript. Requires Docker + the subscription.
-    ``agent_version`` pins the in-container claude CLI install (mem-p3w parity)."""
+    ``agent_version`` pins the in-container claude CLI install (mem-p3w parity).
+
+    A per-task `AGENT_ENV_FILENAME` sidecar (injected conditions) relocates
+    ``CLAUDE_CONFIG_DIR`` so the agent's native-memory block reads the injected file."""
     jobs_dir = jobs_dir or (task_dir.parent / "_harbor_jobs")
     job_name = job_name or task_dir.name
     job_dir = run_harbor_job(
@@ -593,6 +711,7 @@ def harbor_stream_exec(
         harbor_bin=harbor_bin,
         timeout_sec=timeout_sec,
         agent_version=agent_version,
+        agent_env=_resolve_agent_env(task_dir),
     )
     return load_stream(job_dir)
 
@@ -821,11 +940,20 @@ def run_probe(
 
     A dead run (`detect_run_failure` -- auth/limit error or zero-output transcript)
     raises `EmptyRunError` BEFORE the candidate harvest, so the caller writes no
-    result file and the run re-executes on resume rather than scoring a silent 0."""
+    result file and the run re-executes on resume rather than scoring a silent 0.
+
+    A memory-injected condition additionally passes the consumption gate
+    (`assert_memory_consumed`): the injected file (``<task_dir>/memory/MEMORY.md``,
+    present iff memory was injected) must show up as read in the transcript, else
+    `MemoryNotConsumedError` -- the arm degenerated to ``none`` and must not be scored."""
     stream = exec_stream(task_dir)
     failure = detect_run_failure(stream)
     if failure is not None:
         raise EmptyRunError(f"{bundle.work_id} [{condition}]: {failure}")
+    # The injected file is present iff this condition injected memory (build_probe_task
+    # writes it only then), so its existence is the exact gate trigger.
+    if (task_dir / MEMORY_FILENAME).exists():
+        assert_memory_consumed(stream, work_id=bundle.work_id, condition=condition)
     candidate = harvest_candidate(
         stream, bundle, clone=clone, runner=runner, worktree_root=worktree_root
     )
