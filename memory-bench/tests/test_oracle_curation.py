@@ -675,6 +675,64 @@ def test_build_provenance_unions_backends_across_symbols(tmp_path):
     assert ob.oracle.oracle_backends_consensus == ("gold_diff", "grep", "sourcegraph")
 
 
+def test_build_curator_isolation_none_when_no_llm_fired():
+    # Tier-1-only build (mem-x5d3): no Tier-2 candidate reaches the curator, so
+    # there is no isolation surface to attest.
+    resolvers = _two_resolvers(
+        {"writer": frozenset({"src/store/writer.ts", "src/store/schema.ts"})},
+        {"writer": frozenset({"src/store/writer.ts", "src/store/schema.ts"})},
+    )
+    ob = build_oracle_context(
+        modified_files=["src/store/writer.ts"], repo_root=REPO, resolvers=resolvers, threshold=0.5
+    )
+    assert ob.oracle.curator_isolation is None
+
+
+def test_build_curator_isolation_threaded_through_when_llm_fires(tmp_path):
+    # A Tier-2 candidate routes through the curator; its isolation_marker must be
+    # captured onto the built oracle (mem-x5d3). Real ClaudeOracleCurator with an
+    # injected runner, not a hand-rolled fake, so this pins the actual marker shape.
+    def runner(argv, **kw):
+        return _completed(stdout='{"result": "{\\"keep\\": true, \\"rationale\\": \\"ok\\"}"}')
+
+    curator = ClaudeOracleCurator(runner=runner, isolation=prepare_isolated_judge(base=tmp_path))
+    repo = _repo_with(tmp_path, "src/store/writer.ts", "helper.ts")
+    resolvers = _two_resolvers(
+        {"writer": frozenset({"src/store/writer.ts", "helper.ts"})},
+        {"writer": frozenset({"src/store/writer.ts"})},
+    )
+    ob = build_oracle_context(
+        modified_files=["src/store/writer.ts"],
+        repo_root=repo,
+        resolvers=resolvers,
+        curator=curator,
+        threshold=0.4,
+    )
+    assert dict(ob.oracle.oracle_tiers)["helper.ts"] == "supplementary"
+    assert ob.oracle.curator_isolation == curator.isolation_marker
+
+
+def test_build_curator_isolation_none_when_curator_lacks_attr(tmp_path):
+    # StubOracleCurator has no isolation_marker attribute at all -- getattr's
+    # default must apply even though its Tier-2 vote did fire.
+    repo = _repo_with(tmp_path, "src/store/writer.ts", "helper.ts")
+    resolvers = _two_resolvers(
+        {"writer": frozenset({"src/store/writer.ts", "helper.ts"})},
+        {"writer": frozenset({"src/store/writer.ts"})},
+    )
+    curator = StubOracleCurator(keep=True)
+    ob = build_oracle_context(
+        modified_files=["src/store/writer.ts"],
+        repo_root=repo,
+        resolvers=resolvers,
+        curator=curator,
+        threshold=0.4,
+    )
+    assert dict(ob.oracle.oracle_tiers)["helper.ts"] == "supplementary"
+    assert not hasattr(curator, "isolation_marker")
+    assert ob.oracle.curator_isolation is None
+
+
 def test_build_rejects_bad_max_oracle_files():
     with pytest.raises(ValueError):
         build_oracle_context(
