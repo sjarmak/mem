@@ -210,6 +210,11 @@ def test_scope_judge_delegates_isolation_marker_to_completer(tmp_path: Path) -> 
     marker = abg.ClaudeScopeJudge(completer=curator).isolation_marker
     assert marker is not None and marker["isolated_config"] is True
 
+    # A real claude completer that never fired (e.g. an all-singleton pool where
+    # fanout_scope_guard skips the judge) has no isolation surface to attest: the
+    # marker is None and NO temp dir is minted by the read (mem-hv9l review).
+    assert abg.ClaudeScopeJudge().isolation_marker is None
+
 
 def test_main_dry_run_writes_manifest_with_null_curator_isolation(tmp_path: Path) -> None:
     # --dry-run uses the stub scope judge (no claude spawn), so the manifest-level

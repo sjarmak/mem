@@ -204,3 +204,19 @@ def test_claude_judge_isolation_marker_echoed_in_payload(tmp_path: Path, store: 
     marker = payload["judge_isolation"]
     assert marker["isolated_config"] is True
     assert marker["strict_mcp_config"] is True
+
+
+def test_claude_judge_never_fired_echoes_null_isolation(store: Path) -> None:
+    # Every pair skips -> the claude judge never shells anything -> the payload
+    # records null, not a marker for an isolation surface no call ran under
+    # (mem-hv9l review finding).
+    from membench.bbon.comparative_judge import ClaudeComparativeJudge
+
+    def exploding_runner(argv: list, **kwargs: object) -> object:
+        raise AssertionError("judge must not be invoked for unresolvable pairs")
+
+    payload = arm_narrative.analyze(
+        [("ghost-a", "ghost-b")], store, None, ClaudeComparativeJudge(runner=exploding_runner)
+    )
+    assert payload["n_resolved"] == 0
+    assert payload["judge_isolation"] is None

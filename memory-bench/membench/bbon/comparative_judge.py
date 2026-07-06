@@ -135,10 +135,13 @@ class ClaudeComparativeJudge:
         return self.isolation
 
     @property
-    def isolation_marker(self) -> dict[str, object]:
+    def isolation_marker(self) -> dict[str, object] | None:
         """The attributable isolation record echoed into a run's payload -- proves an
-        isolated (clean-config) verdict is distinguishable from a pre-isolation one."""
-        return self._resolved_isolation().marker
+        isolated (clean-config) verdict is distinguishable from a pre-isolation one.
+        None until an isolation surface exists (injected, or materialized by the
+        first ``complete``): the marker attests a surface a call actually ran under,
+        never one minted just to satisfy a report (mem-hv9l review)."""
+        return None if self.isolation is None else self.isolation.marker
 
     def complete(self, prompt: str) -> str:
         isolation = self._resolved_isolation()

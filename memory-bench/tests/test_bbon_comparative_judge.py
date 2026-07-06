@@ -168,7 +168,7 @@ def _fake_completed(stdout: str, returncode: int = 0, stderr: str = "") -> Any:
     )
 
 
-def test_claude_unwraps_cli_json_result() -> None:
+def test_claude_unwraps_cli_json_result(tmp_path: Any) -> None:
     captured: dict[str, Any] = {}
 
     def runner(argv: list[str], **kwargs: Any) -> Any:
@@ -176,7 +176,9 @@ def test_claude_unwraps_cli_json_result() -> None:
         inner = '{"winner": "B", "confidence": 0.9, "rationale": "warm"}'
         return _fake_completed(json.dumps({"result": inner, "usage": {}}))
 
-    judge = ClaudeComparativeJudge(runner=runner)
+    # tmp_path-scoped isolation on every complete() test in this module: the lazy
+    # default would mkdtemp a real, never-cleaned dir per run (non-hermetic).
+    judge = ClaudeComparativeJudge(runner=runner, isolation=prepare_isolated_judge(base=tmp_path))
     text = judge.complete("the prompt")
     assert json.loads(text)["winner"] == "B"
     # default (no model pinned): the CLI default is recorded, no --model flag passed.
@@ -204,33 +206,37 @@ def test_claude_passes_explicit_model_flag(tmp_path: Any) -> None:
     assert captured["argv"][i + 1] == "claude-haiku-4-5"
 
 
-def test_claude_raw_stdout_passed_through_when_not_wrapper() -> None:
-    judge = ClaudeComparativeJudge(runner=lambda *a, **k: _fake_completed("plain reply"))
+def test_claude_raw_stdout_passed_through_when_not_wrapper(tmp_path: Any) -> None:
+    judge = ClaudeComparativeJudge(
+        runner=lambda *a, **k: _fake_completed("plain reply"),
+        isolation=prepare_isolated_judge(base=tmp_path),
+    )
     assert judge.complete("p") == "plain reply"
 
 
-def test_claude_non_zero_exit_raises() -> None:
+def test_claude_non_zero_exit_raises(tmp_path: Any) -> None:
     judge = ClaudeComparativeJudge(
-        runner=lambda *a, **k: _fake_completed("", returncode=2, stderr="boom")
+        runner=lambda *a, **k: _fake_completed("", returncode=2, stderr="boom"),
+        isolation=prepare_isolated_judge(base=tmp_path),
     )
     with pytest.raises(ComparativeJudgeError, match=r"exit 2.*boom"):
         judge.complete("p")
 
 
-def test_claude_missing_binary_raises() -> None:
+def test_claude_missing_binary_raises(tmp_path: Any) -> None:
     def runner(*a: Any, **k: Any) -> Any:
         raise FileNotFoundError("claude")
 
-    judge = ClaudeComparativeJudge(runner=runner)
+    judge = ClaudeComparativeJudge(runner=runner, isolation=prepare_isolated_judge(base=tmp_path))
     with pytest.raises(ComparativeJudgeError, match="not found"):
         judge.complete("p")
 
 
-def test_claude_timeout_raises() -> None:
+def test_claude_timeout_raises(tmp_path: Any) -> None:
     def runner(*a: Any, **k: Any) -> Any:
         raise subprocess.TimeoutExpired(cmd="claude", timeout=90.0)
 
-    judge = ClaudeComparativeJudge(runner=runner)
+    judge = ClaudeComparativeJudge(runner=runner, isolation=prepare_isolated_judge(base=tmp_path))
     with pytest.raises(ComparativeJudgeError, match="did not respond"):
         judge.complete("p")
 

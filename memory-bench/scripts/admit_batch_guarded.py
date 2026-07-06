@@ -114,7 +114,9 @@ class ClaudeScopeJudge:
         """The completer's mem-9ld4 clean-config marker (mem-hv9l), echoed into the
         manifest so a scope verdict produced under isolation is distinguishable from
         a pre-isolation one. None when the completer is not the claude curator (a
-        stub completer shells nothing, so there is no isolation surface to record)."""
+        stub completer shells nothing) AND when the curator never fired (an
+        all-singleton pool skips the judge; a marker must attest calls that
+        happened, not mint an empty audit dir)."""
         if isinstance(self.completer, ClaudeOracleCurator):
             return self.completer.isolation_marker
         return None
@@ -366,7 +368,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         manifest = build_manifest(rows)
         # mem-hv9l: the scope judge's mem-9ld4 clean-config marker, echoed at the
         # manifest level in main() (not build_manifest — the marker is invocation
-        # provenance, not a per-bundle verdict). None under --dry-run's stub judge.
+        # provenance, not a per-bundle verdict). None under --dry-run's stub judge
+        # AND when no bundle crossed the fanout threshold (judge never fired).
         manifest["curator_isolation"] = (
             judge.isolation_marker if isinstance(judge, ClaudeScopeJudge) else None
         )

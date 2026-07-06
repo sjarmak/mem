@@ -125,6 +125,30 @@ def test_isolation_marker_reports_isolated(  # type: ignore[no-untyped-def]
 
 
 @pytest.mark.parametrize("cls, patch_target, label, env_model", CASES)
+def test_isolation_marker_is_none_until_a_call_materializes_it(  # type: ignore[no-untyped-def]
+    cls, patch_target, label, env_model, tmp_path, monkeypatch
+) -> None:
+    # A never-fired judge has no isolation surface to attest: reading the marker
+    # must return None WITHOUT minting a temp dir (an empty audit dir proves
+    # nothing and litters the retained trail — mem-hv9l review finding). After the
+    # first complete() the marker reports the surface that call actually ran under.
+    def prepare_in_tmp(base=None, *, label="graded"):  # type: ignore[no-untyped-def]
+        return prepare_isolated_judge(base=tmp_path / "materialized")
+
+    monkeypatch.setattr(patch_target, prepare_in_tmp)
+    captured: dict = {}
+    instance = cls(runner=_capturing_runner(captured))
+
+    assert instance.isolation_marker is None
+    assert not (tmp_path / "materialized").exists()  # no dir minted by the read
+
+    instance.complete("p")
+    marker = instance.isolation_marker
+    assert marker is not None and marker["isolated_config"] is True
+    assert marker["config_dir"] == captured["env"][ENV_CLAUDE_CONFIG_DIR]
+
+
+@pytest.mark.parametrize("cls, patch_target, label, env_model", CASES)
 def test_pinned_model_flag_rides_with_isolation_argv(  # type: ignore[no-untyped-def]
     cls, patch_target, label, env_model, tmp_path, monkeypatch
 ) -> None:

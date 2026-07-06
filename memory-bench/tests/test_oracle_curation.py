@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from membench.bundle.replay import CallReplay, ReplayOutcome, ReplayResult
+from membench.judge_config import prepare_isolated_judge
 from membench.oracle import (
     BackendResult,
     ClaudeOracleCurator,
@@ -383,44 +384,53 @@ def test_stub_curator_needs_exactly_one_mode():
         StubOracleCurator(keep=True, fn=lambda p: p)
 
 
-def test_claude_curator_unwraps_cli_json():
+def test_claude_curator_unwraps_cli_json(tmp_path):
     def runner(argv, **kw):
         return _completed(stdout='{"result": "{\\"keep\\": true, \\"rationale\\": \\"r\\"}"}')
 
-    cur = ClaudeOracleCurator(runner=runner)
+    # tmp_path-scoped isolation on every complete() test in this module: the lazy
+    # default would mkdtemp a real, never-cleaned dir per run (non-hermetic).
+    cur = ClaudeOracleCurator(runner=runner, isolation=prepare_isolated_judge(base=tmp_path))
     assert parse_curator_reply(cur.complete("p")).keep
 
 
-def test_claude_curator_nonzero_exit_raises():
-    cur = ClaudeOracleCurator(runner=lambda argv, **kw: _completed(returncode=2, stderr="boom"))
+def test_claude_curator_nonzero_exit_raises(tmp_path):
+    cur = ClaudeOracleCurator(
+        runner=lambda argv, **kw: _completed(returncode=2, stderr="boom"),
+        isolation=prepare_isolated_judge(base=tmp_path),
+    )
     with pytest.raises(OracleCuratorError):
         cur.complete("p")
 
 
-def test_claude_curator_missing_binary_raises():
+def test_claude_curator_missing_binary_raises(tmp_path):
     def runner(argv, **kw):
         raise FileNotFoundError("no claude")
 
+    cur = ClaudeOracleCurator(runner=runner, isolation=prepare_isolated_judge(base=tmp_path))
     with pytest.raises(OracleCuratorError):
-        ClaudeOracleCurator(runner=runner).complete("p")
+        cur.complete("p")
 
 
-def test_claude_curator_timeout_raises():
+def test_claude_curator_timeout_raises(tmp_path):
     def runner(argv, **kw):
         raise subprocess.TimeoutExpired(cmd="claude", timeout=1)
 
+    cur = ClaudeOracleCurator(runner=runner, isolation=prepare_isolated_judge(base=tmp_path))
     with pytest.raises(OracleCuratorError):
-        ClaudeOracleCurator(runner=runner).complete("p")
+        cur.complete("p")
 
 
-def test_claude_curator_passes_model_when_pinned():
+def test_claude_curator_passes_model_when_pinned(tmp_path):
     seen: dict = {}
 
     def runner(argv, **kw):
         seen["argv"] = argv
         return _completed(stdout='{"keep": true}')
 
-    ClaudeOracleCurator(model="haiku", runner=runner).complete("p")
+    ClaudeOracleCurator(
+        model="haiku", runner=runner, isolation=prepare_isolated_judge(base=tmp_path)
+    ).complete("p")
     assert "--model" in seen["argv"] and "haiku" in seen["argv"]
 
 
