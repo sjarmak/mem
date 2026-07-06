@@ -111,8 +111,8 @@ def score_runs(
                 out = grid_dir / f"{bundle.work_id}.{condition}.json"
                 if out.exists():
                     skipped += 1
-                    results[(bundle.work_id, condition)] = (
-                        GridConditionResult.model_validate_json(out.read_text(encoding="utf-8"))
+                    results[(bundle.work_id, condition)] = GridConditionResult.model_validate_json(
+                        out.read_text(encoding="utf-8")
                     )
                     print(f"SKIP  {bundle.work_id} {condition}  (result exists)")
                     continue

@@ -193,3 +193,62 @@ def test_manifest_provenance_distinguishes_scope_and_oracle_rejects() -> None:
 def test_dry_repro_runner_declares_every_oracle_sound() -> None:
     rows = abg.apply_validity_gate([_scope_admit("a")], {"a": _bundle("a")}, abg._DryReproRunner())
     assert rows[0].admitted and rows[0].validity.valid
+
+
+# --- scope-judge isolation marker (mem-hv9l) ----------------------------------------
+
+
+def test_scope_judge_delegates_isolation_marker_to_completer(tmp_path: Path) -> None:
+    # The scope judge shells claude via its completer, so the mem-9ld4 clean-config
+    # marker is the COMPLETER's; a stub completer shells nothing -> None.
+    from membench.judge_config import prepare_isolated_judge
+    from membench.oracle.curator import ClaudeOracleCurator, StubOracleCurator
+
+    assert abg.ClaudeScopeJudge(completer=StubOracleCurator(keep=True)).isolation_marker is None
+
+    curator = ClaudeOracleCurator(isolation=prepare_isolated_judge(base=tmp_path))
+    marker = abg.ClaudeScopeJudge(completer=curator).isolation_marker
+    assert marker is not None and marker["isolated_config"] is True
+
+    # A real claude completer that never fired (e.g. an all-singleton pool where
+    # fanout_scope_guard skips the judge) has no isolation surface to attest: the
+    # marker is None and NO temp dir is minted by the read (mem-hv9l review).
+    assert abg.ClaudeScopeJudge().isolation_marker is None
+
+
+def test_main_dry_run_writes_manifest_with_null_curator_isolation(tmp_path: Path) -> None:
+    # --dry-run uses the stub scope judge (no claude spawn), so the manifest-level
+    # curator_isolation echo must be null -- present (schema-stable), never a
+    # fabricated marker for a judge that could not have been isolated.
+    import sqlite3
+
+    bundles_dir = tmp_path / "bundles"
+    bundles_dir.mkdir()
+    (bundles_dir / "a.json").write_text(_bundle("a").model_dump_json(), encoding="utf-8")
+    store = tmp_path / "store.db"
+    con = sqlite3.connect(store)
+    con.execute("CREATE TABLE work_records (record TEXT NOT NULL)")
+    con.commit()
+    con.close()
+    manifest_path = tmp_path / "grid-ready-pool.json"
+    report_path = tmp_path / "report.md"
+
+    rc = abg.main(
+        [
+            "--bundles-dir",
+            str(bundles_dir),
+            "--store",
+            str(store),
+            "--manifest",
+            str(manifest_path),
+            "--report-out",
+            str(report_path),
+            "--dry-run",
+            "--write",
+        ]
+    )
+    assert rc == 0
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["curator_isolation"] is None
+    assert manifest["admitted"] == ["a"]  # singleton fanout, dry oracle sound

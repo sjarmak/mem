@@ -60,8 +60,10 @@ def main() -> int:
         v = memory_necessity_gate(seq).verdict
         admitted += v.accepted
         rows.append({"sequence_id": seq.sequence_id, "accepted": v.accepted, "delta": v.delta})
-        print(f"  {seq.sequence_id}: oracle {v.oracle_reward:.3f} none {v.no_memory_reward:.3f} "
-              f"delta {v.delta:.3f} -> {'ADMIT' if v.accepted else 'REJECT'}")
+        print(
+            f"  {seq.sequence_id}: oracle {v.oracle_reward:.3f} none {v.no_memory_reward:.3f} "
+            f"delta {v.delta:.3f} -> {'ADMIT' if v.accepted else 'REJECT'}"
+        )
 
     seq_path = Path(out_dir) / "sequences.json"
     seq_path.write_text(

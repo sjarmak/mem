@@ -131,6 +131,9 @@ def test_cli_resolves_pair_judges_and_writes_report(tmp_path: Path, store: Path)
     assert payload["n_pairs"] == 1
     assert payload["n_resolved"] == 1
     assert payload["judge_model"] == "stub"
+    # The offline stub shells nothing, so there is no isolation surface to record
+    # (mem-hv9l): the key is present (schema-stable) but null.
+    assert payload["judge_isolation"] is None
     assert payload["skips"] == []
     pair = payload["per_pair"][0]
     assert pair["left_work_id"] == "cold-1"
@@ -178,3 +181,42 @@ def test_load_pairs_malformed_row_names_the_row(tmp_path: Path) -> None:
 def test_make_judge_rejects_unknown_kind() -> None:
     with pytest.raises(ValueError, match="unknown judge"):
         arm_narrative._make_judge("gpt")
+
+
+def test_claude_judge_isolation_marker_echoed_in_payload(tmp_path: Path, store: Path) -> None:
+    # mem-hv9l: a payload produced by the claude judge carries the mem-9ld4
+    # clean-config marker (same key as the grid pins), so an isolated verdict is
+    # distinguishable from a pre-isolation (contaminated-era) one. Injected runner +
+    # tmp_path-scoped isolation -- no real claude.
+    import subprocess
+
+    from membench.bbon.comparative_judge import ClaudeComparativeJudge
+    from membench.judge_config import prepare_isolated_judge
+
+    def runner(argv: list, **kwargs: object) -> "subprocess.CompletedProcess[str]":
+        reply = '{"winner": "B", "confidence": 0.9, "rationale": "warm did better"}'
+        return subprocess.CompletedProcess(argv, 0, stdout=reply, stderr="")
+
+    judge = ClaudeComparativeJudge(runner=runner, isolation=prepare_isolated_judge(base=tmp_path))
+    payload = arm_narrative.analyze([("cold-1", "warm-1")], store, None, judge)
+
+    assert payload["n_resolved"] == 1
+    marker = payload["judge_isolation"]
+    assert marker["isolated_config"] is True
+    assert marker["strict_mcp_config"] is True
+
+
+def test_claude_judge_never_fired_echoes_null_isolation(store: Path) -> None:
+    # Every pair skips -> the claude judge never shells anything -> the payload
+    # records null, not a marker for an isolation surface no call ran under
+    # (mem-hv9l review finding).
+    from membench.bbon.comparative_judge import ClaudeComparativeJudge
+
+    def exploding_runner(argv: list, **kwargs: object) -> object:
+        raise AssertionError("judge must not be invoked for unresolvable pairs")
+
+    payload = arm_narrative.analyze(
+        [("ghost-a", "ghost-b")], store, None, ClaudeComparativeJudge(runner=exploding_runner)
+    )
+    assert payload["n_resolved"] == 0
+    assert payload["judge_isolation"] is None

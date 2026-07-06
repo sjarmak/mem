@@ -176,6 +176,13 @@ def analyze(
         "n_pairs": len(pairs),
         "n_resolved": len(comparisons),
         "judge_model": judge.model,
+        # mem-hv9l: the mem-9ld4 clean-config marker for the claude judge (same key
+        # as the grid pins), None for the offline stub and when no pair resolved (a
+        # never-fired judge has no isolation surface to attest) — a verdict produced
+        # under isolation is distinguishable from a pre-isolation one.
+        "judge_isolation": (
+            judge.isolation_marker if isinstance(judge, ClaudeComparativeJudge) else None
+        ),
         "per_pair": per_pair,
         "skips": skips,
         "summary": summarize_comparisons(comparisons) if comparisons else None,

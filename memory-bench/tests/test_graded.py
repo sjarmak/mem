@@ -24,7 +24,7 @@ from membench.grading.graded import (
     parse_criteria,
     weighted_score,
 )
-from membench.grading.judge_config import (
+from membench.judge_config import (
     ENV_CLAUDE_CONFIG_DIR,
     FORBIDDEN_CONFIG_ENTRIES,
     STRICT_MCP_CONFIG_FLAG,
@@ -178,8 +178,14 @@ def _fake_claude(reply_text: str):
     return runner
 
 
-def test_claude_judge_parses_and_weights() -> None:
-    judge = ClaudeRubricJudge(model="claude-sonnet-4-6", runner=_fake_claude(_reply(1.0, 0.5, 0.0)))
+def test_claude_judge_parses_and_weights(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # tmp_path-scoped isolation: the lazy default would mkdtemp a real,
+    # never-cleaned dir per run (non-hermetic; mem-hv9l review).
+    judge = ClaudeRubricJudge(
+        model="claude-sonnet-4-6",
+        runner=_fake_claude(_reply(1.0, 0.5, 0.0)),
+        isolation=prepare_isolated_judge(base=tmp_path),
+    )
     score = judge.score(
         *build_graded_view(
             issue_title="t", issue_body="", candidate_diff=CANDIDATE, gold_diff=GOLD
@@ -191,11 +197,11 @@ def test_claude_judge_parses_and_weights() -> None:
     assert judge.model == "claude-sonnet-4-6"
 
 
-def test_claude_judge_nonzero_exit_raises() -> None:
+def test_claude_judge_nonzero_exit_raises(tmp_path) -> None:  # type: ignore[no-untyped-def]
     def runner(argv, **kwargs):  # type: ignore[no-untyped-def]
         return subprocess.CompletedProcess(argv, 1, stdout="", stderr="quota exceeded")
 
-    judge = ClaudeRubricJudge(runner=runner)
+    judge = ClaudeRubricJudge(runner=runner, isolation=prepare_isolated_judge(base=tmp_path))
     with pytest.raises(RuntimeError, match="claude -p failed"):
         judge.score("t", "c", graded_rubric())
 
@@ -286,6 +292,15 @@ def test_claude_judge_default_isolation_marker_is_on(tmp_path) -> None:  # type:
     assert marker["isolated_config"] is True
     assert marker["strict_mcp_config"] is True
     assert "account3" not in str(marker["config_dir"])
+
+
+def test_claude_judge_marker_is_none_before_any_score() -> None:
+    # A never-fired judge has no isolation surface to attest: the marker read is
+    # None and mints NO temp dir (mem-hv9l review finding — an empty audit dir
+    # would be indistinguishable from one that backed real judge calls). The pins
+    # echo in the grid drivers runs after scoring, so a normal run still records
+    # the marker; a zero-scored run now records null instead of a fabrication.
+    assert ClaudeRubricJudge().isolation_marker is None
 
 
 # --- judge_graded orchestration (vote + divergence) -------------------------------

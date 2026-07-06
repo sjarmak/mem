@@ -28,6 +28,11 @@ from typing import Any, Protocol
 
 from membench._claude_cli import first_json_object, unwrap_cli_json
 from membench.bbon.models import Attempt, Judgment, NarrativeDiff, deterministic_id
+from membench.judge_config import (
+    IsolatedJudgeConfig,
+    isolated_judge_env,
+    prepare_isolated_judge,
+)
 
 DEFAULT_PROMPT_VERSION = "v1"
 
@@ -94,11 +99,22 @@ class ClaudeComparativeJudge:
     ``model`` pins the CLI model; left empty it reads ``MEMBENCH_COMPARATIVE_JUDGE_MODEL``
     and otherwise falls back to the CLI's own default (no ``--model`` flag, recorded as
     ``cli-default``). ``runner`` is injected so tests drive the parse path without
-    spawning a real claude. Every failure raises `ComparativeJudgeError`."""
+    spawning a real claude. Every failure raises `ComparativeJudgeError`.
+
+    ``isolation`` (mem-9ld4 / mem-hv9l) is the clean-config surface the ``claude -p``
+    subprocess runs under: a minimal EMPTY ``CLAUDE_CONFIG_DIR`` +
+    ``--strict-mcp-config`` + a neutral cwd, so no host/project agent (notably a
+    ``code-reviewer``) can hijack the judge — the NarrativeDiff content this judge
+    reads is exactly the reviewable-diff shape that triggered the original graded
+    hijack (mem-eacq). Left ``None`` it is materialized lazily on first use and
+    cached; tests inject a ``tmp_path``-scoped one. The subprocess env is assembled
+    FRESH per call (`isolated_judge_env`) so a credential refreshed mid-run is never
+    shipped stale."""
 
     model: str = ""
     timeout_s: float = DEFAULT_TIMEOUT_S
     runner: Runner = subprocess.run
+    isolation: IsolatedJudgeConfig | None = None
     _pass_model: bool = field(default=False, init=False)
 
     def __post_init__(self) -> None:
@@ -108,13 +124,40 @@ class ClaudeComparativeJudge:
         object.__setattr__(self, "_pass_model", bool(resolved))
         object.__setattr__(self, "model", resolved or CLI_DEFAULT_MODEL)
 
+    def _resolved_isolation(self) -> IsolatedJudgeConfig:
+        """The clean-config surface, materialized (and cached) on first use. Deferred
+        out of ``__post_init__`` so constructing a judge writes no clean-config dir to
+        disk. NOT thread-safe: a judge instance is sequential-use only (the
+        `ClaudeRubricJudge` convention)."""
+        if self.isolation is None:
+            object.__setattr__(self, "isolation", prepare_isolated_judge(label="comparative"))
+        assert self.isolation is not None  # just set above
+        return self.isolation
+
+    @property
+    def isolation_marker(self) -> dict[str, object] | None:
+        """The attributable isolation record echoed into a run's payload -- proves an
+        isolated (clean-config) verdict is distinguishable from a pre-isolation one.
+        None until an isolation surface exists (injected, or materialized by the
+        first ``complete``): the marker attests a surface a call actually ran under,
+        never one minted just to satisfy a report (mem-hv9l review)."""
+        return None if self.isolation is None else self.isolation.marker
+
     def complete(self, prompt: str) -> str:
+        isolation = self._resolved_isolation()
         argv = ["claude", "-p", prompt, "--output-format", "json"]
         if self._pass_model:
             argv += ["--model", self.model]
+        argv += list(isolation.extra_argv)
         try:
             completed = self.runner(
-                argv, capture_output=True, text=True, check=False, timeout=self.timeout_s
+                argv,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=self.timeout_s,
+                env=isolated_judge_env(isolation.config_dir),
+                cwd=isolation.cwd,
             )
         except FileNotFoundError as exc:
             raise ComparativeJudgeError(

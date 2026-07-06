@@ -21,6 +21,7 @@ from membench.bbon.comparative_judge import (
 )
 from membench.bbon.models import Attempt, NarrativeDiff, deterministic_id
 from membench.bbon.narrative_diff import generate_narrative_diff
+from membench.judge_config import prepare_isolated_judge
 
 
 def _attempt(arm: str, status: str = "completed", **result: object) -> Attempt:
@@ -167,7 +168,7 @@ def _fake_completed(stdout: str, returncode: int = 0, stderr: str = "") -> Any:
     )
 
 
-def test_claude_unwraps_cli_json_result() -> None:
+def test_claude_unwraps_cli_json_result(tmp_path: Any) -> None:
     captured: dict[str, Any] = {}
 
     def runner(argv: list[str], **kwargs: Any) -> Any:
@@ -175,7 +176,9 @@ def test_claude_unwraps_cli_json_result() -> None:
         inner = '{"winner": "B", "confidence": 0.9, "rationale": "warm"}'
         return _fake_completed(json.dumps({"result": inner, "usage": {}}))
 
-    judge = ClaudeComparativeJudge(runner=runner)
+    # tmp_path-scoped isolation on every complete() test in this module: the lazy
+    # default would mkdtemp a real, never-cleaned dir per run (non-hermetic).
+    judge = ClaudeComparativeJudge(runner=runner, isolation=prepare_isolated_judge(base=tmp_path))
     text = judge.complete("the prompt")
     assert json.loads(text)["winner"] == "B"
     # default (no model pinned): the CLI default is recorded, no --model flag passed.
@@ -185,51 +188,60 @@ def test_claude_unwraps_cli_json_result() -> None:
     assert "--output-format" in captured["argv"]
 
 
-def test_claude_passes_explicit_model_flag() -> None:
+def test_claude_passes_explicit_model_flag(tmp_path: Any) -> None:
     captured: dict[str, Any] = {}
 
     def runner(argv: list[str], **kwargs: Any) -> Any:
         captured["argv"] = argv
         return _fake_completed("raw text reply")
 
-    judge = ClaudeComparativeJudge(model="claude-haiku-4-5", runner=runner)
+    judge = ClaudeComparativeJudge(
+        model="claude-haiku-4-5", runner=runner, isolation=prepare_isolated_judge(base=tmp_path)
+    )
     judge.complete("p")
     assert judge.model == "claude-haiku-4-5"
-    assert captured["argv"][-2:] == ["--model", "claude-haiku-4-5"]
+    # --model rides immediately before its value; the isolation argv follows it
+    # (mem-hv9l), so the pair is no longer the argv tail.
+    i = captured["argv"].index("--model")
+    assert captured["argv"][i + 1] == "claude-haiku-4-5"
 
 
-def test_claude_raw_stdout_passed_through_when_not_wrapper() -> None:
-    judge = ClaudeComparativeJudge(runner=lambda *a, **k: _fake_completed("plain reply"))
+def test_claude_raw_stdout_passed_through_when_not_wrapper(tmp_path: Any) -> None:
+    judge = ClaudeComparativeJudge(
+        runner=lambda *a, **k: _fake_completed("plain reply"),
+        isolation=prepare_isolated_judge(base=tmp_path),
+    )
     assert judge.complete("p") == "plain reply"
 
 
-def test_claude_non_zero_exit_raises() -> None:
+def test_claude_non_zero_exit_raises(tmp_path: Any) -> None:
     judge = ClaudeComparativeJudge(
-        runner=lambda *a, **k: _fake_completed("", returncode=2, stderr="boom")
+        runner=lambda *a, **k: _fake_completed("", returncode=2, stderr="boom"),
+        isolation=prepare_isolated_judge(base=tmp_path),
     )
     with pytest.raises(ComparativeJudgeError, match=r"exit 2.*boom"):
         judge.complete("p")
 
 
-def test_claude_missing_binary_raises() -> None:
+def test_claude_missing_binary_raises(tmp_path: Any) -> None:
     def runner(*a: Any, **k: Any) -> Any:
         raise FileNotFoundError("claude")
 
-    judge = ClaudeComparativeJudge(runner=runner)
+    judge = ClaudeComparativeJudge(runner=runner, isolation=prepare_isolated_judge(base=tmp_path))
     with pytest.raises(ComparativeJudgeError, match="not found"):
         judge.complete("p")
 
 
-def test_claude_timeout_raises() -> None:
+def test_claude_timeout_raises(tmp_path: Any) -> None:
     def runner(*a: Any, **k: Any) -> Any:
         raise subprocess.TimeoutExpired(cmd="claude", timeout=90.0)
 
-    judge = ClaudeComparativeJudge(runner=runner)
+    judge = ClaudeComparativeJudge(runner=runner, isolation=prepare_isolated_judge(base=tmp_path))
     with pytest.raises(ComparativeJudgeError, match="did not respond"):
         judge.complete("p")
 
 
-def test_claude_env_model_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_claude_env_model_is_used(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
     monkeypatch.setenv("MEMBENCH_COMPARATIVE_JUDGE_MODEL", "env-model")
     captured: dict[str, Any] = {}
 
@@ -237,7 +249,8 @@ def test_claude_env_model_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
         captured["argv"] = argv
         return _fake_completed("x")
 
-    judge = ClaudeComparativeJudge(runner=runner)
+    judge = ClaudeComparativeJudge(runner=runner, isolation=prepare_isolated_judge(base=tmp_path))
     assert judge.model == "env-model"
     judge.complete("p")
-    assert captured["argv"][-2:] == ["--model", "env-model"]
+    i = captured["argv"].index("--model")
+    assert captured["argv"][i + 1] == "env-model"
