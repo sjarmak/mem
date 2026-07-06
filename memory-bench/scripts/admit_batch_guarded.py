@@ -49,6 +49,8 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
 from membench.bundle.assemble import (
     ISSUE_REF_KEY,
     FanoutDecision,
@@ -229,16 +231,38 @@ def load_prior_validity(manifest_path: Path) -> dict[str, ValidityResult]:
     scope-admitted in the new run then surfaces as a reuse gap (`reuse_validity`),
     never a fabricated pass. A manifest with duplicate work_ids is ambiguous to
     key on and is refused outright."""
-    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise SystemExit(f"{manifest_path}: cannot read manifest: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"{manifest_path}: not valid JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise SystemExit(f"{manifest_path}: top level is not an object — not a manifest?")
     rows = payload.get("provenance")
     if not isinstance(rows, list):
         raise SystemExit(f"{manifest_path}: no provenance[] — not a grid-ready manifest?")
     out: dict[str, ValidityResult] = {}
-    for row in rows:
+    for i, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise SystemExit(f"{manifest_path}: provenance[{i}] is not an object")
         validity = row.get("validity")
         if validity is None:
             continue
-        result = ValidityResult.model_validate(validity)
+        try:
+            result = ValidityResult.model_validate(validity)
+        except ValidationError as exc:
+            raise SystemExit(
+                f"{manifest_path}: provenance[{i}] validity is malformed: {exc}"
+            ) from exc
+        # Key on the row's own identity and refuse a nested mismatch: a hand-merged
+        # manifest that disagrees with itself would otherwise silently attach a
+        # recorded readout to the WRONG bundle — worse than a crash in a gate.
+        if result.work_id != row.get("work_id"):
+            raise SystemExit(
+                f"{manifest_path}: provenance[{i}] work_id {row.get('work_id')!r} != "
+                f"validity.work_id {result.work_id!r}"
+            )
         if result.work_id in out:
             raise SystemExit(f"{manifest_path}: duplicate work_id {result.work_id} in provenance")
         out[result.work_id] = result
@@ -421,13 +445,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         judge = ClaudeScopeJudge()
 
     rows = _guard_pool(bundles, corpus, judge)
-    # Stage 2: oracle soundness over the scope-admitted bundles. The live runner is a
-    # context manager so a crashed gate never strands worktrees on the rig clone.
+    # Stage 2: oracle soundness over the scope-admitted bundles — reused from a prior
+    # manifest, stubbed (--dry-run), or run live.
     if args.reuse_validity is not None:
         rows = reuse_validity(rows, load_prior_validity(args.reuse_validity), args.reuse_validity)
     elif args.dry_run:
         rows = apply_validity_gate(rows, bundles_by_id, _DryReproRunner())
     else:
+        # The live runner is a context manager so a crashed gate never strands
+        # worktrees on the rig clone.
         with LiveReproRunner() as runner:
             rows = apply_validity_gate(rows, bundles_by_id, runner)
     report = _render_report(rows)
@@ -445,7 +471,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # (reused verbatim), the dry stub, or the live repro gate — so a reused
         # readout is never mistaken for a fresh one.
         if args.reuse_validity is not None:
-            manifest["validity_source"] = str(args.reuse_validity)
+            manifest["validity_source"] = str(args.reuse_validity.resolve())
         else:
             manifest["validity_source"] = "dry-run" if args.dry_run else "live"
         args.manifest.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
