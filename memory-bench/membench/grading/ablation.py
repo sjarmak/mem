@@ -34,13 +34,10 @@ DEFAULT_RUNGS: tuple[str, ...] = (
 # same rungs for the separate runnability concept (they coincide until mem-whi).
 COMBINATION_RUNGS: frozenset[str] = frozenset({"builtin", "ours+builtin"})
 
-# The base rung the combination axis layers onto — the memory point the
-# saturation / min-useful-combo readouts measure a combination rung (`builtin` /
-# `ours+builtin`) *against*. The readouts need this baseline present or "does
-# layering add reward?" has no reference point,
-# so `curve._require_full_ladder` requires it alongside a combination rung (mem-do8r.2:
-# a `(none, vector-rag, builtin, oracle)` ladder carries a combination rung but no
-# `ours`, and reading saturation over it is a category error — Codex F1).
+# The base rung a combination rung (`builtin` / `ours+builtin`) layers onto — the
+# baseline `curve._require_full_ladder` requires present before the saturation /
+# min-useful-combo readouts may compute. Full rationale: the "Recall ladder" note in
+# curve.py's module docstring (mem-do8r.2 / Codex F1).
 COMBINATION_BASE_RUNG: str = "ours"
 
 

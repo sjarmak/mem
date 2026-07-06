@@ -311,12 +311,10 @@ def build_curve(
 
 
 def _require_full_ladder(curve: ScoreInformationCurve) -> None:
-    # Axis gate, not a raw count: a 4-rung recall-only ladder must still refuse
-    # (see the "Recall ladder (mem-do8r)" note in the module docstring). The gate
-    # requires BOTH a combination rung AND the `ours` base rung it layers onto --
-    # a `(none, vector-rag, builtin, oracle)` ladder carries a combination rung but
-    # no `ours` baseline, so "does layering add reward?" has no reference point and
-    # the readout would be a category error (mem-do8r.2 / Codex F1).
+    # Axis gate, not a raw count: require >=4 rungs, a combination rung, AND the
+    # `ours` base rung it layers onto. A recall-only or ours-absent ladder refuses
+    # (rationale: the "Recall ladder" note in the module docstring; the raised
+    # message below spells out the missing prerequisite to the caller).
     present = {r.rung for r in curve.rungs}
     if (
         len(curve.rungs) < MIN_LADDER_FOR_SATURATION
