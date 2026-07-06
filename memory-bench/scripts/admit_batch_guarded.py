@@ -399,10 +399,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=Path,
         default=None,
         metavar="MANIFEST",
-        help="attach the oracle-soundness results recorded in a prior grid-ready "
-        "manifest instead of running the live repro gate (judge-isolation re-scores: "
-        "the oracle stage never shells claude, and re-running it would let live-repro "
-        "nondeterminism masquerade as an isolation delta)",
+        help="attach the prior manifest's oracle-soundness results instead of "
+        "re-running the live repro gate (see reuse_validity())",
     )
     args = parser.parse_args(argv)
     if args.reuse_validity is not None and args.dry_run:

@@ -195,6 +195,22 @@ def test_dry_repro_runner_declares_every_oracle_sound() -> None:
     assert rows[0].admitted and rows[0].validity.valid
 
 
+def _bare_store_and_bundles(tmp_path: Path) -> tuple[Path, Path]:
+    """A bundles dir holding bundle 'a' + an empty work_records sqlite store — the
+    fixture shape every main()-level CLI test here needs."""
+    import sqlite3
+
+    bundles_dir = tmp_path / "bundles"
+    bundles_dir.mkdir()
+    (bundles_dir / "a.json").write_text(_bundle("a").model_dump_json(), encoding="utf-8")
+    store = tmp_path / "store.db"
+    con = sqlite3.connect(store)
+    con.execute("CREATE TABLE work_records (record TEXT NOT NULL)")
+    con.commit()
+    con.close()
+    return bundles_dir, store
+
+
 # --- --reuse-validity (mem-s5qy) -----------------------------------------------------
 
 
@@ -276,16 +292,7 @@ def test_main_reuse_validity_end_to_end(tmp_path: Path) -> None:
     # An all-singleton pool: the real ClaudeScopeJudge is constructed but never
     # fires (fanout below threshold), so this exercises the REAL non-dry main path
     # offline — no claude spawn, no isolation dir minted.
-    import sqlite3
-
-    bundles_dir = tmp_path / "bundles"
-    bundles_dir.mkdir()
-    (bundles_dir / "a.json").write_text(_bundle("a").model_dump_json(), encoding="utf-8")
-    store = tmp_path / "store.db"
-    con = sqlite3.connect(store)
-    con.execute("CREATE TABLE work_records (record TEXT NOT NULL)")
-    con.commit()
-    con.close()
+    bundles_dir, store = _bare_store_and_bundles(tmp_path)
 
     # Prior manifest: 'a' was a sound singleton.
     prior_rows = abg.apply_validity_gate(
@@ -323,16 +330,7 @@ def test_main_dry_run_manifest_records_dry_validity_source(tmp_path: Path) -> No
     # validity_source must name which oracle stage produced the readout: a prior
     # manifest path (reused), "dry-run" (stub), or "live". The dry stub must never
     # masquerade as a live gate.
-    import sqlite3
-
-    bundles_dir = tmp_path / "bundles"
-    bundles_dir.mkdir()
-    (bundles_dir / "a.json").write_text(_bundle("a").model_dump_json(), encoding="utf-8")
-    store = tmp_path / "store.db"
-    con = sqlite3.connect(store)
-    con.execute("CREATE TABLE work_records (record TEXT NOT NULL)")
-    con.commit()
-    con.close()
+    bundles_dir, store = _bare_store_and_bundles(tmp_path)
     manifest_path = tmp_path / "grid-ready-pool.json"
 
     rc = abg.main(
@@ -379,16 +377,7 @@ def test_main_dry_run_writes_manifest_with_null_curator_isolation(tmp_path: Path
     # --dry-run uses the stub scope judge (no claude spawn), so the manifest-level
     # curator_isolation echo must be null -- present (schema-stable), never a
     # fabricated marker for a judge that could not have been isolated.
-    import sqlite3
-
-    bundles_dir = tmp_path / "bundles"
-    bundles_dir.mkdir()
-    (bundles_dir / "a.json").write_text(_bundle("a").model_dump_json(), encoding="utf-8")
-    store = tmp_path / "store.db"
-    con = sqlite3.connect(store)
-    con.execute("CREATE TABLE work_records (record TEXT NOT NULL)")
-    con.commit()
-    con.close()
+    bundles_dir, store = _bare_store_and_bundles(tmp_path)
     manifest_path = tmp_path / "grid-ready-pool.json"
     report_path = tmp_path / "report.md"
 
