@@ -128,6 +128,10 @@ def build_oracle_context(
 
     symbol_quarantines: list[SymbolQuarantine] = []
     file_quarantines: list[tuple[str, str]] = []
+    # Whether ANY symbol's curate_consensus call actually invoked the Tier-2 LLM
+    # curator -- the gate for capturing curator_isolation below (mem-x5d3): a build
+    # with zero LLM votes has no isolation surface to attest.
+    llm_used_any = False
 
     for mod_path in modified:
         symbol = _seed_symbol(mod_path)
@@ -159,6 +163,7 @@ def build_oracle_context(
             min_backends=min_backends,
             use_llm=use_llm,
         )
+        llm_used_any = llm_used_any or curated.llm_used
         for item in curated.items:
             # The modified files are already REQUIRED from ground truth; a backend
             # re-finding them adds no information and must not be downgraded.
@@ -173,10 +178,16 @@ def build_oracle_context(
     # Truncation is a drop -- record which paths so the audit trail is complete.
     for path in dropped:
         file_quarantines.append((path, f"volume_guard: truncated (cap={max_oracle_files})"))
+    # Captured once, after the fact -- `isolation_marker` reflects whatever surface
+    # the curator actually ran its call(s) under, never a surface minted just to
+    # populate this field. None when the curator never fired (llm_used_any False)
+    # or has no isolation_marker attribute (e.g. StubOracleCurator).
+    curator_isolation = getattr(curator, "isolation_marker", None) if llm_used_any else None
     oracle = CuratedOracle(
         oracle_answer=oracle_answer,
         oracle_tiers=oracle_tiers,
         oracle_backends_consensus=_provenance(set(oracle_answer), modified_set, consensus_backends),
+        curator_isolation=curator_isolation,
     )
     return OracleBuild(
         oracle=oracle,

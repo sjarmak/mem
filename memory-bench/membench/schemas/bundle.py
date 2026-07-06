@@ -101,6 +101,13 @@ class CuratedOracle(BaseModel):
     # file -> tier ("required" | "supplementary" | "context"), codeprobe-shaped.
     oracle_tiers: tuple[tuple[str, str], ...] = ()
     oracle_backends_consensus: tuple[str, ...] = ()
+    # The mem-9ld4 curator-isolation marker (see `judge_config.IsolatedJudgeConfig
+    # .marker`), captured when a Tier-2 LLM vote actually fired during this build.
+    # None when no Tier-2 candidate reached the curator (consensus-only, or
+    # use_llm=False -- today's only batch caller) -- distinguishes a curated oracle
+    # with no LLM provenance to isolate from one whose isolation marker was simply
+    # never threaded through (mem-x5d3).
+    curator_isolation: dict[str, object] | None = None
 
 
 class BundleVerification(BaseModel):
