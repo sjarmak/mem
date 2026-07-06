@@ -378,3 +378,39 @@ def test_vector_rag_to_ours_interior_delta_reachable_via_paired_delta():
 def test_empty_records_is_a_caller_error():
     with pytest.raises(ValueError):
         build_curve([])
+
+
+# --- explicit rungs= must be a duplicate-free canonical subsequence (mem-rvu6).
+# Both readouts (`saturation_point` / `min_useful_combo`) are order-sensitive and
+# gate on the raw slot count, so a duplicated or reordered explicit ladder is a
+# latent robustness bug (unreachable from the auto-detect production caller, which
+# passes no rungs=). build_curve rejects it loudly rather than silently building a
+# fake ladder.
+
+
+def test_build_curve_rejects_duplicate_rung_names():
+    # Finding 1: a duplicate explicit rung inflates the slot count past the distinct
+    # membership, so `_require_full_ladder` (len-based) would pass on a fake 4-rung
+    # ladder built from only 3 unique rungs.
+    records = [
+        _rec("w1", "none", det="reach", resolved=False),
+        _rec("w1", "ours", det="reach", resolved=True),
+        _rec("w1", "builtin", det="reach", resolved=True),
+    ]
+    with pytest.raises(ValueError):
+        build_curve(records, rungs=("none", "ours", "builtin", "builtin"))
+
+
+def test_build_curve_rejects_non_canonical_rung_order():
+    # Finding 2: `saturation_point` ("no later rung exceeds") and `min_useful_combo`
+    # ("earliest-on-ladder") are order-sensitive, so an explicit ladder listed out of
+    # canonical order would make both readouts return whichever rung was listed first
+    # (here `oracle`) — a pure ordering artifact rather than a real saturation read.
+    records = []
+    for i in range(4):
+        records.append(_rec(f"w{i}", "none", det="reach", resolved=False))
+        records.append(_rec(f"w{i}", "ours", det="reach", resolved=True))
+        records.append(_rec(f"w{i}", "builtin", det="reach", resolved=True))
+        records.append(_rec(f"w{i}", "oracle", det="reach", resolved=True))
+    with pytest.raises(ValueError):
+        build_curve(records, rungs=("oracle", "none", "ours", "builtin"))

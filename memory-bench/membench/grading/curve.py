@@ -244,6 +244,28 @@ def _mean_ci(values: list[float], conf: float) -> tuple[float, float, float]:
     return mean, max(0.0, mean - half), min(1.0, mean + half)
 
 
+def _validate_explicit_rungs(rungs: Sequence[str]) -> None:
+    """Reject an explicit ``rungs=`` that is not a duplicate-free subsequence of
+    ``DEFAULT_RUNGS`` in canonical order.
+
+    ``saturation_point`` and ``min_useful_combo`` read rung order verbatim off
+    ``_ladder_order``, and ``_require_full_ladder`` gates on the raw slot count, so a
+    duplicated ladder fakes extra rungs and a reordered one flips both readouts to
+    whichever rung is listed first — pure artifacts. The production caller auto-detects
+    (no ``rungs=``); an explicit non-canonical ladder is a caller error surfaced loudly
+    rather than silently canonicalized (mem-rvu6)."""
+    given = set(rungs)
+    canonical = [r for r in DEFAULT_RUNGS if r in given]
+    if list(rungs) != canonical:
+        unknown = sorted(given - set(DEFAULT_RUNGS))
+        detail = f"; unknown rung(s) {unknown!r}" if unknown else ""
+        raise ValueError(
+            f"rungs={tuple(rungs)!r} must be a duplicate-free subsequence of the canonical "
+            f"ladder {DEFAULT_RUNGS!r}, in that order (the saturation / min-useful-combo "
+            f"readouts are order-sensitive){detail}; canonical form is {tuple(canonical)!r}"
+        )
+
+
 def _ladder_order(present: set[str], rungs: Sequence[str] | None) -> list[str]:
     """The rungs to report, in order. Explicit ``rungs`` are honored (restricted to
     those with data); auto-detect falls back to canonical ladder order with any
@@ -272,6 +294,8 @@ def build_curve(
         raise ValueError("build_curve needs at least one reward record")
     if not 0.0 < conf < 1.0:
         raise ValueError(f"conf must be in (0, 1), got {conf}")
+    if rungs is not None:
+        _validate_explicit_rungs(rungs)
 
     # (rung, work_id) -> the task's per-repeat rewards.
     by_task: dict[tuple[str, str], list[float]] = defaultdict(list)
