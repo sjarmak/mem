@@ -195,6 +195,165 @@ def test_dry_repro_runner_declares_every_oracle_sound() -> None:
     assert rows[0].admitted and rows[0].validity.valid
 
 
+# --- --reuse-validity (mem-s5qy) -----------------------------------------------------
+
+
+def _prior_manifest(tmp_path: Path) -> Path:
+    """A prior v2 manifest with one sound row ('a'), one broken-oracle row ('c'),
+    and one scope-rejected row ('b', validity null) — the shapes load_prior_validity
+    must keep, keep, and skip respectively."""
+    rows = abg.apply_validity_gate(
+        [_scope_admit("a"), _scope_admit("c"), _scope_reject("b")],
+        {"a": _bundle("a"), "c": _bundle("c"), "b": _bundle("b")},
+        _FakeRunner({"a": _SOUND, "c": _BROKEN_GOLD}, seen=[]),
+    )
+    path = tmp_path / "prior.json"
+    path.write_text(json.dumps(abg.build_manifest(rows)), encoding="utf-8")
+    return path
+
+
+def test_load_prior_validity_keeps_recorded_rows_and_skips_nulls(tmp_path: Path) -> None:
+    prior = abg.load_prior_validity(_prior_manifest(tmp_path))
+    # Scope-rejected 'b' carried validity=null -> absent, not a fabricated result.
+    assert set(prior) == {"a", "c"}
+    assert prior["a"].valid is True
+    assert prior["c"].valid is False and "did not reproduce" in prior["c"].reason
+
+
+def test_load_prior_validity_raises_on_duplicate_work_id(tmp_path: Path) -> None:
+    import pytest
+
+    path = _prior_manifest(tmp_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["provenance"].append(payload["provenance"][0])
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(SystemExit, match="duplicate"):
+        abg.load_prior_validity(path)
+
+
+def test_load_prior_validity_rejects_manifest_without_provenance(tmp_path: Path) -> None:
+    import pytest
+
+    path = tmp_path / "not-a-manifest.json"
+    path.write_text(json.dumps({"admitted": ["a"]}), encoding="utf-8")
+    with pytest.raises(SystemExit, match="provenance"):
+        abg.load_prior_validity(path)
+
+
+def test_reuse_validity_attaches_recorded_results_verbatim(tmp_path: Path) -> None:
+    prior = abg.load_prior_validity(_prior_manifest(tmp_path))
+    rows = abg.reuse_validity(
+        [_scope_admit("a"), _scope_admit("c"), _scope_reject("b")], prior, tmp_path / "prior.json"
+    )
+    by_id = {r.work_id: r for r in rows}
+    # Recorded results are attached VERBATIM (same reason strings), so the reused
+    # stage can never disagree with the prior run's oracle readout.
+    assert by_id["a"].admitted and by_id["a"].validity == prior["a"]
+    assert not by_id["c"].admitted and by_id["c"].validity == prior["c"]
+    # Scope-rejected rows pass through untouched, validity stays None.
+    assert by_id["b"].validity is None
+
+
+def test_reuse_validity_marks_missing_bundle_as_scope_flip(tmp_path: Path) -> None:
+    prior = abg.load_prior_validity(_prior_manifest(tmp_path))
+    # 'd' is scope-admitted NOW but has no recorded validity (it was never gated in
+    # the prior run) — a scope-verdict flip. It must be surfaced as invalid with a
+    # reason naming the gap, never silently admitted or crashed on.
+    rows = abg.reuse_validity([_scope_admit("d")], prior, tmp_path / "prior.json")
+    assert rows[0].scope_admitted and not rows[0].admitted
+    assert rows[0].validity is not None and not rows[0].validity.valid
+    assert "no recorded validity" in rows[0].validity.reason
+
+
+def test_main_rejects_reuse_validity_with_dry_run(tmp_path: Path) -> None:
+    import pytest
+
+    with pytest.raises(SystemExit):
+        abg.main(["--dry-run", "--reuse-validity", str(tmp_path / "prior.json")])
+
+
+def test_main_reuse_validity_end_to_end(tmp_path: Path) -> None:
+    # An all-singleton pool: the real ClaudeScopeJudge is constructed but never
+    # fires (fanout below threshold), so this exercises the REAL non-dry main path
+    # offline — no claude spawn, no isolation dir minted.
+    import sqlite3
+
+    bundles_dir = tmp_path / "bundles"
+    bundles_dir.mkdir()
+    (bundles_dir / "a.json").write_text(_bundle("a").model_dump_json(), encoding="utf-8")
+    store = tmp_path / "store.db"
+    con = sqlite3.connect(store)
+    con.execute("CREATE TABLE work_records (record TEXT NOT NULL)")
+    con.commit()
+    con.close()
+
+    # Prior manifest: 'a' was a sound singleton.
+    prior_rows = abg.apply_validity_gate(
+        [abg.GuardRow("a", None, FanoutDecision(None, 1, False, "no fanout"))],
+        {"a": _bundle("a")},
+        _FakeRunner({"a": _SOUND}, seen=[]),
+    )
+    prior_path = tmp_path / "prior.json"
+    prior_path.write_text(json.dumps(abg.build_manifest(prior_rows)), encoding="utf-8")
+
+    manifest_path = tmp_path / "grid-ready-pool.json"
+    rc = abg.main(
+        [
+            "--bundles-dir",
+            str(bundles_dir),
+            "--store",
+            str(store),
+            "--manifest",
+            str(manifest_path),
+            "--report-out",
+            str(tmp_path / "report.md"),
+            "--reuse-validity",
+            str(prior_path),
+            "--write",
+        ]
+    )
+    assert rc == 0
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["admitted"] == ["a"]
+    assert manifest["validity_source"] == str(prior_path)
+    assert manifest["curator_isolation"] is None  # judge never fired
+
+
+def test_main_dry_run_manifest_records_dry_validity_source(tmp_path: Path) -> None:
+    # validity_source must name which oracle stage produced the readout: a prior
+    # manifest path (reused), "dry-run" (stub), or "live". The dry stub must never
+    # masquerade as a live gate.
+    import sqlite3
+
+    bundles_dir = tmp_path / "bundles"
+    bundles_dir.mkdir()
+    (bundles_dir / "a.json").write_text(_bundle("a").model_dump_json(), encoding="utf-8")
+    store = tmp_path / "store.db"
+    con = sqlite3.connect(store)
+    con.execute("CREATE TABLE work_records (record TEXT NOT NULL)")
+    con.commit()
+    con.close()
+    manifest_path = tmp_path / "grid-ready-pool.json"
+
+    rc = abg.main(
+        [
+            "--bundles-dir",
+            str(bundles_dir),
+            "--store",
+            str(store),
+            "--manifest",
+            str(manifest_path),
+            "--report-out",
+            str(tmp_path / "report.md"),
+            "--dry-run",
+            "--write",
+        ]
+    )
+    assert rc == 0
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["validity_source"] == "dry-run"
+
+
 # --- scope-judge isolation marker (mem-hv9l) ----------------------------------------
 
 
