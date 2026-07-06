@@ -33,6 +33,7 @@ from membench.harbor.probe_gate import (
     MemoryNotConsumedError,
     PinMismatchError,
     ProbeConditionResult,
+    _bake_memory_into_env,
     _resolve_agent_env,
     assert_memory_consumed,
     assert_probe_task_clean,
@@ -206,6 +207,25 @@ def test_injected_condition_bakes_native_path_and_config_dir_chmod(
     assert f"COPY MEMORY.md {AGENT_NATIVE_MEMORY_PATH}" in dockerfile
     assert f"COPY MEMORY.md {INSTRUCTION_MEMORY_PATH}" in dockerfile  # instruction fallback kept
     assert f"RUN chmod -R 777 {AGENT_CONFIG_DIR}" in dockerfile
+
+
+def test_bake_memory_rejects_empty_headerless_source(clone: Path, tmp_path: Path) -> None:
+    # DELIVERY invariant (mem-f2vi): the run-side gate cannot see native-memory CONTENT (CC's
+    # memory_paths is content-independent), so an empty/headerless bake -- which auto-loads
+    # nothing and degenerates the arm to `none` -- must be caught HERE, at build.
+    task_dir = tmp_path / "t"
+    (task_dir / "environment").mkdir(parents=True)
+    (task_dir / "environment" / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
+    empty = task_dir / "memory" / "MEMORY.md"
+    empty.parent.mkdir()
+    empty.write_text("", encoding="utf-8")
+    with pytest.raises(ValueError, match=r"missing header"):
+        _bake_memory_into_env(task_dir, empty)
+    # A well-formed (header-bearing) source is accepted.
+    empty.write_text(f"{MEMORY_HEADER}\n\n## oracle-files\n- src/x.py\n", encoding="utf-8")
+    _bake_memory_into_env(task_dir, empty)
+    dockerfile = (task_dir / "environment" / "Dockerfile").read_text(encoding="utf-8")
+    assert f"COPY MEMORY.md {AGENT_NATIVE_MEMORY_PATH}" in dockerfile
 
 
 def test_injected_condition_writes_agent_env_sidecar(clone: Path, tmp_path: Path) -> None:
@@ -490,7 +510,9 @@ def _stream_with_result(*, tool_uses: tuple[dict, ...] = (), result_text: str | 
 
 
 def test_assert_memory_consumed_passes_when_header_in_transcript() -> None:
-    # A cat/Read observation (or a silent auto-load echoed in context) surfaces the header.
+    # A visible cat/Read observation surfaces the header in the stdout stream. (The silent
+    # native auto-load does NOT -- see the init-event test below -- so that path is covered
+    # by `memory_paths`, not the header.)
     stream = _stream_with_result(result_text=f"{MEMORY_HEADER}\n\n## oracle-files\n- src/x.py")
     assert_memory_consumed(stream, work_id="w", condition="oracle")
 
@@ -518,6 +540,55 @@ def test_assert_memory_consumed_does_not_false_pass_on_oracle_file_path() -> Non
     # MEDIUM-4 regression: oracle payloads are bare file paths the agent edits anyway.
     # A run that edits the gold file but never reads memory must still fail the gate.
     stream = _stream(_edit_block("/app/src/x.py", "a", "b"))
+    with pytest.raises(MemoryNotConsumedError):
+        assert_memory_consumed(stream, work_id="w", condition="oracle")
+
+
+def _init_event(memory_paths: dict | None) -> dict:
+    """A Claude Code ``system``/``init`` event, optionally carrying the ``memory_paths``
+    auto-load map (the real relocated-config shape: ``{"auto": "<native dir>/"}``)."""
+    event: dict = {"type": "system", "subtype": "init", "session_id": "x"}
+    if memory_paths is not None:
+        event["memory_paths"] = memory_paths
+    return event
+
+
+def test_assert_memory_consumed_passes_on_native_autoload_init_event() -> None:
+    # The real Harbor shape (confirmed 2026-07-06): CC auto-loads native memory from the
+    # relocated dir and reports it in the init event, but the load is SILENT -- no header in
+    # the stream, no delivered-path Read. The init `memory_paths` is the only signal.
+    autoload_dir = AGENT_NATIVE_MEMORY_PATH.rsplit("/", 1)[0] + "/"  # trailing slash, as CC emits
+    decoy = {"type": "system", "subtype": "thinking_tokens"}
+    init = _init_event({"auto": autoload_dir})
+    billed = {
+        "type": "assistant",
+        "message": {"content": [], "usage": {"input_tokens": 100, "output_tokens": 40}},
+    }
+    stream = "\n".join(json.dumps(e) for e in (decoy, init, billed))
+    assert MEMORY_HEADER not in stream  # guard: the pass is via memory_paths, not the header
+    assert_memory_consumed(stream, work_id="w", condition="oracle")
+
+
+def test_assert_memory_consumed_ignores_unrelated_init_memory_paths() -> None:
+    # An init event that auto-loads memory from a DIFFERENT dir (the pre-fix bug: CC's own
+    # empty native path under /logs) is not our delivery -> the gate must still fire.
+    init = _init_event({"auto": "/logs/agent/sessions/projects/-app/memory/"})
+    stream = "\n".join(
+        json.dumps(e)
+        for e in (init, {"type": "assistant", "message": {"content": [], "usage": {}}})
+    )
+    with pytest.raises(MemoryNotConsumedError):
+        assert_memory_consumed(stream, work_id="w", condition="oracle")
+
+
+def test_assert_memory_consumed_handles_init_without_memory_paths() -> None:
+    # An init event with no memory_paths field (nothing auto-loaded) must not crash the
+    # scan and must still fail when no other signal is present.
+    init = _init_event(memory_paths=None)
+    stream = "\n".join(
+        json.dumps(e)
+        for e in (init, {"type": "assistant", "message": {"content": [], "usage": {}}})
+    )
     with pytest.raises(MemoryNotConsumedError):
         assert_memory_consumed(stream, work_id="w", condition="oracle")
 

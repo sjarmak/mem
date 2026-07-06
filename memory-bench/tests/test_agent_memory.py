@@ -4,12 +4,14 @@ string helpers that decide WHERE injected memory lands so the agent reads it."""
 from membench.harbor.agent_memory import (
     AGENT_CONFIG_DIR,
     AGENT_MEMORY_ENV,
+    AGENT_NATIVE_MEMORY_DIR,
     AGENT_NATIVE_MEMORY_PATH,
     AGENT_WORKDIR,
     DELIVERED_MEMORY_PATHS,
     INSTRUCTION_MEMORY_PATH,
     config_slug,
     native_memory_path,
+    path_covers_native_memory,
 )
 from membench.harbor.probe_gate import CONTAINER_WORKDIR
 
@@ -49,3 +51,25 @@ def test_agent_memory_env_relocates_config_dir_only_no_secret() -> None:
 def test_delivered_paths_are_native_then_instruction() -> None:
     assert DELIVERED_MEMORY_PATHS == (AGENT_NATIVE_MEMORY_PATH, INSTRUCTION_MEMORY_PATH)
     assert INSTRUCTION_MEMORY_PATH == "/memory/MEMORY.md"
+
+
+def test_native_memory_dir_is_parent_of_native_path() -> None:
+    assert f"{AGENT_CONFIG_DIR}/projects/-app/memory" == AGENT_NATIVE_MEMORY_DIR
+    assert f"{AGENT_NATIVE_MEMORY_DIR}/MEMORY.md" == AGENT_NATIVE_MEMORY_PATH
+
+
+def test_path_covers_native_memory_matches_cc_autoload_dir() -> None:
+    # Claude Code's init event reports the auto-load DIRECTORY with a trailing slash (the
+    # real shape confirmed on a live Harbor leg): {"auto": ".../-app/memory/"}. It must
+    # register as covering the delivered native file.
+    assert path_covers_native_memory(AGENT_NATIVE_MEMORY_DIR + "/")
+    assert path_covers_native_memory(AGENT_NATIVE_MEMORY_DIR)  # no trailing slash
+    assert path_covers_native_memory(AGENT_NATIVE_MEMORY_PATH)  # some versions report the file
+
+
+def test_path_covers_native_memory_rejects_other_paths() -> None:
+    # The pre-fix bug path (CC's empty native dir under /logs) and the instruction fallback
+    # are NOT the relocated native dir -> not a native auto-load signal.
+    assert not path_covers_native_memory("/logs/agent/sessions/projects/-app/memory/")
+    assert not path_covers_native_memory(INSTRUCTION_MEMORY_PATH)
+    assert not path_covers_native_memory("/app/CLAUDE.md")

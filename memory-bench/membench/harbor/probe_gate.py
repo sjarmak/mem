@@ -64,6 +64,7 @@ from membench.harbor.agent_memory import (
     AGENT_NATIVE_MEMORY_PATH,
     DELIVERED_MEMORY_PATHS,
     INSTRUCTION_MEMORY_PATH,
+    path_covers_native_memory,
 )
 from membench.harbor.agent_memory import (
     AGENT_WORKDIR as CONTAINER_WORKDIR,
@@ -288,7 +289,24 @@ def _bake_memory_into_env(task_dir: Path, memory_file: Path) -> None:
       insurance: the base images set no ``USER`` and the task sets no ``agent.user``, so
       both build and run are root today.
     - ``ORACLE_MEMORY_CONTAINER_PATH`` -- the path the fixed instruction names (fallback
-      for an agent that follows the instruction literally)."""
+      for an agent that follows the instruction literally).
+
+    DELIVERY invariant (mem-f2vi): the run-side gate cannot witness the auto-load -- CC's
+    ``memory_paths`` reports the CONFIGURED native dir independent of its contents (verified
+    on CLI 2.1.201: byte-identical whether a MEMORY.md is present, the dir is empty, or
+    absent; the loaded content never reaches the stdout stream). So the guarantee that
+    NON-EMPTY memory actually lands at the native path is enforced HERE, at build: a
+    well-formed (header-bearing) source is required before it is baked. An empty/headerless
+    native file would auto-load nothing and silently degenerate the arm to ``none`` -- the
+    exact invalidity the consumption gate exists to prevent, on the one axis the transcript
+    cannot see."""
+    content = memory_file.read_text(encoding="utf-8")
+    if MEMORY_HEADER not in content:
+        raise ValueError(
+            f"refusing to bake malformed memory {memory_file}: missing header "
+            f"{MEMORY_HEADER!r} (size={len(content)}) -- an empty/headerless native file "
+            "auto-loads nothing, degenerating the memory arm to `none`"
+        )
     env_dir = task_dir / "environment"
     shutil.copyfile(memory_file, env_dir / "MEMORY.md")
     dockerfile = env_dir / "Dockerfile"
@@ -560,26 +578,60 @@ class MemoryNotConsumedError(RuntimeError):
         )
 
 
+def _init_memory_paths(stream: str) -> list[str]:
+    """The paths Claude Code auto-loaded native memory from, read off the stream's
+    ``system``/``init`` event ``memory_paths`` field -- a ``{label: path}`` map, e.g.
+    ``{"auto": "/agent-memory/projects/-app/memory/"}``. Empty when there is no init event
+    or it reports no memory paths. Mirrors `assert_run_pins`' init-event scan (skips
+    non-init system events like ``thinking_tokens``)."""
+    for line in stream.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, Mapping) or event.get("type") != "system":
+            continue
+        if event.get("subtype") != "init":
+            continue
+        paths = event.get("memory_paths")
+        return (
+            [v for v in paths.values() if isinstance(v, str)] if isinstance(paths, Mapping) else []
+        )
+    return []
+
+
 def assert_memory_consumed(stream: str, *, work_id: str, condition: str) -> None:
     """Raise `MemoryNotConsumedError` unless the run's ``stream`` shows the injected memory
-    reached the agent. Two mechanical signals, either sufficient:
+    reached the agent's context. Three mechanical signals, any sufficient:
 
+    - Claude Code's ``system``/``init`` event lists a ``memory_paths`` auto-load whose dir is
+      the relocated native path (`path_covers_native_memory`) -- CC's native-memory is
+      pointed at our baked dir, so it auto-loads whatever is there. This is the PRIMARY
+      signal for the real relocated-config run, whose auto-load is otherwise SILENT (content
+      never reaches the stdout stream -- no header echo, no ``Read`` tool call; confirmed on
+      CLI 2.1.201). It proves the RELOCATION took effect (the ``extra_env`` override reached
+      the agent), NOT that content was present: ``memory_paths`` is content-independent (same
+      field whether the dir holds a file or is empty). Content is guaranteed on the other
+      side of the delivery -- `_bake_memory_into_env` refuses to bake an empty/headerless
+      native file -- so relocation-active + non-empty-bake together put the memory in
+      context; or
     - the render header `MEMORY_HEADER` appears anywhere in the raw transcript -- it heads
-      every injected file, so a ``cat``/``Read`` observation OR Claude Code's silent
-      native-memory auto-load into context surfaces it (the header carries no JSON-special
-      chars, so it matches verbatim inside the escaped stream); or
+      every injected file, so a visible ``cat``/``Read`` observation surfaces it (the header
+      carries no JSON-special chars, so it matches verbatim inside the escaped stream); or
     - a structured `Read` tool call targeted a delivered memory path -- covers a read whose
       observation the transcript elided.
 
-    The failure mode (``cat`` of the empty native dir -> "No memory file found") produces
-    neither, so it correctly fails. Uniform across conditions (no per-payload fingerprint,
-    so oracle's file-path payloads cannot false-pass). ZFC-clean: substring presence + a
-    path-set membership test, no semantic judgment.
-
-    NOTE: this assumes consumption is observable in the transcript -- true for the visible
-    ``cat``/``Read`` the agent emits when instructed (the trace-explorer evidence), and for
-    an echoed context injection. Confirm on one real Harbor run before trusting the
-    ``not_consumed`` tally at grid scale."""
+    The failure mode (relocation did NOT take effect -> ``memory_paths`` points at CC's
+    default /logs dir, which the runtime mount leaves empty -> the agent gets nothing and
+    reads no delivered path) produces none of these, so it correctly fails. Uniform across
+    conditions (no per-payload fingerprint, so oracle's file-path payloads cannot
+    false-pass). ZFC-clean: init-event path membership + substring presence + a path-set
+    membership test, no semantic judgment."""
+    if any(path_covers_native_memory(p) for p in _init_memory_paths(stream)):
+        return
     if MEMORY_HEADER in stream:
         return
     files_read = project_claude_stream(stream)["files_read"]
@@ -676,7 +728,9 @@ def _resolve_agent_env(task_dir: Path) -> dict[str, str] | None:
     try:
         data = json.loads(sidecar.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise ValueError(f"malformed {AGENT_ENV_FILENAME} at {sidecar}: invalid JSON ({exc})")
+        raise ValueError(
+            f"malformed {AGENT_ENV_FILENAME} at {sidecar}: invalid JSON ({exc})"
+        ) from exc
     if not isinstance(data, dict) or not all(
         isinstance(k, str) and isinstance(v, str) for k, v in data.items()
     ):

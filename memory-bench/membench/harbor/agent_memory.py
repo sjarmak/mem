@@ -80,3 +80,26 @@ def native_memory_path(config_dir: str = AGENT_CONFIG_DIR, workdir: str = AGENT_
 # read path (primary — its own instinct finds it) and the instruction path (fallback).
 AGENT_NATIVE_MEMORY_PATH = native_memory_path()
 DELIVERED_MEMORY_PATHS: tuple[str, ...] = (AGENT_NATIVE_MEMORY_PATH, INSTRUCTION_MEMORY_PATH)
+
+# The native-memory DIRECTORY (parent of the baked file). Claude Code's ``system``/``init``
+# event reports the directory it auto-loaded memory from (its ``memory_paths`` field), not
+# the file, e.g. ``{"auto": "/agent-memory/projects/-app/memory/"}``.
+AGENT_NATIVE_MEMORY_DIR = AGENT_NATIVE_MEMORY_PATH.rsplit("/", 1)[0]
+
+
+def path_covers_native_memory(loaded_path: str) -> bool:
+    """True when ``loaded_path`` — a path from Claude Code's ``system``/``init``
+    ``memory_paths`` field — is the relocated native-memory directory we bake into.
+
+    CC reports the CONFIGURED native-memory directory here (with a trailing slash,
+    ``/agent-memory/projects/-app/memory/``; some CLI versions the file itself),
+    INDEPENDENT of whether a file was found there — verified on CLI 2.1.201: the field is
+    byte-identical whether the dir holds a ``MEMORY.md``, is empty, or is absent, and the
+    loaded content never reaches the stdout stream. So a match confirms the
+    ``CLAUDE_CONFIG_DIR`` RELOCATION reached the agent (CC auto-loads from our baked dir,
+    not its default ``/logs`` path) — NOT that content was loaded. Content is guaranteed
+    separately, at build, by the non-empty bake at this exact path
+    (`probe_gate._bake_memory_into_env`); the two together put the injected memory in the
+    agent's context. Exact match (not a prefix test), so a sibling like ``.../memory-old/``
+    cannot false-cover."""
+    return loaded_path.rstrip("/") in (AGENT_NATIVE_MEMORY_DIR, AGENT_NATIVE_MEMORY_PATH)
