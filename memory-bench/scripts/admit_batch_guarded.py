@@ -49,6 +49,8 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
 from membench.bundle.assemble import (
     ISSUE_REF_KEY,
     FanoutDecision,
@@ -222,6 +224,84 @@ def apply_validity_gate(
     return out
 
 
+def load_prior_validity(manifest_path: Path) -> dict[str, ValidityResult]:
+    """The per-bundle `ValidityResult`s a prior grid-ready manifest recorded (v2
+    provenance rows with a non-null ``validity``). Scope-rejected rows carry
+    ``validity: null`` there and are simply absent here — a bundle that turns
+    scope-admitted in the new run then surfaces as a reuse gap (`reuse_validity`),
+    never a fabricated pass. A manifest with duplicate work_ids is ambiguous to
+    key on and is refused outright."""
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise SystemExit(f"{manifest_path}: cannot read manifest: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"{manifest_path}: not valid JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise SystemExit(f"{manifest_path}: top level is not an object — not a manifest?")
+    rows = payload.get("provenance")
+    if not isinstance(rows, list):
+        raise SystemExit(f"{manifest_path}: no provenance[] — not a grid-ready manifest?")
+    out: dict[str, ValidityResult] = {}
+    for i, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise SystemExit(f"{manifest_path}: provenance[{i}] is not an object")
+        validity = row.get("validity")
+        if validity is None:
+            continue
+        try:
+            result = ValidityResult.model_validate(validity)
+        except ValidationError as exc:
+            raise SystemExit(
+                f"{manifest_path}: provenance[{i}] validity is malformed: {exc}"
+            ) from exc
+        # Key on the row's own identity and refuse a nested mismatch: a hand-merged
+        # manifest that disagrees with itself would otherwise silently attach a
+        # recorded readout to the WRONG bundle — worse than a crash in a gate.
+        if result.work_id != row.get("work_id"):
+            raise SystemExit(
+                f"{manifest_path}: provenance[{i}] work_id {row.get('work_id')!r} != "
+                f"validity.work_id {result.work_id!r}"
+            )
+        if result.work_id in out:
+            raise SystemExit(f"{manifest_path}: duplicate work_id {result.work_id} in provenance")
+        out[result.work_id] = result
+    return out
+
+
+def reuse_validity(
+    rows: Sequence[GuardRow], prior: Mapping[str, ValidityResult], source: Path
+) -> list[GuardRow]:
+    """Stage 2 in ``--reuse-validity`` mode: attach each scope-admitted bundle's
+    RECORDED `ValidityResult` verbatim. The repro stage is npm/vitest — it never
+    shells claude, so a judge-isolation re-score (mem-s5qy) must not re-run it:
+    live-repro nondeterminism would masquerade as an isolation delta. A
+    scope-admitted row with no recorded validity is a scope-verdict flip vs the
+    prior run; it is marked invalid with a reason naming the gap, never silently
+    admitted (its real oracle readout needs a live gate run)."""
+    out: list[GuardRow] = []
+    for row in rows:
+        if not row.scope_admitted:
+            out.append(row)
+            continue
+        result = prior.get(row.work_id)
+        if result is None:
+            result = ValidityResult(
+                work_id=row.work_id,
+                gold_repro_passed=False,
+                gold_test_ratio=None,
+                empty_repro_passed=False,
+                empty_test_ratio=None,
+                valid=False,
+                reason=(
+                    f"no recorded validity in {source} (scope verdict flip vs the prior "
+                    "run; the live gate was not re-run in --reuse-validity mode)"
+                ),
+            )
+        out.append(replace(row, validity=result))
+    return out
+
+
 def build_manifest(rows: Sequence[GuardRow]) -> dict[str, Any]:
     """The grid-ready manifest (schema v2). ``admitted`` is the BOTH-stages set the
     reader consumes; ``provenance`` records every bundle's scope verdict and, for the
@@ -338,7 +418,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="write the grid-ready manifest + report (default: print only)",
     )
+    parser.add_argument(
+        "--reuse-validity",
+        type=Path,
+        default=None,
+        metavar="MANIFEST",
+        help="attach the prior manifest's oracle-soundness results instead of "
+        "re-running the live repro gate (see reuse_validity())",
+    )
     args = parser.parse_args(argv)
+    if args.reuse_validity is not None and args.dry_run:
+        parser.error("--reuse-validity replaces the oracle stage; --dry-run stubs it — pass one")
 
     bundle_paths = sorted(args.bundles_dir.glob("*.json"))
     if not bundle_paths:
@@ -355,11 +445,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         judge = ClaudeScopeJudge()
 
     rows = _guard_pool(bundles, corpus, judge)
-    # Stage 2: oracle soundness over the scope-admitted bundles. The live runner is a
-    # context manager so a crashed gate never strands worktrees on the rig clone.
-    if args.dry_run:
+    # Stage 2: oracle soundness over the scope-admitted bundles — reused from a prior
+    # manifest, stubbed (--dry-run), or run live.
+    if args.reuse_validity is not None:
+        rows = reuse_validity(rows, load_prior_validity(args.reuse_validity), args.reuse_validity)
+    elif args.dry_run:
         rows = apply_validity_gate(rows, bundles_by_id, _DryReproRunner())
     else:
+        # The live runner is a context manager so a crashed gate never strands
+        # worktrees on the rig clone.
         with LiveReproRunner() as runner:
             rows = apply_validity_gate(rows, bundles_by_id, runner)
     report = _render_report(rows)
@@ -373,6 +467,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         manifest["curator_isolation"] = (
             judge.isolation_marker if isinstance(judge, ClaudeScopeJudge) else None
         )
+        # Which oracle stage produced the validity readout: a prior manifest path
+        # (reused verbatim), the dry stub, or the live repro gate — so a reused
+        # readout is never mistaken for a fresh one.
+        if args.reuse_validity is not None:
+            manifest["validity_source"] = str(args.reuse_validity.resolve())
+        else:
+            manifest["validity_source"] = "dry-run" if args.dry_run else "live"
         args.manifest.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         args.report_out.parent.mkdir(parents=True, exist_ok=True)
         args.report_out.write_text(report, encoding="utf-8")
