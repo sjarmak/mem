@@ -450,6 +450,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "cli_version": args.cli_version,
         "judge_model": args.judge_model,
         "judge_rounds": args.judge_rounds,
+        "judge_isolation": judge.isolation_marker,  # mem-9ld4 clean-config marker
         "builtin_arm": "fresh",
         "repeats": args.repeats,
     }

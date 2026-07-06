@@ -61,6 +61,11 @@ from typing import Protocol
 
 from membench._claude_cli import first_json_object, unwrap_cli_json
 from membench.grading.judge import Rubric, RubricCriterion, score_completion
+from membench.grading.judge_config import (
+    IsolatedJudgeConfig,
+    isolated_judge_env,
+    prepare_isolated_judge,
+)
 
 # Judge score and the mechanical reference disagree by more than this -> flag the run
 # for review (EB rescore comparator's 0.3 threshold).
@@ -316,11 +321,23 @@ class ClaudeRubricJudge:
     `judge_graded`, not on temp 0 (see the module docstring). ``runner`` is injected
     so tests drive the parse path without spawning a real claude; every failure
     raises `RubricParseError` or
-    `RuntimeError`, never a default score."""
+    `RuntimeError`, never a default score.
+
+    ``isolation`` (mem-9ld4) is the clean-config surface the ``claude -p`` subprocess
+    runs under: a minimal EMPTY ``CLAUDE_CONFIG_DIR`` + ``--strict-mcp-config`` + a
+    neutral cwd, so no host/project agent (notably a ``code-reviewer``) can hijack the
+    judge into answering as a reviewer. Left ``None`` it is materialized lazily on
+    first use (`prepare_isolated_judge`) and cached, so mere construction touches no
+    disk; tests inject a ``tmp_path``-scoped one. The subprocess env is NOT part of
+    that cache -- `_complete` assembles it fresh (`isolated_judge_env`) on every call,
+    so a credential refreshed mid-run (e.g. ``CLAUDE_CODE_OAUTH_TOKEN``) is never
+    shipped stale. The MODEL and round count are unchanged -- only the config surface
+    the judge loads is."""
 
     model: str = ""
     timeout_s: float = DEFAULT_TIMEOUT_S
     runner: Runner = subprocess.run
+    isolation: IsolatedJudgeConfig | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -328,6 +345,26 @@ class ClaudeRubricJudge:
             "model",
             self.model or os.environ.get(ENV_GRADED_JUDGE_MODEL, DEFAULT_GRADED_JUDGE_MODEL),
         )
+
+    def _resolved_isolation(self) -> IsolatedJudgeConfig:
+        """The clean-config surface, materialized (and cached) on first use. Deferred
+        out of ``__post_init__`` so constructing a judge -- e.g. to read ``model`` or
+        drive a fake ``runner`` -- writes no clean-config dir to disk.
+
+        The check-then-set below is NOT thread-safe: a judge instance is
+        sequential-use only (every current driver runs rounds in a plain ``for``
+        loop). Parallelizing rounds across threads on one instance would need a
+        lock here, or one judge per thread."""
+        if self.isolation is None:
+            object.__setattr__(self, "isolation", prepare_isolated_judge())
+        assert self.isolation is not None  # just set above
+        return self.isolation
+
+    @property
+    def isolation_marker(self) -> dict[str, object]:
+        """The attributable isolation record echoed into a run's pins -- proves an
+        isolated (clean-judge) score is distinguishable from a pre-isolation one."""
+        return self._resolved_isolation().marker
 
     def build_prompt(self, task: str, run_output: str, rubric: Rubric) -> str:
         """The rubric-grounded judge prompt. Pure -- assembles the model input from
@@ -341,10 +378,26 @@ class ClaudeRubricJudge:
         return weighted_score(parse_criteria(reply, rubric), rubric)
 
     def _complete(self, prompt: str) -> str:
-        argv = ["claude", "-p", prompt, "--output-format", "json", "--model", self.model]
+        isolation = self._resolved_isolation()
+        argv = [
+            "claude",
+            "-p",
+            prompt,
+            "--output-format",
+            "json",
+            "--model",
+            self.model,
+            *isolation.extra_argv,
+        ]
         try:
             completed = self.runner(
-                argv, capture_output=True, text=True, check=False, timeout=self.timeout_s
+                argv,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=self.timeout_s,
+                env=isolated_judge_env(isolation.config_dir),
+                cwd=isolation.cwd,
             )
         except FileNotFoundError as exc:
             raise RuntimeError("'claude' CLI not found -- install it to run the judge") from exc
