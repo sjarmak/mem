@@ -24,16 +24,26 @@ ladder; they REFUSE (raise ``InsufficientLadderError``) below four rungs rather 
 fabricate a vacuous "saturation at the only interior rung". They were designed for the
 mem-whi *combination* axis and become meaningful once the builtin rungs land.
 
-**Recall ladder (mem-do8r).** The ``vector-rag`` rung is now runnable
-(``harbor.memory_inject.RUNNABLE_RUNGS``) and sits between ``none`` and ``ours`` in
-``DEFAULT_RUNGS`` (canonical order ``none < vector-rag < ours ≤ oracle``), so
-``_ladder_order`` places it correctly. A 4-rung RECALL ladder varies the recall policy,
-a different axis from the ``saturation_point`` / ``min_useful_combo`` COMBINATION readouts
-— so ``_require_full_ladder`` gates on a combination rung being present, not on rung count
-alone, and REFUSES a recall-only ladder rather than emit a combination number over it.
-``floor_lift`` / ``ceiling_gap`` remain valid (name-based). Defining real saturation
-semantics for the recall axis (and whether ``floor_lift`` should baseline against
-``vector-rag`` rather than ``none``) is tracked in mem-do8r.2.
+**Recall ladder (mem-do8r / mem-do8r.2, RESOLVED).** The ``vector-rag`` rung is
+runnable (``harbor.memory_inject.RUNNABLE_RUNGS``) and sits between ``none`` and ``ours``
+in ``DEFAULT_RUNGS`` (canonical order ``none < vector-rag < ours ≤ oracle``), so
+``_ladder_order`` places it correctly. A 4-rung RECALL ladder varies the recall policy, a
+different axis from the ``saturation_point`` / ``min_useful_combo`` COMBINATION readouts,
+and reading a combination number over a recall sweep is a category error. So
+``_require_full_ladder`` gates on the COMBINATION AXIS, not on rung count: it requires both
+a combination rung (``builtin`` / ``ours+builtin``) AND the ``ours`` base rung
+(``ablation.COMBINATION_BASE_RUNG``) that combination layers onto -- ``builtin`` with no
+``ours`` baseline has no reference point for "does layering add reward?". A
+``(none, vector-rag, builtin, oracle)`` ladder therefore REFUSES despite reaching four
+rungs and carrying a combination rung (mem-do8r.2 / Codex F1). We GUARD the recall axis
+(option b) rather than define new recall-saturation semantics (option a), per KISS/YAGNI.
+
+``floor_lift`` / ``ceiling_gap`` stay name-based: ``floor_lift`` keeps the ``none``
+(zero-memory) floor as its baseline -- re-baselining to ``vector-rag`` would silently
+redefine the pre-registered D17 headline (``ours`` minus ``none``). ``ceiling_gap`` stays
+``oracle`` minus ``ours`` (None until both rungs are present). The ``vector-rag`` -> ``ours``
+interior recall delta stays reachable through the generic ``paired_delta`` escape hatch
+instead of a named property.
 
 Repeats collapse within task (architect M2) before the across-task mean + CI: ``k``
 repeats of a task are correlated, not independent observations, so each task
@@ -45,7 +55,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from math import atan, cos, fsum, pi, sin, sqrt
 
-from membench.grading.ablation import COMBINATION_RUNGS, DEFAULT_RUNGS
+from membench.grading.ablation import COMBINATION_BASE_RUNG, COMBINATION_RUNGS, DEFAULT_RUNGS
 from membench.grading.paired_ci import (
     POPULATION_PRIMARY,
     PairedDeltaCI,
@@ -302,14 +312,23 @@ def build_curve(
 
 def _require_full_ladder(curve: ScoreInformationCurve) -> None:
     # Axis gate, not a raw count: a 4-rung recall-only ladder must still refuse
-    # (see the "Recall ladder (mem-do8r)" note in the module docstring).
+    # (see the "Recall ladder (mem-do8r)" note in the module docstring). The gate
+    # requires BOTH a combination rung AND the `ours` base rung it layers onto --
+    # a `(none, vector-rag, builtin, oracle)` ladder carries a combination rung but
+    # no `ours` baseline, so "does layering add reward?" has no reference point and
+    # the readout would be a category error (mem-do8r.2 / Codex F1).
     present = {r.rung for r in curve.rungs}
-    if len(curve.rungs) < MIN_LADDER_FOR_SATURATION or present.isdisjoint(COMBINATION_RUNGS):
+    if (
+        len(curve.rungs) < MIN_LADDER_FOR_SATURATION
+        or present.isdisjoint(COMBINATION_RUNGS)
+        or COMBINATION_BASE_RUNG not in present
+    ):
         raise InsufficientLadderError(
-            f"need ≥{MIN_LADDER_FOR_SATURATION} rungs including a combination rung "
-            f"({' / '.join(sorted(COMBINATION_RUNGS))}, mem-whi) to read this off; have "
-            f"{[r.rung for r in curve.rungs]}. A recall-only ladder has no combination "
-            f"axis -- its saturation semantics are pending (mem-do8r.2)."
+            f"need ≥{MIN_LADDER_FOR_SATURATION} rungs including the `{COMBINATION_BASE_RUNG}` "
+            f"base rung and a combination rung ({' / '.join(sorted(COMBINATION_RUNGS))}, mem-whi) "
+            f"to read this off; have {[r.rung for r in curve.rungs]}. A recall-only ladder has no "
+            f"combination axis, and a combination rung with no `{COMBINATION_BASE_RUNG}` baseline "
+            f"has nothing to measure lift against (mem-do8r.2)."
         )
 
 

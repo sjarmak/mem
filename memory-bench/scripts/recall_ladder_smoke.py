@@ -339,8 +339,17 @@ def main() -> None:
 
     _print_table(rows)
 
-    scored = {rec.rung for rec, _ in rows}
-    assert scored == set(RUNGS), f"expected every rung scored, got {sorted(scored)}"
+    # Per-task per-rung completeness (Codex F2): a global `scored == set(RUNGS)` union
+    # check plus a total-row count can BOTH pass while one task silently drops a rung and
+    # another double-counts it (task A emits 5 rungs, task B emits 3 -> total 8 = 2x4, and
+    # the union is still complete). Assert every task carries the EXACT rung set so a
+    # per-task dispatch dropout fails loud; the total-count check then rules out per-task
+    # duplicates.
+    for task in TASKS:
+        task_rungs = {rec.rung for rec, _ in rows if rec.work_id == task.work_id}
+        assert task_rungs == set(
+            RUNGS
+        ), f"{task.work_id}: expected exactly rungs {sorted(RUNGS)}, got {sorted(task_rungs)}"
     assert len(rows) == len(TASKS) * len(
         RUNGS
     ), f"expected one record per work_id x rung ({len(TASKS)}x{len(RUNGS)}), got {len(rows)}"

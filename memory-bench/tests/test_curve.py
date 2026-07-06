@@ -298,6 +298,80 @@ def test_min_useful_combo_at_four_rungs_returns_cheapest_rung_at_ceiling():
     assert combo.rung == "builtin"
 
 
+# --- combination readouts require the `ours` base rung, not just any combination
+# rung (mem-do8r.2 / Codex F1). A 4-rung ladder that carries a combination rung but
+# is missing the `ours` baseline has no reference point for "does layering add
+# reward?" — the readout would be a category error, so the gate must refuse. These
+# pins are mutation-effective: the ladder reaches 4 rungs AND carries a combination
+# rung, so it passes the pilot's count-only + axis gate; only the added `ours`-present
+# conjunct tells them apart.
+
+
+@pytest.mark.parametrize("combo_rung", ["builtin", "ours+builtin"])
+def test_combination_readouts_refuse_when_ours_baseline_absent(combo_rung):
+    records = []
+    for i in range(4):
+        records.append(_rec(f"w{i}", "none", det="reach", resolved=False))
+        records.append(_rec(f"w{i}", "vector-rag", det="reach", resolved=True))
+        records.append(_rec(f"w{i}", combo_rung, det="reach", resolved=True))
+        records.append(_rec(f"w{i}", "oracle", det="reach", resolved=True))
+    curve = build_curve(records, rungs=("none", "vector-rag", combo_rung, "oracle"))
+    assert "ours" not in {r.rung for r in curve.rungs}
+    with pytest.raises(InsufficientLadderError):
+        saturation_point(curve)
+    with pytest.raises(InsufficientLadderError):
+        min_useful_combo(curve)
+
+
+def test_combination_readouts_compute_over_ours_plus_builtin_ladder():
+    # Positive pin: the true combination ladder (none < ours < ours+builtin < oracle)
+    # carries the `ours` baseline AND a combination rung, so the readouts compute.
+    # The existing must-not-raise pins only cover `builtin`; this covers `ours+builtin`.
+    records = []
+    for i in range(4):
+        records.append(_rec(f"w{i}", "none", det="reach", resolved=False))  # 0.0
+        records.append(_rec(f"w{i}", "ours", det="reach", resolved=True, rubric=0.0))  # 0.5
+        records.append(_rec(f"w{i}", "ours+builtin", det="reach", resolved=True))  # 1.0
+        records.append(_rec(f"w{i}", "oracle", det="reach", resolved=True))  # 1.0
+    curve = build_curve(records, rungs=("none", "ours", "ours+builtin", "oracle"))
+    assert saturation_point(curve).rung == "ours+builtin"  # must NOT raise
+    assert min_useful_combo(curve).rung == "ours+builtin"
+
+
+# --- floor_lift keeps the `none` (zero-memory) baseline even when the interior
+# `vector-rag` recall rung is present (mem-do8r.2 decision). Re-baselining floor_lift
+# to vector-rag would silently redefine the pre-registered D17 headline metric
+# (ours - none); the vector-rag → ours interior delta stays reachable via the generic
+# paired_delta escape hatch instead.
+
+
+def test_floor_lift_baselines_on_none_not_vector_rag():
+    records = [
+        _rec("w1", "none", det="miss", resolved=False),  # 0.0
+        _rec("w1", "vector-rag", det="reach", resolved=True, rubric=0.0),  # 0.5 (interior)
+        _rec("w1", "ours", det="reach", resolved=True),  # 1.0
+    ]
+    curve = build_curve(records)
+    # ours - none = 1.0, NOT ours - vector-rag = 0.5.
+    assert curve.floor_lift == pytest.approx(1.0)
+
+
+def test_vector_rag_to_ours_interior_delta_reachable_via_paired_delta():
+    # The recall-axis interior read (vector-rag → ours) is not a named property but
+    # is reachable through the generic paired_delta, so the escape hatch the docstring
+    # advertises is locked by a test, not just prose.
+    records = [
+        _rec("w1", "vector-rag", det="reach", resolved=True, rubric=0.0),  # 0.5
+        _rec("w1", "ours", det="reach", resolved=True),  # 1.0
+        _rec("w2", "vector-rag", det="reach", resolved=True, rubric=0.0),  # 0.5
+        _rec("w2", "ours", det="reach", resolved=True),  # 1.0
+    ]
+    curve = build_curve(records)
+    delta = curve.paired_delta("vector-rag", "ours")
+    assert delta is not None
+    assert delta.delta == pytest.approx(0.5)  # ours 1.0 - vector-rag 0.5
+
+
 # --- guards -------------------------------------------------------------------
 
 
