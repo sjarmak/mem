@@ -66,7 +66,7 @@ from membench.schemas.bundle import TaskBundle
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 # The materialized codeprobe ftp anchor bundles (mem-bxhh.3.2): gitignored data,
-# regenerable via `scripts/materialize_codeprobe_anchors.py`.
+# regenerable via `scripts/materialize_ftp_anchors.py --rig codeprobe`.
 DEFAULT_BUNDLES_DIR = PROJECT_ROOT / ".mem/bundles-codeprobe"
 # Isolated probe/grid dirs so an ftp run never collides with the native pool's.
 DEFAULT_PROBE_DIR = PROJECT_ROOT / ".mem/probe-codeprobe"
@@ -81,22 +81,32 @@ DEFAULT_CLI_VERSION = "2.1.173"
 BUILTIN_CONDITION = "none"
 
 
-def load_ftp_bundles(bundles_dir: Path, *, limit: int | None = None) -> list[TaskBundle]:
-    """Every ``*.json`` anchor bundle carrying an ftp oracle, sorted by work_id,
-    optionally capped to the first ``limit`` (the smoke-run knob). A bundle without
-    ``verification.ftp_oracle`` is not an ftp anchor and is skipped."""
+def load_ftp_bundles(bundles_dirs: Sequence[Path], *, limit: int | None = None) -> list[TaskBundle]:
+    """Every ``*.json`` anchor bundle carrying an ftp oracle across ``bundles_dirs``
+    (one or more rig bundle directories, so a run can span a cross-rig pool -- mem-
+    on3f), sorted by work_id, optionally capped to the first ``limit`` (the smoke-run
+    knob). A bundle without ``verification.ftp_oracle`` is not an ftp anchor and is
+    skipped. Anchor ``work_id``s are rig-prefixed (``<rig>-<sha12>``, see
+    `membench.bundle.anchor.anchor_bundle`), so cross-rig collisions cannot occur."""
     bundles: list[TaskBundle] = []
-    for path in sorted(bundles_dir.glob("*.json")):
-        bundle = TaskBundle.model_validate_json(path.read_text(encoding="utf-8"))
-        if bundle.verification.ftp_oracle is not None:
-            bundles.append(bundle)
+    for bundles_dir in bundles_dirs:
+        for path in sorted(bundles_dir.glob("*.json")):
+            bundle = TaskBundle.model_validate_json(path.read_text(encoding="utf-8"))
+            if bundle.verification.ftp_oracle is not None:
+                bundles.append(bundle)
     bundles.sort(key=lambda b: b.work_id)
     return bundles[:limit] if limit is not None else bundles
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--bundles-dir", type=Path, default=DEFAULT_BUNDLES_DIR)
+    parser.add_argument(
+        "--bundles-dir",
+        type=Path,
+        nargs="+",
+        default=[DEFAULT_BUNDLES_DIR],
+        help="one or more bundle dirs; repeat for a cross-rig pool (mem-on3f)",
+    )
     parser.add_argument("--probe-dir", type=Path, default=DEFAULT_PROBE_DIR)
     parser.add_argument("--grid-dir", type=Path, default=DEFAULT_GRID_DIR)
     parser.add_argument("--store", type=Path, default=DEFAULT_STORE)
