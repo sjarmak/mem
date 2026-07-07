@@ -9,13 +9,11 @@ description: >
   in code), the memory-necessity gate (rejects oracle≈no_memory tasks), the
   world freeze + determinism manifest, opaque memory ids, adding a decision
   subject, regenerating or verifying a frozen world.json, or debugging a
-  verify_worlds failure. NOT for running the eval harness end-to-end — use
-  mem-eval-harness-run. NOT for grading, the ablation curve, or validity gates
-  on runs — use mem-grading-and-validity-gates. NOT for the memory arms under
-  test — use mem-competitive-arms. NOT for the ZFC boundary in the TypeScript
-  parse layer — use mem-deterministic-extraction-zfc. NOT for loading synthetic
-  records into the store / temporal LOO — use mem-store-schema-and-rebuild and
-  mem-temporal-loo-and-leak-safety.
+  verify_worlds failure. NOT for running the harness (mem-eval-harness-run),
+  grading/ablation/validity gates (mem-grading-and-validity-gates), the memory
+  arms under test (mem-competitive-arms), or loading records into the store /
+  temporal LOO (mem-store-schema-and-rebuild,
+  mem-temporal-loo-and-leak-safety).
 ---
 
 # mem synthetic world generator

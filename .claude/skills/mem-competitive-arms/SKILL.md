@@ -10,11 +10,10 @@ description: >
   adapters, launch-time arm selection (MEMBENCH_MEMORY_SYSTEM), and the
   checklist for adding a new arm. Load when wiring, debugging, comparing, or
   extending an arm, or when an arm raises at construction/first retrieve.
-  NOT for running the eval end-to-end or Harbor mechanics — use
-  mem-eval-harness-run; NOT for scoring/gates (ablation curve, validity_gate,
-  precision guard) — use mem-grading-and-validity-gates; NOT for the TS
-  retrieval substrate or LOO internals — use mem-temporal-loo-and-leak-safety;
-  NOT for synthetic task authoring — use mem-synthetic-world-generator.
+  NOT for running the eval or Harbor (mem-eval-harness-run), scoring/gates
+  (mem-grading-and-validity-gates), the LOO substrate
+  (mem-temporal-loo-and-leak-safety), or synthetic task authoring
+  (mem-synthetic-world-generator).
 ---
 
 # mem-competitive-arms: the retrieval systems under test

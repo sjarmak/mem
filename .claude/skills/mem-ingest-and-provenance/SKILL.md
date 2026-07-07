@@ -9,14 +9,12 @@ description: >
   Load when building or diagnosing the .mem/store.db sidecar, when a coverage
   axis reads zero, when adding a rig to the rig→repo map, when wiring a
   producer `cut` event, or when you need to know which ingest stage sets which
-  WorkRecord field. NOT for the nightly substrate-ingest procedure (use the
-  existing ingest-trace-substrate skill); NOT for schema versions, rebuild
-  round-trips, or the append-only tables (use mem-store-schema-and-rebuild);
-  NOT for the parse layer's error extraction (use
-  mem-deterministic-extraction-zfc); NOT for temporal-LOO exclusions (use
-  mem-temporal-loo-and-leak-safety); NOT for why the real-corpus oracle funnel
-  collapsed (use mem-failure-archaeology and
-  mem-oracle-validity-wall-campaign).
+  WorkRecord field. NOT for the nightly substrate ingest
+  (ingest-trace-substrate), schema/rebuild/append-only tables
+  (mem-store-schema-and-rebuild), the parse layer
+  (mem-deterministic-extraction-zfc), temporal-LOO exclusions
+  (mem-temporal-loo-and-leak-safety), or why the oracle funnel collapsed
+  (mem-oracle-validity-wall-campaign).
 ---
 
 # mem ingest and provenance

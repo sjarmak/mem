@@ -9,13 +9,11 @@ description: >
   assert_no_leak), or memory-bench/membench/grading/leak_guard.py (outcome-label
   scan); before adding a memory arm that ingests WorkRecords; when debugging a
   LeakageError or OutcomeLeakError; when a timestamp/format change touches
-  lifecycle columns; or when reviewing the TS↔Python parity contract. Also covers
-  the progressive-disclosure retrieval surface (mem retrieve --format
-  index|details|full). NOT for running the eval end-to-end — use
-  mem-eval-harness-run. NOT for grading gates, ablation curves, or judge doctrine
-  — use mem-grading-and-validity-gates. NOT for the deterministic-parse ZFC
-  boundary — use mem-deterministic-extraction-zfc. NOT for store schema/rebuild
-  mechanics — use mem-store-schema-and-rebuild.
+  lifecycle columns; or when reviewing the TS↔Python parity contract. Also covers progressive-disclosure
+  retrieval (mem retrieve --format index|details|full). NOT for running the eval (mem-eval-harness-run), grading
+  gates/ablation/judge doctrine (mem-grading-and-validity-gates), the
+  deterministic-parse ZFC boundary (mem-deterministic-extraction-zfc), or store
+  schema/rebuild (mem-store-schema-and-rebuild).
 ---
 
 # Temporal LOO and leak safety

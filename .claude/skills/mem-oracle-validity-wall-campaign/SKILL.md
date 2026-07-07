@@ -10,13 +10,11 @@ description: >-
   Phase 2), or forward-capture (mem-31kz), or when deciding which lever on the
   wall to work next. Gives numbered phases with expected observations at every
   gate (linked → replayable → sound → discriminating), the ranked solution
-  menu as decision-gated branches, and the fenced wrong paths. NOT for the
-  history of how the wall was diagnosed — use mem-failure-archaeology. NOT for
-  how the validity gates score mechanically — use
-  mem-grading-and-validity-gates. NOT for authoring synthetic worlds — use
-  mem-synthetic-world-generator. NOT for running the harness generally — use
-  mem-eval-harness-run. NOT for evidence doctrine — use
-  mem-research-methodology-and-evidence-bar.
+  menu as decision-gated branches, and the fenced wrong paths. NOT for how the
+  wall was diagnosed (mem-failure-archaeology), how gates score mechanically
+  (mem-grading-and-validity-gates), authoring synthetic worlds
+  (mem-synthetic-world-generator), or evidence doctrine
+  (mem-research-methodology-and-evidence-bar).
 ---
 
 # mem-oracle-validity-wall-campaign — the forward campaign on the signal-poor real corpus
