@@ -1,7 +1,7 @@
 """Difficulty banding for ftp-oracle anchor bundles (mem-on3f)."""
 
 from membench.bundle.replay import ReplayResult
-from membench.generators.ftp_difficulty import band_pool, ftp_test_count, gold_file_count
+from membench.grading.ftp_difficulty import band_pool, ftp_test_count, gold_file_count
 from membench.schemas.bundle import BundleEnv, BundleVerification, FtpOracle, TaskBundle
 
 

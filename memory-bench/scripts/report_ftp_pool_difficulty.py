@@ -3,7 +3,7 @@
 (mem-on3f). FREE: file IO + Docker-free JSON parsing only.
 
     uv run python scripts/report_ftp_pool_difficulty.py \
-        --bundles-dir .mem/bundles-codeprobe --bundles-dir .mem/bundles-scix_experiments
+        --bundles-dir .mem/bundles-codeprobe .mem/bundles-scix_experiments
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from typing import Any
 
 from run_grid_3arm_ftp import load_ftp_bundles
 
-from membench.generators.ftp_difficulty import band_pool
+from membench.grading.ftp_difficulty import band_pool
 from membench.schemas.bundle import TaskBundle
 
 
@@ -27,7 +27,6 @@ def build_report(bundles: Sequence[TaskBundle]) -> dict[str, Any]:
     tertile-band counts, and per-anchor detail -- the exact shape written to
     ``--out`` and printed to stdout."""
     stats = band_pool(bundles)
-    rig_by_work_id = {b.work_id: b.rig for b in bundles}
     by_rig = Counter(b.rig for b in bundles)
     by_band = Counter(s.band for s in stats)
     return {
@@ -37,7 +36,7 @@ def build_report(bundles: Sequence[TaskBundle]) -> dict[str, Any]:
         "anchors": [
             {
                 "work_id": s.work_id,
-                "rig": rig_by_work_id[s.work_id],
+                "rig": s.rig,
                 "gold_files": s.gold_files,
                 "ftp_tests": s.ftp_tests,
                 "band": s.band,
@@ -49,7 +48,7 @@ def build_report(bundles: Sequence[TaskBundle]) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--bundles-dir", type=Path, action="append", required=True)
+    parser.add_argument("--bundles-dir", type=Path, nargs="+", required=True)
     parser.add_argument("--out", type=Path, default=None, help="also write the report as JSON")
     args = parser.parse_args(argv)
 

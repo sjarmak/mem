@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from membench.grading.probe_direct import gold_file_list
 from membench.schemas.bundle import TaskBundle
 
 BANDS: tuple[str, str, str] = ("easy", "medium", "hard")
@@ -24,13 +25,14 @@ BANDS: tuple[str, str, str] = ("easy", "medium", "hard")
 @dataclass(frozen=True)
 class DifficultyStats:
     work_id: str
+    rig: str
     gold_files: int
     ftp_tests: int
     band: str
 
 
 def gold_file_count(bundle: TaskBundle) -> int:
-    return len(bundle.output.file_diffs)
+    return len(gold_file_list(bundle))
 
 
 def ftp_test_count(bundle: TaskBundle) -> int:
@@ -54,6 +56,7 @@ def band_pool(bundles: Sequence[TaskBundle]) -> list[DifficultyStats]:
         stats.append(
             DifficultyStats(
                 work_id=bundle.work_id,
+                rig=bundle.rig,
                 gold_files=gold_file_count(bundle),
                 ftp_tests=ftp_test_count(bundle),
                 band=BANDS[tertile],
