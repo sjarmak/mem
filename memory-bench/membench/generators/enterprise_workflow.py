@@ -178,9 +178,11 @@ def _materialize_task(
     superseded: list[str] = []
     forbidden_values: list[str] = []
     # The current value of the ONE superseded subject — the value a tool-requiring
-    # goal must apply (mem-31vl). Set in the chain branch below (chain_position is
-    # always visited exactly once).
-    chain_current_value = ""
+    # goal must apply (mem-31vl). None until the chain branch below sets it
+    # (chain_position is always visited exactly once); a broken invariant then fails
+    # loudly at the assert rather than authoring arg_values=[""] (which would match
+    # any text, since states_value(text, "") is true).
+    chain_current_value: str | None = None
 
     for i, subject in enumerate(subjects):
         if i == chain_position:
@@ -274,6 +276,7 @@ def _materialize_task(
 
     prompts = ", ".join(s.prompt for s in subjects)
     if tool_requiring:
+        assert chain_current_value is not None, "chain_position was never visited"
         # Tool-requiring variant (mem-31vl): success requires APPLYING the current
         # value via a tool call, not merely stating it. Staleness moves off the text
         # answer (forbidden_values cleared) onto the tool argument, so the tool action

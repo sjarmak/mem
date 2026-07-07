@@ -67,16 +67,11 @@ def states_value(text: str, value: str) -> bool:
     return re.search(rf"(?<!\w){re.escape(value)}(?!\w)", text) is not None
 
 
-def _tool_arg_text(tool_calls: Collection[ToolCall], tool: str) -> str:
-    """Concatenated string of the argument VALUES of every call to ``tool``.
-
-    Grades against the argument values, never ``str(arguments)`` — so the mechanical
-    match does not depend on Python's dict repr (quoting/braces)."""
-    parts: list[str] = []
-    for call in tool_calls:
-        if call.name == tool:
-            parts.extend(str(value) for value in call.arguments.values())
-    return "\n".join(parts)
+def _call_args_text(call: ToolCall) -> str:
+    """One tool call's argument VALUES as a single string — values, never
+    ``str(arguments)`` — so the mechanical match does not depend on Python's dict repr
+    (quoting/braces)."""
+    return "\n".join(str(value) for value in call.arguments.values())
 
 
 def outcome_check_passes(
@@ -105,12 +100,22 @@ def outcome_check_passes(
     if any(states_value(stated_text, value) for value in check.forbidden_values):
         return False
     for action in check.requires_action:
-        if not any(call.name == action.tool for call in tool_calls):
+        calls = [call for call in tool_calls if call.name == action.tool]
+        if not calls:
             return False
-        arg_text = _tool_arg_text(tool_calls, action.tool)
-        if not all(states_value(arg_text, value) for value in action.arg_values):
+        # Some SINGLE call must carry every required value (a real application of the
+        # recalled fact, not values merged across calls) ...
+        if not any(
+            all(states_value(_call_args_text(call), value) for value in action.arg_values)
+            for call in calls
+        ):
             return False
-        if any(states_value(arg_text, value) for value in action.forbidden_values):
+        # ... and NO call to the tool may carry a forbidden (stale) value.
+        if any(
+            states_value(_call_args_text(call), value)
+            for call in calls
+            for value in action.forbidden_values
+        ):
             return False
     return True
 

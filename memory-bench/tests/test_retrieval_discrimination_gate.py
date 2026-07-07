@@ -13,6 +13,7 @@ from membench.generators.retrieval_discrimination_gate import (
     retrieval_discrimination_gate,
 )
 from membench.report.comparison import EPSILON
+from membench.schemas.sequence import BenchmarkSequence
 from membench.schemas.world import Channel, EnterpriseWorld, Persona, Project, Team
 
 
@@ -42,7 +43,7 @@ def _project(seed: int = 5) -> Project:
     )
 
 
-def _tool_requiring_seq(seed: int = 5):
+def _tool_requiring_seq(seed: int = 5) -> BenchmarkSequence:
     return materialize_world(
         _world(seed), _project(seed), n_tasks=1, facts_per_task=3, tool_requiring=True
     )[0]

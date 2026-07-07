@@ -517,6 +517,27 @@ def test_tool_action_is_the_sole_reward_channel_not_the_text_answer() -> None:
     )
 
 
+def test_tool_action_requires_all_arg_values_in_a_single_call() -> None:
+    # A required value split across two SEPARATE calls does not satisfy the action —
+    # one call must carry every required value (a real application, not a merge).
+    check = OutcomeCheck(
+        check_id="c",
+        requires_action=[ExpectedAction(tool="apply_config", arg_values=["45s", "us-east-1"])],
+    )
+    split = [
+        ToolCall(name="apply_config", arguments={"value": "timeout 45s"}),
+        ToolCall(name="apply_config", arguments={"value": "region us-east-1"}),
+    ]
+    assert (
+        outcome_check_passes(check, available_ids=set(), stated_text="", tool_calls=split) is False
+    )
+    together = [ToolCall(name="apply_config", arguments={"value": "timeout 45s in us-east-1"})]
+    assert (
+        outcome_check_passes(check, available_ids=set(), stated_text="", tool_calls=together)
+        is True
+    )
+
+
 def test_outcome_check_without_requires_action_ignores_tool_calls() -> None:
     # Backward compat: a check with no requires_action grades identically whether or
     # not tool_calls are supplied — only requires_action consults them.
