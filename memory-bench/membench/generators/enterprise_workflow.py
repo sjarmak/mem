@@ -39,13 +39,19 @@ from membench.generators.opaque_ids import opaque_memory_id
 from membench.metrics.scorers import states_value
 from membench.schemas.sequence import (
     BenchmarkSequence,
+    ExpectedAction,
     MemoryProbe,
     OutcomeCheck,
     SequenceStep,
 )
 from membench.schemas.world import EnterpriseWorld, Persona, Project
 
-GENERATOR_VERSION = "enterprise-workflow.v2"
+GENERATOR_VERSION = "enterprise-workflow.v3"
+
+# The tool the tool-requiring goal variant demands (mem-31vl): success requires
+# invoking it with the CURRENT (supersession-aware) value as its argument, so a
+# naive arm that surfaces a stale version drives a stale argument and fails.
+_APPLY_TOOL = "apply_config"
 
 # Supersession chain length for the one superseded subject (mem-z3gi): versions
 # v1..vD under distinct opaque ids, each superseding step marking its predecessor;
@@ -147,6 +153,7 @@ def _materialize_task(
     seed: int,
     charter: tuple[str, str] | None = None,
     establish_charter: bool = False,
+    tool_requiring: bool = False,
 ) -> BenchmarkSequence:
     rng = random.Random((seed << 16) ^ (task_index * 2654435761))
     subjects = rng.sample(_SUBJECTS, facts_per_task)
@@ -170,6 +177,10 @@ def _materialize_task(
     distractors: dict[str, str] = {}
     superseded: list[str] = []
     forbidden_values: list[str] = []
+    # The current value of the ONE superseded subject — the value a tool-requiring
+    # goal must apply (mem-31vl). Set in the chain branch below (chain_position is
+    # always visited exactly once).
+    chain_current_value = ""
 
     for i, subject in enumerate(subjects):
         if i == chain_position:
@@ -194,6 +205,7 @@ def _materialize_task(
                 )
             current_id = version_ids[-1]
             current_value = chain_values[-1]
+            chain_current_value = current_value
             superseded.extend(version_ids[:-1])
             forbidden_values.extend(chain_values[:-1])
             taken_values = list(chain_values)
@@ -261,22 +273,51 @@ def _materialize_task(
     )
 
     prompts = ", ".join(s.prompt for s in subjects)
-    steps.append(
-        SequenceStep(
-            step_id=f"{seq_id}-goal",
-            user_request=f"{project.goal} State the current value of: {prompts}.",
-            expected_memory_reads=required_ids,
-            outcome_checks=[
-                OutcomeCheck(
-                    check_id=f"{seq_id}-goal-check",
-                    description=(
-                        "goal requires the current value of each established subject "
-                        "and must not state a superseded value"
-                    ),
-                    requires_memory=required_ids,
+    if tool_requiring:
+        # Tool-requiring variant (mem-31vl): success requires APPLYING the current
+        # value via a tool call, not merely stating it. Staleness moves off the text
+        # answer (forbidden_values cleared) onto the tool argument, so the tool action
+        # is the sole reward-bearing channel — a stale value fails in the argument, not
+        # the prose. That makes memory quality load-bearing THROUGH the action.
+        goal_request = (
+            f"{project.goal} Using the tool `{_APPLY_TOOL}`, apply the current value "
+            f"of: {prompts}."
+        )
+        goal_check = OutcomeCheck(
+            check_id=f"{seq_id}-goal-check",
+            description=(
+                f"goal requires calling `{_APPLY_TOOL}` with the current value of the "
+                "superseded subject and never a stale one"
+            ),
+            requires_memory=required_ids,
+            requires_action=[
+                ExpectedAction(
+                    tool=_APPLY_TOOL,
+                    arg_values=[chain_current_value],
                     forbidden_values=list(forbidden_values),
                 )
             ],
+        )
+        available_tools = [_APPLY_TOOL]
+    else:
+        goal_request = f"{project.goal} State the current value of: {prompts}."
+        goal_check = OutcomeCheck(
+            check_id=f"{seq_id}-goal-check",
+            description=(
+                "goal requires the current value of each established subject "
+                "and must not state a superseded value"
+            ),
+            requires_memory=required_ids,
+            forbidden_values=list(forbidden_values),
+        )
+        available_tools = []
+    steps.append(
+        SequenceStep(
+            step_id=f"{seq_id}-goal",
+            user_request=goal_request,
+            available_tools=available_tools,
+            expected_memory_reads=required_ids,
+            outcome_checks=[goal_check],
             memory_probes=probes,
             distractor_memories=distractors,
             superseded_memory_ids=superseded,
@@ -314,17 +355,25 @@ def materialize_world(
     n_tasks: int = 2,
     facts_per_task: int = 3,
     seed: int | None = None,
+    tool_requiring: bool = False,
 ) -> list[BenchmarkSequence]:
     """Materialise ``n_tasks`` INDEPENDENT memory-dependent sequences from a world.
 
     Deterministic: the same (world, project, args, seed) yields byte-identical
     sequences. ``seed`` defaults to the world's seed. Each sequence is memory-
-    dependent by construction and clears ``memory_necessity_gate``."""
+    dependent by construction and clears ``memory_necessity_gate``. ``tool_requiring``
+    (mem-31vl) makes the goal demand a tool call carrying the current value instead of
+    a text answer, so retrieval quality is load-bearing through the action."""
     _validate(world, project, facts_per_task=facts_per_task, n_tasks=n_tasks)
     base_seed = world.seed if seed is None else seed
     return [
         _materialize_task(
-            world, project, task_index=t, facts_per_task=facts_per_task, seed=base_seed
+            world,
+            project,
+            task_index=t,
+            facts_per_task=facts_per_task,
+            seed=base_seed,
+            tool_requiring=tool_requiring,
         )
         for t in range(n_tasks)
     ]
@@ -338,6 +387,7 @@ def materialize_project(
     facts_per_task: int = 3,
     seed: int | None = None,
     drop_charter: bool = False,
+    tool_requiring: bool = False,
 ) -> list[BenchmarkSequence]:
     """Materialise a PROJECT: ``n_tasks`` linked by a shared charter established in
     task 0 and required by EVERY task's goal — cross-task continuity, meant to run
@@ -368,6 +418,7 @@ def materialize_project(
             seed=base_seed,
             charter=charter,
             establish_charter=(t == 0 and not drop_charter),
+            tool_requiring=tool_requiring,
         )
         for t in range(n_tasks)
     ]

@@ -148,3 +148,40 @@ def test_rejects_world_without_personas() -> None:
     empty = empty.model_copy(update={"personas": []})
     with pytest.raises(ValueError, match="no personas"):
         materialize_world(empty, _project())
+
+
+def test_tool_requiring_variant_moves_staleness_onto_the_tool_action() -> None:
+    # mem-31vl: the tool-requiring goal demands a tool call carrying the CURRENT
+    # value; staleness moves off the text answer (forbidden_values cleared) onto the
+    # action's OWN forbidden_values, so the tool is the sole reward-bearing channel.
+    seq = materialize_world(
+        _world(), _project(), n_tasks=1, facts_per_task=3, tool_requiring=True
+    )[0]
+    goal = seq.steps[-1]
+    assert goal.available_tools == ["apply_config"]
+    check = goal.outcome_checks[0]
+    assert check.forbidden_values == []  # text clause cleared
+    assert len(check.requires_action) == 1
+    action = check.requires_action[0]
+    assert action.tool == "apply_config"
+    assert action.arg_values and all(action.arg_values)  # a real current value
+    assert action.forbidden_values  # stale values live on the action, not the prose
+    # the current value is never itself a forbidden (stale) value
+    assert not set(action.arg_values) & set(action.forbidden_values)
+
+
+def test_tool_requiring_variant_is_still_memory_dependent() -> None:
+    # Necessity survives the shape change: oracle (surfaces current-only -> valid tool
+    # arg) beats no-memory (empty arg -> current value absent).
+    for seq in materialize_world(_world(), _project(), n_tasks=3, tool_requiring=True):
+        verdict = memory_necessity_gate(seq).verdict
+        assert verdict.accepted, f"{seq.sequence_id}: {verdict.reason}"
+        assert verdict.delta > EPSILON
+
+
+def test_default_variant_stays_text_answer() -> None:
+    # Backward compat: default (tool_requiring=False) keeps the text-answer goal.
+    goal = materialize_world(_world(), _project(), n_tasks=1, facts_per_task=3)[0].steps[-1]
+    assert goal.available_tools == []
+    assert goal.outcome_checks[0].requires_action == []
+    assert goal.outcome_checks[0].forbidden_values  # text staleness still enforced
