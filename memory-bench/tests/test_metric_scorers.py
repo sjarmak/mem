@@ -38,7 +38,8 @@ from membench.schemas.handoff import (
     PredecessorEvent,
 )
 from membench.schemas.memory_event import MemoryBackend, MemoryEvent, MemoryOperation
-from membench.schemas.sequence import OutcomeCheck
+from membench.schemas.sequence import ExpectedAction, OutcomeCheck
+from membench.schemas.trace import ToolCall
 
 
 def _event(latency: float = 0.0) -> MemoryEvent:
@@ -451,3 +452,82 @@ def test_outcome_check_fails_when_a_forbidden_value_is_stated() -> None:
 def test_outcome_check_with_no_requirements_and_no_forbidden_values_passes() -> None:
     # Backward compat: existing fixtures (no forbidden_values) grade exactly as before.
     assert outcome_check_passes(OutcomeCheck(check_id="c"), available_ids=set(), stated_text="")
+
+
+def test_outcome_check_requires_tool_action_with_recalled_arg() -> None:
+    # mem-31vl: the goal requires invoking `apply_config` with the CURRENT value as
+    # its argument. Required memory alone is not enough — the tool must be called
+    # AND carry the recalled value.
+    check = OutcomeCheck(
+        check_id="c",
+        requires_memory=["m1"],
+        requires_action=[ExpectedAction(tool="apply_config", arg_values=["45s"])],
+    )
+    # required memory present but NO tool call -> fails (memory-gated action absent)
+    assert (
+        outcome_check_passes(check, available_ids={"m1"}, stated_text="", tool_calls=())
+        is False
+    )
+    # tool call present carrying the current value -> passes
+    call = ToolCall(name="apply_config", arguments={"value": "the timeout is 45s — by Ada"})
+    assert (
+        outcome_check_passes(check, available_ids={"m1"}, stated_text="", tool_calls=[call])
+        is True
+    )
+    # right value but WRONG tool -> fails
+    wrong = ToolCall(name="other_tool", arguments={"value": "45s"})
+    assert (
+        outcome_check_passes(check, available_ids={"m1"}, stated_text="", tool_calls=[wrong])
+        is False
+    )
+    # tool called but the required current value is absent (empty recall) -> fails
+    empty = ToolCall(name="apply_config", arguments={"value": ""})
+    assert (
+        outcome_check_passes(check, available_ids={"m1"}, stated_text="", tool_calls=[empty])
+        is False
+    )
+
+
+def test_tool_action_is_the_sole_reward_channel_not_the_text_answer() -> None:
+    # mem-31vl C1 isolation: on a tool-requiring shape the goal's TEXT forbidden
+    # clause is empty; staleness is enforced ONLY through the tool argument. A stale
+    # value in the tool ARG must fail even when the stated text is clean — this is
+    # the acceptance-level proof that the tool path (not the text path) is what
+    # fails a naive arm. Without a working action clause this test cannot pass.
+    check = OutcomeCheck(
+        check_id="c",
+        requires_memory=["m1"],
+        forbidden_values=[],  # text clause deliberately cleared (tool-requiring shape)
+        requires_action=[
+            ExpectedAction(tool="apply_config", arg_values=["45s"], forbidden_values=["30s"])
+        ],
+    )
+    clean = ToolCall(name="apply_config", arguments={"value": "the timeout is 45s"})
+    assert (
+        outcome_check_passes(
+            check, available_ids={"m1"}, stated_text="all good", tool_calls=[clean]
+        )
+        is True
+    )
+    # clean text, but the STALE value rode into the tool arg -> FAILS on the action.
+    stale = ToolCall(
+        name="apply_config", arguments={"value": "the timeout is 45s\nthe timeout is 30s"}
+    )
+    assert (
+        outcome_check_passes(
+            check, available_ids={"m1"}, stated_text="all good", tool_calls=[stale]
+        )
+        is False
+    )
+
+
+def test_outcome_check_without_requires_action_ignores_tool_calls() -> None:
+    # Backward compat: a check with no requires_action grades identically whether or
+    # not tool_calls are supplied — only requires_action consults them.
+    check = OutcomeCheck(check_id="c", requires_memory=["m1"], forbidden_values=["30s"])
+    assert outcome_check_passes(check, available_ids={"m1"}, stated_text="45s") is True
+    junk = ToolCall(name="whatever", arguments={"value": "30s"})
+    assert (
+        outcome_check_passes(check, available_ids={"m1"}, stated_text="45s", tool_calls=[junk])
+        is True
+    )

@@ -11,6 +11,24 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+class ExpectedAction(BaseModel):
+    """A tool action a step's goal REQUIRES — recalled memory must drive it (mem-31vl).
+
+    ``tool`` must be invoked; every string in ``arg_values`` must appear in that
+    call's arguments and none in ``forbidden_values`` may — both word-boundary
+    matched (``metrics.scorers.states_value``) over the call's argument VALUES (not
+    the dict repr). This carries its OWN ``forbidden_values``, distinct from
+    ``OutcomeCheck.forbidden_values`` (which grades the text answer), so a
+    tool-requiring shape can make the ACTION the sole reward-bearing channel: the
+    stale value fails inside the tool argument, not in the prose. This is what makes
+    memory quality load-bearing through a tool call rather than optional text recall.
+    """
+
+    tool: str
+    arg_values: list[str] = Field(default_factory=list)
+    forbidden_values: list[str] = Field(default_factory=list)
+
+
 class OutcomeCheck(BaseModel):
     """A deterministic check on a step's outcome (§9.3)."""
 
@@ -28,6 +46,11 @@ class OutcomeCheck(BaseModel):
     # ``stale_memory_retrieval_rate`` diagnostic. Defaults empty so existing
     # fixtures stay valid.
     forbidden_values: list[str] = Field(default_factory=list)
+    # Tool actions the step's goal REQUIRES (mem-31vl): recalled memory must drive a
+    # specific tool call, not just a text answer. Empty => text-only grade (existing
+    # behavior). Graded by ``metrics.scorers.outcome_check_passes`` over the agent's
+    # ``tool_calls``. Defaults empty so existing fixtures stay valid.
+    requires_action: list[ExpectedAction] = Field(default_factory=list)
 
 
 class MemoryProbe(BaseModel):

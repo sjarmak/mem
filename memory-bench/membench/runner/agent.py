@@ -58,10 +58,13 @@ class ScriptedAgent:
     this step), and the agent's stated answer must not state a forbidden
     (superseded) value. The reference agent "states" every memory it recalled — the
     surfaced contents ARE its answer material — so surfacing a stale value fails a
-    check that forbids it (reward-bearing staleness, mem-z3gi). Checks that require
-    no memory and forbid nothing pass statelessly. The agent persists the step's
-    `expected_memory_writes` — its (skeleton) write decision is write-all; a learned
-    write policy replaces this later.
+    check that forbids it (reward-bearing staleness, mem-z3gi). When a check
+    `requires_action` (mem-31vl), the agent also "uses" that recalled content: it
+    invokes the step's tool with the recalled text as the argument, so a stale value
+    riding into the tool argument fails the action just as it would the answer.
+    Checks that require no memory and forbid nothing pass statelessly. The agent
+    persists the step's `expected_memory_writes` — its (skeleton) write decision is
+    write-all; a learned write policy replaces this later.
     """
 
     def __init__(self, agent_config_id: str = "scripted-ref") -> None:
@@ -75,10 +78,29 @@ class ScriptedAgent:
     ) -> AgentStepResult:
         have = set(available_memory)
         recalled_text = "\n".join(available_memory.values())
+        # The reference agent "uses" what it recalled: on a step whose checks require
+        # a tool action it invokes each available tool with the recalled content as
+        # the argument (mem-31vl). An arm that surfaced clean current-only memory
+        # drives a clean tool argument (passes); one that surfaced a stale version
+        # drives a stale-contaminated argument (fails); empty recall -> empty argument
+        # -> the required current value is absent (fails). Non-action steps keep the
+        # empty-arg call, so efficiency accounting is unchanged.
+        requires_action = any(check.requires_action for check in step.outcome_checks)
+        tool_calls = [
+            ToolCall(
+                name=t,
+                arguments={"value": recalled_text} if requires_action else {},
+                latency_ms=ctx.clock.latency_ms(),
+            )
+            for t in step.available_tools
+        ]
         check_results: dict[str, bool] = {}
         for check in step.outcome_checks:
             check_results[check.check_id] = outcome_check_passes(
-                check, available_ids=have, stated_text=recalled_text
+                check,
+                available_ids=have,
+                stated_text=recalled_text,
+                tool_calls=tool_calls,
             )
 
         messages = [
@@ -87,10 +109,6 @@ class ScriptedAgent:
                 role="assistant",
                 content=f"step {step.step_id}: used {len(have)} memories",
             ),
-        ]
-        tool_calls = [
-            ToolCall(name=t, arguments={}, latency_ms=ctx.clock.latency_ms())
-            for t in step.available_tools
         ]
         passed = sum(check_results.values())
         final_answer = f"{passed}/{len(check_results)} checks satisfied"

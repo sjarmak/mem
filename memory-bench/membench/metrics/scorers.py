@@ -37,6 +37,7 @@ from membench.schemas.metrics import (
     SynthesisMetrics,
 )
 from membench.schemas.sequence import OutcomeCheck
+from membench.schemas.trace import ToolCall
 
 # DIV-4 frozen vocabulary (phase-2.5-plan §A): the model-classified sensitivity
 # buckets, and the cross-rig isolation leak a strict cross_rig run must never produce.
@@ -66,20 +67,52 @@ def states_value(text: str, value: str) -> bool:
     return re.search(rf"(?<!\w){re.escape(value)}(?!\w)", text) is not None
 
 
+def _tool_arg_text(tool_calls: Collection[ToolCall], tool: str) -> str:
+    """Concatenated string of the argument VALUES of every call to ``tool``.
+
+    Grades against the argument values, never ``str(arguments)`` — so the mechanical
+    match does not depend on Python's dict repr (quoting/braces)."""
+    parts: list[str] = []
+    for call in tool_calls:
+        if call.name == tool:
+            parts.extend(str(value) for value in call.arguments.values())
+    return "\n".join(parts)
+
+
 def outcome_check_passes(
-    check: OutcomeCheck, *, available_ids: Collection[str], stated_text: str
+    check: OutcomeCheck,
+    *,
+    available_ids: Collection[str],
+    stated_text: str,
+    tool_calls: Collection[ToolCall] = (),
 ) -> bool:
     """Deterministic grade for one ``OutcomeCheck``: every required memory id must be
-    available AND the answer must not state any forbidden (superseded) value.
+    available, the answer must not state any forbidden (superseded) value, AND every
+    required tool action must have been taken with the recalled value in its args.
 
-    The second clause is what makes staleness reward-bearing (mem-z3gi): an arm that
-    surfaces a stale version FAILS the goal instead of only ticking the diagnostic
-    ``stale_memory_retrieval_rate``. Shared by the ``ScriptedAgent`` self-grade and
-    any external scorer of a real agent's final answer (the values are authored, so
-    the grade is mechanical either way)."""
+    The forbidden-values clause makes staleness reward-bearing on the TEXT answer
+    (mem-z3gi). The ``requires_action`` clause (mem-31vl) makes it reward-bearing on
+    a TOOL action instead: the goal REQUIRES calling a named tool whose arguments
+    contain every ``arg_values`` string and none of the action's own
+    ``forbidden_values`` (both matched over the call's argument values with the same
+    word-boundary ``states_value``). A tool-requiring shape clears the text
+    ``forbidden_values`` so the action is the sole reward-bearing channel — an arm
+    that surfaced a stale version drives a stale tool argument and fails HERE, not on
+    the prose. Shared by the ``ScriptedAgent`` self-grade and any external scorer of
+    a real agent's trace (the values are authored, so the grade is mechanical)."""
     if not set(check.requires_memory).issubset(available_ids):
         return False
-    return not any(states_value(stated_text, value) for value in check.forbidden_values)
+    if any(states_value(stated_text, value) for value in check.forbidden_values):
+        return False
+    for action in check.requires_action:
+        if not any(call.name == action.tool for call in tool_calls):
+            return False
+        arg_text = _tool_arg_text(tool_calls, action.tool)
+        if not all(states_value(arg_text, value) for value in action.arg_values):
+            return False
+        if any(states_value(arg_text, value) for value in action.forbidden_values):
+            return False
+    return True
 
 
 # --------------------------------------------------------------------------- #
