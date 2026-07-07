@@ -154,9 +154,9 @@ def test_tool_requiring_variant_moves_staleness_onto_the_tool_action() -> None:
     # mem-31vl: the tool-requiring goal demands a tool call carrying the CURRENT
     # value; staleness moves off the text answer (forbidden_values cleared) onto the
     # action's OWN forbidden_values, so the tool is the sole reward-bearing channel.
-    seq = materialize_world(
-        _world(), _project(), n_tasks=1, facts_per_task=3, tool_requiring=True
-    )[0]
+    seq = materialize_world(_world(), _project(), n_tasks=1, facts_per_task=3, tool_requiring=True)[
+        0
+    ]
     goal = seq.steps[-1]
     assert goal.available_tools == ["apply_config"]
     check = goal.outcome_checks[0]

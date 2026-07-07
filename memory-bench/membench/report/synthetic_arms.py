@@ -13,16 +13,20 @@ Two harnesses: ``eval_arms_over_sequences`` runs each sequence INDEPENDENTLY
 (run_project), so the gap between them on a cross-task project IS the continuity
 signal — a persisting arm reaches oracle under run_project but not when isolated.
 
-CEILING (updated, mem-zt1c): the reference ScriptedAgent retrieves by exact id, so the
+CEILING (updated, mem-z3gi): the reference ScriptedAgent retrieves by exact id, so the
 id-exact arms (``oracle``, ``filesystem``) reach oracle-level reward by construction and
 report 0 Confusion/Staleness. The ``lexical`` query/top-k arm DOES surface seeded
 distractors and the superseded v1 — so ``confusion`` / ``staleness`` are non-zero for it
-while the exact arms stay 0 (a real arm no longer == oracle on these axes). What this path
-does NOT yet claim is reward-level differentiation: at the default top-k the lexical arm
-still recalls every required id (recall=1), so its reward matches oracle — token overlap
-cannot rank the truth above a distractor (the distinguishing value is absent from the
-query, by design). DRIVING the Confusion/Staleness rate back down needs a supersession-
-aware / semantic arm or a real agent (Harbor); that is the next lever, not this baseline.
+while the exact arms stay 0 (a real arm no longer == oracle on these axes). Staleness is
+now REWARD-bearing (mem-z3gi): the superseded value is in the goal's ``forbidden_values``,
+so the confused arm that surfaces it FAILS the goal and its reward trails oracle
+(``lexical.oracle_gap > 0`` — see ``test_synthetic_arms``). Confusion stays diagnostic-
+only: the distractor value is deliberately kept OUT of ``forbidden_values``, so surfacing
+it moves the rate but not reward. A tool-requiring shape moves that same staleness lever
+from the text answer onto a tool argument (mem-31vl,
+``generators.retrieval_discrimination_gate``); driving the Confusion rate itself down
+needs a supersession-aware / semantic arm or a real agent (Harbor) — the next lever, not
+this baseline.
 """
 
 from __future__ import annotations

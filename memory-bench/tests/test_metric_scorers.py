@@ -464,15 +464,11 @@ def test_outcome_check_requires_tool_action_with_recalled_arg() -> None:
         requires_action=[ExpectedAction(tool="apply_config", arg_values=["45s"])],
     )
     # required memory present but NO tool call -> fails (memory-gated action absent)
-    assert (
-        outcome_check_passes(check, available_ids={"m1"}, stated_text="", tool_calls=())
-        is False
-    )
+    assert outcome_check_passes(check, available_ids={"m1"}, stated_text="", tool_calls=()) is False
     # tool call present carrying the current value -> passes
     call = ToolCall(name="apply_config", arguments={"value": "the timeout is 45s — by Ada"})
     assert (
-        outcome_check_passes(check, available_ids={"m1"}, stated_text="", tool_calls=[call])
-        is True
+        outcome_check_passes(check, available_ids={"m1"}, stated_text="", tool_calls=[call]) is True
     )
     # right value but WRONG tool -> fails
     wrong = ToolCall(name="other_tool", arguments={"value": "45s"})
