@@ -3,7 +3,10 @@
 Quantifies how realistic a synthetic eval corpus is versus real agent traces, on
 three independently-reported axes:
 
-* STRUCTURAL  — mechanical distributional match of task shapes (``distance``).
+* STRUCTURAL  — mechanical distributional match of task shapes. The signed-off
+  form (#mem 2026-06-21) is the per-feature KS vector in ``perfeature_reference``
+  (matchable vs disjoint memory-op groups, no aggregate); ``distance`` keeps the
+  earlier mean-of-7 aggregate for callers not yet migrated.
 * SEMANTIC    — a model judge's per-task realism rating (``semantic``).
 * CONSTRUCT   — rank-correlation of memory-arm performance, N-flagged (``construct``).
 
@@ -31,6 +34,12 @@ from membench.realism.features import (
     features_from_sequence,
     features_from_trace_steps,
 )
+from membench.realism.perfeature_reference import (
+    MATCHABLE_FEATURES,
+    MEMORY_OP_FEATURES,
+    PerFeatureReference,
+    per_feature_reference,
+)
 from membench.realism.report import (
     PerTaskRealism,
     RealismReport,
@@ -48,8 +57,11 @@ from membench.realism.semantic import (
 
 __all__ = [
     "FEATURE_NAMES",
+    "MATCHABLE_FEATURES",
+    "MEMORY_OP_FEATURES",
     "ConstructVerdict",
     "FlatSampleError",
+    "PerFeatureReference",
     "PerTaskRealism",
     "RealismReport",
     "SemanticAggregate",
@@ -66,6 +78,7 @@ __all__ = [
     "features_from_trace_steps",
     "ks_statistic",
     "parse_semantic_verdict",
+    "per_feature_reference",
     "score_semantic_realism",
     "spearman_rho",
     "structural_realism",
