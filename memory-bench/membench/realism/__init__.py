@@ -34,11 +34,24 @@ from membench.realism.features import (
     features_from_sequence,
     features_from_trace_steps,
 )
+from membench.realism.mem_corpus import (
+    default_message_filter,
+    load_real_corpus,
+    load_work_records,
+    parse_transcript,
+)
 from membench.realism.perfeature_reference import (
     MATCHABLE_FEATURES,
     MEMORY_OP_FEATURES,
     PerFeatureReference,
     per_feature_reference,
+)
+from membench.realism.real_loader import (
+    RECOVERABLE_FEATURES,
+    features_from_trace,
+    load_real_features,
+    memory_dependency_depth,
+    trace_to_steps,
 )
 from membench.realism.report import (
     PerTaskRealism,
@@ -59,6 +72,7 @@ __all__ = [
     "FEATURE_NAMES",
     "MATCHABLE_FEATURES",
     "MEMORY_OP_FEATURES",
+    "RECOVERABLE_FEATURES",
     "ConstructVerdict",
     "FlatSampleError",
     "PerFeatureReference",
@@ -74,13 +88,21 @@ __all__ = [
     "build_semantic_prompt",
     "construct_validity",
     "construct_validity_from_arms",
+    "default_message_filter",
     "features_from_sequence",
+    "features_from_trace",
     "features_from_trace_steps",
     "ks_statistic",
+    "load_real_corpus",
+    "load_real_features",
+    "load_work_records",
+    "memory_dependency_depth",
     "parse_semantic_verdict",
+    "parse_transcript",
     "per_feature_reference",
     "score_semantic_realism",
     "spearman_rho",
     "structural_realism",
     "task_text_for_sequence",
+    "trace_to_steps",
 ]
