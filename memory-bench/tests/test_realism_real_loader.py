@@ -13,6 +13,7 @@ was never merged (the landed per-feature comparison, ``perfeature_reference.py``
 excludes ``dependency_depth`` a different way — see that module's own tests)."""
 
 from membench.realism.features import FEATURE_NAMES, features_from_sequence
+from membench.realism.perfeature_reference import MATCHABLE_FEATURES, MEMORY_OP_FEATURES
 from membench.realism.real_loader import (
     RECOVERABLE_FEATURES,
     features_from_trace,
@@ -100,6 +101,35 @@ def test_no_user_messages_falls_back_to_all_messages():
     assert features_from_trace(trace).n_steps == 2
 
 
+def _one_step_per_message(trace):
+    return [m.content for m in trace.messages]
+
+
+def test_custom_segmenter_overrides_default_user_turn_split():
+    # Fork B (session -> step segmentation) is injectable, mirroring Fork A
+    # (mem_corpus.load_work_records's filters) and Fork C (message_filter): a
+    # caller can resolve it without editing this module.
+    trace = _trace(messages=[_msg("user", "one"), _msg("assistant", "two"), _msg("user", "three")])
+    steps = trace_to_steps(trace, segmenter=_one_step_per_message)
+    assert len(steps) == 3
+    assert features_from_trace(trace, segmenter=_one_step_per_message).n_steps == 3
+    assert [f.n_steps for f in load_real_features([trace], segmenter=_one_step_per_message)] == [3]
+    # The default (unspecified) segmenter is unaffected — still user-turn split.
+    assert features_from_trace(trace).n_steps == 2
+
+
+def test_custom_segmenter_preserves_tool_and_memory_consolidation_on_first_step():
+    trace = _trace(
+        messages=[_msg("user", "a"), _msg("user", "b")],
+        tool_calls=[_call("bash")],
+        memory_events=[_mem(MemoryOperation.WRITE, written=["k"])],
+    )
+    steps = trace_to_steps(trace, segmenter=_one_step_per_message)
+    assert steps[0].tools == ("bash",)
+    assert steps[0].memory_writes == ("k",)
+    assert steps[1].tools == ()
+
+
 def test_tool_or_memory_only_session_is_one_step():
     trace = _trace(tool_calls=[_call("bash"), _call("grep")])
     feat = features_from_trace(trace)
@@ -154,6 +184,14 @@ def test_dependency_depth_is_na_zero_on_flat_session():
 def test_recoverable_features_exclude_dependency_depth():
     assert "dependency_depth" not in RECOVERABLE_FEATURES
     assert set(RECOVERABLE_FEATURES) == set(FEATURE_NAMES) - {"dependency_depth"}
+
+
+def test_recoverable_features_built_from_perfeature_reference_groups():
+    # RECOVERABLE_FEATURES is not an independently-maintained "FEATURE_NAMES minus
+    # one" derivation — it composes the SAME signed-off groups perfeature_reference
+    # already reports separately, so the two modules can never silently disagree
+    # about which features exclude dependency_depth.
+    assert RECOVERABLE_FEATURES == MATCHABLE_FEATURES + MEMORY_OP_FEATURES
 
 
 # --- dependency-depth diagnostic -------------------------------------------

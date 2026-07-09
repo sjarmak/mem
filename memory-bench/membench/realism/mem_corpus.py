@@ -19,8 +19,9 @@ loader hardcodes no default: ``load_work_records`` takes ``filters`` as an
 explicit caller-supplied mapping onto ``mem query`` CLI flags, so resolving fork A
 is entirely the caller's call, never a change to this module.
 
-Fork B — SESSION -> STEP segmentation — is resolved inside ``real_loader.py``
-(user-turn segmentation), not here; this module only supplies the ``Trace``.
+Fork B — SESSION -> STEP segmentation — is defaulted (user-turn) and independently
+injectable (``segmenter``) inside ``real_loader.py``, not here; this module only
+supplies the ``Trace``.
 
 Fork C — ``task_text`` gc-prime boilerplate handling — is surfaced, not resolved,
 by ``default_message_filter``'s docstring: for autonomous worker-pool sessions the
