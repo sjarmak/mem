@@ -112,19 +112,14 @@ def trace_to_steps(trace: Trace) -> list[TraceStep]:
     survives is a session sum/union, this placement does not change them, and
     ``dependency_depth`` (the one feature it would affect) is excluded as N/A."""
     texts = _turn_texts(trace)
-    steps = [TraceStep(text=text) for text in texts]
 
     tools = tuple(call.name for call in trace.tool_calls)
     writes = tuple(mid for ev in trace.memory_events for mid in _written_ids(ev))
     reads = tuple(mid for ev in trace.memory_events for mid in _read_ids(ev))
 
-    steps[0] = TraceStep(
-        tools=tools,
-        memory_writes=writes,
-        memory_reads=reads,
-        text=steps[0].text,
-    )
-    return steps
+    first = TraceStep(text=texts[0], tools=tools, memory_writes=writes, memory_reads=reads)
+    rest = [TraceStep(text=text) for text in texts[1:]]
+    return [first, *rest]
 
 
 def features_from_trace(trace: Trace) -> TaskFeatures:

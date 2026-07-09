@@ -6,12 +6,12 @@ two IO steps that produce them: querying the live ``.mem`` work-audit graph for
 candidate ``WorkRecord``\\ s, and parsing each one's transcript JSONL into a
 ``Trace``.
 
-Querying mirrors ``corpus.py``'s injectable-runner seam (a ``CorpusRunner`` shells
-to the ``mem`` CLI through ``mem_cli.run_mem_json``; both are testable without a
-built binary via an injected fake). It is intentionally a separate seam rather
-than a shared import: ``corpus.py`` loads the LOO-relevant ``WorkRef`` projection
-for retrieval, this module loads the RAW record (it needs ``trace.jsonl_path``,
-which ``WorkRef`` deliberately drops) — same pattern, different projection.
+Querying reuses ``corpus.py``'s injectable-runner seam directly (``CorpusRunner``,
+``_default_runner``): the runner-resolution plumbing has no reason to diverge
+between the two callers. What stays separate is the record PROJECTION —
+``corpus.py`` loads the LOO-relevant ``WorkRef`` for retrieval, this module loads
+the RAW record (it needs ``trace.jsonl_path``, which ``WorkRef`` deliberately
+drops) — same query seam, different projection.
 
 Fork A — the corpus SUBSET (which real records enter the reference corpus, e.g.
 by rig/status/date-range) — is PENDING Stephanie #mem sign-off (mem-ovi §1). This
@@ -39,15 +39,10 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from membench.mem_cli import run_mem_json
+from membench.corpus import CorpusRunner, _default_runner
 from membench.schemas.trace import ToolCall, Trace, TraceMessage
 
 logger = logging.getLogger(__name__)
-
-# A runner takes the `mem` argv (without `--json`) and returns the success
-# envelope's `data`. Injectable so the loader is testable without a built CLI —
-# mirrors `corpus.py`'s `CorpusRunner`.
-CorpusRunner = Callable[[list[str]], dict[str, Any]]
 
 # One raw transcript entry (a parsed JSONL line). Only a `Mapping` is assumed —
 # the transcript format's other entry types (`mode`, `attachment`, `system`, ...)
@@ -62,16 +57,6 @@ MessageFilter = Callable[[TranscriptEntry], bool]
 # Reads the transcript text at a `trace.jsonl_path`. Injectable so tests exercise
 # `load_real_corpus` against hand-built fixtures with no filesystem access.
 TranscriptReader = Callable[[str], str]
-
-
-def _default_runner(mem_bin: str) -> CorpusRunner:
-    """Shell to the `mem` CLI through the shared seam (`mem_cli.run_mem_json`:
-    timeout, missing-binary and malformed-envelope context, fail-loud)."""
-
-    def run(args: list[str]) -> dict[str, Any]:
-        return run_mem_json([mem_bin, *args])
-
-    return run
 
 
 def _resolve(runner: CorpusRunner | None, mem_bin: str | None) -> CorpusRunner:
@@ -104,11 +89,18 @@ def load_work_records(
     return list(data["records"])
 
 
+def _message_content(entry: TranscriptEntry) -> Any:
+    """The raw `entry.message.content` value (`str`, `list`, or `None` when the
+    entry carries no `message`, or an entry type — e.g. `system` — that has none).
+    Every other message-shape helper derives from this single lookup."""
+    message = entry.get("message")
+    return message.get("content") if isinstance(message, Mapping) else None
+
+
 def _content_blocks(entry: TranscriptEntry) -> list[Any]:
     """The entry's `message.content[]` blocks, or `[]` when absent/not a list
     (a bare string content, or an entry type that carries no `message` at all)."""
-    message = entry.get("message")
-    content = message.get("content") if isinstance(message, Mapping) else None
+    content = _message_content(entry)
     return content if isinstance(content, list) else []
 
 
@@ -145,8 +137,7 @@ def _entry_text(entry: TranscriptEntry) -> str:
     """Flatten one entry's `message.content` to plain text: a bare string passes
     through unchanged; a block list joins only `text`-typed blocks (`thinking`,
     `tool_use`, and `tool_result` blocks carry no conversational text)."""
-    message = entry.get("message")
-    content = message.get("content") if isinstance(message, Mapping) else None
+    content = _message_content(entry)
     if isinstance(content, str):
         return content
     if isinstance(content, list):
@@ -164,8 +155,7 @@ def _is_textual(entry: TranscriptEntry) -> bool:
     `tool_use`/`thinking` blocks has nothing to contribute as a session message
     (its tool_use blocks are already captured as `tool_calls`) — including it
     anyway would add a phantom zero-length turn."""
-    message = entry.get("message")
-    content = message.get("content") if isinstance(message, Mapping) else None
+    content = _message_content(entry)
     if isinstance(content, str):
         return True
     if isinstance(content, list):
