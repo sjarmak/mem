@@ -7,8 +7,8 @@ candidate ``WorkRecord``\\ s, and parsing each one's transcript JSONL into a
 ``Trace``.
 
 Querying reuses ``corpus.py``'s injectable-runner seam directly (``CorpusRunner``,
-``_default_runner``): the runner-resolution plumbing has no reason to diverge
-between the two callers. What stays separate is the record PROJECTION —
+``_resolve``): the runner-resolution plumbing has no reason to diverge between
+the two callers. What stays separate is the record PROJECTION —
 ``corpus.py`` loads the LOO-relevant ``WorkRef`` for retrieval, this module loads
 the RAW record (it needs ``trace.jsonl_path``, which ``WorkRef`` deliberately
 drops) — same query seam, different projection.
@@ -40,7 +40,8 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from membench.corpus import CorpusRunner, _default_runner
+from membench.corpus import CorpusRunner
+from membench.corpus import _resolve as _resolve_runner
 from membench.schemas.trace import ToolCall, Trace, TraceMessage
 
 logger = logging.getLogger(__name__)
@@ -58,14 +59,6 @@ MessageFilter = Callable[[TranscriptEntry], bool]
 # Reads the transcript text at a `trace.jsonl_path`. Injectable so tests exercise
 # `load_real_corpus` against hand-built fixtures with no filesystem access.
 TranscriptReader = Callable[[str], str]
-
-
-def _resolve(runner: CorpusRunner | None, mem_bin: str | None) -> CorpusRunner:
-    if runner is not None:
-        return runner
-    if mem_bin is None:
-        raise ValueError("mem_corpus loader needs either an injected `runner` or a `mem_bin` path.")
-    return _default_runner(mem_bin)
 
 
 def load_work_records(
@@ -86,7 +79,7 @@ def load_work_records(
     args = ["query", "--store", store_path]
     for flag, value in (filters or {}).items():
         args.extend([f"--{flag}", value])
-    data = _resolve(runner, mem_bin)(args)
+    data = _resolve_runner(runner, mem_bin)(args)
     return list(data["records"])
 
 
@@ -270,7 +263,13 @@ def load_real_corpus(
             continue
         try:
             text = transcript_reader(jsonl_path)
-        except OSError as exc:
+        except (OSError, UnicodeDecodeError) as exc:
+            # UnicodeDecodeError (raised by the default _read_transcript_file on
+            # invalid-UTF-8 bytes, e.g. a corrupted/archived transcript) is a
+            # ValueError subclass, not an OSError — it must be caught alongside
+            # the missing-file/permission case or it propagates and aborts the
+            # whole corpus load, breaking this function's own skip-not-raise
+            # contract (mem-ovi.1 rejection).
             logger.warning(
                 "work_id %s transcript unreadable at %s: %s", record.get("work_id"), jsonl_path, exc
             )

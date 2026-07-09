@@ -240,6 +240,31 @@ def test_load_real_corpus_skips_unreadable_transcript_without_raising():
     assert traces == []
 
 
+def test_load_real_corpus_skips_undecodable_transcript_without_raising():
+    """The default transcript_reader (_read_transcript_file) does
+    Path(path).read_text(encoding="utf-8"), so a corrupted/archived transcript
+    with invalid UTF-8 raises UnicodeDecodeError — a ValueError subclass, not an
+    OSError. load_real_corpus's own docstring promises an unreadable transcript
+    is "logged and skipped rather than raised"; this pins that the promise holds
+    for a decode failure, not just a missing-file OSError."""
+    records = [
+        {
+            "work_id": "gc-5",
+            "rig": "mem",
+            "lifecycle": {"created": "2026-07-01T00:00:00Z"},
+            "trace": {"jsonl_path": "/traces/corrupted.jsonl"},
+        }
+    ]
+
+    def _raise(path):
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+
+    traces = load_real_corpus(
+        "/store", runner=lambda args: {"records": records}, transcript_reader=_raise
+    )
+    assert traces == []
+
+
 def test_load_real_corpus_falls_back_to_created_and_unknown_agent():
     records = [
         {

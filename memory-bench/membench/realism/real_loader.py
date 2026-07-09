@@ -77,6 +77,12 @@ RECOVERABLE_FEATURES: tuple[str, ...] = MATCHABLE_FEATURES + MEMORY_OP_FEATURES
 # this module — mirrors how Fork A (corpus subset) and Fork C (message_filter,
 # mem_corpus.py) are already parameterized. Defaults to ``_turn_texts``
 # (segmentation by user turn, Decision 1 below).
+#
+# Contract: MUST return a non-empty list. ``trace_to_steps`` indexes the first
+# element unconditionally to build the step carrying the session's tool/memory
+# surface; ``_turn_texts`` upholds this (falls back to all messages, then to a
+# single empty turn) but a caller-supplied segmenter that can return `[]` will
+# raise IndexError.
 Segmenter = Callable[[Trace], list[str]]
 
 
