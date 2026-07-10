@@ -62,6 +62,20 @@ def test_records_to_world_is_deterministic() -> None:
     assert a.model_dump_json() == b.model_dump_json()
 
 
+def test_slug_colliding_team_names_merge_to_one_team() -> None:
+    # The model emits near-duplicate team names ("DevOps Team" / "DevOps team") that slug
+    # to the same id; they must collapse to a single team, not two rows sharing a team_id
+    # (which EnterpriseWorld's uniqueness validator rejects — mem-bdzhj).
+    rows = _rows()
+    rows[0]["team_name"] = "DevOps Team"
+    rows[1]["team_name"] = "DevOps team"
+    world, _ = records_to_world(rows, seed=2)
+    assert len(world.teams) == 1
+    assert world.teams[0].name == "DevOps Team"  # first-seen wins
+    # both personas resolve to the one shared team
+    assert {p.team_id for p in world.personas} == {world.teams[0].team_id}
+
+
 def test_incoherent_org_field_raises() -> None:
     rows = _rows()
     rows[1]["domain"] = "legal"  # two domains in one run -> not one organization

@@ -215,15 +215,21 @@ def records_to_world(
 
     world_id = f"world-seed{seed}"
 
-    # Teams: de-duplicate by name, preserving first-seen order; map name -> id.
+    # Teams: de-duplicate by derived id (not raw name), preserving first-seen order and
+    # mapping name -> id. Distinct names that slug to the same id (e.g. "DevOps Team" and
+    # "DevOps team") are one team — the model emits such near-duplicates, and keying on the
+    # raw name would build two Team rows sharing a team_id, which EnterpriseWorld rejects.
     team_id_by_name: dict[str, str] = {}
-    teams: list[Team] = []
+    teams_by_id: dict[str, Team] = {}
     for r in records:
         name = str(r["team_name"])
-        if name not in team_id_by_name:
-            tid = f"{world_id}-team-{_slug(name)}"
-            team_id_by_name[name] = tid
-            teams.append(Team(team_id=tid, name=name))
+        if name in team_id_by_name:
+            continue
+        tid = f"{world_id}-team-{_slug(name)}"
+        team_id_by_name[name] = tid
+        if tid not in teams_by_id:
+            teams_by_id[tid] = Team(team_id=tid, name=name)
+    teams: list[Team] = list(teams_by_id.values())
 
     personas = [
         Persona(
