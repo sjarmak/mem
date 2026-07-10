@@ -14,6 +14,9 @@ Contract mirrored from ``ConsolidatingMemory`` (the two-speed sibling):
 
 from __future__ import annotations
 
+import shutil
+import urllib.error
+import urllib.request
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -172,21 +175,24 @@ def test_default_synthesizer_constructs_without_shelling() -> None:
 
 
 def test_cli_synthesizer_shell_shape(tmp_path: Path) -> None:
-    # Exercise _CliWikiSynthesizer's shell shape with an injected runner: it materialises
-    # sources in a fresh per-call workdir, invokes `openwiki code --update --print`, then
-    # reads the wiki dir back and removes the workdir.
+    # Exercise _CliWikiSynthesizer's verified shell shape (openwiki v0.1.0, mem-nul9j)
+    # with an injected runner: sources written to the workdir root + git-snapshotted,
+    # `openwiki code --init --print --modelId <m>` invoked with env-driven provider
+    # config, nested pages read back via rglob, workdir removed.
     captured: dict[str, object] = {}
 
-    def fake_runner(argv: list[str], cwd: Path) -> str:
+    def fake_runner(argv: list[str], cwd: Path, env: Mapping[str, str]) -> str:
         captured["argv"] = argv
         captured["cwd"] = cwd
-        # The sources were materialised in this call's workdir for OpenWiki to ingest.
-        assert (cwd / "sources" / "a.md").read_text(encoding="utf-8") == "alpha"
-        # Simulate OpenWiki writing a synthesised page + a token-accounting summary line.
-        wiki = cwd / "openwiki"
-        wiki.mkdir(parents=True, exist_ok=True)
-        (wiki / "overview.md").write_text("synthesised overview", encoding="utf-8")
-        return '{"total_tokens": 128}'
+        captured["env"] = dict(env)
+        # Sources were written to the workdir root and committed (code mode needs git).
+        assert (cwd / "a.md").read_text(encoding="utf-8") == "alpha"
+        assert (cwd / ".git").is_dir()
+        # Simulate OpenWiki writing NESTED synthesised pages (as the real CLI does).
+        (cwd / "openwiki" / "architecture").mkdir(parents=True, exist_ok=True)
+        (cwd / "openwiki" / "quickstart.md").write_text("qs", encoding="utf-8")
+        (cwd / "openwiki" / "architecture" / "overview.md").write_text("ov", encoding="utf-8")
+        return "no token json in --print prose output"
 
     runner: WikiCliRunner = fake_runner
     synth = _CliWikiSynthesizer(tmp_path, runner=runner)
@@ -194,19 +200,26 @@ def test_cli_synthesizer_shell_shape(tmp_path: Path) -> None:
 
     argv = captured["argv"]
     assert isinstance(argv, list)
-    assert argv[:4] == ["openwiki", "code", "--update", "--print"]
-    assert "openai-compatible" in argv  # no-paid-API: local endpoint, not a paid provider
-    (page,) = result.pages
-    assert page.page_id == "openwiki-page-overview"  # namespaced away from raw ids
-    assert page.content == "synthesised overview"
-    assert page.source_ids == ("a", "b")  # conservative all-source provenance
-    assert result.background_tokens == 128
+    assert argv[:4] == ["openwiki", "code", "--init", "--print"]
+    assert "--modelId" in argv
+    env = captured["env"]
+    assert isinstance(env, dict)
+    # no-paid-API: local Ollama openai-compatible endpoint, not a paid provider.
+    assert env["OPENWIKI_PROVIDER"] == "openai-compatible"
+    assert env["OPENAI_COMPATIBLE_BASE_URL"].endswith("/v1")
+    assert env["OPENWIKI_MODEL_ID"]  # model pinned from the LocalModelStack
+    # Nested pages are read recursively and namespaced by relative path.
+    by_id = {p.page_id: p for p in result.pages}
+    assert set(by_id) == {"openwiki-page-quickstart", "openwiki-page-architecture_overview"}
+    assert by_id["openwiki-page-architecture_overview"].content == "ov"
+    assert by_id["openwiki-page-quickstart"].source_ids == ("a", "b")  # all-source provenance
+    assert result.background_tokens == 0  # --print emits prose, no token accounting
     # The per-call workdir is hermetic and removed after synthesis (no cross-trial leak).
     assert not Path(str(captured["cwd"])).exists()
 
 
 def test_cli_synthesizer_empty_sources_skips_shell(tmp_path: Path) -> None:
-    def exploding_runner(argv: list[str], cwd: Path) -> str:
+    def exploding_runner(argv: list[str], cwd: Path, env: Mapping[str, str]) -> str:
         raise AssertionError("must not shell openwiki for an empty source set")
 
     synth = _CliWikiSynthesizer(tmp_path, runner=exploding_runner)
@@ -215,7 +228,7 @@ def test_cli_synthesizer_empty_sources_skips_shell(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("bad_id", ["../oops", "a/b", "/etc/x", "a b"])
 def test_cli_synthesizer_rejects_unsafe_source_id(tmp_path: Path, bad_id: str) -> None:
-    def exploding_runner(argv: list[str], cwd: Path) -> str:
+    def exploding_runner(argv: list[str], cwd: Path, env: Mapping[str, str]) -> str:
         raise AssertionError("must reject an unsafe id before shelling openwiki")
 
     synth = _CliWikiSynthesizer(tmp_path, runner=exploding_runner)
@@ -291,12 +304,56 @@ def test_tombstoned_ids_are_deterministic_first_seen_order() -> None:
     assert result.tombstoned_ids == ("c", "a", "b", "d")
 
 
+def _openwiki_stack_available() -> bool:
+    """True iff the real OpenWiki CLI is installed AND the local Ollama daemon has the
+    pinned chat model pulled. Gates the end-to-end integration test so it skips cleanly
+    in CI (no CLI/daemon) and wherever the pinned model isn't provisioned — rather than
+    failing on a MODEL_NOT_FOUND. Set MEMBENCH_LOCAL_CHAT_MODEL to a pulled model to run."""
+    if shutil.which("openwiki") is None:
+        return False
+    import json
+
+    from membench.memory_systems.local_stack import LocalModelStack
+
+    stack = LocalModelStack.from_env()
+    base = stack.ollama_base_url.rstrip("/")
+    try:
+        with urllib.request.urlopen(f"{base}/api/tags", timeout=3) as resp:
+            tags = [m.get("name", "") for m in json.loads(resp.read()).get("models", [])]
+    except (urllib.error.URLError, OSError):
+        return False
+    return any(t == stack.chat_model or t.split(":", 1)[0] == stack.chat_model for t in tags)
+
+
+@pytest.mark.skipif(
+    not _openwiki_stack_available(),
+    reason="requires the provisioned OpenWiki CLI (npm i -g openwiki) + a local Ollama daemon",
+)
+def test_openwiki_real_end_to_end() -> None:
+    # Full real path (verified for mem-nul9j): write sources → git snapshot → shell the
+    # real `openwiki code --init --print` against Ollama → read nested pages back. LLM
+    # output is nondeterministic, so we assert the plumbing (env/git/argv/parse/read)
+    # runs clean and returns a well-formed result, not a specific page set.
+    synth = default_openwiki_synthesizer()
+    result = synth.synthesize(
+        sources={
+            "deploy": "The deploy script is scripts/deploy.sh; it needs AWS_PROFILE=prod.",
+            "orders": "The orders table needs an index on created_at for the nightly report.",
+        }
+    )
+    assert isinstance(result, WikiSynthesisResult)
+    assert result.background_tokens >= 0
+    for page in result.pages:
+        assert page.page_id.startswith("openwiki-page-")
+        assert page.source_ids == ("deploy", "orders")
+
+
 def test_page_id_namespaced_away_from_raw_id_collision() -> None:
     # A synthesised page id can never equal a raw memory_id, so a raw lookup is never
     # misrouted to wiki content. The CLI synthesiser prefixes md.stem with the namespace.
     captured: dict[str, object] = {}
 
-    def fake_runner(argv: list[str], cwd: Path) -> str:
+    def fake_runner(argv: list[str], cwd: Path, env: Mapping[str, str]) -> str:
         captured["cwd"] = cwd
         wiki = cwd / "openwiki"
         wiki.mkdir(parents=True, exist_ok=True)

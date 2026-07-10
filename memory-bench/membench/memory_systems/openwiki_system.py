@@ -25,12 +25,14 @@ suite runs with no Node CLI, no Ollama, and no network. The real
 OpenAI-compatible endpoint (Ollama), honouring the no-paid-API constraint
 (Decision 16) — its model id comes from ``LocalModelStack``, never hardcoded.
 
-Provisioning caveat (downstream of green CI, like Qdrant/Chroma for the vector arms):
-a real run needs ``npm i -g openwiki`` plus a running Ollama daemon reachable as an
-OpenAI-compatible endpoint. The exact code-mode ingest/config wiring the real
-synthesiser drives is PROVISIONAL pending an install-and-verify pass (follow-up bead),
-and the subprocess runner is injected so the shell shape is unit-testable without the
-CLI present.
+Provisioning (downstream of green CI, like Qdrant/Chroma for the vector arms): a real
+run needs ``npm i -g openwiki`` plus a running Ollama daemon exposed at its
+OpenAI-compatible endpoint (``{OLLAMA}/v1``). The real code-mode wiring was verified
+end-to-end against openwiki v0.1.0 + Ollama (mem-nul9j): git-snapshot the sources, run
+``openwiki code --init --print`` with env-driven provider/model config, read the nested
+``openwiki/`` pages back. The subprocess runner is injected so the shell shape stays
+unit-testable without the CLI; the real end-to-end path has a provisioning-gated
+integration test (skipped in CI).
 
 Provenance: OpenWiki synthesises pages freely and does not emit per-page
 source→page citations, so a page conservatively cites EVERY live source it was
@@ -43,6 +45,7 @@ citations.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -63,6 +66,9 @@ from membench.schemas.memory_event import MemoryBackend, MemoryEvent, MemoryOper
 # can mirror a raw id — an unnamespaced page id would misroute a raw lookup to wiki
 # content). Mirrors ``ConsolidatingMemory``'s ``f"{name}-schema-{i}"`` disjointness.
 _PAGE_PREFIX = "openwiki-page-"
+
+# OpenWiki provider selector for the local Ollama OpenAI-compatible endpoint.
+_OPENWIKI_PROVIDER = "openai-compatible"
 
 # Generous bound on the OpenWiki CLI shell-out (mirrors ``mem_cli.DEFAULT_TIMEOUT_S``):
 # the CLI drives a local LLM, so a cold model load can be slow, but a hang past this is
@@ -123,21 +129,25 @@ class ConcatWikiSynthesizer:
         return WikiSynthesisResult(pages=(page,), background_tokens=0)
 
 
-# The shell seam: ``(argv, cwd) -> stdout``. Injectable so the CLI-shell shape is
-# unit-testable with no ``openwiki`` binary present, mirroring ``OursMemory``'s runner.
-WikiCliRunner = Callable[[list[str], Path], str]
+# The shell seam: ``(argv, cwd, env) -> stdout``. ``env`` overlays the process env for
+# that call (OpenWiki takes provider/model/base-url config from env, not flags).
+# Injectable so the CLI-shell shape is unit-testable with no ``openwiki`` binary present.
+WikiCliRunner = Callable[[list[str], Path, Mapping[str, str]], str]
 
 
-def _default_cli_runner(argv: list[str], cwd: Path) -> str:
-    """Run ``openwiki`` non-interactively and return stdout. Time-bounded and typed:
-    a missing binary, a timeout, or a non-zero exit all raise ``OpenWikiCliError`` with
-    context (the trust-boundary timeout convention the repo already sets in
-    ``mem_cli.run_mem_json``) — a hang or failure is surfaced, never a silent empty wiki."""
+def _default_cli_runner(argv: list[str], cwd: Path, env: Mapping[str, str]) -> str:
+    """Run ``openwiki`` non-interactively and return stdout, with ``env`` overlaid on the
+    process environment. Time-bounded and typed: a missing binary, a timeout, or a
+    non-zero exit all raise ``OpenWikiCliError`` with context (the trust-boundary timeout
+    convention the repo already sets in ``mem_cli.run_mem_json``) — a hang or failure is
+    surfaced, never a silent empty wiki."""
     cmd = " ".join(argv)
+    merged = {**os.environ, **env}
     try:
         proc = subprocess.run(
             argv,
             cwd=cwd,
+            env=merged,
             capture_output=True,
             text=True,
             check=False,
@@ -156,20 +166,74 @@ def _default_cli_runner(argv: list[str], cwd: Path) -> str:
     return proc.stdout
 
 
+def _git_snapshot(workdir: Path) -> None:
+    """Initialise ``workdir`` as a git repo and commit its current files. OpenWiki's
+    ``code`` mode reads git context to decide what to document — verified empirically
+    (mem-nul9j): with no commit it writes nothing or a degenerate page, with a commit it
+    synthesises structured pages. A pinned identity + no-gpg-sign keeps this hermetic and
+    non-interactive; any git failure raises ``OpenWikiCliError`` (never a silent skip)."""
+    steps = [
+        ["git", "init", "-q"],
+        ["git", "add", "-A"],
+        # -c flags supply an identity so the commit needs no ambient git config.
+        [
+            "git",
+            "-c",
+            "user.email=openwiki-arm@local",
+            "-c",
+            "user.name=openwiki-arm",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-q",
+            "-m",
+            "sources",
+        ],
+    ]
+    for step in steps:
+        proc = subprocess.run(
+            step, cwd=workdir, capture_output=True, text=True, check=False, timeout=30.0
+        )
+        if proc.returncode != 0:
+            raise OpenWikiCliError(
+                f"{' '.join(step)} failed (exit {proc.returncode}): {proc.stderr.strip()}"
+            )
+
+
+def _openwiki_env(stack: LocalModelStack) -> dict[str, str]:
+    """The env OpenWiki needs to run against the local Ollama OpenAI-compatible endpoint
+    (no-paid-API, Decision 16). Model + base-url come from ``LocalModelStack`` (never
+    hardcoded); the api key is a non-empty placeholder Ollama ignores but the OpenAI SDK
+    requires. Verified against openwiki v0.1.0 (mem-nul9j)."""
+    base_url = f"{stack.ollama_base_url.rstrip('/')}/v1"
+    return {
+        "OPENWIKI_PROVIDER": _OPENWIKI_PROVIDER,
+        "OPENAI_COMPATIBLE_BASE_URL": base_url,
+        "OPENAI_COMPATIBLE_API_KEY": os.environ.get("OPENAI_COMPATIBLE_API_KEY") or "ollama",
+        "OPENWIKI_MODEL_ID": stack.chat_model,
+    }
+
+
 class _CliWikiSynthesizer:
     """Adapts the OpenWiki CLI to ``WikiSynthesizer``. Each ``synthesize`` call runs in
-    a FRESH throwaway workdir: it materialises the live raw sources as Markdown files,
-    shells ``openwiki code --update --print`` against the local OpenAI-compatible
-    (Ollama) endpoint, reads the synthesised ``openwiki/`` pages back, then removes the
-    workdir. A per-call hermetic dir is load-bearing — a workdir shared across trials
-    would let ``--update`` build one trial's wiki off another's stale sources, leaking
-    the answer across the temporal-LOO boundary (and a fixed relative default would make
-    the location cwd-dependent and racy under concurrent sequences).
+    a FRESH throwaway workdir: it writes the live raw sources as Markdown files,
+    git-snapshots them, shells ``openwiki code --init --print`` against the local
+    OpenAI-compatible (Ollama) endpoint, reads the synthesised ``openwiki/`` pages back
+    (recursively — OpenWiki nests them under ``architecture/``, ``workflows/``, …), then
+    removes the workdir.
 
-    PROVISIONAL (pending install-and-verify): the exact code-mode config/ingest
-    contract OpenWiki expects is nailed down against an installed CLI in a follow-up;
-    the subprocess runner is injected so this class is testable without it, and the
-    model id + endpoint come from ``LocalModelStack`` (no-paid-API, Decision 16)."""
+    A per-call hermetic dir is load-bearing — a workdir shared across trials would let
+    OpenWiki build one trial's wiki off another's stale sources, leaking the answer
+    across the temporal-LOO boundary (and a fixed relative default would make the
+    location cwd-dependent and racy under concurrent sequences).
+
+    Contract verified against openwiki v0.1.0 (mem-nul9j): provider/model/base-url are
+    ENV-driven (``_openwiki_env`` from ``LocalModelStack`` — no-paid-API, Decision 16),
+    ``code`` mode needs a git commit to have anything to document (``_git_snapshot``),
+    ``--init`` is the fresh-build command, and pages land nested under ``openwiki/``. The
+    subprocess runner is injected so this class stays unit-testable with no ``openwiki``
+    binary and no Ollama; the real end-to-end path is exercised by a provisioning-gated
+    integration test (skipped in CI)."""
 
     _WIKI_SUBDIR = "openwiki"
 
@@ -201,33 +265,33 @@ class _CliWikiSynthesizer:
             Path(self._parent_dir).mkdir(parents=True, exist_ok=True)
         workdir = Path(tempfile.mkdtemp(prefix="openwiki-arm-", dir=self._parent_dir))
         try:
-            src_dir = workdir / "sources"
-            src_dir.mkdir(parents=True, exist_ok=True)
             source_ids = tuple(sources.keys())
             for mid, content in sources.items():
-                (src_dir / f"{mid}.md").write_text(content, encoding="utf-8")
+                (workdir / f"{mid}.md").write_text(content, encoding="utf-8")
+            _git_snapshot(workdir)
             argv = [
                 "openwiki",
                 "code",
-                "--update",
+                "--init",
                 "--print",
-                "--provider",
-                "openai-compatible",
-                "--model",
+                "--modelId",
                 self._stack.chat_model,
+                "Document every source file as wiki pages.",
             ]
-            stdout = self._runner(argv, workdir)
+            stdout = self._runner(argv, workdir, _openwiki_env(self._stack))
             background_tokens = _parse_background_tokens(stdout)
             wiki_dir = workdir / self._WIKI_SUBDIR
             pages = tuple(
                 # No per-page citations from OpenWiki: conservatively cite every source.
-                # Page id is namespaced so it cannot collide with a raw ``memory_id``.
+                # Page id = the namespaced, filesystem-safe relative path (e.g.
+                # ``openwiki-page-architecture_overview``) so it cannot collide with a raw
+                # ``memory_id``. rglob so nested pages are not dropped.
                 WikiPage(
-                    page_id=f"{_PAGE_PREFIX}{md.stem}",
+                    page_id=f"{_PAGE_PREFIX}{_safe_name(str(md.relative_to(wiki_dir).with_suffix('')))}",
                     content=md.read_text(encoding="utf-8"),
                     source_ids=source_ids,
                 )
-                for md in sorted(wiki_dir.glob("*.md"))
+                for md in sorted(wiki_dir.rglob("*.md"))
             )
             return WikiSynthesisResult(pages=pages, background_tokens=background_tokens)
         finally:
