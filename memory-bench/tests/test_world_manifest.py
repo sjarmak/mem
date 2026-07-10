@@ -49,10 +49,17 @@ def _rows() -> list[dict[str, object]]:
     ]
 
 
-def _freeze(tmp_path):
+def _freeze(tmp_path, *, tool_requiring: bool = False):
     world, project = records_to_world(_rows(), seed=4)
     out = write_world(world, project, base_dir=tmp_path)
-    sequences = materialize_world(world, project, n_tasks=_N_TASKS, facts_per_task=_FACTS, seed=4)
+    sequences = materialize_world(
+        world,
+        project,
+        n_tasks=_N_TASKS,
+        facts_per_task=_FACTS,
+        seed=4,
+        tool_requiring=tool_requiring,
+    )
     manifest = build_manifest(
         world,
         project,
@@ -61,6 +68,7 @@ def _freeze(tmp_path):
         n_tasks=_N_TASKS,
         facts_per_task=_FACTS,
         seed=4,
+        tool_requiring=tool_requiring,
     )
     write_manifest(manifest, world_dir=out)
     return out
@@ -79,6 +87,25 @@ def test_clean_freeze_verifies(tmp_path) -> None:
     out = _freeze(tmp_path)
     result = verify_world(out)
     assert result.ok, result.mismatches
+
+
+def test_tool_requiring_freeze_verifies(tmp_path) -> None:
+    # H1 (mem-rk41.1): a tool-requiring frozen world must verify. verify_world must
+    # re-materialise WITH tool_requiring recorded on the manifest; if it defaults to
+    # the text-answer shape the sequence hashes diverge and every tool-requiring world
+    # would falsely fail as "materialiser drifted".
+    out = _freeze(tmp_path, tool_requiring=True)
+    assert read_manifest(out).tool_requiring is True
+    result = verify_world(out)
+    assert result.ok, result.mismatches
+
+
+def test_tool_requiring_shape_differs_from_text(tmp_path) -> None:
+    # The two shapes must freeze to different sequence hashes — else the flag is inert
+    # and the H1 regression above could pass trivially.
+    text = read_manifest(_freeze(tmp_path / "text")).sequences_sha256
+    tool = read_manifest(_freeze(tmp_path / "tool", tool_requiring=True)).sequences_sha256
+    assert text != tool
 
 
 def test_tampered_world_is_detected(tmp_path) -> None:

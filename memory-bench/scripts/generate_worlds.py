@@ -71,13 +71,16 @@ def generate_and_freeze(
     nim_endpoint: str,
     nim_model: str,
     out: str,
+    tool_requiring: bool = False,
     verbose: bool = True,
 ) -> WorldResult:
     """Generate one synthetic world, freeze it under ``<out>/<seed>/``, and gate its tasks.
 
     Runs the full Phase-1 + Phase-2 pipeline (NeMo -> world -> freeze -> materialise ->
     memory-necessity gate) against a LOCAL NIM. Returns the artifact locations and the
-    per-sequence admission verdicts so callers can aggregate across seeds.
+    per-sequence admission verdicts so callers can aggregate across seeds. ``tool_requiring``
+    (mem-31vl) materialises the goal as a tool action carrying the current value instead of
+    a text answer, so retrieval quality is load-bearing through the action.
     """
     if verbose:
         print(f"[seed {seed}] generating {personas} persona rows via NeMo @ {nim_endpoint} ...")
@@ -92,7 +95,9 @@ def generate_and_freeze(
     if verbose:
         print(f"[seed {seed}] froze world '{world.org_name}' ({world.domain}) -> {out_dir}")
 
-    sequences = materialize_world(world, project, n_tasks=tasks, facts_per_task=facts)
+    sequences = materialize_world(
+        world, project, n_tasks=tasks, facts_per_task=facts, tool_requiring=tool_requiring
+    )
     admissions: list[SequenceAdmission] = []
     for seq in sequences:
         v = memory_necessity_gate(seq).verdict
@@ -127,6 +132,7 @@ def generate_and_freeze(
         n_tasks=tasks,
         facts_per_task=facts,
         seed=seed,
+        tool_requiring=tool_requiring,
     )
     mpath = write_manifest(manifest, world_dir=str(out_dir))
     result = WorldResult(
@@ -152,6 +158,11 @@ def main() -> int:
     ap.add_argument("--nim-endpoint", default=DEFAULT_NIM_ENDPOINT)
     ap.add_argument("--nim-model", default=DEFAULT_NIM_MODEL)
     ap.add_argument("--out", default="fixtures/worlds")
+    ap.add_argument(
+        "--tool-requiring",
+        action="store_true",
+        help="materialise goals as memory-gated tool actions (mem-31vl) instead of text answers",
+    )
     args = ap.parse_args()
 
     generate_and_freeze(
@@ -162,6 +173,7 @@ def main() -> int:
         nim_endpoint=args.nim_endpoint,
         nim_model=args.nim_model,
         out=args.out,
+        tool_requiring=args.tool_requiring,
     )
     return 0
 

@@ -67,6 +67,11 @@ class WorldManifest(BaseModel):
     nim_model: str
     n_tasks: int
     facts_per_task: int
+    # Whether the sequences were materialised in the tool-requiring shape (mem-31vl).
+    # Load-bearing for verify_world: it must re-materialise with the same flag or the
+    # sequence hashes diverge. Defaults False so manifests frozen before this field
+    # (text-answer shape) still read back and verify.
+    tool_requiring: bool = False
     world_sha256: str
     project_sha256: str
     sequences_sha256: str
@@ -81,14 +86,17 @@ def build_manifest(
     n_tasks: int,
     facts_per_task: int,
     seed: int | None = None,
+    tool_requiring: bool = False,
 ) -> WorldManifest:
     """Build the manifest for a frozen world. ``seed`` defaults to the world's seed
-    (the seed the materialiser used)."""
+    (the seed the materialiser used). ``tool_requiring`` must match the flag the
+    sequences were materialised with so ``verify_world`` reproduces them."""
     return WorldManifest(
         seed=world.seed if seed is None else seed,
         nim_model=nim_model,
         n_tasks=n_tasks,
         facts_per_task=facts_per_task,
+        tool_requiring=tool_requiring,
         world_sha256=_hash_model(world),
         project_sha256=_hash_model(project),
         sequences_sha256=_hash_sequences(sequences),
@@ -138,6 +146,7 @@ def verify_world(world_dir: str | Path) -> VerifyResult:
         n_tasks=manifest.n_tasks,
         facts_per_task=manifest.facts_per_task,
         seed=manifest.seed,
+        tool_requiring=manifest.tool_requiring,
     )
     if (got := _hash_sequences(sequences)) != manifest.sequences_sha256:
         mismatches.append(

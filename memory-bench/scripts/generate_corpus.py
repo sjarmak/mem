@@ -93,6 +93,11 @@ def main() -> int:
     ap.add_argument("--nim-endpoint", default=DEFAULT_NIM_ENDPOINT)
     ap.add_argument("--nim-model", default=DEFAULT_NIM_MODEL)
     ap.add_argument("--out", default="fixtures/worlds")
+    ap.add_argument(
+        "--tool-requiring",
+        action="store_true",
+        help="materialise goals as memory-gated tool actions (mem-31vl) instead of text answers",
+    )
     args = ap.parse_args()
 
     seeds = parse_seed_spec(args.seeds)
@@ -111,6 +116,7 @@ def main() -> int:
                     nim_endpoint=args.nim_endpoint,
                     nim_model=args.nim_model,
                     out=args.out,
+                    tool_requiring=args.tool_requiring,
                 )
             )
         except Exception as exc:  # one bad seed must not abort the whole sweep
