@@ -29,6 +29,7 @@ from membench.memory_systems.openwiki_system import (
     WikiSynthesisResult,
     WikiSynthesizer,
     _CliWikiSynthesizer,
+    _parse_background_tokens,
     default_openwiki_synthesizer,
 )
 from membench.runtime import IdClock, StepContext
@@ -172,12 +173,15 @@ def test_default_synthesizer_constructs_without_shelling() -> None:
 
 def test_cli_synthesizer_shell_shape(tmp_path: Path) -> None:
     # Exercise _CliWikiSynthesizer's shell shape with an injected runner: it materialises
-    # sources, invokes `openwiki code --update --print`, then reads the wiki dir back.
+    # sources in a fresh per-call workdir, invokes `openwiki code --update --print`, then
+    # reads the wiki dir back and removes the workdir.
     captured: dict[str, object] = {}
 
     def fake_runner(argv: list[str], cwd: Path) -> str:
         captured["argv"] = argv
         captured["cwd"] = cwd
+        # The sources were materialised in this call's workdir for OpenWiki to ingest.
+        assert (cwd / "sources" / "a.md").read_text(encoding="utf-8") == "alpha"
         # Simulate OpenWiki writing a synthesised page + a token-accounting summary line.
         wiki = cwd / "openwiki"
         wiki.mkdir(parents=True, exist_ok=True)
@@ -192,13 +196,13 @@ def test_cli_synthesizer_shell_shape(tmp_path: Path) -> None:
     assert isinstance(argv, list)
     assert argv[:4] == ["openwiki", "code", "--update", "--print"]
     assert "openai-compatible" in argv  # no-paid-API: local endpoint, not a paid provider
-    # Sources were materialised as Markdown files for OpenWiki to ingest.
-    assert (tmp_path / "sources" / "a.md").read_text(encoding="utf-8") == "alpha"
     (page,) = result.pages
-    assert page.page_id == "overview"
+    assert page.page_id == "openwiki-page-overview"  # namespaced away from raw ids
     assert page.content == "synthesised overview"
     assert page.source_ids == ("a", "b")  # conservative all-source provenance
     assert result.background_tokens == 128
+    # The per-call workdir is hermetic and removed after synthesis (no cross-trial leak).
+    assert not Path(str(captured["cwd"])).exists()
 
 
 def test_cli_synthesizer_empty_sources_skips_shell(tmp_path: Path) -> None:
@@ -209,8 +213,99 @@ def test_cli_synthesizer_empty_sources_skips_shell(tmp_path: Path) -> None:
     assert synth.synthesize(sources={}).pages == ()
 
 
+@pytest.mark.parametrize("bad_id", ["../oops", "a/b", "/etc/x", "a b"])
+def test_cli_synthesizer_rejects_unsafe_source_id(tmp_path: Path, bad_id: str) -> None:
+    def exploding_runner(argv: list[str], cwd: Path) -> str:
+        raise AssertionError("must reject an unsafe id before shelling openwiki")
+
+    synth = _CliWikiSynthesizer(tmp_path, runner=exploding_runner)
+    with pytest.raises(ValueError, match="not filesystem-safe"):
+        synth.synthesize(sources={bad_id: "x"})
+
+
 def test_build_openwiki_constructs_with_injected_synthesizer() -> None:
     arm = build_memory_system("openwiki", synthesizer=ConcatWikiSynthesizer())
     assert arm.name == "openwiki"
     assert arm.uses_scope is False
     assert arm.supports_write is True
+
+
+@pytest.mark.parametrize(
+    "stdout,expected",
+    [
+        ('{"total_tokens": 128}', 128),
+        ('noise\n{"total_tokens": 7}\ntrailing', 7),
+        ('{"total_tokens": -1}', 0),  # negative → treated as absent
+        ('{"total_tokens": true}', 0),  # bool-is-int trap: not a count
+        ('{"other": 5}', 0),  # missing key
+        ("not json at all", 0),
+        ("", 0),
+        # Two JSON-looking lines: the LAST valid one wins (reversed scan).
+        ('{"total_tokens": 1}\n{"total_tokens": 9}', 9),
+        ("{not valid json}", 0),  # {-prefixed but unparseable → skipped, never raises
+    ],
+)
+def test_parse_background_tokens(stdout: str, expected: int) -> None:
+    assert _parse_background_tokens(stdout) == expected
+
+
+class _TwoPageSynthesizer:
+    """Emits a valid page then a sourceless page — to prove consolidate() is atomic."""
+
+    def synthesize(self, *, sources: Mapping[str, str]) -> WikiSynthesisResult:
+        good = WikiPage(page_id="p-good", content="c", source_ids=tuple(sources.keys()))
+        bad = WikiPage(page_id="p-bad", content="c2", source_ids=())
+        return WikiSynthesisResult(pages=(good, bad), background_tokens=0)
+
+
+def test_consolidate_is_atomic_on_later_sourceless_page() -> None:
+    arm = OpenWikiMemory(synthesizer=_TwoPageSynthesizer())
+    arm.reset("t-1")
+    arm.write("a", "alpha", _ctx())
+    with pytest.raises(ValueError, match="no source_ids"):
+        arm.consolidate(_ctx())
+    # The valid page must NOT have been half-committed before the guard fired.
+    from membench.memory_systems import RetrievalRequest
+
+    res = arm.retrieve(RetrievalRequest(query_text="q", requested_ids=["p-good"]), _ctx())
+    assert res.payloads == {}
+    # And the source was not tombstoned by the aborted pass.
+    assert "a" not in arm._tombstoned
+
+
+class _MultiSourceSynthesizer:
+    """One page citing many sources in a fixed order — to pin tombstone determinism."""
+
+    def synthesize(self, *, sources: Mapping[str, str]) -> WikiSynthesisResult:
+        ids = tuple(sources.keys())
+        return WikiSynthesisResult(pages=(WikiPage("p", "c", ids),), background_tokens=0)
+
+
+def test_tombstoned_ids_are_deterministic_first_seen_order() -> None:
+    arm = OpenWikiMemory(synthesizer=_MultiSourceSynthesizer())
+    arm.reset("t-1")
+    for mid in ("c", "a", "b", "d"):
+        arm.write(mid, mid, _ctx())
+    result = arm.consolidate(_ctx())
+    # Ordered dedup (dict.fromkeys), not set iteration → stable write-order tuple.
+    assert result.tombstoned_ids == ("c", "a", "b", "d")
+
+
+def test_page_id_namespaced_away_from_raw_id_collision() -> None:
+    # A synthesised page id can never equal a raw memory_id, so a raw lookup is never
+    # misrouted to wiki content. The CLI synthesiser prefixes md.stem with the namespace.
+    captured: dict[str, object] = {}
+
+    def fake_runner(argv: list[str], cwd: Path) -> str:
+        captured["cwd"] = cwd
+        wiki = cwd / "openwiki"
+        wiki.mkdir(parents=True, exist_ok=True)
+        # OpenWiki names a page identically to a raw source id ("a").
+        (wiki / "a.md").write_text("WIKI CONTENT", encoding="utf-8")
+        return ""
+
+    runner: WikiCliRunner = fake_runner
+    synth = _CliWikiSynthesizer(runner=runner)
+    (page,) = synth.synthesize(sources={"a": "raw-a"}).pages
+    assert page.page_id == "openwiki-page-a"
+    assert page.page_id != "a"
