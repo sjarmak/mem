@@ -40,6 +40,7 @@ from membench.memory_systems.mem0_system import Mem0Memory
 from membench.memory_systems.nat_system import NatMemory
 from membench.memory_systems.nemo_embed_system import NemoEmbedMemory
 from membench.memory_systems.none_system import NoneMemory
+from membench.memory_systems.openwiki_system import OpenWikiMemory
 from membench.memory_systems.oracle_system import OracleMemory
 from membench.memory_systems.ours_live_system import OursLiveMemory
 from membench.memory_systems.ours_system import OursIssueTriggerMemory, OursMemory
@@ -66,6 +67,7 @@ __all__ = [
     "NatMemory",
     "NemoEmbedMemory",
     "NoneMemory",
+    "OpenWikiMemory",
     "OracleMemory",
     "OursIssueTriggerMemory",
     "OursLiveMemory",
@@ -98,6 +100,7 @@ def _systems_registry() -> dict[str, type[MemorySystem]]:
         "a-mem": AMemMemory,
         "nat": NatMemory,
         "graphiti": GraphitiMemory,
+        "openwiki": OpenWikiMemory,
     }
 
 

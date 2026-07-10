@@ -95,3 +95,12 @@ def test_build_amem_constructs_with_injected_client():
     arm = build_memory_system("a-mem", client=FakeSemanticClient())
     assert arm.name == "a-mem"
     assert arm.uses_scope is False
+
+
+def test_build_openwiki_constructs():
+    # OpenWiki (LangChain) is a consolidating-filesystem arm: a bare factory call builds
+    # the CLI-backed synthesiser lazily (no shelling at construction).
+    arm = build_memory_system("openwiki")
+    assert arm.name == "openwiki"
+    assert arm.uses_scope is False
+    assert arm.supports_write is True
