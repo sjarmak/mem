@@ -95,8 +95,8 @@ def test_m1_truncation_short_circuits_without_running_arms(monkeypatch) -> None:
     assert not result.wellformed
     assert result.discrimination is None
     assert "M1 truncation" in result.reason
-    assert result.facts_per_task == DEFAULT_TOP_K + 1
-    assert result.top_k == DEFAULT_TOP_K
+    # the reason carries the confounding counts inline (no redundant result fields)
+    assert f"facts_per_task {DEFAULT_TOP_K + 1} > top_k {DEFAULT_TOP_K}" in result.reason
 
 
 def test_low_top_k_forces_malformed() -> None:

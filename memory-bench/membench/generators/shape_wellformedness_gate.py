@@ -60,8 +60,6 @@ class WellformednessResult:
     sequence_id: str
     wellformed: bool
     reason: str
-    facts_per_task: int
-    top_k: int
     discrimination: DiscriminationResult | None
 
 
@@ -92,8 +90,6 @@ def shape_wellformedness_gate(
             sequence_id=seq.sequence_id,
             wellformed=False,
             reason=reason,
-            facts_per_task=facts_per_task,
-            top_k=top_k,
             discrimination=None,
         )
 
@@ -111,7 +107,5 @@ def shape_wellformedness_gate(
         sequence_id=seq.sequence_id,
         wellformed=result.accepted,
         reason=reason,
-        facts_per_task=facts_per_task,
-        top_k=top_k,
         discrimination=result,
     )
