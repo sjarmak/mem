@@ -25,11 +25,16 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from membench.generators import materialize_world, memory_necessity_gate
+from membench.generators import (
+    materialize_world,
+    memory_necessity_gate,
+    shape_wellformedness_gate,
+)
 from membench.generators.nemo import records_to_world, write_world
 from membench.generators.nemo.model_provider import DEFAULT_NIM_ENDPOINT, DEFAULT_NIM_MODEL
 from membench.generators.nemo.world_builder import generate_world_records
 from membench.generators.world_manifest import build_manifest, write_manifest
+from membench.memory_systems.lexical_system import DEFAULT_TOP_K
 
 
 @dataclass(frozen=True)
@@ -44,14 +49,32 @@ class SequenceAdmission:
 
 
 @dataclass(frozen=True)
+class SequenceWellformedness:
+    """One materialised sequence's shape well-formedness verdict (mem-rk41.2).
+
+    A corpus-VALIDITY signal, NOT an ours-vs-builtin claim: ``wellformed`` is false
+    when the generated tool-requiring shape carries a construction bug (e.g. the M1
+    ``facts_per_task > top_k`` truncation case)."""
+
+    sequence_id: str
+    wellformed: bool
+    reason: str
+
+
+@dataclass(frozen=True)
 class WorldResult:
-    """The frozen-world artifact locations plus per-sequence admission for one seed."""
+    """The frozen-world artifact locations plus per-sequence admission for one seed.
+
+    ``wellformedness`` is populated only for tool-requiring generation (the shape
+    well-formedness gate is a property of that shape); it is empty for text-answer
+    worlds, so a summary can honestly omit the block when no shape was graded."""
 
     seed: int
     org_name: str
     domain: str
     out_dir: Path
     admissions: tuple[SequenceAdmission, ...]
+    wellformedness: tuple[SequenceWellformedness, ...] = ()
 
     @property
     def total(self) -> int:
@@ -99,6 +122,7 @@ def generate_and_freeze(
         world, project, n_tasks=tasks, facts_per_task=facts, tool_requiring=tool_requiring
     )
     admissions: list[SequenceAdmission] = []
+    wellformedness: list[SequenceWellformedness] = []
     for seq in sequences:
         v = memory_necessity_gate(seq).verdict
         admissions.append(
@@ -116,6 +140,23 @@ def generate_and_freeze(
                 f"none {v.no_memory_reward:.3f} delta {v.delta:.3f} "
                 f"-> {'ADMIT' if v.accepted else 'REJECT'}"
             )
+        # Shape well-formedness is a property of the tool-requiring shape (mem-rk41.2):
+        # flag construction bugs (incl. the M1 facts_per_task>top_k truncation case).
+        # Text-answer worlds have no such shape, so the gate is skipped there.
+        if tool_requiring:
+            w = shape_wellformedness_gate(seq, facts_per_task=facts, top_k=DEFAULT_TOP_K)
+            wellformedness.append(
+                SequenceWellformedness(
+                    sequence_id=seq.sequence_id,
+                    wellformed=w.wellformed,
+                    reason=w.reason,
+                )
+            )
+            if verbose:
+                print(
+                    f"    shape well-formedness: "
+                    f"{'WELL-FORMED' if w.wellformed else 'MALFORMED'} ({w.reason})"
+                )
 
     seq_path = out_dir / "sequences.json"
     seq_path.write_text(
@@ -141,6 +182,7 @@ def generate_and_freeze(
         domain=world.domain,
         out_dir=out_dir,
         admissions=tuple(admissions),
+        wellformedness=tuple(wellformedness),
     )
     if verbose:
         sha = manifest.sequences_sha256[:12]

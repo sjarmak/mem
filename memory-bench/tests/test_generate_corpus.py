@@ -17,7 +17,11 @@ if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
 from generate_corpus import _summarise, parse_seed_spec  # noqa: E402
-from generate_worlds import SequenceAdmission, WorldResult  # noqa: E402
+from generate_worlds import (  # noqa: E402
+    SequenceAdmission,
+    SequenceWellformedness,
+    WorldResult,
+)
 
 
 @pytest.mark.parametrize(
@@ -52,13 +56,24 @@ def _admission(seq_id: str, accepted: bool) -> SequenceAdmission:
     )
 
 
-def _world(seed: int, accepts: list[bool]) -> WorldResult:
+def _world(seed: int, accepts: list[bool], *, wellformed: list[bool] | None = None) -> WorldResult:
+    shapes: tuple[SequenceWellformedness, ...] = ()
+    if wellformed is not None:
+        shapes = tuple(
+            SequenceWellformedness(
+                sequence_id=f"s{seed}-t{i}",
+                wellformed=w,
+                reason="well-formed" if w else "M1 truncation: facts_per_task > top_k",
+            )
+            for i, w in enumerate(wellformed)
+        )
     return WorldResult(
         seed=seed,
         org_name=f"Org{seed}",
         domain="data-infrastructure",
         out_dir=Path(f"fixtures/worlds/{seed}"),
         admissions=tuple(_admission(f"s{seed}-t{i}", a) for i, a in enumerate(accepts)),
+        wellformedness=shapes,
     )
 
 
@@ -93,3 +108,31 @@ def test_summarise_counts_failed_seeds_in_denominator() -> None:
     # a failed seed contributes no tasks to the corpus totals
     assert summary["tasks_generated"] == 2
     assert summary["tasks_admitted"] == 2
+
+
+def test_shape_wellformedness_block_absent_when_no_tool_requiring() -> None:
+    # Text-answer worlds carry no graded shape, so the summary must omit the block
+    # rather than report a vacuous 0/0 well-formedness (mem-rk41.2).
+    results = [_world(0, [True, False]), _world(1, [True, True])]
+    summary = _summarise(results, failures=[])
+    assert "shape_wellformedness" not in summary
+
+
+def test_shape_wellformedness_block_aggregates_across_seeds() -> None:
+    # Two tool-requiring worlds, one malformed task among them: the block reports the
+    # corpus-wide graded/well-formed/malformed counts and names the malformed task.
+    results = [
+        _world(0, [True, True], wellformed=[True, False]),
+        _world(1, [True], wellformed=[True]),
+    ]
+    summary = _summarise(results, failures=[])
+
+    block = summary["shape_wellformedness"]
+    assert isinstance(block, dict)
+    assert "NOT arm discrimination" in block["label"]
+    assert block["tasks_graded"] == 3
+    assert block["tasks_wellformed"] == 2
+    assert block["tasks_malformed"] == 1
+    assert block["malformed"] == [
+        {"sequence_id": "s0-t1", "reason": "M1 truncation: facts_per_task > top_k"}
+    ]

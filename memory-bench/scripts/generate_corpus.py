@@ -53,7 +53,7 @@ def parse_seed_spec(spec: str) -> list[int]:
 def _summarise(results: list[WorldResult], failures: list[tuple[int, str]]) -> dict[str, object]:
     total_seqs = sum(r.total for r in results)
     admitted = sum(r.admitted for r in results)
-    return {
+    summary: dict[str, object] = {
         "seeds_requested": len(results) + len(failures),
         "seeds_generated": len(results),
         "seeds_failed": [{"seed": s, "error": e} for s, e in failures],
@@ -80,6 +80,33 @@ def _summarise(results: list[WorldResult], failures: list[tuple[int, str]]) -> d
                 ],
             }
             for r in results
+        ],
+    }
+
+    block = _shape_wellformedness_block(results)
+    if block is not None:
+        summary["shape_wellformedness"] = block
+    return summary
+
+
+def _shape_wellformedness_block(results: list[WorldResult]) -> dict[str, object] | None:
+    """Aggregate the shape well-formedness gate over the corpus (mem-rk41.2).
+
+    Returns ``None`` when no world carried a graded shape (text-answer generation), so
+    the summary honestly omits the block rather than reporting a vacuous 0/0. The label
+    is deliberate: this counts MALFORMED generated tasks (a corpus-validity signal), it
+    is NOT an ours-vs-builtin / arm-discrimination verdict."""
+    graded = [w for r in results for w in r.wellformedness]
+    if not graded:
+        return None
+    wellformed = sum(w.wellformed for w in graded)
+    return {
+        "label": "shape well-formedness (malformed-task detector, NOT arm discrimination)",
+        "tasks_graded": len(graded),
+        "tasks_wellformed": wellformed,
+        "tasks_malformed": len(graded) - wellformed,
+        "malformed": [
+            {"sequence_id": w.sequence_id, "reason": w.reason} for w in graded if not w.wellformed
         ],
     }
 
@@ -137,6 +164,12 @@ def main() -> int:
         f"tasks: {summary['tasks_admitted']} admitted / {summary['tasks_generated']} generated"
         f" ({summary['tasks_rejected']} rejected by memory-necessity gate)"
     )
+    shape = summary.get("shape_wellformedness")
+    if isinstance(shape, dict):
+        print(
+            f"shape: {shape['tasks_wellformed']} well-formed / {shape['tasks_graded']} graded"
+            f" ({shape['tasks_malformed']} malformed generated tasks flagged)"
+        )
     print(f"wrote {summary_path}")
     return 1 if failures else 0
 

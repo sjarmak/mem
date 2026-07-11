@@ -19,6 +19,10 @@ from membench.generators.schema_induction import (
     GENERATOR_VERSION,
     generate_schema_induction_sequence,
 )
+from membench.generators.shape_wellformedness_gate import (
+    WellformednessResult,
+    shape_wellformedness_gate,
+)
 from membench.generators.synthetic_task import (
     SHAPE_BLUEPRINTS,
     generate_shape_sequences,
@@ -30,6 +34,7 @@ __all__ = [
     "SHAPE_BLUEPRINTS",
     "FtpShape",
     "NecessityResult",
+    "WellformednessResult",
     "assert_shapes_grounded",
     "generate_schema_induction_sequence",
     "generate_shape_sequences",
@@ -37,4 +42,5 @@ __all__ = [
     "materialize_world",
     "memory_dependent_shapes",
     "memory_necessity_gate",
+    "shape_wellformedness_gate",
 ]
