@@ -72,7 +72,12 @@ def materialize_record(
         "rig": SYNTHETIC_ORIGIN,
         # Label-free task framing — the only synthetic text an agent may read.
         "title": seq.title,
-        "lifecycle": {"created": started, "started": started, "closed": closed},
+        "lifecycle": {
+            "created": started,
+            "started": started,
+            "closed": closed,
+            "status": "closed",
+        },
         "links": {"supersedes": []},
         "origin": SYNTHETIC_ORIGIN,
         "outcome": outcome,

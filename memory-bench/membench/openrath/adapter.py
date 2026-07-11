@@ -81,6 +81,9 @@ def project_session_to_record(session: Mapping[str, Any]) -> dict[str, Any]:
             # The D6 LOO boundary the ladder reads; a timestamp, not an outcome.
             "started": session["started"],
             "created": session["started"],
+            # A projected Session is always a completed, held-out replay (like a
+            # synthetic record) — there is no in-progress OpenRath Session concept.
+            "status": "closed",
         },
     }
     commit_sha = lineage.get("commit_sha")

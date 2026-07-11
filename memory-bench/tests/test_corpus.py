@@ -12,10 +12,16 @@ def _record(
     return {
         "work_id": work_id,
         "rig": rig,
-        "lifecycle": {"created": "2026-01-01T00:00:00Z", "started": started, "closed": closed},
+        "title": kw.get("title", "test record"),
+        "lifecycle": {
+            "created": "2026-01-01T00:00:00Z",
+            "started": started,
+            "closed": closed,
+            "status": "closed",
+        },
         "links": kw.get("links", {"supersedes": []}),
         "outcome": kw.get("outcome", {}),
-        **{k: v for k, v in kw.items() if k not in ("links", "outcome")},
+        **{k: v for k, v in kw.items() if k not in ("links", "outcome", "title")},
     }
 
 

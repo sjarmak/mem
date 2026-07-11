@@ -81,7 +81,12 @@ def _synthetic_record(
         "work_id": work_id,
         "rig": "synthetic",
         "title": title,
-        "lifecycle": {"created": "2026-03-01T00:00:00Z", "started": started, "closed": closed},
+        "lifecycle": {
+            "created": "2026-03-01T00:00:00Z",
+            "started": started,
+            "closed": closed,
+            "status": "closed",
+        },
         "links": {"supersedes": []},
         "outcome": outcome if outcome is not None else {"commit_sha": SENTINEL},
     }

@@ -20,6 +20,7 @@ import toml
 
 from membench.grading import AblationSource, assert_no_outcome_leak, outcome_labels
 from membench.harbor.task_env import NetworkMode, environment_network
+from membench.schemas.work_record import WorkRecord
 from membench.validity import query_from_record
 
 # The stateless baseline rung surfaces no prior-session memory; every other rung
@@ -57,18 +58,21 @@ class WorkRecordLadderAdapter:
 
     def __init__(
         self,
-        record: Mapping[str, Any],
+        record: Mapping[str, Any] | WorkRecord,
         output_dir: str | Path,
         *,
         source: AblationSource | None = None,
         overwrite: bool = False,
         network: NetworkMode = "no-network",
     ) -> None:
-        # Snapshot so a caller mutating its dict between construction and run()
-        # cannot change what the leak guard sees vs what gets written. Shallow is
-        # enough: the adapter only reads leaf values (title/work_id/rig) and the
-        # one-level lifecycle/outcome dicts.
-        self.record = dict(record)
+        # Snapshot (via validation or a deep copy) so a caller mutating its input
+        # between construction and run() cannot change what the leak guard sees vs
+        # what gets written.
+        self.record: WorkRecord = (
+            record.model_copy(deep=True)
+            if isinstance(record, WorkRecord)
+            else WorkRecord.model_validate(record)
+        )
         self.output_dir = Path(output_dir)
         self.source = source or AblationSource()
         self.overwrite = overwrite
@@ -85,11 +89,11 @@ class WorkRecordLadderAdapter:
             "schema_version": "1.1",
             "task": {
                 "name": name,
-                "description": f"{self.record['title']} [{rung}]",
+                "description": f"{self.record.title} [{rung}]",
             },
             "metadata": {
-                "work_id": self.record["work_id"],
-                "rig": self.record["rig"],
+                "work_id": self.record.work_id,
+                "rig": self.record.rig,
                 "rung": rung,
                 # The D6 LOO boundary (the record's own `started`) — a timestamp,
                 # not an outcome, so it is label-free and rides into the task.
@@ -108,19 +112,22 @@ class WorkRecordLadderAdapter:
         Every rung's files are built and leak-checked BEFORE any are written, so a
         leak (or a pre-existing dir) in any rung aborts the whole emission with no
         partial output on disk."""
-        design = self.source.design(self.record)
+        # These three contracts still take Mapping[str, Any] (validity.py's LOO
+        # module and grading's leak guard are unchanged) — dumped once and reused.
+        record_dict = self.record.model_dump()
+        design = self.source.design(record_dict)
         # The boundary is the record's own `started` (falls back to `created`);
         # raises if neither exists, rather than inventing a leak-unsafe default.
-        loo_boundary = query_from_record(self.record).started
-        labels = outcome_labels(self.record)
+        loo_boundary = query_from_record(record_dict).started
+        labels = outcome_labels(record_dict)
 
         planned: list[tuple[Path, str, str]] = []  # (task_dir, instruction, task_toml)
         for rung in design.rungs:
-            slug = f"{_safe(self.record['work_id'])}-{_safe(rung)}"
+            slug = f"{_safe(self.record.work_id)}-{_safe(rung)}"
             task_dir = self.output_dir / slug
             if task_dir.exists() and not self.overwrite:
                 raise FileExistsError(f"Task dir already exists: {task_dir} (pass overwrite=True)")
-            instruction = _instruction_md(self.record, rung)
+            instruction = _instruction_md(record_dict, rung)
             task_toml = self._task_toml(f"membench-wr/{slug}", rung, loo_boundary)
             # Mechanical leak guard over every agent-readable file BEFORE any write.
             assert_no_outcome_leak({"instruction.md": instruction, "task.toml": task_toml}, labels)

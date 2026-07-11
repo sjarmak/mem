@@ -15,6 +15,7 @@ from collections.abc import Callable
 from typing import Any
 
 from membench.mem_cli import run_mem_json
+from membench.schemas.work_record import WorkRecord
 from membench.validity import (
     QueryWork,
     WorkRef,
@@ -52,9 +53,15 @@ def load_corpus(
     runner: CorpusRunner | None = None,
 ) -> list[WorkRef]:
     """Load the whole store as a `WorkRef` corpus (the LOO guard bounds it per
-    query). Order is the reader's deterministic `ORDER BY work_id`."""
+    query). Order is the reader's deterministic `ORDER BY work_id`.
+
+    Each record is validated against the `WorkRecord` contract before projection,
+    so a malformed record fails loudly here rather than downstream."""
     data = _resolve(runner, mem_bin)(["query", "--store", store_path])
-    return [work_ref_from_record(record) for record in data["records"]]
+    return [
+        work_ref_from_record(WorkRecord.model_validate(record).model_dump())
+        for record in data["records"]
+    ]
 
 
 def load_query_work(
@@ -71,4 +78,4 @@ def load_query_work(
     records = data["records"]
     if not records:
         raise ValueError(f"no record for work_id {work_id!r} in {store_path}")
-    return query_from_record(records[0])
+    return query_from_record(WorkRecord.model_validate(records[0]).model_dump())

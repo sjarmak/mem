@@ -39,7 +39,11 @@ def _record(work_id: str) -> dict:
         "work_id": work_id,
         "rig": "gascity",
         "title": f"work {work_id}",
-        "lifecycle": {"started": "2026-06-07T00:00:00", "created": "2026-06-07T00:00:00"},
+        "lifecycle": {
+            "started": "2026-06-07T00:00:00",
+            "created": "2026-06-07T00:00:00",
+            "status": "closed",
+        },
     }
 
 
