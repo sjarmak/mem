@@ -39,6 +39,10 @@ class MemoryConfig(BaseModel):
     memory_tools: list[str] = Field(default_factory=list)
     storage_backends: list[MemoryBackend] = Field(default_factory=list)
     retrieval_strategy: str = "none"
+    # Retrieval width override. ``None`` means "use the arm's own default". Currently
+    # only the ``lexical`` arm's construction consumes this (§runner/conditions.py
+    # ``_system_for``); other arms ignore it.
+    top_k: int | None = None
 
 
 class ExperimentConfig(BaseModel):

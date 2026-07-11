@@ -202,6 +202,8 @@ def _system_for(
     kwargs: dict[str, object] = {}
     if system_name == "filesystem" and fs_base_dir is not None:
         kwargs["base_dir"] = fs_base_dir
+    elif system_name == "lexical" and experiment.memory.top_k is not None:
+        kwargs["top_k"] = experiment.memory.top_k
     elif system_name in _LIVE_OURS_SYSTEMS:
         kwargs.update(_live_arm_kwargs(system_name))
     # When the env override changed the arm, the experiment's memory_config_id no

@@ -76,8 +76,10 @@ def shape_wellformedness_gate(
     1. **M1 structural pre-check** — if ``facts_per_task > top_k`` the naive arm would
        fail from truncation rather than staleness, so the discrimination signal is
        confounded. Declare malformed WITHOUT running the arms.
-    2. **Discrimination check** — otherwise run ``retrieval_discrimination_gate``; the
-       shape is well-formed iff the quality arm cleanly beats the naive arm at the goal
+    2. **Discrimination check** — otherwise run ``retrieval_discrimination_gate``,
+       threading this same ``top_k`` into the naive arm's construction so the check
+       and the arm it is checking never disagree about retrieval width. The shape is
+       well-formed iff the quality arm cleanly beats the naive arm at the goal
        (``accepted``). A rejection here flags a construction bug, not an arm verdict.
     """
     if facts_per_task > top_k:
@@ -93,7 +95,7 @@ def shape_wellformedness_gate(
             discrimination=None,
         )
 
-    result = retrieval_discrimination_gate(seq)
+    result = retrieval_discrimination_gate(seq, top_k=top_k)
     reason = (
         f"shape separates quality from naive at the goal ({result.reason})"
         if result.accepted
