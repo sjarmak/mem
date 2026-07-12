@@ -33,34 +33,26 @@ class ConditionSummary:
 
 
 def _summarize(condition: Condition, trials: list[StepTrial]) -> ConditionSummary:
-    n = len(trials)
-
     def mean(xs: list[float]) -> float:
-        return sum(xs) / n if n else 0.0
+        return sum(xs) / len(xs) if xs else 0.0
 
     # A context_gated trial (mem-1m0s) skips retrieval by design, so its retrieval
     # metrics are a fabricated 0.0 (retrieved_ids=[]), not a measured rate — excluded
     # from these 4 means the same way _confusion_staleness excludes it in
     # report/synthetic_arms.py. n_steps and the other means still cover every trial.
     retrieving = [t for t in trials if not t.metrics.retrieval.context_gated]
-    n_retrieving = len(retrieving)
-
-    def retrieval_mean(xs: list[float]) -> float:
-        return sum(xs) / n_retrieving if n_retrieving else 0.0
 
     return ConditionSummary(
         condition=condition.value,
-        n_steps=n,
+        n_steps=len(trials),
         mean_reward=mean([t.metrics.task.reward for t in trials]),
         pass_rate=mean([1.0 if t.metrics.task.pass_ else 0.0 for t in trials]),
         total_tokens=sum(t.metrics.efficiency.total_tokens for t in trials),
         memory_tool_calls=sum(t.metrics.efficiency.memory_tool_calls for t in trials),
-        mean_precision_at_k=retrieval_mean(
-            [t.metrics.retrieval.precision_at_k for t in retrieving]
-        ),
-        mean_recall_at_k=retrieval_mean([t.metrics.retrieval.recall_at_k for t in retrieving]),
-        mean_mrr=retrieval_mean([t.metrics.retrieval.mrr for t in retrieving]),
-        mean_ndcg=retrieval_mean([t.metrics.retrieval.nDCG for t in retrieving]),
+        mean_precision_at_k=mean([t.metrics.retrieval.precision_at_k for t in retrieving]),
+        mean_recall_at_k=mean([t.metrics.retrieval.recall_at_k for t in retrieving]),
+        mean_mrr=mean([t.metrics.retrieval.mrr for t in retrieving]),
+        mean_ndcg=mean([t.metrics.retrieval.nDCG for t in retrieving]),
         write_hit_rate=mean([t.metrics.retention.write_hit_rate for t in trials]),
         over_retention_rate=mean([t.metrics.retention.over_retention_rate for t in trials]),
         cross_session_success_rate=mean(

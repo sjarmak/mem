@@ -209,23 +209,30 @@ def test_establishing_steps_emit_no_phantom_retrieve(tmp_path):
     assert all(e.normalized_operation.value == "write" for e in mem_s1.trace.memory_events)
 
 
+def _s3_trial(tmp_path, context_budget_tokens, condition=Condition.MEMORY_ENABLED):
+    """The "s3-add-endpoint" trial for ``condition`` after running the FIXTURE
+    sequence under the given budget. s1 (total_tokens=16) + s2 (total_tokens=13)
+    accumulate to 29 tokens before s3 runs — the number every budget below is
+    chosen against."""
+    seq = load_sequence(FIXTURE)
+    run = run_sequence(
+        seq, _experiment(context_budget_tokens=context_budget_tokens), fs_base_dir=tmp_path
+    )
+    return next(t for t in run.by_condition()[condition] if t.step_id == "s3-add-endpoint")
+
+
 @pytest.mark.parametrize("context_budget_tokens", [50, None])
 def test_context_gate_stays_open_while_accumulated_tokens_under_budget(
     tmp_path, context_budget_tokens
 ):
     """mem-1m0s rework (rejection issue #1): the gate reads the RUNNING token count
     accumulated over the condition's prior steps, not the current step's own request
-    size. s1 (total_tokens=16) + s2 (total_tokens=13) accumulate to 29 tokens before
-    s3 runs; a budget of 50 has room to spare, and no budget at all (None) is the
-    always-on default — both leave the gate open, so s3's retrieve proceeds and it
-    recovers full reward. Budget=50 used to (incorrectly) FIRE the gate under the old
-    per-request heuristic, stripping a memory read the step actually needed."""
-    seq = load_sequence(FIXTURE)
-    run = run_sequence(
-        seq, _experiment(context_budget_tokens=context_budget_tokens), fs_base_dir=tmp_path
-    )
-    by_cond = run.by_condition()
-    s3 = next(t for t in by_cond[Condition.MEMORY_ENABLED] if t.step_id == "s3-add-endpoint")
+    size. A budget of 50 has room to spare over the 29 accumulated tokens, and no
+    budget at all (None) is the always-on default — both leave the gate open, so
+    s3's retrieve proceeds and it recovers full reward. Budget=50 used to
+    (incorrectly) FIRE the gate under the old per-request heuristic, stripping a
+    memory read the step actually needed."""
+    s3 = _s3_trial(tmp_path, context_budget_tokens)
     assert s3.metrics.retrieval.context_gated is False
     assert s3.metrics.efficiency.memory_tool_calls == 1
     assert s3.reward == 1.0
@@ -237,12 +244,7 @@ def test_context_gate_fires_once_accumulated_tokens_reach_budget(tmp_path, conte
     the gate fires, s3's retrieve is skipped, and the step loses the capability it
     needed (real cost, matching the feature's own premise: memory is expensive when
     it would overflow context)."""
-    seq = load_sequence(FIXTURE)
-    run = run_sequence(
-        seq, _experiment(context_budget_tokens=context_budget_tokens), fs_base_dir=tmp_path
-    )
-    by_cond = run.by_condition()
-    s3 = next(t for t in by_cond[Condition.MEMORY_ENABLED] if t.step_id == "s3-add-endpoint")
+    s3 = _s3_trial(tmp_path, context_budget_tokens)
     assert s3.metrics.retrieval.context_gated is True
     assert s3.metrics.efficiency.memory_tool_calls == 0
     assert s3.trace.memory_events == []
@@ -253,10 +255,7 @@ def test_context_gate_fires_exactly_at_the_budget_boundary(tmp_path):
     """Pins the `>=` decision: a budget EQUAL to the 29 tokens accumulated from s1+s2
     fires the gate — budget is the ceiling a run must stay under, not a strictly-less
     threshold."""
-    seq = load_sequence(FIXTURE)
-    run = run_sequence(seq, _experiment(context_budget_tokens=29), fs_base_dir=tmp_path)
-    by_cond = run.by_condition()
-    s3 = next(t for t in by_cond[Condition.MEMORY_ENABLED] if t.step_id == "s3-add-endpoint")
+    s3 = _s3_trial(tmp_path, 29)
     assert s3.metrics.retrieval.context_gated is True
 
 
@@ -283,10 +282,7 @@ def test_context_gate_excludes_gated_trial_from_confusion_staleness(tmp_path):
 def test_context_gate_does_not_affect_oracle_condition(tmp_path):
     """The gate only applies to MEMORY_ENABLED — oracle stays the fixed always-on
     ceiling control regardless of the configured budget."""
-    seq = load_sequence(FIXTURE)
-    run = run_sequence(seq, _experiment(context_budget_tokens=50), fs_base_dir=tmp_path)
-    by_cond = run.by_condition()
-    s3_oracle = next(t for t in by_cond[Condition.ORACLE_MEMORY] if t.step_id == "s3-add-endpoint")
+    s3_oracle = _s3_trial(tmp_path, 50, condition=Condition.ORACLE_MEMORY)
     assert s3_oracle.metrics.retrieval.context_gated is False
     assert s3_oracle.metrics.efficiency.memory_tool_calls == 1
     assert s3_oracle.reward == 1.0

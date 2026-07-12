@@ -25,6 +25,7 @@ from membench.runner.conditions import (
     _execute_step,
     _oracle_pool,
     _system_for,
+    _TokenAccumulator,
 )
 from membench.runtime import IdClock, StepContext
 from membench.schemas.conditions import Condition
@@ -99,11 +100,9 @@ def run_project(
         if isinstance(system, OracleMemory):
             system.load(_project_oracle_pool(sequences))
 
-        # Running token count for the context-overflow gate (mem-1m0s), reset per
-        # condition alongside system.reset above and accumulated across EVERY
-        # sequence in the project — the shared scope means context pressure carries
-        # across task boundaries here just like memory does.
-        accumulated_tokens = 0
+        # Accumulated across EVERY sequence in the project — the shared scope means
+        # context pressure carries across task boundaries here just like memory does.
+        tokens = _TokenAccumulator()
         for seq in sequences:
             for step in seq.steps:
                 trial = _execute_step(
@@ -115,10 +114,10 @@ def run_project(
                     memory_config_id=memory_config_id,
                     experiment=experiment,
                     agent=agent,
-                    accumulated_tokens_before=accumulated_tokens,
+                    accumulated_tokens_before=tokens.tokens,
                 )
                 run.trials.append(trial)
-                accumulated_tokens += trial.metrics.efficiency.total_tokens
+                tokens.record(trial)
 
         if condition is Condition.MEMORY_ENABLED and isinstance(system, ConsolidationCapable):
             consolidate_ctx = StepContext(

@@ -214,6 +214,19 @@ def _system_for(
     return build_memory_system(system_name, **kwargs), config_id
 
 
+class _TokenAccumulator:
+    """Running per-condition token count for the context-overflow gate (mem-1m0s).
+    Reset once per condition (alongside ``system.reset``) and fed one trial at a
+    time via ``record`` — shared by ``run_sequence`` and ``run_project`` so the
+    reset/accumulate mechanics live in one place instead of two copies."""
+
+    def __init__(self) -> None:
+        self.tokens = 0
+
+    def record(self, trial: StepTrial) -> None:
+        self.tokens += trial.metrics.efficiency.total_tokens
+
+
 def _execute_step(
     *,
     seq_id: str,
@@ -374,11 +387,9 @@ def run_sequence(
         if isinstance(system, OracleMemory):
             system.load(_oracle_pool(seq))
 
-        # Running token count for the context-overflow gate (mem-1m0s), reset per
-        # condition alongside system.reset above — accumulated over EVERY trial
-        # regardless of condition, so no_memory/oracle runs also advance it even
-        # though only MEMORY_ENABLED reads it.
-        accumulated_tokens = 0
+        # Accumulated over EVERY trial regardless of condition, so no_memory/oracle
+        # runs also advance it even though only MEMORY_ENABLED reads it.
+        tokens = _TokenAccumulator()
         for step in seq.steps:
             trial = _execute_step(
                 seq_id=seq.sequence_id,
@@ -389,10 +400,10 @@ def run_sequence(
                 memory_config_id=memory_config_id,
                 experiment=experiment,
                 agent=agent,
-                accumulated_tokens_before=accumulated_tokens,
+                accumulated_tokens_before=tokens.tokens,
             )
             run.trials.append(trial)
-            accumulated_tokens += trial.metrics.efficiency.total_tokens
+            tokens.record(trial)
 
         # Offline consolidation runs ONCE per condition, after every step's writes
         # are persisted (so it sees the full episode set), and only for an arm that
