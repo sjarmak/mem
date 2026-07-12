@@ -33,11 +33,11 @@ def _safe(value: str) -> str:
     return "".join(c if c.isalnum() or c in "-" else "-" for c in value.lower())
 
 
-def _instruction_md(record: Mapping[str, Any], rung: str) -> str:
+def _instruction_md(record: WorkRecord, rung: str) -> str:
     parts = [
-        f"# {record['work_id']}",
+        f"# {record.work_id}",
         "",
-        record["title"],
+        record.title,
         "",
         "Complete the work described above.",
         "",
@@ -127,7 +127,7 @@ class WorkRecordLadderAdapter:
             task_dir = self.output_dir / slug
             if task_dir.exists() and not self.overwrite:
                 raise FileExistsError(f"Task dir already exists: {task_dir} (pass overwrite=True)")
-            instruction = _instruction_md(record_dict, rung)
+            instruction = _instruction_md(self.record, rung)
             task_toml = self._task_toml(f"membench-wr/{slug}", rung, loo_boundary)
             # Mechanical leak guard over every agent-readable file BEFORE any write.
             assert_no_outcome_leak({"instruction.md": instruction, "task.toml": task_toml}, labels)

@@ -58,10 +58,10 @@ def load_corpus(
     Each record is validated against the `WorkRecord` contract before projection,
     so a malformed record fails loudly here rather than downstream."""
     data = _resolve(runner, mem_bin)(["query", "--store", store_path])
-    return [
-        work_ref_from_record(WorkRecord.model_validate(record).model_dump())
-        for record in data["records"]
-    ]
+    records = data["records"]
+    for record in records:
+        WorkRecord.model_validate(record)
+    return [work_ref_from_record(record) for record in records]
 
 
 def load_query_work(
@@ -78,4 +78,6 @@ def load_query_work(
     records = data["records"]
     if not records:
         raise ValueError(f"no record for work_id {work_id!r} in {store_path}")
-    return query_from_record(WorkRecord.model_validate(records[0]).model_dump())
+    record = records[0]
+    WorkRecord.model_validate(record)
+    return query_from_record(record)

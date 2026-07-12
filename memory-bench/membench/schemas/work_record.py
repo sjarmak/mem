@@ -24,17 +24,20 @@ ShortOrFullCommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{7,40
 RepoSource = Literal["outcome", "rig-map", "unmapped"]
 
 
-class StatusHistoryEntry(BaseModel):
+class _AllowExtra(BaseModel):
+    """Base for every model here: pydantic does not inherit `extra="allow"` from
+    field composition, but subclassing does — set it once."""
+
     model_config = ConfigDict(extra="allow")
 
+
+class StatusHistoryEntry(_AllowExtra):
     status: str
     at: str
 
 
-class Lifecycle(BaseModel):
+class Lifecycle(_AllowExtra):
     """Bead lifecycle. `status` stays a plain string, mirroring the TS side."""
-
-    model_config = ConfigDict(extra="allow")
 
     created: str
     started: str | None = None
@@ -43,10 +46,8 @@ class Lifecycle(BaseModel):
     status_history: list[StatusHistoryEntry] = Field(default_factory=list)
 
 
-class AgentRef(BaseModel):
+class AgentRef(_AllowExtra):
     """An agent/session that worked the bead."""
-
-    model_config = ConfigDict(extra="allow")
 
     agent_id: str = Field(min_length=1)
     role: str | None = None
@@ -59,10 +60,8 @@ class AgentRef(BaseModel):
     suspect: bool | None = None
 
 
-class TraceError(BaseModel):
+class TraceError(_AllowExtra):
     """A single build/test/lint error with file:line provenance."""
-
-    model_config = ConfigDict(extra="allow")
 
     tool: str
     severity: Literal["error", "warning", "info"]
@@ -72,10 +71,8 @@ class TraceError(BaseModel):
     column: int | None = None
 
 
-class Execution(BaseModel):
+class Execution(_AllowExtra):
     """One tool execution (build/test/lint run) and its outcome."""
-
-    model_config = ConfigDict(extra="allow")
 
     runner: str
     command: str
@@ -83,10 +80,8 @@ class Execution(BaseModel):
     errors: list[TraceError]
 
 
-class TraceRun(BaseModel):
+class TraceRun(_AllowExtra):
     """Run-level metadata for one session transcript."""
-
-    model_config = ConfigDict(extra="allow")
 
     session_uuid: str = Field(min_length=1)
     model: str | None = None
@@ -103,10 +98,8 @@ class TraceRun(BaseModel):
     outcome: str | None = None
 
 
-class PrLink(BaseModel):
+class PrLink(_AllowExtra):
     """A `pr-link` transcript entry — the explicit transcript→GitHub PR bridge."""
-
-    model_config = ConfigDict(extra="allow")
 
     session_uuid: str = Field(min_length=1)
     pr_number: int = Field(gt=0)
@@ -115,12 +108,10 @@ class PrLink(BaseModel):
     timestamp: str | None = None
 
 
-class TraceRef(BaseModel):
+class TraceRef(_AllowExtra):
     """Trace pointer plus parsed signal. Parsed fields stay absent (not defaulted)
     until parsing runs, so "not yet parsed" is distinguishable from "parsed, found
     nothing"."""
-
-    model_config = ConfigDict(extra="allow")
 
     jsonl_path: str = Field(min_length=1)
     n_turns: int | None = None
@@ -130,10 +121,8 @@ class TraceRef(BaseModel):
     pr_links: list[PrLink] | None = None
 
 
-class Outcome(BaseModel):
+class Outcome(_AllowExtra):
     """The verifiable outcome label — what makes this a benchmark, not a log."""
-
-    model_config = ConfigDict(extra="allow")
 
     pr: str | None = None
     repo: str | None = None
@@ -143,10 +132,8 @@ class Outcome(BaseModel):
     ci: Literal["pass", "fail"] | None = None
 
 
-class Provenance(BaseModel):
+class Provenance(_AllowExtra):
     """Locally-derived environment baseline (git-provenance ingest)."""
-
-    model_config = ConfigDict(extra="allow")
 
     work_dir: str = Field(min_length=1)
     repo: str = Field(min_length=1)
@@ -157,10 +144,8 @@ class Provenance(BaseModel):
     base_branch_source: Literal["metadata", "default"] | None = None
 
 
-class Landed(BaseModel):
+class Landed(_AllowExtra):
     """Locally-derived OUTCOME for the direct-to-main majority (ingest/landed)."""
-
-    model_config = ConfigDict(extra="allow")
 
     base_commit: FullCommitSha
     landed_commit: FullCommitSha | None = None
@@ -175,19 +160,15 @@ class Landed(BaseModel):
     ]
 
 
-class Signal(BaseModel):
+class Signal(_AllowExtra):
     """Extracted memory signal. Shapes are open until P1.6+/Phase 2 settle them."""
-
-    model_config = ConfigDict(extra="allow")
 
     deterministic: dict[str, Any] = Field(default_factory=dict)
     semantic: dict[str, Any] = Field(default_factory=dict)
 
 
-class Links(BaseModel):
+class Links(_AllowExtra):
     """Graph edges to other work, populated by the beads ingest."""
-
-    model_config = ConfigDict(extra="allow")
 
     deps: list[str] = Field(default_factory=list)
     convoy_id: str | None = None
@@ -195,10 +176,8 @@ class Links(BaseModel):
     parent: str | None = None
 
 
-class SessionCommits(BaseModel):
+class SessionCommits(_AllowExtra):
     """Each session's OWN local commit SHAs, recovered from its trace at ingest."""
-
-    model_config = ConfigDict(extra="allow")
 
     commits: list[ShortOrFullCommitSha] = Field(min_length=1)
     first_commit: ShortOrFullCommitSha
@@ -206,11 +185,9 @@ class SessionCommits(BaseModel):
     base_state: Literal["resolved", "commit-absent"]
 
 
-class WorkRecord(BaseModel):
+class WorkRecord(_AllowExtra):
     """The atomic unit of the work-audit graph (ARCHITECTURE.md, "Data model").
     Mirrors `src/schemas/workrecord.ts` `WorkRecordSchema` field-for-field."""
-
-    model_config = ConfigDict(extra="allow")
 
     work_id: str = Field(min_length=1)
     rig: str = Field(min_length=1)
@@ -231,4 +208,4 @@ class WorkRecord(BaseModel):
     landed: Landed | None = None
     session_commits: SessionCommits | None = None
     signal: Signal | None = None
-    links: Links = Field(default_factory=lambda: Links(deps=[], supersedes=[]))
+    links: Links = Field(default_factory=Links)
