@@ -86,7 +86,7 @@ def retrieval_discrimination_gate(
     ours-vs-builtin (see module docstring). Reuses ``pilot_filter`` for the decision.
     ``top_k``, when set, overrides the naive arm's retrieval width (only ``lexical``
     consumes it; the id-exact quality arm ignores it)."""
-    quality_reward = _goal_reward(seq, quality_arm, top_k=top_k)
+    quality_reward = _goal_reward(seq, quality_arm)
     naive_reward = _goal_reward(seq, naive_arm, top_k=top_k)
     verdict = pilot_filter(
         oracle_reward=quality_reward, no_memory_reward=naive_reward, epsilon=epsilon
