@@ -437,29 +437,27 @@ function workIdsBySignatures(
  */
 function buildCandidateCache(
   db: StoreDatabase,
-  workIdsBySignature: ReadonlyMap<string, string[]>,
+  workIds: readonly string[],
   lesson: { work_id: string; sourceQuery: ReturnType<typeof queryFromRecord> },
   superseded: ReadonlySet<string>
 ): Map<string, RegressionCandidate> {
   const cache = new Map<string, RegressionCandidate>();
-  for (const workIds of workIdsBySignature.values()) {
-    for (const workId of workIds) {
-      if (workId === lesson.work_id || cache.has(workId)) continue;
-      // `getRecord` fails loudly on a schema-invalid row (store corruption) —
-      // the SQL join above only proves a row existed at query time, not that
-      // it still parses now. One bad candidate must not abort the whole
-      // check, so it's dropped the same as a genuinely vanished row
-      // (matching the `candidateRecord === null` case below).
-      let candidateRecord: WorkRecord | null;
-      try {
-        candidateRecord = getRecord(db, workId);
-      } catch {
-        continue;
-      }
-      if (candidateRecord === null) continue;
-      const sibling = isSibling(candidateRecord, lesson.sourceQuery) || superseded.has(workId);
-      cache.set(workId, { work_id: workId, is_sibling: sibling });
+  for (const workId of workIds) {
+    if (workId === lesson.work_id || cache.has(workId)) continue;
+    // `getRecord` fails loudly on a schema-invalid row (store corruption) —
+    // the SQL join above only proves a row existed at query time, not that
+    // it still parses now. One bad candidate must not abort the whole
+    // check, so it's dropped the same as a genuinely vanished row
+    // (matching the `candidateRecord === null` case below).
+    let candidateRecord: WorkRecord | null;
+    try {
+      candidateRecord = getRecord(db, workId);
+    } catch {
+      continue;
     }
+    if (candidateRecord === null) continue;
+    const sibling = isSibling(candidateRecord, lesson.sourceQuery) || superseded.has(workId);
+    cache.set(workId, { work_id: workId, is_sibling: sibling });
   }
   return cache;
 }
@@ -540,7 +538,12 @@ export function computeRegressions(
     const lessonCtx = { work_id: lesson.work_id, extractedAtUtc, sourceQuery };
 
     const workIdsBySignature = workIdsBySignatures(db, signatures, lessonCtx);
-    const candidateCache = buildCandidateCache(db, workIdsBySignature, lessonCtx, superseded);
+    const candidateCache = buildCandidateCache(
+      db,
+      [...workIdsBySignature.values()].flat(),
+      lessonCtx,
+      superseded
+    );
     const candidatesBySignature = new Map<string, RegressionCandidate[]>(
       [...workIdsBySignature].map(([signature, workIds]) => [
         signature,
