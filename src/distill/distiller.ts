@@ -398,10 +398,14 @@ export const DEFAULT_REGRESSION_WINDOW = 5;
 /**
  * One signature's later-closed candidates, for the K-past-fix check: every
  * work_id carrying the same failure signature as `lesson`, closed strictly
- * after `lesson`'s `extracted_at`, tagged with whether Decision-6's
- * convoy/PR/parent/supersedes exclusions already cover it (that reuse is
- * exactly why this stays a thin loop over `workIdsBySignature` — the
+ * after `lesson`'s `extracted_at`, IN THE SAME RIG, tagged with whether
+ * Decision-6's convoy/PR/parent/supersedes exclusions already cover it (that
+ * reuse is exactly why this stays a thin loop over `workIdsBySignature` — the
  * exclusion logic itself lives in `isSibling`/`supersedesClosure`, not here).
+ * `workIdsBySignature` queries `trace_errors` store-wide across all ~18
+ * corpus rigs with no rig column, so the rig-equality filter is required —
+ * without it a coincidental file:line:tool:error_class match in an unrelated
+ * rig would be flagged as "this fix didn't stick".
  */
 function candidatesForSignature(
   db: StoreDatabase,
@@ -418,6 +422,7 @@ function candidatesForSignature(
     if (workId === lesson.work_id) continue;
     const candidateRecord = getRecord(db, workId);
     if (candidateRecord === null || candidateRecord.lifecycle.closed === undefined) continue;
+    if (candidateRecord.rig !== lesson.sourceQuery.rig) continue;
     if (toIsoUtc(candidateRecord.lifecycle.closed) <= lesson.extractedAtUtc) continue;
     const sibling = isSibling(candidateRecord, lesson.sourceQuery) || superseded.has(workId);
     candidates.push({ work_id: workId, is_sibling: sibling });
@@ -455,9 +460,22 @@ export function computeRegressions(
     const signatures = recordSignatures(sourceRecord);
     if (signatures.length === 0) continue;
 
+    // `extracted_at` crosses the unvalidated `import-lessons` boundary
+    // (LessonLineSchema only requires a non-empty string, no format
+    // enforcement) — unlike WorkRecord lifecycle timestamps, which come from
+    // the controlled ingest pipeline's known producer formats. Skip rather
+    // than throw: lessons are append-only, so an uncaught throw here would
+    // permanently poison every `distill-lessons` invocation once a single
+    // malformed lesson entered the window.
+    let extractedAtUtc: string;
+    try {
+      extractedAtUtc = toIsoUtc(lesson.extracted_at);
+    } catch {
+      continue;
+    }
+
     const sourceQuery = queryFromRecord(db, lesson.work_id);
     const superseded = new Set(supersedesClosure(db, lesson.work_id));
-    const extractedAtUtc = toIsoUtc(lesson.extracted_at);
     const lessonCtx = { work_id: lesson.work_id, extractedAtUtc, sourceQuery };
 
     const candidatesBySignature = new Map<string, RegressionCandidate[]>(

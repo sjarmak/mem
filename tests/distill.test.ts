@@ -625,4 +625,53 @@ describe('computeRegressions', () => {
 
     expect(computeRegressions(db)).toEqual([]);
   });
+
+  it('does NOT flag a same-signature recurrence in a different rig (no cross-rig confusion)', () => {
+    writeRecords(db, [
+      closedRecord('w-src', 'rigA'),
+      closedRecord('w-later-other-rig', 'rigB', {
+        lifecycle: {
+          created: '2026-06-06T00:00:00Z',
+          started: '2026-06-06T01:00:00Z',
+          closed: '2026-06-07T00:00:00Z',
+          status: 'closed',
+          status_history: [],
+        },
+      }),
+    ]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    expect(computeRegressions(db)).toEqual([]);
+  });
+
+  it('skips a lesson gracefully when its extracted_at is unparseable, and still checks the rest', () => {
+    writeRecords(db, [
+      closedRecord('w-bad', 'rigA'),
+      closedRecord('w-good', 'rigA', {
+        trace: { jsonl_path: '/t/w-good.jsonl', errors: [tsError('src/good.ts')] },
+      }),
+      closedRecord('w-later', 'rigA', {
+        trace: { jsonl_path: '/t/w-later.jsonl', errors: [tsError('src/good.ts')] },
+        lifecycle: {
+          created: '2026-06-06T00:00:00Z',
+          started: '2026-06-06T01:00:00Z',
+          closed: '2026-06-07T00:00:00Z',
+          status: 'closed',
+          status_history: [],
+        },
+      }),
+    ]);
+    // Simulates a lesson admitted via `import-lessons`, whose LessonLineSchema
+    // does not enforce timestamp format — this must not crash the whole check.
+    appendLesson(db, { work_id: 'w-bad', extracted_at: 'not-a-timestamp', payload: {} });
+    appendLesson(db, { work_id: 'w-good', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+
+    const flags = computeRegressions(db);
+    expect(flags).toHaveLength(1);
+    expect(flags[0].lesson_work_id).toBe('w-good');
+  });
 });
