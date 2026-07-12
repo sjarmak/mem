@@ -31,7 +31,7 @@ this baseline.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from membench.runner.conditions import StepTrial, run_sequence
@@ -120,15 +120,30 @@ def _mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
+@dataclass
+class _CostSamples:
+    """Per-condition token/latency samples feeding `ArmResult`'s cost columns — one
+    object instead of 4 same-typed parallel lists, so callers can't swap a pair by
+    position and `_arm_result` doesn't need a dedicated positional param per list."""
+
+    none_tokens: list[float] = field(default_factory=list)
+    arm_tokens: list[float] = field(default_factory=list)
+    none_latency_ms: list[float] = field(default_factory=list)
+    arm_latency_ms: list[float] = field(default_factory=list)
+
+    def extend(self, other: _CostSamples) -> None:
+        self.none_tokens.extend(other.none_tokens)
+        self.arm_tokens.extend(other.arm_tokens)
+        self.none_latency_ms.extend(other.none_latency_ms)
+        self.arm_latency_ms.extend(other.arm_latency_ms)
+
+
 def _arm_result(
     arm: str,
     rewards: dict[Condition, list[float]],
     confusion: list[float],
     staleness: list[float],
-    none_tokens: list[float],
-    arm_tokens: list[float],
-    none_latency_ms: list[float],
-    arm_latency_ms: list[float],
+    samples: _CostSamples,
 ) -> ArmResult:
     return ArmResult(
         arm=arm,
@@ -138,32 +153,27 @@ def _arm_result(
         arm_confusion=_mean(confusion),
         arm_staleness=_mean(staleness),
         rate_n=len(confusion),
-        none_tokens=_mean(none_tokens),
-        arm_tokens=_mean(arm_tokens),
-        none_latency_ms=_mean(none_latency_ms),
-        arm_latency_ms=_mean(arm_latency_ms),
+        none_tokens=_mean(samples.none_tokens),
+        arm_tokens=_mean(samples.arm_tokens),
+        none_latency_ms=_mean(samples.none_latency_ms),
+        arm_latency_ms=_mean(samples.arm_latency_ms),
     )
 
 
-def _cost_deltas(
-    trials: list[StepTrial],
-) -> tuple[list[float], list[float], list[float], list[float]]:
+def _cost_deltas(trials: list[StepTrial]) -> _CostSamples:
     """none/arm token + latency samples for the cost columns — ALL trials in the
     condition (not just retrieving ones, unlike confusion/staleness): cost is paid on
     every step, whether or not that step reads. Only NO_MEMORY/MEMORY_ENABLED feed the
     cost columns, so oracle trials are skipped rather than collected and discarded."""
-    none_tokens: list[float] = []
-    arm_tokens: list[float] = []
-    none_latency_ms: list[float] = []
-    arm_latency_ms: list[float] = []
+    samples = _CostSamples()
     for t in trials:
         if t.condition is Condition.NO_MEMORY:
-            none_tokens.append(t.metrics.efficiency.total_tokens)
-            none_latency_ms.append(t.metrics.efficiency.tool_latency_ms)
+            samples.none_tokens.append(t.metrics.efficiency.total_tokens)
+            samples.none_latency_ms.append(t.metrics.efficiency.tool_latency_ms)
         elif t.condition is Condition.MEMORY_ENABLED:
-            arm_tokens.append(t.metrics.efficiency.total_tokens)
-            arm_latency_ms.append(t.metrics.efficiency.tool_latency_ms)
-    return none_tokens, arm_tokens, none_latency_ms, arm_latency_ms
+            samples.arm_tokens.append(t.metrics.efficiency.total_tokens)
+            samples.arm_latency_ms.append(t.metrics.efficiency.tool_latency_ms)
+    return samples
 
 
 def eval_arms_over_sequences(
@@ -176,10 +186,7 @@ def eval_arms_over_sequences(
         rewards: dict[Condition, list[float]] = {c: [] for c in _CONDITIONS}
         confusion: list[float] = []
         staleness: list[float] = []
-        none_tokens: list[float] = []
-        arm_tokens: list[float] = []
-        none_latency_ms: list[float] = []
-        arm_latency_ms: list[float] = []
+        samples = _CostSamples()
         for seq in sequences:
             run = run_sequence(
                 seq, _experiment(arm), conditions=_CONDITIONS, fs_base_dir=fs_base_dir
@@ -189,23 +196,8 @@ def eval_arms_over_sequences(
             seq_conf, seq_stale = _confusion_staleness(run.trials)
             confusion.extend(seq_conf)
             staleness.extend(seq_stale)
-            seq_none_tok, seq_arm_tok, seq_none_lat, seq_arm_lat = _cost_deltas(run.trials)
-            none_tokens.extend(seq_none_tok)
-            arm_tokens.extend(seq_arm_tok)
-            none_latency_ms.extend(seq_none_lat)
-            arm_latency_ms.extend(seq_arm_lat)
-        results.append(
-            _arm_result(
-                arm,
-                rewards,
-                confusion,
-                staleness,
-                none_tokens,
-                arm_tokens,
-                none_latency_ms,
-                arm_latency_ms,
-            )
-        )
+            samples.extend(_cost_deltas(run.trials))
+        results.append(_arm_result(arm, rewards, confusion, staleness, samples))
     return results
 
 
@@ -238,19 +230,8 @@ def eval_arms_over_project(
         for trial in run.trials:
             rewards[trial.condition].append(trial.reward)
         confusion, staleness = _confusion_staleness(run.trials)
-        none_tokens, arm_tokens, none_latency_ms, arm_latency_ms = _cost_deltas(run.trials)
-        results.append(
-            _arm_result(
-                arm,
-                rewards,
-                confusion,
-                staleness,
-                none_tokens,
-                arm_tokens,
-                none_latency_ms,
-                arm_latency_ms,
-            )
-        )
+        samples = _cost_deltas(run.trials)
+        results.append(_arm_result(arm, rewards, confusion, staleness, samples))
     return results
 
 
