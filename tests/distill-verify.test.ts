@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   checkPriorFixRegression,
-  classifyEvidence,
   recordSignatures,
   verifyFixEvidence,
   type RegressionCandidate,
@@ -60,23 +59,6 @@ describe('verifyFixEvidence', () => {
       total_chars: 8,
     };
     expect(verifyFixEvidence(evidence)).toEqual({ admitted: true, evidence });
-  });
-});
-
-describe('classifyEvidence', () => {
-  it('reports the evidence kind mechanically, both tiers', () => {
-    expect(
-      classifyEvidence({
-        kind: 'landed-diff',
-        commit_sha: 's',
-        text: '',
-        truncated: false,
-        total_chars: 0,
-      })
-    ).toBe('landed-diff');
-    expect(
-      classifyEvidence({ kind: 'transcript-tail', text: '', truncated: false, total_chars: 0 })
-    ).toBe('transcript-tail');
   });
 });
 

@@ -24,7 +24,6 @@ import {
 } from '../store/index.js';
 import {
   checkPriorFixRegression,
-  classifyEvidence,
   recordSignatures,
   verifyFixEvidence,
   type RegressionCandidate,
@@ -384,8 +383,8 @@ export function distillLessons(
         ...(record.outcome?.commit_sha !== undefined
           ? { commit_sha: record.outcome.commit_sha }
           : {}),
-        // Mechanical provenance (classifyEvidence), never asked of the model (ZFC).
-        payload: { ...payload, evidence_kind: classifyEvidence(admission.evidence) },
+        // Mechanical provenance — a plain field read, never asked of the model (ZFC).
+        payload: { ...payload, evidence_kind: admission.evidence.kind },
       });
     } catch (error: unknown) {
       failures.push({
@@ -455,7 +454,7 @@ function candidatesForSignature(
  * lessons, does the failure signature they documented recur in LATER-closed,
  * non-sibling work? A recurrence means that lesson's fix did not durably
  * prevent the failure — the concrete, mechanical signal that a
- * transcript-tail-only lesson (see {@link classifyEvidence}) needed a
+ * transcript-tail-only lesson (see the payload's `evidence_kind`) needed a
  * stronger layer than memory. Reuses the existing `trace_errors` signature
  * index and the Decision-6 sibling/supersedes exclusions (a later record on
  * the SAME work continuing through a convoy follow-up is expected
@@ -522,7 +521,7 @@ export function computeRegressions(
       continue;
     }
 
-    const sourceQuery = queryFromRecord(db, lesson.work_id);
+    const sourceQuery = queryFromRecord(db, lesson.work_id, { record: sourceRecord });
     const superseded = new Set(supersedesClosure(db, lesson.work_id));
     const lessonCtx = { work_id: lesson.work_id, extractedAtUtc, sourceQuery };
 

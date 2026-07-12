@@ -32,8 +32,9 @@ export type ConceptTag = z.infer<typeof ConceptTagSchema>;
  * so a typo'd concept tag fails at insert, not silently at retrieval.
  *
  * `evidence_kind` (mem-0r7l): the mechanical resolution-evidence provenance
- * the verified-write gate stamped this lesson with — see
- * `src/distill/verify.ts`'s `classifyEvidence`. Never asked of the model.
+ * the verified-write gate (`src/distill/verify.ts`'s `verifyFixEvidence`)
+ * stamped this lesson with — a plain field read off the admitted evidence,
+ * never asked of the model.
  */
 export const LessonPayloadSchema = z
   .object({

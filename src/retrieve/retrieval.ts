@@ -349,6 +349,11 @@ export interface QueryFromRecordOptions {
    * trigger-information contribution is separable. Either way the boundary and
    * every D6 exclusion key come from the record unchanged. */
   trigger?: RetrievalTrigger;
+  /** A record the caller already fetched for this `workId` — skips this
+   * function's own `getRecord`, so a caller that needs the record for its
+   * own purposes too (mem-0r7l's regression check) doesn't pay for the same
+   * fetch+parse twice. Must be the record for `workId`; not verified. */
+  record?: WorkRecord;
 }
 
 /**
@@ -362,7 +367,7 @@ export function queryFromRecord(
   workId: string,
   opts: QueryFromRecordOptions = {}
 ): RetrievalQuery {
-  const record = getRecord(db, workId);
+  const record = opts.record ?? getRecord(db, workId);
   if (record === null) {
     throw new Error(`No record for work_id ${workId} — cannot build a retrieval query from it.`);
   }

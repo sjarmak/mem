@@ -95,29 +95,6 @@ export interface StoredLesson extends LessonInput {
   id: number;
 }
 
-/** All lessons for a bead, in append order. */
-export function lessonsFor(db: StoreDatabase, workId: string): StoredLesson[] {
-  const rows = db
-    .prepare(
-      'SELECT id, work_id, extracted_at, commit_sha, payload FROM lessons WHERE work_id = ? ORDER BY id'
-    )
-    .all(workId) as {
-    id: number;
-    work_id: string;
-    extracted_at: string;
-    commit_sha: string | null;
-    payload: string;
-  }[];
-
-  return rows.map(row => ({
-    id: row.id,
-    work_id: row.work_id,
-    extracted_at: row.extracted_at,
-    ...(row.commit_sha !== null && { commit_sha: row.commit_sha }),
-    payload: JSON.parse(row.payload) as Record<string, unknown>,
-  }));
-}
-
 interface LessonRow {
   id: number;
   work_id: string;
@@ -134,6 +111,16 @@ function toStoredLesson(row: LessonRow): StoredLesson {
     ...(row.commit_sha !== null && { commit_sha: row.commit_sha }),
     payload: JSON.parse(row.payload) as Record<string, unknown>,
   };
+}
+
+/** All lessons for a bead, in append order. */
+export function lessonsFor(db: StoreDatabase, workId: string): StoredLesson[] {
+  const rows = db
+    .prepare(
+      'SELECT id, work_id, extracted_at, commit_sha, payload FROM lessons WHERE work_id = ? ORDER BY id'
+    )
+    .all(workId) as LessonRow[];
+  return rows.map(toStoredLesson);
 }
 
 /** Every lesson in the store, in append (id) order — the export side of the

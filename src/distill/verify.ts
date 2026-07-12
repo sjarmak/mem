@@ -43,18 +43,6 @@ export function verifyFixEvidence(evidence: ResolutionEvidence | null): Admissio
   return { admitted: true, evidence };
 }
 
-/**
- * Evidence provenance — a mechanical fact about WHAT backs an admitted
- * lesson, never a judgment about "the smallest durable layer" (that needs
- * model reasoning and is out of scope here, ZFC). A `landed-diff` lesson
- * corroborates a fix already captured in code; a `transcript-tail` lesson is
- * the ONLY durable record of the fix — see {@link checkPriorFixRegression}
- * for the mechanical signal on whether that is holding up.
- */
-export function classifyEvidence(evidence: ResolutionEvidence): 'landed-diff' | 'transcript-tail' {
-  return evidence.kind;
-}
-
 /** The distinct failure signatures a record's trace exhibits (Decision 8) —
  * the K-past-fix regression check's unit of comparison. */
 export function recordSignatures(record: WorkRecord): string[] {
