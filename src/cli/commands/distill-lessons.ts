@@ -14,7 +14,7 @@ import {
   type DistillRunner,
   type EvidenceOptions,
 } from '../../distill/distiller.js';
-import type { RegressionFlag } from '../../distill/verify.js';
+import type { RegressionFlag, RegressionSkip } from '../../distill/verify.js';
 
 export interface DistillLessonsResult {
   candidates: number;
@@ -27,6 +27,15 @@ export interface DistillLessonsResult {
   /** mem-0r7l K-past-fix check: signatures from the most-recently-appended
    * lessons that recurred in later, non-sibling work — report-only. */
   regressions: RegressionFlag[];
+  /** Non-null when the regression check itself failed. Always returned —
+   * including for `--json` callers — so a failed check is never
+   * indistinguishable from a clean one; the already-committed import (if
+   * any) is never rolled back on account of this. */
+  regressionError: string | null;
+  /** Lessons in the K-window the regression check could not evaluate (source
+   * record missing, or an unparseable `extracted_at`) — surfaced rather than
+   * silently dropped. */
+  regressionSkipped: RegressionSkip[];
 }
 
 const DEFAULT_MODEL = 'sonnet';
@@ -90,22 +99,27 @@ export function distillLessonsCommand(
     outPath = out;
   }
 
+  // mem-0r7l: report-only, checked against lessons already in the store
+  // BEFORE this run's own batch is appended below — a batch that imports >= k
+  // new lessons would otherwise evict every pre-existing lesson from the
+  // K-window before its signature could ever be checked (this run's own new
+  // lessons can't recur "later than now" in the same run regardless of
+  // ordering, so nothing is lost by checking first). A failure here must
+  // degrade to an empty report rather than block the import below.
+  let regressions: RegressionFlag[] = [];
+  let regressionSkipped: RegressionSkip[] = [];
+  let regressionError: string | null = null;
+  try {
+    const result = withReadStore(ctx.options, db => computeRegressions(db, parsedRegressionWindow));
+    regressions = result.flags;
+    regressionSkipped = result.skipped;
+  } catch (error: unknown) {
+    regressionError = error instanceof Error ? error.message : String(error);
+  }
+
   let imported: DistillLessonsResult['imported'] = null;
   if (ctx.options.import === true && lessons.length > 0) {
     imported = withWriteStore(ctx.options, db => importLessons(db, lessons));
-  }
-
-  // mem-0r7l: report-only, against whatever lessons are in the store now
-  // (including any just imported above) — never mutates the append-only table.
-  // The import above already committed; a failure here must degrade to an
-  // empty report rather than hide that already-successful result from the
-  // caller.
-  let regressions: RegressionFlag[] = [];
-  let regressionError: string | null = null;
-  try {
-    regressions = withReadStore(ctx.options, db => computeRegressions(db, parsedRegressionWindow));
-  } catch (error: unknown) {
-    regressionError = error instanceof Error ? error.message : String(error);
   }
 
   if (!ctx.options.json) {
@@ -125,6 +139,9 @@ export function distillLessonsCommand(
         `REGRESSION ${flag.lesson_work_id} (${flag.signature}) recurred in: ${flag.recurred_in.join(', ')}`
       );
     }
+    for (const skip of regressionSkipped) {
+      console.error(`REGRESSION CHECK SKIPPED ${skip.work_id}: ${skip.reason}`);
+    }
   }
 
   return {
@@ -134,5 +151,7 @@ export function distillLessonsCommand(
     out: outPath,
     imported,
     regressions,
+    regressionError,
+    regressionSkipped,
   };
 }

@@ -28,6 +28,7 @@ import {
   verifyFixEvidence,
   type RegressionCandidate,
   type RegressionFlag,
+  type RegressionSkip,
 } from './verify.js';
 
 /**
@@ -449,17 +450,22 @@ function candidatesForSignature(
 export function computeRegressions(
   db: StoreDatabase,
   k: number = DEFAULT_REGRESSION_WINDOW
-): RegressionFlag[] {
+): { flags: RegressionFlag[]; skipped: RegressionSkip[] } {
   // `slice(-0)` is `slice(0)` in JS — a bare `k <= 0` guard keeps "check
   // nothing" from silently becoming "check everything" for a direct caller.
   const recentLessons = k <= 0 ? [] : allLessons(db).slice(-k);
   const flags: RegressionFlag[] = [];
+  const skipped: RegressionSkip[] = [];
 
   for (const lesson of recentLessons) {
     // Lessons carry no FK to work_records (Decision 9): the source may have
-    // been deleted or re-ingested since. Skip gracefully, never throw.
+    // been deleted or re-ingested since. Skip gracefully, never throw — but
+    // surface it, rather than let it look identical to "checked, clean".
     const sourceRecord = getRecord(db, lesson.work_id);
-    if (sourceRecord === null) continue;
+    if (sourceRecord === null) {
+      skipped.push({ work_id: lesson.work_id, reason: 'source-record-missing' });
+      continue;
+    }
     const signatures = recordSignatures(sourceRecord);
     if (signatures.length === 0) continue;
 
@@ -469,11 +475,13 @@ export function computeRegressions(
     // the controlled ingest pipeline's known producer formats. Skip rather
     // than throw: lessons are append-only, so an uncaught throw here would
     // permanently poison every `distill-lessons` invocation once a single
-    // malformed lesson entered the window.
+    // malformed lesson entered the window. Surfaced via `skipped`, same as
+    // the missing-source-record case above, rather than a silent continue.
     let extractedAtUtc: string;
     try {
       extractedAtUtc = toIsoUtc(lesson.extracted_at);
     } catch {
+      skipped.push({ work_id: lesson.work_id, reason: 'unparseable-extracted-at' });
       continue;
     }
 
@@ -488,10 +496,8 @@ export function computeRegressions(
       ])
     );
 
-    flags.push(
-      ...checkPriorFixRegression(lesson.work_id, lesson.extracted_at, candidatesBySignature)
-    );
+    flags.push(...checkPriorFixRegression(lesson.work_id, extractedAtUtc, candidatesBySignature));
   }
 
-  return flags;
+  return { flags, skipped };
 }

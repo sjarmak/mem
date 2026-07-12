@@ -491,7 +491,7 @@ describe('distillLessonsCommand', () => {
     ).toThrow(/--limit/);
   });
 
-  it('degrades to an empty, report-only regression list when computeRegressions throws, without losing the already-committed import', () => {
+  it('degrades to an empty, report-only regression list when computeRegressions throws, without losing the already-committed import, and surfaces regressionError even in --json mode', () => {
     writeRecords(db, [closedRecord('w-1', 'rigA')]);
     const regressionSpy = vi.spyOn(distiller, 'computeRegressions').mockImplementation(() => {
       throw new Error('boom: regression check exploded');
@@ -505,10 +505,64 @@ describe('distillLessonsCommand', () => {
       );
       expect(result.imported).toEqual({ appended: 1, skipped: 0 });
       expect(result.regressions).toEqual([]);
+      expect(result.regressionError).toContain('boom: regression check exploded');
       expect(lessonsFor(db, 'w-1')).toHaveLength(1);
     } finally {
       regressionSpy.mockRestore();
     }
+  });
+
+  it("checks pre-existing lessons before this run's own batch is imported, so a large import cannot evict them from the K-window first", () => {
+    writeRecords(db, [closedRecord('w-old', 'rigA'), laterClosedRecord('w-old-recur', 'rigA')]);
+    appendLesson(db, {
+      work_id: 'w-old',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 'pre-existing' },
+    });
+    // w-old-recur already has a lesson too, so it's not itself a candidate
+    // for this run's batch — only the signature-recurrence check matters here.
+    appendLesson(db, {
+      work_id: 'w-old-recur',
+      extracted_at: '2026-06-07T00:00:00Z',
+      payload: { subtitle: 'unrelated' },
+    });
+    // Default --regression-window is 5; 6 new candidates in this run's own
+    // batch would evict w-old's lesson from the K-window before it could be
+    // checked, if the regression check ran after (not before) the import.
+    writeRecords(
+      db,
+      Array.from({ length: 6 }, (_, i) =>
+        closedRecord(`w-new-${i}`, 'rigA', {
+          trace: { jsonl_path: `/t/w-new-${i}.jsonl`, errors: [tsError(`src/new-${i}.ts`)] },
+        })
+      )
+    );
+
+    const result = distillLessonsCommand(
+      ctx({ import: true }),
+      () => validLessonJson,
+      evidenceOpts
+    );
+
+    expect(result.imported).toEqual({ appended: 6, skipped: 0 });
+    expect(result.regressions).toEqual([
+      expect.objectContaining({ lesson_work_id: 'w-old', recurred_in: ['w-old-recur'] }),
+    ]);
+  });
+
+  it('surfaces regressionSkipped for lessons the K-window could not evaluate', () => {
+    appendLesson(db, { work_id: 'w-deleted', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+    writeRecords(db, [closedRecord('w-2', 'rigA')]);
+
+    const result = distillLessonsCommand(
+      ctx({ import: true }),
+      () => validLessonJson,
+      evidenceOpts
+    );
+
+    expect(result.regressionSkipped).toEqual([
+      { work_id: 'w-deleted', reason: 'source-record-missing' },
+    ]);
   });
 });
 
@@ -524,11 +578,14 @@ describe('computeRegressions', () => {
       payload: { subtitle: 's' },
     });
 
-    const flags = computeRegressions(db);
+    const { flags } = computeRegressions(db);
     expect(flags).toEqual([
       {
         lesson_work_id: 'w-src',
-        extracted_at: '2026-06-05T12:00:00Z',
+        // Normalized (mem-0r7l bug4): the SQL boundary uses the canonicalized
+        // extracted_at, so the flag's own extracted_at must match rather than
+        // echo the raw, non-canonical input.
+        extracted_at: '2026-06-05T12:00:00.000Z',
         signature: 'tsc:src/a.ts:13:TS2741',
         recurred_in: ['w-later'],
       },
@@ -548,7 +605,7 @@ describe('computeRegressions', () => {
       payload: { subtitle: 's' },
     });
 
-    expect(computeRegressions(db)).toEqual([]);
+    expect(computeRegressions(db).flags).toEqual([]);
   });
 
   it('does NOT flag a supersedes-chain recurrence', () => {
@@ -562,7 +619,7 @@ describe('computeRegressions', () => {
       payload: { subtitle: 's' },
     });
 
-    expect(computeRegressions(db)).toEqual([]);
+    expect(computeRegressions(db).flags).toEqual([]);
   });
 
   it('does not flag when the signature never recurs', () => {
@@ -573,7 +630,7 @@ describe('computeRegressions', () => {
       payload: { subtitle: 's' },
     });
 
-    expect(computeRegressions(db)).toEqual([]);
+    expect(computeRegressions(db).flags).toEqual([]);
   });
 
   it('does not flag a recurrence that closed BEFORE the lesson was extracted', () => {
@@ -596,7 +653,7 @@ describe('computeRegressions', () => {
       payload: { subtitle: 's' },
     });
 
-    expect(computeRegressions(db)).toEqual([]);
+    expect(computeRegressions(db).flags).toEqual([]);
   });
 
   it('respects the k window: only the most-recently-appended lessons are checked', () => {
@@ -611,7 +668,7 @@ describe('computeRegressions', () => {
     appendLesson(db, { work_id: 'w-recent', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
 
     // w-later recurs w-recent's signature, not w-old's — k=1 only checks w-recent.
-    const flags = computeRegressions(db, 1);
+    const { flags } = computeRegressions(db, 1);
     expect(flags).toHaveLength(1);
     expect(flags[0].lesson_work_id).toBe('w-recent');
   });
@@ -624,7 +681,7 @@ describe('computeRegressions', () => {
       payload: { subtitle: 's' },
     });
 
-    expect(computeRegressions(db, 0)).toEqual([]);
+    expect(computeRegressions(db, 0).flags).toEqual([]);
   });
 
   it('skips a lesson gracefully when its source record no longer exists', () => {
@@ -634,7 +691,9 @@ describe('computeRegressions', () => {
       payload: { subtitle: 's' },
     });
 
-    expect(computeRegressions(db)).toEqual([]);
+    const { flags, skipped } = computeRegressions(db);
+    expect(flags).toEqual([]);
+    expect(skipped).toEqual([{ work_id: 'w-deleted', reason: 'source-record-missing' }]);
   });
 
   it('does NOT flag a same-signature recurrence in a different rig (no cross-rig confusion)', () => {
@@ -648,7 +707,7 @@ describe('computeRegressions', () => {
       payload: { subtitle: 's' },
     });
 
-    expect(computeRegressions(db)).toEqual([]);
+    expect(computeRegressions(db).flags).toEqual([]);
   });
 
   it('skips a lesson gracefully when its extracted_at is unparseable, and still checks the rest', () => {
@@ -666,8 +725,9 @@ describe('computeRegressions', () => {
     appendLesson(db, { work_id: 'w-bad', extracted_at: 'not-a-timestamp', payload: {} });
     appendLesson(db, { work_id: 'w-good', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
 
-    const flags = computeRegressions(db);
+    const { flags, skipped } = computeRegressions(db);
     expect(flags).toHaveLength(1);
     expect(flags[0].lesson_work_id).toBe('w-good');
+    expect(skipped).toEqual([{ work_id: 'w-bad', reason: 'unparseable-extracted-at' }]);
   });
 });

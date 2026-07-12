@@ -80,6 +80,16 @@ export interface RegressionFlag {
   recurred_in: string[];
 }
 
+/** One lesson in the K-window the regression check could not evaluate —
+ * its source record was deleted/re-ingested, or its `extracted_at` (which
+ * crosses the unvalidated `import-lessons` boundary) failed to parse.
+ * Surfaced rather than silently dropped, so a skip is never indistinguishable
+ * from "checked, clean". */
+export interface RegressionSkip {
+  work_id: string;
+  reason: string;
+}
+
 /**
  * Pure signature-recurrence check for ONE prior lesson. `candidatesBySignature`
  * maps each of the lesson's originating failure signatures to the later,
