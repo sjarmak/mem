@@ -85,9 +85,11 @@ def retrieval_discrimination_gate(
     naive arm at the goal by more than ``epsilon`` — the deterministic proxy for
     ours-vs-builtin (see module docstring). Reuses ``pilot_filter`` for the decision.
     ``top_k``, when set, overrides the naive arm's retrieval width (only ``lexical``
-    consumes it; the id-exact quality arm ignores it). Not re-validated here: a
-    ``top_k < 1`` propagates unwrapped as a ``ValueError`` from ``LexicalTopKMemory``'s
-    constructor, which is the intended validation point."""
+    consumes it; the id-exact quality arm ignores it). Checked up front against
+    ``LexicalTopKMemory``'s own floor so an invalid value fails before either arm runs,
+    not after a full quality-arm simulation is thrown away."""
+    if top_k is not None and top_k < 1:
+        raise ValueError(f"top_k must be >= 1, got {top_k}")
     quality_reward = _goal_reward(seq, quality_arm)
     naive_reward = _goal_reward(seq, naive_arm, top_k=top_k)
     verdict = pilot_filter(

@@ -81,11 +81,9 @@ def test_discrimination_holds_across_seeds() -> None:
         assert result.quality_reward > result.naive_reward
 
 
-def test_invalid_top_k_propagates_from_lexical_arm() -> None:
-    # top_k<1 is not re-validated at this boundary (mem-keqrm): the naive ("lexical")
-    # arm is the one system that actually consumes top_k, and its constructor already
-    # raises ValueError for an invalid value. This locks in that the error reaches the
-    # gate's caller unwrapped and unswallowed, so a future refactor of the arm-building
-    # path can't silently absorb it.
+def test_invalid_top_k_rejected_before_either_arm_runs() -> None:
+    # Mirrors the floor LexicalTopKMemory's own constructor enforces (mem-keqrm) — see
+    # retrieval_discrimination_gate's docstring for why it's checked here up front
+    # rather than left to surface from the arm's construction.
     with pytest.raises(ValueError, match="top_k must be >= 1"):
         retrieval_discrimination_gate(_tool_requiring_seq(), top_k=0)

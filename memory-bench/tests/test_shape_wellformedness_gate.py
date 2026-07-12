@@ -126,9 +126,9 @@ def test_nondefault_top_k_reaches_the_lexical_arm(monkeypatch) -> None:
     monkeypatch.setattr(conditions_mod, "build_memory_system", _spy)
 
     seq = _tool_requiring_seq(facts_per_task=3)
-    result = shape_wellformedness_gate(seq, facts_per_task=3, top_k=5)
+    shape_wellformedness_gate(seq, facts_per_task=3, top_k=5)
 
+    # the trailing wellformed/discrimination shape is already covered by
+    # test_wellformed_seq_is_admitted; this test's only claim is that top_k reaches
+    # the lexical arm's construction rather than falling back to DEFAULT_TOP_K.
     assert captured.get("top_k") == 5
-    assert result.discrimination is not None
-    assert result.discrimination.accepted
-    assert result.discrimination.quality_reward > result.discrimination.naive_reward
