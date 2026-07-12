@@ -2,11 +2,13 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { distillLessonsCommand } from '../src/cli/commands/distill-lessons.js';
+import * as distiller from '../src/distill/distiller.js';
 import {
   buildDistillPrompt,
+  computeRegressions,
   distillLessons,
   parseDistilledPayload,
   resolveResolutionEvidence,
@@ -53,6 +55,23 @@ const closedRecord = (
     },
     ...overrides,
   });
+
+/** The `computeRegressions` tests below all need one closed record that
+ * postdates `closedRecord`'s default `closed: '2026-06-05'` — this fixed
+ * lifecycle is that "later" fixture. */
+const LATER_LIFECYCLE: WorkRecord['lifecycle'] = {
+  created: '2026-06-06T00:00:00Z',
+  started: '2026-06-06T01:00:00Z',
+  closed: '2026-06-07T00:00:00Z',
+  status: 'closed',
+  status_history: [],
+};
+
+const laterClosedRecord = (
+  workId: string,
+  rig: string,
+  overrides: Partial<WorkRecord> = {}
+): WorkRecord => closedRecord(workId, rig, { ...overrides, lifecycle: LATER_LIFECYCLE });
 
 const validLessonJson = JSON.stringify({
   subtitle: 'AttentionContributor requires coverage',
@@ -314,16 +333,75 @@ describe('distillLessons', () => {
     const runner = (prompt: string): string =>
       prompt.includes('w-bad') ? 'not json at all' : validLessonJson;
 
-    const outcome = distillLessons(records, runner, '2026-06-12T00:00:00Z');
+    // Both records need resolution evidence to clear the mem-0r7l gate before
+    // the JSON-validity failure (isolated to w-bad) can be observed.
+    const outcome = distillLessons(records, runner, '2026-06-12T00:00:00Z', {
+      readTranscript: () => 'fixed by adding the coverage field',
+    });
     expect(outcome.lessons).toHaveLength(1);
     expect(outcome.lessons[0]).toMatchObject({
       work_id: 'w-good',
       extracted_at: '2026-06-12T00:00:00Z',
       commit_sha: 'abc123',
     });
+    expect(outcome.lessons[0].payload.evidence_kind).toBe('transcript-tail');
     expect(outcome.failures).toHaveLength(1);
     expect(outcome.failures[0].work_id).toBe('w-bad');
     expect(outcome.failures[0].error).toContain('JSON');
+  });
+
+  it('refuses admission (and never calls the runner) for a candidate with no resolution evidence', () => {
+    let runnerCalls = 0;
+    const outcome = distillLessons(
+      [closedRecord('w-unverifiable', 'rigA')],
+      () => {
+        runnerCalls++;
+        return validLessonJson;
+      },
+      '2026-06-12T00:00:00Z',
+      {
+        readTranscript: () => {
+          throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+        },
+      }
+    );
+    expect(outcome.lessons).toHaveLength(0);
+    expect(outcome.failures).toHaveLength(1);
+    expect(outcome.failures[0].work_id).toBe('w-unverifiable');
+    expect(outcome.failures[0].error).toContain('no-resolution-evidence');
+    expect(runnerCalls).toBe(0);
+  });
+
+  it('stamps evidence_kind: landed-diff for a git-verified candidate', () => {
+    const record = closedRecord('w-1', 'rigA', {
+      outcome: { commit_sha: 'abc123' },
+      provenance: { work_dir: '/repo/checkout', repo: 'checkout', history_state: 'unresolved' },
+    });
+    const outcome = distillLessons([record], () => validLessonJson, '2026-06-12T00:00:00Z', {
+      run: () => 'diff --git a/src/a.ts b/src/a.ts\n+  coverage: 1,\n',
+    });
+    expect(outcome.lessons[0].payload.evidence_kind).toBe('landed-diff');
+  });
+
+  it('does not reject an otherwise-valid lesson when the model emits its own evidence_kind (mechanically overwritten, never validated)', () => {
+    const modelJson = JSON.stringify({
+      subtitle: 'AttentionContributor requires coverage',
+      facts: ['Adding a contributor requires the coverage field on every test fixture.'],
+      narrative: 'TS2741 fired on test fixtures missing the new required field.',
+      concepts: ['gotcha'],
+      // Not one of the two real evidence_kind values — must not fail parsing,
+      // since the code always overwrites this field after parsing anyway.
+      evidence_kind: 'diff',
+    });
+    const outcome = distillLessons(
+      [closedRecord('w-1', 'rigA')],
+      () => modelJson,
+      '2026-06-12T00:00:00Z',
+      { readTranscript: () => 'fixed by adding the coverage field' }
+    );
+    expect(outcome.failures).toEqual([]);
+    expect(outcome.lessons).toHaveLength(1);
+    expect(outcome.lessons[0].payload.evidence_kind).toBe('transcript-tail');
   });
 
   it('threads resolution evidence into the prompt the runner sees', () => {
@@ -348,13 +426,16 @@ describe('distillLessonsCommand', () => {
     options: { json: true, verbose: false, store: storeFile, ...options } as never,
   });
 
+  const evidenceOpts = { readTranscript: () => 'fixed by adding the coverage field' };
+
   it('distills, writes NDJSON, and imports into the store', () => {
     writeRecords(db, [closedRecord('w-1', 'rigA')]);
     const outFile = join(dir, 'lessons.jsonl');
 
     const result = distillLessonsCommand(
       ctx({ out: outFile, import: true }),
-      () => validLessonJson
+      () => validLessonJson,
+      evidenceOpts
     );
 
     expect(result).toMatchObject({
@@ -363,6 +444,7 @@ describe('distillLessonsCommand', () => {
       failures: [],
       out: outFile,
       imported: { appended: 1, skipped: 0 },
+      regressions: [],
     });
     const line = JSON.parse(readFileSync(outFile, 'utf8').trim()) as { work_id: string };
     expect(line.work_id).toBe('w-1');
@@ -371,11 +453,47 @@ describe('distillLessonsCommand', () => {
 
   it('is idempotent across reruns: lessoned records are no longer candidates', () => {
     writeRecords(db, [closedRecord('w-1', 'rigA')]);
-    distillLessonsCommand(ctx({ import: true }), () => validLessonJson);
+    distillLessonsCommand(ctx({ import: true }), () => validLessonJson, evidenceOpts);
 
-    const rerun = distillLessonsCommand(ctx({ import: true }), () => validLessonJson);
+    const rerun = distillLessonsCommand(ctx({ import: true }), () => validLessonJson, evidenceOpts);
     expect(rerun.candidates).toBe(0);
     expect(lessonsFor(db, 'w-1')).toHaveLength(1);
+  });
+
+  it('refuses admission for a candidate with no resolution evidence, via the CLI', () => {
+    writeRecords(db, [closedRecord('w-unverifiable', 'rigA')]);
+
+    const result = distillLessonsCommand(ctx({ import: true }), () => validLessonJson, {
+      readTranscript: () => {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      },
+    });
+
+    expect(result.distilled).toBe(0);
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0].work_id).toBe('w-unverifiable');
+    expect(result.failures[0].error).toContain('no-resolution-evidence');
+    expect(lessonsFor(db, 'w-unverifiable')).toHaveLength(0);
+  });
+
+  it('rejects a non-numeric --regression-window', () => {
+    expect(() =>
+      distillLessonsCommand(
+        ctx({ import: true, 'regression-window': 'lots' }),
+        () => validLessonJson,
+        evidenceOpts
+      )
+    ).toThrow(/--regression-window/);
+  });
+
+  it('rejects a bare --regression-window (parsed as boolean true) instead of silently using 1', () => {
+    expect(() =>
+      distillLessonsCommand(
+        ctx({ import: true, 'regression-window': true }),
+        () => validLessonJson,
+        evidenceOpts
+      )
+    ).toThrow(/--regression-window/);
   });
 
   it('refuses to run with neither --out nor --import', () => {
@@ -386,5 +504,308 @@ describe('distillLessonsCommand', () => {
     expect(() =>
       distillLessonsCommand(ctx({ import: true, limit: 'lots' }), () => validLessonJson)
     ).toThrow(/--limit/);
+  });
+
+  it('rejects a bare --limit (parsed as boolean true) instead of silently using 1', () => {
+    expect(() =>
+      distillLessonsCommand(ctx({ import: true, limit: true }), () => validLessonJson)
+    ).toThrow(/--limit/);
+  });
+
+  it('degrades to an empty, report-only regression list when computeRegressions throws, without losing the already-committed import, and surfaces regressionError even in --json mode', () => {
+    writeRecords(db, [closedRecord('w-1', 'rigA')]);
+    const regressionSpy = vi.spyOn(distiller, 'computeRegressions').mockImplementation(() => {
+      throw new Error('boom: regression check exploded');
+    });
+
+    try {
+      const result = distillLessonsCommand(
+        ctx({ import: true }),
+        () => validLessonJson,
+        evidenceOpts
+      );
+      expect(result.imported).toEqual({ appended: 1, skipped: 0 });
+      expect(result.regressions).toEqual([]);
+      expect(result.regressionError).toContain('boom: regression check exploded');
+      expect(lessonsFor(db, 'w-1')).toHaveLength(1);
+    } finally {
+      regressionSpy.mockRestore();
+    }
+  });
+
+  it("checks pre-existing lessons before this run's own batch is imported, so a large import cannot evict them from the K-window first", () => {
+    writeRecords(db, [closedRecord('w-old', 'rigA'), laterClosedRecord('w-old-recur', 'rigA')]);
+    appendLesson(db, {
+      work_id: 'w-old',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 'pre-existing' },
+    });
+    // w-old-recur already has a lesson too, so it's not itself a candidate
+    // for this run's batch — only the signature-recurrence check matters here.
+    appendLesson(db, {
+      work_id: 'w-old-recur',
+      extracted_at: '2026-06-07T00:00:00Z',
+      payload: { subtitle: 'unrelated' },
+    });
+    // Default --regression-window is 5; 6 new candidates in this run's own
+    // batch would evict w-old's lesson from the K-window before it could be
+    // checked, if the regression check ran after (not before) the import.
+    writeRecords(
+      db,
+      Array.from({ length: 6 }, (_, i) =>
+        closedRecord(`w-new-${i}`, 'rigA', {
+          trace: { jsonl_path: `/t/w-new-${i}.jsonl`, errors: [tsError(`src/new-${i}.ts`)] },
+        })
+      )
+    );
+
+    const result = distillLessonsCommand(
+      ctx({ import: true }),
+      () => validLessonJson,
+      evidenceOpts
+    );
+
+    expect(result.imported).toEqual({ appended: 6, skipped: 0 });
+    expect(result.regressions).toEqual([
+      expect.objectContaining({ lesson_work_id: 'w-old', recurred_in: ['w-old-recur'] }),
+    ]);
+  });
+
+  it('surfaces regressionSkipped for lessons the K-window could not evaluate', () => {
+    appendLesson(db, { work_id: 'w-deleted', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+
+    const result = distillLessonsCommand(
+      ctx({ import: true }),
+      () => validLessonJson,
+      evidenceOpts
+    );
+
+    expect(result.regressionSkipped).toEqual([
+      { work_id: 'w-deleted', reason: 'source-record-missing' },
+    ]);
+  });
+});
+
+describe('computeRegressions', () => {
+  it('flags a lesson signature that recurred in later, unrelated closed work', () => {
+    writeRecords(db, [
+      closedRecord('w-src', 'rigA'), // closed 2026-06-05
+      laterClosedRecord('w-later', 'rigA'),
+    ]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    const { flags } = computeRegressions(db);
+    expect(flags).toEqual([
+      {
+        lesson_work_id: 'w-src',
+        // Normalized (mem-0r7l bug4): the SQL boundary uses the canonicalized
+        // extracted_at, so the flag's own extracted_at must match rather than
+        // echo the raw, non-canonical input.
+        extracted_at: '2026-06-05T12:00:00.000Z',
+        signature: 'tsc:src/a.ts:13:TS2741',
+        recurred_in: ['w-later'],
+      },
+    ]);
+  });
+
+  it('does NOT flag a convoy-sibling recurrence (expected iteration, not a regression)', () => {
+    writeRecords(db, [
+      closedRecord('w-src', 'rigA', { links: { deps: [], supersedes: [], convoy_id: 'c-1' } }),
+      laterClosedRecord('w-followup', 'rigA', {
+        links: { deps: [], supersedes: [], convoy_id: 'c-1' },
+      }),
+    ]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    expect(computeRegressions(db).flags).toEqual([]);
+  });
+
+  it('does NOT flag a supersedes-chain recurrence', () => {
+    writeRecords(db, [
+      closedRecord('w-src', 'rigA'),
+      laterClosedRecord('w-superseder', 'rigA', { links: { deps: [], supersedes: ['w-src'] } }),
+    ]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    expect(computeRegressions(db).flags).toEqual([]);
+  });
+
+  it('does not flag when the signature never recurs', () => {
+    writeRecords(db, [closedRecord('w-src', 'rigA')]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    expect(computeRegressions(db).flags).toEqual([]);
+  });
+
+  it('does not flag a recurrence that closed BEFORE the lesson was extracted', () => {
+    writeRecords(db, [
+      closedRecord('w-src', 'rigA'), // closed 2026-06-05T00:00:00Z
+      closedRecord('w-earlier', 'rigA', {
+        lifecycle: {
+          created: '2026-06-01T00:00:00Z',
+          started: '2026-06-01T01:00:00Z',
+          closed: '2026-06-02T00:00:00Z',
+          status: 'closed',
+          status_history: [],
+        },
+      }),
+    ]);
+    // extracted_at AFTER w-earlier closed, so w-earlier is not "later" work.
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-10T00:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    expect(computeRegressions(db).flags).toEqual([]);
+  });
+
+  it('respects the k window: only the most-recently-appended lessons are checked', () => {
+    writeRecords(db, [
+      closedRecord('w-old', 'rigA', {
+        trace: { jsonl_path: '/t/w-old.jsonl', errors: [tsError('src/old.ts')] },
+      }),
+      closedRecord('w-recent', 'rigA'),
+      laterClosedRecord('w-later', 'rigA'),
+    ]);
+    appendLesson(db, { work_id: 'w-old', extracted_at: '2026-06-05T10:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-recent', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+
+    // w-later recurs w-recent's signature, not w-old's — k=1 only checks w-recent.
+    const { flags } = computeRegressions(db, 1);
+    expect(flags).toHaveLength(1);
+    expect(flags[0].lesson_work_id).toBe('w-recent');
+  });
+
+  it('checks nothing for k <= 0, guarding against the slice(-0) === slice(0) footgun', () => {
+    writeRecords(db, [closedRecord('w-src', 'rigA'), laterClosedRecord('w-later', 'rigA')]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    expect(computeRegressions(db, 0).flags).toEqual([]);
+  });
+
+  it('skips a lesson gracefully when its source record no longer exists', () => {
+    appendLesson(db, {
+      work_id: 'w-deleted',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    const { flags, skipped } = computeRegressions(db);
+    expect(flags).toEqual([]);
+    expect(skipped).toEqual([{ work_id: 'w-deleted', reason: 'source-record-missing' }]);
+  });
+
+  it('does NOT flag a same-signature recurrence in a different rig (no cross-rig confusion)', () => {
+    writeRecords(db, [
+      closedRecord('w-src', 'rigA'),
+      laterClosedRecord('w-later-other-rig', 'rigB'),
+    ]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    expect(computeRegressions(db).flags).toEqual([]);
+  });
+
+  it('skips a lesson gracefully when its extracted_at is unparseable, and still checks the rest', () => {
+    writeRecords(db, [
+      closedRecord('w-bad', 'rigA'),
+      closedRecord('w-good', 'rigA', {
+        trace: { jsonl_path: '/t/w-good.jsonl', errors: [tsError('src/good.ts')] },
+      }),
+      laterClosedRecord('w-later', 'rigA', {
+        trace: { jsonl_path: '/t/w-later.jsonl', errors: [tsError('src/good.ts')] },
+      }),
+    ]);
+    // Simulates a lesson admitted via `import-lessons`, whose LessonLineSchema
+    // does not enforce timestamp format — this must not crash the whole check.
+    appendLesson(db, { work_id: 'w-bad', extracted_at: 'not-a-timestamp', payload: {} });
+    appendLesson(db, { work_id: 'w-good', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+
+    const { flags, skipped } = computeRegressions(db);
+    expect(flags).toHaveLength(1);
+    expect(flags[0].lesson_work_id).toBe('w-good');
+    expect(skipped).toEqual([{ work_id: 'w-bad', reason: 'unparseable-extracted-at' }]);
+  });
+
+  it('skips a lesson (with a reason) whose source record currently carries no trace-error signatures', () => {
+    writeRecords(db, [
+      closedRecord('w-clean', 'rigA', { trace: { jsonl_path: '/t/w-clean.jsonl', errors: [] } }),
+    ]);
+    appendLesson(db, {
+      work_id: 'w-clean',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    const { flags, skipped } = computeRegressions(db);
+    expect(flags).toEqual([]);
+    expect(skipped).toEqual([{ work_id: 'w-clean', reason: 'no-signatures' }]);
+  });
+
+  it('isolates one lesson whose source record fails schema validation, instead of aborting the whole check', () => {
+    writeRecords(db, [
+      closedRecord('w-corrupt', 'rigA'),
+      closedRecord('w-good', 'rigA', {
+        trace: { jsonl_path: '/t/w-good.jsonl', errors: [tsError('src/good.ts')] },
+      }),
+      laterClosedRecord('w-later', 'rigA', {
+        trace: { jsonl_path: '/t/w-later.jsonl', errors: [tsError('src/good.ts')] },
+      }),
+    ]);
+    appendLesson(db, { work_id: 'w-corrupt', extracted_at: '2026-06-05T10:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-good', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+    // Corrupt the stored record directly (bypassing writeRecords' own
+    // validation) so `getRecord`'s WorkRecordSchema.parse throws — simulating
+    // store corruption / a stale-schema row, not a merely-missing one.
+    db.prepare('UPDATE work_records SET record = ? WHERE work_id = ?').run(
+      JSON.stringify({ not: 'a valid WorkRecord' }),
+      'w-corrupt'
+    );
+
+    const { flags, skipped } = computeRegressions(db);
+    expect(flags).toHaveLength(1);
+    expect(flags[0].lesson_work_id).toBe('w-good');
+    expect(skipped).toHaveLength(1);
+    expect(skipped[0].work_id).toBe('w-corrupt');
+    expect(skipped[0].reason).toContain('source-record-invalid');
+  });
+
+  it("scopes the K-window by rig when one is given, so another rig's more-recent lessons don't evict this rig's own", () => {
+    writeRecords(db, [closedRecord('w-a', 'rigA'), laterClosedRecord('w-a-recur', 'rigA')]);
+    appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+
+    // A different rig's lesson, appended later, fills an unscoped k=1 window.
+    writeRecords(db, [closedRecord('w-b', 'rigB')]);
+    appendLesson(db, { work_id: 'w-b', extracted_at: '2026-06-06T00:00:00Z', payload: {} });
+
+    expect(computeRegressions(db, 1).flags).toEqual([]);
+
+    const { flags } = computeRegressions(db, 1, 'rigA');
+    expect(flags).toHaveLength(1);
+    expect(flags[0].lesson_work_id).toBe('w-a');
   });
 });

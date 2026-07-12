@@ -30,6 +30,7 @@ export {
   coverageReport,
   getRecord,
   lessonsFor,
+  lessonsForRig,
   linksFor,
   queryRecords,
   runsFor,
@@ -37,6 +38,7 @@ export {
   searchErrorMessages,
   supersedesClosure,
   workIdsBySignature,
+  workIdsBySignatureSince,
 } from './reader.js';
 export {
   type ImportProvenanceEventsResult,

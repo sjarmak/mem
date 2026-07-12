@@ -5,11 +5,32 @@ import { z } from 'zod';
 
 import { defaultGitRunner, isNonZeroExit, type GitRunner } from '../ingest/provenance.js';
 import { RIG_REPOS } from '../ingest/rig-repo-map.js';
+import { isSibling } from '../retrieve/exclusions.js';
+import { queryFromRecord } from '../retrieve/index.js';
 import { LessonPayloadSchema, ConceptTagSchema, type LessonPayload } from '../schemas/lesson.js';
 import type { TraceError } from '../schemas/trace.js';
 import type { WorkRecord } from '../schemas/workrecord.js';
 import type { LessonInput } from '../store/index.js';
-import { lessonsFor, queryRecords, type StoreDatabase } from '../store/index.js';
+import {
+  allLessons,
+  getRecord,
+  lessonsFor,
+  lessonsForRig,
+  queryRecords,
+  supersedesClosure,
+  toIsoUtc,
+  workIdsBySignatureSince,
+  type StoreDatabase,
+} from '../store/index.js';
+import {
+  checkPriorFixRegression,
+  classifyEvidence,
+  recordSignatures,
+  verifyFixEvidence,
+  type RegressionCandidate,
+  type RegressionFlag,
+  type RegressionSkip,
+} from './verify.js';
 
 /**
  * Lessons distiller (Decision 9): produce append-only lesson payloads from
@@ -260,8 +281,13 @@ export function buildDistillPrompt(
 // --- Model output validation ---------------------------------------------------------
 
 /** The distiller's required payload: unlike historical lessons the convention
- * fields are mandatory here — an empty distillation is a failure, not a row. */
-const DistilledPayloadSchema = LessonPayloadSchema.extend({
+ * fields are mandatory here — an empty distillation is a failure, not a row.
+ * `evidence_kind` is omitted from validation (mem-0r7l): it is never asked of
+ * the model (see `buildDistillPrompt`'s JSON contract) and is always
+ * overwritten mechanically after parsing (see the `distillLessons` loop
+ * below) — validating it here would only give a model-hallucinated value in
+ * that field the power to fail an otherwise well-formed lesson. */
+const DistilledPayloadSchema = LessonPayloadSchema.omit({ evidence_kind: true }).extend({
   subtitle: z.string().min(1),
   facts: z.array(z.string().min(1)).min(1),
   narrative: z.string().min(1),
@@ -341,7 +367,16 @@ export function distillLessons(
   const failures: DistillFailure[] = [];
   for (const record of records) {
     try {
-      const prompt = buildDistillPrompt(record, resolveResolutionEvidence(record, evidence));
+      // mem-0r7l gate: refuse before spending a model call. Everywhere this
+      // module builds a prompt, it does so from `admission.evidence`, not a
+      // bare `resolveResolutionEvidence(...)` result — so a future admission
+      // criterion added to verifyFixEvidence is honored here for free.
+      const admission = verifyFixEvidence(resolveResolutionEvidence(record, evidence));
+      if (!admission.admitted) {
+        failures.push({ work_id: record.work_id, error: admission.reason });
+        continue;
+      }
+      const prompt = buildDistillPrompt(record, admission.evidence);
       const payload = parseDistilledPayload(runner(prompt));
       lessons.push({
         work_id: record.work_id,
@@ -349,7 +384,8 @@ export function distillLessons(
         ...(record.outcome?.commit_sha !== undefined
           ? { commit_sha: record.outcome.commit_sha }
           : {}),
-        payload,
+        // Mechanical provenance (classifyEvidence), never asked of the model (ZFC).
+        payload: { ...payload, evidence_kind: classifyEvidence(admission.evidence) },
       });
     } catch (error: unknown) {
       failures.push({
@@ -359,4 +395,146 @@ export function distillLessons(
     }
   }
   return { lessons, failures };
+}
+
+// --- K-past-fix regression check ------------------------------------------------------
+
+/** Default {@link computeRegressions} window — also the CLI's `--regression-window` default. */
+export const DEFAULT_REGRESSION_WINDOW = 5;
+
+/**
+ * One signature's later-closed candidates, for the K-past-fix check: every
+ * work_id carrying the same failure signature as `lesson`, closed strictly
+ * after `lesson`'s `extracted_at`, IN THE SAME RIG, tagged with whether
+ * Decision-6's convoy/PR/parent/supersedes exclusions already cover it (that
+ * reuse is exactly why this stays a thin loop — the exclusion logic itself
+ * lives in `isSibling`/`supersedesClosure`, not here). The rig/temporal
+ * narrowing runs in SQL ({@link workIdsBySignatureSince}, joined against the
+ * promoted `work_records.rig`/`closed_at` columns) so a coincidental
+ * file:line:tool:error_class match in an unrelated rig, or one that predates
+ * the lesson, is never fetched at all — only surviving candidates pay for a
+ * full record fetch, needed for the `isSibling` check.
+ */
+function candidatesForSignature(
+  db: StoreDatabase,
+  signature: string,
+  lesson: {
+    work_id: string;
+    extractedAtUtc: string;
+    sourceQuery: ReturnType<typeof queryFromRecord>;
+  },
+  superseded: ReadonlySet<string>
+): RegressionCandidate[] {
+  const candidates: RegressionCandidate[] = [];
+  const workIds = workIdsBySignatureSince(db, signature, {
+    rig: lesson.sourceQuery.rig,
+    closedAfter: lesson.extractedAtUtc,
+  });
+  for (const workId of workIds) {
+    if (workId === lesson.work_id) continue;
+    // `getRecord` fails loudly on a schema-invalid row (store corruption) —
+    // the SQL join above only proves a row existed at query time, not that
+    // it still parses now. One bad candidate must not abort the whole
+    // signature's candidate list, so it's dropped the same as a genuinely
+    // vanished row (matching the `candidateRecord === null` case below).
+    let candidateRecord: WorkRecord | null;
+    try {
+      candidateRecord = getRecord(db, workId);
+    } catch {
+      continue;
+    }
+    if (candidateRecord === null) continue;
+    const sibling = isSibling(candidateRecord, lesson.sourceQuery) || superseded.has(workId);
+    candidates.push({ work_id: workId, is_sibling: sibling });
+  }
+  return candidates;
+}
+
+/**
+ * Regression-aware check (mem-0r7l): for the K most-recently-appended
+ * lessons, does the failure signature they documented recur in LATER-closed,
+ * non-sibling work? A recurrence means that lesson's fix did not durably
+ * prevent the failure — the concrete, mechanical signal that a
+ * transcript-tail-only lesson (see {@link classifyEvidence}) needed a
+ * stronger layer than memory. Reuses the existing `trace_errors` signature
+ * index and the Decision-6 sibling/supersedes exclusions (a later record on
+ * the SAME work continuing through a convoy follow-up is expected
+ * iteration, not a regression) — mechanical throughout (ZFC), never a
+ * keyword or semantic judgment. Report-only: lessons are append-only
+ * (Decision 9) and are never rewritten by this check.
+ */
+export function computeRegressions(
+  db: StoreDatabase,
+  k: number = DEFAULT_REGRESSION_WINDOW,
+  rig?: string
+): { flags: RegressionFlag[]; skipped: RegressionSkip[] } {
+  // `slice(-0)` is `slice(0)` in JS — a bare `k <= 0` guard keeps "check
+  // nothing" from silently becoming "check everything" for a direct caller.
+  // Rig-scoped (mem-0r7l): matching `selectCandidates`' own `--rig` scope —
+  // otherwise a multi-rig store's K-window fills with an unrelated rig's
+  // lessons and this rig's own lessons are never checked, with no signal
+  // that anything was skipped (the window just silently contains 0 of them).
+  const recentLessons =
+    k <= 0 ? [] : (rig === undefined ? allLessons(db) : lessonsForRig(db, rig)).slice(-k);
+  const flags: RegressionFlag[] = [];
+  const skipped: RegressionSkip[] = [];
+
+  for (const lesson of recentLessons) {
+    // Lessons carry no FK to work_records (Decision 9): the source may have
+    // been deleted, re-ingested, or (rarer) now fail schema validation since
+    // (`getRecord` fails loudly on a corrupt/stale-schema row — store
+    // corruption, not absence). Skip gracefully, never throw a single bad
+    // lesson into aborting every other lesson's check in this run — but
+    // surface it, rather than let it look identical to "checked, clean".
+    let sourceRecord: WorkRecord | null;
+    try {
+      sourceRecord = getRecord(db, lesson.work_id);
+    } catch (error: unknown) {
+      skipped.push({
+        work_id: lesson.work_id,
+        reason: `source-record-invalid: ${error instanceof Error ? error.message : String(error)}`,
+      });
+      continue;
+    }
+    if (sourceRecord === null) {
+      skipped.push({ work_id: lesson.work_id, reason: 'source-record-missing' });
+      continue;
+    }
+    const signatures = recordSignatures(sourceRecord);
+    if (signatures.length === 0) {
+      skipped.push({ work_id: lesson.work_id, reason: 'no-signatures' });
+      continue;
+    }
+
+    // `extracted_at` crosses the unvalidated `import-lessons` boundary
+    // (LessonLineSchema only requires a non-empty string, no format
+    // enforcement) — unlike WorkRecord lifecycle timestamps, which come from
+    // the controlled ingest pipeline's known producer formats. Skip rather
+    // than throw: lessons are append-only, so an uncaught throw here would
+    // permanently poison every `distill-lessons` invocation once a single
+    // malformed lesson entered the window. Surfaced via `skipped`, same as
+    // the missing-source-record case above, rather than a silent continue.
+    let extractedAtUtc: string;
+    try {
+      extractedAtUtc = toIsoUtc(lesson.extracted_at);
+    } catch {
+      skipped.push({ work_id: lesson.work_id, reason: 'unparseable-extracted-at' });
+      continue;
+    }
+
+    const sourceQuery = queryFromRecord(db, lesson.work_id);
+    const superseded = new Set(supersedesClosure(db, lesson.work_id));
+    const lessonCtx = { work_id: lesson.work_id, extractedAtUtc, sourceQuery };
+
+    const candidatesBySignature = new Map<string, RegressionCandidate[]>(
+      signatures.map(signature => [
+        signature,
+        candidatesForSignature(db, signature, lessonCtx, superseded),
+      ])
+    );
+
+    flags.push(...checkPriorFixRegression(lesson.work_id, extractedAtUtc, candidatesBySignature));
+  }
+
+  return { flags, skipped };
 }

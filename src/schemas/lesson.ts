@@ -30,6 +30,10 @@ export type ConceptTag = z.infer<typeof ConceptTagSchema>;
  * (full context), `concepts` (the taxonomy above). All optional — historical
  * lessons predate the convention — but when present they must be well-formed,
  * so a typo'd concept tag fails at insert, not silently at retrieval.
+ *
+ * `evidence_kind` (mem-0r7l): the mechanical resolution-evidence provenance
+ * the verified-write gate stamped this lesson with — see
+ * `src/distill/verify.ts`'s `classifyEvidence`. Never asked of the model.
  */
 export const LessonPayloadSchema = z
   .object({
@@ -37,6 +41,7 @@ export const LessonPayloadSchema = z
     facts: z.array(z.string()).optional(),
     narrative: z.string().optional(),
     concepts: z.array(ConceptTagSchema).optional(),
+    evidence_kind: z.enum(['landed-diff', 'transcript-tail']).optional(),
   })
   .passthrough();
 

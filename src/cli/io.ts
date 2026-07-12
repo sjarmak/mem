@@ -25,6 +25,17 @@ export function asEnum<T extends string>(
   return str as T;
 }
 
+/** Require a positive-integer value for a flag that takes one; `undefined` when absent. */
+export function asPositiveInt(value: OptionValue, flag: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') throw new Error(`--${flag} requires a value`);
+  const n = Number(value);
+  if (!Number.isInteger(n) || n <= 0) {
+    throw new Error(`--${flag} must be a positive integer, got ${String(value)}`);
+  }
+  return n;
+}
+
 /** Read all of stdin. A TTY never yields EOF on its own, so the `for await`
  * would hang silently — fail loud instead; the consumer always pipes input or
  * uses `--file`. */

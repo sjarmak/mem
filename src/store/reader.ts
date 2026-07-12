@@ -118,6 +118,24 @@ export function lessonsFor(db: StoreDatabase, workId: string): StoredLesson[] {
   }));
 }
 
+interface LessonRow {
+  id: number;
+  work_id: string;
+  extracted_at: string;
+  commit_sha: string | null;
+  payload: string;
+}
+
+function toStoredLesson(row: LessonRow): StoredLesson {
+  return {
+    id: row.id,
+    work_id: row.work_id,
+    extracted_at: row.extracted_at,
+    ...(row.commit_sha !== null && { commit_sha: row.commit_sha }),
+    payload: JSON.parse(row.payload) as Record<string, unknown>,
+  };
+}
+
 /** Every lesson in the store, in append (id) order — the export side of the
  * schema-bump migration path. Lessons are the one table a store rebuild cannot
  * regenerate (append-only, extracted once per Decision 9), so they must be
@@ -125,21 +143,30 @@ export function lessonsFor(db: StoreDatabase, workId: string): StoredLesson[] {
 export function allLessons(db: StoreDatabase): StoredLesson[] {
   const rows = db
     .prepare('SELECT id, work_id, extracted_at, commit_sha, payload FROM lessons ORDER BY id')
-    .all() as {
-    id: number;
-    work_id: string;
-    extracted_at: string;
-    commit_sha: string | null;
-    payload: string;
-  }[];
+    .all() as LessonRow[];
 
-  return rows.map(row => ({
-    id: row.id,
-    work_id: row.work_id,
-    extracted_at: row.extracted_at,
-    ...(row.commit_sha !== null && { commit_sha: row.commit_sha }),
-    payload: JSON.parse(row.payload) as Record<string, unknown>,
-  }));
+  return rows.map(toStoredLesson);
+}
+
+/** Lessons whose source work_record is in `rig`, in append (id) order
+ * (mem-0r7l): the K-past-fix regression check's rig-scoped window. Lessons
+ * carry no FK to work_records (Decision 9), so this is an INNER JOIN — a
+ * lesson whose source record no longer exists can't be attributed to any
+ * rig and is correctly absent here (its own `getRecord` lookup would fail
+ * the same way in `computeRegressions` regardless). An unscoped `--rig`-less
+ * caller should use {@link allLessons} instead; this is deliberately narrower. */
+export function lessonsForRig(db: StoreDatabase, rig: string): StoredLesson[] {
+  const rows = db
+    .prepare(
+      `SELECT l.id, l.work_id, l.extracted_at, l.commit_sha, l.payload
+         FROM lessons l
+         JOIN work_records wr ON wr.work_id = l.work_id
+        WHERE wr.rig = ?
+        ORDER BY l.id`
+    )
+    .all(rig) as LessonRow[];
+
+  return rows.map(toStoredLesson);
 }
 
 /** Every work id reachable from `workId` over `supersedes` links, traversed as
@@ -169,6 +196,30 @@ export function workIdsBySignature(db: StoreDatabase, signature: string): string
   const rows = db
     .prepare('SELECT DISTINCT work_id FROM trace_errors WHERE signature = ? ORDER BY work_id')
     .all(signature) as { work_id: string }[];
+  return rows.map(row => row.work_id);
+}
+
+/** Like {@link workIdsBySignature}, restricted to one rig and closed strictly
+ * after `closedAfter` — pushed into SQL (joining the promoted, indexed
+ * `work_records.rig`/`closed_at` columns) so the K-past-fix regression check
+ * never fetches and parses a candidate record only to discard it on rig or
+ * temporal mismatch. */
+export function workIdsBySignatureSince(
+  db: StoreDatabase,
+  signature: string,
+  filter: { rig: string; closedAfter: string }
+): string[] {
+  const rows = db
+    .prepare(
+      `SELECT DISTINCT te.work_id
+         FROM trace_errors te
+         JOIN work_records wr ON wr.work_id = te.work_id
+        WHERE te.signature = ?
+          AND wr.rig = ?
+          AND wr.closed_at IS NOT NULL AND wr.closed_at > ?
+        ORDER BY te.work_id`
+    )
+    .all(signature, filter.rig, toIsoUtc(filter.closedAfter)) as { work_id: string }[];
   return rows.map(row => row.work_id);
 }
 
