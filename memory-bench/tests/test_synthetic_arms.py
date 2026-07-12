@@ -120,3 +120,23 @@ def test_format_report_has_confusion_and_staleness_columns(tmp_path) -> None:
     report = format_report("synthetic arms", results)
     assert "confusion" in report
     assert "staleness" in report
+
+
+def test_cost_delta_positive_for_recalling_arm_flat_for_none(tmp_path) -> None:
+    """mem-1m0s: 'bad memory is expensive' — a recalling arm (filesystem) pays extra
+    tokens over the no-memory baseline even though its lift is what carries the reward
+    story; the none arm's own MEMORY_ENABLED condition retrieves nothing, so its delta
+    stays flat."""
+    seqs = materialize_world(_world(), _project(), n_tasks=2)
+    res = _by_arm(eval_arms_over_sequences(seqs, ["none", "filesystem"], fs_base_dir=tmp_path))
+    assert res["filesystem"].token_cost_delta > 0.0
+    assert res["filesystem"].latency_cost_delta_ms >= 0.0
+    assert res["none"].token_cost_delta == 0.0
+
+
+def test_format_report_has_cost_columns(tmp_path) -> None:
+    seqs = materialize_world(_world(), _project(), n_tasks=2)
+    results = eval_arms_over_sequences(seqs, ["filesystem"], fs_base_dir=tmp_path)
+    report = format_report("synthetic arms", results)
+    assert "tok_delta" in report
+    assert "lat_delta_ms" in report

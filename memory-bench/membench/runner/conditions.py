@@ -214,6 +214,18 @@ def _system_for(
     return build_memory_system(system_name, **kwargs), config_id
 
 
+def _request_token_estimate(step: SequenceStep) -> int:
+    """Word-count proxy for the step's own request tokens — same heuristic style as
+    `ScriptedAgent`'s existing `input_tokens` estimate (`runner/agent.py`), but over
+    the request alone, BEFORE any memory payload is surfaced (that's the point of the
+    gate: decide whether to retrieve before paying for what retrieval would add)."""
+    return len(step.user_request.split())
+
+
+def _context_overflows(step: SequenceStep, budget: int) -> bool:
+    return _request_token_estimate(step) > budget
+
+
 def _execute_step(
     *,
     seq_id: str,
@@ -251,12 +263,23 @@ def _execute_step(
         # seed() iterates read-only; no defensive copy needed.
         system.seed(step.distractor_memories, seed_ctx)
 
+    # Opt-in context-overflow gate (mem-1m0s): only MEMORY_ENABLED is gated — oracle
+    # stays the fixed always-on ceiling control, and no_memory already never reads.
+    # Budget unset (None) preserves always-on behavior (zero blast radius).
+    budget = experiment.memory.context_budget_tokens
+    context_gated = (
+        condition is Condition.MEMORY_ENABLED
+        and budget is not None
+        and not _context_overflows(step, budget)
+    )
+
     retrieve: RetrieveResult | None = None
     memory_events: list[MemoryEvent] = []
     # Only issue a retrieve when the step actually depends on prior memory; a
     # retrieve with no requested ids would emit a phantom event and inflate
-    # memory_tool_calls for establishing steps.
-    if reads_enabled and step.expected_memory_reads:
+    # memory_tool_calls for establishing steps. A context-gated step also skips it —
+    # the request fits inside the budget, so retrieval would add cost, not capability.
+    if reads_enabled and step.expected_memory_reads and not context_gated:
         request = RetrievalRequest(
             query_text=step.user_request,
             requested_ids=step.expected_memory_reads,
@@ -292,7 +315,12 @@ def _execute_step(
     memory_events.extend(write_events)
 
     metrics = compute_metrics(
-        step, agent_result, retrieve, write_events, reads_enabled=reads_enabled
+        step,
+        agent_result,
+        retrieve,
+        write_events,
+        reads_enabled=reads_enabled,
+        context_gated=context_gated,
     )
     files_read = list(available_memory) if condition is Condition.MEMORY_ENABLED else []
     files_written = [mid for ev in write_events for mid in ev.written_ids]

@@ -61,6 +61,10 @@ class RetrievalMetrics(BaseModel):
     distractor_retrieval_rate: float = 0.0
     stale_memory_retrieval_rate: float = 0.0
     missed_required_memory_count: int = 0
+    # Observability for the context-overflow gate (mem-1m0s): True when the retrieve
+    # call was SKIPPED because the step's own request fit inside `context_budget_tokens`
+    # (no scorer signature change — set post-hoc via model_copy in compute_metrics).
+    context_gated: bool = False
 
 
 class RetentionMetrics(BaseModel):

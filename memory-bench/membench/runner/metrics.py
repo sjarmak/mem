@@ -54,6 +54,7 @@ def compute_metrics(
     write_events: list[MemoryEvent],
     *,
     reads_enabled: bool,
+    context_gated: bool = False,
 ) -> MetricsBundle:
     checks = agent_result.check_results
     passed = sum(checks.values())
@@ -99,6 +100,8 @@ def compute_metrics(
             read_attempted=reads_enabled,
         )
     )
+    if context_gated:
+        retrieval = retrieval.model_copy(update={"context_gated": True})
 
     written_ids = [mid for ev in write_events for mid in ev.written_ids]
     retention = score_retention(

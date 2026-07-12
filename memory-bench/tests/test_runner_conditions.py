@@ -15,11 +15,15 @@ from membench.schemas.config import AgentConfig, ExperimentConfig, MemoryConfig
 from tests.paths import FIXTURE
 
 
-def _experiment():
+def _experiment(context_budget_tokens=None):
     return ExperimentConfig(
         experiment_id="test-exp",
         agent=AgentConfig(agent_config_id="scripted-ref", runtime="scripted"),
-        memory=MemoryConfig(memory_config_id="filesystem", system="filesystem"),
+        memory=MemoryConfig(
+            memory_config_id="filesystem",
+            system="filesystem",
+            context_budget_tokens=context_budget_tokens,
+        ),
         dataset_id="gascity-backend-conventions",
     )
 
@@ -198,6 +202,55 @@ def test_establishing_steps_emit_no_phantom_retrieve(tmp_path):
     )
     assert mem_s1.metrics.efficiency.memory_tool_calls == 1
     assert all(e.normalized_operation.value == "write" for e in mem_s1.trace.memory_events)
+
+
+def test_context_gate_skips_retrieve_when_request_fits_budget(tmp_path):
+    """mem-1m0s: a budget large enough that the step's own request (12 words for
+    s3-add-endpoint) does NOT overflow it skips the retrieve entirely and marks
+    context_gated — memory would add cost here, not capability."""
+    seq = load_sequence(FIXTURE)
+    run = run_sequence(seq, _experiment(context_budget_tokens=50), fs_base_dir=tmp_path)
+    by_cond = run.by_condition()
+    s3 = next(t for t in by_cond[Condition.MEMORY_ENABLED] if t.step_id == "s3-add-endpoint")
+    assert s3.metrics.retrieval.context_gated is True
+    assert s3.metrics.efficiency.memory_tool_calls == 0
+    assert s3.trace.memory_events == []
+    assert s3.reward < 1.0  # the gated-off conventions are no longer recalled
+
+
+def test_context_gate_allows_retrieve_when_request_overflows_budget(tmp_path):
+    """A budget the step's own request already exceeds is the overflow case: the gate
+    does NOT suppress retrieval and behavior matches the always-on default."""
+    seq = load_sequence(FIXTURE)
+    run = run_sequence(seq, _experiment(context_budget_tokens=1), fs_base_dir=tmp_path)
+    by_cond = run.by_condition()
+    s3 = next(t for t in by_cond[Condition.MEMORY_ENABLED] if t.step_id == "s3-add-endpoint")
+    assert s3.metrics.retrieval.context_gated is False
+    assert s3.metrics.efficiency.memory_tool_calls == 1
+    assert s3.reward == 1.0
+
+
+def test_context_gate_does_not_affect_oracle_condition(tmp_path):
+    """The gate only applies to MEMORY_ENABLED — oracle stays the fixed always-on
+    ceiling control regardless of the configured budget."""
+    seq = load_sequence(FIXTURE)
+    run = run_sequence(seq, _experiment(context_budget_tokens=50), fs_base_dir=tmp_path)
+    by_cond = run.by_condition()
+    s3_oracle = next(t for t in by_cond[Condition.ORACLE_MEMORY] if t.step_id == "s3-add-endpoint")
+    assert s3_oracle.metrics.retrieval.context_gated is False
+    assert s3_oracle.metrics.efficiency.memory_tool_calls == 1
+    assert s3_oracle.reward == 1.0
+
+
+def test_context_gate_default_none_preserves_always_on_behavior(tmp_path):
+    """context_budget_tokens defaults to None — zero blast radius to existing runs."""
+    seq = load_sequence(FIXTURE)
+    run = run_sequence(seq, _experiment(), fs_base_dir=tmp_path)
+    by_cond = run.by_condition()
+    s3 = next(t for t in by_cond[Condition.MEMORY_ENABLED] if t.step_id == "s3-add-endpoint")
+    assert s3.metrics.retrieval.context_gated is False
+    assert s3.metrics.efficiency.memory_tool_calls == 1
+    assert s3.reward == 1.0
 
 
 def _two_step_sequence(writes_s1, writes_s2):

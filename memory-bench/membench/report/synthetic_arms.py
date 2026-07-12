@@ -45,13 +45,20 @@ _CONDITIONS = [Condition.NO_MEMORY, Condition.ORACLE_MEMORY, Condition.MEMORY_EN
 
 @dataclass(frozen=True)
 class ArmResult:
-    """One arm's mean reward across the eval, per condition, plus its Confusion/Staleness.
+    """One arm's mean reward across the eval, per condition, plus its Confusion/Staleness
+    and its token/latency cost.
 
     ``arm_confusion`` / ``arm_staleness`` are the mean ``distractor_retrieval_rate`` /
     ``stale_memory_retrieval_rate`` over the arm's read-attempted MEMORY_ENABLED trials —
     the only trials where retrieval ran, so a non-retrieving step cannot dilute the rate
     toward 0. ``rate_n`` is how many trials contributed, surfaced so a small denominator
     (only goal steps retrieve) is not dressed up as a many-trial mean.
+
+    ``none_tokens``/``arm_tokens`` (mean ``efficiency.total_tokens``) and
+    ``none_latency_ms``/``arm_latency_ms`` (mean ``efficiency.tool_latency_ms``) are the
+    'bad memory is expensive' headline (mem-1m0s): a lift~0 arm still shows its added cost
+    via ``token_cost_delta``/``latency_cost_delta_ms``, over ALL trials in the condition
+    (not just retrieving ones — cost is paid whether or not the step reads).
     """
 
     arm: str
@@ -61,6 +68,10 @@ class ArmResult:
     arm_confusion: float = 0.0
     arm_staleness: float = 0.0
     rate_n: int = 0
+    none_tokens: float = 0.0
+    arm_tokens: float = 0.0
+    none_latency_ms: float = 0.0
+    arm_latency_ms: float = 0.0
 
     @property
     def lift(self) -> float:
@@ -71,6 +82,16 @@ class ArmResult:
     def oracle_gap(self) -> float:
         """How far the arm fell short of perfect (oracle) recall."""
         return self.oracle_reward - self.arm_reward
+
+    @property
+    def token_cost_delta(self) -> float:
+        """Mean total_tokens the arm added over the no-memory baseline."""
+        return self.arm_tokens - self.none_tokens
+
+    @property
+    def latency_cost_delta_ms(self) -> float:
+        """Mean tool_latency_ms the arm added over the no-memory baseline."""
+        return self.arm_latency_ms - self.none_latency_ms
 
 
 def _confusion_staleness(trials: list[StepTrial]) -> tuple[list[float], list[float]]:
@@ -104,6 +125,8 @@ def _arm_result(
     rewards: dict[Condition, list[float]],
     confusion: list[float],
     staleness: list[float],
+    tokens: dict[Condition, list[float]],
+    latency_ms: dict[Condition, list[float]],
 ) -> ArmResult:
     return ArmResult(
         arm=arm,
@@ -113,7 +136,25 @@ def _arm_result(
         arm_confusion=_mean(confusion),
         arm_staleness=_mean(staleness),
         rate_n=len(confusion),
+        none_tokens=_mean(tokens[Condition.NO_MEMORY]),
+        arm_tokens=_mean(tokens[Condition.MEMORY_ENABLED]),
+        none_latency_ms=_mean(latency_ms[Condition.NO_MEMORY]),
+        arm_latency_ms=_mean(latency_ms[Condition.MEMORY_ENABLED]),
     )
+
+
+def _cost_by_condition(
+    trials: list[StepTrial],
+) -> tuple[dict[Condition, list[float]], dict[Condition, list[float]]]:
+    """Per-condition mean-input lists for the cost columns — ALL trials in the
+    condition (not just retrieving ones, unlike confusion/staleness): cost is paid on
+    every step, whether or not that step reads."""
+    tokens: dict[Condition, list[float]] = {c: [] for c in _CONDITIONS}
+    latency_ms: dict[Condition, list[float]] = {c: [] for c in _CONDITIONS}
+    for t in trials:
+        tokens[t.condition].append(t.metrics.efficiency.total_tokens)
+        latency_ms[t.condition].append(t.metrics.efficiency.tool_latency_ms)
+    return tokens, latency_ms
 
 
 def eval_arms_over_sequences(
@@ -126,6 +167,7 @@ def eval_arms_over_sequences(
         rewards: dict[Condition, list[float]] = {c: [] for c in _CONDITIONS}
         confusion: list[float] = []
         staleness: list[float] = []
+        all_trials: list[StepTrial] = []
         for seq in sequences:
             run = run_sequence(
                 seq, _experiment(arm), conditions=_CONDITIONS, fs_base_dir=fs_base_dir
@@ -135,7 +177,9 @@ def eval_arms_over_sequences(
             seq_conf, seq_stale = _confusion_staleness(run.trials)
             confusion.extend(seq_conf)
             staleness.extend(seq_stale)
-        results.append(_arm_result(arm, rewards, confusion, staleness))
+            all_trials.extend(run.trials)
+        tokens, latency_ms = _cost_by_condition(all_trials)
+        results.append(_arm_result(arm, rewards, confusion, staleness, tokens, latency_ms))
     return results
 
 
@@ -168,22 +212,24 @@ def eval_arms_over_project(
         for trial in run.trials:
             rewards[trial.condition].append(trial.reward)
         confusion, staleness = _confusion_staleness(run.trials)
-        results.append(_arm_result(arm, rewards, confusion, staleness))
+        tokens, latency_ms = _cost_by_condition(run.trials)
+        results.append(_arm_result(arm, rewards, confusion, staleness, tokens, latency_ms))
     return results
 
 
 def format_report(title: str, results: list[ArmResult]) -> str:
-    """A compact text table of the per-arm rewards + lift."""
+    """A compact text table of the per-arm rewards + lift + token/latency cost delta."""
     lines = [
         f"# {title}",
         f"{'arm':<14}{'none':>7}{'oracle':>8}{'arm':>7}{'lift':>7}{'oracle_gap':>12}"
-        f"{'confusion':>11}{'staleness':>11}",
-        "-" * 77,
+        f"{'confusion':>11}{'staleness':>11}{'tok_delta':>11}{'lat_delta_ms':>14}",
+        "-" * 102,
     ]
     for r in results:
         lines.append(
             f"{r.arm:<14}{r.none_reward:>7.3f}{r.oracle_reward:>8.3f}"
             f"{r.arm_reward:>7.3f}{r.lift:>7.3f}{r.oracle_gap:>12.3f}"
             f"{r.arm_confusion:>11.3f}{r.arm_staleness:>11.3f}"
+            f"{r.token_cost_delta:>11.1f}{r.latency_cost_delta_ms:>14.1f}"
         )
     return "\n".join(lines)
