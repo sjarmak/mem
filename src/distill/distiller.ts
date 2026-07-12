@@ -5,11 +5,30 @@ import { z } from 'zod';
 
 import { defaultGitRunner, isNonZeroExit, type GitRunner } from '../ingest/provenance.js';
 import { RIG_REPOS } from '../ingest/rig-repo-map.js';
+import { isSibling } from '../retrieve/exclusions.js';
+import { queryFromRecord } from '../retrieve/index.js';
 import { LessonPayloadSchema, ConceptTagSchema, type LessonPayload } from '../schemas/lesson.js';
 import type { TraceError } from '../schemas/trace.js';
 import type { WorkRecord } from '../schemas/workrecord.js';
 import type { LessonInput } from '../store/index.js';
-import { lessonsFor, queryRecords, type StoreDatabase } from '../store/index.js';
+import {
+  allLessons,
+  getRecord,
+  lessonsFor,
+  queryRecords,
+  supersedesClosure,
+  toIsoUtc,
+  workIdsBySignature,
+  type StoreDatabase,
+} from '../store/index.js';
+import {
+  checkPriorFixRegression,
+  classifyEvidence,
+  recordSignatures,
+  verifyFixEvidence,
+  type RegressionCandidate,
+  type RegressionFlag,
+} from './verify.js';
 
 /**
  * Lessons distiller (Decision 9): produce append-only lesson payloads from
@@ -341,7 +360,16 @@ export function distillLessons(
   const failures: DistillFailure[] = [];
   for (const record of records) {
     try {
-      const prompt = buildDistillPrompt(record, resolveResolutionEvidence(record, evidence));
+      // mem-0r7l gate: refuse before spending a model call. The only way to
+      // reach a real ResolutionEvidence below is through this check's
+      // `admitted: true` branch — a future admission criterion added to
+      // verifyFixEvidence is honored here for free, never bypassable.
+      const admission = verifyFixEvidence(resolveResolutionEvidence(record, evidence));
+      if (!admission.admitted) {
+        failures.push({ work_id: record.work_id, error: admission.reason });
+        continue;
+      }
+      const prompt = buildDistillPrompt(record, admission.evidence);
       const payload = parseDistilledPayload(runner(prompt));
       lessons.push({
         work_id: record.work_id,
@@ -349,7 +377,8 @@ export function distillLessons(
         ...(record.outcome?.commit_sha !== undefined
           ? { commit_sha: record.outcome.commit_sha }
           : {}),
-        payload,
+        // Mechanical provenance (classifyEvidence), never asked of the model (ZFC).
+        payload: { ...payload, evidence_kind: classifyEvidence(admission.evidence) },
       });
     } catch (error: unknown) {
       failures.push({
@@ -359,4 +388,72 @@ export function distillLessons(
     }
   }
   return { lessons, failures };
+}
+
+// --- K-past-fix regression check ------------------------------------------------------
+
+/** Default {@link RegressionOptions.k} — also the CLI's `--regression-window` default. */
+export const DEFAULT_REGRESSION_WINDOW = 5;
+
+/** Options for {@link computeRegressions}. */
+export interface RegressionOptions {
+  /** How many of the most-recently-appended lessons to check (default {@link DEFAULT_REGRESSION_WINDOW}). */
+  k?: number;
+}
+
+/**
+ * Regression-aware check (mem-0r7l): for the K most-recently-appended
+ * lessons, does the failure signature they documented recur in LATER-closed,
+ * non-sibling work? A recurrence means that lesson's fix did not durably
+ * prevent the failure — the concrete, mechanical signal that a
+ * transcript-tail-only lesson (see {@link classifyEvidence}) needed a
+ * stronger layer than memory. Reuses the existing `trace_errors` signature
+ * index and the Decision-6 sibling/supersedes exclusions (a later record on
+ * the SAME work continuing through a convoy follow-up is expected
+ * iteration, not a regression) — mechanical throughout (ZFC), never a
+ * keyword or semantic judgment. Report-only: lessons are append-only
+ * (Decision 9) and are never rewritten by this check.
+ */
+export function computeRegressions(
+  db: StoreDatabase,
+  opts: RegressionOptions = {}
+): RegressionFlag[] {
+  const k = opts.k ?? DEFAULT_REGRESSION_WINDOW;
+  // `slice(-0)` is `slice(0)` in JS — a bare `k <= 0` guard keeps "check
+  // nothing" from silently becoming "check everything" for a direct caller.
+  const recentLessons = k <= 0 ? [] : allLessons(db).slice(-k);
+  const flags: RegressionFlag[] = [];
+
+  for (const lesson of recentLessons) {
+    // Lessons carry no FK to work_records (Decision 9): the source may have
+    // been deleted or re-ingested since. Skip gracefully, never throw.
+    const sourceRecord = getRecord(db, lesson.work_id);
+    if (sourceRecord === null) continue;
+    const signatures = recordSignatures(sourceRecord);
+    if (signatures.length === 0) continue;
+
+    const sourceQuery = queryFromRecord(db, lesson.work_id);
+    const superseded = new Set(supersedesClosure(db, lesson.work_id));
+    const extractedAtUtc = toIsoUtc(lesson.extracted_at);
+
+    const candidatesBySignature = new Map<string, RegressionCandidate[]>();
+    for (const signature of signatures) {
+      const candidates: RegressionCandidate[] = [];
+      for (const workId of workIdsBySignature(db, signature)) {
+        if (workId === lesson.work_id) continue;
+        const candidateRecord = getRecord(db, workId);
+        if (candidateRecord === null || candidateRecord.lifecycle.closed === undefined) continue;
+        if (toIsoUtc(candidateRecord.lifecycle.closed) <= extractedAtUtc) continue;
+        const sibling = isSibling(candidateRecord, sourceQuery) || superseded.has(workId);
+        candidates.push({ work_id: workId, is_sibling: sibling });
+      }
+      if (candidates.length > 0) candidatesBySignature.set(signature, candidates);
+    }
+
+    flags.push(
+      ...checkPriorFixRegression(lesson.work_id, lesson.extracted_at, candidatesBySignature)
+    );
+  }
+
+  return flags;
 }

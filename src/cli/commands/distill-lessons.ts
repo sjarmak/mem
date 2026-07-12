@@ -1,16 +1,20 @@
 import { writeFileSync } from 'node:fs';
 
 import { CommandContext } from '../index.js';
-import { asString } from '../io.js';
+import { asString, type OptionValue } from '../io.js';
 import { withReadStore, withWriteStore } from '../store.js';
 import { importLessons } from '../../store/index.js';
 import {
   claudeRunner,
+  computeRegressions,
+  DEFAULT_REGRESSION_WINDOW,
   distillLessons,
   selectCandidates,
   type DistillFailure,
   type DistillRunner,
+  type EvidenceOptions,
 } from '../../distill/distiller.js';
+import type { RegressionFlag } from '../../distill/verify.js';
 
 export interface DistillLessonsResult {
   candidates: number;
@@ -20,36 +24,54 @@ export interface DistillLessonsResult {
   out: string | null;
   /** Import counts when `--import` was given, else null. */
   imported: { appended: number; skipped: number } | null;
+  /** mem-0r7l K-past-fix check: signatures from the most-recently-appended
+   * lessons that recurred in later, non-sibling work — report-only. */
+  regressions: RegressionFlag[];
 }
 
 const DEFAULT_MODEL = 'sonnet';
 
+/** Parse a `--<flag> N` CLI option as a positive integer; `undefined` when absent. */
+function parsePositiveInt(flag: string, value: OptionValue): number | undefined {
+  if (value === undefined) return undefined;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n <= 0) {
+    throw new Error(`--${flag} must be a positive integer, got ${String(value)}`);
+  }
+  return n;
+}
+
 /**
  * `mem distill-lessons [--rig RIG] [--work-ids a,b,c] [--limit N]
- *   [--model sonnet] [--out FILE] [--import] [--force] [--store PATH]`
+ *   [--model sonnet] [--out FILE] [--import] [--force] [--store PATH]
+ *   [--regression-window N]`
  *
  * Distill Decision-9 lesson payloads from closed WorkRecords that carry trace
  * errors, via headless Claude on the OAuth subscription (no-paid-API). Writes
  * import-ready NDJSON with `--out`, appends straight into the store with
  * `--import` (idempotent), or both. Records that already have lessons are
  * skipped unless `--force` (lessons are append-only).
+ *
+ * mem-0r7l verified-write gate: a candidate with no resolution evidence at
+ * all (no landed diff, no readable transcript) is refused before any model
+ * call — surfaced as a `no-resolution-evidence` failure. Admitted lessons
+ * carry a mechanical `evidence_kind` provenance tag. `--regression-window`
+ * (default 5) sets how many of the most-recently-appended lessons are
+ * checked for K-past-fix regressions (report-only, see `regressions` below).
  */
 export function distillLessonsCommand(
   ctx: CommandContext,
-  runner?: DistillRunner
+  runner?: DistillRunner,
+  evidenceOpts: EvidenceOptions = {}
 ): DistillLessonsResult {
   const rig = asString(ctx.options.rig, 'rig');
   const model = asString(ctx.options.model, 'model');
   const out = asString(ctx.options.out, 'out');
   const workIdsOpt = asString(ctx.options['work-ids'], 'work-ids');
-  const limit = ctx.options.limit;
-  let parsedLimit: number | undefined;
-  if (limit !== undefined) {
-    parsedLimit = Number(limit);
-    if (!Number.isInteger(parsedLimit) || parsedLimit <= 0) {
-      throw new Error(`--limit must be a positive integer, got ${String(limit)}`);
-    }
-  }
+  const parsedLimit = parsePositiveInt('limit', ctx.options.limit);
+  const parsedRegressionWindow =
+    parsePositiveInt('regression-window', ctx.options['regression-window']) ??
+    DEFAULT_REGRESSION_WINDOW;
   if (out === undefined && ctx.options.import !== true) {
     throw new Error('nothing to do: pass --out FILE and/or --import');
   }
@@ -64,7 +86,12 @@ export function distillLessonsCommand(
   );
 
   const distill = runner ?? claudeRunner(model ?? DEFAULT_MODEL);
-  const { lessons, failures } = distillLessons(records, distill, new Date().toISOString());
+  const { lessons, failures } = distillLessons(
+    records,
+    distill,
+    new Date().toISOString(),
+    evidenceOpts
+  );
 
   let outPath: string | null = null;
   if (out !== undefined) {
@@ -78,6 +105,12 @@ export function distillLessonsCommand(
     imported = withWriteStore(ctx.options, db => importLessons(db, lessons));
   }
 
+  // mem-0r7l: report-only, against whatever lessons are in the store now
+  // (including any just imported above) — never mutates the append-only table.
+  const regressions = withReadStore(ctx.options, db =>
+    computeRegressions(db, { k: parsedRegressionWindow })
+  );
+
   if (!ctx.options.json) {
     console.error(
       `distilled ${lessons.length}/${records.length} lesson(s)` +
@@ -87,6 +120,11 @@ export function distillLessonsCommand(
     for (const failure of failures) {
       console.error(`FAILED ${failure.work_id}: ${failure.error}`);
     }
+    for (const flag of regressions) {
+      console.error(
+        `REGRESSION ${flag.lesson_work_id} (${flag.signature}) recurred in: ${flag.recurred_in.join(', ')}`
+      );
+    }
   }
 
   return {
@@ -95,5 +133,6 @@ export function distillLessonsCommand(
     failures,
     out: outPath,
     imported,
+    regressions,
   };
 }

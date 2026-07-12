@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { distillLessonsCommand } from '../src/cli/commands/distill-lessons.js';
 import {
   buildDistillPrompt,
+  computeRegressions,
   distillLessons,
   parseDistilledPayload,
   resolveResolutionEvidence,
@@ -314,16 +315,54 @@ describe('distillLessons', () => {
     const runner = (prompt: string): string =>
       prompt.includes('w-bad') ? 'not json at all' : validLessonJson;
 
-    const outcome = distillLessons(records, runner, '2026-06-12T00:00:00Z');
+    // Both records need resolution evidence to clear the mem-0r7l gate before
+    // the JSON-validity failure (isolated to w-bad) can be observed.
+    const outcome = distillLessons(records, runner, '2026-06-12T00:00:00Z', {
+      readTranscript: () => 'fixed by adding the coverage field',
+    });
     expect(outcome.lessons).toHaveLength(1);
     expect(outcome.lessons[0]).toMatchObject({
       work_id: 'w-good',
       extracted_at: '2026-06-12T00:00:00Z',
       commit_sha: 'abc123',
     });
+    expect(outcome.lessons[0].payload.evidence_kind).toBe('transcript-tail');
     expect(outcome.failures).toHaveLength(1);
     expect(outcome.failures[0].work_id).toBe('w-bad');
     expect(outcome.failures[0].error).toContain('JSON');
+  });
+
+  it('refuses admission (and never calls the runner) for a candidate with no resolution evidence', () => {
+    let runnerCalls = 0;
+    const outcome = distillLessons(
+      [closedRecord('w-unverifiable', 'rigA')],
+      () => {
+        runnerCalls++;
+        return validLessonJson;
+      },
+      '2026-06-12T00:00:00Z',
+      {
+        readTranscript: () => {
+          throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+        },
+      }
+    );
+    expect(outcome.lessons).toHaveLength(0);
+    expect(outcome.failures).toHaveLength(1);
+    expect(outcome.failures[0].work_id).toBe('w-unverifiable');
+    expect(outcome.failures[0].error).toContain('no-resolution-evidence');
+    expect(runnerCalls).toBe(0);
+  });
+
+  it('stamps evidence_kind: landed-diff for a git-verified candidate', () => {
+    const record = closedRecord('w-1', 'rigA', {
+      outcome: { commit_sha: 'abc123' },
+      provenance: { work_dir: '/repo/checkout', repo: 'checkout', history_state: 'unresolved' },
+    });
+    const outcome = distillLessons([record], () => validLessonJson, '2026-06-12T00:00:00Z', {
+      run: () => 'diff --git a/src/a.ts b/src/a.ts\n+  coverage: 1,\n',
+    });
+    expect(outcome.lessons[0].payload.evidence_kind).toBe('landed-diff');
   });
 
   it('threads resolution evidence into the prompt the runner sees', () => {
@@ -348,13 +387,16 @@ describe('distillLessonsCommand', () => {
     options: { json: true, verbose: false, store: storeFile, ...options } as never,
   });
 
+  const evidenceOpts = { readTranscript: () => 'fixed by adding the coverage field' };
+
   it('distills, writes NDJSON, and imports into the store', () => {
     writeRecords(db, [closedRecord('w-1', 'rigA')]);
     const outFile = join(dir, 'lessons.jsonl');
 
     const result = distillLessonsCommand(
       ctx({ out: outFile, import: true }),
-      () => validLessonJson
+      () => validLessonJson,
+      evidenceOpts
     );
 
     expect(result).toMatchObject({
@@ -363,6 +405,7 @@ describe('distillLessonsCommand', () => {
       failures: [],
       out: outFile,
       imported: { appended: 1, skipped: 0 },
+      regressions: [],
     });
     const line = JSON.parse(readFileSync(outFile, 'utf8').trim()) as { work_id: string };
     expect(line.work_id).toBe('w-1');
@@ -371,11 +414,37 @@ describe('distillLessonsCommand', () => {
 
   it('is idempotent across reruns: lessoned records are no longer candidates', () => {
     writeRecords(db, [closedRecord('w-1', 'rigA')]);
-    distillLessonsCommand(ctx({ import: true }), () => validLessonJson);
+    distillLessonsCommand(ctx({ import: true }), () => validLessonJson, evidenceOpts);
 
-    const rerun = distillLessonsCommand(ctx({ import: true }), () => validLessonJson);
+    const rerun = distillLessonsCommand(ctx({ import: true }), () => validLessonJson, evidenceOpts);
     expect(rerun.candidates).toBe(0);
     expect(lessonsFor(db, 'w-1')).toHaveLength(1);
+  });
+
+  it('refuses admission for a candidate with no resolution evidence, via the CLI', () => {
+    writeRecords(db, [closedRecord('w-unverifiable', 'rigA')]);
+
+    const result = distillLessonsCommand(ctx({ import: true }), () => validLessonJson, {
+      readTranscript: () => {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      },
+    });
+
+    expect(result.distilled).toBe(0);
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0].work_id).toBe('w-unverifiable');
+    expect(result.failures[0].error).toContain('no-resolution-evidence');
+    expect(lessonsFor(db, 'w-unverifiable')).toHaveLength(0);
+  });
+
+  it('rejects a non-numeric --regression-window', () => {
+    expect(() =>
+      distillLessonsCommand(
+        ctx({ import: true, 'regression-window': 'lots' }),
+        () => validLessonJson,
+        evidenceOpts
+      )
+    ).toThrow(/--regression-window/);
   });
 
   it('refuses to run with neither --out nor --import', () => {
@@ -386,5 +455,174 @@ describe('distillLessonsCommand', () => {
     expect(() =>
       distillLessonsCommand(ctx({ import: true, limit: 'lots' }), () => validLessonJson)
     ).toThrow(/--limit/);
+  });
+});
+
+describe('computeRegressions', () => {
+  it('flags a lesson signature that recurred in later, unrelated closed work', () => {
+    writeRecords(db, [
+      closedRecord('w-src', 'rigA'), // closed 2026-06-05
+      closedRecord('w-later', 'rigA', {
+        lifecycle: {
+          created: '2026-06-06T00:00:00Z',
+          started: '2026-06-06T01:00:00Z',
+          closed: '2026-06-07T00:00:00Z',
+          status: 'closed',
+          status_history: [],
+        },
+      }),
+    ]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    const flags = computeRegressions(db);
+    expect(flags).toEqual([
+      {
+        lesson_work_id: 'w-src',
+        extracted_at: '2026-06-05T12:00:00Z',
+        signature: 'tsc:src/a.ts:13:TS2741',
+        recurred_in: ['w-later'],
+      },
+    ]);
+  });
+
+  it('does NOT flag a convoy-sibling recurrence (expected iteration, not a regression)', () => {
+    writeRecords(db, [
+      closedRecord('w-src', 'rigA', { links: { deps: [], supersedes: [], convoy_id: 'c-1' } }),
+      closedRecord('w-followup', 'rigA', {
+        links: { deps: [], supersedes: [], convoy_id: 'c-1' },
+        lifecycle: {
+          created: '2026-06-06T00:00:00Z',
+          started: '2026-06-06T01:00:00Z',
+          closed: '2026-06-07T00:00:00Z',
+          status: 'closed',
+          status_history: [],
+        },
+      }),
+    ]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    expect(computeRegressions(db)).toEqual([]);
+  });
+
+  it('does NOT flag a supersedes-chain recurrence', () => {
+    writeRecords(db, [
+      closedRecord('w-src', 'rigA'),
+      closedRecord('w-superseder', 'rigA', {
+        links: { deps: [], supersedes: ['w-src'] },
+        lifecycle: {
+          created: '2026-06-06T00:00:00Z',
+          started: '2026-06-06T01:00:00Z',
+          closed: '2026-06-07T00:00:00Z',
+          status: 'closed',
+          status_history: [],
+        },
+      }),
+    ]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    expect(computeRegressions(db)).toEqual([]);
+  });
+
+  it('does not flag when the signature never recurs', () => {
+    writeRecords(db, [closedRecord('w-src', 'rigA')]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    expect(computeRegressions(db)).toEqual([]);
+  });
+
+  it('does not flag a recurrence that closed BEFORE the lesson was extracted', () => {
+    writeRecords(db, [
+      closedRecord('w-src', 'rigA'), // closed 2026-06-05T00:00:00Z
+      closedRecord('w-earlier', 'rigA', {
+        lifecycle: {
+          created: '2026-06-01T00:00:00Z',
+          started: '2026-06-01T01:00:00Z',
+          closed: '2026-06-02T00:00:00Z',
+          status: 'closed',
+          status_history: [],
+        },
+      }),
+    ]);
+    // extracted_at AFTER w-earlier closed, so w-earlier is not "later" work.
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-10T00:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    expect(computeRegressions(db)).toEqual([]);
+  });
+
+  it('respects the k window: only the most-recently-appended lessons are checked', () => {
+    writeRecords(db, [
+      closedRecord('w-old', 'rigA', {
+        trace: { jsonl_path: '/t/w-old.jsonl', errors: [tsError('src/old.ts')] },
+      }),
+      closedRecord('w-recent', 'rigA'),
+      closedRecord('w-later', 'rigA', {
+        lifecycle: {
+          created: '2026-06-06T00:00:00Z',
+          started: '2026-06-06T01:00:00Z',
+          closed: '2026-06-07T00:00:00Z',
+          status: 'closed',
+          status_history: [],
+        },
+      }),
+    ]);
+    appendLesson(db, { work_id: 'w-old', extracted_at: '2026-06-05T10:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-recent', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+
+    // w-later recurs w-recent's signature, not w-old's — k=1 only checks w-recent.
+    const flags = computeRegressions(db, { k: 1 });
+    expect(flags).toHaveLength(1);
+    expect(flags[0].lesson_work_id).toBe('w-recent');
+  });
+
+  it('checks nothing for k <= 0, guarding against the slice(-0) === slice(0) footgun', () => {
+    writeRecords(db, [
+      closedRecord('w-src', 'rigA'),
+      closedRecord('w-later', 'rigA', {
+        lifecycle: {
+          created: '2026-06-06T00:00:00Z',
+          started: '2026-06-06T01:00:00Z',
+          closed: '2026-06-07T00:00:00Z',
+          status: 'closed',
+          status_history: [],
+        },
+      }),
+    ]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    expect(computeRegressions(db, { k: 0 })).toEqual([]);
+  });
+
+  it('skips a lesson gracefully when its source record no longer exists', () => {
+    appendLesson(db, {
+      work_id: 'w-deleted',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    expect(computeRegressions(db)).toEqual([]);
   });
 });
