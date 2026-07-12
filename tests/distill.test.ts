@@ -589,7 +589,7 @@ describe('computeRegressions', () => {
     appendLesson(db, { work_id: 'w-recent', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
 
     // w-later recurs w-recent's signature, not w-old's — k=1 only checks w-recent.
-    const flags = computeRegressions(db, { k: 1 });
+    const flags = computeRegressions(db, 1);
     expect(flags).toHaveLength(1);
     expect(flags[0].lesson_work_id).toBe('w-recent');
   });
@@ -613,7 +613,7 @@ describe('computeRegressions', () => {
       payload: { subtitle: 's' },
     });
 
-    expect(computeRegressions(db, { k: 0 })).toEqual([]);
+    expect(computeRegressions(db, 0)).toEqual([]);
   });
 
   it('skips a lesson gracefully when its source record no longer exists', () => {

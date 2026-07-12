@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 
 import { CommandContext } from '../index.js';
-import { asString, type OptionValue } from '../io.js';
+import { asPositiveInt, asString } from '../io.js';
 import { withReadStore, withWriteStore } from '../store.js';
 import { importLessons } from '../../store/index.js';
 import {
@@ -31,16 +31,6 @@ export interface DistillLessonsResult {
 
 const DEFAULT_MODEL = 'sonnet';
 
-/** Parse a `--<flag> N` CLI option as a positive integer; `undefined` when absent. */
-function parsePositiveInt(flag: string, value: OptionValue): number | undefined {
-  if (value === undefined) return undefined;
-  const n = Number(value);
-  if (!Number.isInteger(n) || n <= 0) {
-    throw new Error(`--${flag} must be a positive integer, got ${String(value)}`);
-  }
-  return n;
-}
-
 /**
  * `mem distill-lessons [--rig RIG] [--work-ids a,b,c] [--limit N]
  *   [--model sonnet] [--out FILE] [--import] [--force] [--store PATH]
@@ -68,9 +58,9 @@ export function distillLessonsCommand(
   const model = asString(ctx.options.model, 'model');
   const out = asString(ctx.options.out, 'out');
   const workIdsOpt = asString(ctx.options['work-ids'], 'work-ids');
-  const parsedLimit = parsePositiveInt('limit', ctx.options.limit);
+  const parsedLimit = asPositiveInt(ctx.options.limit, 'limit');
   const parsedRegressionWindow =
-    parsePositiveInt('regression-window', ctx.options['regression-window']) ??
+    asPositiveInt(ctx.options['regression-window'], 'regression-window') ??
     DEFAULT_REGRESSION_WINDOW;
   if (out === undefined && ctx.options.import !== true) {
     throw new Error('nothing to do: pass --out FILE and/or --import');
@@ -108,7 +98,7 @@ export function distillLessonsCommand(
   // mem-0r7l: report-only, against whatever lessons are in the store now
   // (including any just imported above) — never mutates the append-only table.
   const regressions = withReadStore(ctx.options, db =>
-    computeRegressions(db, { k: parsedRegressionWindow })
+    computeRegressions(db, parsedRegressionWindow)
   );
 
   if (!ctx.options.json) {

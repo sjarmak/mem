@@ -360,10 +360,10 @@ export function distillLessons(
   const failures: DistillFailure[] = [];
   for (const record of records) {
     try {
-      // mem-0r7l gate: refuse before spending a model call. The only way to
-      // reach a real ResolutionEvidence below is through this check's
-      // `admitted: true` branch — a future admission criterion added to
-      // verifyFixEvidence is honored here for free, never bypassable.
+      // mem-0r7l gate: refuse before spending a model call. Everywhere this
+      // module builds a prompt, it does so from `admission.evidence`, not a
+      // bare `resolveResolutionEvidence(...)` result — so a future admission
+      // criterion added to verifyFixEvidence is honored here for free.
       const admission = verifyFixEvidence(resolveResolutionEvidence(record, evidence));
       if (!admission.admitted) {
         failures.push({ work_id: record.work_id, error: admission.reason });
@@ -392,13 +392,37 @@ export function distillLessons(
 
 // --- K-past-fix regression check ------------------------------------------------------
 
-/** Default {@link RegressionOptions.k} — also the CLI's `--regression-window` default. */
+/** Default {@link computeRegressions} window — also the CLI's `--regression-window` default. */
 export const DEFAULT_REGRESSION_WINDOW = 5;
 
-/** Options for {@link computeRegressions}. */
-export interface RegressionOptions {
-  /** How many of the most-recently-appended lessons to check (default {@link DEFAULT_REGRESSION_WINDOW}). */
-  k?: number;
+/**
+ * One signature's later-closed candidates, for the K-past-fix check: every
+ * work_id carrying the same failure signature as `lesson`, closed strictly
+ * after `lesson`'s `extracted_at`, tagged with whether Decision-6's
+ * convoy/PR/parent/supersedes exclusions already cover it (that reuse is
+ * exactly why this stays a thin loop over `workIdsBySignature` — the
+ * exclusion logic itself lives in `isSibling`/`supersedesClosure`, not here).
+ */
+function candidatesForSignature(
+  db: StoreDatabase,
+  signature: string,
+  lesson: {
+    work_id: string;
+    extractedAtUtc: string;
+    sourceQuery: ReturnType<typeof queryFromRecord>;
+  },
+  superseded: ReadonlySet<string>
+): RegressionCandidate[] {
+  const candidates: RegressionCandidate[] = [];
+  for (const workId of workIdsBySignature(db, signature)) {
+    if (workId === lesson.work_id) continue;
+    const candidateRecord = getRecord(db, workId);
+    if (candidateRecord === null || candidateRecord.lifecycle.closed === undefined) continue;
+    if (toIsoUtc(candidateRecord.lifecycle.closed) <= lesson.extractedAtUtc) continue;
+    const sibling = isSibling(candidateRecord, lesson.sourceQuery) || superseded.has(workId);
+    candidates.push({ work_id: workId, is_sibling: sibling });
+  }
+  return candidates;
 }
 
 /**
@@ -416,9 +440,8 @@ export interface RegressionOptions {
  */
 export function computeRegressions(
   db: StoreDatabase,
-  opts: RegressionOptions = {}
+  k: number = DEFAULT_REGRESSION_WINDOW
 ): RegressionFlag[] {
-  const k = opts.k ?? DEFAULT_REGRESSION_WINDOW;
   // `slice(-0)` is `slice(0)` in JS — a bare `k <= 0` guard keeps "check
   // nothing" from silently becoming "check everything" for a direct caller.
   const recentLessons = k <= 0 ? [] : allLessons(db).slice(-k);
@@ -435,20 +458,14 @@ export function computeRegressions(
     const sourceQuery = queryFromRecord(db, lesson.work_id);
     const superseded = new Set(supersedesClosure(db, lesson.work_id));
     const extractedAtUtc = toIsoUtc(lesson.extracted_at);
+    const lessonCtx = { work_id: lesson.work_id, extractedAtUtc, sourceQuery };
 
-    const candidatesBySignature = new Map<string, RegressionCandidate[]>();
-    for (const signature of signatures) {
-      const candidates: RegressionCandidate[] = [];
-      for (const workId of workIdsBySignature(db, signature)) {
-        if (workId === lesson.work_id) continue;
-        const candidateRecord = getRecord(db, workId);
-        if (candidateRecord === null || candidateRecord.lifecycle.closed === undefined) continue;
-        if (toIsoUtc(candidateRecord.lifecycle.closed) <= extractedAtUtc) continue;
-        const sibling = isSibling(candidateRecord, sourceQuery) || superseded.has(workId);
-        candidates.push({ work_id: workId, is_sibling: sibling });
-      }
-      if (candidates.length > 0) candidatesBySignature.set(signature, candidates);
-    }
+    const candidatesBySignature = new Map<string, RegressionCandidate[]>(
+      signatures.map(signature => [
+        signature,
+        candidatesForSignature(db, signature, lessonCtx, superseded),
+      ])
+    );
 
     flags.push(
       ...checkPriorFixRegression(lesson.work_id, lesson.extracted_at, candidatesBySignature)
