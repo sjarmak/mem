@@ -3,6 +3,7 @@ import pytest
 from membench.dataset import load_sequence
 from membench.memory_systems.ours_live_system import OursLiveMemory
 from membench.report.comparison import build_comparison
+from membench.report.synthetic_arms import _confusion_staleness
 from membench.runner.conditions import (
     ENV_MEM_BIN,
     ENV_MEM_STORE,
@@ -232,6 +233,24 @@ def test_context_gate_allows_retrieve_when_not_overflowing(tmp_path, context_bud
     assert s3.metrics.retrieval.context_gated is False
     assert s3.metrics.efficiency.memory_tool_calls == 1
     assert s3.reward == 1.0
+
+
+def test_context_gate_excludes_gated_trial_from_confusion_staleness(tmp_path):
+    """mem-1m0s rework: a context_gated trial must not leak a fabricated 0.0 rate into
+    _confusion_staleness's samples. Before the fix, read_attempted was ANDed only with
+    bool(required_ids) — not with `not context_gated` — so a gated trial (retrieve
+    skipped, retrieved_ids=[]) still reported read_attempted=True and diluted the
+    arm's true distractor/stale average with a rate that was never actually measured."""
+    seq = load_sequence(FIXTURE)
+    run = run_sequence(seq, _experiment(context_budget_tokens=50), fs_base_dir=tmp_path)
+    by_cond = run.by_condition()
+    s3 = next(t for t in by_cond[Condition.MEMORY_ENABLED] if t.step_id == "s3-add-endpoint")
+    assert s3.metrics.retrieval.context_gated is True
+    assert s3.metrics.retrieval.read_attempted is False
+
+    confusion, staleness = _confusion_staleness(run.trials)
+    assert confusion == []
+    assert staleness == []
 
 
 def test_context_gate_does_not_affect_oracle_condition(tmp_path):

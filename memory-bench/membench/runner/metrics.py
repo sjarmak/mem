@@ -97,7 +97,7 @@ def compute_metrics(
             required_ids=list(step.expected_memory_reads),
             distractor_ids=list(step.distractor_memories),
             stale_ids=list(step.superseded_memory_ids),
-            read_attempted=reads_enabled,
+            read_attempted=reads_enabled and not context_gated,
             context_gated=context_gated,
         )
     )

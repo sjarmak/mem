@@ -269,6 +269,7 @@ def _execute_step(
     budget = experiment.memory.context_budget_tokens
     context_gated = (
         condition is Condition.MEMORY_ENABLED
+        and bool(step.expected_memory_reads)
         and budget is not None
         and _fits_within_budget(step, budget)
     )

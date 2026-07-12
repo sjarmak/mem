@@ -63,7 +63,8 @@ class RetrievalMetrics(BaseModel):
     missed_required_memory_count: int = 0
     # Observability for the context-overflow gate (mem-1m0s): True when the retrieve
     # call was SKIPPED because the step's own request fit inside `context_budget_tokens`
-    # (no scorer signature change — set post-hoc via model_copy in compute_metrics).
+    # (threaded through RetrievalInputs -> score_retrieval's constructor call in
+    # runner/metrics.py; no scorer signature change).
     context_gated: bool = False
 
 
