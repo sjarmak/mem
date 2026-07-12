@@ -130,3 +130,5 @@ def test_nondefault_top_k_reaches_the_lexical_arm(monkeypatch) -> None:
 
     assert captured.get("top_k") == 5
     assert result.discrimination is not None
+    assert result.discrimination.accepted
+    assert result.discrimination.quality_reward > result.discrimination.naive_reward
