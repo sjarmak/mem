@@ -20,6 +20,7 @@ import importlib
 from membench.generators.enterprise_workflow import materialize_world
 from membench.generators.shape_wellformedness_gate import shape_wellformedness_gate
 from membench.memory_systems.lexical_system import DEFAULT_TOP_K
+from membench.runner import conditions as conditions_mod
 from membench.schemas.sequence import BenchmarkSequence
 from membench.schemas.world import Channel, EnterpriseWorld, Persona, Project, Team
 
@@ -107,3 +108,27 @@ def test_low_top_k_forces_malformed() -> None:
     assert not result.wellformed
     assert result.discrimination is None
     assert "M1 truncation" in result.reason
+
+
+def test_nondefault_top_k_reaches_the_lexical_arm(monkeypatch) -> None:
+    # facts_per_task <= top_k here, so this exercises the discrimination path (not
+    # the M1 short-circuit) — the gate's top_k must actually construct the naive
+    # ("lexical") arm, not silently fall back to DEFAULT_TOP_K.
+    assert DEFAULT_TOP_K != 5
+    captured: dict[str, object] = {}
+    real_build = conditions_mod.build_memory_system
+
+    def _spy(name: str, **kwargs: object) -> object:
+        if name == "lexical":
+            captured.update(kwargs)
+        return real_build(name, **kwargs)
+
+    monkeypatch.setattr(conditions_mod, "build_memory_system", _spy)
+
+    seq = _tool_requiring_seq(facts_per_task=3)
+    result = shape_wellformedness_gate(seq, facts_per_task=3, top_k=5)
+
+    assert captured.get("top_k") == 5
+    assert result.discrimination is not None
+    assert result.discrimination.accepted
+    assert result.discrimination.quality_reward > result.discrimination.naive_reward

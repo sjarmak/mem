@@ -5,6 +5,8 @@ no Docker. The discrimination is the deterministic proxy for ours-vs-builtin.
 
 from __future__ import annotations
 
+import pytest
+
 from membench.generators.enterprise_workflow import materialize_world
 from membench.generators.memory_necessity_gate import memory_necessity_gate
 from membench.generators.retrieval_discrimination_gate import (
@@ -77,3 +79,13 @@ def test_discrimination_holds_across_seeds() -> None:
         result = retrieval_discrimination_gate(_tool_requiring_seq(seed))
         assert result.accepted, f"seed {seed}: {result.reason}"
         assert result.quality_reward > result.naive_reward
+
+
+def test_invalid_top_k_propagates_from_lexical_arm() -> None:
+    # top_k<1 is not re-validated at this boundary (mem-keqrm): the naive ("lexical")
+    # arm is the one system that actually consumes top_k, and its constructor already
+    # raises ValueError for an invalid value. This locks in that the error reaches the
+    # gate's caller unwrapped and unswallowed, so a future refactor of the arm-building
+    # path can't silently absorb it.
+    with pytest.raises(ValueError, match="top_k must be >= 1"):
+        retrieval_discrimination_gate(_tool_requiring_seq(), top_k=0)

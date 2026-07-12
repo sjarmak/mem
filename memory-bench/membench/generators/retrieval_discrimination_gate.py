@@ -54,18 +54,18 @@ class DiscriminationResult:
     reason: str
 
 
-def _experiment(arm: str) -> ExperimentConfig:
+def _experiment(arm: str, *, top_k: int | None = None) -> ExperimentConfig:
     return ExperimentConfig(
         experiment_id=f"discrimination-{arm}",
         agent=AgentConfig(agent_config_id="scripted-ref"),
-        memory=MemoryConfig(memory_config_id=arm, system=arm),
+        memory=MemoryConfig(memory_config_id=arm, system=arm, top_k=top_k),
         dataset_id="synthetic",
     )
 
 
-def _goal_reward(seq: BenchmarkSequence, arm: str) -> float:
+def _goal_reward(seq: BenchmarkSequence, arm: str, *, top_k: int | None = None) -> float:
     """MEMORY_ENABLED reward of the GOAL step (the last step) for ``arm``."""
-    run = run_sequence(seq, _experiment(arm), conditions=[Condition.MEMORY_ENABLED])
+    run = run_sequence(seq, _experiment(arm, top_k=top_k), conditions=[Condition.MEMORY_ENABLED])
     goal_id = seq.steps[-1].step_id
     for trial in run.trials:
         if trial.condition is Condition.MEMORY_ENABLED and trial.step_id == goal_id:
@@ -79,12 +79,17 @@ def retrieval_discrimination_gate(
     quality_arm: str = QUALITY_ARM,
     naive_arm: str = NAIVE_ARM,
     epsilon: float = EPSILON,
+    top_k: int | None = None,
 ) -> DiscriminationResult:
     """Admit ``seq`` as retrieval-quality-discriminating iff the quality arm beats the
     naive arm at the goal by more than ``epsilon`` — the deterministic proxy for
-    ours-vs-builtin (see module docstring). Reuses ``pilot_filter`` for the decision."""
+    ours-vs-builtin (see module docstring). Reuses ``pilot_filter`` for the decision.
+    ``top_k``, when set, overrides the naive arm's retrieval width (only ``lexical``
+    consumes it; the id-exact quality arm ignores it). Not re-validated here: a
+    ``top_k < 1`` propagates unwrapped as a ``ValueError`` from ``LexicalTopKMemory``'s
+    constructor, which is the intended validation point."""
     quality_reward = _goal_reward(seq, quality_arm)
-    naive_reward = _goal_reward(seq, naive_arm)
+    naive_reward = _goal_reward(seq, naive_arm, top_k=top_k)
     verdict = pilot_filter(
         oracle_reward=quality_reward, no_memory_reward=naive_reward, epsilon=epsilon
     )

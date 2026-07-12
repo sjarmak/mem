@@ -44,6 +44,10 @@ class MemoryConfig(BaseModel):
     # steps reaches this budget. None (the default) preserves always-on retrieval —
     # zero blast radius to existing runs.
     context_budget_tokens: int | None = None
+    # Retrieval width override. ``None`` means "use the arm's own default". Currently
+    # only the ``lexical`` arm's construction consumes this (§runner/conditions.py
+    # ``_system_for``); other arms ignore it.
+    top_k: int | None = None
 
 
 class ExperimentConfig(BaseModel):
