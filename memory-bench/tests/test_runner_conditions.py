@@ -218,11 +218,15 @@ def test_context_gate_skips_retrieve_when_request_fits_budget(tmp_path):
     assert s3.reward < 1.0  # the gated-off conventions are no longer recalled
 
 
-def test_context_gate_allows_retrieve_when_request_overflows_budget(tmp_path):
-    """A budget the step's own request already exceeds is the overflow case: the gate
-    does NOT suppress retrieval and behavior matches the always-on default."""
+@pytest.mark.parametrize("context_budget_tokens", [1, None])
+def test_context_gate_allows_retrieve_when_not_overflowing(tmp_path, context_budget_tokens):
+    """A budget the step's own request already exceeds (1), and no budget at all
+    (None, the always-on default), both leave the gate open: retrieval behaves
+    exactly as if the gate did not exist."""
     seq = load_sequence(FIXTURE)
-    run = run_sequence(seq, _experiment(context_budget_tokens=1), fs_base_dir=tmp_path)
+    run = run_sequence(
+        seq, _experiment(context_budget_tokens=context_budget_tokens), fs_base_dir=tmp_path
+    )
     by_cond = run.by_condition()
     s3 = next(t for t in by_cond[Condition.MEMORY_ENABLED] if t.step_id == "s3-add-endpoint")
     assert s3.metrics.retrieval.context_gated is False
@@ -240,17 +244,6 @@ def test_context_gate_does_not_affect_oracle_condition(tmp_path):
     assert s3_oracle.metrics.retrieval.context_gated is False
     assert s3_oracle.metrics.efficiency.memory_tool_calls == 1
     assert s3_oracle.reward == 1.0
-
-
-def test_context_gate_default_none_preserves_always_on_behavior(tmp_path):
-    """context_budget_tokens defaults to None — zero blast radius to existing runs."""
-    seq = load_sequence(FIXTURE)
-    run = run_sequence(seq, _experiment(), fs_base_dir=tmp_path)
-    by_cond = run.by_condition()
-    s3 = next(t for t in by_cond[Condition.MEMORY_ENABLED] if t.step_id == "s3-add-endpoint")
-    assert s3.metrics.retrieval.context_gated is False
-    assert s3.metrics.efficiency.memory_tool_calls == 1
-    assert s3.reward == 1.0
 
 
 def _two_step_sequence(writes_s1, writes_s2):

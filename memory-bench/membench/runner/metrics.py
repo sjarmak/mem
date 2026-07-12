@@ -98,10 +98,9 @@ def compute_metrics(
             distractor_ids=list(step.distractor_memories),
             stale_ids=list(step.superseded_memory_ids),
             read_attempted=reads_enabled,
+            context_gated=context_gated,
         )
     )
-    if context_gated:
-        retrieval = retrieval.model_copy(update={"context_gated": True})
 
     written_ids = [mid for ev in write_events for mid in ev.written_ids]
     retention = score_retention(

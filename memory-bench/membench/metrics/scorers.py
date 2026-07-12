@@ -132,6 +132,9 @@ class RetrievalInputs:
     and `stale_ids` are known-irrelevant / known-superseded ids the backend should
     NOT have surfaced; both default empty, so an arm that seeds neither reports 0.0
     for those rates (an honest "not measured here", not a fabricated number).
+    `context_gated` (mem-1m0s) is passed straight through to `RetrievalMetrics` —
+    True when the harness skipped the retrieve call because the step's own request
+    fit inside the configured context budget.
     """
 
     retrieved_ids: list[str]
@@ -139,6 +142,7 @@ class RetrievalInputs:
     distractor_ids: list[str] = field(default_factory=list)
     stale_ids: list[str] = field(default_factory=list)
     read_attempted: bool = True
+    context_gated: bool = False
 
 
 def _dcg(relevances: list[int]) -> float:
@@ -181,6 +185,7 @@ def score_retrieval(inp: RetrievalInputs) -> RetrievalMetrics:
         distractor_retrieval_rate=_ratio(n_distractor, len(retrieved)),
         stale_memory_retrieval_rate=_ratio(n_stale, len(retrieved)),
         missed_required_memory_count=len(required_set - set(retrieved)),
+        context_gated=inp.context_gated,
     )
 
 

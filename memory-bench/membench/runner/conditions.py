@@ -222,8 +222,8 @@ def _request_token_estimate(step: SequenceStep) -> int:
     return len(step.user_request.split())
 
 
-def _context_overflows(step: SequenceStep, budget: int) -> bool:
-    return _request_token_estimate(step) > budget
+def _fits_within_budget(step: SequenceStep, budget: int) -> bool:
+    return _request_token_estimate(step) <= budget
 
 
 def _execute_step(
@@ -270,7 +270,7 @@ def _execute_step(
     context_gated = (
         condition is Condition.MEMORY_ENABLED
         and budget is not None
-        and not _context_overflows(step, budget)
+        and _fits_within_budget(step, budget)
     )
 
     retrieve: RetrieveResult | None = None

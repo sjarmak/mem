@@ -125,8 +125,10 @@ def _arm_result(
     rewards: dict[Condition, list[float]],
     confusion: list[float],
     staleness: list[float],
-    tokens: dict[Condition, list[float]],
-    latency_ms: dict[Condition, list[float]],
+    none_tokens: list[float],
+    arm_tokens: list[float],
+    none_latency_ms: list[float],
+    arm_latency_ms: list[float],
 ) -> ArmResult:
     return ArmResult(
         arm=arm,
@@ -136,25 +138,32 @@ def _arm_result(
         arm_confusion=_mean(confusion),
         arm_staleness=_mean(staleness),
         rate_n=len(confusion),
-        none_tokens=_mean(tokens[Condition.NO_MEMORY]),
-        arm_tokens=_mean(tokens[Condition.MEMORY_ENABLED]),
-        none_latency_ms=_mean(latency_ms[Condition.NO_MEMORY]),
-        arm_latency_ms=_mean(latency_ms[Condition.MEMORY_ENABLED]),
+        none_tokens=_mean(none_tokens),
+        arm_tokens=_mean(arm_tokens),
+        none_latency_ms=_mean(none_latency_ms),
+        arm_latency_ms=_mean(arm_latency_ms),
     )
 
 
-def _cost_by_condition(
+def _cost_deltas(
     trials: list[StepTrial],
-) -> tuple[dict[Condition, list[float]], dict[Condition, list[float]]]:
-    """Per-condition mean-input lists for the cost columns — ALL trials in the
+) -> tuple[list[float], list[float], list[float], list[float]]:
+    """none/arm token + latency samples for the cost columns — ALL trials in the
     condition (not just retrieving ones, unlike confusion/staleness): cost is paid on
-    every step, whether or not that step reads."""
-    tokens: dict[Condition, list[float]] = {c: [] for c in _CONDITIONS}
-    latency_ms: dict[Condition, list[float]] = {c: [] for c in _CONDITIONS}
+    every step, whether or not that step reads. Only NO_MEMORY/MEMORY_ENABLED feed the
+    cost columns, so oracle trials are skipped rather than collected and discarded."""
+    none_tokens: list[float] = []
+    arm_tokens: list[float] = []
+    none_latency_ms: list[float] = []
+    arm_latency_ms: list[float] = []
     for t in trials:
-        tokens[t.condition].append(t.metrics.efficiency.total_tokens)
-        latency_ms[t.condition].append(t.metrics.efficiency.tool_latency_ms)
-    return tokens, latency_ms
+        if t.condition is Condition.NO_MEMORY:
+            none_tokens.append(t.metrics.efficiency.total_tokens)
+            none_latency_ms.append(t.metrics.efficiency.tool_latency_ms)
+        elif t.condition is Condition.MEMORY_ENABLED:
+            arm_tokens.append(t.metrics.efficiency.total_tokens)
+            arm_latency_ms.append(t.metrics.efficiency.tool_latency_ms)
+    return none_tokens, arm_tokens, none_latency_ms, arm_latency_ms
 
 
 def eval_arms_over_sequences(
@@ -167,7 +176,10 @@ def eval_arms_over_sequences(
         rewards: dict[Condition, list[float]] = {c: [] for c in _CONDITIONS}
         confusion: list[float] = []
         staleness: list[float] = []
-        all_trials: list[StepTrial] = []
+        none_tokens: list[float] = []
+        arm_tokens: list[float] = []
+        none_latency_ms: list[float] = []
+        arm_latency_ms: list[float] = []
         for seq in sequences:
             run = run_sequence(
                 seq, _experiment(arm), conditions=_CONDITIONS, fs_base_dir=fs_base_dir
@@ -177,9 +189,23 @@ def eval_arms_over_sequences(
             seq_conf, seq_stale = _confusion_staleness(run.trials)
             confusion.extend(seq_conf)
             staleness.extend(seq_stale)
-            all_trials.extend(run.trials)
-        tokens, latency_ms = _cost_by_condition(all_trials)
-        results.append(_arm_result(arm, rewards, confusion, staleness, tokens, latency_ms))
+            seq_none_tok, seq_arm_tok, seq_none_lat, seq_arm_lat = _cost_deltas(run.trials)
+            none_tokens.extend(seq_none_tok)
+            arm_tokens.extend(seq_arm_tok)
+            none_latency_ms.extend(seq_none_lat)
+            arm_latency_ms.extend(seq_arm_lat)
+        results.append(
+            _arm_result(
+                arm,
+                rewards,
+                confusion,
+                staleness,
+                none_tokens,
+                arm_tokens,
+                none_latency_ms,
+                arm_latency_ms,
+            )
+        )
     return results
 
 
@@ -212,8 +238,19 @@ def eval_arms_over_project(
         for trial in run.trials:
             rewards[trial.condition].append(trial.reward)
         confusion, staleness = _confusion_staleness(run.trials)
-        tokens, latency_ms = _cost_by_condition(run.trials)
-        results.append(_arm_result(arm, rewards, confusion, staleness, tokens, latency_ms))
+        none_tokens, arm_tokens, none_latency_ms, arm_latency_ms = _cost_deltas(run.trials)
+        results.append(
+            _arm_result(
+                arm,
+                rewards,
+                confusion,
+                staleness,
+                none_tokens,
+                arm_tokens,
+                none_latency_ms,
+                arm_latency_ms,
+            )
+        )
     return results
 
 
