@@ -99,20 +99,26 @@ def run_project(
         if isinstance(system, OracleMemory):
             system.load(_project_oracle_pool(sequences))
 
+        # Running token count for the context-overflow gate (mem-1m0s), reset per
+        # condition alongside system.reset above and accumulated across EVERY
+        # sequence in the project — the shared scope means context pressure carries
+        # across task boundaries here just like memory does.
+        accumulated_tokens = 0
         for seq in sequences:
             for step in seq.steps:
-                run.trials.append(
-                    _execute_step(
-                        seq_id=seq.sequence_id,
-                        step=step,
-                        system=system,
-                        condition=condition,
-                        scope=project_root,
-                        memory_config_id=memory_config_id,
-                        experiment=experiment,
-                        agent=agent,
-                    )
+                trial = _execute_step(
+                    seq_id=seq.sequence_id,
+                    step=step,
+                    system=system,
+                    condition=condition,
+                    scope=project_root,
+                    memory_config_id=memory_config_id,
+                    experiment=experiment,
+                    agent=agent,
+                    accumulated_tokens_before=accumulated_tokens,
                 )
+                run.trials.append(trial)
+                accumulated_tokens += trial.metrics.efficiency.total_tokens
 
         if condition is Condition.MEMORY_ENABLED and isinstance(system, ConsolidationCapable):
             consolidate_ctx = StepContext(

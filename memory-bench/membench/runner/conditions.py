@@ -214,18 +214,6 @@ def _system_for(
     return build_memory_system(system_name, **kwargs), config_id
 
 
-def _request_token_estimate(step: SequenceStep) -> int:
-    """Word-count proxy for the step's own request tokens — same heuristic style as
-    `ScriptedAgent`'s existing `input_tokens` estimate (`runner/agent.py`), but over
-    the request alone, BEFORE any memory payload is surfaced (that's the point of the
-    gate: decide whether to retrieve before paying for what retrieval would add)."""
-    return len(step.user_request.split())
-
-
-def _fits_within_budget(step: SequenceStep, budget: int) -> bool:
-    return _request_token_estimate(step) <= budget
-
-
 def _execute_step(
     *,
     seq_id: str,
@@ -236,6 +224,7 @@ def _execute_step(
     memory_config_id: str,
     experiment: ExperimentConfig,
     agent: Agent,
+    accumulated_tokens_before: int,
 ) -> StepTrial:
     """Run one step against ``system`` under ``condition``, returning its trial.
 
@@ -265,13 +254,18 @@ def _execute_step(
 
     # Opt-in context-overflow gate (mem-1m0s): only MEMORY_ENABLED is gated — oracle
     # stays the fixed always-on ceiling control, and no_memory already never reads.
-    # Budget unset (None) preserves always-on behavior (zero blast radius).
+    # Budget unset (None) preserves always-on behavior (zero blast radius). Gates on
+    # the RUNNING token count accumulated over this condition's prior steps, not the
+    # current step's own request size — request length has no relationship to whether
+    # a step needs memory (that's already known via expected_memory_reads); it is the
+    # accumulated context that risks overflow, so that is the signal that must be
+    # near/over budget for the gate to fire.
     budget = experiment.memory.context_budget_tokens
     context_gated = (
         condition is Condition.MEMORY_ENABLED
         and bool(step.expected_memory_reads)
         and budget is not None
-        and _fits_within_budget(step, budget)
+        and accumulated_tokens_before >= budget
     )
 
     retrieve: RetrieveResult | None = None
@@ -279,7 +273,8 @@ def _execute_step(
     # Only issue a retrieve when the step actually depends on prior memory; a
     # retrieve with no requested ids would emit a phantom event and inflate
     # memory_tool_calls for establishing steps. A context-gated step also skips it —
-    # the request fits inside the budget, so retrieval would add cost, not capability.
+    # accumulated context is already at/over budget, so retrieval would add cost, not
+    # capability.
     if reads_enabled and step.expected_memory_reads and not context_gated:
         request = RetrievalRequest(
             query_text=step.user_request,
@@ -379,19 +374,25 @@ def run_sequence(
         if isinstance(system, OracleMemory):
             system.load(_oracle_pool(seq))
 
+        # Running token count for the context-overflow gate (mem-1m0s), reset per
+        # condition alongside system.reset above — accumulated over EVERY trial
+        # regardless of condition, so no_memory/oracle runs also advance it even
+        # though only MEMORY_ENABLED reads it.
+        accumulated_tokens = 0
         for step in seq.steps:
-            run.trials.append(
-                _execute_step(
-                    seq_id=seq.sequence_id,
-                    step=step,
-                    system=system,
-                    condition=condition,
-                    scope=condition_root,
-                    memory_config_id=memory_config_id,
-                    experiment=experiment,
-                    agent=agent,
-                )
+            trial = _execute_step(
+                seq_id=seq.sequence_id,
+                step=step,
+                system=system,
+                condition=condition,
+                scope=condition_root,
+                memory_config_id=memory_config_id,
+                experiment=experiment,
+                agent=agent,
+                accumulated_tokens_before=accumulated_tokens,
             )
+            run.trials.append(trial)
+            accumulated_tokens += trial.metrics.efficiency.total_tokens
 
         # Offline consolidation runs ONCE per condition, after every step's writes
         # are persisted (so it sees the full episode set), and only for an arm that

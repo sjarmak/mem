@@ -39,9 +39,10 @@ class MemoryConfig(BaseModel):
     memory_tools: list[str] = Field(default_factory=list)
     storage_backends: list[MemoryBackend] = Field(default_factory=list)
     retrieval_strategy: str = "none"
-    # Opt-in context-overflow gate (mem-1m0s): when set, MEMORY_ENABLED only issues a
-    # retrieve if the step's own request estimate exceeds this token budget. None (the
-    # default) preserves always-on retrieval — zero blast radius to existing runs.
+    # Opt-in context-overflow gate (mem-1m0s): when set, MEMORY_ENABLED skips a step's
+    # retrieve once the RUNNING token count accumulated over the condition's prior
+    # steps reaches this budget. None (the default) preserves always-on retrieval —
+    # zero blast radius to existing runs.
     context_budget_tokens: int | None = None
 
 

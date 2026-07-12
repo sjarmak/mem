@@ -133,8 +133,8 @@ class RetrievalInputs:
     NOT have surfaced; both default empty, so an arm that seeds neither reports 0.0
     for those rates (an honest "not measured here", not a fabricated number).
     `context_gated` (mem-1m0s) is passed straight through to `RetrievalMetrics` —
-    True when the harness skipped the retrieve call because the step's own request
-    fit inside the configured context budget.
+    True when the harness skipped the retrieve call because the accumulated token
+    count for the condition reached the configured context budget.
     """
 
     retrieved_ids: list[str]

@@ -209,25 +209,17 @@ def test_establishing_steps_emit_no_phantom_retrieve(tmp_path):
     assert all(e.normalized_operation.value == "write" for e in mem_s1.trace.memory_events)
 
 
-def test_context_gate_skips_retrieve_when_request_fits_budget(tmp_path):
-    """mem-1m0s: a budget large enough that the step's own request (12 words for
-    s3-add-endpoint) does NOT overflow it skips the retrieve entirely and marks
-    context_gated — memory would add cost here, not capability."""
-    seq = load_sequence(FIXTURE)
-    run = run_sequence(seq, _experiment(context_budget_tokens=50), fs_base_dir=tmp_path)
-    by_cond = run.by_condition()
-    s3 = next(t for t in by_cond[Condition.MEMORY_ENABLED] if t.step_id == "s3-add-endpoint")
-    assert s3.metrics.retrieval.context_gated is True
-    assert s3.metrics.efficiency.memory_tool_calls == 0
-    assert s3.trace.memory_events == []
-    assert s3.reward < 1.0  # the gated-off conventions are no longer recalled
-
-
-@pytest.mark.parametrize("context_budget_tokens", [1, None])
-def test_context_gate_allows_retrieve_when_not_overflowing(tmp_path, context_budget_tokens):
-    """A budget the step's own request already exceeds (1), and no budget at all
-    (None, the always-on default), both leave the gate open: retrieval behaves
-    exactly as if the gate did not exist."""
+@pytest.mark.parametrize("context_budget_tokens", [50, None])
+def test_context_gate_stays_open_while_accumulated_tokens_under_budget(
+    tmp_path, context_budget_tokens
+):
+    """mem-1m0s rework (rejection issue #1): the gate reads the RUNNING token count
+    accumulated over the condition's prior steps, not the current step's own request
+    size. s1 (total_tokens=16) + s2 (total_tokens=13) accumulate to 29 tokens before
+    s3 runs; a budget of 50 has room to spare, and no budget at all (None) is the
+    always-on default — both leave the gate open, so s3's retrieve proceeds and it
+    recovers full reward. Budget=50 used to (incorrectly) FIRE the gate under the old
+    per-request heuristic, stripping a memory read the step actually needed."""
     seq = load_sequence(FIXTURE)
     run = run_sequence(
         seq, _experiment(context_budget_tokens=context_budget_tokens), fs_base_dir=tmp_path
@@ -239,14 +231,45 @@ def test_context_gate_allows_retrieve_when_not_overflowing(tmp_path, context_bud
     assert s3.reward == 1.0
 
 
+@pytest.mark.parametrize("context_budget_tokens", [1, 25])
+def test_context_gate_fires_once_accumulated_tokens_reach_budget(tmp_path, context_budget_tokens):
+    """The 29 tokens accumulated from s1+s2 already reach a tight budget of 1 or 25 —
+    the gate fires, s3's retrieve is skipped, and the step loses the capability it
+    needed (real cost, matching the feature's own premise: memory is expensive when
+    it would overflow context)."""
+    seq = load_sequence(FIXTURE)
+    run = run_sequence(
+        seq, _experiment(context_budget_tokens=context_budget_tokens), fs_base_dir=tmp_path
+    )
+    by_cond = run.by_condition()
+    s3 = next(t for t in by_cond[Condition.MEMORY_ENABLED] if t.step_id == "s3-add-endpoint")
+    assert s3.metrics.retrieval.context_gated is True
+    assert s3.metrics.efficiency.memory_tool_calls == 0
+    assert s3.trace.memory_events == []
+    assert s3.reward < 1.0  # the gated-off conventions are no longer recalled
+
+
+def test_context_gate_fires_exactly_at_the_budget_boundary(tmp_path):
+    """Pins the `>=` decision: a budget EQUAL to the 29 tokens accumulated from s1+s2
+    fires the gate — budget is the ceiling a run must stay under, not a strictly-less
+    threshold."""
+    seq = load_sequence(FIXTURE)
+    run = run_sequence(seq, _experiment(context_budget_tokens=29), fs_base_dir=tmp_path)
+    by_cond = run.by_condition()
+    s3 = next(t for t in by_cond[Condition.MEMORY_ENABLED] if t.step_id == "s3-add-endpoint")
+    assert s3.metrics.retrieval.context_gated is True
+
+
 def test_context_gate_excludes_gated_trial_from_confusion_staleness(tmp_path):
     """mem-1m0s rework: a context_gated trial must not leak a fabricated 0.0 rate into
     _confusion_staleness's samples. Before the fix, read_attempted was ANDed only with
     bool(required_ids) — not with `not context_gated` — so a gated trial (retrieve
     skipped, retrieved_ids=[]) still reported read_attempted=True and diluted the
-    arm's true distractor/stale average with a rate that was never actually measured."""
+    arm's true distractor/stale average with a rate that was never actually measured.
+    Budget=25 is a real firing budget post-fix (accumulated tokens 29 >= 25); the old
+    budget=50 no longer gates this fixture at all."""
     seq = load_sequence(FIXTURE)
-    run = run_sequence(seq, _experiment(context_budget_tokens=50), fs_base_dir=tmp_path)
+    run = run_sequence(seq, _experiment(context_budget_tokens=25), fs_base_dir=tmp_path)
     by_cond = run.by_condition()
     s3 = next(t for t in by_cond[Condition.MEMORY_ENABLED] if t.step_id == "s3-add-endpoint")
     assert s3.metrics.retrieval.context_gated is True
