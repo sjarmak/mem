@@ -383,6 +383,27 @@ describe('distillLessons', () => {
     expect(outcome.lessons[0].payload.evidence_kind).toBe('landed-diff');
   });
 
+  it('does not reject an otherwise-valid lesson when the model emits its own evidence_kind (mechanically overwritten, never validated)', () => {
+    const modelJson = JSON.stringify({
+      subtitle: 'AttentionContributor requires coverage',
+      facts: ['Adding a contributor requires the coverage field on every test fixture.'],
+      narrative: 'TS2741 fired on test fixtures missing the new required field.',
+      concepts: ['gotcha'],
+      // Not one of the two real evidence_kind values — must not fail parsing,
+      // since the code always overwrites this field after parsing anyway.
+      evidence_kind: 'diff',
+    });
+    const outcome = distillLessons(
+      [closedRecord('w-1', 'rigA')],
+      () => modelJson,
+      '2026-06-12T00:00:00Z',
+      { readTranscript: () => 'fixed by adding the coverage field' }
+    );
+    expect(outcome.failures).toEqual([]);
+    expect(outcome.lessons).toHaveLength(1);
+    expect(outcome.lessons[0].payload.evidence_kind).toBe('transcript-tail');
+  });
+
   it('threads resolution evidence into the prompt the runner sees', () => {
     const prompts: string[] = [];
     const outcome = distillLessons(
@@ -728,5 +749,63 @@ describe('computeRegressions', () => {
     expect(flags).toHaveLength(1);
     expect(flags[0].lesson_work_id).toBe('w-good');
     expect(skipped).toEqual([{ work_id: 'w-bad', reason: 'unparseable-extracted-at' }]);
+  });
+
+  it('skips a lesson (with a reason) whose source record currently carries no trace-error signatures', () => {
+    writeRecords(db, [
+      closedRecord('w-clean', 'rigA', { trace: { jsonl_path: '/t/w-clean.jsonl', errors: [] } }),
+    ]);
+    appendLesson(db, {
+      work_id: 'w-clean',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    const { flags, skipped } = computeRegressions(db);
+    expect(flags).toEqual([]);
+    expect(skipped).toEqual([{ work_id: 'w-clean', reason: 'no-signatures' }]);
+  });
+
+  it('isolates one lesson whose source record fails schema validation, instead of aborting the whole check', () => {
+    writeRecords(db, [
+      closedRecord('w-corrupt', 'rigA'),
+      closedRecord('w-good', 'rigA', {
+        trace: { jsonl_path: '/t/w-good.jsonl', errors: [tsError('src/good.ts')] },
+      }),
+      laterClosedRecord('w-later', 'rigA', {
+        trace: { jsonl_path: '/t/w-later.jsonl', errors: [tsError('src/good.ts')] },
+      }),
+    ]);
+    appendLesson(db, { work_id: 'w-corrupt', extracted_at: '2026-06-05T10:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-good', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+    // Corrupt the stored record directly (bypassing writeRecords' own
+    // validation) so `getRecord`'s WorkRecordSchema.parse throws — simulating
+    // store corruption / a stale-schema row, not a merely-missing one.
+    db.prepare('UPDATE work_records SET record = ? WHERE work_id = ?').run(
+      JSON.stringify({ not: 'a valid WorkRecord' }),
+      'w-corrupt'
+    );
+
+    const { flags, skipped } = computeRegressions(db);
+    expect(flags).toHaveLength(1);
+    expect(flags[0].lesson_work_id).toBe('w-good');
+    expect(skipped).toHaveLength(1);
+    expect(skipped[0].work_id).toBe('w-corrupt');
+    expect(skipped[0].reason).toContain('source-record-invalid');
+  });
+
+  it("scopes the K-window by rig when one is given, so another rig's more-recent lessons don't evict this rig's own", () => {
+    writeRecords(db, [closedRecord('w-a', 'rigA'), laterClosedRecord('w-a-recur', 'rigA')]);
+    appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+
+    // A different rig's lesson, appended later, fills an unscoped k=1 window.
+    writeRecords(db, [closedRecord('w-b', 'rigB')]);
+    appendLesson(db, { work_id: 'w-b', extracted_at: '2026-06-06T00:00:00Z', payload: {} });
+
+    expect(computeRegressions(db, 1).flags).toEqual([]);
+
+    const { flags } = computeRegressions(db, 1, 'rigA');
+    expect(flags).toHaveLength(1);
+    expect(flags[0].lesson_work_id).toBe('w-a');
   });
 });

@@ -110,7 +110,9 @@ export function distillLessonsCommand(
   let regressionSkipped: RegressionSkip[] = [];
   let regressionError: string | null = null;
   try {
-    const result = withReadStore(ctx.options, db => computeRegressions(db, parsedRegressionWindow));
+    const result = withReadStore(ctx.options, db =>
+      computeRegressions(db, parsedRegressionWindow, rig)
+    );
     regressions = result.flags;
     regressionSkipped = result.skipped;
   } catch (error: unknown) {

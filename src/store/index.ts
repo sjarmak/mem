@@ -30,6 +30,7 @@ export {
   coverageReport,
   getRecord,
   lessonsFor,
+  lessonsForRig,
   linksFor,
   queryRecords,
   runsFor,

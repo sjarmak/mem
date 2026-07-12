@@ -15,6 +15,7 @@ import {
   allLessons,
   getRecord,
   lessonsFor,
+  lessonsForRig,
   queryRecords,
   supersedesClosure,
   toIsoUtc,
@@ -280,8 +281,13 @@ export function buildDistillPrompt(
 // --- Model output validation ---------------------------------------------------------
 
 /** The distiller's required payload: unlike historical lessons the convention
- * fields are mandatory here — an empty distillation is a failure, not a row. */
-const DistilledPayloadSchema = LessonPayloadSchema.extend({
+ * fields are mandatory here — an empty distillation is a failure, not a row.
+ * `evidence_kind` is omitted from validation (mem-0r7l): it is never asked of
+ * the model (see `buildDistillPrompt`'s JSON contract) and is always
+ * overwritten mechanically after parsing (see the `distillLessons` loop
+ * below) — validating it here would only give a model-hallucinated value in
+ * that field the power to fail an otherwise well-formed lesson. */
+const DistilledPayloadSchema = LessonPayloadSchema.omit({ evidence_kind: true }).extend({
   subtitle: z.string().min(1),
   facts: z.array(z.string().min(1)).min(1),
   narrative: z.string().min(1),
@@ -426,7 +432,17 @@ function candidatesForSignature(
   });
   for (const workId of workIds) {
     if (workId === lesson.work_id) continue;
-    const candidateRecord = getRecord(db, workId);
+    // `getRecord` fails loudly on a schema-invalid row (store corruption) —
+    // the SQL join above only proves a row existed at query time, not that
+    // it still parses now. One bad candidate must not abort the whole
+    // signature's candidate list, so it's dropped the same as a genuinely
+    // vanished row (matching the `candidateRecord === null` case below).
+    let candidateRecord: WorkRecord | null;
+    try {
+      candidateRecord = getRecord(db, workId);
+    } catch {
+      continue;
+    }
     if (candidateRecord === null) continue;
     const sibling = isSibling(candidateRecord, lesson.sourceQuery) || superseded.has(workId);
     candidates.push({ work_id: workId, is_sibling: sibling });
@@ -449,25 +465,46 @@ function candidatesForSignature(
  */
 export function computeRegressions(
   db: StoreDatabase,
-  k: number = DEFAULT_REGRESSION_WINDOW
+  k: number = DEFAULT_REGRESSION_WINDOW,
+  rig?: string
 ): { flags: RegressionFlag[]; skipped: RegressionSkip[] } {
   // `slice(-0)` is `slice(0)` in JS — a bare `k <= 0` guard keeps "check
   // nothing" from silently becoming "check everything" for a direct caller.
-  const recentLessons = k <= 0 ? [] : allLessons(db).slice(-k);
+  // Rig-scoped (mem-0r7l): matching `selectCandidates`' own `--rig` scope —
+  // otherwise a multi-rig store's K-window fills with an unrelated rig's
+  // lessons and this rig's own lessons are never checked, with no signal
+  // that anything was skipped (the window just silently contains 0 of them).
+  const recentLessons =
+    k <= 0 ? [] : (rig === undefined ? allLessons(db) : lessonsForRig(db, rig)).slice(-k);
   const flags: RegressionFlag[] = [];
   const skipped: RegressionSkip[] = [];
 
   for (const lesson of recentLessons) {
     // Lessons carry no FK to work_records (Decision 9): the source may have
-    // been deleted or re-ingested since. Skip gracefully, never throw — but
+    // been deleted, re-ingested, or (rarer) now fail schema validation since
+    // (`getRecord` fails loudly on a corrupt/stale-schema row — store
+    // corruption, not absence). Skip gracefully, never throw a single bad
+    // lesson into aborting every other lesson's check in this run — but
     // surface it, rather than let it look identical to "checked, clean".
-    const sourceRecord = getRecord(db, lesson.work_id);
+    let sourceRecord: WorkRecord | null;
+    try {
+      sourceRecord = getRecord(db, lesson.work_id);
+    } catch (error: unknown) {
+      skipped.push({
+        work_id: lesson.work_id,
+        reason: `source-record-invalid: ${error instanceof Error ? error.message : String(error)}`,
+      });
+      continue;
+    }
     if (sourceRecord === null) {
       skipped.push({ work_id: lesson.work_id, reason: 'source-record-missing' });
       continue;
     }
     const signatures = recordSignatures(sourceRecord);
-    if (signatures.length === 0) continue;
+    if (signatures.length === 0) {
+      skipped.push({ work_id: lesson.work_id, reason: 'no-signatures' });
+      continue;
+    }
 
     // `extracted_at` crosses the unvalidated `import-lessons` boundary
     // (LessonLineSchema only requires a non-empty string, no format
