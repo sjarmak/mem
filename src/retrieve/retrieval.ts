@@ -352,7 +352,9 @@ export interface QueryFromRecordOptions {
   /** A record the caller already fetched for this `workId` — skips this
    * function's own `getRecord`, so a caller that needs the record for its
    * own purposes too (mem-0r7l's regression check) doesn't pay for the same
-   * fetch+parse twice. Must be the record for `workId`; not verified. */
+   * fetch+parse twice. Must be the record for `workId` — checked, and a
+   * mismatch throws rather than silently building a query against the
+   * wrong record's rig/exclusion keys. */
   record?: WorkRecord;
 }
 
@@ -367,6 +369,11 @@ export function queryFromRecord(
   workId: string,
   opts: QueryFromRecordOptions = {}
 ): RetrievalQuery {
+  if (opts.record !== undefined && opts.record.work_id !== workId) {
+    throw new Error(
+      `queryFromRecord: opts.record.work_id (${opts.record.work_id}) does not match workId (${workId})`
+    );
+  }
   const record = opts.record ?? getRecord(db, workId);
   if (record === null) {
     throw new Error(`No record for work_id ${workId} — cannot build a retrieval query from it.`);
