@@ -172,6 +172,30 @@ export function workIdsBySignature(db: StoreDatabase, signature: string): string
   return rows.map(row => row.work_id);
 }
 
+/** Like {@link workIdsBySignature}, restricted to one rig and closed strictly
+ * after `closedAfter` — pushed into SQL (joining the promoted, indexed
+ * `work_records.rig`/`closed_at` columns) so the K-past-fix regression check
+ * never fetches and parses a candidate record only to discard it on rig or
+ * temporal mismatch. */
+export function workIdsBySignatureSince(
+  db: StoreDatabase,
+  signature: string,
+  filter: { rig: string; closedAfter: string }
+): string[] {
+  const rows = db
+    .prepare(
+      `SELECT DISTINCT te.work_id
+         FROM trace_errors te
+         JOIN work_records wr ON wr.work_id = te.work_id
+        WHERE te.signature = ?
+          AND wr.rig = ?
+          AND wr.closed_at IS NOT NULL AND wr.closed_at > ?
+        ORDER BY te.work_id`
+    )
+    .all(signature, filter.rig, toIsoUtc(filter.closedAfter)) as { work_id: string }[];
+  return rows.map(row => row.work_id);
+}
+
 /** One FTS hit on a trace error's message. */
 export interface ErrorSearchHit {
   work_id: string;

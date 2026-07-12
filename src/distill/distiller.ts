@@ -18,7 +18,7 @@ import {
   queryRecords,
   supersedesClosure,
   toIsoUtc,
-  workIdsBySignature,
+  workIdsBySignatureSince,
   type StoreDatabase,
 } from '../store/index.js';
 import {
@@ -400,12 +400,13 @@ export const DEFAULT_REGRESSION_WINDOW = 5;
  * work_id carrying the same failure signature as `lesson`, closed strictly
  * after `lesson`'s `extracted_at`, IN THE SAME RIG, tagged with whether
  * Decision-6's convoy/PR/parent/supersedes exclusions already cover it (that
- * reuse is exactly why this stays a thin loop over `workIdsBySignature` — the
- * exclusion logic itself lives in `isSibling`/`supersedesClosure`, not here).
- * `workIdsBySignature` queries `trace_errors` store-wide across all ~18
- * corpus rigs with no rig column, so the rig-equality filter is required —
- * without it a coincidental file:line:tool:error_class match in an unrelated
- * rig would be flagged as "this fix didn't stick".
+ * reuse is exactly why this stays a thin loop — the exclusion logic itself
+ * lives in `isSibling`/`supersedesClosure`, not here). The rig/temporal
+ * narrowing runs in SQL ({@link workIdsBySignatureSince}, joined against the
+ * promoted `work_records.rig`/`closed_at` columns) so a coincidental
+ * file:line:tool:error_class match in an unrelated rig, or one that predates
+ * the lesson, is never fetched at all — only surviving candidates pay for a
+ * full record fetch, needed for the `isSibling` check.
  */
 function candidatesForSignature(
   db: StoreDatabase,
@@ -418,12 +419,14 @@ function candidatesForSignature(
   superseded: ReadonlySet<string>
 ): RegressionCandidate[] {
   const candidates: RegressionCandidate[] = [];
-  for (const workId of workIdsBySignature(db, signature)) {
+  const workIds = workIdsBySignatureSince(db, signature, {
+    rig: lesson.sourceQuery.rig,
+    closedAfter: lesson.extractedAtUtc,
+  });
+  for (const workId of workIds) {
     if (workId === lesson.work_id) continue;
     const candidateRecord = getRecord(db, workId);
-    if (candidateRecord === null || candidateRecord.lifecycle.closed === undefined) continue;
-    if (candidateRecord.rig !== lesson.sourceQuery.rig) continue;
-    if (toIsoUtc(candidateRecord.lifecycle.closed) <= lesson.extractedAtUtc) continue;
+    if (candidateRecord === null) continue;
     const sibling = isSibling(candidateRecord, lesson.sourceQuery) || superseded.has(workId);
     candidates.push({ work_id: workId, is_sibling: sibling });
   }

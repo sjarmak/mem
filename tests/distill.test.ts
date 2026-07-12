@@ -55,6 +55,23 @@ const closedRecord = (
     ...overrides,
   });
 
+/** The `computeRegressions` tests below all need one closed record that
+ * postdates `closedRecord`'s default `closed: '2026-06-05'` — this fixed
+ * lifecycle is that "later" fixture. */
+const LATER_LIFECYCLE: WorkRecord['lifecycle'] = {
+  created: '2026-06-06T00:00:00Z',
+  started: '2026-06-06T01:00:00Z',
+  closed: '2026-06-07T00:00:00Z',
+  status: 'closed',
+  status_history: [],
+};
+
+const laterClosedRecord = (
+  workId: string,
+  rig: string,
+  overrides: Partial<WorkRecord> = {}
+): WorkRecord => closedRecord(workId, rig, { ...overrides, lifecycle: LATER_LIFECYCLE });
+
 const validLessonJson = JSON.stringify({
   subtitle: 'AttentionContributor requires coverage',
   facts: ['Adding a contributor requires the coverage field on every test fixture.'],
@@ -462,15 +479,7 @@ describe('computeRegressions', () => {
   it('flags a lesson signature that recurred in later, unrelated closed work', () => {
     writeRecords(db, [
       closedRecord('w-src', 'rigA'), // closed 2026-06-05
-      closedRecord('w-later', 'rigA', {
-        lifecycle: {
-          created: '2026-06-06T00:00:00Z',
-          started: '2026-06-06T01:00:00Z',
-          closed: '2026-06-07T00:00:00Z',
-          status: 'closed',
-          status_history: [],
-        },
-      }),
+      laterClosedRecord('w-later', 'rigA'),
     ]);
     appendLesson(db, {
       work_id: 'w-src',
@@ -492,15 +501,8 @@ describe('computeRegressions', () => {
   it('does NOT flag a convoy-sibling recurrence (expected iteration, not a regression)', () => {
     writeRecords(db, [
       closedRecord('w-src', 'rigA', { links: { deps: [], supersedes: [], convoy_id: 'c-1' } }),
-      closedRecord('w-followup', 'rigA', {
+      laterClosedRecord('w-followup', 'rigA', {
         links: { deps: [], supersedes: [], convoy_id: 'c-1' },
-        lifecycle: {
-          created: '2026-06-06T00:00:00Z',
-          started: '2026-06-06T01:00:00Z',
-          closed: '2026-06-07T00:00:00Z',
-          status: 'closed',
-          status_history: [],
-        },
       }),
     ]);
     appendLesson(db, {
@@ -515,16 +517,7 @@ describe('computeRegressions', () => {
   it('does NOT flag a supersedes-chain recurrence', () => {
     writeRecords(db, [
       closedRecord('w-src', 'rigA'),
-      closedRecord('w-superseder', 'rigA', {
-        links: { deps: [], supersedes: ['w-src'] },
-        lifecycle: {
-          created: '2026-06-06T00:00:00Z',
-          started: '2026-06-06T01:00:00Z',
-          closed: '2026-06-07T00:00:00Z',
-          status: 'closed',
-          status_history: [],
-        },
-      }),
+      laterClosedRecord('w-superseder', 'rigA', { links: { deps: [], supersedes: ['w-src'] } }),
     ]);
     appendLesson(db, {
       work_id: 'w-src',
@@ -575,15 +568,7 @@ describe('computeRegressions', () => {
         trace: { jsonl_path: '/t/w-old.jsonl', errors: [tsError('src/old.ts')] },
       }),
       closedRecord('w-recent', 'rigA'),
-      closedRecord('w-later', 'rigA', {
-        lifecycle: {
-          created: '2026-06-06T00:00:00Z',
-          started: '2026-06-06T01:00:00Z',
-          closed: '2026-06-07T00:00:00Z',
-          status: 'closed',
-          status_history: [],
-        },
-      }),
+      laterClosedRecord('w-later', 'rigA'),
     ]);
     appendLesson(db, { work_id: 'w-old', extracted_at: '2026-06-05T10:00:00Z', payload: {} });
     appendLesson(db, { work_id: 'w-recent', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
@@ -595,18 +580,7 @@ describe('computeRegressions', () => {
   });
 
   it('checks nothing for k <= 0, guarding against the slice(-0) === slice(0) footgun', () => {
-    writeRecords(db, [
-      closedRecord('w-src', 'rigA'),
-      closedRecord('w-later', 'rigA', {
-        lifecycle: {
-          created: '2026-06-06T00:00:00Z',
-          started: '2026-06-06T01:00:00Z',
-          closed: '2026-06-07T00:00:00Z',
-          status: 'closed',
-          status_history: [],
-        },
-      }),
-    ]);
+    writeRecords(db, [closedRecord('w-src', 'rigA'), laterClosedRecord('w-later', 'rigA')]);
     appendLesson(db, {
       work_id: 'w-src',
       extracted_at: '2026-06-05T12:00:00Z',
@@ -629,15 +603,7 @@ describe('computeRegressions', () => {
   it('does NOT flag a same-signature recurrence in a different rig (no cross-rig confusion)', () => {
     writeRecords(db, [
       closedRecord('w-src', 'rigA'),
-      closedRecord('w-later-other-rig', 'rigB', {
-        lifecycle: {
-          created: '2026-06-06T00:00:00Z',
-          started: '2026-06-06T01:00:00Z',
-          closed: '2026-06-07T00:00:00Z',
-          status: 'closed',
-          status_history: [],
-        },
-      }),
+      laterClosedRecord('w-later-other-rig', 'rigB'),
     ]);
     appendLesson(db, {
       work_id: 'w-src',
@@ -654,15 +620,8 @@ describe('computeRegressions', () => {
       closedRecord('w-good', 'rigA', {
         trace: { jsonl_path: '/t/w-good.jsonl', errors: [tsError('src/good.ts')] },
       }),
-      closedRecord('w-later', 'rigA', {
+      laterClosedRecord('w-later', 'rigA', {
         trace: { jsonl_path: '/t/w-later.jsonl', errors: [tsError('src/good.ts')] },
-        lifecycle: {
-          created: '2026-06-06T00:00:00Z',
-          started: '2026-06-06T01:00:00Z',
-          closed: '2026-06-07T00:00:00Z',
-          status: 'closed',
-          status_history: [],
-        },
       }),
     ]);
     // Simulates a lesson admitted via `import-lessons`, whose LessonLineSchema
