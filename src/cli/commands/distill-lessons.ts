@@ -97,9 +97,16 @@ export function distillLessonsCommand(
 
   // mem-0r7l: report-only, against whatever lessons are in the store now
   // (including any just imported above) — never mutates the append-only table.
-  const regressions = withReadStore(ctx.options, db =>
-    computeRegressions(db, parsedRegressionWindow)
-  );
+  // The import above already committed; a failure here must degrade to an
+  // empty report rather than hide that already-successful result from the
+  // caller.
+  let regressions: RegressionFlag[] = [];
+  let regressionError: string | null = null;
+  try {
+    regressions = withReadStore(ctx.options, db => computeRegressions(db, parsedRegressionWindow));
+  } catch (error: unknown) {
+    regressionError = error instanceof Error ? error.message : String(error);
+  }
 
   if (!ctx.options.json) {
     console.error(
@@ -109,6 +116,9 @@ export function distillLessonsCommand(
     );
     for (const failure of failures) {
       console.error(`FAILED ${failure.work_id}: ${failure.error}`);
+    }
+    if (regressionError !== null) {
+      console.error(`REGRESSION CHECK FAILED (non-fatal): ${regressionError}`);
     }
     for (const flag of regressions) {
       console.error(

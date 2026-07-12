@@ -2,9 +2,10 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { distillLessonsCommand } from '../src/cli/commands/distill-lessons.js';
+import * as distiller from '../src/distill/distiller.js';
 import {
   buildDistillPrompt,
   computeRegressions,
@@ -464,6 +465,16 @@ describe('distillLessonsCommand', () => {
     ).toThrow(/--regression-window/);
   });
 
+  it('rejects a bare --regression-window (parsed as boolean true) instead of silently using 1', () => {
+    expect(() =>
+      distillLessonsCommand(
+        ctx({ import: true, 'regression-window': true }),
+        () => validLessonJson,
+        evidenceOpts
+      )
+    ).toThrow(/--regression-window/);
+  });
+
   it('refuses to run with neither --out nor --import', () => {
     expect(() => distillLessonsCommand(ctx({}), () => validLessonJson)).toThrow(/nothing to do/);
   });
@@ -472,6 +483,32 @@ describe('distillLessonsCommand', () => {
     expect(() =>
       distillLessonsCommand(ctx({ import: true, limit: 'lots' }), () => validLessonJson)
     ).toThrow(/--limit/);
+  });
+
+  it('rejects a bare --limit (parsed as boolean true) instead of silently using 1', () => {
+    expect(() =>
+      distillLessonsCommand(ctx({ import: true, limit: true }), () => validLessonJson)
+    ).toThrow(/--limit/);
+  });
+
+  it('degrades to an empty, report-only regression list when computeRegressions throws, without losing the already-committed import', () => {
+    writeRecords(db, [closedRecord('w-1', 'rigA')]);
+    const regressionSpy = vi.spyOn(distiller, 'computeRegressions').mockImplementation(() => {
+      throw new Error('boom: regression check exploded');
+    });
+
+    try {
+      const result = distillLessonsCommand(
+        ctx({ import: true }),
+        () => validLessonJson,
+        evidenceOpts
+      );
+      expect(result.imported).toEqual({ appended: 1, skipped: 0 });
+      expect(result.regressions).toEqual([]);
+      expect(lessonsFor(db, 'w-1')).toHaveLength(1);
+    } finally {
+      regressionSpy.mockRestore();
+    }
   });
 });
 
