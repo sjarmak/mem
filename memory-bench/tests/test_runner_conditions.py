@@ -8,11 +8,15 @@ from membench.runner.conditions import (
     ENV_MEM_BIN,
     ENV_MEM_STORE,
     ENV_MEMORY_SYSTEM,
+    SequenceRun,
+    StepTrial,
     _system_for,
     run_sequence,
 )
 from membench.schemas.conditions import Condition
 from membench.schemas.config import AgentConfig, ExperimentConfig, MemoryConfig
+from membench.schemas.metrics import MetricsBundle, RetrievalMetrics, TaskMetrics
+from membench.schemas.trace import Trace
 from tests.paths import FIXTURE
 
 
@@ -265,35 +269,66 @@ def test_context_gate_does_not_affect_oracle_condition(tmp_path):
     assert s3_oracle.reward == 1.0
 
 
-def test_comparison_excludes_context_gated_trials_from_retrieval_means(tmp_path):
+def _synthetic_trial(step_id: str, *, precision: float, context_gated: bool) -> StepTrial:
+    trace = Trace(
+        trial_id=f"synthetic-{step_id}",
+        experiment_id="test-exp",
+        dataset_id="synthetic",
+        task_id=step_id,
+        step_id=step_id,
+        agent_config_id="scripted-ref",
+        memory_config_id="filesystem",
+        start_time="0",
+        end_time="0",
+    )
+    metrics = MetricsBundle(
+        task=TaskMetrics(reward=1.0, **{"pass": True}),
+        retrieval=RetrievalMetrics(
+            read_attempted=not context_gated,
+            precision_at_k=precision,
+            recall_at_k=precision,
+            mrr=precision,
+            nDCG=precision,
+            context_gated=context_gated,
+        ),
+    )
+    return StepTrial(
+        trial_id=f"synthetic-{step_id}",
+        sequence_id="synthetic-seq",
+        step_id=step_id,
+        condition=Condition.MEMORY_ENABLED,
+        agent_config_id="scripted-ref",
+        memory_config_id="filesystem",
+        reward=1.0,
+        trace=trace,
+        metrics=metrics,
+    )
+
+
+def test_comparison_excludes_context_gated_trials_from_retrieval_means():
     """mem-1m0s rejection issue #2: _summarize's retrieval-metric means (precision/recall/
     mrr/nDCG) must exclude context_gated trials the same way _confusion_staleness already
-    does, else the gated s3 trial's fabricated retrieved_ids=[] zero dilutes the arm's true
-    average with a rate that was never measured."""
-    seq = load_sequence(FIXTURE)
-    run = run_sequence(seq, _experiment(context_budget_tokens=50), fs_base_dir=tmp_path)
+    does, else a gated trial's fabricated retrieved_ids=[] zero dilutes the arm's true
+    average with a rate that was never measured. Uses synthetic trials, not the FIXTURE —
+    the fixture's establishing steps are already 0/0 with or without the gate, so a
+    fixture-based version of this test passes unchanged against the pre-fix buggy code
+    (verified empirically) and proves nothing. Here one trial has a real retrieval hit
+    (precision=1.0, not gated) and one is gated with a fabricated miss (precision=0.0):
+    unfixed code averages both to 0.5; the fix excludes the gated trial, giving 1.0."""
+    real = _synthetic_trial("s-real", precision=1.0, context_gated=False)
+    gated = _synthetic_trial("s-gated", precision=0.0, context_gated=True)
+    run = SequenceRun(sequence_id="synthetic-seq", experiment_id="test-exp", trials=[real, gated])
+
     report = build_comparison(run)
     mem = report.summaries["memory_enabled"]
 
-    by_cond = run.by_condition()
-    mem_trials = by_cond[Condition.MEMORY_ENABLED]
-    retrieving = [t for t in mem_trials if not t.metrics.retrieval.context_gated]
-    assert len(retrieving) < len(mem_trials)  # the gate did exclude at least s3
-
-    expected_recall = sum(t.metrics.retrieval.recall_at_k for t in retrieving) / len(retrieving)
-    expected_precision = sum(t.metrics.retrieval.precision_at_k for t in retrieving) / len(
-        retrieving
-    )
-    expected_mrr = sum(t.metrics.retrieval.mrr for t in retrieving) / len(retrieving)
-    expected_ndcg = sum(t.metrics.retrieval.nDCG for t in retrieving) / len(retrieving)
-    assert mem.mean_recall_at_k == expected_recall
-    assert mem.mean_precision_at_k == expected_precision
-    assert mem.mean_mrr == expected_mrr
-    assert mem.mean_ndcg == expected_ndcg
-
+    assert mem.mean_precision_at_k == 1.0
+    assert mem.mean_recall_at_k == 1.0
+    assert mem.mean_mrr == 1.0
+    assert mem.mean_ndcg == 1.0
     # n_steps still counts every step (an all-gated condition must not shrink the
     # denominator used for reward/pass_rate/tokens).
-    assert mem.n_steps == len(mem_trials)
+    assert mem.n_steps == 2
 
 
 def _two_step_sequence(writes_s1, writes_s2):
