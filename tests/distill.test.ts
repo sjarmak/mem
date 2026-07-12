@@ -552,7 +552,6 @@ describe('distillLessonsCommand', () => {
 
   it('surfaces regressionSkipped for lessons the K-window could not evaluate', () => {
     appendLesson(db, { work_id: 'w-deleted', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
-    writeRecords(db, [closedRecord('w-2', 'rigA')]);
 
     const result = distillLessonsCommand(
       ctx({ import: true }),
