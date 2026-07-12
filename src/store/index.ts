@@ -29,6 +29,7 @@ export {
   allLessons,
   coverageReport,
   getRecord,
+  lastKLessons,
   lessonsFor,
   lessonsForRig,
   linksFor,

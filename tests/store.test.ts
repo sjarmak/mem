@@ -9,6 +9,7 @@ import {
   appendLesson,
   getRecord,
   importLessons,
+  lastKLessons,
   lessonsFor,
   lessonsForRig,
   linksFor,
@@ -376,6 +377,38 @@ describe('lessons (append-only, D9)', () => {
 
     expect(lessonsForRig(db, 'rigA')).toEqual([]);
     expect(allLessons(db)).toHaveLength(1);
+  });
+
+  it('lastKLessons returns the k most-recently-appended lessons, in append order', () => {
+    const db = openStore(':memory:');
+    appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-03T00:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-b', extracted_at: '2026-06-04T00:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-c', extracted_at: '2026-06-05T00:00:00Z', payload: {} });
+
+    expect(lastKLessons(db, 2).map(l => l.work_id)).toEqual(['w-b', 'w-c']);
+    expect(lastKLessons(db, 100).map(l => l.work_id)).toEqual(['w-a', 'w-b', 'w-c']);
+  });
+
+  it('lastKLessons returns [] for k <= 0, never SQLite LIMIT-with-negative-value "no limit"', () => {
+    const db = openStore(':memory:');
+    appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-03T00:00:00Z', payload: {} });
+
+    expect(lastKLessons(db, 0)).toEqual([]);
+    expect(lastKLessons(db, -1)).toEqual([]);
+  });
+
+  it('lastKLessons scopes the window by rig when one is given', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [
+      fullRecord({ work_id: 'w-a', rig: 'rigA' }),
+      fullRecord({ work_id: 'w-b', rig: 'rigB' }),
+    ]);
+    appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-03T00:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-b', extracted_at: '2026-06-04T00:00:00Z', payload: {} });
+
+    expect(lastKLessons(db, 1, 'rigA').map(l => l.work_id)).toEqual(['w-a']);
+    expect(lastKLessons(db, 5, 'rigA').map(l => l.work_id)).toEqual(['w-a']);
+    expect(lastKLessons(db, 5, 'rigC')).toEqual([]);
   });
 
   it('importLessons appends exported lessons and skips full-content duplicates', () => {

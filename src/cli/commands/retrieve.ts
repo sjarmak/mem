@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 import { CommandContext } from '../index.js';
-import { asEnum, asString, type OptionValue } from '../io.js';
+import { asEnum, asNonNegativeInt, asString, type OptionValue } from '../io.js';
 import { withReadStore } from '../store.js';
 import {
   RetrievalQuerySchema,
@@ -33,18 +33,6 @@ function parseScope(value: OptionValue): RetrievalScope {
     throw new Error(`--scope must be one of: ${Object.keys(SCOPES).join(', ')}`);
   }
   return scope;
-}
-
-/** Parse the optional `--limit` (Decision-10 cap); 0 is valid (return nothing
- * but still report `total_matched`). */
-function parseLimit(value: OptionValue): number | undefined {
-  const str = asString(value, 'limit');
-  if (str === undefined) return undefined;
-  const n = Number(str);
-  if (!Number.isInteger(n) || n < 0) {
-    throw new Error('--limit must be a non-negative integer');
-  }
-  return n;
 }
 
 /** Load and validate an externally supplied query context from a JSON file. */
@@ -150,7 +138,7 @@ export function retrieveCommand(
   ctx: CommandContext
 ): RetrievalResult | RetrievalIndex | RetrievalDetails {
   const scope = parseScope(ctx.options.scope);
-  const limit = parseLimit(ctx.options.limit);
+  const limit = asNonNegativeInt(ctx.options.limit, 'limit');
   const format = parseFormat(ctx.options.format);
   const pick = parsePick(ctx.options.pick, format);
   const workId = ctx.args[0];

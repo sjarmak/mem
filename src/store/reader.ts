@@ -156,6 +156,37 @@ export function lessonsForRig(db: StoreDatabase, rig: string): StoredLesson[] {
   return rows.map(toStoredLesson);
 }
 
+/** The `k` most-recently-appended lessons (optionally rig-scoped), in append
+ * (id) order — the K-past-fix regression check's window (mem-0r7l). Pushed
+ * into SQL (`ORDER BY id DESC LIMIT k`, then reversed back to ascending) so
+ * the check never scans and JSON-parses the full, unboundedly-growing
+ * `lessons` table just to keep the last k rows the way `allLessons(...)
+ * .slice(-k)` did. `k <= 0` returns `[]` directly rather than passing a
+ * non-positive value to SQLite's `LIMIT`, where a negative limit means "no
+ * limit" — the opposite of this function's contract. */
+export function lastKLessons(db: StoreDatabase, k: number, rig?: string): StoredLesson[] {
+  if (k <= 0) return [];
+  const rows = (
+    rig === undefined
+      ? db
+          .prepare(
+            'SELECT id, work_id, extracted_at, commit_sha, payload FROM lessons ORDER BY id DESC LIMIT ?'
+          )
+          .all(k)
+      : db
+          .prepare(
+            `SELECT l.id, l.work_id, l.extracted_at, l.commit_sha, l.payload
+               FROM lessons l
+               JOIN work_records wr ON wr.work_id = l.work_id
+              WHERE wr.rig = ?
+              ORDER BY l.id DESC LIMIT ?`
+          )
+          .all(rig, k)
+  ) as LessonRow[];
+
+  return rows.reverse().map(toStoredLesson);
+}
+
 /** Every work id reachable from `workId` over `supersedes` links, traversed as
  * undirected edges (ancestors AND descendants — both are "the same work" for the
  * Decision-6 leave-one-out exclusion), sorted; `workId` itself is excluded

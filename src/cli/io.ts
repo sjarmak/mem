@@ -25,15 +25,29 @@ export function asEnum<T extends string>(
   return str as T;
 }
 
-/** Require a positive-integer value for a flag that takes one; `undefined` when absent. */
-export function asPositiveInt(value: OptionValue, flag: string): number | undefined {
+/** Shared integer-flag guard behind {@link asPositiveInt} and
+ * {@link asNonNegativeInt} — the two only differ in their floor. */
+function asIntAtLeast(value: OptionValue, flag: string, min: 0 | 1): number | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== 'string') throw new Error(`--${flag} requires a value`);
   const n = Number(value);
-  if (!Number.isInteger(n) || n <= 0) {
-    throw new Error(`--${flag} must be a positive integer, got ${String(value)}`);
+  if (!Number.isInteger(n) || n < min) {
+    const kind = min === 0 ? 'non-negative' : 'positive';
+    throw new Error(`--${flag} must be a ${kind} integer, got ${String(value)}`);
   }
   return n;
+}
+
+/** Require a positive-integer value for a flag that takes one; `undefined` when absent. */
+export function asPositiveInt(value: OptionValue, flag: string): number | undefined {
+  return asIntAtLeast(value, flag, 1);
+}
+
+/** Require a non-negative-integer value for a flag that takes one (0 is
+ * valid — e.g. retrieve's `--limit 0` returns no items but still reports
+ * `total_matched`); `undefined` when absent. */
+export function asNonNegativeInt(value: OptionValue, flag: string): number | undefined {
+  return asIntAtLeast(value, flag, 0);
 }
 
 /** Read all of stdin. A TTY never yields EOF on its own, so the `for await`

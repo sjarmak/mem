@@ -693,7 +693,7 @@ describe('computeRegressions', () => {
     expect(flags[0].lesson_work_id).toBe('w-recent');
   });
 
-  it('checks nothing for k <= 0, guarding against the slice(-0) === slice(0) footgun', () => {
+  it('checks nothing for k <= 0, guarding against SQLite LIMIT-with-negative-value meaning "no limit"', () => {
     writeRecords(db, [closedRecord('w-src', 'rigA'), laterClosedRecord('w-later', 'rigA')]);
     appendLesson(db, {
       work_id: 'w-src',
@@ -702,6 +702,10 @@ describe('computeRegressions', () => {
     });
 
     expect(computeRegressions(db, 0).flags).toEqual([]);
+    // A negative k must not fall through to SQLite's `LIMIT -1`, which means
+    // "no limit" rather than "zero rows" — the exact footgun `lastKLessons`
+    // guards against.
+    expect(computeRegressions(db, -1).flags).toEqual([]);
   });
 
   it('skips a lesson gracefully when its source record no longer exists', () => {
@@ -792,6 +796,33 @@ describe('computeRegressions', () => {
     expect(skipped).toHaveLength(1);
     expect(skipped[0].work_id).toBe('w-corrupt');
     expect(skipped[0].reason).toContain('source-record-invalid');
+  });
+
+  it('flags every signature that recurs, when a single later record matches 2+ of the lesson signatures', () => {
+    // Both errors recur in the SAME later record — the K-past-fix check must
+    // still flag each signature independently (mem-94ktk item 2: the shared
+    // candidate cache dedupes the record fetch, not the per-signature result).
+    const twoErrors = [tsError('src/a.ts'), tsError('src/b.ts')];
+    writeRecords(db, [
+      closedRecord('w-src', 'rigA', { trace: { jsonl_path: '/t/w-src.jsonl', errors: twoErrors } }),
+      laterClosedRecord('w-later', 'rigA', {
+        trace: { jsonl_path: '/t/w-later.jsonl', errors: twoErrors },
+      }),
+    ]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    const { flags } = computeRegressions(db);
+    expect(flags).toHaveLength(2);
+    expect(flags.map(f => f.signature).sort()).toEqual(
+      ['tsc:src/a.ts:13:TS2741', 'tsc:src/b.ts:13:TS2741'].sort()
+    );
+    for (const flag of flags) {
+      expect(flag.recurred_in).toEqual(['w-later']);
+    }
   });
 
   it("scopes the K-window by rig when one is given, so another rig's more-recent lessons don't evict this rig's own", () => {

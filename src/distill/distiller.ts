@@ -12,10 +12,9 @@ import type { TraceError } from '../schemas/trace.js';
 import type { WorkRecord } from '../schemas/workrecord.js';
 import type { LessonInput } from '../store/index.js';
 import {
-  allLessons,
   getRecord,
+  lastKLessons,
   lessonsFor,
-  lessonsForRig,
   queryRecords,
   supersedesClosure,
   toIsoUtc,
@@ -402,51 +401,67 @@ export function distillLessons(
 export const DEFAULT_REGRESSION_WINDOW = 5;
 
 /**
- * One signature's later-closed candidates, for the K-past-fix check: every
- * work_id carrying the same failure signature as `lesson`, closed strictly
- * after `lesson`'s `extracted_at`, IN THE SAME RIG, tagged with whether
- * Decision-6's convoy/PR/parent/supersedes exclusions already cover it (that
- * reuse is exactly why this stays a thin loop — the exclusion logic itself
- * lives in `isSibling`/`supersedesClosure`, not here). The rig/temporal
- * narrowing runs in SQL ({@link workIdsBySignatureSince}, joined against the
- * promoted `work_records.rig`/`closed_at` columns) so a coincidental
- * file:line:tool:error_class match in an unrelated rig, or one that predates
- * the lesson, is never fetched at all — only surviving candidates pay for a
- * full record fetch, needed for the `isSibling` check.
+ * Every later-closed work_id carrying each of `lesson`'s failure signatures,
+ * IN THE SAME RIG — one {@link workIdsBySignatureSince} SQL lookup per
+ * signature, keyed by signature so a signature that matches nothing still
+ * gets an (empty) entry in `candidatesBySignature` downstream. The rig/
+ * temporal narrowing runs in SQL (joined against the promoted `work_records.
+ * rig`/`closed_at` columns) so a coincidental file:line:tool:error_class
+ * match in an unrelated rig, or one that predates the lesson, is never
+ * fetched at all.
  */
-function candidatesForSignature(
+function workIdsBySignatures(
   db: StoreDatabase,
-  signature: string,
-  lesson: {
-    work_id: string;
-    extractedAtUtc: string;
-    sourceQuery: ReturnType<typeof queryFromRecord>;
-  },
+  signatures: readonly string[],
+  lesson: { extractedAtUtc: string; sourceQuery: ReturnType<typeof queryFromRecord> }
+): Map<string, string[]> {
+  return new Map(
+    signatures.map(signature => [
+      signature,
+      workIdsBySignatureSince(db, signature, {
+        rig: lesson.sourceQuery.rig,
+        closedAfter: lesson.extractedAtUtc,
+      }),
+    ])
+  );
+}
+
+/**
+ * Builds each later-closed candidate's {@link RegressionCandidate} at most
+ * once, keyed by work_id, for the K-past-fix check. A single later record
+ * can carry 2+ of a lesson's failure signatures (e.g. two errors that both
+ * recurred in the same later commit) — `getRecord` and the sibling check
+ * depend only on the candidate record and the lesson, not on which signature
+ * matched it, so computing them once here (rather than once per matching
+ * signature) avoids re-fetching and re-parsing the same row.
+ */
+function buildCandidateCache(
+  db: StoreDatabase,
+  workIdsBySignature: ReadonlyMap<string, string[]>,
+  lesson: { work_id: string; sourceQuery: ReturnType<typeof queryFromRecord> },
   superseded: ReadonlySet<string>
-): RegressionCandidate[] {
-  const candidates: RegressionCandidate[] = [];
-  const workIds = workIdsBySignatureSince(db, signature, {
-    rig: lesson.sourceQuery.rig,
-    closedAfter: lesson.extractedAtUtc,
-  });
-  for (const workId of workIds) {
-    if (workId === lesson.work_id) continue;
-    // `getRecord` fails loudly on a schema-invalid row (store corruption) —
-    // the SQL join above only proves a row existed at query time, not that
-    // it still parses now. One bad candidate must not abort the whole
-    // signature's candidate list, so it's dropped the same as a genuinely
-    // vanished row (matching the `candidateRecord === null` case below).
-    let candidateRecord: WorkRecord | null;
-    try {
-      candidateRecord = getRecord(db, workId);
-    } catch {
-      continue;
+): Map<string, RegressionCandidate> {
+  const cache = new Map<string, RegressionCandidate>();
+  for (const workIds of workIdsBySignature.values()) {
+    for (const workId of workIds) {
+      if (workId === lesson.work_id || cache.has(workId)) continue;
+      // `getRecord` fails loudly on a schema-invalid row (store corruption) —
+      // the SQL join above only proves a row existed at query time, not that
+      // it still parses now. One bad candidate must not abort the whole
+      // check, so it's dropped the same as a genuinely vanished row
+      // (matching the `candidateRecord === null` case below).
+      let candidateRecord: WorkRecord | null;
+      try {
+        candidateRecord = getRecord(db, workId);
+      } catch {
+        continue;
+      }
+      if (candidateRecord === null) continue;
+      const sibling = isSibling(candidateRecord, lesson.sourceQuery) || superseded.has(workId);
+      cache.set(workId, { work_id: workId, is_sibling: sibling });
     }
-    if (candidateRecord === null) continue;
-    const sibling = isSibling(candidateRecord, lesson.sourceQuery) || superseded.has(workId);
-    candidates.push({ work_id: workId, is_sibling: sibling });
   }
-  return candidates;
+  return cache;
 }
 
 /**
@@ -467,14 +482,13 @@ export function computeRegressions(
   k: number = DEFAULT_REGRESSION_WINDOW,
   rig?: string
 ): { flags: RegressionFlag[]; skipped: RegressionSkip[] } {
-  // `slice(-0)` is `slice(0)` in JS — a bare `k <= 0` guard keeps "check
-  // nothing" from silently becoming "check everything" for a direct caller.
   // Rig-scoped (mem-0r7l): matching `selectCandidates`' own `--rig` scope —
   // otherwise a multi-rig store's K-window fills with an unrelated rig's
   // lessons and this rig's own lessons are never checked, with no signal
   // that anything was skipped (the window just silently contains 0 of them).
-  const recentLessons =
-    k <= 0 ? [] : (rig === undefined ? allLessons(db) : lessonsForRig(db, rig)).slice(-k);
+  // `lastKLessons` guards `k <= 0` itself (a non-positive value means "check
+  // nothing", not SQLite's `LIMIT`-with-negative-value "no limit").
+  const recentLessons = lastKLessons(db, k, rig);
   const flags: RegressionFlag[] = [];
   const skipped: RegressionSkip[] = [];
 
@@ -525,10 +539,15 @@ export function computeRegressions(
     const superseded = new Set(supersedesClosure(db, lesson.work_id));
     const lessonCtx = { work_id: lesson.work_id, extractedAtUtc, sourceQuery };
 
+    const workIdsBySignature = workIdsBySignatures(db, signatures, lessonCtx);
+    const candidateCache = buildCandidateCache(db, workIdsBySignature, lessonCtx, superseded);
     const candidatesBySignature = new Map<string, RegressionCandidate[]>(
-      signatures.map(signature => [
+      [...workIdsBySignature].map(([signature, workIds]) => [
         signature,
-        candidatesForSignature(db, signature, lessonCtx, superseded),
+        workIds.flatMap(workId => {
+          const candidate = candidateCache.get(workId);
+          return candidate === undefined ? [] : [candidate];
+        }),
       ])
     );
 

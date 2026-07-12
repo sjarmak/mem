@@ -1,4 +1,5 @@
 import { CommandContext } from '../index.js';
+import { asPositiveInt } from '../io.js';
 import { withReadStore } from '../store.js';
 import {
   searchErrorMessages,
@@ -13,17 +14,6 @@ export interface SearchErrorsResult {
   hits: ErrorSearchHit[];
 }
 
-/** Parse `--limit` into a positive integer, or fall back to the reader's default. */
-function parseLimit(value: string | boolean | undefined): number {
-  if (value === undefined) return SEARCH_ERROR_DEFAULT_LIMIT;
-  if (typeof value !== 'string') throw new Error('--limit requires a value');
-  const n = Number(value);
-  if (!Number.isInteger(n) || n < 1) {
-    throw new Error('--limit must be a positive integer');
-  }
-  return n;
-}
-
 /**
  * `mem search-errors <fts-query> [--limit N] [--store PATH]` — full-text search
  * over trace-error messages (the Decision-8 weak tiebreaker), best match first.
@@ -35,7 +25,7 @@ export function searchErrorsCommand(ctx: CommandContext): SearchErrorsResult {
   if (query === undefined) {
     throw new Error('search-errors requires a query: mem search-errors <fts-query>');
   }
-  const limit = parseLimit(ctx.options.limit);
+  const limit = asPositiveInt(ctx.options.limit, 'limit') ?? SEARCH_ERROR_DEFAULT_LIMIT;
 
   const hits = withReadStore(ctx.options, db => searchErrorMessages(db, query, limit));
 
