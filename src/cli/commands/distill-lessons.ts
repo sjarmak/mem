@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { CommandContext } from '../index.js';
 import { asPositiveInt, asString } from '../io.js';
 import { withReadStore, withWriteStore } from '../store.js';
-import { importLessons } from '../../store/index.js';
+import { importLessons, maxLessonId } from '../../store/index.js';
 import {
   claudeRunner,
   computeRegressions,
@@ -86,6 +86,13 @@ export function distillLessonsCommand(
   // after the model calls (mem-0xz9b) — never held open across those calls,
   // since both queries run before `distillLessons` is invoked. A failure
   // here must degrade to an empty report rather than block the import below.
+  //
+  // mem-ljp8b: the K-window boundary is an explicit `maxLessonId(db)` snapshot
+  // threaded through as `asOfLessonId`, rather than relying on this block
+  // happening before `importLessons` as an unenforced convention. Passed
+  // through as returned (`number | null`, not coerced to `undefined`): `null`
+  // (an empty-at-snapshot-time `lessons` table) is a meaningful, distinct
+  // boundary from an omitted one — see `lastKLessons`.
   const { records, regressions, regressionSkipped, regressionError } = withReadStore(
     ctx.options,
     db => {
@@ -95,11 +102,12 @@ export function distillLessonsCommand(
         limit: parsedLimit,
         force: ctx.options.force === true,
       });
+      const asOfLessonId = maxLessonId(db);
       let regressions: RegressionFlag[] = [];
       let regressionSkipped: RegressionSkip[] = [];
       let regressionError: string | null = null;
       try {
-        const result = computeRegressions(db, parsedRegressionWindow, rig);
+        const result = computeRegressions(db, parsedRegressionWindow, rig, asOfLessonId);
         regressions = result.flags;
         regressionSkipped = result.skipped;
       } catch (error: unknown) {

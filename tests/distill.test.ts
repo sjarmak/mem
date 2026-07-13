@@ -19,6 +19,7 @@ import { WorkRecordSchema, type WorkRecord } from '../src/schemas/workrecord.js'
 import {
   appendLesson,
   lessonsFor,
+  maxLessonId,
   openStore,
   writeRecords,
   type StoreDatabase,
@@ -882,5 +883,62 @@ describe('computeRegressions', () => {
     const { flags } = computeRegressions(db, 1, 'rigA');
     expect(flags).toHaveLength(1);
     expect(flags[0].lesson_work_id).toBe('w-a');
+  });
+
+  it('K-window stays correct when new lessons are imported before computeRegressions runs, given an asOfLessonId snapshot (mem-ljp8b)', () => {
+    writeRecords(db, [
+      closedRecord('w-src', 'rigA'),
+      laterClosedRecord('w-later', 'rigA'),
+      // Same rig as w-src so it enters the rig-scoped window below (an
+      // unrelated rig would already be excluded by the rig scope alone,
+      // which isn't the boundary this test is about).
+      laterClosedRecord('w-other', 'rigA', {
+        trace: { jsonl_path: '/t/w-other.jsonl', errors: [tsError('src/other.ts')] },
+      }),
+    ]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+    const asOfLessonId = maxLessonId(db) as number;
+
+    // Simulates importLessons running BEFORE computeRegressions (a call-order
+    // violation of the old comment-only convention): a lesson is appended
+    // after the snapshot but before the check runs, which would otherwise
+    // evict w-src from an unpinned k=1 window.
+    appendLesson(db, { work_id: 'w-other', extracted_at: '2026-06-06T00:00:00Z', payload: {} });
+
+    // Unpinned: w-other evicts w-src from the k=1 window, so the recurrence
+    // is missed entirely — the bug this bead is about.
+    expect(computeRegressions(db, 1, 'rigA').flags).toEqual([]);
+
+    // Pinned to the pre-import snapshot: w-src is still the k=1 window and
+    // its recurrence is correctly flagged, regardless of what was appended
+    // (or in what order) after the snapshot.
+    const { flags } = computeRegressions(db, 1, 'rigA', asOfLessonId);
+    expect(flags).toHaveLength(1);
+    expect(flags[0].lesson_work_id).toBe('w-src');
+  });
+
+  it('checks nothing for an explicit null asOfLessonId (a snapshot taken when the lessons table was empty), even though lessons exist by check time', () => {
+    writeRecords(db, [closedRecord('w-src', 'rigA'), laterClosedRecord('w-later', 'rigA')]);
+    expect(maxLessonId(db)).toBeNull();
+
+    // Lessons are appended after the (empty) snapshot was taken.
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    // null must NOT collapse to "no boundary" (which would see w-src and
+    // flag its recurrence) — it means the window was empty at snapshot time.
+    const { flags, skipped } = computeRegressions(db, 5, 'rigA', null);
+    expect(flags).toEqual([]);
+    expect(skipped).toEqual([]);
+
+    // Contrast: an omitted boundary sees the lesson that now exists.
+    expect(computeRegressions(db, 5, 'rigA').flags).toHaveLength(1);
   });
 });

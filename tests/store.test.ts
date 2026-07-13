@@ -13,6 +13,7 @@ import {
   lessonsFor,
   lessonsForRig,
   linksFor,
+  maxLessonId,
   openStore,
   queryRecords,
   runsFor,
@@ -410,6 +411,61 @@ describe('lessons (append-only, D9)', () => {
     expect(lastKLessons(db, 1, 'rigA').map(l => l.work_id)).toEqual(['w-a']);
     expect(lastKLessons(db, 5, 'rigA').map(l => l.work_id)).toEqual(['w-a']);
     expect(lastKLessons(db, 5, 'rigC')).toEqual([]);
+  });
+
+  it('maxLessonId returns null for an empty table and the highest id otherwise', () => {
+    const db = openStore(':memory:');
+    expect(maxLessonId(db)).toBeNull();
+
+    appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-03T00:00:00Z', payload: {} });
+    const idA = maxLessonId(db);
+    expect(idA).not.toBeNull();
+
+    appendLesson(db, { work_id: 'w-b', extracted_at: '2026-06-04T00:00:00Z', payload: {} });
+    expect(maxLessonId(db)).toBe((idA as number) + 1);
+  });
+
+  it('lastKLessons excludes lessons appended after an asOfLessonId snapshot (unscoped)', () => {
+    const db = openStore(':memory:');
+    appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-03T00:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-b', extracted_at: '2026-06-04T00:00:00Z', payload: {} });
+    const snapshot = maxLessonId(db) as number;
+    appendLesson(db, { work_id: 'w-c', extracted_at: '2026-06-05T00:00:00Z', payload: {} });
+
+    // Without the snapshot, w-c (appended after) is in the window.
+    expect(lastKLessons(db, 2).map(l => l.work_id)).toEqual(['w-b', 'w-c']);
+    // Pinned to the snapshot, w-c is excluded even though it now exists.
+    expect(lastKLessons(db, 2, undefined, snapshot).map(l => l.work_id)).toEqual(['w-a', 'w-b']);
+  });
+
+  it('lastKLessons excludes lessons appended after an asOfLessonId snapshot (rig-scoped)', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [
+      fullRecord({ work_id: 'w-a', rig: 'rigA' }),
+      fullRecord({ work_id: 'w-b', rig: 'rigA' }),
+    ]);
+    appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-03T00:00:00Z', payload: {} });
+    const snapshot = maxLessonId(db) as number;
+    appendLesson(db, { work_id: 'w-b', extracted_at: '2026-06-04T00:00:00Z', payload: {} });
+
+    expect(lastKLessons(db, 5, 'rigA').map(l => l.work_id)).toEqual(['w-a', 'w-b']);
+    expect(lastKLessons(db, 5, 'rigA', snapshot).map(l => l.work_id)).toEqual(['w-a']);
+  });
+
+  it('lastKLessons returns [] for an explicit null asOfLessonId (snapshot taken when the table was empty) — never the unbounded live query', () => {
+    const db = openStore(':memory:');
+    // A snapshot of an empty table (maxLessonId(db) === null here) means no
+    // lessons existed yet — the correct window is empty, not "everything
+    // currently in the table," which is what an omitted (undefined) boundary
+    // means. Collapsing null into undefined would wrongly reproduce the
+    // unbounded live-query behavior for a caller that snapshotted at zero.
+    expect(maxLessonId(db)).toBeNull();
+    appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-03T00:00:00Z', payload: {} });
+
+    expect(lastKLessons(db, 5, undefined, null)).toEqual([]);
+    expect(lastKLessons(db, 5, 'rigA', null)).toEqual([]);
+    // Contrast: an omitted boundary sees the lesson that now exists.
+    expect(lastKLessons(db, 5).map(l => l.work_id)).toEqual(['w-a']);
   });
 
   it('importLessons appends exported lessons and skips full-content duplicates', () => {

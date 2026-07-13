@@ -156,32 +156,76 @@ export function lessonsForRig(db: StoreDatabase, rig: string): StoredLesson[] {
   return rows.map(toStoredLesson);
 }
 
-/** The `k` most-recently-appended lessons (optionally rig-scoped), in append
- * (id) order — the K-past-fix regression check's window (mem-0r7l). Pushed
- * into SQL (`ORDER BY id DESC LIMIT k`, then reversed back to ascending) so
- * the check never scans and JSON-parses the full, unboundedly-growing
- * `lessons` table just to keep the last k rows the way `allLessons(...)
- * .slice(-k)` did. `k <= 0` returns `[]` directly rather than passing a
- * non-positive value to SQLite's `LIMIT`, where a negative limit means "no
- * limit" — the opposite of this function's contract. */
-export function lastKLessons(db: StoreDatabase, k: number, rig?: string): StoredLesson[] {
+/** The highest `lessons.id` currently in the store, or `null` when the table
+ * is empty — the explicit as-of boundary a caller snapshots BEFORE appending
+ * new lessons, so a later {@link lastKLessons}/`computeRegressions` call can
+ * pin its K-window to "lessons that existed as of this snapshot" instead of
+ * depending on being invoked before the append happens (mem-ljp8b: the
+ * K-window's "checked before this run's own batch" invariant used to live
+ * only in a call-order comment, with nothing to catch a future caller that
+ * violates it). */
+export function maxLessonId(db: StoreDatabase): number | null {
+  const row = db.prepare('SELECT MAX(id) AS id FROM lessons').get() as { id: number | null };
+  return row.id;
+}
+
+/** The `k` most-recently-appended lessons (optionally rig-scoped, optionally
+ * as-of a `maxLessonId` snapshot), in append (id) order — the K-past-fix
+ * regression check's window (mem-0r7l). Pushed into SQL (`ORDER BY id DESC
+ * LIMIT k`, then reversed back to ascending) so the check never scans and
+ * JSON-parses the full, unboundedly-growing `lessons` table just to keep the
+ * last k rows the way `allLessons(...).slice(-k)` did. `k <= 0` returns `[]`
+ * directly rather than passing a non-positive value to SQLite's `LIMIT`,
+ * where a negative limit means "no limit" — the opposite of this function's
+ * contract. `asOfLessonId`, when given as a number, excludes any lesson
+ * appended after that snapshot (`id > asOfLessonId`) — an explicit temporal
+ * boundary rather than the implicit "caller ran this before appending more
+ * lessons" convention (mem-ljp8b). `null` (as opposed to `undefined`) means
+ * the snapshot was taken from an empty `lessons` table (`maxLessonId`
+ * returns `null` there) — the correct window is empty, not a live re-query,
+ * so this returns `[]` rather than treating `null` the same as an omitted
+ * (`undefined`) boundary. Only an omitted `asOfLessonId` falls through to
+ * the live table as queried. */
+export function lastKLessons(
+  db: StoreDatabase,
+  k: number,
+  rig?: string,
+  asOfLessonId?: number | null
+): StoredLesson[] {
   if (k <= 0) return [];
+  if (asOfLessonId === null) return [];
+
+  // Same where/params accumulation idiom as `queryRecords` above, so the
+  // rig-scoped and asOf-scoped conditions compose independently instead of
+  // being spelled out per rig×asOf combination.
+  const where: string[] = [];
+  const params: (string | number)[] = [];
+  if (rig !== undefined) {
+    where.push('wr.rig = ?');
+    params.push(rig);
+  }
+  if (asOfLessonId !== undefined) {
+    where.push(`${rig === undefined ? '' : 'l.'}id <= ?`);
+    params.push(asOfLessonId);
+  }
+  params.push(k);
+  const whereSql = where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '';
+
   const rows = (
     rig === undefined
       ? db
           .prepare(
-            'SELECT id, work_id, extracted_at, commit_sha, payload FROM lessons ORDER BY id DESC LIMIT ?'
+            `SELECT id, work_id, extracted_at, commit_sha, payload FROM lessons${whereSql} ORDER BY id DESC LIMIT ?`
           )
-          .all(k)
+          .all(...params)
       : db
           .prepare(
             `SELECT l.id, l.work_id, l.extracted_at, l.commit_sha, l.payload
                FROM lessons l
-               JOIN work_records wr ON wr.work_id = l.work_id
-              WHERE wr.rig = ?
+               JOIN work_records wr ON wr.work_id = l.work_id${whereSql}
               ORDER BY l.id DESC LIMIT ?`
           )
-          .all(rig, k)
+          .all(...params)
   ) as LessonRow[];
 
   return rows.reverse().map(toStoredLesson);
