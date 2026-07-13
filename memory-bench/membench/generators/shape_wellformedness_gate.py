@@ -53,9 +53,11 @@ class WellformednessResult:
 
     ``wellformed`` is the corpus-validity signal: true iff the shape is free of the
     construction bugs this gate detects. ``discrimination`` carries the underlying
-    ``retrieval_discrimination_gate`` result when it was run, and is ``None`` when the
-    M1 structural pre-check short-circuited (the arms were deliberately NOT run
-    because their verdict would be confounded). ``reason`` explains the verdict."""
+    ``retrieval_discrimination_gate`` result when it was run, and is ``None`` when any
+    structural pre-check short-circuited the gate — an invalid ``facts_per_task``
+    boundary or the M1 truncation check (the arms were deliberately NOT run because
+    their verdict would be confounded or meaningless). ``reason`` explains the
+    verdict."""
 
     sequence_id: str
     wellformed: bool
