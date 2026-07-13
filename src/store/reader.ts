@@ -241,6 +241,40 @@ export function workIdsBySignatureSince(
   return rows.map(row => row.work_id);
 }
 
+/** The scalar fields the Decision-6 sibling test ({@link isSibling} in
+ * `retrieve/exclusions.ts`) needs per candidate: `convoy_id`/`pr`/
+ * `external_ref` straight off their promoted `work_records` columns, `parent`
+ * off the `record_links` `'parent'` edge (mem-qgdz). */
+export interface SiblingColumns {
+  work_id: string;
+  convoy_id: string | null;
+  pr: string | null;
+  external_ref: string | null;
+  parent: string | null;
+}
+
+/** Batched {@link SiblingColumns} for a set of work_ids — one query (`json_each`,
+ * no bound-variable chunking) rather than a `getRecord`-and-Zod-parse per
+ * candidate, keyed by work_id for a caller with duplicates to dedup itself
+ * (mem-0xz9b). Candidates absent from the store are simply missing from the
+ * result map. */
+export function siblingColumnsByWorkIds(
+  db: StoreDatabase,
+  workIds: readonly string[]
+): Map<string, SiblingColumns> {
+  if (workIds.length === 0) return new Map();
+  const rows = db
+    .prepare(
+      `SELECT wr.work_id AS work_id, wr.convoy_id AS convoy_id, wr.pr AS pr,
+              wr.external_ref AS external_ref, rl.target_id AS parent
+         FROM work_records wr
+         LEFT JOIN record_links rl ON rl.work_id = wr.work_id AND rl.kind = 'parent'
+        WHERE wr.work_id IN (SELECT value FROM json_each(?))`
+    )
+    .all(JSON.stringify(workIds)) as SiblingColumns[];
+  return new Map(rows.map(row => [row.work_id, row]));
+}
+
 /** One FTS hit on a trace error's message. */
 export interface ErrorSearchHit {
   work_id: string;

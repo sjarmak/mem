@@ -628,6 +628,50 @@ describe('computeRegressions', () => {
     expect(computeRegressions(db).flags).toEqual([]);
   });
 
+  it("does NOT flag a recurrence in the lesson source's own epic child (parent-axis sibling)", () => {
+    writeRecords(db, [
+      closedRecord('w-src', 'rigA', { links: { deps: [], supersedes: [], parent: 'w-epic' } }),
+      laterClosedRecord('w-epic-child', 'rigA', {
+        links: { deps: [], supersedes: [], parent: 'w-epic' },
+      }),
+    ]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    expect(computeRegressions(db).flags).toEqual([]);
+  });
+
+  it('does NOT flag a recurrence in a PR-sibling later record', () => {
+    writeRecords(db, [
+      closedRecord('w-src', 'rigA', { outcome: { pr: '#99', pr_state: 'merged' } }),
+      laterClosedRecord('w-pr-sibling', 'rigA', { outcome: { pr: '#99', pr_state: 'merged' } }),
+    ]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    expect(computeRegressions(db).flags).toEqual([]);
+  });
+
+  it('does NOT flag a recurrence in a branch-sibling (external_ref) later record', () => {
+    writeRecords(db, [
+      closedRecord('w-src', 'rigA', { external_ref: 'polecat/w-src' }),
+      laterClosedRecord('w-branch-sibling', 'rigA', { external_ref: 'polecat/w-src' }),
+    ]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    expect(computeRegressions(db).flags).toEqual([]);
+  });
+
   it('does NOT flag a supersedes-chain recurrence', () => {
     writeRecords(db, [
       closedRecord('w-src', 'rigA'),

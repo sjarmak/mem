@@ -16,6 +16,7 @@ import {
   lastKLessons,
   lessonsFor,
   queryRecords,
+  siblingColumnsByWorkIds,
   supersedesClosure,
   toIsoUtc,
   workIdsBySignatureSince,
@@ -428,12 +429,16 @@ function workIdsBySignatures(
 
 /**
  * Builds each later-closed candidate's {@link RegressionCandidate} at most
- * once, keyed by work_id, for the K-past-fix check. A single later record
- * can carry 2+ of a lesson's failure signatures (e.g. two errors that both
- * recurred in the same later commit) — `getRecord` and the sibling check
- * depend only on the candidate record and the lesson, not on which signature
- * matched it, so computing them once here (rather than once per matching
- * signature) avoids re-fetching and re-parsing the same row.
+ * once, keyed by work_id, for the K-past-fix check. A single later record can
+ * carry 2+ of a lesson's failure signatures (e.g. two errors that both
+ * recurred in the same later commit) — the sibling check depends only on the
+ * candidate and the lesson, not on which signature matched it, so computing
+ * it once here (rather than once per matching signature) avoids redundant
+ * work. The sibling check itself only needs {@link SiblingColumns}
+ * (convoy_id/pr/external_ref/parent) — one batched query for the whole
+ * dedup'd work_id set, not a `getRecord`-and-Zod-parse per candidate
+ * (mem-0xz9b): a candidate the SQL join already proved existed at query time
+ * is never re-fetched just to run isSibling.
  */
 function buildCandidateCache(
   db: StoreDatabase,
@@ -441,22 +446,13 @@ function buildCandidateCache(
   lesson: { work_id: string; sourceQuery: ReturnType<typeof queryFromRecord> },
   superseded: ReadonlySet<string>
 ): Map<string, RegressionCandidate> {
+  const columnsByWorkId = siblingColumnsByWorkIds(
+    db,
+    workIds.filter(workId => workId !== lesson.work_id)
+  );
   const cache = new Map<string, RegressionCandidate>();
-  for (const workId of workIds) {
-    if (workId === lesson.work_id || cache.has(workId)) continue;
-    // `getRecord` fails loudly on a schema-invalid row (store corruption) —
-    // the SQL join above only proves a row existed at query time, not that
-    // it still parses now. One bad candidate must not abort the whole
-    // check, so it's dropped the same as a genuinely vanished row
-    // (matching the `candidateRecord === null` case below).
-    let candidateRecord: WorkRecord | null;
-    try {
-      candidateRecord = getRecord(db, workId);
-    } catch {
-      continue;
-    }
-    if (candidateRecord === null) continue;
-    const sibling = isSibling(candidateRecord, lesson.sourceQuery) || superseded.has(workId);
+  for (const [workId, columns] of columnsByWorkId) {
+    const sibling = isSibling(columns, lesson.sourceQuery) || superseded.has(workId);
     cache.set(workId, { work_id: workId, is_sibling: sibling });
   }
   return cache;

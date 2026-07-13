@@ -12,7 +12,7 @@ import {
   type StoredLesson,
 } from '../store/index.js';
 import type { StoreDatabase } from '../store/sqlite.js';
-import { isSibling } from './exclusions.js';
+import { isSibling, siblingColumnsFromRecord } from './exclusions.js';
 
 /**
  * Retrieval v1 (P2.1): structured/keyword retrieval over the work-audit graph,
@@ -250,7 +250,10 @@ export function retrieve(
   // D6 non-temporal exclusions: self, supersedes chain, convoy/pr/branch.
   const chain = new Set(supersedesClosure(db, q.work_id));
   const retrievable = eligible.filter(
-    record => record.work_id !== q.work_id && !chain.has(record.work_id) && !isSibling(record, q)
+    record =>
+      record.work_id !== q.work_id &&
+      !chain.has(record.work_id) &&
+      !isSibling(siblingColumnsFromRecord(record), q)
   );
 
   // FTS scan: defines the message tier and tiebreaks the structured tiers.

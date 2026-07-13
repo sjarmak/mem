@@ -17,6 +17,7 @@ import {
   queryRecords,
   runsFor,
   searchErrorMessages,
+  siblingColumnsByWorkIds,
   supersedesClosure,
   workIdsBySignature,
   writeRecords,
@@ -796,6 +797,55 @@ describe('failure-signature retrieval keys (D8)', () => {
     ]);
 
     expect(searchErrorMessages(db, 'argument', 1)).toHaveLength(1);
+  });
+});
+
+describe('siblingColumnsByWorkIds (mem-0xz9b)', () => {
+  it('batches convoy_id/pr/external_ref/parent for a set of work_ids in one query', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [
+      fullRecord(), // demo-1a2b: convoy_id 'convoy-7', pr '#63', external_ref set, no parent
+      fullRecord({
+        work_id: 'demo-2b3c',
+        trace: { jsonl_path: '/t/y.jsonl', errors: [] },
+        outcome: undefined,
+        external_ref: undefined,
+        links: { deps: [], supersedes: [], parent: 'demo-1a2b-epic' },
+      }),
+    ]);
+
+    const columns = siblingColumnsByWorkIds(db, ['demo-1a2b', 'demo-2b3c']);
+    expect(columns.get('demo-1a2b')).toEqual({
+      work_id: 'demo-1a2b',
+      convoy_id: 'convoy-7',
+      pr: '#63',
+      external_ref: 'polecat/demo-1a2b',
+      parent: null,
+    });
+    expect(columns.get('demo-2b3c')).toEqual({
+      work_id: 'demo-2b3c',
+      convoy_id: null,
+      pr: null,
+      external_ref: null,
+      parent: 'demo-1a2b-epic',
+    });
+    db.close();
+  });
+
+  it('omits work_ids that do not exist in the store, rather than a null/undefined entry', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [fullRecord()]);
+
+    const columns = siblingColumnsByWorkIds(db, ['demo-1a2b', 'demo-vanished']);
+    expect(columns.has('demo-vanished')).toBe(false);
+    expect(columns.get('demo-1a2b')?.work_id).toBe('demo-1a2b');
+    db.close();
+  });
+
+  it('returns an empty map for an empty work_id list, without querying', () => {
+    const db = openStore(':memory:');
+    expect(siblingColumnsByWorkIds(db, [])).toEqual(new Map());
+    db.close();
   });
 });
 

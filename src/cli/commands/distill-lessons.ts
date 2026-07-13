@@ -75,13 +75,38 @@ export function distillLessonsCommand(
     throw new Error('nothing to do: pass --out FILE and/or --import');
   }
 
-  const records = withReadStore(ctx.options, db =>
-    selectCandidates(db, {
-      rig,
-      workIds: workIdsOpt === undefined ? undefined : workIdsOpt.split(',').filter(s => s !== ''),
-      limit: parsedLimit,
-      force: ctx.options.force === true,
-    })
+  // mem-0r7l: the regression check is report-only, checked against lessons
+  // already in the store BEFORE this run's own batch is appended below — a
+  // batch that imports >= k new lessons would otherwise evict every
+  // pre-existing lesson from the K-window before its signature could ever be
+  // checked (this run's own new lessons can't recur "later than now" in the
+  // same run regardless of ordering, so nothing is lost by checking first).
+  // Nothing mutates the store between here and `importLessons` below, so it
+  // shares `selectCandidates`' read handle rather than opening a second read
+  // after the model calls (mem-0xz9b) — never held open across those calls,
+  // since both queries run before `distillLessons` is invoked. A failure
+  // here must degrade to an empty report rather than block the import below.
+  const { records, regressions, regressionSkipped, regressionError } = withReadStore(
+    ctx.options,
+    db => {
+      const selected = selectCandidates(db, {
+        rig,
+        workIds: workIdsOpt === undefined ? undefined : workIdsOpt.split(',').filter(s => s !== ''),
+        limit: parsedLimit,
+        force: ctx.options.force === true,
+      });
+      let regressions: RegressionFlag[] = [];
+      let regressionSkipped: RegressionSkip[] = [];
+      let regressionError: string | null = null;
+      try {
+        const result = computeRegressions(db, parsedRegressionWindow, rig);
+        regressions = result.flags;
+        regressionSkipped = result.skipped;
+      } catch (error: unknown) {
+        regressionError = error instanceof Error ? error.message : String(error);
+      }
+      return { records: selected, regressions, regressionSkipped, regressionError };
+    }
   );
 
   const distill = runner ?? claudeRunner(model ?? DEFAULT_MODEL);
@@ -97,26 +122,6 @@ export function distillLessonsCommand(
     const ndjson = lessons.map(lesson => JSON.stringify(lesson)).join('\n');
     writeFileSync(out, ndjson === '' ? '' : `${ndjson}\n`, 'utf8');
     outPath = out;
-  }
-
-  // mem-0r7l: report-only, checked against lessons already in the store
-  // BEFORE this run's own batch is appended below — a batch that imports >= k
-  // new lessons would otherwise evict every pre-existing lesson from the
-  // K-window before its signature could ever be checked (this run's own new
-  // lessons can't recur "later than now" in the same run regardless of
-  // ordering, so nothing is lost by checking first). A failure here must
-  // degrade to an empty report rather than block the import below.
-  let regressions: RegressionFlag[] = [];
-  let regressionSkipped: RegressionSkip[] = [];
-  let regressionError: string | null = null;
-  try {
-    const result = withReadStore(ctx.options, db =>
-      computeRegressions(db, parsedRegressionWindow, rig)
-    );
-    regressions = result.flags;
-    regressionSkipped = result.skipped;
-  } catch (error: unknown) {
-    regressionError = error instanceof Error ? error.message : String(error);
   }
 
   let imported: DistillLessonsResult['imported'] = null;
