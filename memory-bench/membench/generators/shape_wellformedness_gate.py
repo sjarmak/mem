@@ -80,27 +80,27 @@ def shape_wellformedness_gate(
 
     Three checks, cheapest first:
 
-    0. **Boundary validation** — ``facts_per_task`` and ``top_k`` must each be >= 1.
-       Neither the M1 check below nor ``retrieval_discrimination_gate`` can be trusted
-       to catch this on every input (M1 only fires when ``facts_per_task > top_k``,
-       which a ``facts_per_task <= 0`` caller can evade), so it is checked explicitly
-       here. Declare malformed WITHOUT running the arms.
+    0. **``facts_per_task`` validation** — must be >= 1. A ``top_k <= 0`` needs no
+       twin check here: M1 below (``facts_per_task > top_k``) already catches it
+       for any ``facts_per_task >= 1``, since that trivially holds once ``top_k``
+       is non-positive. Declare malformed WITHOUT running the arms.
     1. **M1 structural pre-check** — if ``facts_per_task > top_k`` the naive arm would
        fail from truncation rather than staleness, so the discrimination signal is
-       confounded. Declare malformed WITHOUT running the arms.
+       confounded (this is also where an invalid ``top_k <= 0`` surfaces). Declare
+       malformed WITHOUT running the arms.
     2. **Discrimination check** — otherwise run ``retrieval_discrimination_gate``,
        threading this same ``top_k`` into the naive arm's construction so the check
        and the arm it is checking never disagree about retrieval width. The shape is
        well-formed iff the quality arm cleanly beats the naive arm at the goal
        (``accepted``). A rejection here flags a construction bug, not an arm verdict.
     """
-    if facts_per_task < 1 or top_k < 1:
+    if facts_per_task < 1:
         return WellformednessResult(
             sequence_id=seq.sequence_id,
             wellformed=False,
             reason=(
-                f"invalid boundary: facts_per_task={facts_per_task}, top_k={top_k} "
-                "(both must be >= 1) — malformed by construction, arms not run"
+                f"invalid boundary: facts_per_task={facts_per_task} (must be >= 1) "
+                "— malformed by construction, arms not run"
             ),
             discrimination=None,
         )

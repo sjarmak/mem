@@ -10,7 +10,9 @@ Covered:
   discrimination result is carried through;
 * the M1 ``facts_per_task > top_k`` truncation case short-circuits to malformed
   WITHOUT running the arms (a monkeypatched discrimination gate must never fire);
-* a low ``top_k`` forces the same structural short-circuit.
+* a low ``top_k`` forces the same structural short-circuit;
+* an invalid ``facts_per_task`` (<1) short-circuits to malformed without raising,
+  independently of the M1 check (mem-03acq).
 """
 
 from __future__ import annotations
@@ -27,6 +29,17 @@ from membench.schemas.world import Channel, EnterpriseWorld, Persona, Project, T
 # The submodule name collides with the function the package re-exports, so grab the
 # module object explicitly to monkeypatch its ``retrieval_discrimination_gate`` symbol.
 gate_mod = importlib.import_module("membench.generators.shape_wellformedness_gate")
+
+
+def _forbid_arms(monkeypatch) -> None:
+    """Make ``retrieval_discrimination_gate`` blow up if called — for a short-circuit
+    test, that proves the arms were never run rather than merely asserting the
+    returned verdict."""
+
+    def _must_not_run(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("arms must not run for a malformed-shape short-circuit")
+
+    monkeypatch.setattr(gate_mod, "retrieval_discrimination_gate", _must_not_run)
 
 
 def _world(seed: int = 7) -> EnterpriseWorld:
@@ -83,13 +96,8 @@ def test_wellformed_holds_across_seeds() -> None:
 
 def test_m1_truncation_short_circuits_without_running_arms(monkeypatch) -> None:
     # facts_per_task > top_k confounds the naive arm (truncation, not staleness), so
-    # the gate must declare malformed WITHOUT running the arms. Monkeypatch the
-    # discrimination gate to blow up if it is ever called — the short-circuit means
-    # it must not be.
-    def _must_not_run(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("arms must not run for an M1-malformed task")
-
-    monkeypatch.setattr(gate_mod, "retrieval_discrimination_gate", _must_not_run)
+    # the gate must declare malformed WITHOUT running the arms.
+    _forbid_arms(monkeypatch)
 
     seq = _tool_requiring_seq(facts_per_task=3)
     result = shape_wellformedness_gate(seq, facts_per_task=DEFAULT_TOP_K + 1, top_k=DEFAULT_TOP_K)
@@ -110,15 +118,17 @@ def test_low_top_k_forces_malformed() -> None:
     assert "M1 truncation" in result.reason
 
 
-def test_invalid_boundary_returns_malformed_without_raising(monkeypatch) -> None:
+def test_invalid_facts_per_task_returns_malformed_without_raising(monkeypatch) -> None:
     # facts_per_task <= 0 evades the M1 check (facts_per_task > top_k is false when
     # facts_per_task is 0 and top_k is DEFAULT_TOP_K), so it needs its own guard.
-    # The gate's contract is "always returns a verdict object" (mem-03acq) — it must
-    # never raise, and the arms must never run on a structurally invalid boundary.
-    def _must_not_run(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("arms must not run for an invalid-boundary task")
-
-    monkeypatch.setattr(gate_mod, "retrieval_discrimination_gate", _must_not_run)
+    # The gate's contract is "never raises for an invalid boundary" (mem-03acq) — the
+    # arms must never run on a structurally invalid boundary either.
+    #
+    # Note top_k < 1 needs no equivalent test here: for any facts_per_task >= 1 it is
+    # already caught by test_low_top_k_forces_malformed's M1 path (facts_per_task >
+    # top_k trivially holds once top_k <= 0), so a dedicated top_k-only case would
+    # just re-test the same M1 branch under a different name.
+    _forbid_arms(monkeypatch)
 
     seq = _tool_requiring_seq(facts_per_task=3)
     result = shape_wellformedness_gate(seq, facts_per_task=0, top_k=DEFAULT_TOP_K)
@@ -126,24 +136,6 @@ def test_invalid_boundary_returns_malformed_without_raising(monkeypatch) -> None
     assert result.discrimination is None
     assert "invalid boundary" in result.reason
     assert "facts_per_task=0" in result.reason
-
-
-def test_invalid_top_k_returns_malformed_without_raising(monkeypatch) -> None:
-    # top_k < 1 with facts_per_task >= 1 would ALSO be caught by the M1 check (since
-    # facts_per_task > top_k trivially holds), but this exercises the boundary check's
-    # own top_k branch directly and pins the "invalid boundary" reason distinctly from
-    # M1's "M1 truncation" reason for the same inputs.
-    def _must_not_run(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("arms must not run for an invalid-boundary task")
-
-    monkeypatch.setattr(gate_mod, "retrieval_discrimination_gate", _must_not_run)
-
-    seq = _tool_requiring_seq(facts_per_task=3)
-    result = shape_wellformedness_gate(seq, facts_per_task=3, top_k=0)
-    assert not result.wellformed
-    assert result.discrimination is None
-    assert "invalid boundary" in result.reason
-    assert "top_k=0" in result.reason
 
 
 def test_nondefault_top_k_reaches_the_lexical_arm(monkeypatch) -> None:
