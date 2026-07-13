@@ -254,6 +254,34 @@ def test_env_model_resolves_and_passes_non_empty_flag(monkeypatch: pytest.Monkey
 
 
 # --------------------------------------------------------------------------- #
+# mem-rk41.3.2 H1: env threading (merged, never replaced)
+# --------------------------------------------------------------------------- #
+def test_env_none_by_default_omits_kwarg() -> None:
+    runner = _fake_runner(_stream_json())
+    HeadlessClaudeAgent(runner=runner).run_step(_step(), {}, _ctx())
+    assert "env" not in runner.captured["kwargs"]
+
+
+def test_agent_with_env_stays_hashable() -> None:
+    # `env` carries a plain (unhashable) dict on every real call site; without
+    # `field(hash=False)` this would raise `TypeError: unhashable type: 'dict'` and
+    # silently break the frozen dataclass's auto-generated __hash__.
+    agent = HeadlessClaudeAgent(env={"CLAUDE_CONFIG_DIR": "/tmp/x"})
+    hash(agent)  # must not raise
+
+
+def test_env_is_merged_over_os_environ_not_replaced(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MEMBENCH_PARENT_SENTINEL", "still-here")
+    runner = _fake_runner(_stream_json())
+    agent = HeadlessClaudeAgent(runner=runner, env={"CLAUDE_CONFIG_DIR": "/tmp/builtin-cfg"})
+    agent.run_step(_step(), {}, _ctx())
+    passed_env = runner.captured["kwargs"]["env"]
+    # a raw replace would drop this — a merge keeps the parent environment (PATH, OAuth token)
+    assert passed_env["MEMBENCH_PARENT_SENTINEL"] == "still-here"
+    assert passed_env["CLAUDE_CONFIG_DIR"] == "/tmp/builtin-cfg"
+
+
+# --------------------------------------------------------------------------- #
 # helper
 # --------------------------------------------------------------------------- #
 def _ctx():

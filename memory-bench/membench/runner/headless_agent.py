@@ -31,8 +31,9 @@ behavior IS the model's; no semantic judgment lives here.
 
 from __future__ import annotations
 
+import os
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -199,12 +200,18 @@ class HeadlessClaudeAgent:
     # memory the agent should see is the arm's surfaced ``available_memory``. ``None``
     # inherits the parent cwd (correct only in tests with an injected runner).
     cwd: str | None = None
+    # Extra env vars for the CLI subprocess (e.g. the builtin arm's `CLAUDE_CONFIG_DIR`
+    # override). ``None`` (default) omits the ``env`` kwarg entirely, preserving the
+    # existing inherited-environment behavior. When set, MERGED over `os.environ` —
+    # never a raw replace, which would silently drop PATH/the OAuth token and stays
+    # invisible under `--dry-run` (simulated runners swallow `**kwargs`). ``hash=False``:
+    # every caller passes a plain (unhashable) `dict`, which would otherwise break this
+    # frozen dataclass's auto-generated `__hash__` — equality still compares it.
+    env: Mapping[str, str] | None = field(default=None, hash=False)
     _pass_model: bool = field(default=False, init=False)
     _resolved_model: str = field(default="", init=False)
 
     def __post_init__(self) -> None:
-        import os
-
         resolved = self.model or os.environ.get(ENV_MODEL, "")
         object.__setattr__(self, "_pass_model", bool(resolved))
         object.__setattr__(self, "_resolved_model", resolved or "cli-default")
@@ -230,15 +237,17 @@ class HeadlessClaudeAgent:
     ) -> AgentStepResult:
         prompt = build_agent_prompt(step, available_memory, self.memory_channel)
         argv = self._argv(prompt, step)
+        kwargs: dict[str, object] = {
+            "capture_output": True,
+            "text": True,
+            "check": False,
+            "timeout": self.timeout_s,
+            "cwd": self.cwd,
+        }
+        if self.env is not None:
+            kwargs["env"] = {**os.environ, **self.env}
         try:
-            completed = self.runner(
-                argv,
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=self.timeout_s,
-                cwd=self.cwd,
-            )
+            completed = self.runner(argv, **kwargs)
         except FileNotFoundError as exc:
             raise HeadlessAgentError(
                 "'claude' CLI not found — install it to run the headless agent"
