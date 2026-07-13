@@ -187,6 +187,26 @@ def run_builtin_arm(
     engaged = 0
     leaked = 0
     establish_tool_calls = 0
+
+    def _agent(
+        memory_channel: MemoryChannel, *, cwd: str, env: Mapping[str, str]
+    ) -> HeadlessClaudeAgent:
+        # available_tools=[] on the establish step (see _establish_step) suppresses
+        # --allowedTools ENTIRELY (H3) — CC's own default toolset applies so its
+        # memory-write path is never blocked. That makes the establish call a genuinely
+        # unconstrained call, not just an unlisted one; its tool_calls are counted below
+        # (never discarded) as the audit trail a paid-fire review needs before
+        # authorizing spend on this arm. The goal call constrains to Write-only, matching
+        # task.goal_step.available_tools.
+        return HeadlessClaudeAgent(
+            model=model,
+            runner=runner,
+            memory_channel=memory_channel,
+            constrain_tools=True,
+            cwd=cwd,
+            env=env,
+        )
+
     for i in range(repeats):
         with (
             tempfile.TemporaryDirectory(prefix=f"toolreq-{ARM}-sandbox-") as sandbox,
@@ -195,19 +215,7 @@ def run_builtin_arm(
             config_dir = Path(config_dir_str)
             env = {"CLAUDE_CONFIG_DIR": str(config_dir)}
 
-            establish_agent = HeadlessClaudeAgent(
-                model=model,
-                runner=runner,
-                memory_channel=channel,
-                # available_tools=[] suppresses --allowedTools ENTIRELY (H3) — CC's own
-                # default toolset applies so its memory-write path is never blocked. This
-                # is a genuinely unconstrained call, not just an unlisted one; its
-                # tool_calls are counted below (never discarded) as the audit trail a
-                # paid-fire review needs before authorizing spend on this arm.
-                constrain_tools=True,
-                cwd=sandbox,
-                env=env,
-            )
+            establish_agent = _agent(channel, cwd=sandbox, env=env)
             establish_ctx = StepContext(
                 trial_id=f"{ARM}-{channel.value}-{i}-establish",
                 session_id=f"{ARM}-{channel.value}-{i}",
@@ -219,14 +227,8 @@ def run_builtin_arm(
             establish_tool_calls += len(establish_result.tool_calls)
             repeat_engaged = _memory_engaged(config_dir, task.current_opaque_values)
 
-            goal_agent = HeadlessClaudeAgent(
-                model=model,
-                runner=runner,
-                memory_channel=MemoryChannel.RECALLED,  # unlabeled: memory={} is a no-op (H4)
-                constrain_tools=True,  # Write-only — matches task.goal_step.available_tools
-                cwd=sandbox,
-                env=env,
-            )
+            # unlabeled: memory={} makes the channel a no-op for the goal call (H4)
+            goal_agent = _agent(MemoryChannel.RECALLED, cwd=sandbox, env=env)
             goal_ctx = StepContext(
                 trial_id=f"{ARM}-{channel.value}-{i}-goal",
                 session_id=f"{ARM}-{channel.value}-{i}",

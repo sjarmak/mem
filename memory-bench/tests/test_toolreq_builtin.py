@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from membench.harbor.agent_memory import native_memory_path
@@ -87,6 +88,33 @@ def _toolreq_seq(seq_id: str = "w-t0") -> BenchmarkSequence:
 
 def _task(seq_id: str = "w-t0"):
     return adapt_sequence(_toolreq_seq(seq_id))
+
+
+def _stream_json_runner(
+    *, tool_use_when: Callable[[list[str]], bool], tool_name: str, tool_input: dict[str, object]
+):
+    """Build a fake `claude -p` runner that emits one `tool_use` event (`tool_name` /
+    `tool_input`) iff `tool_use_when(argv)` is true, always followed by a terminal
+    `result` event — the shared shape behind this file's per-call-site runner stubs."""
+
+    def run(argv, **kwargs):
+        argv_list = list(argv)
+        events: list[dict[str, object]] = []
+        if tool_use_when(argv_list):
+            events.append(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [{"type": "tool_use", "name": tool_name, "input": tool_input}],
+                        "usage": {"input_tokens": 0, "output_tokens": 0},
+                    },
+                }
+            )
+        events.append({"type": "result", "result": "done"})
+        stdout = "\n".join(json.dumps(e) for e in events)
+        return subprocess.CompletedProcess(argv_list, returncode=0, stdout=stdout, stderr="")
+
+    return run
 
 
 # --- establish step (H3, H4) ----------------------------------------------------------
@@ -216,25 +244,11 @@ def test_establish_tool_calls_are_counted_not_discarded() -> None:
     # The establish call's own tool_calls must be captured (the security-review finding:
     # it runs with NO --allowedTools clamp, so its actions need an audit trail).
     task = _task()
-
-    def bash_happy_runner(argv, **kwargs):
-        argv_list = list(argv)
-        events: list[dict[str, object]] = []
-        if "--allowedTools" not in argv_list:  # the establish call only
-            events.append(
-                {
-                    "type": "assistant",
-                    "message": {
-                        "content": [
-                            {"type": "tool_use", "name": "Bash", "input": {"command": "ls"}}
-                        ],
-                        "usage": {"input_tokens": 0, "output_tokens": 0},
-                    },
-                }
-            )
-        events.append({"type": "result", "result": "done"})
-        stdout = "\n".join(json.dumps(e) for e in events)
-        return subprocess.CompletedProcess(argv_list, returncode=0, stdout=stdout, stderr="")
+    bash_happy_runner = _stream_json_runner(
+        tool_use_when=lambda argv: "--allowedTools" not in argv,  # the establish call only
+        tool_name="Bash",
+        tool_input={"command": "ls"},
+    )
 
     _, diag = run_builtin_arm(
         task,
@@ -300,33 +314,11 @@ def test_leaked_pass_without_engagement_is_flagged_not_counted_as_clean() -> Non
 
 
 def _leaking_runner_for(current_opaque_value: str):
-    def run(argv, **kwargs):
-        argv_list = list(argv)
-        events: list[dict[str, object]] = []
-        if "--allowedTools" in argv_list:  # the goal call only
-            events.append(
-                {
-                    "type": "assistant",
-                    "message": {
-                        "content": [
-                            {
-                                "type": "tool_use",
-                                "name": REAL_TOOL,
-                                "input": {
-                                    "file_path": CONFIG_FILE,
-                                    "content": current_opaque_value,
-                                },
-                            }
-                        ],
-                        "usage": {"input_tokens": 0, "output_tokens": 0},
-                    },
-                }
-            )
-        events.append({"type": "result", "result": "done"})
-        stdout = "\n".join(json.dumps(e) for e in events)
-        return subprocess.CompletedProcess(argv_list, returncode=0, stdout=stdout, stderr="")
-
-    return run
+    return _stream_json_runner(
+        tool_use_when=lambda argv: "--allowedTools" in argv,  # the goal call only
+        tool_name=REAL_TOOL,
+        tool_input={"file_path": CONFIG_FILE, "content": current_opaque_value},
+    )
 
 
 def test_diagnostics_is_a_plain_dataclass_not_an_arm_outcome_subtype() -> None:

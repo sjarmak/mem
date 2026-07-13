@@ -70,19 +70,34 @@ def evaluate_task(
     ]
 
 
+def _cell_kind(outcome: ArmOutcome, diag: BuiltinDiagnostics) -> str:
+    """Classify one (outcome, diagnostics) cell — the single source of truth `task_verdict`
+    (display) and `run_corpus` (summary counts) both read, so a wording change in one can
+    never silently desync from what the other counts. Priority: a LEAK (pass without
+    engagement) outranks everything else — it means the shared sandbox let a Write
+    scavenge a stale file, not that builtin memory worked. Otherwise: full engagement +
+    full pass separates; zero engagement means the mechanism never fired (the mem-hb9o
+    precedent); partial is WEAK."""
+    if diag.leaked:
+        return "LEAK"
+    if outcome.passes == outcome.runs and diag.engaged == outcome.runs and outcome.runs > 0:
+        return "SEPARATES"
+    if diag.engaged == 0:
+        return "NOT-ENGAGED"
+    return "WEAK"
+
+
 def task_verdict(cells: Sequence[Cell]) -> str:
-    """Per-channel call: a LEAK (pass without engagement) outranks everything else — it
-    means the shared sandbox let a Write scavenge a stale file, not that builtin memory
-    worked. Otherwise: full engagement + full pass separates; zero engagement means the
-    mechanism never fired (the mem-hb9o precedent); partial is WEAK."""
+    """Human-readable per-channel verdict line, built from `_cell_kind`."""
     lines: list[str] = []
     for outcome, diag in cells:
         runs = outcome.runs
-        if diag.leaked:
+        kind = _cell_kind(outcome, diag)
+        if kind == "LEAK":
             call = f"LEAK: {diag.leaked}/{runs} passed WITHOUT engaging native memory"
-        elif outcome.passes == runs and diag.engaged == runs and runs > 0:
+        elif kind == "SEPARATES":
             call = f"SEPARATES: {outcome.passes}/{runs} (engaged {diag.engaged}/{runs})"
-        elif diag.engaged == 0:
+        elif kind == "NOT-ENGAGED":
             call = f"NOT-ENGAGED: native memory never reached MEMORY.md (0/{runs})"
         else:
             call = f"WEAK: {outcome.passes}/{runs} passed, engaged {diag.engaged}/{runs}"
@@ -107,6 +122,9 @@ def run_corpus(
     per_task: list[dict[str, Any]] = []
     executed = 0
     reused = 0
+    separates = 0
+    leaked: list[str] = []
+    not_engaged: list[str] = []
     identity = {"repeats": repeats, "dry_run": dry_run, "model": model}
     for task in tasks:
         result_path = out_dir / f"{task.work_id}.json"
@@ -138,15 +156,22 @@ def run_corpus(
             ],
             "verdict": task_verdict(cells),
         }
-        # Atomic publish: write a sibling temp file then rename, so a kill mid-write leaves
-        # either the old result or the new one, never a half-written JSON the next resume trips on.
-        tmp_path = result_path.with_suffix(".json.tmp")
-        tmp_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
-        tmp_path.replace(result_path)
+        if cached_cells is None:
+            # Atomic publish: write a sibling temp file then rename, so a kill mid-write
+            # leaves either the old result or the new one, never a half-written JSON the
+            # next resume trips on. Skipped on a cache hit — the file already holds this
+            # exact content (same identity), so rewriting it would just be wasted I/O.
+            tmp_path = result_path.with_suffix(".json.tmp")
+            tmp_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+            tmp_path.replace(result_path)
         per_task.append(record)
-    separates = sum(1 for r in per_task if r["verdict"].count("SEPARATES") == len(CHANNELS))
-    leaked = [r["work_id"] for r in per_task if "LEAK" in r["verdict"]]
-    not_engaged = [r["work_id"] for r in per_task if "NOT-ENGAGED" in r["verdict"]]
+        kinds = [_cell_kind(outcome, diag) for outcome, diag in cells]
+        if kinds and all(kind == "SEPARATES" for kind in kinds):
+            separates += 1
+        if "LEAK" in kinds:
+            leaked.append(task.work_id)
+        if "NOT-ENGAGED" in kinds:
+            not_engaged.append(task.work_id)
     return {
         "n_tasks": len(tasks),
         "executed": executed,
