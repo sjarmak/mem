@@ -19,7 +19,12 @@ not this baseline.
 import re
 from pathlib import Path
 
-from membench.memory_systems.base import MemorySystem, RetrievalRequest, RetrieveResult
+from membench.memory_systems.base import (
+    MemorySystem,
+    RetrievalRequest,
+    RetrieveResult,
+    validate_top_k,
+)
 from membench.runtime import StepContext
 from membench.schemas.memory_event import MemoryBackend, MemoryEvent, MemoryOperation
 
@@ -42,8 +47,7 @@ class LexicalTopKMemory(MemorySystem):
         # ``base_dir`` is accepted for factory parity with ``filesystem`` (the runner may
         # pass it) but this arm is in-memory: ranking needs every item's content in hand,
         # so persistence buys nothing here. Recorded only to stay signature-compatible.
-        if top_k < 1:
-            raise ValueError(f"top_k must be >= 1, got {top_k}")
+        validate_top_k(top_k)
         self._base_dir = Path(base_dir) if base_dir is not None else None
         self._top_k = top_k
         self._store: dict[str, str] = {}

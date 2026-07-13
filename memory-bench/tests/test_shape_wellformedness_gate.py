@@ -110,6 +110,42 @@ def test_low_top_k_forces_malformed() -> None:
     assert "M1 truncation" in result.reason
 
 
+def test_invalid_boundary_returns_malformed_without_raising(monkeypatch) -> None:
+    # facts_per_task <= 0 evades the M1 check (facts_per_task > top_k is false when
+    # facts_per_task is 0 and top_k is DEFAULT_TOP_K), so it needs its own guard.
+    # The gate's contract is "always returns a verdict object" (mem-03acq) — it must
+    # never raise, and the arms must never run on a structurally invalid boundary.
+    def _must_not_run(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("arms must not run for an invalid-boundary task")
+
+    monkeypatch.setattr(gate_mod, "retrieval_discrimination_gate", _must_not_run)
+
+    seq = _tool_requiring_seq(facts_per_task=3)
+    result = shape_wellformedness_gate(seq, facts_per_task=0, top_k=DEFAULT_TOP_K)
+    assert not result.wellformed
+    assert result.discrimination is None
+    assert "invalid boundary" in result.reason
+    assert "facts_per_task=0" in result.reason
+
+
+def test_invalid_top_k_returns_malformed_without_raising(monkeypatch) -> None:
+    # top_k < 1 with facts_per_task >= 1 would ALSO be caught by the M1 check (since
+    # facts_per_task > top_k trivially holds), but this exercises the boundary check's
+    # own top_k branch directly and pins the "invalid boundary" reason distinctly from
+    # M1's "M1 truncation" reason for the same inputs.
+    def _must_not_run(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("arms must not run for an invalid-boundary task")
+
+    monkeypatch.setattr(gate_mod, "retrieval_discrimination_gate", _must_not_run)
+
+    seq = _tool_requiring_seq(facts_per_task=3)
+    result = shape_wellformedness_gate(seq, facts_per_task=3, top_k=0)
+    assert not result.wellformed
+    assert result.discrimination is None
+    assert "invalid boundary" in result.reason
+    assert "top_k=0" in result.reason
+
+
 def test_nondefault_top_k_reaches_the_lexical_arm(monkeypatch) -> None:
     # facts_per_task <= top_k here, so this exercises the discrimination path (not
     # the M1 short-circuit) — the gate's top_k must actually construct the naive

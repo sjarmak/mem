@@ -47,7 +47,7 @@ class MemoryConfig(BaseModel):
     # Retrieval width override. ``None`` means "use the arm's own default". Currently
     # only the ``lexical`` arm's construction consumes this (§runner/conditions.py
     # ``_system_for``); other arms ignore it.
-    top_k: int | None = None
+    top_k: int | None = Field(default=None, ge=1)
 
 
 class ExperimentConfig(BaseModel):

@@ -22,7 +22,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from membench.memory_systems.base import MemorySystem, RetrievalRequest, RetrieveResult
+from membench.memory_systems.base import (
+    MemorySystem,
+    RetrievalRequest,
+    RetrieveResult,
+    validate_top_k,
+)
 from membench.runtime import StepContext
 from membench.schemas.memory_event import MemoryBackend, MemoryEvent, MemoryOperation
 
@@ -116,8 +121,7 @@ class AbstractSemanticArm(MemorySystem, ABC):
     uses_scope = False
 
     def __init__(self, client: SemanticMemoryClient, *, top_k: int = DEFAULT_TOP_K) -> None:
-        if top_k < 1:
-            raise ValueError(f"top_k must be >= 1, got {top_k}")
+        validate_top_k(top_k)
         self._client = client
         self._top_k = top_k
         # Trial ids this arm has scoped, to assert global uniqueness (mem-lvp.12).

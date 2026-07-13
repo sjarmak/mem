@@ -29,6 +29,14 @@ from membench.validity import QueryWork
 RetrievalScope = str  # "cross_rig" | "same_rig_temporal"
 
 
+def validate_top_k(top_k: int) -> None:
+    """Enforce the retrieval-width floor every top-k-bounded arm shares
+    (``LexicalTopKMemory``, ``AbstractSemanticArm``) — the single home for a check
+    that was previously byte-duplicated across three call sites (mem-03acq)."""
+    if top_k < 1:
+        raise ValueError(f"top_k must be >= 1, got {top_k}")
+
+
 @dataclass(frozen=True)
 class RetrievalRequest:
     """What the harness hands an arm to retrieve (one shape for both families).

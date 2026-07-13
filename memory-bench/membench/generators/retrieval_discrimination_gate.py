@@ -24,6 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from membench.generators.pilot_filter import pilot_filter
+from membench.memory_systems.base import validate_top_k
 from membench.report.comparison import EPSILON
 from membench.runner.conditions import run_sequence
 from membench.schemas.conditions import Condition
@@ -88,8 +89,8 @@ def retrieval_discrimination_gate(
     consumes it; the id-exact quality arm ignores it). Checked up front against
     ``LexicalTopKMemory``'s own floor so an invalid value fails before either arm runs,
     not after a full quality-arm simulation is thrown away."""
-    if top_k is not None and top_k < 1:
-        raise ValueError(f"top_k must be >= 1, got {top_k}")
+    if top_k is not None:
+        validate_top_k(top_k)
     quality_reward = _goal_reward(seq, quality_arm)
     naive_reward = _goal_reward(seq, naive_arm, top_k=top_k)
     verdict = pilot_filter(

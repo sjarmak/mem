@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+
 from membench.dataset import load_sequence
 from membench.schemas import (
     Condition,
@@ -91,3 +94,16 @@ def test_experiment_config_default_conditions():
         Condition.ORACLE_MEMORY,
         Condition.MEMORY_ENABLED,
     ]
+
+
+def test_memory_config_top_k_none_is_valid():
+    # None means "use the arm's own default" — must stay unconstrained.
+    assert MemoryConfig(memory_config_id="m", system="lexical", top_k=None).top_k is None
+
+
+def test_memory_config_top_k_rejects_below_floor():
+    # Mirrors the runtime floor every top-k-bounded arm enforces (mem-03acq) — catch
+    # a bad value at config-construction time, not several frames later inside the
+    # arm's own constructor.
+    with pytest.raises(ValidationError, match="top_k"):
+        MemoryConfig(memory_config_id="m", system="lexical", top_k=0)

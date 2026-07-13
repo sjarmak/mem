@@ -71,8 +71,20 @@ def shape_wellformedness_gate(
 ) -> WellformednessResult:
     """Judge whether a generated tool-requiring ``seq`` is WELL-FORMED (mem-rk41.2).
 
-    Two checks, cheapest first:
+    Never raises for an invalid ``top_k``/``facts_per_task`` boundary (mem-03acq) — a
+    bad boundary is a malformed shape like any other, not an exception. This does NOT
+    cover every possible exception: check 2 still runs ``retrieval_discrimination_gate``
+    -> ``run_sequence``, whose own fail-fast checks (e.g. a bad supersession ordering
+    in ``seq``) deliberately keep raising — those are real construction bugs unrelated
+    to this boundary, not something this gate should swallow.
 
+    Three checks, cheapest first:
+
+    0. **Boundary validation** — ``facts_per_task`` and ``top_k`` must each be >= 1.
+       Neither the M1 check below nor ``retrieval_discrimination_gate`` can be trusted
+       to catch this on every input (M1 only fires when ``facts_per_task > top_k``,
+       which a ``facts_per_task <= 0`` caller can evade), so it is checked explicitly
+       here. Declare malformed WITHOUT running the arms.
     1. **M1 structural pre-check** — if ``facts_per_task > top_k`` the naive arm would
        fail from truncation rather than staleness, so the discrimination signal is
        confounded. Declare malformed WITHOUT running the arms.
@@ -82,6 +94,17 @@ def shape_wellformedness_gate(
        well-formed iff the quality arm cleanly beats the naive arm at the goal
        (``accepted``). A rejection here flags a construction bug, not an arm verdict.
     """
+    if facts_per_task < 1 or top_k < 1:
+        return WellformednessResult(
+            sequence_id=seq.sequence_id,
+            wellformed=False,
+            reason=(
+                f"invalid boundary: facts_per_task={facts_per_task}, top_k={top_k} "
+                "(both must be >= 1) — malformed by construction, arms not run"
+            ),
+            discrimination=None,
+        )
+
     if facts_per_task > top_k:
         reason = (
             f"M1 truncation: facts_per_task {facts_per_task} > top_k {top_k}; the naive "
