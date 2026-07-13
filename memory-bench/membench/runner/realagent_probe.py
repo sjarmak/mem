@@ -29,9 +29,15 @@ provide (that IS the adapter cost this probe gates).
 
 from __future__ import annotations
 
+import json
+import subprocess
+import tempfile
 from collections.abc import Collection
+from dataclasses import dataclass
 
 from membench.metrics.scorers import outcome_check_passes
+from membench.runner.headless_agent import CliRunner, HeadlessClaudeAgent, MemoryChannel
+from membench.runtime import StepContext
 from membench.schemas.sequence import ExpectedAction, OutcomeCheck, SequenceStep
 from membench.schemas.trace import ToolCall
 
@@ -120,3 +126,98 @@ def score_goal_action(
         stated_text=final_answer,
         tool_calls=tool_calls,
     )
+
+
+# --- arm execution (shared by the probe and the mem-rk41.3 corpus driver) --------------
+#
+# Extracted here (from ``scripts/probe_realagent_toolreq.py``) so the single hardcoded
+# probe and the whole-corpus none/oracle driver run the SAME arm loop, simulated runner,
+# and scorer — one code path, no drift. The one generalization the corpus needs: the
+# simulated runner keys on a SET of current values (a multi-subject goal), not one.
+
+
+@dataclass(frozen=True)
+class ArmOutcome:
+    """One (arm, channel) cell: how many of ``runs`` scored a passing goal action."""
+
+    arm: str
+    channel: str
+    passes: int
+    runs: int
+
+
+def simulated_runner(current_values: Collection[str]) -> CliRunner:
+    """A ``CliRunner`` stand-in that SIMULATES an honest memory-copying agent: it Writes
+    the current value(s) iff EVERY one appears in the prompt (i.e. the arm surfaced them),
+    else it makes no tool call. This proves the arm wiring + external scorer discriminate
+    end to end offline — it is NOT a measurement of real agent behaviour."""
+    values = list(current_values)
+
+    def run(argv: Collection[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        argv_list = list(argv)
+        # HeadlessClaudeAgent._argv builds ["claude", "-p", prompt, ...]; assert the layout
+        # so a future reordering fails loudly instead of silently never firing.
+        assert argv_list[:2] == ["claude", "-p"], f"unexpected argv layout: {argv_list[:3]}"
+        prompt = argv_list[2] if len(argv_list) > 2 else ""
+        events: list[dict[str, object]] = []
+        if values and all(value in prompt for value in values):
+            events.append(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "name": REAL_TOOL,
+                                "input": {"file_path": CONFIG_FILE, "content": " ".join(values)},
+                            }
+                        ],
+                        "usage": {"input_tokens": 0, "output_tokens": 0},
+                    },
+                }
+            )
+        events.append({"type": "result", "result": "done"})
+        stdout = "\n".join(json.dumps(event) for event in events)
+        return subprocess.CompletedProcess(argv_list, returncode=0, stdout=stdout, stderr="")
+
+    return run
+
+
+def run_arm(
+    *,
+    arm: str,
+    step: SequenceStep,
+    memory: dict[str, str],
+    channel: MemoryChannel,
+    repeats: int,
+    model: str,
+    dry_run: bool,
+    current_values: Collection[str],
+) -> ArmOutcome:
+    """Run one (arm, channel) cell ``repeats`` times and score each goal action externally.
+
+    ``memory`` is the surfaced memory the arm shows the agent ({} for ``none``, the id-exact
+    current value(s) for ``oracle``); the arm difference lives entirely in that dict, never
+    in the scorer. ``dry_run`` swaps the real ``claude -p`` for ``simulated_runner`` (no
+    token). A fresh neutral sandbox per repeat keeps ``config.json`` from bleeding across
+    trials and keeps the agent out of any mem worktree."""
+    runner = simulated_runner(current_values) if dry_run else subprocess.run
+    passes = 0
+    for i in range(repeats):
+        with tempfile.TemporaryDirectory(prefix=f"toolreq-{arm}-") as sandbox:
+            agent = HeadlessClaudeAgent(
+                model=model,
+                runner=runner,
+                memory_channel=channel,
+                constrain_tools=True,  # --allowedTools Write
+                cwd=sandbox,
+            )
+            ctx = StepContext(
+                trial_id=f"{arm}-{channel.value}-{i}",
+                session_id=f"{arm}-{channel.value}",
+                step_id=step.step_id,
+            )
+            result = agent.run_step(step, dict(memory), ctx)
+        if score_goal_action(step, tool_calls=result.tool_calls, final_answer=result.final_answer):
+            passes += 1
+    return ArmOutcome(arm=arm, channel=channel.value, runs=repeats, passes=passes)

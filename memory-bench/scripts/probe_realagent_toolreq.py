@@ -35,34 +35,25 @@ NOT self-wrap:
 from __future__ import annotations
 
 import argparse
-import json
 import os
-import subprocess
-import tempfile
-from collections.abc import Sequence
-from dataclasses import dataclass
 
-from membench.runner.headless_agent import CliRunner, HeadlessClaudeAgent, MemoryChannel
+from membench.runner.headless_agent import MemoryChannel
 from membench.runner.realagent_probe import (
     DEFAULT_CURRENT_VALUE,
+    ArmOutcome,
     build_probe_step,
     oracle_memory,
-    score_goal_action,
+    run_arm,
 )
-from membench.runtime import StepContext
 from membench.schemas.sequence import SequenceStep
+
+# ArmOutcome + the arm loop now live in membench.runner.realagent_probe (shared with the
+# mem-rk41.3 corpus driver); re-exported here so importers of this CLI keep working.
+__all__ = ["ArmOutcome", "main"]
 
 ENV_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN"
 ARMS = ("none", "oracle")
 CHANNELS = (MemoryChannel.RECALLED, MemoryChannel.TRUSTED)
-
-
-@dataclass(frozen=True)
-class ArmOutcome:
-    arm: str
-    channel: str
-    passes: int
-    runs: int
 
 
 def _arm_memory(arm: str) -> dict[str, str]:
@@ -74,41 +65,6 @@ def _arm_memory(arm: str) -> dict[str, str]:
     raise ValueError(f"unknown arm {arm!r} (expected one of {ARMS})")
 
 
-def _dry_run_runner(current_value: str) -> CliRunner:
-    """A CliRunner stand-in that SIMULATES an honest memory-copying agent: it Writes the
-    current value iff that value appears in the prompt (i.e. the arm surfaced it), else
-    it makes no tool call. This proves the arm wiring + external scorer discriminate end
-    to end offline — it is NOT a measurement of real agent behaviour."""
-
-    def run(argv: Sequence[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        # HeadlessClaudeAgent._argv builds ["claude", "-p", prompt, ...]; assert the
-        # layout so a future reordering fails loudly instead of silently never firing.
-        assert list(argv[:2]) == ["claude", "-p"], f"unexpected argv layout: {argv[:3]}"
-        prompt = argv[2] if len(argv) > 2 else ""
-        events: list[dict[str, object]] = []
-        if current_value in prompt:
-            events.append(
-                {
-                    "type": "assistant",
-                    "message": {
-                        "content": [
-                            {
-                                "type": "tool_use",
-                                "name": "Write",
-                                "input": {"file_path": "config.json", "content": current_value},
-                            }
-                        ],
-                        "usage": {"input_tokens": 0, "output_tokens": 0},
-                    },
-                }
-            )
-        events.append({"type": "result", "result": "done"})
-        stdout = "\n".join(json.dumps(e) for e in events)
-        return subprocess.CompletedProcess(list(argv), returncode=0, stdout=stdout, stderr="")
-
-    return run
-
-
 def _run_arm(
     *,
     step: SequenceStep,
@@ -118,29 +74,18 @@ def _run_arm(
     model: str,
     dry_run: bool,
 ) -> ArmOutcome:
-    runner = _dry_run_runner(DEFAULT_CURRENT_VALUE) if dry_run else subprocess.run
-    memory = _arm_memory(arm)
-    passes = 0
-    for i in range(repeats):
-        # A fresh neutral sandbox PER repeat: never a mem worktree (its CLAUDE.md/hooks
-        # would confound the memory variable), and no config.json bleeds across trials.
-        with tempfile.TemporaryDirectory(prefix=f"probe-{arm}-") as sandbox:
-            agent = HeadlessClaudeAgent(
-                model=model,
-                runner=runner,
-                memory_channel=channel,
-                constrain_tools=True,  # --allowedTools Write
-                cwd=sandbox,
-            )
-            ctx = StepContext(
-                trial_id=f"probe-{arm}-{channel.value}-{i}",
-                session_id=f"probe-{arm}-{channel.value}",
-                step_id=step.step_id,
-            )
-            result = agent.run_step(step, memory, ctx)
-        if score_goal_action(step, tool_calls=result.tool_calls, final_answer=result.final_answer):
-            passes += 1
-    return ArmOutcome(arm=arm, channel=channel.value, runs=repeats, passes=passes)
+    """This probe's single-subject arm run: delegate to the shared ``run_arm`` with the
+    probe's ``none``/``oracle`` memory and its one hardcoded current value."""
+    return run_arm(
+        arm=arm,
+        step=step,
+        memory=_arm_memory(arm),
+        channel=channel,
+        repeats=repeats,
+        model=model,
+        dry_run=dry_run,
+        current_values=[DEFAULT_CURRENT_VALUE],
+    )
 
 
 def _verdict(outcomes: list[ArmOutcome]) -> str:

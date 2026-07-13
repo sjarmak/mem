@@ -75,7 +75,6 @@ _SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-import probe_realagent_toolreq as probe_cli  # noqa: E402
 from probe_realagent_toolreq import ArmOutcome, _arm_memory, _run_arm, _verdict, main  # noqa: E402
 
 from membench.runner.headless_agent import MemoryChannel  # noqa: E402
@@ -94,7 +93,10 @@ def test_spend_gate_refuses_and_never_invokes_claude_without_token(monkeypatch) 
     def _boom(*_a: object, **_k: object) -> object:
         raise AssertionError("subprocess.run must NOT be called when the spend gate fires")
 
-    monkeypatch.setattr(probe_cli.subprocess, "run", _boom)
+    # The real spend now lives in the shared run_arm (realagent_probe); patch it there.
+    from membench.runner import realagent_probe as _rp
+
+    monkeypatch.setattr(_rp.subprocess, "run", _boom)
     assert main() == 2
 
 
