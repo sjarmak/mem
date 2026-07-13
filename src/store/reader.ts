@@ -193,19 +193,24 @@ export function lastKLessons(
   asOfLessonId?: number | null
 ): StoredLesson[] {
   if (k <= 0) return [];
-  if (asOfLessonId === null) return [];
 
   // Same where/params accumulation idiom as `queryRecords` above, so the
   // rig-scoped and asOf-scoped conditions compose independently instead of
-  // being spelled out per rig×asOf combination.
+  // being spelled out per rig×asOf combination. `id` is unqualified even in
+  // the joined branch below — only `lessons` has an `id` column
+  // (`work_records`'s PK is `work_id`), so there's no ambiguity to resolve.
+  // A bound `null` (an as-of-empty-table snapshot) falls through to this
+  // same clause: `id <= NULL` is SQL-unknown for every row, so the query
+  // itself already returns `[]` — no separate early-return needed for that
+  // case.
   const where: string[] = [];
-  const params: (string | number)[] = [];
+  const params: (string | number | null)[] = [];
   if (rig !== undefined) {
     where.push('wr.rig = ?');
     params.push(rig);
   }
   if (asOfLessonId !== undefined) {
-    where.push(`${rig === undefined ? '' : 'l.'}id <= ?`);
+    where.push('id <= ?');
     params.push(asOfLessonId);
   }
   params.push(k);
