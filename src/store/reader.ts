@@ -196,13 +196,15 @@ export function lastKLessons(
 
   // Same where/params accumulation idiom as `queryRecords` above, so the
   // rig-scoped and asOf-scoped conditions compose independently instead of
-  // being spelled out per rig×asOf combination. `id` is unqualified even in
-  // the joined branch below — only `lessons` has an `id` column
-  // (`work_records`'s PK is `work_id`), so there's no ambiguity to resolve.
-  // A bound `null` (an as-of-empty-table snapshot) falls through to this
-  // same clause: `id <= NULL` is SQL-unknown for every row, so the query
-  // itself already returns `[]` — no separate early-return needed for that
-  // case.
+  // being spelled out per rig×asOf combination. Both branches alias `lessons`
+  // as `l` so the shared as-of clause can qualify its column: a bare `id <= ?`
+  // resolves in the joined branch only because `work_records`'s PK is
+  // `work_id`, so a migration giving it an `id` column would turn this into
+  // "ambiguous column name: id" at runtime — which `computeRegressions`' caller
+  // swallows into a `regressionError` string rather than failing the build
+  // (mem-6hvha). A bound `null` (an as-of-empty-table snapshot) falls through
+  // to this same clause: `l.id <= NULL` is SQL-unknown for every row, so the
+  // query itself already returns `[]` — no separate early-return needed.
   const where: string[] = [];
   const params: (string | number | null)[] = [];
   if (rig !== undefined) {
@@ -210,7 +212,7 @@ export function lastKLessons(
     params.push(rig);
   }
   if (asOfLessonId !== undefined) {
-    where.push('id <= ?');
+    where.push('l.id <= ?');
     params.push(asOfLessonId);
   }
   params.push(k);
@@ -220,7 +222,9 @@ export function lastKLessons(
     rig === undefined
       ? db
           .prepare(
-            `SELECT id, work_id, extracted_at, commit_sha, payload FROM lessons${whereSql} ORDER BY id DESC LIMIT ?`
+            `SELECT l.id, l.work_id, l.extracted_at, l.commit_sha, l.payload
+               FROM lessons l${whereSql}
+              ORDER BY l.id DESC LIMIT ?`
           )
           .all(...params)
       : db

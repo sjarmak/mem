@@ -452,6 +452,24 @@ describe('lessons (append-only, D9)', () => {
     expect(lastKLessons(db, 5, 'rigA', snapshot).map(l => l.work_id)).toEqual(['w-a']);
   });
 
+  it('lastKLessons qualifies the asOf column, so a joined table gaining its own id column stays unambiguous', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [fullRecord({ work_id: 'w-a', rig: 'rigA' })]);
+    appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-03T00:00:00Z', payload: {} });
+    const snapshot = maxLessonId(db) as number;
+
+    // The rig-scoped window JOINs work_records, whose PK is work_id — it has no
+    // id column of its own today, which is the only reason a bare `id <= ?` in
+    // the composed WHERE resolved at all. Give work_records an id column (what a
+    // future schema migration would do) and the bare form becomes SQLite's
+    // "ambiguous column name: id" at runtime — where computeRegressions' caller
+    // swallows it into a regressionError string rather than failing the build.
+    // Qualifying as l.id keeps the query resolvable regardless (mem-6hvha).
+    db.exec('ALTER TABLE work_records ADD COLUMN id TEXT');
+
+    expect(lastKLessons(db, 5, 'rigA', snapshot).map(l => l.work_id)).toEqual(['w-a']);
+  });
+
   it('lastKLessons returns [] for an explicit null asOfLessonId (snapshot taken when the table was empty) — never the unbounded live query', () => {
     const db = openStore(':memory:');
     // A snapshot of an empty table (maxLessonId(db) === null here) means no
