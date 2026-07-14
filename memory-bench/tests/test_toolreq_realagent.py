@@ -27,6 +27,8 @@ from membench.runner.toolreq_realagent import (
     ToolReqRealAgentTask,
     adapt_sequence,
     load_corpus,
+    load_corpus_with_sequences,
+    sequence_lessons_opaque,
 )
 from membench.schemas.sequence import (
     BenchmarkSequence,
@@ -34,6 +36,7 @@ from membench.schemas.sequence import (
     OutcomeCheck,
     SequenceStep,
 )
+from tests.paths import DIST_MAIN, MEM_BIN, require_mem_cli
 
 # The driver is a script; import it the way test_realagent_probe imports the probe CLI.
 _SCRIPTS = str(Path(__file__).resolve().parents[1] / "scripts")
@@ -44,6 +47,15 @@ import grid_toolreq_realagent as driver  # noqa: E402
 
 CURRENT = "30 days"
 STALE = "90 days"
+
+
+# The default no-op seed_fn: every hermetic test that exercises run_corpus() but doesn't
+# care about the `ours` arm's actual payload injects this instead of the real seeder, so
+# it never needs a built bin/mem (the injectable seed_fn convention the driver documents).
+def _no_ours_payload(
+    _sequences: object, _tasks: object, _store_path: object, _mem_bin: object
+) -> dict[str, dict[str, str]]:
+    return {}
 
 
 def _toolreq_seq(seq_id: str = "w-t0") -> BenchmarkSequence:
@@ -209,6 +221,53 @@ def test_load_corpus_reads_every_seed(tmp_path: Path) -> None:
     assert sorted(t.work_id for t in tasks) == ["w-0", "w-1"]
 
 
+def test_load_corpus_with_sequences_pairs_in_order(tmp_path: Path) -> None:
+    for seed, sid in enumerate(("w-0", "w-1")):
+        seed_dir = tmp_path / str(seed)
+        seed_dir.mkdir()
+        (seed_dir / "sequences.json").write_text(
+            json.dumps([_toolreq_seq(sid).model_dump()]), encoding="utf-8"
+        )
+    sequences, tasks = load_corpus_with_sequences(tmp_path)
+    assert [s.sequence_id for s in sequences] == [t.work_id for t in tasks] == ["w-0", "w-1"]
+    # load_corpus stays a thin wrapper over the same walk.
+    assert [t.work_id for t in load_corpus(tmp_path)] == ["w-0", "w-1"]
+
+
+# --- sequence_lessons_opaque ---------------------------------------------------------
+
+
+def test_sequence_lessons_opaque_states_current_opaque_value_leak_safely() -> None:
+    seq = _toolreq_seq()
+    task = adapt_sequence(seq)
+    lessons = sequence_lessons_opaque([seq], [task])
+    assert len(lessons) == 1
+    lesson = lessons[0]
+    assert lesson["work_id"] == seq.sequence_id
+    facts = lesson["payload"]["facts"]
+    (current_opaque,) = task.current_opaque_values
+    # reuses adapt_sequence's own oracle_memory dict verbatim -> the current opaque value
+    # is stated, never the realistic current/stale values (leak-safe by construction).
+    assert any(states_value(fact, current_opaque) for fact in facts)
+    for fact in facts:
+        assert not states_value(fact, CURRENT)
+        assert not states_value(fact, STALE)
+
+
+def test_sequence_lessons_opaque_rejects_length_mismatch() -> None:
+    seq = _toolreq_seq()
+    task = adapt_sequence(seq)
+    with pytest.raises(ValueError, match="length mismatch"):
+        sequence_lessons_opaque([seq, _toolreq_seq("w-extra")], [task])
+
+
+def test_sequence_lessons_opaque_rejects_order_mismatch() -> None:
+    seq_a, seq_b = _toolreq_seq("w-a"), _toolreq_seq("w-b")
+    task_a, task_b = adapt_sequence(seq_a), adapt_sequence(seq_b)
+    with pytest.raises(ValueError, match="order mismatch"):
+        sequence_lessons_opaque([seq_a, seq_b], [task_b, task_a])
+
+
 # --- driver (free dry-run) ----------------------------------------------------------
 
 
@@ -219,6 +278,33 @@ def test_dry_run_arms_separate_per_task() -> None:
     for channel in (c.value for c in driver.CHANNELS):
         assert by[("none", channel)].passes == 0
         assert by[("oracle", channel)].passes == by[("oracle", channel)].runs == 2
+        # No ours_payload injected -> `ours` behaves like `none` (empty surfaced memory).
+        assert by[("ours", channel)].passes == 0
+
+
+def test_ours_arm_dry_run_passes_when_payload_states_current_value() -> None:
+    task = adapt_sequence(_toolreq_seq())
+    (current_opaque,) = task.current_opaque_values
+    ours_payload = {"w-prior": f"the retention window is {current_opaque}"}
+    outcomes = driver.evaluate_task(
+        task, repeats=2, model="", dry_run=True, ours_payload=ours_payload
+    )
+    by = {(o.arm, o.channel): o for o in outcomes}
+    for channel in (c.value for c in driver.CHANNELS):
+        assert by[("ours", channel)].passes == by[("ours", channel)].runs == 2
+
+
+def test_ours_arm_dry_run_honest_non_pass_when_payload_lacks_current_value() -> None:
+    # The expected, honest substrate finding: a payload that never states the queried
+    # task's own sequence-unique opaque value cannot make the simulated agent pass.
+    task = adapt_sequence(_toolreq_seq())
+    ours_payload = {"w-prior": "an unrelated retrieved fact about something else entirely"}
+    outcomes = driver.evaluate_task(
+        task, repeats=2, model="", dry_run=True, ours_payload=ours_payload
+    )
+    by = {(o.arm, o.channel): o for o in outcomes}
+    for channel in (c.value for c in driver.CHANNELS):
+        assert by[("ours", channel)].passes == 0
 
 
 def test_run_corpus_persists_and_is_resumable(tmp_path: Path) -> None:
@@ -227,35 +313,66 @@ def test_run_corpus_persists_and_is_resumable(tmp_path: Path) -> None:
     (seed_dir / "sequences.json").write_text(
         json.dumps([_toolreq_seq("w-0").model_dump()]), encoding="utf-8"
     )
-    tasks = load_corpus(tmp_path / "corpus")
+    sequences, tasks = load_corpus_with_sequences(tmp_path / "corpus")
     out = tmp_path / "out"
+    store_path = tmp_path / "store.db"
 
-    first = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    first = driver.run_corpus(
+        tasks,
+        sequences,
+        out_dir=out,
+        repeats=2,
+        model="",
+        dry_run=True,
+        store_path=store_path,
+        seed_fn=_no_ours_payload,
+    )
     assert first["n_tasks"] == 1
     assert first["executed"] == 1 and first["reused"] == 0
     assert (out / "w-0.json").is_file()
     assert "SEPARATES" in first["per_task"][0]["verdict"]
 
     # Re-run: the persisted result is reused, nothing re-executed.
-    second = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    second = driver.run_corpus(
+        tasks,
+        sequences,
+        out_dir=out,
+        repeats=2,
+        model="",
+        dry_run=True,
+        store_path=store_path,
+        seed_fn=_no_ours_payload,
+    )
     assert second["executed"] == 0 and second["reused"] == 1
 
 
-def _corpus_one(tmp_path: Path, work_id: str = "w-0") -> list:
+def _corpus_one(
+    tmp_path: Path, work_id: str = "w-0"
+) -> tuple[list[BenchmarkSequence], list[ToolReqRealAgentTask]]:
     corpus = tmp_path / "corpus"
     (corpus / "0").mkdir(parents=True)
     (corpus / "0" / "sequences.json").write_text(
         json.dumps([_toolreq_seq(work_id).model_dump()]), encoding="utf-8"
     )
-    return load_corpus(corpus)
+    return load_corpus_with_sequences(corpus)
 
 
 def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -> None:
     # The highest-severity confound: a FREE dry-run's simulated result must NOT be reused by
     # a PAID run over the same --out. Prove the paid run re-executes (spied, so no real spend).
-    tasks = _corpus_one(tmp_path)
+    sequences, tasks = _corpus_one(tmp_path)
     out = tmp_path / "out"
-    driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    store_path = tmp_path / "store.db"
+    driver.run_corpus(
+        tasks,
+        sequences,
+        out_dir=out,
+        repeats=2,
+        model="",
+        dry_run=True,
+        store_path=store_path,
+        seed_fn=_no_ours_payload,
+    )
 
     calls = {"n": 0}
     real_eval = driver.evaluate_task
@@ -265,23 +382,42 @@ def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -
         return real_eval(task, repeats=2, model="", dry_run=True)  # simulate, never spend
 
     monkeypatch.setattr(driver, "evaluate_task", _spy)
-    paid = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=False)
+    paid = driver.run_corpus(
+        tasks,
+        sequences,
+        out_dir=out,
+        repeats=2,
+        model="",
+        dry_run=False,
+        store_path=store_path,
+        seed_fn=_no_ours_payload,
+    )
     assert paid["executed"] == 1 and paid["reused"] == 0
     assert calls["n"] == 1
 
 
 def test_corrupt_cache_file_is_re_executed_not_crashed(tmp_path: Path) -> None:
-    tasks = _corpus_one(tmp_path)
+    sequences, tasks = _corpus_one(tmp_path)
     out = tmp_path / "out"
     out.mkdir()
     (out / f"{tasks[0].work_id}.json").write_text("{ half-written not json", encoding="utf-8")
-    summary = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    summary = driver.run_corpus(
+        tasks,
+        sequences,
+        out_dir=out,
+        repeats=2,
+        model="",
+        dry_run=True,
+        store_path=tmp_path / "store.db",
+        seed_fn=_no_ours_payload,
+    )
     assert summary["executed"] == 1 and summary["reused"] == 0  # cache-miss, no crash
 
 
 def test_driver_refuses_to_spend_without_token(tmp_path: Path, monkeypatch) -> None:
     # The corpus-wide spend guard (financial-safety branch): no token + no --dry-run -> exit 2
-    # and never spawn claude, same contract the probe's gate is tested for.
+    # and never spawn claude, same contract the probe's gate is tested for. The spend gate
+    # fires in main() BEFORE run_corpus/seed_fn ever runs, so this needs no built bin/mem.
     _corpus_one(tmp_path)
     monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
     from membench.runner import realagent_probe as _rp
@@ -392,3 +528,32 @@ def test_multi_subject_arms_separate_dry_run() -> None:
     for channel in (c.value for c in driver.CHANNELS):
         assert by[("none", channel)].passes == 0
         assert by[("oracle", channel)].passes == 2
+
+
+# --- ours seeding (real mem CLI, skips like test_pipeline_e2e when the TS build is absent)
+
+
+def test_ours_seeding_retrieves_cross_task_never_leaks_own_id_or_realistic_value(
+    tmp_path: Path,
+) -> None:
+    """The bead's acceptance, against a real built store: seeding two sequences and
+    resolving the `ours` payload for the later one fires a genuine cross-task retrieval
+    (surfaces the earlier sequence's lesson), never returns the queried task's own id
+    (same_rig_temporal excludes self by construction), and never states a realistic
+    (non-opaque) value — only sequence_lessons_opaque's opaque content ever rides in."""
+    require_mem_cli(DIST_MAIN)
+
+    seqs = [_toolreq_seq("w-0"), _toolreq_seq("w-1")]
+    tasks = [adapt_sequence(seq) for seq in seqs]
+    payloads = driver.seed_ours_store_and_resolve_payloads(
+        seqs, tasks, tmp_path / "store.db", str(MEM_BIN)
+    )
+
+    held = "w-1"
+    assert held in payloads
+    injected = payloads[held]
+    assert injected, "retrieval never fired cross-task — the store seeded nothing usable"
+    assert held not in injected  # never its own id
+    joined = " ".join(injected.values())
+    assert not states_value(joined, CURRENT)
+    assert not states_value(joined, STALE)

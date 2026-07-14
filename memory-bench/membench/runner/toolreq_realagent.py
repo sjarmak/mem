@@ -29,6 +29,12 @@ Two things this adapter does that the rk41.4 single-goal probe hardcoded:
 ZFC: a deterministic projection of authored ground truth — no model call, no semantic
 judgment. The one authored thing is the opaque token (a hash of ``(sequence_id, value)``);
 the reward structure is the sequence's own ``requires_action``.
+
+mem-rk41.3.1 adds the ``ours`` arm's seeding half: ``sequence_lessons_opaque`` authors a
+lesson per sequence whose facts state the SAME opaque ``oracle_memory`` content this
+module already computed, so a store seeded from it and the ``oracle`` arm share one
+opaque value space (``scripts/grid_toolreq_realagent.seed_ours_store_and_resolve_payloads``
+imports this alongside rk41.5's value-free ``sequence_records``).
 """
 
 from __future__ import annotations
@@ -39,12 +45,15 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from membench.generators.toolreq_bundle_adapter import (
     APPLY_TOOL,
+    DEFAULT_BASE_STARTED,
     _apply_action,
     _authored_values,
     _goal_step,
+    _lifecycle,
 )
 from membench.metrics.scorers import states_value
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL
@@ -251,12 +260,78 @@ def _seed_sort_key(sequences_path: Path) -> tuple[int, str]:
     return (int(name), "") if name.isdigit() else (2**31, name)
 
 
-def load_corpus(corpus_dir: Path) -> list[ToolReqRealAgentTask]:
+def load_corpus_with_sequences(
+    corpus_dir: Path,
+) -> tuple[list[BenchmarkSequence], list[ToolReqRealAgentTask]]:
     """Adapt every frozen sequence under ``corpus_dir`` (one ``<seed>/sequences.json`` per
-    world), seed dirs in numeric order then in-file order, so a ``--limit`` prefix is stable."""
+    world), seed dirs in numeric order then in-file order, so a ``--limit`` prefix is stable.
+    Returns the source sequences alongside their adapted tasks, in the SAME order — the
+    pairing ``sequence_lessons_opaque`` needs to author each lesson against its own
+    sequence's oracle ceiling."""
+    sequences: list[BenchmarkSequence] = []
     tasks: list[ToolReqRealAgentTask] = []
     for sequences_path in sorted(corpus_dir.glob("*/sequences.json"), key=_seed_sort_key):
         raw: Sequence[dict[str, object]] = json.loads(sequences_path.read_text(encoding="utf-8"))
         for entry in raw:
-            tasks.append(adapt_sequence(BenchmarkSequence.model_validate(entry)))
+            seq = BenchmarkSequence.model_validate(entry)
+            sequences.append(seq)
+            tasks.append(adapt_sequence(seq))
+    return sequences, tasks
+
+
+def load_corpus(corpus_dir: Path) -> list[ToolReqRealAgentTask]:
+    """Adapt every frozen sequence under ``corpus_dir``. A thin wrapper around
+    ``load_corpus_with_sequences`` for callers that need only the tasks."""
+    _, tasks = load_corpus_with_sequences(corpus_dir)
     return tasks
+
+
+# The opaque-value lesson's framing. Distinct from toolreq_bundle_adapter's
+# ``_LESSON_SUBTITLE`` (whose facts embed a tier1 failure SIGNATURE): these facts embed
+# the actual opaque CONTENT — the ``ours`` arm's seeded store needs the value a
+# cross-task retrieval could surface, not a signature string.
+_OPAQUE_LESSON_SUBTITLE = "tool-requiring current-value ceiling (opaque)"
+_OPAQUE_LESSON_CONCEPTS = ("fact",)
+
+
+def sequence_lessons_opaque(
+    sequences: Sequence[BenchmarkSequence],
+    tasks: Sequence[ToolReqRealAgentTask],
+    *,
+    base_started: str = DEFAULT_BASE_STARTED,
+) -> list[dict[str, Any]]:
+    """Author one lesson per sequence (the ``mem import-lessons`` JSON shape) whose facts
+    state each required-memory id's CURRENT value — reusing ``adapt_sequence``'s already
+    opaque + leak-checked ``oracle_memory`` dict VERBATIM (no new value-map logic, so this
+    is leak-safe by construction and stays in the SAME opaque token space the ``oracle``
+    arm surfaces, the mem-rk41.3.1 invariant).
+
+    Raises ``ValueError`` if ``sequences``/``tasks`` mismatch in length or order — the two
+    must be the SAME corpus walk (``load_corpus_with_sequences``), else a lesson would be
+    authored against the wrong sequence's oracle ceiling."""
+    if len(sequences) != len(tasks):
+        raise ValueError(
+            f"sequences/tasks length mismatch: {len(sequences)} sequence(s) != "
+            f"{len(tasks)} task(s)"
+        )
+    lessons: list[dict[str, Any]] = []
+    for index, (seq, task) in enumerate(zip(sequences, tasks, strict=True)):
+        if seq.sequence_id != task.work_id:
+            raise ValueError(
+                f"sequences/tasks order mismatch at index {index}: "
+                f"{seq.sequence_id!r} != {task.work_id!r}"
+            )
+        facts = list(task.oracle_memory.values())
+        _, closed = _lifecycle(base_started, index)
+        lessons.append(
+            {
+                "work_id": seq.sequence_id,
+                "extracted_at": closed,
+                "payload": {
+                    "subtitle": _OPAQUE_LESSON_SUBTITLE,
+                    "facts": facts,
+                    "concepts": list(_OPAQUE_LESSON_CONCEPTS),
+                },
+            }
+        )
+    return lessons
