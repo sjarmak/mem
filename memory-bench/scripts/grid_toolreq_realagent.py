@@ -50,14 +50,15 @@ import json
 import os
 import sys
 import tempfile
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-# Sibling-script reuse (the gate_toolreq_offline convention): the SAME NDJSON writer and
-# payload resolver the offline gate and paid grid already use — no reimplementation.
-from gate_toolreq_offline import _write_ndjson
+# Sibling-script reuse: the SAME payload resolver the paid grid already uses — no
+# reimplementation. (The NDJSON writer is two lines and lives below instead of being
+# imported from gate_toolreq_offline, whose module body drags the NeMo import graph into
+# this driver's startup for no reason.)
 from run_grid_3arm import resolve_payloads
 
 from membench.generators.toolreq_bundle_adapter import sequence_bundles, sequence_records
@@ -81,14 +82,29 @@ ENV_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN"
 ARMS = ("none", "oracle", "ours")
 CHANNELS = (MemoryChannel.RECALLED, MemoryChannel.TRUSTED)
 
-# Seeds the `ours` store + resolves its payload: (sequences, tasks, store_path, mem_bin)
-# -> work_id -> (source work_id -> rendered payload). Injectable so hermetic tests can
-# stub it out without a built bin/mem (matching this codebase's CliRunner/RetrieveRunner
-# injection convention — see headless_agent.CliRunner / ours_system.RetrieveRunner).
+# Seeds the `ours` store + resolves its payload: (sequences, tasks, store_path, mem_bin,
+# resolve_ids) -> work_id -> (source work_id -> rendered payload). `resolve_ids` narrows the
+# resolution step to the tasks actually being executed; seeding stays full-corpus. Injectable
+# so hermetic tests can stub it out without a built bin/mem (matching this codebase's
+# CliRunner/RetrieveRunner injection convention — see headless_agent.CliRunner).
 SeedFn = Callable[
-    [Sequence[BenchmarkSequence], Sequence[ToolReqRealAgentTask], Path, str],
+    [
+        Sequence[BenchmarkSequence],
+        Sequence[ToolReqRealAgentTask],
+        Path,
+        str,
+        Collection[str],
+    ],
     dict[str, dict[str, str]],
 ]
+
+
+def _write_ndjson(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
+    """One JSON object per line — the import format `mem import-records/-lessons` reads."""
+    path.write_text(
+        "".join(json.dumps(row) + "\n" for row in rows),
+        encoding="utf-8",
+    )
 
 
 def arm_memories(
@@ -174,11 +190,26 @@ def task_verdict(outcomes: Sequence[ArmOutcome]) -> str:
     return " | ".join(lines)
 
 
+def _reset_store(store_path: Path) -> None:
+    """Delete any store already at ``store_path``, SQLite sidecars included, so the seed that
+    follows is genuinely FRESH.
+
+    Load-bearing, not hygiene: ``lessons`` is append-only (see CLAUDE.md — three tables have
+    no FK to ``work_records`` and are never rewritten). Importing into a store left behind by
+    an EARLIER corpus therefore keeps that corpus's opaque tokens retrievable, and
+    ``resolve_payloads`` renders them straight into the live cross-task payloads — a paid
+    ``ours`` measurement quietly carrying values that are no longer in the world. The store is
+    a derived artifact of the corpus and is cheap to rebuild (FREE), so rebuild it."""
+    for suffix in ("", "-wal", "-shm"):
+        store_path.with_name(store_path.name + suffix).unlink(missing_ok=True)
+
+
 def seed_ours_store_and_resolve_payloads(
     sequences: Sequence[BenchmarkSequence],
     tasks: Sequence[ToolReqRealAgentTask],
     store_path: Path,
     mem_bin: str,
+    resolve_ids: Collection[str] | None = None,
 ) -> dict[str, dict[str, str]]:
     """Seed a fresh ``ours`` store with the SAME substrate the mem-rk41.5 offline gate
     builds (``sequence_records`` — the shared value-free apply_config staleness trace
@@ -187,10 +218,19 @@ def seed_ours_store_and_resolve_payloads(
     arm's real retrieval payload via ``run_grid_3arm.resolve_payloads`` — the SAME
     function the paid ours-vs-builtin grid uses, no reimplementation.
 
+    The store is rebuilt from scratch on every call (``_reset_store``): seeding is FREE and
+    the store is a pure function of the corpus, so a regenerated corpus must never inherit
+    the previous one's append-only lessons.
+
+    Seeding always covers ALL sequences (cross-task retrieval needs every lesson in the
+    store); ``resolve_ids`` narrows only the RESOLUTION step to the tasks that will actually
+    be executed, so a resumed sweep does not re-query the store for cache-served tasks.
+
     FREE: this never spends an agent turn regardless of ``--dry-run`` (only ``claude -p``
     is spend-gated, in ``run_corpus``, which also skips this seed entirely when every task
     is cache-served) — it does need a built ``bin/mem``."""
     store_path.parent.mkdir(parents=True, exist_ok=True)
+    _reset_store(store_path)
     records = sequence_records(sequences)
     lessons = sequence_lessons_opaque(sequences, tasks)
     with tempfile.TemporaryDirectory(prefix="toolreq-ours-seed-") as workspace:
@@ -206,6 +246,8 @@ def seed_ours_store_and_resolve_payloads(
             [mem_bin, "import-lessons", "--file", str(lessons_path), "--store", str(store_path)]
         )
     bundles = sequence_bundles(sequences)
+    if resolve_ids is not None:
+        bundles = [bundle for bundle in bundles if bundle.work_id in resolve_ids]
     runner = _default_runner(mem_bin)
     return resolve_payloads(bundles, store_path=store_path, runner=runner)
 
@@ -252,7 +294,11 @@ def run_corpus(
             if all(loaded.get(key) == value for key, value in identity.items()):
                 cached_by_id[task.work_id] = loaded
     pending = [task for task in tasks if task.work_id not in cached_by_id]
-    ours_payloads = seed_fn(sequences, tasks, store_path, mem_bin) if pending else {}
+    ours_payloads = (
+        seed_fn(sequences, tasks, store_path, mem_bin, {task.work_id for task in pending})
+        if pending
+        else {}
+    )
     per_task: list[dict[str, Any]] = []
     executed = 0
     reused = 0

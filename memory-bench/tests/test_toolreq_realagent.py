@@ -54,7 +54,11 @@ STALE = "90 days"
 # care about the `ours` arm's actual payload injects this instead of the real seeder, so
 # it never needs a built bin/mem (the injectable seed_fn convention the driver documents).
 def _no_ours_payload(
-    _sequences: object, _tasks: object, _store_path: object, _mem_bin: object
+    _sequences: object,
+    _tasks: object,
+    _store_path: object,
+    _mem_bin: object,
+    _resolve_ids: object = None,
 ) -> dict[str, dict[str, str]]:
     return {}
 
@@ -82,11 +86,16 @@ def _run_corpus(
     )
 
 
-def _toolreq_seq(seq_id: str = "w-t0") -> BenchmarkSequence:
+def _toolreq_seq(
+    seq_id: str = "w-t0", *, current: str = CURRENT, stale: str = STALE
+) -> BenchmarkSequence:
     """A minimal tool-requiring sequence: a v1->v2 superseded retention chain plus a
     goal whose ``apply_config`` action requires the current value and forbids the stale
     one. Mirrors the frozen ``fixtures/worlds-tool`` shape without depending on the
-    (untracked) generated corpus."""
+    (untracked) generated corpus.
+
+    ``current``/``stale`` are overridable so a test can build a REGENERATED corpus — same
+    sequence ids, different authored values, hence a disjoint opaque-token space."""
     return BenchmarkSequence(
         sequence_id=seq_id,
         title=f"{seq_id} initiative: reconcile retention",
@@ -97,14 +106,14 @@ def _toolreq_seq(seq_id: str = "w-t0") -> BenchmarkSequence:
                 step_id=f"{seq_id}-s0",
                 user_request="Record the current value of the data retention window.",
                 expected_memory_writes={
-                    "m-v1": f"the data retention window is {STALE} — by A. Ree in #chat"
+                    "m-v1": f"the data retention window is {stale} — by A. Ree in #chat"
                 },
             ),
             SequenceStep(
                 step_id=f"{seq_id}-s1",
                 user_request="Record the current value of the data retention window.",
                 expected_memory_writes={
-                    "m-v2": f"the data retention window is {CURRENT} — by B. Cee in #meeting"
+                    "m-v2": f"the data retention window is {current} — by B. Cee in #meeting"
                 },
                 superseded_memory_ids=["m-v1"],
             ),
@@ -124,8 +133,8 @@ def _toolreq_seq(seq_id: str = "w-t0") -> BenchmarkSequence:
                         requires_action=[
                             ExpectedAction(
                                 tool="apply_config",
-                                arg_values=[CURRENT],
-                                forbidden_values=[STALE],
+                                arg_values=[current],
+                                forbidden_values=[stale],
                             )
                         ],
                     )
@@ -537,3 +546,37 @@ def test_ours_seeding_retrieves_cross_task_never_leaks_own_id_or_realistic_value
     joined = " ".join(injected.values())
     assert not states_value(joined, CURRENT)
     assert not states_value(joined, STALE)
+
+
+def test_reseeding_a_store_never_surfaces_the_previous_corpus(tmp_path: Path) -> None:
+    """Seeding must be genuinely FRESH, as the docstring claims. ``lessons`` is append-only,
+    so importing into a store left behind by an EARLIER corpus keeps that corpus's opaque
+    tokens alive; ``resolve_payloads`` then renders those dead tokens into the cross-task
+    payload of every task, silently contaminating the paid ``ours`` measurement with values
+    that are no longer in the world. Regenerate the corpus, re-seed the same store, and only
+    the current corpus may surface."""
+    require_mem_cli(DIST_MAIN)
+    store_path = tmp_path / "store.db"
+
+    old = [
+        _toolreq_seq("w-0", current="11 days", stale="12 days"),
+        _toolreq_seq("w-1", current="13 days", stale="14 days"),
+    ]
+    new = [
+        _toolreq_seq("w-0", current="21 days", stale="22 days"),
+        _toolreq_seq("w-1", current="23 days", stale="24 days"),
+    ]
+    old_tasks = [adapt_sequence(seq) for seq in old]
+    new_tasks = [adapt_sequence(seq) for seq in new]
+
+    driver.seed_ours_store_and_resolve_payloads(old, old_tasks, store_path, str(MEM_BIN))
+    payloads = driver.seed_ours_store_and_resolve_payloads(new, new_tasks, store_path, str(MEM_BIN))
+
+    # w-1 holds out its own lesson, so what it sees cross-task is w-0's — which corpus's?
+    surfaced = " ".join(payloads["w-1"].values())
+    assert surfaced, "cross-task retrieval never fired"
+    dead = set(old_tasks[0].current_opaque_values)
+    live = set(new_tasks[0].current_opaque_values)
+    assert dead and live and not (dead & live)  # the two corpora share no token
+    assert not [tok for tok in dead if tok in surfaced], "stale corpus leaked into the payload"
+    assert [tok for tok in live if tok in surfaced], "current corpus never surfaced"
