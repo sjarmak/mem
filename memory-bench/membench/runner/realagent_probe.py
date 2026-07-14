@@ -39,10 +39,12 @@ from membench.metrics.scorers import outcome_check_passes
 from membench.runner.headless_agent import (
     CellCalls,
     CliRunner,
-    HeadlessClaudeAgent,
+    Leg,
     MemoryChannel,
     RecordingRunner,
+    cell_agent,
     one_cycle,
+    render_cell_calls,
 )
 from membench.runtime import StepContext
 from membench.schemas.sequence import ExpectedAction, OutcomeCheck, SequenceStep
@@ -190,45 +192,19 @@ def simulated_runner(current_values: Collection[str]) -> CliRunner:
     return run
 
 
-def cell_agent(
-    *,
-    model: str,
-    channel: MemoryChannel,
-    runner: CliRunner = subprocess.run,
-    cwd: str | None = None,
-) -> HeadlessClaudeAgent:
-    """The agent one ``(arm, channel)`` cell runs under.
-
-    THE definition, and the only one: ``run_arm`` executes through it and
-    ``toolreq_grid.invocation_fingerprint`` renders the cell's command line through it
-    (``cell_calls``). A second construction of this agent beside the fingerprint is how
-    ``constrain_tools`` or ``strict_mcp`` end up set one way on the wire and another in the hash,
-    and each of those flags moves a result on its own (see
-    ``resume_cache.BaseRunIdentity.invocation_fingerprint``).
-
-    ``runner`` and ``cwd`` are the only things the fingerprint path leaves at their defaults:
-    neither appears in the argv, so a rendered invocation is byte-identical to the sent one without
-    either.
-    """
-    return HeadlessClaudeAgent(
-        model=model,
-        runner=runner,
-        memory_channel=channel,
-        constrain_tools=True,  # --allowedTools Write
-        cwd=cwd,
-    )
+def goal_leg(step: SequenceStep, memory: Mapping[str, str]) -> Leg:
+    """This grid's whole cell: ONE ``claude -p``, the scored goal call, under the arm's surfaced
+    memory. The builtin arm establishes its fact in an earlier leg; here the fact (or its absence)
+    IS the surfaced memory, so there is nothing to establish."""
+    return Leg("goal", step, memory)
 
 
 def cell_calls(
     *, arm: str, step: SequenceStep, memory: Mapping[str, str], channel: MemoryChannel, model: str
 ) -> CellCalls:
-    """The command line one ``(arm, channel)`` cell WILL spawn — the plan, rendered through the same
-    agent that executes it. One ``claude -p`` per repeat, so the cycle is one call long."""
-    return CellCalls(
-        arm=arm,
-        channel=channel.value,
-        calls=(tuple(cell_agent(model=model, channel=channel).argv_for(step, memory)),),
-    )
+    """The command line one ``(arm, channel)`` cell WILL spawn — the plan, rendered from the leg the
+    arm executes, through the agent that executes it (``headless_agent.render_cell_calls``)."""
+    return render_cell_calls(arm=arm, channel=channel, legs=[goal_leg(step, memory)], model=model)
 
 
 def run_arm(

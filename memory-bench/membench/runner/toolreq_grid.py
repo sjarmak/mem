@@ -170,19 +170,19 @@ def evaluate_task(
     rows they scored — the cache checks the second against this run's identity before it will
     publish the first (``resume_cache.run_cached_corpus``).
 
-    The never-run ``ours`` cell (see ``planned_cells``) is filled by relabeling ``none``: it
-    contributes a ROW but no invocation, which is exactly what it did."""
-    planned = {(cell.arm, cell.channel): cell for cell in planned_cells(task, ours_payload)}
+    The plan is ITERATED, never re-indexed and re-filtered: it is already channel-major and in
+    ``ARMS`` order, so walking it is the same traversal without a second skip predicate to keep in
+    step with ``planned_cells``'. The never-run ``ours`` cell is simply absent from it, and is
+    filled below by relabeling ``none`` — it contributes a ROW but no invocation, which is exactly
+    what it did."""
+    plan = planned_cells(task, ours_payload)
     outcomes: list[ArmOutcome] = []
     calls: list[CellCalls] = []
     for channel in CHANNELS:
         cells: dict[str, ArmOutcome] = {}
-        for arm in ARMS:
-            cell = planned.get((arm, channel))
-            if cell is None:
-                continue  # `ours`, empty retrieval — filled from `none` below, never spent on
-            cells[arm], sent = run_arm(
-                arm=arm,
+        for cell in (c for c in plan if c.channel == channel):
+            cells[cell.arm], sent = run_arm(
+                arm=cell.arm,
                 step=cell.step,
                 memory=dict(cell.memory),
                 channel=channel,
@@ -194,6 +194,7 @@ def evaluate_task(
             calls.append(sent)
         if RETRIEVING_ARM not in cells:
             cells[RETRIEVING_ARM] = replace(cells["none"], arm=RETRIEVING_ARM)
+        # `ARMS` order, not plan order: the canonical row order the scorer and the summary read.
         outcomes.extend(cells[arm] for arm in ARMS)
     return Evaluation(outcomes=_cells(outcomes), calls=calls)
 
@@ -280,7 +281,7 @@ def invocation_fingerprint(
     spawn. See ``BaseRunIdentity.invocation_fingerprint``: it cannot be incomplete about the
     invocation, because it IS the invocation.
 
-    Rendered from ``planned_cells`` through ``realagent_probe.cell_agent`` — the same cells
+    Rendered from ``planned_cells`` through ``headless_agent.cell_agent`` — the same cells
     ``evaluate_task`` runs, through the same agent it runs them with. Building one is string
     assembly: FREE, no agent turn."""
     return invocation_digest(

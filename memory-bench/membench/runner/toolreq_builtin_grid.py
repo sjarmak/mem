@@ -197,7 +197,7 @@ def task_verdict(cells: Sequence[BuiltinCell]) -> str:
 def invocation_fingerprint(task: ToolReqRealAgentTask, *, model: str) -> str:
     """Hashes the COMMAND LINES THEMSELVES — every ``claude -p`` argv every cell will spawn.
 
-    Rendered from ``toolreq_builtin.cell_legs`` through ``toolreq_builtin.cell_agent``: the same
+    Rendered from ``toolreq_builtin.cell_legs`` through ``headless_agent.cell_agent``: the same
     legs ``run_builtin_arm`` executes, through the same agent it executes them with. So this cannot
     fingerprint an invocation the arm does not make — it is not a copy of the arm's behaviour kept
     beside it, it is the arm's own plan. The write boundary then checks the RECORDED invocations

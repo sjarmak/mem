@@ -93,6 +93,21 @@ class CellCalls:
     calls: tuple[tuple[str, ...], ...]
 
 
+@dataclass(frozen=True)
+class Leg:
+    """One ``claude -p`` call a cell makes: the step it runs, the memory it surfaces to run it, and
+    the label its ``StepContext`` carries.
+
+    A cell's legs are the unit both halves of the identity are built from — ``cell_agent`` renders
+    them into the plan (``render_cell_calls``) and the arm executes them — so a cell with one leg
+    (the none/oracle/ours grid's goal call) and a cell with two (the builtin arm's establish + goal)
+    say so in ONE vocabulary rather than each inventing its own."""
+
+    name: str
+    step: SequenceStep
+    memory: Mapping[str, str]
+
+
 @dataclass(eq=False)
 class RecordingRunner:
     """A ``CliRunner`` that records the argv of every ``claude -p`` it spawns, then delegates.
@@ -386,3 +401,56 @@ class HeadlessClaudeAgent:
             output_tokens=output_tokens,
             raw_stream=stream_text,
         )
+
+
+def cell_agent(
+    *,
+    model: str,
+    channel: MemoryChannel,
+    runner: CliRunner = subprocess.run,
+    cwd: str | None = None,
+    env: Mapping[str, str] | None = None,
+) -> HeadlessClaudeAgent:
+    """The agent one ``(arm, channel)`` cell runs ALL its legs through.
+
+    THE definition, and the only one — for every paid grid, not per grid. Each arm executes through
+    it and each grid renders its cache identity through it (``render_cell_calls``), so the flags
+    that land in the argv cannot be set one way on the wire and another in the hash. A per-grid copy
+    of this constructor would keep each grid internally consistent (its own fingerprint and its own
+    calls moving together, write boundary green) while letting two grids drift onto DIFFERENT
+    command lines — and ours-vs-builtin is a comparison between grids.
+
+    ONE agent drives every leg of a cell, which is what makes "the legs share a sandbox cwd and a
+    ``CLAUDE_CONFIG_DIR``" structural rather than a thing to assert. Safe because the per-leg
+    differences are carried by the STEP, not the agent: ``--allowedTools`` is derived from
+    ``step.available_tools`` (so the builtin arm's establish leg runs unconstrained and its goal leg
+    is Write-only), and ``memory_channel`` only frames a surfaced-memory block, which a bare leg
+    never has.
+
+    ``runner``, ``cwd`` and ``env`` are the only things the fingerprint path leaves at their
+    defaults: none of them appears in the argv, so a rendered invocation is byte-identical to the
+    sent one without them."""
+    return HeadlessClaudeAgent(
+        model=model,
+        runner=runner,
+        memory_channel=channel,
+        constrain_tools=True,
+        cwd=cwd,
+        env=env,
+    )
+
+
+def render_cell_calls(
+    *, arm: str, channel: MemoryChannel, legs: Sequence[Leg], model: str
+) -> CellCalls:
+    """The command lines one ``(arm, channel)`` cell WILL spawn — the plan, rendered from the legs
+    the arm executes, through the agent that executes them.
+
+    EVERY leg, in order. A fingerprint over the scored leg alone would call two runs identical while
+    an earlier leg differed — and for the builtin arm the earlier leg is the one under test."""
+    agent = cell_agent(model=model, channel=channel)
+    return CellCalls(
+        arm=arm,
+        channel=channel.value,
+        calls=tuple(tuple(agent.argv_for(leg.step, leg.memory)) for leg in legs),
+    )

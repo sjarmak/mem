@@ -60,10 +60,12 @@ from membench.metrics.scorers import states_value
 from membench.runner.headless_agent import (
     CellCalls,
     CliRunner,
-    HeadlessClaudeAgent,
+    Leg,
     MemoryChannel,
     RecordingRunner,
+    cell_agent,
     one_cycle,
+    render_cell_calls,
 )
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome, score_goal_action
 from membench.runner.resume_cache import digest
@@ -94,16 +96,6 @@ def _establish_step(task: ToolReqRealAgentTask) -> SequenceStep:
     )
 
 
-@dataclass(frozen=True)
-class Leg:
-    """One ``claude -p`` call a ``(builtin, channel)`` cell makes: the step it runs, and the
-    memory it surfaces to run it."""
-
-    name: str
-    step: SequenceStep
-    memory: Mapping[str, str]
-
-
 def cell_legs(task: ToolReqRealAgentTask) -> tuple[Leg, Leg]:
     """The two calls one ``(builtin, channel)`` cell makes, in order.
 
@@ -130,50 +122,11 @@ def cell_legs(task: ToolReqRealAgentTask) -> tuple[Leg, Leg]:
     )
 
 
-def cell_agent(
-    *,
-    model: str,
-    channel: MemoryChannel,
-    runner: CliRunner = subprocess.run,
-    cwd: str | None = None,
-    config_dir: Path | None = None,
-) -> HeadlessClaudeAgent:
-    """The agent one ``(builtin, channel)`` cell runs BOTH its legs through.
-
-    THE definition: ``run_builtin_arm`` executes through it and
-    ``toolreq_builtin_grid.invocation_fingerprint`` renders through it (``cell_calls``). ONE agent
-    drives both legs, which is what makes "establish and goal share a sandbox cwd + a
-    ``CLAUDE_CONFIG_DIR``" structural rather than a thing to assert. Safe because the per-call
-    differences are carried by the STEP, not the agent: ``--allowedTools`` is derived from
-    ``step.available_tools`` (so establish runs unconstrained and goal is Write-only), and
-    ``memory_channel`` only frames a surfaced-memory block, which the bare goal leg never has.
-
-    ``runner``, ``cwd`` and ``config_dir`` are the only things the fingerprint path leaves at their
-    defaults: none of them appears in the argv, so a rendered invocation is byte-identical to the
-    sent one without them."""
-    return HeadlessClaudeAgent(
-        model=model,
-        runner=runner,
-        memory_channel=channel,
-        constrain_tools=True,
-        cwd=cwd,
-        env=None if config_dir is None else {"CLAUDE_CONFIG_DIR": str(config_dir)},
-    )
-
-
 def cell_calls(task: ToolReqRealAgentTask, channel: MemoryChannel, *, model: str) -> CellCalls:
     """The two command lines one ``(builtin, channel)`` cell WILL spawn — the plan, rendered from
-    the same legs the arm executes, through the same agent that executes them.
-
-    BOTH legs, in order. The establish leg is the one under test (it must persist the fact) and the
-    goal leg is the one scored; a fingerprint over the second alone would call two runs identical
-    while the first differed."""
-    agent = cell_agent(model=model, channel=channel)
-    return CellCalls(
-        arm=ARM,
-        channel=channel.value,
-        calls=tuple(tuple(agent.argv_for(leg.step, leg.memory)) for leg in cell_legs(task)),
-    )
+    the same legs the arm executes, through the same agent that executes them
+    (``headless_agent.render_cell_calls``)."""
+    return render_cell_calls(arm=ARM, channel=channel, legs=cell_legs(task), model=model)
 
 
 # The mechanism under test, as the literal settings dict `_seed_config_dir` writes. Named, and
@@ -381,7 +334,7 @@ def run_builtin_arm(
                 channel=channel,
                 runner=recorder,
                 cwd=sandbox,
-                config_dir=config_dir,
+                env={"CLAUDE_CONFIG_DIR": str(config_dir)},
             )
 
             def _ctx(leg: str, step_id: str, i: int = i) -> StepContext:
