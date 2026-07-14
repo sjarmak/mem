@@ -19,7 +19,6 @@ HarborRunner + ``mem extract-errors`` extractor.
 
 import json
 import sqlite3
-import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import partial
@@ -33,6 +32,7 @@ from membench.harbor.env_recon import reconstruct_env_for_record
 from membench.harbor.grid import AgentRunner, ErrorExtractor, HarborRunner, run_grid
 from membench.harbor.harbor_exec import harbor_exec
 from membench.harbor.task_env import NetworkMode
+from membench.mem_cli import run_mem_json
 
 RecordLoader = Callable[[str], Mapping[str, Any]]
 HeldErrorsLoader = Callable[[str], list[TraceErrorRef]]
@@ -88,26 +88,13 @@ def make_cli_extractor(mem_bin: str | Path) -> ErrorExtractor:
     """An `ErrorExtractor` that shells the canonical ``mem extract-errors`` (mem-apg.3.1.1).
 
     Stateless -- it never touches the store, so the v2/v3 store drift is irrelevant here.
-    A non-zero exit or non-ok envelope raises, so a broken extractor never silently
-    yields 'no errors' (which would read as a clean run)."""
+    Delegates to `mem_cli.run_mem_json`, the shared envelope/failure-mode seam, so a
+    missing binary, a hang, a non-zero exit, or a malformed envelope all raise
+    `MemCliError` instead of a bare subprocess failure."""
 
     def extract(output: str) -> list[Mapping[str, Any]]:
-        completed = subprocess.run(
-            [str(mem_bin), "extract-errors", "--json"],
-            input=output,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if completed.returncode != 0:
-            raise RuntimeError(
-                f"mem extract-errors failed (exit {completed.returncode}): "
-                f"{completed.stderr.strip() or completed.stdout.strip()}"
-            )
-        envelope = json.loads(completed.stdout)
-        if not envelope.get("ok", False):
-            raise RuntimeError(f"mem extract-errors error: {envelope.get('errors')}")
-        errors: list[Mapping[str, Any]] = envelope["data"]["errors"]
+        data = run_mem_json([str(mem_bin), "extract-errors"], input=output)
+        errors: list[Mapping[str, Any]] = data["errors"]
         return errors
 
     return extract

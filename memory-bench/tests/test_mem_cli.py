@@ -11,14 +11,7 @@ import json
 import pytest
 
 from membench.mem_cli import MemCliError, run_mem_json
-
-
-def _fake_mem(tmp_path, body: str) -> str:
-    """Write an executable stand-in for the `mem` binary and return its path."""
-    script = tmp_path / "fake-mem"
-    script.write_text(f"#!/bin/sh\n{body}\n", encoding="utf-8")
-    script.chmod(0o755)
-    return str(script)
+from tests.helpers import fake_mem as _fake_mem
 
 
 def test_returns_envelope_data(tmp_path):
@@ -62,3 +55,12 @@ def test_mem_cli_error_is_a_runtime_error(tmp_path):
     binary = _fake_mem(tmp_path, "exit 1")
     with pytest.raises(RuntimeError):
         run_mem_json([binary, "query"])
+
+
+def test_input_is_piped_to_stdin(tmp_path):
+    envelope = {"apiVersion": "v1", "cmd": "extract-errors", "ok": True, "data": {"echoed": None}}
+    binary = _fake_mem(
+        tmp_path,
+        f'stdin=$(cat); echo \'{json.dumps(envelope)}\' | sed "s/null/\\"$stdin\\"/"',
+    )
+    assert run_mem_json([binary, "extract-errors"], input="hello") == {"echoed": "hello"}

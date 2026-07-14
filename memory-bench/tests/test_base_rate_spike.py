@@ -17,9 +17,11 @@ from membench.harbor.base_rate_spike import (
     BeadOutcome,
     load_held_errors_from_store,
     load_record_from_store,
+    make_cli_extractor,
     run_base_rate_spike,
 )
 from membench.harbor.grid import StubRunner
+from tests.helpers import fake_mem as _fake_mem
 
 
 def _held(file: str = "foo_test.go") -> TraceErrorRef:
@@ -44,6 +46,21 @@ def _record(work_id: str) -> dict:
 def _recurring_none_trace() -> RunTrace:
     # Reached the held file AND the known failure recurred -> deterministic_term 0.0.
     return RunTrace(errors=(_held(),), files_touched=frozenset({"/app/x/foo_test.go"}))
+
+
+# --- make_cli_extractor: thin wrapper over the shared run_mem_json seam ---------
+
+
+def test_make_cli_extractor_returns_errors(tmp_path: Path):
+    envelope = {
+        "apiVersion": "v1",
+        "cmd": "extract-errors",
+        "ok": True,
+        "data": {"errors": [{"tool": "go", "file": "foo_test.go"}]},
+    }
+    binary = _fake_mem(tmp_path, f"cat >/dev/null; echo '{json.dumps(envelope)}'")
+    extract = make_cli_extractor(binary)
+    assert extract("some agent output") == [{"tool": "go", "file": "foo_test.go"}]
 
 
 # --- store loaders against a real temp SQLite store -----------------------------

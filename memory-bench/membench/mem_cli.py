@@ -1,9 +1,10 @@
 """The one subprocess seam to the TS `mem` CLI.
 
-`corpus.py` (store loading) and `memory_systems/ours_system.py` (retrieval-v1)
-both shell out to `mem ... --json` and unwrap the same success envelope
-(`{apiVersion, cmd, ok, data, errors}`). This module owns that seam once, with
-the failure modes the call sites should not each re-derive:
+`corpus.py` (store loading), `memory_systems/ours_system.py` (retrieval-v1), and
+`harbor/base_rate_spike.py` (the `mem extract-errors` extractor) all shell out
+to `mem ... --json` and unwrap the same success envelope (`{apiVersion, cmd,
+ok, data, errors}`). This module owns that seam once, with the failure modes
+the call sites should not each re-derive:
 
 - a missing binary names the fix (build the TS CLI), not a bare FileNotFoundError;
 - a hang is bounded by a timeout and surfaces as a loud error, never a stuck run;
@@ -29,15 +30,20 @@ class MemCliError(RuntimeError):
     malformed envelope). Carries the command for context."""
 
 
-def run_mem_json(argv: list[str], *, timeout_s: float = DEFAULT_TIMEOUT_S) -> dict[str, Any]:
+def run_mem_json(
+    argv: list[str], *, input: str | None = None, timeout_s: float = DEFAULT_TIMEOUT_S
+) -> dict[str, Any]:
     """Run `<argv> --json` and return the success envelope's `data`.
 
     `argv` is the full command including the binary path; `--json` is appended
-    here so every caller goes through the envelope contract."""
+    here so every caller goes through the envelope contract. `input`, if given,
+    is piped to the process's stdin (e.g. `mem extract-errors` reads its input
+    that way)."""
     cmd = " ".join(argv)
     try:
         completed = subprocess.run(
             [*argv, "--json"],
+            input=input,
             capture_output=True,
             text=True,
             check=False,
