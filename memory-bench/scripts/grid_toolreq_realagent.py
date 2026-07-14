@@ -278,9 +278,12 @@ class _CachedTask:
     ours_retrieval_empty: bool
 
 
-def _load_cached(
-    result_path: Path, identity: Mapping[str, Any], n_cells: int
-) -> _CachedTask | None:
+def expected_cells() -> set[tuple[str, str]]:
+    """The full (arm, channel) grid one task must cover to be scored as complete."""
+    return {(arm, channel.value) for arm in ARMS for channel in CHANNELS}
+
+
+def _load_cached(result_path: Path, identity: Mapping[str, Any]) -> _CachedTask | None:
     """A persisted per-task result, or ``None`` meaning MISS — re-execute this task.
 
     Every rejection below is a miss, never a crash, and never a partial acceptance. These
@@ -301,12 +304,19 @@ def _load_cached(
     if not isinstance(loaded.get("ours_retrieval_empty"), bool):
         return None  # written before the flag existed, or hand-edited
     rows = loaded.get("outcomes")
-    if not isinstance(rows, list) or len(rows) != n_cells:
-        return None  # arity drift: a dropped arm or channel is a miss, not a partial score
+    if not isinstance(rows, list):
+        return None
     try:
         outcomes = [ArmOutcome(**row) for row in rows]
     except TypeError:
-        return None  # schema-drifted row (missing/extra/non-mapping)
+        return None  # schema-drifted row (missing/extra field, or not a mapping)
+    # The cells must cover the grid EXACTLY — one per (arm, channel), no dupes, no strays.
+    # A row-count check is not enough: six copies of the same cell has the right arity, and
+    # would be accepted as a complete task. task_verdict keys by (arm, channel), so it would
+    # then emit an EMPTY verdict, and the task would vanish from the separates/leaked
+    # accounting while still counting as `reused` — a partial run reading as a full one.
+    if {(o.arm, o.channel) for o in outcomes} != expected_cells():
+        return None
     return _CachedTask(outcomes=outcomes, ours_retrieval_empty=loaded["ours_retrieval_empty"])
 
 
@@ -339,14 +349,13 @@ def run_corpus(
     stub it out without a built ``bin/mem``."""
     out_dir.mkdir(parents=True, exist_ok=True)
     identity = {"repeats": repeats, "dry_run": dry_run, "model": model, "arms": list(ARMS)}
-    n_cells = len(ARMS) * len(CHANNELS)
     cached_by_id: dict[str, _CachedTask] = {}
     if resume:
         for task in tasks:
             result_path = out_dir / f"{task.work_id}.json"
             if not result_path.is_file():
                 continue
-            cached = _load_cached(result_path, identity, n_cells)
+            cached = _load_cached(result_path, identity)
             if cached is not None:
                 cached_by_id[task.work_id] = cached
     pending = [task for task in tasks if task.work_id not in cached_by_id]

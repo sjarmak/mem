@@ -445,6 +445,46 @@ def test_partial_cache_arity_is_a_miss_never_a_silent_truncation(tmp_path: Path)
     assert len(summary["per_task"][0]["outcomes"]) == full
 
 
+def test_duplicate_cell_cache_is_a_miss_even_though_the_arity_is_right(tmp_path: Path) -> None:
+    """Counting rows is NOT enough. A cache holding len(ARMS)*len(CHANNELS) copies of the SAME
+    cell has the right arity but does not cover the grid. task_verdict keys by (arm, channel),
+    so such a record yields an EMPTY verdict — the task would then be counted as ``reused``
+    while silently vanishing from the separates/leaked accounting. The cells must cover every
+    (arm, channel) exactly once or the record is a miss."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+
+    result_path = out / f"{tasks[0].work_id}.json"
+    record = json.loads(result_path.read_text(encoding="utf-8"))
+    one_cell = record["outcomes"][0]
+    record["outcomes"] = [dict(one_cell) for _ in record["outcomes"]]  # right count, one cell
+    result_path.write_text(json.dumps(record), encoding="utf-8")
+
+    summary = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+    assert summary["executed"] == 1 and summary["reused"] == 0
+    # and the re-executed task is scored, not silently dropped
+    assert summary["separates_all_channels"] == 1
+    assert {(o["arm"], o["channel"]) for o in summary["per_task"][0]["outcomes"]} == (
+        driver.expected_cells()
+    )
+
+
+def test_unknown_arm_or_channel_cache_is_a_miss(tmp_path: Path) -> None:
+    """A row naming an arm/channel outside the grid (schema drift across a rename) is a miss."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+
+    result_path = out / f"{tasks[0].work_id}.json"
+    record = json.loads(result_path.read_text(encoding="utf-8"))
+    record["outcomes"][0]["arm"] = "some-renamed-arm"
+    result_path.write_text(json.dumps(record), encoding="utf-8")
+
+    summary = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+    assert summary["executed"] == 1 and summary["reused"] == 0
+
+
 def test_schema_drifted_cache_row_is_a_miss_not_a_typeerror(tmp_path: Path) -> None:
     """An ``outcomes`` row that is not a valid ``ArmOutcome`` kwargs mapping must miss, not
     blow up in ``ArmOutcome(**row)`` outside the guard."""
