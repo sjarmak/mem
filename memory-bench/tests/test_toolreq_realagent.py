@@ -555,6 +555,49 @@ def test_value_drifted_cache_row_is_a_miss_not_a_crash(
     assert summary["executed"] == 1 and summary["reused"] == 0
 
 
+@pytest.mark.parametrize(
+    "cache_text",
+    [
+        pytest.param("[" * 20_000 + "]" * 20_000, id="deeply-nested-recursionerror"),
+        pytest.param('{"repeats": ' + "1" * 6000 + "}", id="huge-int-literal-valueerror"),
+    ],
+)
+def test_hostile_json_never_escapes_the_parse_boundary(tmp_path: Path, cache_text: str) -> None:
+    """``json.loads`` raises more than JSONDecodeError. Deeply nested JSON raises
+    RecursionError, and an integer literal over CPython's 4300-digit limit raises a bare
+    ValueError. Neither was caught, so one corrupted cache file killed a resumed PAID sweep —
+    the same "unhandled exception ends the sweep" failure this ladder exists to prevent."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / f"{tasks[0].work_id}.json").write_text(cache_text, encoding="utf-8")
+    summary = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+    assert summary["executed"] == 1 and summary["reused"] == 0
+
+
+def test_cells_measured_at_another_repeat_count_are_a_miss(tmp_path: Path) -> None:
+    """A cell's ``runs`` must equal the run's ``repeats``. Nothing else can produce it
+    (``run_arm`` loops ``range(repeats)``), so a disagreeing record is corrupt. The degenerate
+    ``runs=0`` case is the dangerous one: it satisfies ``0 <= passes <= runs``, keeps full grid
+    coverage, and makes task_verdict read ``oracle 0/0`` and emit a confident
+    "KILL: no separation" for a task that was never evaluated — counted as ``reused``."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    first = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+    assert "SEPARATES" in first["per_task"][0]["verdict"]
+
+    result_path = out / f"{tasks[0].work_id}.json"
+    record = json.loads(result_path.read_text(encoding="utf-8"))
+    for row in record["outcomes"]:  # zero every cell, leave `repeats` in the identity alone
+        row["passes"], row["runs"] = 0, 0
+    result_path.write_text(json.dumps(record), encoding="utf-8")
+
+    summary = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+    assert summary["executed"] == 1 and summary["reused"] == 0
+    verdict = summary["per_task"][0]["verdict"]
+    assert "KILL" not in verdict and "SEPARATES" in verdict  # re-measured, not fabricated
+
+
 def test_schema_drifted_cache_row_is_a_miss_not_a_typeerror(tmp_path: Path) -> None:
     """An ``outcomes`` row that is not a valid ``ArmOutcome`` kwargs mapping must miss, not
     blow up in ``ArmOutcome(**row)`` outside the guard."""

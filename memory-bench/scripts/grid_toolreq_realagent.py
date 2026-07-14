@@ -308,16 +308,23 @@ def task_fingerprint(task: ToolReqRealAgentTask) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
-def _valid_cell(row: Any) -> bool:
-    """Is one persisted ``outcomes`` row a faithful ArmOutcome?
+def _valid_cell(row: Any, repeats: int) -> bool:
+    """Is one persisted ``outcomes`` row a faithful ArmOutcome measured at THIS run's repeats?
 
     JSON has no int/str distinction at the schema level and ``ArmOutcome`` is a plain frozen
     dataclass that does not type-check its fields, so ``{"passes": "0"}`` constructs happily
     and only blows up LATER, in ``task_verdict``'s ``passes > 0`` — an unhandled TypeError
     escaping mid-resume and killing a paid sweep. Validate the VALUES here, where a bad row
     is still just a miss. ``bool`` is excluded explicitly because it is an ``int`` subclass
-    and would otherwise sail through. ``passes > runs`` is rejected as well: it is not
-    representable by any real run, and left in place it would inflate the oracle ceiling."""
+    and would otherwise sail through.
+
+    ``runs`` must equal ``repeats``. Every real write path sets it that way
+    (``run_arm`` loops ``range(repeats)``), so anything else is a corrupted record — and the
+    degenerate ``runs=0`` case is the one that bites: it satisfies ``0 <= passes <= runs``,
+    and ``task_verdict`` then reads ``oracle 0/0`` and fabricates a confident
+    "KILL: no separation" for a task that was never evaluated, counted as ``reused``.
+    ``passes > runs`` is rejected for the mirror reason: no real run produces it, and left in
+    place it inflates the oracle ceiling."""
     if not isinstance(row, Mapping):
         return False
     arm, channel = row.get("arm"), row.get("channel")
@@ -328,7 +335,7 @@ def _valid_cell(row: Any) -> bool:
         return False
     if not isinstance(passes, int) or not isinstance(runs, int):
         return False
-    return 0 <= passes <= runs
+    return runs == repeats and 0 <= passes <= runs
 
 
 def _load_cached(result_path: Path, identity: Mapping[str, Any]) -> _CachedTask | None:
@@ -343,16 +350,23 @@ def _load_cached(result_path: Path, identity: Mapping[str, Any]) -> _CachedTask 
     the previous world's numbers."""
     try:
         loaded = json.loads(result_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError, OSError):
-        return None  # corrupt, truncated, or unreadable
+    except (ValueError, OSError, RecursionError):
+        # This is a PARSE BOUNDARY over an untrusted file, so it catches by blast radius, not
+        # by enumerating what json.loads is known to raise — enumerating is what let the last
+        # two rounds through. ValueError covers JSONDecodeError and UnicodeDecodeError (both
+        # subclasses) AND the >4300-digit int-literal limit; RecursionError covers deeply
+        # nested JSON; OSError covers unreadable/directory/permission. A corrupt file is a
+        # miss; it must never kill a resumed paid sweep.
+        return None
     if not isinstance(loaded, dict):
         return None  # valid JSON of the wrong shape: null, 3, [], "cached"
     if any(loaded.get(key) != value for key, value in identity.items()):
-        return None  # another run's identity (dry-run vs paid, model, repeats, arms)
+        return None  # another run's identity (dry-run vs paid, model, repeats, arms, world)
     if not isinstance(loaded.get("ours_retrieval_empty"), bool):
         return None  # written before the flag existed, or hand-edited
+    repeats = identity["repeats"]
     rows = loaded.get("outcomes")
-    if not isinstance(rows, list) or not all(_valid_cell(row) for row in rows):
+    if not isinstance(rows, list) or not all(_valid_cell(row, repeats) for row in rows):
         return None  # not a list, or a row whose fields drifted in TYPE or in VALUE
     try:
         outcomes = [ArmOutcome(**row) for row in rows]
