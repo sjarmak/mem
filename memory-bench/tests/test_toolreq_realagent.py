@@ -742,6 +742,41 @@ def test_duplicate_work_ids_are_refused(tmp_path: Path) -> None:
         )
 
 
+def test_prompt_fingerprint_catches_what_a_field_model_misses(tmp_path: Path) -> None:
+    """The point of prompt_fingerprint: it hashes the PROMPT, not a model of the prompt.
+
+    Every defect in this file's history was the same shape -- the identity hashed a field-by-field
+    MODEL of the executed input and the model was missing a field (memory ORDER, retrieval RANK,
+    goal_step, ...). Each fix added the missing field; the next review found the next one. Hashing
+    the rendered prompt cannot be incomplete ABOUT THE PROMPT, because it is the prompt.
+
+    Asserted here on the two axes that already shipped as bugs (memory order on both the ours and
+    the oracle arm) plus the trust channel's framing, all of which reach the prompt text."""
+    _, tasks = _corpus_one(tmp_path)
+    task = tasks[0]
+
+    # ours payload rank order -- shipped as a bug
+    assert prompt_fp(task, {"a": "A", "b": "B"}) != prompt_fp(task, {"b": "B", "a": "A"})
+
+    # oracle memory order -- shipped as a bug, on the CEILING arm
+    om = {"m-1": "one", "m-2": "two"}
+    fwd, rev = dataclasses.replace(task, oracle_memory=om), dataclasses.replace(
+        task, oracle_memory=dict(reversed(list(om.items())))
+    )
+    assert prompt_fp(fwd, {}) != prompt_fp(rev, {})
+
+    # identical inputs are stable (an UNSTABLE fingerprint is the expensive direction -- it
+    # would re-spend real money on every resume)
+    assert prompt_fp(task, {"a": "A"}) == prompt_fp(task, {"a": "A"})
+
+    # and the memory CONTENT still moves it, obviously
+    assert prompt_fp(task, {"a": "A"}) != prompt_fp(task, {"a": "DIFFERENT"})
+
+
+def prompt_fp(task: object, payload: dict[str, str]) -> str:
+    return driver.prompt_fingerprint(task, payload)  # type: ignore[arg-type]
+
+
 def test_unknown_arm_or_channel_cache_is_a_miss(tmp_path: Path) -> None:
     """A row naming an arm/channel outside the grid (schema drift across a rename) is a miss."""
     sequences, tasks = _corpus_one(tmp_path)

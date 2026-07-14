@@ -65,7 +65,12 @@ from run_grid_3arm import resolve_payloads
 from membench.generators.toolreq_bundle_adapter import sequence_bundles, sequence_records
 from membench.mem_cli import run_mem_json
 from membench.memory_systems.ours_system import _default_runner
-from membench.runner.headless_agent import DEFAULT_TIMEOUT_S, ENV_MODEL, MemoryChannel
+from membench.runner.headless_agent import (
+    DEFAULT_TIMEOUT_S,
+    ENV_MODEL,
+    MemoryChannel,
+    build_agent_prompt,
+)
 from membench.runner.realagent_probe import ArmOutcome, run_arm
 from membench.runner.toolreq_realagent import (
     ToolReqRealAgentTask,
@@ -361,6 +366,40 @@ def payload_fingerprint(ours_payload: Mapping[str, str]) -> str:
     return hashlib.sha256(json.dumps(list(ours_payload.items())).encode("utf-8")).hexdigest()[:16]
 
 
+def prompt_fingerprint(task: ToolReqRealAgentTask, ours_payload: Mapping[str, str]) -> str:
+    """Hashes the PROMPTS THEMSELVES — the exact text every (arm, channel) cell will send to
+    ``claude -p`` — rather than a model of what goes into them.
+
+    This is the answer to the defect family that has dominated this file. Every previous cache
+    bug had one shape: the identity hashed a MODEL of the executed input, and the model was
+    incomplete. It carried ``oracle_memory``'s content but not its ORDER (which the prompt
+    renders). It carried the ``ours`` payload but not its retrieval RANK. It carried the
+    authored values but not ``goal_step``, so an adapter change was invisible. Each fix
+    extended the model by one field, and the next review found the next missing field —
+    fourteen times.
+
+    Hashing the rendered prompt removes the model. Memory content, memory order, the trust
+    channel's framing, the user request, and every prompt-visible field of ``goal_step``
+    collapse into one digest that CANNOT be incomplete about the prompt, because it IS the
+    prompt. Anything that changes what the agent reads changes this hash, whether or not
+    anyone remembered to enumerate it here.
+
+    It is FREE: building a prompt is string concatenation, no agent turn.
+
+    It does NOT subsume the other fingerprints and is deliberately added ALONGSIDE them, not
+    in place of them. What the prompt cannot see still matters: the scorer (``outcome_checks``,
+    ``current_opaque_values``) grades output the prompt never mentions, and one earlier "fix"
+    in this file DELETED a check it wrongly believed a newer one subsumed and re-opened a
+    closed hole. Redundant checks are cheap; a fabricated paid number is not."""
+    memories = arm_memories(task, ours_payload)
+    cells = [
+        (arm, channel.value, build_agent_prompt(task.goal_step, memories[arm], channel))
+        for channel in CHANNELS
+        for arm in ARMS
+    ]
+    return hashlib.sha256(json.dumps(cells).encode("utf-8")).hexdigest()[:16]
+
+
 def _valid_cell(row: Any, repeats: int) -> bool:
     """Is one persisted ``outcomes`` row a faithful ArmOutcome measured at THIS run's repeats?
 
@@ -534,6 +573,9 @@ def run_corpus(
             **run_identity,
             "task_fingerprint": task_fingerprint(task),
             "ours_payload_fingerprint": payload_fingerprint(ours_payloads.get(task.work_id, {})),
+            # The prompts themselves — see prompt_fingerprint. The other two hash a MODEL of
+            # the executed input; this hashes the input. Kept alongside them, never instead.
+            "prompt_fingerprint": prompt_fingerprint(task, ours_payloads.get(task.work_id, {})),
         }
         for task in tasks
     }
