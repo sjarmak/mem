@@ -216,6 +216,29 @@ def test_a_free_dry_run_never_satisfies_a_paid_run(tmp_path: Path) -> None:
     assert (paid.executed, paid.reused) == (1, 0)
 
 
+def test_a_record_measured_at_a_different_repeat_count_is_a_miss(tmp_path: Path) -> None:
+    """The forged-repeat-count shape on the LOAD path: a record SELF-consistent at repeats=3
+    (rows at runs=3, so the grid check passes and runs > 0 keeps it out of reach of the ge=1
+    row bound) must still miss for a repeats=2 run. The whole-object identity ``==`` is the
+    only guard left standing — delete it and a sweep measured at one repeat count is served,
+    at executed=0, as a measurement of another."""
+    out = tmp_path / "out"
+    out.mkdir()
+    record = _Result.of("w-0", _identity(repeats=3), _cells(passes=3, runs=3))
+    result_path = out / "w-0.json"
+    result_path.write_text(record.model_dump_json(), encoding="utf-8")
+    # Pin that the record on disk really is the repeats=3 one, so the miss below can only come
+    # from the load-time identity comparison.
+    assert json.loads(result_path.read_text(encoding="utf-8"))["identity"]["repeats"] == 3
+
+    assert load_cached(result_path, _identity(repeats=2), _Result) is None
+    resumed = _run([_Task("w-0")], out, _identity(repeats=2))
+    assert (resumed.executed, resumed.reused) == (
+        1,
+        0,
+    ), "served a repeats=3 measurement for a repeats=2 run"
+
+
 # --- the parse boundary: every rejection is a MISS, never a crash -----------------------
 
 

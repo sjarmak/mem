@@ -479,10 +479,11 @@ _Rows = list[dict[str, Any]]
             lambda rows: [{**row, "passes": 0, "runs": 0} for row in rows],
             True,
             True,
-            "runs=0 keeps BOTH arity and coverage and satisfies 0 <= passes <= runs, so only the "
-            "runs == repeats check stands between it and acceptance. Accepted, task_verdict "
-            "reads oracle 0/0 and emits a confident 'KILL: no separation' for a task that was "
-            "never evaluated — counted as reused",
+            "runs=0 keeps BOTH arity and coverage, but never reaches the runs == repeats grid "
+            "check: the row schema itself (BaseCellOutcome, runs >= 1) refuses a zeroed row at "
+            "the parse boundary. Kept because acceptance would read oracle 0/0 as a confident "
+            "'KILL: no separation' for a task that was never evaluated; the runs == repeats "
+            "conjunct is uniquely exercised by the dedicated forged-repeat-count test below",
             id="zeroed-runs",
         ),
         pytest.param(
@@ -534,6 +535,48 @@ def test_a_mutated_cache_record_is_a_miss_and_is_re_measured(
     assert {(o["arm"], o["channel"]) for o in re_measured["outcomes"]} == grid.expected_cells()
     assert "KILL" not in re_measured["verdict"] and "SEPARATES" in re_measured["verdict"]
     assert summary["separates_all_channels"] == 1
+
+
+def test_a_record_forged_at_a_different_repeat_count_is_a_miss(tmp_path: Path) -> None:
+    """The one mutation the runs == repeats grid check ALONE stands against: rows scaled to a
+    different repeat count, with runs > 0.
+
+    Every guard the zeroed-runs case leans on is deliberately satisfied here — each row alone is
+    schema-valid (runs >= 1, passes <= runs), arity and coverage are kept, the stored verdict is
+    recomputed to the one the FORGED rows imply (classify embeds passes/runs in the line, so an
+    un-recomputed verdict would trip the derived-verdict check first), the identity is untouched,
+    and uniform scaling keeps each ``ours`` row equal to its ``none`` row, so the
+    empty-retrieval-parity validator stays satisfied under this corpus's stubbed seed_fn. Delete
+    the ``cell.runs != identity.repeats`` conjunct in
+    ``_rows_are_a_complete_grid_measured_at_this_identity`` and this record is ACCEPTED: a grid
+    nobody measured at this run's repeats, served as reused at executed=0."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    first = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+    assert "SEPARATES" in first["per_task"][0]["verdict"]
+
+    result_path = out / f"{tasks[0].work_id}.json"
+    record = json.loads(result_path.read_text(encoding="utf-8"))
+    forged = [
+        {**row, "passes": row["passes"] * 2, "runs": row["runs"] * 2} for row in record["outcomes"]
+    ]
+    # Pin what the forgery deliberately PRESERVES, so the case cannot silently stop being
+    # adversarial in the way it claims: every row constructs, the grid is covered exactly, and
+    # the verdict is the forged rows' own.
+    cells = [grid.CellOutcome(**row) for row in forged]
+    assert {(c.arm, c.channel) for c in cells} == grid.expected_cells()
+    record["outcomes"] = forged
+    record["verdict"] = grid.task_verdict(cells)
+    result_path.write_text(json.dumps(record), encoding="utf-8")
+
+    resumed = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+    assert (resumed["executed"], resumed["reused"]) == (
+        1,
+        0,
+    ), "a grid measured at runs=4 was served for a repeats=2 identity"
+    re_measured = resumed["per_task"][0]
+    assert all(o["runs"] == 2 for o in re_measured["outcomes"])
+    assert "SEPARATES" in re_measured["verdict"]
 
 
 def test_regenerated_corpus_never_reuses_the_previous_worlds_results(tmp_path: Path) -> None:
