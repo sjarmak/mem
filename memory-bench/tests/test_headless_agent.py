@@ -5,6 +5,7 @@ stream-json; no real `claude`, no network, no scix-batch."""
 
 from __future__ import annotations
 
+import errno
 import json
 import subprocess
 from typing import Any
@@ -150,6 +151,22 @@ def test_run_step_raises_on_timeout() -> None:
         raise subprocess.TimeoutExpired(argv, 600)
 
     with pytest.raises(HeadlessAgentError, match="did not respond"):
+        HeadlessClaudeAgent(runner=runner).run_step(_step(), {}, _ctx())
+
+
+def test_run_step_raises_on_permission_error() -> None:
+    def runner(argv, **kwargs):
+        raise PermissionError(errno.EACCES, "Permission denied", "claude")
+
+    with pytest.raises(HeadlessAgentError, match="could not spawn"):
+        HeadlessClaudeAgent(runner=runner).run_step(_step(), {}, _ctx())
+
+
+def test_run_step_raises_on_enoexec() -> None:
+    def runner(argv, **kwargs):
+        raise OSError(errno.ENOEXEC, "Exec format error", "claude")
+
+    with pytest.raises(HeadlessAgentError, match="could not spawn"):
         HeadlessClaudeAgent(runner=runner).run_step(_step(), {}, _ctx())
 
 

@@ -243,6 +243,10 @@ class HeadlessClaudeAgent:
             raise HeadlessAgentError(
                 "'claude' CLI not found — install it to run the headless agent"
             ) from exc
+        except OSError as exc:
+            # PermissionError, ENOEXEC, EACCES on cwd — the whole spawn-failure
+            # family must surface as a diagnosed halt, never a raw traceback.
+            raise HeadlessAgentError(f"could not spawn claude -p: {exc}") from exc
         except subprocess.TimeoutExpired as exc:
             raise HeadlessAgentError(
                 f"claude -p did not respond within {self.timeout_s:.0f}s"
