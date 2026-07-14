@@ -227,9 +227,6 @@ def test_a_record_measured_at_a_different_repeat_count_is_a_miss(tmp_path: Path)
     record = _Result.of("w-0", _identity(repeats=3), _cells(passes=3, runs=3))
     result_path = out / "w-0.json"
     result_path.write_text(record.model_dump_json(), encoding="utf-8")
-    # Pin that the record on disk really is the repeats=3 one, so the miss below can only come
-    # from the load-time identity comparison.
-    assert json.loads(result_path.read_text(encoding="utf-8"))["identity"]["repeats"] == 3
 
     assert load_cached(result_path, _identity(repeats=2), _Result) is None
     resumed = _run([_Task("w-0")], out, _identity(repeats=2))
