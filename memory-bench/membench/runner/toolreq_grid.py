@@ -272,10 +272,6 @@ class CachedResult(BaseCachedResult[RunIdentity, CellOutcome]):
                 )
         return self
 
-    def arm_outcomes(self) -> list[ArmOutcome]:
-        """The rows as the in-memory measurement type the rest of the grid speaks."""
-        return [ArmOutcome(**cell.model_dump()) for cell in self.outcomes]
-
 
 def _cells(outcomes: Sequence[ArmOutcome]) -> list[CellOutcome]:
     """The measured rows as persisted ones — the parse boundary crossed in the WRITE direction, so

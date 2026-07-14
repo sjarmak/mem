@@ -96,16 +96,6 @@ class BuiltinCell(BaseCellOutcome):
             )
         return self
 
-    def diagnostics(self) -> BuiltinDiagnostics:
-        """The row as the in-memory diagnostics type the arm speaks."""
-        return BuiltinDiagnostics(
-            engaged=self.engaged,
-            leaked=self.leaked,
-            runs=self.runs,
-            establish_tool_calls=self.establish_tool_calls,
-            establish_tool_names=tuple(self.establish_tool_names),
-        )
-
 
 def _cell(outcome: ArmOutcome, diagnostics: BuiltinDiagnostics) -> BuiltinCell:
     """One measured cell as a persisted row — the parse boundary crossed in the WRITE direction, so
