@@ -576,6 +576,18 @@ def run_corpus(
             # The prompts themselves — see prompt_fingerprint. The other two hash a MODEL of
             # the executed input; this hashes the input. Kept alongside them, never instead.
             "prompt_fingerprint": prompt_fingerprint(task, ours_payloads.get(task.work_id, {})),
+            # A FIRST-CLASS identity field, live-computed, exactly like every fingerprint above.
+            # It says whether the `ours` cell was measured at all or relabeled from `none`, which
+            # makes it the denominator the headline is read through — and a value the cache must
+            # therefore agree with. An earlier fix cross-validated it in ONE direction only (when
+            # the flag was True, the ours rows had to equal none's) and declared the hole closed.
+            # It was half closed: a file claiming False carried a fabricated `ours 2/2` straight
+            # past every check, because the flag was never compared against what THIS run resolves.
+            # Comparing it here closes both directions at once, and it is the same treatment the
+            # other measured inputs already get. Two fixes in this file have now failed by
+            # subsuming a check that only LOOKED equivalent; a flag outside the identity is not
+            # defended by the checks that surround it.
+            "ours_retrieval_empty": not ours_payloads.get(task.work_id, {}),
         }
         for task in tasks
     }
@@ -596,11 +608,9 @@ def run_corpus(
         cached = cached_by_id.get(task.work_id)
         if cached is not None:
             outcomes = cached.outcomes
-            retrieval_empty = cached.ours_retrieval_empty
             reused += 1
         else:
             ours_payload = ours_payloads.get(task.work_id, {})
-            retrieval_empty = not ours_payload
             outcomes = evaluate_task(
                 task,
                 repeats=repeats,
@@ -609,10 +619,12 @@ def run_corpus(
                 ours_payload=ours_payload,
             )
             executed += 1
+        # `ours_retrieval_empty` is written by the identity spread, not set again here: it now
+        # rides IN the identity, so the identity is its single source. Re-stating it would give
+        # the flag a second writer that could drift from the one the cache is validated against.
         record = {
             "work_id": task.work_id,
             **identity_of[task.work_id],
-            "ours_retrieval_empty": retrieval_empty,
             "outcomes": [asdict(o) for o in outcomes],
             "verdict": task_verdict(outcomes),
         }

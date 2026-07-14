@@ -777,6 +777,43 @@ def prompt_fp(task: object, payload: dict[str, str]) -> str:
     return driver.prompt_fingerprint(task, payload)  # type: ignore[arg-type]
 
 
+def test_forged_not_empty_flag_with_a_fabricated_ours_cell_is_a_miss(tmp_path: Path) -> None:
+    """The OTHER direction of the empty-flag hole, and the one that actually pays.
+
+    An earlier fix cross-validated the flag only when it was True (ours rows had to equal none's)
+    and called the hole closed. It was half closed. A file claiming ours_retrieval_empty=False --
+    i.e. 'ours really was measured' -- while carrying a fabricated passing ours cell walked past
+    every check, because the flag itself was never compared against what THIS run resolves. The
+    result: a task whose retrieval returned NOTHING is served a fully-passing (ours 2/2), with
+    zero spend, no crash, and a green suite. The flag now rides IN the identity, so a file whose
+    flag disagrees with the live-resolved payload is a miss in both directions."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    store_path = tmp_path / "store.db"
+    # the real run: retrieval is empty (lifecycle-earliest task, LOO admits no priors)
+    first = _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
+    assert first["ours_empty_retrieval"] == [tasks[0].work_id]
+
+    result_path = out / f"{tasks[0].work_id}.json"
+    record = json.loads(result_path.read_text())
+    assert record["ours_retrieval_empty"] is True
+
+    # forge: claim ours WAS measured, and that it passed everything
+    record["ours_retrieval_empty"] = False
+    for row in record["outcomes"]:
+        if row["arm"] == "ours":
+            row["passes"] = row["runs"]
+    result_path.write_text(json.dumps(record))
+
+    resumed = _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
+    assert (resumed["executed"], resumed["reused"]) == (
+        1,
+        0,
+    ), "served a fabricated ours measurement for a task whose retrieval was empty"
+    assert "(ours 2/2)" not in resumed["per_task"][0]["verdict"]
+    assert resumed["ours_empty_retrieval"] == [tasks[0].work_id]  # the truth is restored
+
+
 def test_unknown_arm_or_channel_cache_is_a_miss(tmp_path: Path) -> None:
     """A row naming an arm/channel outside the grid (schema drift across a rename) is a miss."""
     sequences, tasks = _corpus_one(tmp_path)
