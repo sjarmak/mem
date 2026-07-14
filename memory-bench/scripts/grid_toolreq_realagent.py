@@ -46,6 +46,7 @@ env, separately substantial.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -283,16 +284,40 @@ def expected_cells() -> set[tuple[str, str]]:
     return {(arm, channel.value) for arm in ARMS for channel in CHANNELS}
 
 
+def task_fingerprint(task: ToolReqRealAgentTask) -> str:
+    """Identifies the WORLD a cached result was measured against, not just the run's knobs.
+
+    Without this, the cache identity is only ``(repeats, dry_run, model, arms)`` — none of
+    which change when the CORPUS is regenerated. Work ids are positional (``w-0``, ``w-1``),
+    so a fresh world reuses them, and a re-run over the same ``--out`` reports the PREVIOUS
+    world's numbers with zero cells evaluated. Reproduced before this was added: a corpus
+    with entirely different authored values returned executed=0 reused=3 and printed the old
+    world's verdicts as the new world's.
+
+    The reward-bearing content IS the world: the opaque values the action must carry and the
+    oracle memory that surfaces them. Hash those and a regenerated corpus invalidates its
+    stale caches automatically."""
+    payload = json.dumps(
+        {
+            "work_id": task.work_id,
+            "oracle_memory": sorted(task.oracle_memory.items()),
+            "current_opaque_values": sorted(task.current_opaque_values),
+        },
+        sort_keys=True,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
 def _load_cached(result_path: Path, identity: Mapping[str, Any]) -> _CachedTask | None:
     """A persisted per-task result, or ``None`` meaning MISS — re-execute this task.
 
     Every rejection below is a miss, never a crash, and never a partial acceptance. These
     files are written by a sweep that can be killed mid-run and re-read by a PAID resume, so
     the two failure modes to design against are (a) an exception escaping and killing the
-    whole sweep on one bad file, and (b) a degenerate file being scored as a complete task.
-    The arity check guards (b): a truncated ``outcomes`` list would otherwise be summarized as
-    a full task, letting ``separates_all_channels`` report a partially-evaluated task as
-    having separated on every channel — the silent-truncation class this rig forbids."""
+    whole sweep on one bad file, and (b) a degenerate or FOREIGN file being scored as a
+    complete task. ``identity`` carries the run's knobs AND the per-task world fingerprint
+    (see ``task_fingerprint``), so a regenerated corpus misses rather than silently reporting
+    the previous world's numbers."""
     try:
         loaded = json.loads(result_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError, OSError):
@@ -334,7 +359,8 @@ def run_corpus(
     resume: bool = True,
 ) -> dict[str, Any]:
     """Evaluate every task, persisting one ``<work_id>.json`` each. A persisted result is
-    reused only when its ``(repeats, dry_run, model, arms)`` identity matches — so a FREE
+    reused only when its ``(repeats, dry_run, model, arms, task_fingerprint)`` identity
+    matches — so a FREE
     dry-run's simulated result can never satisfy a PAID run over the same ``--out`` (the
     highest-severity confound: a paid ceiling silently reporting a fabricated pass), and a
     pre-``ours`` cache is correctly invalidated rather than silently reused missing the new
@@ -348,14 +374,18 @@ def run_corpus(
     resumability contract as ``evaluate_task``. It is injectable so a hermetic test can
     stub it out without a built ``bin/mem``."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    identity = {"repeats": repeats, "dry_run": dry_run, "model": model, "arms": list(ARMS)}
+    run_identity = {"repeats": repeats, "dry_run": dry_run, "model": model, "arms": list(ARMS)}
+    # Per-task, because the world fingerprint is per-task: same knobs, different corpus -> miss.
+    identity_of = {
+        task.work_id: {**run_identity, "task_fingerprint": task_fingerprint(task)} for task in tasks
+    }
     cached_by_id: dict[str, _CachedTask] = {}
     if resume:
         for task in tasks:
             result_path = out_dir / f"{task.work_id}.json"
             if not result_path.is_file():
                 continue
-            cached = _load_cached(result_path, identity)
+            cached = _load_cached(result_path, identity_of[task.work_id])
             if cached is not None:
                 cached_by_id[task.work_id] = cached
     pending = [task for task in tasks if task.work_id not in cached_by_id]
@@ -387,7 +417,7 @@ def run_corpus(
             executed += 1
         record = {
             "work_id": task.work_id,
-            **identity,
+            **identity_of[task.work_id],
             "ours_retrieval_empty": retrieval_empty,
             "outcomes": [asdict(o) for o in outcomes],
             "verdict": task_verdict(outcomes),

@@ -470,6 +470,40 @@ def test_duplicate_cell_cache_is_a_miss_even_though_the_arity_is_right(tmp_path:
     )
 
 
+def test_regenerated_corpus_never_reuses_the_previous_worlds_results(tmp_path: Path) -> None:
+    """Work ids are positional (``w-0``...), so a regenerated corpus REUSES them. The run
+    identity (repeats, dry_run, model, arms) does not change when the WORLD does, so without a
+    per-task world fingerprint a re-run over the same ``--out`` reports the previous world's
+    numbers with zero cells evaluated — on the PAID path. Reproduced before the fingerprint
+    existed: executed=0, reused=N, old verdicts printed as the new world's."""
+    out = tmp_path / "out"
+    store_path = tmp_path / "store.db"
+
+    corpus_a = tmp_path / "a"
+    (corpus_a / "0").mkdir(parents=True)
+    (corpus_a / "0" / "sequences.json").write_text(
+        json.dumps([_toolreq_seq("w-0", current="11 days", stale="12 days").model_dump()]),
+        encoding="utf-8",
+    )
+    seqs_a, tasks_a = load_corpus_with_sequences(corpus_a)
+    first = _run_corpus(tasks_a, seqs_a, out, dry_run=True, store_path=store_path)
+    assert (first["executed"], first["reused"]) == (1, 0)
+
+    # Same work_id, a genuinely different world (new authored values -> new opaque tokens).
+    corpus_b = tmp_path / "b"
+    (corpus_b / "0").mkdir(parents=True)
+    (corpus_b / "0" / "sequences.json").write_text(
+        json.dumps([_toolreq_seq("w-0", current="99 days", stale="98 days").model_dump()]),
+        encoding="utf-8",
+    )
+    seqs_b, tasks_b = load_corpus_with_sequences(corpus_b)
+    assert tasks_b[0].work_id == tasks_a[0].work_id  # the id collides, as in the real corpus
+    assert driver.task_fingerprint(tasks_b[0]) != driver.task_fingerprint(tasks_a[0])
+
+    second = _run_corpus(tasks_b, seqs_b, out, dry_run=True, store_path=store_path)
+    assert (second["executed"], second["reused"]) == (1, 0), "reused another world's result"
+
+
 def test_unknown_arm_or_channel_cache_is_a_miss(tmp_path: Path) -> None:
     """A row naming an arm/channel outside the grid (schema drift across a rename) is a miss."""
     sequences, tasks = _corpus_one(tmp_path)
