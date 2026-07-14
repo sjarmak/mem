@@ -26,8 +26,9 @@ path-suffix match, so they align with repo-relative held paths WITHOUT normaliza
 here. ``test_projected_files_suffix_match_repo_relative_held_path`` pins that contract.
 
 The pure projection (`project_trajectory`) is unit-tested against a synthesized ATIF
-fixture that is first validated by Harbor's own model. The subprocess driver
-(`run_harbor_job`) needs Docker + a real subscription run and is not exercised in CI.
+fixture that is first validated by Harbor's own model. A SUCCESSFUL `run_harbor_job`
+needs Docker + a real subscription run and is not exercised in CI; its spawn-FAILURE
+ladder is, against a stubbed `subprocess.run` (a spawn that never happens needs neither).
 """
 
 import json
@@ -298,6 +299,11 @@ def run_harbor_job(
     (the OAuth token) that would otherwise block on stdin; ``-q`` suppresses the live
     UI. A non-zero exit raises -- a failed run is never silently a clean trace.
 
+    Every way the spawn itself can fail raises a DIAGNOSED `RuntimeError` too: a missing
+    binary, any other spawn OSError (permissions, ENOEXEC), and a timeout. `HarborRunner`
+    (grid.py) catches nothing on this path, so an undiagnosed spawn failure would kill a
+    whole sweep with a raw traceback that says nothing about which of the three it was.
+
     ``agent_env`` relocates ``CLAUDE_CONFIG_DIR`` for the probe path (`build_job_config`)."""
     jobs_dir.mkdir(parents=True, exist_ok=True)
     config = build_job_config(
@@ -311,13 +317,33 @@ def run_harbor_job(
     config_path = jobs_dir / f"{job_name}.job.json"
     config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
 
-    completed = subprocess.run(
-        [harbor_bin, "run", "--config", str(config_path), "-q", "-y"],
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=timeout_sec,
-    )
+    # Only the SPAWN is guarded. The mkdir/write_text above stay outside, so their
+    # OSErrors keep their own identity instead of being misreported as a bad binary --
+    # and `harbor_exec`'s "task dir does not exist" guard sits a frame above, untouched.
+    try:
+        completed = subprocess.run(
+            [harbor_bin, "run", "--config", str(config_path), "-q", "-y"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout_sec,
+        )
+    except FileNotFoundError as exc:
+        # Ordered before OSError -- FileNotFoundError is a subclass, so the reverse order
+        # would make this specific wording dead code.
+        raise RuntimeError(
+            f"harbor binary not found: {harbor_bin!r} -- install harbor or pass harbor_bin"
+        ) from exc
+    except OSError as exc:
+        # PermissionError, ENOEXEC, EACCES on cwd -- the rest of the spawn-failure family.
+        raise RuntimeError(f"could not spawn harbor run: {exc}") from exc
+    except subprocess.TimeoutExpired as exc:
+        # Not an OSError, so it needs its own clause. The duration comes from the
+        # exception, not `timeout_sec` -- that parameter is Optional and would render
+        # "within Nones" on the very path where it is set.
+        raise RuntimeError(
+            f"harbor run for {task_dir} did not finish within {exc.timeout}s"
+        ) from exc
     if completed.returncode != 0:
         raise RuntimeError(
             f"harbor run for {task_dir} failed (exit {completed.returncode}): "
