@@ -519,6 +519,42 @@ def test_unknown_arm_or_channel_cache_is_a_miss(tmp_path: Path) -> None:
     assert summary["executed"] == 1 and summary["reused"] == 0
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        pytest.param("passes", "0", id="passes-str"),
+        pytest.param("runs", "2", id="runs-str"),
+        pytest.param("passes", None, id="passes-null"),
+        pytest.param("passes", 1.5, id="passes-float"),
+        pytest.param("passes", True, id="passes-bool"),  # bool is an int subclass — must miss
+        pytest.param("passes", -1, id="passes-negative"),
+        pytest.param("passes", 99, id="passes-exceeds-runs"),  # would inflate the ceiling
+        pytest.param("arm", 3, id="arm-not-str"),
+    ],
+)
+def test_value_drifted_cache_row_is_a_miss_not_a_crash(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    """The miss-ladder must validate VALUES, not just structure. JSON carries no int/str
+    distinction and ``ArmOutcome`` is a plain frozen dataclass that type-checks nothing, so
+    ``{"passes": "0"}`` constructs fine and only detonates later inside ``task_verdict``
+    (``passes > 0`` -> TypeError) — an unhandled exception escaping mid-resume and killing a
+    paid sweep. A ``passes`` above ``runs`` is the quieter version: no crash, just a
+    fabricated ceiling."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+
+    result_path = out / f"{tasks[0].work_id}.json"
+    record = json.loads(result_path.read_text(encoding="utf-8"))
+    record["outcomes"][0][field] = value
+    result_path.write_text(json.dumps(record), encoding="utf-8")
+
+    # must re-execute, and must not raise
+    summary = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+    assert summary["executed"] == 1 and summary["reused"] == 0
+
+
 def test_schema_drifted_cache_row_is_a_miss_not_a_typeerror(tmp_path: Path) -> None:
     """An ``outcomes`` row that is not a valid ``ArmOutcome`` kwargs mapping must miss, not
     blow up in ``ArmOutcome(**row)`` outside the guard."""

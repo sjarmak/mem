@@ -308,6 +308,29 @@ def task_fingerprint(task: ToolReqRealAgentTask) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
+def _valid_cell(row: Any) -> bool:
+    """Is one persisted ``outcomes`` row a faithful ArmOutcome?
+
+    JSON has no int/str distinction at the schema level and ``ArmOutcome`` is a plain frozen
+    dataclass that does not type-check its fields, so ``{"passes": "0"}`` constructs happily
+    and only blows up LATER, in ``task_verdict``'s ``passes > 0`` — an unhandled TypeError
+    escaping mid-resume and killing a paid sweep. Validate the VALUES here, where a bad row
+    is still just a miss. ``bool`` is excluded explicitly because it is an ``int`` subclass
+    and would otherwise sail through. ``passes > runs`` is rejected as well: it is not
+    representable by any real run, and left in place it would inflate the oracle ceiling."""
+    if not isinstance(row, Mapping):
+        return False
+    arm, channel = row.get("arm"), row.get("channel")
+    passes, runs = row.get("passes"), row.get("runs")
+    if not isinstance(arm, str) or not isinstance(channel, str):
+        return False
+    if isinstance(passes, bool) or isinstance(runs, bool):
+        return False
+    if not isinstance(passes, int) or not isinstance(runs, int):
+        return False
+    return 0 <= passes <= runs
+
+
 def _load_cached(result_path: Path, identity: Mapping[str, Any]) -> _CachedTask | None:
     """A persisted per-task result, or ``None`` meaning MISS — re-execute this task.
 
@@ -329,12 +352,12 @@ def _load_cached(result_path: Path, identity: Mapping[str, Any]) -> _CachedTask 
     if not isinstance(loaded.get("ours_retrieval_empty"), bool):
         return None  # written before the flag existed, or hand-edited
     rows = loaded.get("outcomes")
-    if not isinstance(rows, list):
-        return None
+    if not isinstance(rows, list) or not all(_valid_cell(row) for row in rows):
+        return None  # not a list, or a row whose fields drifted in TYPE or in VALUE
     try:
         outcomes = [ArmOutcome(**row) for row in rows]
     except TypeError:
-        return None  # schema-drifted row (missing/extra field, or not a mapping)
+        return None  # schema-drifted row (missing/extra field)
     # The cells must cover the grid EXACTLY — one per (arm, channel), no dupes, no strays.
     # A row-count check is not enough: six copies of the same cell has the right arity, and
     # would be accepted as a complete task. task_verdict keys by (arm, channel), so it would
