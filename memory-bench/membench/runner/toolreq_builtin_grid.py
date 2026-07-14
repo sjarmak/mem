@@ -62,17 +62,27 @@ class BuiltinCell(BaseCellOutcome):
     """One persisted ``(builtin, channel)`` row: the score AND the engagement diagnostics that make
     the score interpretable.
 
-    The three cross-field bounds below are STRUCTURAL. A row is a claim about what happened across
-    ``runs`` repeats, and these are the claims that cannot all be true at once:
+    ``leaked`` is defined by the arm as the number of repeats that PASSED while NOT engaging
+    (``run_builtin_arm``), and the four cross-field bounds below fall straight out of that
+    definition. A row is a claim about what happened across ``runs`` repeats; these are the claims
+    that cannot all be true at once:
 
     * ``engaged <= runs`` — the fact cannot have reached native memory in more repeats than ran.
-    * ``leaked <= passes`` — a leak IS a pass (one that happened without engagement), so it cannot
-      outnumber the passes it is drawn from.
-    * ``leaked <= runs - engaged`` — for the same reason, from the other side: a leaked repeat is by
-      definition one that did NOT engage, so the leaks cannot outnumber the non-engaged repeats.
+    * ``leaked <= passes`` — a leak IS a pass, so it cannot outnumber the passes it is drawn from.
+    * ``leaked <= runs - engaged`` — the same, from the other side: a leaked repeat is by definition
+      one that did NOT engage, so the leaks cannot outnumber the non-engaged repeats.
+    * ``leaked >= passes - engaged`` — the LOWER bound, and the one whose absence is a hole rather
+      than a slack: by inclusion-exclusion, at least ``passes - engaged`` of the passing repeats
+      cannot have been engaged ones. Without it a row can claim ``passes=2, engaged=0, leaked=0``,
+      which is arithmetically impossible — both passes were leaks — and ``cell_kind`` then reports
+      NOT-ENGAGED for a cell that actually LEAKED. That is a one-field edit to a ``<work_id>.json``
+      that erases the most severe verdict the arm can produce (a pass the sandbox handed over, not
+      a builtin win) and quietly moves the task from the summary's ``leaked`` list to its
+      ``not_engaged`` list. The upper bounds do not catch it: they only ever say leaked is too BIG.
 
-    Together they make the pass accounting checkable rather than merely reported: a record claiming
-    a clean builtin win it never measured is unconstructible, and one edited to claim it is a MISS.
+    Together they make the pass accounting checkable rather than merely reported. They do NOT make
+    ``leaked`` derivable — with ``passes=1, engaged=1, runs=2`` the passing repeat may or may not be
+    the engaged one — so the field carries real information and is bounded, not computed.
     """
 
     engaged: int = Field(ge=0)
@@ -93,6 +103,12 @@ class BuiltinCell(BaseCellOutcome):
             raise ValueError(
                 f"{self.channel}: leaked {self.leaked} > non-engaged repeats "
                 f"{self.runs - self.engaged} — a leak is a pass WITHOUT engagement"
+            )
+        if self.leaked < self.passes - self.engaged:
+            raise ValueError(
+                f"{self.channel}: leaked {self.leaked} < passes {self.passes} - engaged "
+                f"{self.engaged} — at least {self.passes - self.engaged} of the passing repeat(s) "
+                "cannot have engaged native memory, and a pass without engagement IS a leak"
             )
         return self
 

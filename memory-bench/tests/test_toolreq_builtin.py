@@ -641,6 +641,67 @@ def test_more_leaks_than_non_engaged_repeats_is_unconstructible() -> None:
         _cell(passes=2, runs=2, engaged=2, leaked=2)
 
 
+def test_fewer_leaks_than_passes_minus_engaged_is_unconstructible() -> None:
+    # The LOWER bound, and the one the three upper bounds cannot stand in for: they only ever say
+    # `leaked` is too BIG. `leaked` counts the repeats that PASSED while NOT engaging, so by
+    # inclusion-exclusion at least (passes - engaged) of the passing repeats were leaks. A row
+    # claiming 2 passes, 0 engaged and 0 leaks is arithmetically impossible.
+    with pytest.raises(ValidationError):
+        _cell(passes=2, runs=2, engaged=0, leaked=0)
+
+
+def test_zeroing_leaked_on_a_real_leak_record_cannot_rewrite_the_headline(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # The reason the lower bound matters, end to end. `run_builtin_arm` legitimately writes a LEAK
+    # cell (passes=2, engaged=0, leaked=2) when the sandbox hands the agent a pass it never earned
+    # through native memory — the most severe verdict the arm produces. Zero `leaked` on disk and
+    # the row still satisfies every UPPER bound, while `cell_kind` now reads it as NOT-ENGAGED: the
+    # task silently moves out of the summary's `leaked` list into `not_engaged`, on the PAID path,
+    # at executed=0.
+    #
+    # The forged record carries the verdict its forged rows IMPLY, not the original LEAK string.
+    # That is what makes this a test of the lower bound rather than of the verdict-derivation check
+    # — leave the stale LEAK verdict in place and that other check refuses the file first, and this
+    # test would pass with no lower bound at all. A record whose every OTHER field agrees with
+    # itself is exactly the one nothing else can refuse.
+    tasks = _corpus_one(tmp_path)
+
+    def _arm(engaged: int, leaked: int):
+        def run(task, *, repeats: int, channel: MemoryChannel, **_kwargs):
+            return (
+                ArmOutcome(arm=ARM, channel=channel.value, passes=repeats, runs=repeats),
+                BuiltinDiagnostics(engaged=engaged, leaked=leaked * repeats, runs=repeats),
+            )
+
+        return run
+
+    # The verdict a genuinely NOT-ENGAGED grid produces — taken from a real run, never hand-typed,
+    # so the forgery is exactly what a self-consistent record would say.
+    monkeypatch.setattr(grid, "run_builtin_arm", _arm(engaged=2, leaked=0))
+    engaged_out = tmp_path / "engaged"
+    grid.run_corpus(tasks, out_dir=engaged_out, repeats=2, model="", dry_run=True)
+    not_engaged_verdict = json.loads((engaged_out / "w-0.json").read_text())["verdict"].replace(
+        "SEPARATES: 2/2 (engaged 2/2)", "NOT-ENGAGED: the fact never reached native memory (0/2)"
+    )
+
+    out = tmp_path / "out"
+    monkeypatch.setattr(grid, "run_builtin_arm", _arm(engaged=0, leaked=1))
+    truth = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert truth["leaked"] == ["w-0"] and truth["not_engaged"] == []
+
+    result_path = out / "w-0.json"
+    record = json.loads(result_path.read_text(encoding="utf-8"))
+    for row in record["outcomes"]:
+        row["leaked"] = 0  # the edit that erases the LEAK...
+    record["verdict"] = not_engaged_verdict  # ...and the verdict those rows now imply
+    result_path.write_text(json.dumps(record), encoding="utf-8")
+
+    resumed = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert resumed["executed"] == 1 and resumed["reused"] == 0, "served a forged leak-free record"
+    assert resumed["leaked"] == ["w-0"], "the LEAK was downgraded to NOT-ENGAGED"
+
+
 def test_a_cell_whose_diagnostics_disagree_about_runs_is_refused() -> None:
     # The arm reports `runs` on BOTH halves it returns; they are the same measurement, so a
     # disagreement means one of the two is fabricated and the record must not be written.
