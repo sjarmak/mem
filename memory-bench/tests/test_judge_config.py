@@ -6,6 +6,7 @@ contaminating agent surface makes it fail LOUD, the env redirects
 model call anywhere.
 """
 
+import errno
 import shutil
 
 import pytest
@@ -14,10 +15,20 @@ from membench.judge_config import (
     ENV_CLAUDE_CONFIG_DIR,
     FORBIDDEN_CONFIG_ENTRIES,
     STRICT_MCP_CONFIG_FLAG,
+    IsolatedJudgeConfig,
     ensure_isolated_config_dir,
     isolated_judge_env,
     prepare_isolated_judge,
+    run_isolated_claude,
 )
+
+
+def _isolation(tmp_path) -> IsolatedJudgeConfig:  # type: ignore[no-untyped-def]
+    return IsolatedJudgeConfig(
+        config_dir=tmp_path / "config",
+        cwd=tmp_path / "cwd",
+        extra_argv=(STRICT_MCP_CONFIG_FLAG,),
+    )
 
 
 def test_prepare_materializes_clean_empty_config(tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -107,3 +118,35 @@ def test_default_base_requires_label() -> None:
     # (or worse, silently mislabelled) audit evidence: fail loud instead.
     with pytest.raises(ValueError, match="label is required"):
         prepare_isolated_judge()
+
+
+def test_run_isolated_claude_raises_on_permission_error(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # Regression (mem-k1a2i): the choke point's docstring promises every spawn
+    # failure raises via `error` -- PermissionError must not escape raw.
+    def runner(argv, **kwargs):  # type: ignore[no-untyped-def]
+        raise PermissionError(errno.EACCES, "Permission denied", "claude")
+
+    with pytest.raises(RuntimeError, match="could not spawn"):
+        run_isolated_claude(
+            "prompt",
+            isolation=_isolation(tmp_path),
+            runner=runner,
+            timeout_s=30.0,
+            model=None,
+            callsite="test callsite",
+        )
+
+
+def test_run_isolated_claude_raises_on_enoexec(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    def runner(argv, **kwargs):  # type: ignore[no-untyped-def]
+        raise OSError(errno.ENOEXEC, "Exec format error", "claude")
+
+    with pytest.raises(RuntimeError, match="could not spawn"):
+        run_isolated_claude(
+            "prompt",
+            isolation=_isolation(tmp_path),
+            runner=runner,
+            timeout_s=30.0,
+            model=None,
+            callsite="test callsite",
+        )

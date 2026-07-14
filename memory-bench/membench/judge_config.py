@@ -225,6 +225,10 @@ def run_isolated_claude(
         )
     except FileNotFoundError as exc:
         raise error(f"'claude' CLI not found -- install it to run the {callsite}") from exc
+    except OSError as exc:
+        # PermissionError, ENOEXEC, EACCES on cwd -- the whole spawn-failure
+        # family must surface as a diagnosed error, never a raw traceback.
+        raise error(f"could not spawn claude -p for the {callsite}: {exc}") from exc
     except subprocess.TimeoutExpired as exc:
         raise error(f"claude -p did not respond within {timeout_s:.0f}s") from exc
     if completed.returncode != 0:
