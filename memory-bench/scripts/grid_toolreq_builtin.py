@@ -43,7 +43,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from membench.runner.headless_agent import DEFAULT_TIMEOUT_S, MemoryChannel
+from membench.runner.headless_agent import DEFAULT_TIMEOUT_S, HeadlessAgentError, MemoryChannel
 from membench.runner.realagent_probe import ArmOutcome
 from membench.runner.toolreq_builtin import BuiltinDiagnostics, run_builtin_arm
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask, load_corpus
@@ -137,10 +137,11 @@ def run_corpus(
                         (ArmOutcome(**row["outcome"]), BuiltinDiagnostics(**row["diagnostics"]))
                         for row in loaded["cells"]
                     ]
-            except (json.JSONDecodeError, OSError, KeyError, TypeError):
-                # corrupt/partial file OR a schema mismatch (e.g. an older result
-                # written before a BuiltinDiagnostics field was added) -> re-execute
-                # this one task rather than crash the whole resumed sweep.
+            except (json.JSONDecodeError, OSError, KeyError, TypeError, AttributeError):
+                # corrupt/partial file, a schema mismatch (e.g. an older result written
+                # before a BuiltinDiagnostics field was added), OR a syntactically valid
+                # but non-dict top level (e.g. "[]" -> loaded.get raises AttributeError)
+                # -> re-execute this one task rather than crash the whole resumed sweep.
                 cached_cells = None
         if cached_cells is not None:
             cells = cached_cells
@@ -256,7 +257,17 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if not args.dry_run and not args.skip_preflight:
         print("PREFLIGHT: one real establish+check cycle before the full sweep...")
-        diag = preflight(tasks[0], model=args.model)
+        try:
+            diag = preflight(tasks[0], model=args.model)
+        except HeadlessAgentError as exc:
+            print(
+                f"PREFLIGHT HALT: the real establish/goal call failed ({exc}) — refusing "
+                "to spend on the full sweep. This is a diagnosed halt, not a mechanism-"
+                "disabled verdict (mem-rk41.3.2 Q3); retry once the underlying failure "
+                "(network, rate limit, CLI issue) is resolved.",
+                file=sys.stderr,
+            )
+            return 3
         if diag.engaged == 0:
             print(
                 "PREFLIGHT HALT: the real establish call never reached MEMORY.md — builtin "

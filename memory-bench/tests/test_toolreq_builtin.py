@@ -24,7 +24,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from membench.harbor.agent_memory import native_memory_path
-from membench.runner.headless_agent import MemoryChannel
+from membench.runner.headless_agent import HeadlessAgentError, MemoryChannel
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome
 from membench.runner.toolreq_builtin import (
     ARM,
@@ -435,6 +435,24 @@ def test_schema_mismatched_cache_file_is_re_executed_not_crashed(tmp_path: Path)
     assert summary["executed"] == 1 and summary["reused"] == 0
 
 
+def test_non_dict_cache_file_is_re_executed_not_crashed(tmp_path: Path) -> None:
+    # Syntactically valid JSON, but a non-dict top level (e.g. a bare list) -> the
+    # identity check's loaded.get(key) must not raise AttributeError and kill the sweep.
+    from membench.runner.toolreq_realagent import load_corpus
+
+    seed_dir = tmp_path / "corpus" / "0"
+    seed_dir.mkdir(parents=True)
+    (seed_dir / "sequences.json").write_text(
+        json.dumps([_toolreq_seq("w-0").model_dump()]), encoding="utf-8"
+    )
+    tasks = load_corpus(tmp_path / "corpus")
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "w-0.json").write_text("[]", encoding="utf-8")
+    summary = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert summary["executed"] == 1 and summary["reused"] == 0
+
+
 def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -> None:
     from membench.runner.toolreq_realagent import load_corpus
 
@@ -494,6 +512,31 @@ def test_preflight_halts_when_native_memory_never_engages(tmp_path: Path, monkey
     monkeypatch.setattr(driver, "run_builtin_arm", _never_engages)
     code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
     assert code == 3
+
+
+def test_preflight_agent_error_halts_diagnosed_not_raw_traceback(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    # The most likely REAL preflight failure is an erroring/flaky/timed-out `claude -p`
+    # call (HeadlessAgentError), not a clean not-engaged diagnosis. main() must convert
+    # it into the documented diagnosed PREFLIGHT HALT (exit 3, same as the not-engaged
+    # halt), never let a raw traceback propagate out of the driver.
+    seed_dir = tmp_path / "corpus" / "0"
+    seed_dir.mkdir(parents=True)
+    (seed_dir / "sequences.json").write_text(
+        json.dumps([_toolreq_seq("w-0").model_dump()]), encoding="utf-8"
+    )
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+
+    def _raises(task, **_kwargs):
+        raise HeadlessAgentError("claude -p failed: simulated rate-limit")
+
+    monkeypatch.setattr(driver, "run_builtin_arm", _raises)
+    code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
+    assert code == 3
+    err = capsys.readouterr().err
+    assert "PREFLIGHT HALT" in err
+    assert "simulated rate-limit" in err  # the halt carries the underlying failure
 
 
 def test_preflight_proceeds_when_engaged(tmp_path: Path, monkeypatch) -> None:
