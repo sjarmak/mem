@@ -420,7 +420,24 @@ def _load_cached(result_path: Path, identity: Mapping[str, Any]) -> _CachedTask 
     expected = expected_cells()
     if len(outcomes) != len(expected) or {(o.arm, o.channel) for o in outcomes} != expected:
         return None
-    return _CachedTask(outcomes=outcomes, ours_retrieval_empty=loaded["ours_retrieval_empty"])
+    retrieval_empty = loaded["ours_retrieval_empty"]
+    # The flag must AGREE with the rows it is filed next to. `ours_retrieval_empty` asserts the
+    # `ours` cell was never run — it was produced by relabeling `none` (evaluate_task), so it is
+    # none-equal by construction. A file claiming the flag while carrying an `ours` row that
+    # DIFFERS from its channel's `none` row is therefore self-contradictory: one of the two is
+    # fabricated, and both readings are load-bearing. The flag is the denominator that makes a
+    # flat `(ours 0/N)` attributable (retrieval surfaced nothing vs memory did not help), and the
+    # rows are the measurement. Ordinary runs cannot produce the mismatch — both derive from the
+    # same ours_payload object — so this only fires on a corrupted or hand-edited file, which is
+    # exactly the input class every other check here exists to reject. Cross-validate rather than
+    # trust: a miss costs one re-run, accepting it publishes a number nobody measured.
+    if retrieval_empty:
+        by_cell = {(o.arm, o.channel): o for o in outcomes}
+        for channel in (c.value for c in CHANNELS):
+            ours_o, none_o = by_cell[(RETRIEVING_ARM, channel)], by_cell[("none", channel)]
+            if replace(ours_o, arm="none") != none_o:
+                return None
+    return _CachedTask(outcomes=outcomes, ours_retrieval_empty=retrieval_empty)
 
 
 def run_corpus(

@@ -675,6 +675,32 @@ def test_reordered_oracle_memory_invalidates_the_cache(tmp_path: Path) -> None:
     ), "the ceiling arm's prompt changed but the fingerprint did not"
 
 
+def test_empty_flag_contradicting_the_ours_rows_is_a_miss(tmp_path: Path) -> None:
+    """`ours_retrieval_empty` claims the ours cell was NEVER RUN — it was relabeled from `none`,
+    so it is none-equal by construction. A file that sets the flag while carrying an ours row
+    that DIFFERS from its channel's none row is self-contradictory: the flag is the denominator
+    that makes a flat (ours 0/N) attributable, the rows are the measurement, and here they
+    disagree. Ordinary runs cannot produce it (both derive from the same payload object), so this
+    is a corrupted/hand-edited file — the exact input class every other check here rejects."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    store_path = tmp_path / "store.db"
+    _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
+
+    result_path = out / f"{tasks[0].work_id}.json"
+    record = json.loads(result_path.read_text())
+    assert record["ours_retrieval_empty"] is True  # w-0 is lifecycle-earliest: LOO gives no priors
+
+    # forge a spent-looking ours measurement while keeping the never-ran flag
+    for row in record["outcomes"]:
+        if row["arm"] == "ours":
+            row["passes"] = row["runs"]
+    result_path.write_text(json.dumps(record))
+
+    identity = {k: record[k] for k in record if k not in ("work_id", "outcomes", "verdict")}
+    assert driver._load_cached(result_path, identity) is None, "accepted a fabricated ours cell"
+
+
 def test_unknown_arm_or_channel_cache_is_a_miss(tmp_path: Path) -> None:
     """A row naming an arm/channel outside the grid (schema drift across a rename) is a miss."""
     sequences, tasks = _corpus_one(tmp_path)
