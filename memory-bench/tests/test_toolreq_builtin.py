@@ -282,6 +282,31 @@ def test_dry_run_arm_channel_recorded_on_outcome() -> None:
     assert outcome.channel == "trusted"
 
 
+@pytest.mark.parametrize("channel", [MemoryChannel.RECALLED, MemoryChannel.TRUSTED])
+def test_goal_call_is_bare_under_either_channel(channel: MemoryChannel) -> None:
+    # ONE HeadlessClaudeAgent drives both legs, carrying the arm's channel. That is only
+    # sound because the goal call surfaces memory={} and `build_agent_prompt` emits NO
+    # memory block for empty memory under EITHER channel — so the channel's trust framing
+    # cannot leak the opaque value into the bare goal prompt. If that ever stops holding,
+    # the goal call starts being handed the answer and every builtin "pass" is a leak.
+    task = _task()
+    value = task.current_opaque_values[0]
+    prompts: list[str] = []
+
+    def recording_runner(argv, **kwargs):
+        prompts.append(argv[2])
+        return subprocess.CompletedProcess(list(argv), returncode=0, stdout="", stderr="")
+
+    run_builtin_arm(
+        task, repeats=1, model="", dry_run=False, channel=channel, runner=recording_runner
+    )
+    establish_prompt, goal_prompt = prompts
+    assert value in establish_prompt  # establish is handed the fact...
+    assert value not in goal_prompt  # ...the goal call is not, under either channel
+    assert "Established facts" not in goal_prompt
+    assert "recalled from" not in goal_prompt.lower()
+
+
 def test_fresh_sandbox_and_config_dir_per_repeat() -> None:
     # A regression test that would actually FAIL if the two TemporaryDirectory context
     # managers were hoisted out of the per-repeat loop and shared across repeats: record

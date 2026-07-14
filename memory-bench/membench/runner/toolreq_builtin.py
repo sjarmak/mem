@@ -9,23 +9,19 @@ Code's own memory file is the sole continuity channel):
 
 1. **establish** — the id-exact facts (``task.oracle_memory``, opaque-valued like the
    oracle arm) are surfaced via ``available_memory`` under the TRUSTED/RECALLED channel,
-   with an explicit instruction to retain them for later (the usability-ceiling framing;
-   the bead's Q2 left "explicit instruction" vs "unprompted uptake" open — this arm
-   measures the ceiling so a null result is interpretable as "the mechanism doesn't
-   work" rather than "the agent wasn't told to"; unprompted uptake is a distinct
-   follow-up experiment, not this one). No tool allowlist (``available_tools=[]``), so
-   Claude Code's own memory-write path is never blocked by ``--allowedTools``.
+   with an explicit instruction to retain them for later. That instruction makes this the
+   usability CEILING, so a null reads as "the mechanism doesn't work" rather than "the
+   agent wasn't told to" (unprompted uptake is a separate experiment). No tool allowlist
+   (``available_tools=[]``), so Claude Code's own memory-write path is never blocked by
+   ``--allowedTools``.
 2. **goal** — ``task.goal_step`` run BARE (``memory={}``): the only way the current
    opaque value can reach the ``Write`` call is if call 1 actually persisted it and
    Claude Code's native-memory system re-surfaced it unprompted. Write-only tool access
    (matches the oracle/none arms) closes the scavenge vector: the goal call cannot Read
    a leftover file from the establish turn to fake engagement.
 
-Engagement is graded on CONTENT, not file existence (Claude Code can scaffold an empty
-``memory/`` dir regardless of whether anything meaningful was written): after call 1,
-every ``MEMORY.md`` under ``{config_dir}/projects/*/memory/`` is globbed (never a
-predicted exact path — the project-slug is cwd-dependent and not worth reconstructing
-for a tempdir sandbox) and checked for the current opaque token. A goal PASS with
+Engagement is graded on CONTENT, not file existence: after call 1, every ``MEMORY.md``
+under the config dir is checked for the current opaque token. A goal PASS with
 engaged=False is a LEAK (the shared sandbox let the goal call scavenge a leftover file
 some other way), not a builtin win — same severity class as the ``none``-arm leak
 branch in ``realagent_probe``.
@@ -44,7 +40,7 @@ from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from membench.harbor.agent_memory import native_memory_path
+from membench.harbor.agent_memory import NATIVE_MEMORY_GLOB, native_memory_path
 from membench.metrics.scorers import states_value
 from membench.runner.headless_agent import CliRunner, HeadlessClaudeAgent, MemoryChannel
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome, score_goal_action
@@ -62,9 +58,8 @@ _ESTABLISH_INSTRUCTION = (
 
 def _establish_step(task: ToolReqRealAgentTask) -> SequenceStep:
     """The establish turn's bare instruction. The facts themselves are NOT embedded in
-    this prose — they are delivered via ``available_memory`` (like the oracle arm), so
-    the TRUSTED/RECALLED channel framing meaningfully varies how the establish turn
-    presents them (mem-rk41.3.2 bead PLAN-REVIEW H4)."""
+    this prose — they are delivered via ``available_memory`` (like the oracle arm), which
+    is what lets the TRUSTED/RECALLED channel framing actually vary how they present."""
     return SequenceStep(
         step_id=f"{task.work_id}-establish",
         user_request=_ESTABLISH_INSTRUCTION,
@@ -74,10 +69,10 @@ def _establish_step(task: ToolReqRealAgentTask) -> SequenceStep:
 
 def _memory_engaged(config_dir: Path, tokens: Collection[str]) -> bool:
     """True iff any current opaque ``tokens`` reached a native ``MEMORY.md`` under
-    ``config_dir``. Globs the project-slug dir rather than predicting the exact path
-    (M1) — a tempdir cwd's slug is not worth reconstructing — and matches on CONTENT
-    (H2), not file existence, so an empty scaffolded dir never counts as engagement."""
-    for memory_file in config_dir.glob("projects/*/memory/MEMORY.md"):
+    ``config_dir``. Matches on CONTENT, not file existence — Claude Code scaffolds an
+    empty ``memory/`` dir regardless of whether anything meaningful was written, so
+    existence alone would read as engagement."""
+    for memory_file in config_dir.glob(NATIVE_MEMORY_GLOB):
         try:
             content = memory_file.read_text(encoding="utf-8")
         except OSError:
@@ -98,14 +93,10 @@ class BuiltinDiagnostics:
     engaged: int
     leaked: int
     runs: int
-    # Audit trail for the establish call's tool access. H3 deliberately runs it with NO
-    # --allowedTools clamp (available_tools=[] suppresses the flag entirely, so Claude
-    # Code's own default toolset applies) so CC's memory-write path is never blocked —
-    # but that means the establish call genuinely CAN invoke Bash/Read/etc, not just the
-    # intended memory write. Summed across every repeat so a reviewer gating the paid
-    # fire can see what the unconstrained call actually did before authorizing spend,
-    # rather than that result being silently discarded. Defaults to 0 so call sites
-    # that don't care about this axis (e.g. accounting-only tests) stay terse.
+    # Audit trail for the establish call, which runs with NO --allowedTools clamp (so CC's
+    # memory-write path is never blocked) and can therefore genuinely invoke Bash/Read/etc,
+    # not just the intended memory write. Summed across repeats so a reviewer gating the
+    # paid fire can see what the unconstrained call actually did before authorizing spend.
     establish_tool_calls: int = 0
 
 
@@ -115,11 +106,9 @@ def simulated_builtin_runner(current_values: Collection[str]) -> CliRunner:
     current value (i.e. iff the arm surfaced them via ``available_memory``); the goal
     call — always bare, so its own prompt never carries the values — checks for that
     marker and Writes the current value(s) iff present. Proves the two-call shared
-    cwd/config-dir wiring and scoring path end to end for zero tokens — it does NOT and
-    CANNOT exercise the single most uncertain real link: whether a real ``claude -p``
-    session actually persists to ``MEMORY.md`` when asked. Dry-run green is necessary,
-    not sufficient; the content-based engagement gate and a real preflight are the real
-    insurance (see ``scripts/grid_toolreq_builtin.py``)."""
+    cwd/config-dir wiring and scoring path for zero tokens; it CANNOT exercise the one
+    link that actually matters — whether a real ``claude -p`` session persists to
+    ``MEMORY.md`` when asked. That is the real preflight's job, not this simulator's."""
     values = list(current_values)
 
     def run(argv: Collection[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -188,53 +177,43 @@ def run_builtin_arm(
     leaked = 0
     establish_tool_calls = 0
 
-    def _agent(
-        memory_channel: MemoryChannel, *, cwd: str, env: Mapping[str, str]
-    ) -> HeadlessClaudeAgent:
-        # available_tools=[] on the establish step (see _establish_step) suppresses
-        # --allowedTools ENTIRELY (H3) — CC's own default toolset applies so its
-        # memory-write path is never blocked. That makes the establish call a genuinely
-        # unconstrained call, not just an unlisted one; its tool_calls are counted below
-        # (never discarded) as the audit trail a paid-fire review needs before
-        # authorizing spend on this arm. The goal call constrains to Write-only, matching
-        # task.goal_step.available_tools.
-        return HeadlessClaudeAgent(
-            model=model,
-            runner=runner,
-            memory_channel=memory_channel,
-            constrain_tools=True,
-            cwd=cwd,
-            env=env,
-        )
-
     for i in range(repeats):
         with (
             tempfile.TemporaryDirectory(prefix=f"toolreq-{ARM}-sandbox-") as sandbox,
             tempfile.TemporaryDirectory(prefix=f"toolreq-{ARM}-config-") as config_dir_str,
         ):
             config_dir = Path(config_dir_str)
-            env = {"CLAUDE_CONFIG_DIR": str(config_dir)}
-
-            establish_agent = _agent(channel, cwd=sandbox, env=env)
-            establish_ctx = StepContext(
-                trial_id=f"{ARM}-{channel.value}-{i}-establish",
-                session_id=f"{ARM}-{channel.value}-{i}",
-                step_id=establish_step.step_id,
+            # ONE agent drives both calls, which is what makes "establish and goal share a
+            # sandbox cwd + a CLAUDE_CONFIG_DIR" structural rather than a thing to assert.
+            # Safe because the per-call differences are carried by the STEP, not the agent:
+            # --allowedTools is derived from `step.available_tools` (so establish runs
+            # unconstrained and goal is Write-only), and `memory_channel` only frames a
+            # surfaced-memory block, which the bare goal call (memory={}) never has.
+            agent = HeadlessClaudeAgent(
+                model=model,
+                runner=runner,
+                memory_channel=channel,
+                constrain_tools=True,
+                cwd=sandbox,
+                env={"CLAUDE_CONFIG_DIR": str(config_dir)},
             )
-            establish_result = establish_agent.run_step(
-                establish_step, dict(task.oracle_memory), establish_ctx
+
+            def _ctx(leg: str, step_id: str, i: int = i) -> StepContext:
+                return StepContext(
+                    trial_id=f"{ARM}-{channel.value}-{i}-{leg}",
+                    session_id=f"{ARM}-{channel.value}-{i}",
+                    step_id=step_id,
+                )
+
+            establish_result = agent.run_step(
+                establish_step,
+                dict(task.oracle_memory),
+                _ctx("establish", establish_step.step_id),
             )
             establish_tool_calls += len(establish_result.tool_calls)
             repeat_engaged = _memory_engaged(config_dir, task.current_opaque_values)
 
-            # unlabeled: memory={} makes the channel a no-op for the goal call (H4)
-            goal_agent = _agent(MemoryChannel.RECALLED, cwd=sandbox, env=env)
-            goal_ctx = StepContext(
-                trial_id=f"{ARM}-{channel.value}-{i}-goal",
-                session_id=f"{ARM}-{channel.value}-{i}",
-                step_id=task.goal_step.step_id,
-            )
-            result = goal_agent.run_step(task.goal_step, {}, goal_ctx)
+            result = agent.run_step(task.goal_step, {}, _ctx("goal", task.goal_step.step_id))
 
         passed = score_goal_action(
             task.goal_step, tool_calls=result.tool_calls, final_answer=result.final_answer

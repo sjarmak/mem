@@ -256,10 +256,12 @@ def test_env_model_resolves_and_passes_non_empty_flag(monkeypatch: pytest.Monkey
 # --------------------------------------------------------------------------- #
 # mem-rk41.3.2 H1: env threading (merged, never replaced)
 # --------------------------------------------------------------------------- #
-def test_env_none_by_default_omits_kwarg() -> None:
+def test_env_none_by_default_inherits_parent_environment() -> None:
+    # `None` is subprocess's inherit-the-parent-environment sentinel: an agent that sets no
+    # env must not narrow the child's environment at all.
     runner = _fake_runner(_stream_json())
     HeadlessClaudeAgent(runner=runner).run_step(_step(), {}, _ctx())
-    assert "env" not in runner.captured["kwargs"]
+    assert runner.captured["kwargs"]["env"] is None
 
 
 def test_agent_with_env_stays_hashable() -> None:

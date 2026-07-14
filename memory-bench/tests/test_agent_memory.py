@@ -1,6 +1,8 @@
 """Agent-memory delivery paths (trace-explorer audit 2026-07-05): pure constants +
 string helpers that decide WHERE injected memory lands so the agent reads it."""
 
+from pathlib import Path
+
 from membench.harbor.agent_memory import (
     AGENT_CONFIG_DIR,
     AGENT_MEMORY_ENV,
@@ -9,6 +11,7 @@ from membench.harbor.agent_memory import (
     AGENT_WORKDIR,
     DELIVERED_MEMORY_PATHS,
     INSTRUCTION_MEMORY_PATH,
+    NATIVE_MEMORY_GLOB,
     config_slug,
     native_memory_path,
     path_covers_native_memory,
@@ -33,6 +36,17 @@ def test_config_slug_matches_harbor_hardcoded_app_slug() -> None:
 def test_native_memory_path_is_config_dir_projects_slug_memory() -> None:
     assert f"{AGENT_CONFIG_DIR}/projects/-app/memory/MEMORY.md" == AGENT_NATIVE_MEMORY_PATH
     assert native_memory_path("/x", "/app") == "/x/projects/-app/memory/MEMORY.md"
+
+
+def test_native_memory_glob_matches_the_path_it_globs_for(tmp_path: Path) -> None:
+    # The glob is the slug-agnostic form of native_memory_path, for callers whose sandbox
+    # cwd slug is not worth reconstructing (toolreq_builtin's engagement check). If the two
+    # ever drift, that caller silently finds nothing — which reads as "native memory never
+    # engaged", i.e. a false mechanism-disabled verdict on the PAID path.
+    written = Path(native_memory_path(config_dir=str(tmp_path), workdir="/some/sandbox"))
+    written.parent.mkdir(parents=True)
+    written.write_text("x", encoding="utf-8")
+    assert list(tmp_path.glob(NATIVE_MEMORY_GLOB)) == [written]
 
 
 def test_config_dir_is_outside_app_and_logs() -> None:

@@ -17,10 +17,9 @@ This is the paid ceiling driver. It STAGES but never over-reaches:
   none/oracle cost per repeat: establish + goal), so the paid fire stays an explicit,
   cost-disclosed, per-action decision (Stephanie's call);
 * a real run also spends one cheap PREFLIGHT establish+check cycle before the full
-  sweep and HALTS if native memory never reached ``MEMORY.md`` — builtin engagement can
-  depend on an account/pool-level feature flag this script's env plumbing cannot itself
-  turn on (mem-rk41.3.2 bead Q3), so a silent no-op run would produce an uninterpretable
-  null instead of a diagnosed refusal;
+  sweep and HALTS if native memory never reached ``MEMORY.md``, so a builtin that is
+  simply switched off for this account produces a diagnosed refusal rather than an
+  uninterpretable null;
 * per-task results persist to ``--out/<work_id>.json`` and are REUSED on re-run, so a
   token-expiry or OOM mid-sweep does not re-pay for finished tasks.
 
@@ -70,49 +69,40 @@ def evaluate_task(
     ]
 
 
-def _cell_kind(outcome: ArmOutcome, diag: BuiltinDiagnostics) -> str:
-    """Classify one (outcome, diagnostics) cell — the single source of truth `task_verdict`
-    (display) and `run_corpus` (summary counts) both read, so a wording change in one can
-    never silently desync from what the other counts. Priority: a LEAK (pass without
-    engagement) outranks everything else — it means the shared sandbox let a Write
-    scavenge a stale file, not that builtin memory worked. Otherwise: full engagement +
-    full pass separates; zero engagement means the mechanism never fired (the mem-hb9o
-    precedent); partial is WEAK."""
+def _cell_kind(outcome: ArmOutcome, diag: BuiltinDiagnostics) -> tuple[str, str]:
+    """Classify one cell into its (kind, display-line). Returning both from one branch
+    ladder is what keeps `task_verdict` (display) and `run_corpus` (summary counts) from
+    desyncing — they read the same tuple rather than two chains that must agree.
+
+    Priority: a LEAK (pass without engagement) outranks everything else — it means the
+    shared sandbox let a Write scavenge a stale file, not that builtin memory worked.
+    Otherwise: full engagement + full pass separates; zero engagement means the mechanism
+    never fired (the mem-hb9o precedent); partial is WEAK. The `runs > 0` clause is NOT
+    redundant — `--repeats 0` would otherwise report SEPARATES off zero measurement."""
+    runs = outcome.runs
     if diag.leaked:
-        return "LEAK"
-    if outcome.passes == outcome.runs and diag.engaged == outcome.runs and outcome.runs > 0:
-        return "SEPARATES"
+        return "LEAK", f"LEAK: {diag.leaked}/{runs} passed WITHOUT engaging native memory"
+    if outcome.passes == runs and diag.engaged == runs and runs > 0:
+        return "SEPARATES", f"SEPARATES: {outcome.passes}/{runs} (engaged {diag.engaged}/{runs})"
     if diag.engaged == 0:
-        return "NOT-ENGAGED"
-    return "WEAK"
+        return "NOT-ENGAGED", f"NOT-ENGAGED: native memory never reached MEMORY.md (0/{runs})"
+    return "WEAK", f"WEAK: {outcome.passes}/{runs} passed, engaged {diag.engaged}/{runs}"
 
 
 def task_verdict(cells: Sequence[Cell]) -> str:
     """Human-readable per-channel verdict line, built from `_cell_kind`."""
-    lines: list[str] = []
-    for outcome, diag in cells:
-        runs = outcome.runs
-        kind = _cell_kind(outcome, diag)
-        if kind == "LEAK":
-            call = f"LEAK: {diag.leaked}/{runs} passed WITHOUT engaging native memory"
-        elif kind == "SEPARATES":
-            call = f"SEPARATES: {outcome.passes}/{runs} (engaged {diag.engaged}/{runs})"
-        elif kind == "NOT-ENGAGED":
-            call = f"NOT-ENGAGED: native memory never reached MEMORY.md (0/{runs})"
-        else:
-            call = f"WEAK: {outcome.passes}/{runs} passed, engaged {diag.engaged}/{runs}"
-        lines.append(f"[{outcome.channel}] {call}")
-    return " | ".join(lines)
+    return " | ".join(
+        f"[{outcome.channel}] {_cell_kind(outcome, diag)[1]}" for outcome, diag in cells
+    )
 
 
 def _int_fields_ok(obj: ArmOutcome | BuiltinDiagnostics) -> bool:
     """True iff every int-annotated field on ``obj`` actually holds an int.
 
-    Schema-driven (``dataclasses.fields``), not a hand-list of whatever fields the
-    scoring path reads today: ``dataclass(**...)`` never type-checks, so a cache with
-    (e.g.) string counts constructs fine and only crashes later at ``_cell_kind``'s
-    ``runs > 0``. Deriving the check from the dataclass definitions means adding a new
-    count field can never silently reopen that path."""
+    ``dataclass(**...)`` never type-checks, so a cache with string counts constructs fine
+    and only crashes later at ``_cell_kind``'s ``runs > 0``. Driving the check off the
+    dataclass definitions (rather than a hand-list of today's fields) means adding a new
+    count field cannot silently reopen that path."""
     hints = get_type_hints(type(obj))
     return all(
         isinstance(getattr(obj, field.name), int)
@@ -124,19 +114,18 @@ def _int_fields_ok(obj: ArmOutcome | BuiltinDiagnostics) -> bool:
 def _load_cached_cells(result_path: Path, identity: Mapping[str, object]) -> list[Cell] | None:
     """One persisted per-task result -> its cells, or ``None`` = cache miss.
 
-    ``run_corpus``'s guarantee ("a corrupt or partial cache file is treated as a miss
-    and re-executed, never a crash") lives HERE, as explicit miss branches instead of
-    an ever-widening except tuple: unreadable or non-UTF-8 bytes, malformed JSON, a
-    non-dict top level, an identity mismatch, schema drift, type-hostile counts, and a
-    cell grid that does not cover exactly ``CHANNELS`` are all misses.
+    ``run_corpus``'s guarantee ("a corrupt or partial cache file is treated as a miss and
+    re-executed, never a crash") lives HERE, as explicit miss branches rather than an
+    ever-widening except tuple: unreadable or non-UTF-8 bytes, malformed JSON, a non-dict
+    top level, an identity mismatch, schema drift, type-hostile counts, and a cell grid
+    that does not cover exactly ``CHANNELS`` are all misses.
 
-    That last branch is load-bearing on the PAID path. ``run_corpus`` derives the
-    ``separates_all_channels`` headline from whatever cells this returns, so a grid
-    missing a channel (truncated write, or a channel added since the file was written)
-    or repeating one twice would credit "separates on BOTH channels" off a measurement
-    that only ever covered one — full coverage reported for a channel no ``claude -p``
-    call ever ran. Comparing the cells' channels against ``CHANNELS`` pins arity,
-    identity, and order in one check; a partial grid must be re-executed, not scored."""
+    That last branch is load-bearing on the PAID path: ``run_corpus`` derives the
+    ``separates_all_channels`` headline from these cells, so a grid missing a channel
+    (truncated write, or a channel added since the file was written) or repeating one
+    twice would report full coverage for a channel no ``claude -p`` call ever ran.
+    Comparing the cells' channels against ``CHANNELS`` pins arity, identity, and order in
+    one check; a partial grid must be re-executed, not scored."""
     try:
         loaded = json.loads(result_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -210,14 +199,18 @@ def run_corpus(
         if cached_cells is None:
             # Atomic publish: write a sibling temp file then rename, so a kill mid-write
             # leaves either the old result or the new one, never a half-written JSON the
-            # next resume trips on. Skipped on a cache hit — the file already holds this
-            # exact content (same identity), so rewriting it would just be wasted I/O.
+            # next resume trips on.
             tmp_path = result_path.with_suffix(".json.tmp")
             tmp_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
             tmp_path.replace(result_path)
         per_task.append(record)
-        kinds = [_cell_kind(outcome, diag) for outcome, diag in cells]
-        if kinds and all(kind == "SEPARATES" for kind in kinds):
+        kinds = [kind for kind, _ in (_cell_kind(outcome, diag) for outcome, diag in cells)]
+        # Count SEPARATES against len(CHANNELS), never `all(...)` over whatever cells we
+        # happen to hold: `all([])` is vacuously True, so an empty or short grid would
+        # credit "separates on BOTH channels" off a measurement that covered neither.
+        # `_load_cached_cells` already refuses to hand back a short grid; this is the
+        # second lock on the same headline, stated positively.
+        if kinds.count("SEPARATES") == len(CHANNELS):
             separates += 1
         if "LEAK" in kinds:
             leaked.append(task.work_id)
