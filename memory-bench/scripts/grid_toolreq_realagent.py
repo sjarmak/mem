@@ -285,10 +285,14 @@ def seed_ours_store_and_resolve_payloads(
 
 @dataclass(frozen=True)
 class _CachedTask:
-    """A persisted per-task result that passed every validity check in ``_load_cached``."""
+    """A persisted per-task result that passed every validity check in ``_load_cached``.
+
+    It carries only the outcomes. ``ours_retrieval_empty`` used to ride here too, back when the
+    flag was a value the cache CARRIED FORWARD from the file; it is now a live-computed identity
+    field, so a cached file can only be accepted when its flag already equals this run's, and
+    re-exporting it from here would just be a second source for a value the identity owns."""
 
     outcomes: list[ArmOutcome]
-    ours_retrieval_empty: bool
 
 
 def expected_cells() -> set[tuple[str, str]]:
@@ -500,7 +504,7 @@ def _load_cached(result_path: Path, identity: Mapping[str, Any]) -> _CachedTask 
             ours_o, none_o = by_cell[(RETRIEVING_ARM, channel)], by_cell[("none", channel)]
             if replace(ours_o, arm="none") != none_o:
                 return None
-    return _CachedTask(outcomes=outcomes, ours_retrieval_empty=retrieval_empty)
+    return _CachedTask(outcomes=outcomes)
 
 
 def run_corpus(
