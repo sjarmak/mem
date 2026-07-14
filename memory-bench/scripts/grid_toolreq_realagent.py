@@ -51,7 +51,7 @@ import os
 import sys
 import tempfile
 from collections.abc import Callable, Collection, Mapping, Sequence
-from dataclasses import asdict
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -98,6 +98,10 @@ SeedFn = Callable[
     dict[str, dict[str, str]],
 ]
 
+# The one arm whose memory can legitimately come back EMPTY: `ours` retrieves, and temporal
+# LOO admits no priors for the lifecycle-earliest task. See evaluate_task.
+RETRIEVING_ARM = "ours"
+
 
 def _write_ndjson(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
     """One JSON object per line — the import format `mem import-records/-lessons` reads."""
@@ -132,23 +136,37 @@ def evaluate_task(
     ours_payload: Mapping[str, str] | None = None,
     channels: Sequence[MemoryChannel] = CHANNELS,
 ) -> list[ArmOutcome]:
-    """Run every (arm, channel) cell for one task."""
+    """Run every (arm, channel) cell for one task.
+
+    One cell is never run: ``ours`` when its retrieval came back EMPTY. That is not an edge
+    case but a guarantee for the lifecycle-earliest task, which temporal LOO leaves with no
+    priors to retrieve. An empty payload makes the ``ours`` prompt byte-identical to ``none``,
+    so the cell is none-equivalent by construction (delta exactly 0) — running it would spend
+    ``repeats`` real ``claude -p`` turns per channel to re-measure ``none``, and would leave
+    the headline ``(ours 0/N)`` unattributable: a retrieval miss reads exactly like
+    memory-did-not-help. The ``none`` cell is relabeled instead, matching
+    ``run_grid_3arm``'s empty-retrieval convention, and ``run_corpus`` records the
+    ``ours_retrieval_empty`` flag so the two causes stay distinguishable in the results."""
     memories = arm_memories(task, ours_payload)
     outcomes: list[ArmOutcome] = []
     for channel in channels:
+        cells: dict[str, ArmOutcome] = {}
         for arm in ARMS:
-            outcomes.append(
-                run_arm(
-                    arm=arm,
-                    step=task.goal_step,
-                    memory=memories[arm],
-                    channel=channel,
-                    repeats=repeats,
-                    model=model,
-                    dry_run=dry_run,
-                    current_values=task.current_opaque_values,
-                )
+            if arm == RETRIEVING_ARM and not memories[arm]:
+                continue  # filled from `none` below — never spent on
+            cells[arm] = run_arm(
+                arm=arm,
+                step=task.goal_step,
+                memory=memories[arm],
+                channel=channel,
+                repeats=repeats,
+                model=model,
+                dry_run=dry_run,
+                current_values=task.current_opaque_values,
             )
+        if RETRIEVING_ARM not in cells:
+            cells[RETRIEVING_ARM] = replace(cells["none"], arm=RETRIEVING_ARM)
+        outcomes.extend(cells[arm] for arm in ARMS)
     return outcomes
 
 
@@ -252,6 +270,46 @@ def seed_ours_store_and_resolve_payloads(
     return resolve_payloads(bundles, store_path=store_path, runner=runner)
 
 
+@dataclass(frozen=True)
+class _CachedTask:
+    """A persisted per-task result that passed every validity check in ``_load_cached``."""
+
+    outcomes: list[ArmOutcome]
+    ours_retrieval_empty: bool
+
+
+def _load_cached(
+    result_path: Path, identity: Mapping[str, Any], n_cells: int
+) -> _CachedTask | None:
+    """A persisted per-task result, or ``None`` meaning MISS — re-execute this task.
+
+    Every rejection below is a miss, never a crash, and never a partial acceptance. These
+    files are written by a sweep that can be killed mid-run and re-read by a PAID resume, so
+    the two failure modes to design against are (a) an exception escaping and killing the
+    whole sweep on one bad file, and (b) a degenerate file being scored as a complete task.
+    The arity check guards (b): a truncated ``outcomes`` list would otherwise be summarized as
+    a full task, letting ``separates_all_channels`` report a partially-evaluated task as
+    having separated on every channel — the silent-truncation class this rig forbids."""
+    try:
+        loaded = json.loads(result_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+        return None  # corrupt, truncated, or unreadable
+    if not isinstance(loaded, dict):
+        return None  # valid JSON of the wrong shape: null, 3, [], "cached"
+    if any(loaded.get(key) != value for key, value in identity.items()):
+        return None  # another run's identity (dry-run vs paid, model, repeats, arms)
+    if not isinstance(loaded.get("ours_retrieval_empty"), bool):
+        return None  # written before the flag existed, or hand-edited
+    rows = loaded.get("outcomes")
+    if not isinstance(rows, list) or len(rows) != n_cells:
+        return None  # arity drift: a dropped arm or channel is a miss, not a partial score
+    try:
+        outcomes = [ArmOutcome(**row) for row in rows]
+    except TypeError:
+        return None  # schema-drifted row (missing/extra/non-mapping)
+    return _CachedTask(outcomes=outcomes, ours_retrieval_empty=loaded["ours_retrieval_empty"])
+
+
 def run_corpus(
     tasks: Sequence[ToolReqRealAgentTask],
     sequences: Sequence[BenchmarkSequence],
@@ -281,18 +339,16 @@ def run_corpus(
     stub it out without a built ``bin/mem``."""
     out_dir.mkdir(parents=True, exist_ok=True)
     identity = {"repeats": repeats, "dry_run": dry_run, "model": model, "arms": list(ARMS)}
-    cached_by_id: dict[str, dict[str, Any]] = {}
+    n_cells = len(ARMS) * len(CHANNELS)
+    cached_by_id: dict[str, _CachedTask] = {}
     if resume:
         for task in tasks:
             result_path = out_dir / f"{task.work_id}.json"
             if not result_path.is_file():
                 continue
-            try:
-                loaded = json.loads(result_path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
-                continue  # corrupt/partial file -> re-execute this one task
-            if all(loaded.get(key) == value for key, value in identity.items()):
-                cached_by_id[task.work_id] = loaded
+            cached = _load_cached(result_path, identity, n_cells)
+            if cached is not None:
+                cached_by_id[task.work_id] = cached
     pending = [task for task in tasks if task.work_id not in cached_by_id]
     ours_payloads = (
         seed_fn(sequences, tasks, store_path, mem_bin, {task.work_id for task in pending})
@@ -306,20 +362,24 @@ def run_corpus(
         result_path = out_dir / f"{task.work_id}.json"
         cached = cached_by_id.get(task.work_id)
         if cached is not None:
-            outcomes = [ArmOutcome(**row) for row in cached["outcomes"]]
+            outcomes = cached.outcomes
+            retrieval_empty = cached.ours_retrieval_empty
             reused += 1
         else:
+            ours_payload = ours_payloads.get(task.work_id, {})
+            retrieval_empty = not ours_payload
             outcomes = evaluate_task(
                 task,
                 repeats=repeats,
                 model=model,
                 dry_run=dry_run,
-                ours_payload=ours_payloads.get(task.work_id, {}),
+                ours_payload=ours_payload,
             )
             executed += 1
         record = {
             "work_id": task.work_id,
             **identity,
+            "ours_retrieval_empty": retrieval_empty,
             "outcomes": [asdict(o) for o in outcomes],
             "verdict": task_verdict(outcomes),
         }
@@ -331,6 +391,11 @@ def run_corpus(
         per_task.append(record)
     separates = sum(1 for r in per_task if r["verdict"].count("SEPARATES") == len(CHANNELS))
     leaked = [r["work_id"] for r in per_task if "LEAK" in r["verdict"]]
+    # Attribution, not trivia: for these tasks `ours` was never actually run (empty retrieval,
+    # scored none-equivalent), so a flat ours-vs-none result over them means "retrieval
+    # surfaced nothing", NOT "memory did not help". Reading the arm without this denominator
+    # is how a retrieval miss gets misreported as a null memory effect.
+    empty_retrieval = [r["work_id"] for r in per_task if r["ours_retrieval_empty"]]
     return {
         "n_tasks": len(tasks),
         "executed": executed,
@@ -340,6 +405,7 @@ def run_corpus(
         "per_task": per_task,
         "separates_all_channels": separates,
         "leaked": leaked,
+        "ours_empty_retrieval": empty_retrieval,
     }
 
 

@@ -402,6 +402,132 @@ def test_corrupt_cache_file_is_re_executed_not_crashed(tmp_path: Path) -> None:
     assert summary["executed"] == 1 and summary["reused"] == 0  # cache-miss, no crash
 
 
+@pytest.mark.parametrize(
+    "cache_text",
+    [
+        pytest.param("null", id="json-null"),
+        pytest.param("3", id="json-number"),
+        pytest.param("[]", id="json-list"),
+        pytest.param('"cached"', id="json-string"),
+    ],
+)
+def test_non_object_cache_is_a_miss_not_an_attributeerror(tmp_path: Path, cache_text: str) -> None:
+    """A cache file holding VALID JSON of the wrong shape survives ``json.loads`` and then
+    dies on ``.get`` — an AttributeError that aborts the whole sweep, contradicting the
+    docstring's miss-never-crash guarantee. Every non-object payload must be a plain miss."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / f"{tasks[0].work_id}.json").write_text(cache_text, encoding="utf-8")
+    summary = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+    assert summary["executed"] == 1 and summary["reused"] == 0
+
+
+def test_partial_cache_arity_is_a_miss_never_a_silent_truncation(tmp_path: Path) -> None:
+    """A cache whose identity matches but whose ``outcomes`` list is TRUNCATED (a channel or
+    arm dropped — schema drift, or a kill mid-write that still renamed) must re-execute. If
+    it is accepted, the task is scored on a subset of its cells and the headline
+    ``separates_all_channels`` silently reads a partial run as a full one — the silent-cap
+    class the rig forbids."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+
+    result_path = out / f"{tasks[0].work_id}.json"
+    record = json.loads(result_path.read_text(encoding="utf-8"))
+    full = len(record["outcomes"])
+    assert full == len(driver.ARMS) * len(driver.CHANNELS)
+    record["outcomes"] = record["outcomes"][:1]  # drop every cell but one
+    result_path.write_text(json.dumps(record), encoding="utf-8")
+
+    summary = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+    assert summary["executed"] == 1 and summary["reused"] == 0
+    assert len(summary["per_task"][0]["outcomes"]) == full
+
+
+def test_schema_drifted_cache_row_is_a_miss_not_a_typeerror(tmp_path: Path) -> None:
+    """An ``outcomes`` row that is not a valid ``ArmOutcome`` kwargs mapping must miss, not
+    blow up in ``ArmOutcome(**row)`` outside the guard."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+
+    result_path = out / f"{tasks[0].work_id}.json"
+    record = json.loads(result_path.read_text(encoding="utf-8"))
+    record["outcomes"] = [{"arm": "none", "unexpected": 1} for _ in record["outcomes"]]
+    result_path.write_text(json.dumps(record), encoding="utf-8")
+
+    summary = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+    assert summary["executed"] == 1 and summary["reused"] == 0
+
+
+def test_empty_ours_payload_is_none_equivalent_and_never_spends(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Temporal LOO admits no priors for the lifecycle-EARLIEST task, so its ``ours`` payload
+    is empty by construction. Spending paid ``claude -p`` on it buys a guaranteed non-pass and
+    makes ``(ours 0/N)`` unattributable — retrieval miss, or memory did not help? Follow the
+    ``run_grid_3arm`` convention: reuse the ``none`` cell (delta exactly 0), flag
+    ``ours_retrieval_empty``, and spend nothing."""
+    sequences, tasks = _corpus_one(tmp_path)
+    seen: list[str] = []
+
+    def _spy_run_arm(*, arm: str, channel, repeats: int, **_kwargs: Any) -> driver.ArmOutcome:
+        seen.append(arm)  # a real paid cell would spawn `claude -p` here
+        return driver.ArmOutcome(
+            arm=arm, channel=channel.value, passes=repeats if arm == "oracle" else 0, runs=repeats
+        )
+
+    monkeypatch.setattr(driver, "run_arm", _spy_run_arm)
+    summary = driver.run_corpus(
+        tasks,
+        sequences,
+        out_dir=tmp_path / "out",
+        repeats=2,
+        model="sonnet",
+        dry_run=False,  # PAID path — the one that must not burn a turn on an empty payload
+        store_path=tmp_path / "store.db",
+        seed_fn=_no_ours_payload,  # resolves to {} -> empty payload for every task
+    )
+
+    assert "ours" not in seen, "spent a paid run on an empty `ours` payload"
+    record = summary["per_task"][0]
+    assert record["ours_retrieval_empty"] is True
+    by = {(o["arm"], o["channel"]): o for o in record["outcomes"]}
+    assert len(by) == len(driver.ARMS) * len(driver.CHANNELS)  # ours still reported, not dropped
+    for channel in driver.CHANNELS:
+        ours, none = by[("ours", channel.value)], by[("none", channel.value)]
+        assert (ours["passes"], ours["runs"]) == (none["passes"], none["runs"])
+
+
+def test_non_empty_ours_payload_still_spends(tmp_path: Path, monkeypatch) -> None:
+    """The guard above must be narrow: a task WITH a resolved payload still runs its own
+    `ours` cell (otherwise the arm could never score above `none`)."""
+    sequences, tasks = _corpus_one(tmp_path)
+    seen: list[str] = []
+
+    def _spy_run_arm(*, arm: str, channel, repeats: int, **_kwargs: Any) -> driver.ArmOutcome:
+        seen.append(arm)
+        return driver.ArmOutcome(arm=arm, channel=channel.value, passes=0, runs=repeats)
+
+    def _payload(*_args: object) -> dict[str, dict[str, str]]:
+        return {tasks[0].work_id: {"lesson-1": "the retention window is TOKEN-abc"}}
+
+    monkeypatch.setattr(driver, "run_arm", _spy_run_arm)
+    summary = driver.run_corpus(
+        tasks,
+        sequences,
+        out_dir=tmp_path / "out",
+        repeats=2,
+        model="sonnet",
+        dry_run=False,
+        store_path=tmp_path / "store.db",
+        seed_fn=_payload,
+    )
+    assert seen.count("ours") == len(driver.CHANNELS)
+    assert summary["per_task"][0]["ours_retrieval_empty"] is False
+
+
 def test_driver_refuses_to_spend_without_token(tmp_path: Path, monkeypatch) -> None:
     # The corpus-wide spend guard (financial-safety branch): no token + no --dry-run -> exit 2
     # and never spawn claude, same contract the probe's gate is tested for. The spend gate
@@ -553,8 +679,8 @@ def test_reseeding_a_store_never_surfaces_the_previous_corpus(tmp_path: Path) ->
     so importing into a store left behind by an EARLIER corpus keeps that corpus's opaque
     tokens alive; ``resolve_payloads`` then renders those dead tokens into the cross-task
     payload of every task, silently contaminating the paid ``ours`` measurement with values
-    that are no longer in the world. Regenerate the corpus, re-seed the same store, and only
-    the current corpus may surface."""
+    that are no longer in the world. Regenerate the corpus, re-seed the same ``--out``, and
+    only the current corpus may surface."""
     require_mem_cli(DIST_MAIN)
     store_path = tmp_path / "store.db"
 
