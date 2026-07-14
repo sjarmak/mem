@@ -814,6 +814,28 @@ def test_forged_not_empty_flag_with_a_fabricated_ours_cell_is_a_miss(tmp_path: P
     assert resumed["ours_empty_retrieval"] == [tasks[0].work_id]  # the truth is restored
 
 
+@pytest.mark.parametrize(
+    "bad_id",
+    [
+        "summary-toolreq-realagent",  # claims the summary's filename
+        "../escape",  # writes the result outside --out
+        "nested/id",  # path separator
+        "",  # empty
+    ],
+)
+def test_unsafe_work_ids_are_refused(tmp_path: Path, bad_id: str) -> None:
+    """work_id is CORPUS DATA used to build a filesystem path (<work_id>.json), so it must be a
+    safe, unclaimed filename before it is trusted as one. A task named after the summary gets its
+    result OVERWRITTEN by the summary main() writes into the same dir afterwards -- so it misses
+    forever and every resume re-pays for it. A separator/traversal writes outside --out entirely.
+    Neither fabricates a number, but both are the file's root shape: untrusted input consumed
+    without a check at the boundary it crosses."""
+    seq = _toolreq_seq("w-safe")
+    task = dataclasses.replace(adapt_sequence(seq), work_id=bad_id)
+    with pytest.raises(ValueError, match="unsafe work_id"):
+        _run_corpus([task], [seq], tmp_path / "out", dry_run=True, store_path=tmp_path / "s.db")
+
+
 def test_unknown_arm_or_channel_cache_is_a_miss(tmp_path: Path) -> None:
     """A row naming an arm/channel outside the grid (schema drift across a rename) is a miss."""
     sequences, tasks = _corpus_one(tmp_path)

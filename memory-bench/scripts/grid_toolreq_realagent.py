@@ -88,6 +88,10 @@ ENV_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN"
 ARMS = ("none", "oracle", "ours")
 CHANNELS = (MemoryChannel.RECALLED, MemoryChannel.TRUSTED)
 
+# The run summary, written into the SAME directory as the per-task `<work_id>.json` results —
+# hence a name the tasks are not allowed to claim (see run_corpus).
+SUMMARY_NAME = "summary-toolreq-realagent.json"
+
 # Rides in the cache identity to cover what the fingerprints structurally CANNOT: the
 # executing and scoring CODE. `task_fingerprint` and `payload_fingerprint` hash the DATA that
 # reaches the prompt, but a cached cell is equally invalidated by a change to how that data is
@@ -561,6 +565,24 @@ def run_corpus(
             f"duplicate work_id(s) in the corpus: {duplicates} — each task must map to exactly "
             "one <work_id>.json, or a resumed run serves one task's measurement for another"
         )
+    # A work_id is CORPUS DATA that gets used to build a filesystem path (`<work_id>.json`), so it
+    # has to be a safe, unclaimed filename before it is trusted as one. Two ways it is not:
+    #   * it names the summary file, which main() writes into the SAME directory AFTER the
+    #     per-task results — the summary then overwrites that task's result, and every resume
+    #     re-pays for it (a corrupt-looking cache file that misses forever);
+    #   * it carries a path separator or traversal, which writes the result OUTSIDE --out.
+    # Neither fabricates a number, but both are the same root shape as the rest of this file:
+    # untrusted input consumed without being checked at the boundary it crosses.
+    unsafe = sorted(
+        t.work_id
+        for t in tasks
+        if f"{t.work_id}.json" == SUMMARY_NAME or Path(t.work_id).name != t.work_id or not t.work_id
+    )
+    if unsafe:
+        raise ValueError(
+            f"unsafe work_id(s) for a result filename: {unsafe} — a work_id must be a plain "
+            f"filename component and must not claim the summary's name ({SUMMARY_NAME})"
+        )
     # Seeding + resolution happen BEFORE the cache is consulted, and cover EVERY task, because
     # the resolved `ours` payload is itself a measured input and therefore belongs in the cache
     # identity. It cannot be narrowed to pending tasks (an earlier revision did exactly that):
@@ -735,7 +757,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     for record in summary["per_task"]:
         print(f"  {record['work_id']:<24} {record['verdict']}")
-    summary_path = args.out / "summary-toolreq-realagent.json"
+    summary_path = args.out / SUMMARY_NAME
     summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(
         f"\n{summary['separates_all_channels']}/{summary['n_tasks']} task(s) separate on both "
