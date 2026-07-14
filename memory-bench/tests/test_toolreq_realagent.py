@@ -846,10 +846,11 @@ def test_a_cached_record_in_the_old_spread_identity_shape_is_a_miss(tmp_path: Pa
 def test_a_forged_verdict_is_a_miss(tmp_path: Path) -> None:
     """The verdict is DERIVED from the rows, so a persisted one may only be the one they imply.
 
-    It is the summary's own vocabulary: `separates_all_channels` and `leaked` are built by reading
-    these strings, not by re-deriving them from the rows. A file whose rows say KILL and whose
-    verdict string says SEPARATES agrees with this run on every other field — identity intact, grid
-    complete, flag consistent — so nothing else in the record can refuse it."""
+    A file whose rows say KILL and whose verdict string says SEPARATES agrees with this run on every
+    other field — identity intact, grid complete, flag consistent — so nothing else in the record
+    can refuse it. The summary is the second lock: it counts KINDS re-derived from the rows
+    (`CachedResult.kinds`), never substrings of the stored verdict, so a forgery that got past the
+    validator still could not reach the headline."""
     sequences, tasks = _corpus_one(tmp_path)
     out = tmp_path / "out"
     store_path = tmp_path / "store.db"

@@ -57,8 +57,11 @@ class _Result(BaseCachedResult[_Identity, _Cell]):
         return {("a", "recalled"), ("a", "trusted")}
 
     @classmethod
-    def implied_verdict(cls, outcomes: Sequence[_Cell]) -> str:
-        return " | ".join(f"[{c.channel}] {c.passes}/{c.runs}" for c in outcomes)
+    def classify(cls, outcomes: Sequence[_Cell]) -> list[tuple[str, str, str]]:
+        return [
+            (c.channel, "PASS" if c.passes == c.runs else "FAIL", f"{c.passes}/{c.runs}")
+            for c in outcomes
+        ]
 
 
 def _identity(**overrides: object) -> _Identity:
@@ -398,3 +401,24 @@ def test_a_leftover_temp_file_is_never_read_as_a_result(tmp_path: Path) -> None:
     run = _run([_Task("w-0")], out)
     assert (run.executed, run.reused) == (1, 0)
     assert not (out / "w-0.json.tmp").exists()  # the publish replaced it
+
+
+def test_the_verdict_string_and_the_counted_kinds_come_from_one_ladder() -> None:
+    """`classify` yields (channel, kind, line) from a single branch: the summary COUNTS the kinds
+    and the human READS the lines, so the two cannot desync.
+
+    The shape this replaces derived the headline by substring-matching the rendered verdict
+    (`"LEAK" in verdict`, `verdict.count("SEPARATES")`). Under that shape, rewording a line — or
+    adding an arm whose NAME contains a kind word — silently moves the headline with no schema
+    change and nothing failing. Here the line is not an input to any count."""
+    record = _Result.of("w-0", _identity(), _cells(passes=2, runs=2))
+    assert record.kinds == ["PASS", "PASS"]
+    assert record.verdict == "[recalled] 2/2 | [trusted] 2/2"
+
+    mixed = [
+        _Cell(arm="a", channel="recalled", passes=2, runs=2),
+        _Cell(arm="a", channel="trusted", passes=0, runs=2),
+    ]
+    assert _Result.of("w-1", _identity(), mixed).kinds == ["PASS", "FAIL"]
+    # The kinds are not recoverable from the rendered line by any string match — that is the point.
+    assert "PASS" not in _Result.of("w-1", _identity(), mixed).verdict

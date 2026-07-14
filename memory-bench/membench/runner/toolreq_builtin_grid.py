@@ -13,15 +13,11 @@ shipped lived in an untyped script. The driver keeps argparse, the refuse-to-spe
 preflight and its printing; everything that decides what is EXECUTED, what is SCORED, and what may
 be REUSED is in this module, inside the type checker and on top of the shared cache.
 
-What this grid adds beyond the shared core:
-
-* **A cell carries its DIAGNOSTICS, not just its score** (``BuiltinCell``). ``engaged`` and
-  ``leaked`` are what make a builtin ``passes`` interpretable at all: a pass WITHOUT engagement is a
-  leak (the sandbox let a Write scavenge a stale file), not a builtin win, and zero engagement is
-  the mechanism never firing. Their cross-field bounds are schema, not caller discipline.
-* **A prompt fingerprint over BOTH legs.** The arm sends two different prompts per cell; hashing
-  only the goal leg would call two runs identical while the establish leg — the one that has to
-  persist the fact — differed.
+What this grid adds beyond the shared core: a cell that carries its DIAGNOSTICS, not just its score
+(``BuiltinCell``). ``engaged`` and ``leaked`` are what make a builtin ``passes`` interpretable at
+all: a pass WITHOUT engagement is a leak (the sandbox let a Write scavenge a stale file), not a
+builtin win, and zero engagement is the mechanism never firing. Their cross-field bounds are schema,
+not caller discipline.
 """
 
 from __future__ import annotations
@@ -38,7 +34,9 @@ from membench.runner.resume_cache import (
     BaseCachedResult,
     BaseCellOutcome,
     BaseRunIdentity,
+    corpus_summary,
     digest,
+    render_verdict,
     run_cached_corpus,
 )
 from membench.runner.toolreq_builtin import ARM, BuiltinDiagnostics, cell_prompts, run_builtin_arm
@@ -176,14 +174,8 @@ def cell_kind(cell: BuiltinCell) -> tuple[str, str]:
 
 
 def task_verdict(cells: Sequence[BuiltinCell]) -> str:
-    """Human-readable per-channel verdict line, built from ``cell_kind``."""
-    return " | ".join(f"[{cell.channel}] {cell_kind(cell)[1]}" for cell in cells)
-
-
-def expected_cells() -> set[tuple[str, str]]:
-    """The full (arm, channel) grid one task must cover to be scored as complete — one arm here, so
-    the grid is exactly the channels."""
-    return {(ARM, channel.value) for channel in CHANNELS}
+    """The human-readable verdict line, rendered from ``cell_kind``."""
+    return render_verdict([(cell.channel, *cell_kind(cell)) for cell in cells])
 
 
 def prompt_fingerprint(task: ToolReqRealAgentTask) -> str:
@@ -196,35 +188,30 @@ def prompt_fingerprint(task: ToolReqRealAgentTask) -> str:
     return digest([(channel.value, *cell_prompts(task, channel)) for channel in CHANNELS])
 
 
-class BuiltinRunIdentity(BaseRunIdentity):
-    """What a persisted builtin cell was measured under. The knobs, the resolved model, the protocol
-    and both fingerprints are ``BaseRunIdentity``'s; this grid adds no measured input of its own.
-
-    Unlike the ``ours`` arm, ``builtin`` retrieves nothing from an external store — its memory is
-    the agent's own, established in-band by the first leg — so there is no cross-task payload to
-    hash.
-    Everything that varies what it executes is in the task and in the prompts, and both are already
-    fingerprinted."""
-
-
-class BuiltinCachedResult(BaseCachedResult[BuiltinRunIdentity, BuiltinCell]):
+class BuiltinCachedResult(BaseCachedResult[BaseRunIdentity, BuiltinCell]):
     """One task's persisted builtin result. Every invariant is the shared core's; this class only
-    tells it what the grid is and what verdict the rows imply."""
+    tells it what the grid is and how its rows classify.
+
+    The identity is ``BaseRunIdentity`` unextended: unlike the ``ours`` arm, ``builtin`` retrieves
+    nothing from an external store — its memory is the agent's own, established in-band by the first
+    leg — so there is no cross-task payload to hash. Everything that varies what it executes is in
+    the task and in the prompts, and both are already fingerprinted."""
 
     @classmethod
     def expected_cells(cls) -> set[tuple[str, str]]:
-        return expected_cells()
+        # One arm here, so the grid is exactly the channels.
+        return {(ARM, channel.value) for channel in CHANNELS}
 
     @classmethod
-    def implied_verdict(cls, outcomes: Sequence[BuiltinCell]) -> str:
-        return task_verdict(outcomes)
+    def classify(cls, outcomes: Sequence[BuiltinCell]) -> list[tuple[str, str, str]]:
+        return [(cell.channel, *cell_kind(cell)) for cell in outcomes]
 
 
 def _identity(
     task: ToolReqRealAgentTask, *, repeats: int, resolved_model: str, dry_run: bool
-) -> BuiltinRunIdentity:
-    """The cache identity for one task (see ``BuiltinRunIdentity`` / ``BaseRunIdentity``)."""
-    return BuiltinRunIdentity(
+) -> BaseRunIdentity:
+    """The cache identity for one task (see ``BaseRunIdentity``)."""
+    return BaseRunIdentity(
         repeats=repeats,
         dry_run=dry_run,
         model=resolved_model,
@@ -262,14 +249,9 @@ def run_corpus(
         resume=resume,
     )
     results = run.results
-    kinds = {r.work_id: [cell_kind(cell)[0] for cell in r.outcomes] for r in results}
+    kinds = {r.work_id: r.kinds for r in results}
     return {
-        "n_tasks": len(tasks),
-        "executed": run.executed,
-        "reused": run.reused,
-        "dry_run": dry_run,
-        "repeats": repeats,
-        "per_task": [r.model_dump(mode="json") for r in results],
+        **corpus_summary(tasks, run, dry_run=dry_run, repeats=repeats),
         # Counted against len(CHANNELS), never `all(...)` over whatever cells we happen to hold:
         # `all([])` is vacuously True, so an empty or short grid would credit "separates on BOTH
         # channels" off a measurement that covered neither. The schema already refuses a short grid;

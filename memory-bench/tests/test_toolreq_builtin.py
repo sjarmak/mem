@@ -911,10 +911,11 @@ def test_a_duplicate_channel_cache_never_credits_a_both_channel_separation(
 
 
 def test_a_forged_leak_free_verdict_is_a_miss(tmp_path: Path, monkeypatch) -> None:
-    # The verdict is DERIVED, so a persisted one may only be the one its rows imply — and the
-    # summary a human reads (`leaked`, `not_engaged`, `separates_all_channels`) is built from
-    # these strings. A record whose rows say LEAK and whose verdict says SEPARATES agrees with the
-    # run on every other field, so nothing else in it can refuse it.
+    # The verdict is DERIVED, so a persisted one may only be the one its rows imply. A record whose
+    # rows say LEAK and whose verdict says SEPARATES agrees with the run on every other field —
+    # identity intact, grid complete — so nothing else in it can refuse it. The summary counts KINDS
+    # re-derived from the rows, so a forged verdict cannot reach it even if this check missed; both
+    # locks are asserted below.
     tasks = _corpus_one(tmp_path)
     out = tmp_path / "out"
     grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)

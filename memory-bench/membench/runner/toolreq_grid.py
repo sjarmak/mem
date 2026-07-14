@@ -30,7 +30,10 @@ from membench.runner.resume_cache import (
     BaseCachedResult,
     BaseCellOutcome,
     BaseRunIdentity,
+    Cell,
+    corpus_summary,
     digest,
+    render_verdict,
     run_cached_corpus,
 )
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask, task_fingerprint
@@ -40,12 +43,17 @@ __all__ = [
     "ARMS",
     "CHANNELS",
     "EXECUTION_PROTOCOL",
+    "KILL",
+    "LEAK",
+    "SEPARATES",
     "SUMMARY_NAME",
+    "WEAK",
     "CachedResult",
     "CellOutcome",
     "RunIdentity",
     "SeedFn",
     "arm_memories",
+    "classify_channels",
     "evaluate_task",
     "expected_cells",
     "payload_fingerprint",
@@ -139,18 +147,28 @@ def evaluate_task(
 
 
 # The verdict is decided by these two arms alone; every other ARMS member rides along as
-# an informational suffix (see task_verdict).
+# an informational suffix (see classify_channels).
 _GATING_ARMS = ("none", "oracle")
 
+# The verdict kinds. `classify_channels` returns one of these per channel and the summary COUNTS
+# them; nothing derives a headline by matching substrings of the rendered line.
+LEAK = "LEAK"
+SEPARATES = "SEPARATES"
+KILL = "KILL"
+WEAK = "WEAK"
 
-def task_verdict(outcomes: Sequence[ArmOutcome]) -> str:
-    """The probe's per-channel verdict rule (valid again under opaque values): ``none``
-    passing means a leak; ``none`` 0 + ``oracle`` ceiling means the arms separate. Arms beyond
-    ``_GATING_ARMS`` (today: ``ours``) never gate the call — each rides along as an
-    informational suffix, because ``ours`` scoring near ``none`` is the expected substrate
-    finding, not a failure of the grid."""
+
+def classify_channels(outcomes: Sequence[Cell]) -> list[tuple[str, str, str]]:
+    """The probe's per-channel verdict rule (valid again under opaque values), as one ladder:
+    ``none`` passing means a leak; ``none`` 0 + ``oracle`` ceiling means the arms separate. Arms
+    beyond ``_GATING_ARMS`` (today: ``ours``) never gate the call — each rides along as an
+    informational suffix, because ``ours`` scoring near ``none`` is the expected substrate finding,
+    not a failure of the grid.
+
+    Kind and line leave the same branch (see ``BaseCachedResult.classify``), so the suffix loop
+    below can grow an arm whose NAME contains "LEAK" without moving a single headline count."""
     by = {(o.arm, o.channel): o for o in outcomes}
-    lines: list[str] = []
+    classified: list[tuple[str, str, str]] = []
     for channel in (c.value for c in CHANNELS):
         none_o = by.get(("none", channel))
         oracle_o = by.get(("oracle", channel))
@@ -158,12 +176,16 @@ def task_verdict(outcomes: Sequence[ArmOutcome]) -> str:
             continue
         runs = oracle_o.runs
         if none_o.passes > 0:
+            kind = LEAK
             call = f"LEAK: none {none_o.passes}/{none_o.runs} — value reached the prompt"
         elif oracle_o.passes == runs and runs > 0:
+            kind = SEPARATES
             call = f"SEPARATES: none 0/{runs}, oracle {oracle_o.passes}/{runs}"
         elif oracle_o.passes == 0:
+            kind = KILL
             call = f"KILL: oracle ceiling 0/{runs} — no separation"
         else:
+            kind = WEAK
             call = f"WEAK: none 0/{runs}, oracle {oracle_o.passes}/{runs} — add repeats"
         for arm in ARMS:
             if arm in _GATING_ARMS:
@@ -171,8 +193,13 @@ def task_verdict(outcomes: Sequence[ArmOutcome]) -> str:
             extra = by.get((arm, channel))
             if extra is not None:
                 call += f" ({arm} {extra.passes}/{extra.runs})"
-        lines.append(f"[{channel}] {call}")
-    return " | ".join(lines)
+        classified.append((channel, kind, call))
+    return classified
+
+
+def task_verdict(outcomes: Sequence[Cell]) -> str:
+    """The human-readable verdict line, rendered from ``classify_channels``."""
+    return render_verdict(classify_channels(outcomes))
 
 
 def expected_cells() -> set[tuple[str, str]]:
@@ -226,10 +253,10 @@ class RunIdentity(BaseRunIdentity):
     ours_retrieval_empty: bool
 
 
-class CellOutcome(BaseCellOutcome):
-    """One persisted ``(arm, channel)`` row. This grid's cells carry no fields beyond the shared
-    ones — ``ArmOutcome`` is exactly ``(arm, channel, passes, runs)`` — but they get the shared
-    schema's strict typing and its ``passes <= runs`` bound."""
+# This grid's cells carry no field beyond the shared four — `ArmOutcome` is exactly
+# (arm, channel, passes, runs) — so the base row IS the row, strict typing and `passes <= runs`
+# bound included. Named for the readers that persist and assert against it.
+CellOutcome = BaseCellOutcome
 
 
 class CachedResult(BaseCachedResult[RunIdentity, CellOutcome]):
@@ -242,8 +269,8 @@ class CachedResult(BaseCachedResult[RunIdentity, CellOutcome]):
         return expected_cells()
 
     @classmethod
-    def implied_verdict(cls, outcomes: Sequence[CellOutcome]) -> str:
-        return task_verdict([ArmOutcome(**cell.model_dump()) for cell in outcomes])
+    def classify(cls, outcomes: Sequence[CellOutcome]) -> list[tuple[str, str, str]]:
+        return classify_channels(outcomes)
 
     @model_validator(mode="after")
     def _empty_retrieval_flag_agrees_with_the_rows_filed_next_to_it(self) -> Self:
@@ -252,12 +279,9 @@ class CachedResult(BaseCachedResult[RunIdentity, CellOutcome]):
         while carrying an ``ours`` row that DIFFERS from its channel's ``none`` row is
         self-contradictory: one of the two is fabricated.
 
-        It looks its rows up with ``.get``, not ``[]``, and that is not defensiveness about a case
-        the base already rejects — it is refusing to DEPEND on the base rejecting it. Indexing
-        blindly would make this validator's safety a property of another validator running first,
-        and a raw ``KeyError`` (unlike a ``ValueError``) is not a ``ValidationError``: it would sail
-        past ``load_cached``'s handler and kill a PAID resume on one truncated file. An incomplete
-        grid is the completeness check's finding to report; this one stays total over its input."""
+        It stays TOTAL over its input — ``.get``, not ``[]`` — rather than depending on the
+        completeness check having run first: a ``KeyError`` is not a ``ValidationError``, so on a
+        truncated file it would sail past ``load_cached``'s handler and kill a PAID resume."""
         if not self.identity.ours_retrieval_empty:
             return self
         by_cell = {(cell.arm, cell.channel): cell for cell in self.outcomes}
@@ -355,17 +379,16 @@ def run_corpus(
         resume=resume,
     )
     results = run.results
+    kinds = {r.work_id: r.kinds for r in results}
     return {
-        "n_tasks": len(tasks),
-        "executed": run.executed,
-        "reused": run.reused,
-        "dry_run": dry_run,
-        "repeats": repeats,
-        "per_task": [r.model_dump(mode="json") for r in results],
+        **corpus_summary(tasks, run, dry_run=dry_run, repeats=repeats),
+        # Counted against len(CHANNELS), never `all(...)` over whatever cells we happen to hold:
+        # `all([])` is vacuously True, so an empty or short grid would credit "separates on BOTH
+        # channels" off a measurement that covered neither.
         "separates_all_channels": sum(
-            1 for r in results if r.verdict.count("SEPARATES") == len(CHANNELS)
+            1 for r in results if kinds[r.work_id].count(SEPARATES) == len(CHANNELS)
         ),
-        "leaked": [r.work_id for r in results if "LEAK" in r.verdict],
+        "leaked": [r.work_id for r in results if LEAK in kinds[r.work_id]],
         # Attribution, not trivia: for these tasks `ours` was never actually run (empty retrieval,
         # scored none-equivalent), so a flat ours-vs-none result over them means "retrieval
         # surfaced nothing", NOT "memory did not help".

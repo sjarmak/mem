@@ -1,10 +1,4 @@
-"""mem-mpxie — the resumable per-task result cache, shared by every paid toolreq grid.
-
-Extracted from ``toolreq_grid`` when its sibling (``toolreq_builtin_grid``) arrived as the second
-consumer: the 3-arm module had fused a GENERIC resume cache with the SPECIFIC none/oracle/ours
-experiment, so the builtin driver could not adopt it and hand-rolled its own — re-earning, in
-untyped ``scripts/``, the whole defect family the 3-arm cache had already been hardened against.
-This module is the half that is not about arms.
+"""The resumable per-task result cache, shared by every paid toolreq grid.
 
 THE CACHE INVARIANT — stated once here, for every consumer, not re-argued at each check. A resumed
 paid run may reuse a persisted cell only when that cell's identity is a total function of what was
@@ -14,29 +8,12 @@ the model was one field short, and the task then reported ``reused``, spent noth
 and printed a stale or fabricated number as a real measurement. A green suite is not evidence
 against that; each such shape is an executable case in ``tests/test_resume_cache.py``.
 
-Three defenses, and each is STRUCTURAL — a property of the schema, not of the caller:
-
-* **Whole-object identity.** ``BaseCachedResult.identity`` is a NESTED model under ``strict`` +
-  ``extra="forbid"``, so acceptance is one ``==`` against this run's identity. The predecessor
-  compared a SUBSET (``any(loaded.get(k) != v for k, v in identity.items())``), so a record
-  carrying a field the reader did not know about — a NEWER writer's file, read by an older binary —
-  matched on the fields they happened to share and was served as ``reused``.
-* **The model is a FIXED POINT of ``resolve_model``.** ``--model`` defaults to ``""`` and the agent
-  then reads ``MEMBENCH_AGENT_MODEL``, so an identity that stores the RAW flag makes the driver's
-  primary independent variable invisible: run a sweep under one model, repoint the env var, resume,
-  and every task is served as ``reused`` with the first model's numbers relabelled as the second's.
-  Validating ``model == resolve_model(model)`` makes the raw ``""`` unconstructible AND unloadable
-  whenever the env is pointed somewhere — a caller who forgets to resolve gets a ValidationError,
-  not a silent mislabelling, and a record written by a forgetful caller is a MISS (re-measure)
-  rather than an accept (publish someone else's number). The legitimate CLI-default ``""`` (no pin,
-  no env) is its own fixed point and still validates.
-* **Every rejection is a MISS.** Unreadable, unparseable, drifted, degenerate, foreign: all return
-  ``None`` and re-measure. A miss re-spends; an accept publishes a number nothing measured.
-
-A consumer subclasses ``BaseRunIdentity`` / ``BaseCellOutcome`` / ``BaseCachedResult`` to add its
-own measured inputs and its own cell fields, and supplies ``expected_cells`` + ``implied_verdict``.
-Everything above stays in force by construction — a grid that does not cover its cells exactly, or
-whose stored verdict is not the one its own rows imply, cannot be constructed, let alone loaded.
+Every defense below is STRUCTURAL — a property of the schema, not of the caller — and each is
+stated at its own definition. A consumer subclasses ``BaseRunIdentity`` / ``BaseCellOutcome`` /
+``BaseCachedResult`` to add its own measured inputs and cell fields, and supplies ``expected_cells``
++ ``classify``. All of it then stays in force by construction: a grid that does not cover its cells
+exactly, or whose stored verdict is not the one its own rows imply, cannot be constructed, let
+alone loaded.
 """
 
 from __future__ import annotations
@@ -57,14 +34,10 @@ from membench.runner.headless_agent import resolve_model
 def digest(payload: object) -> str:
     """The one hash used by every fingerprint in every grid — same encoding, same width.
 
-    Canonical (``deterministic_id`` -> RFC8785-style: object keys SORTED, list order KEPT), which is
-    what a cache identity needs and a plain ``json.dumps`` is not. ``json.dumps`` serializes dict
-    keys in INSERTION order, so hashing a pydantic ``model_dump()`` would hash the field-DECLARATION
-    order: reordering two fields in ``SequenceStep`` — a no-op that moves nothing executed and
-    nothing scored — would miss every persisted cell and re-spend the whole paid grid. Sorting keys
-    is safe precisely because every input whose ORDER IS a measured input (surfaced memory, a
-    retrieval payload, the prompt cells) is passed as a LIST, and canonical JSON preserves list
-    order."""
+    Canonical (``deterministic_id`` -> RFC8785-style: object keys SORTED, list order KEPT). Sorting
+    keys is what makes a field REORDER — which moves nothing executed and nothing scored — a cache
+    hit rather than a full re-spend, and it is safe only because every input whose ORDER IS a
+    measured input (surfaced memory, a retrieval payload, the prompt cells) is passed as a LIST."""
     return deterministic_id(payload)[:16]
 
 
@@ -79,6 +52,32 @@ class CacheableTask(Protocol):
 
 
 TaskT = TypeVar("TaskT", bound=CacheableTask)
+
+
+class Cell(Protocol):
+    """The four fields every grid's verdict rule reads.
+
+    Structural, so one rule applies both to a persisted row (``BaseCellOutcome``) and to a raw
+    in-memory measurement (``ArmOutcome``) — including a DEGENERATE one the schema refuses to
+    persist (``runs=0``), which is how the rules that refuse it stay testable at all."""
+
+    @property
+    def arm(self) -> str: ...
+
+    @property
+    def channel(self) -> str: ...
+
+    @property
+    def passes(self) -> int: ...
+
+    @property
+    def runs(self) -> int: ...
+
+
+def render_verdict(classified: Sequence[tuple[str, str, str]]) -> str:
+    """The one renderer, so every grid's verdict string is built from its kind ladder rather than
+    authored beside it."""
+    return " | ".join(f"[{channel}] {line}" for channel, _kind, line in classified)
 
 
 class BaseRunIdentity(BaseModel):
@@ -184,9 +183,26 @@ class BaseCachedResult(BaseModel, Generic[IdentityT, CellT]):
         raise NotImplementedError
 
     @classmethod
-    def implied_verdict(cls, outcomes: Sequence[CellT]) -> str:
-        """The verdict these rows produce. The stored one may only ever be this one."""
+    def classify(cls, outcomes: Sequence[CellT]) -> list[tuple[str, str, str]]:
+        """This grid's verdict rule as ONE ladder: ``(channel, kind, line)``, one entry per channel.
+
+        The kind a summary COUNTS and the line a human READS come out of the same branch, so they
+        cannot desync. Deriving the counts the other way — substring-matching the rendered line, as
+        ``"LEAK" in verdict`` — is what this shape refuses: reword a line and the headline silently
+        changes, with no schema change and nothing failing."""
         raise NotImplementedError
+
+    @classmethod
+    def implied_verdict(cls, outcomes: Sequence[CellT]) -> str:
+        """The verdict these rows produce — rendered from ``classify``, never authored beside it.
+        The stored one may only ever be this one."""
+        return render_verdict(cls.classify(outcomes))
+
+    @property
+    def kinds(self) -> list[str]:
+        """This record's per-channel verdict kinds — what a summary counts, taken from the same
+        ladder that produced its ``verdict`` string."""
+        return [kind for _channel, kind, _line in type(self).classify(self.outcomes)]
 
     @model_validator(mode="after")
     def _rows_are_a_complete_grid_measured_at_this_identity(self) -> Self:
@@ -339,11 +355,9 @@ def run_cached_corpus(
     for task in tasks:
         result_path = out_dir / f"{task.work_id}.json"
         identity = identity_of(task)
-        cached = (
-            load_cached(result_path, identity, result_cls)
-            if resume and result_path.is_file()
-            else None
-        )
+        # No is_file() probe first: load_cached is TOTAL over its path — a missing file raises
+        # OSError inside it and is a miss like every other rejection.
+        cached = load_cached(result_path, identity, result_cls) if resume else None
         if cached is not None:
             # Reused whole. Nothing is recomputed and the file is NOT rewritten: it already passed
             # every validator, so a rewrite could only reproduce it — and a fully cache-served
@@ -362,3 +376,23 @@ def run_cached_corpus(
         tmp_path.replace(result_path)
         results.append(result)
     return CorpusRun(results=results, executed=executed, reused=reused)
+
+
+def corpus_summary(
+    tasks: Sequence[CacheableTask],
+    run: CorpusRun[ResultT],
+    *,
+    dry_run: bool,
+    repeats: int,
+) -> dict[str, Any]:
+    """The summary keys EVERY grid emits: what the run covered, what it cost, and the rows behind
+    both. Each grid spreads this and adds only its own headline, so the accounting a paid run is
+    read through has one owner rather than a copy per grid that can drift apart."""
+    return {
+        "n_tasks": len(tasks),
+        "executed": run.executed,
+        "reused": run.reused,
+        "dry_run": dry_run,
+        "repeats": repeats,
+        "per_task": [r.model_dump(mode="json") for r in run.results],
+    }
