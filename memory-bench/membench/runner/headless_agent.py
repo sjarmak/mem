@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import os
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -214,6 +214,12 @@ class HeadlessClaudeAgent:
     # memory the agent should see is the arm's surfaced ``available_memory``. ``None``
     # inherits the parent cwd (correct only in tests with an injected runner).
     cwd: str | None = None
+    # Extra env vars for the CLI subprocess (the builtin arm's ``CLAUDE_CONFIG_DIR``).
+    # MERGED over `os.environ`, never a raw replace — a replace would silently drop PATH
+    # and the OAuth token, and stay invisible under `--dry-run` (simulated runners swallow
+    # `**kwargs`). ``hash=False``: callers pass a plain (unhashable) dict, which would
+    # otherwise break this frozen dataclass's auto-generated ``__hash__``.
+    env: Mapping[str, str] | None = field(default=None, hash=False)
     _pass_model: bool = field(default=False, init=False)
     _resolved_model: str = field(default="", init=False)
 
@@ -243,6 +249,9 @@ class HeadlessClaudeAgent:
     ) -> AgentStepResult:
         prompt = build_agent_prompt(step, available_memory, self.memory_channel)
         argv = self._argv(prompt, step)
+        # `env=None` is subprocess's own inherit-the-parent-environment sentinel, so the
+        # default needs no special-casing at the call site.
+        env = None if self.env is None else {**os.environ, **self.env}
         try:
             completed = self.runner(
                 argv,
@@ -251,6 +260,7 @@ class HeadlessClaudeAgent:
                 check=False,
                 timeout=self.timeout_s,
                 cwd=self.cwd,
+                env=env,
             )
         except FileNotFoundError as exc:
             raise HeadlessAgentError(

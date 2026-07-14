@@ -76,6 +76,19 @@ def native_memory_path(config_dir: str = AGENT_CONFIG_DIR, workdir: str = AGENT_
     return f"{config_dir}/projects/{config_slug(workdir)}/memory/MEMORY.md"
 
 
+# Same layout, slug-agnostic: for a sandbox cwd whose slug is not worth reconstructing,
+# glob this under a config dir instead of predicting the exact path. Lives here so the
+# layout has ONE source of truth — a Claude Code layout change must not leave a globbing
+# caller silently finding nothing (which reads as "native memory never engaged").
+#
+# EVERY .md, not just MEMORY.md: native memory is an INDEX plus TOPIC FILES. MEMORY.md
+# holds one-line pointers ("- [Title](topic.md) — hook") and the FACT lives in the sibling
+# <topic>.md. Globbing the index alone finds a pointer where the content is, so a WORKING
+# native memory reads as engaged=0 — the false mechanism-disabled verdict this constant
+# exists to prevent.
+NATIVE_MEMORY_GLOB = "projects/*/memory/*.md"
+
+
 # The two in-container paths a build delivers the injected memory to: the agent's native
 # read path (primary — its own instinct finds it) and the instruction path (fallback).
 AGENT_NATIVE_MEMORY_PATH = native_memory_path()
