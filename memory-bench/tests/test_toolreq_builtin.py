@@ -453,6 +453,53 @@ def test_non_dict_cache_file_is_re_executed_not_crashed(tmp_path: Path) -> None:
     assert summary["executed"] == 1 and summary["reused"] == 0
 
 
+def test_invalid_utf8_cache_file_is_re_executed_not_crashed(tmp_path: Path) -> None:
+    # Externally corrupted cache bytes (disk rot, manual edit) that aren't valid UTF-8
+    # raise UnicodeDecodeError from read_text — a miss per the docstring, never a crash.
+    from membench.runner.toolreq_realagent import load_corpus
+
+    seed_dir = tmp_path / "corpus" / "0"
+    seed_dir.mkdir(parents=True)
+    (seed_dir / "sequences.json").write_text(
+        json.dumps([_toolreq_seq("w-0").model_dump()]), encoding="utf-8"
+    )
+    tasks = load_corpus(tmp_path / "corpus")
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "w-0.json").write_bytes(b"\xff\xfe\x00corrupt")
+    summary = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert summary["executed"] == 1 and summary["reused"] == 0
+
+
+def test_type_hostile_cache_counts_are_re_executed_not_crashed(tmp_path: Path) -> None:
+    # A cache that parses, matches the identity, and constructs both dataclasses — but
+    # with string counts — must be a miss. Unvalidated, it survives the cache-load guard
+    # and crashes later at _cell_kind's `runs > 0` (TypeError: str > int), outside the
+    # except. Built by mutating a REAL dry-run record so the shape can't drift.
+    from membench.runner.toolreq_realagent import load_corpus
+
+    seed_dir = tmp_path / "corpus" / "0"
+    seed_dir.mkdir(parents=True)
+    (seed_dir / "sequences.json").write_text(
+        json.dumps([_toolreq_seq("w-0").model_dump()]), encoding="utf-8"
+    )
+    tasks = load_corpus(tmp_path / "corpus")
+    out = tmp_path / "out"
+    first = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert first["executed"] == 1
+    result_path = out / "w-0.json"
+    record = json.loads(result_path.read_text(encoding="utf-8"))
+    for cell in record["cells"]:
+        # Stringify exactly the trio _cell_kind compares equal before `runs > 0`, so the
+        # equality checks pass and the unfixed code reaches the crashing comparison.
+        cell["outcome"]["passes"] = str(cell["outcome"]["passes"])
+        cell["outcome"]["runs"] = str(cell["outcome"]["runs"])
+        cell["diagnostics"]["engaged"] = str(cell["diagnostics"]["engaged"])
+    result_path.write_text(json.dumps(record), encoding="utf-8")
+    summary = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert summary["executed"] == 1 and summary["reused"] == 0
+
+
 def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -> None:
     from membench.runner.toolreq_realagent import load_corpus
 

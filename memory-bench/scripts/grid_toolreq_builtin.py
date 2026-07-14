@@ -133,14 +133,31 @@ def run_corpus(
             try:
                 loaded = json.loads(result_path.read_text(encoding="utf-8"))
                 if all(loaded.get(key) == value for key, value in identity.items()):
-                    cached_cells = [
+                    candidate = [
                         (ArmOutcome(**row["outcome"]), BuiltinDiagnostics(**row["diagnostics"]))
                         for row in loaded["cells"]
                     ]
-            except (json.JSONDecodeError, OSError, KeyError, TypeError, AttributeError):
-                # corrupt/partial file, a schema mismatch (e.g. an older result written
-                # before a BuiltinDiagnostics field was added), OR a syntactically valid
-                # but non-dict top level (e.g. "[]" -> loaded.get raises AttributeError)
+                    # dataclass(**...) never type-checks its fields: a cache whose counts
+                    # are (e.g.) strings constructs fine here but crashes later in
+                    # `_cell_kind`'s `runs > 0` — OUTSIDE this guard. Reject type-hostile
+                    # counts as a miss NOW, while the except below still catches it.
+                    for outcome, diag in candidate:
+                        counts = (outcome.passes, outcome.runs, diag.engaged, diag.leaked)
+                        if not all(isinstance(count, int) for count in counts):
+                            raise TypeError("cached cell counts are not ints")
+                    cached_cells = candidate
+            except (
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                OSError,
+                KeyError,
+                TypeError,
+                AttributeError,
+            ):
+                # corrupt/partial file (malformed JSON or invalid UTF-8 bytes), a schema
+                # mismatch (e.g. an older result written before a BuiltinDiagnostics field
+                # was added), a syntactically valid but non-dict top level (e.g. "[]" ->
+                # loaded.get raises AttributeError), or type-hostile counts (above)
                 # -> re-execute this one task rather than crash the whole resumed sweep.
                 cached_cells = None
         if cached_cells is not None:
