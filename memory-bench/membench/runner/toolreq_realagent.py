@@ -279,13 +279,6 @@ def load_corpus_with_sequences(
     return sequences, tasks
 
 
-def load_corpus(corpus_dir: Path) -> list[ToolReqRealAgentTask]:
-    """Adapt every frozen sequence under ``corpus_dir``. A thin wrapper around
-    ``load_corpus_with_sequences`` for callers that need only the tasks."""
-    _, tasks = load_corpus_with_sequences(corpus_dir)
-    return tasks
-
-
 # The opaque-value lesson's framing. Distinct from toolreq_bundle_adapter's
 # ``_LESSON_SUBTITLE`` (whose facts embed a tier1 failure SIGNATURE): these facts embed
 # the actual opaque CONTENT — the ``ours`` arm's seeded store needs the value a

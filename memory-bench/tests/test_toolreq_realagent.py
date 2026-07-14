@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -26,7 +28,6 @@ from membench.metrics.scorers import states_value
 from membench.runner.toolreq_realagent import (
     ToolReqRealAgentTask,
     adapt_sequence,
-    load_corpus,
     load_corpus_with_sequences,
     sequence_lessons_opaque,
 )
@@ -56,6 +57,29 @@ def _no_ours_payload(
     _sequences: object, _tasks: object, _store_path: object, _mem_bin: object
 ) -> dict[str, dict[str, str]]:
     return {}
+
+
+def _run_corpus(
+    tasks: list[ToolReqRealAgentTask],
+    sequences: list[BenchmarkSequence],
+    out: Path,
+    *,
+    dry_run: bool,
+    store_path: Path,
+    seed_fn: Callable[..., dict[str, dict[str, str]]] = _no_ours_payload,
+) -> dict[str, Any]:
+    """driver.run_corpus with the hermetic test wiring (repeats=2, no model, stubbed
+    seed_fn) — only what a test actually varies rides in its call."""
+    return driver.run_corpus(
+        tasks,
+        sequences,
+        out_dir=out,
+        repeats=2,
+        model="",
+        dry_run=dry_run,
+        store_path=store_path,
+        seed_fn=seed_fn,
+    )
 
 
 def _toolreq_seq(seq_id: str = "w-t0") -> BenchmarkSequence:
@@ -210,17 +234,6 @@ def test_opacity_deterministic_and_sequence_unique() -> None:
 # --- corpus loader ------------------------------------------------------------------
 
 
-def test_load_corpus_reads_every_seed(tmp_path: Path) -> None:
-    for seed, sid in enumerate(("w-0", "w-1")):
-        seed_dir = tmp_path / str(seed)
-        seed_dir.mkdir()
-        (seed_dir / "sequences.json").write_text(
-            json.dumps([_toolreq_seq(sid).model_dump()]), encoding="utf-8"
-        )
-    tasks = load_corpus(tmp_path)
-    assert sorted(t.work_id for t in tasks) == ["w-0", "w-1"]
-
-
 def test_load_corpus_with_sequences_pairs_in_order(tmp_path: Path) -> None:
     for seed, sid in enumerate(("w-0", "w-1")):
         seed_dir = tmp_path / str(seed)
@@ -230,8 +243,6 @@ def test_load_corpus_with_sequences_pairs_in_order(tmp_path: Path) -> None:
         )
     sequences, tasks = load_corpus_with_sequences(tmp_path)
     assert [s.sequence_id for s in sequences] == [t.work_id for t in tasks] == ["w-0", "w-1"]
-    # load_corpus stays a thin wrapper over the same walk.
-    assert [t.work_id for t in load_corpus(tmp_path)] == ["w-0", "w-1"]
 
 
 # --- sequence_lessons_opaque ---------------------------------------------------------
@@ -317,33 +328,28 @@ def test_run_corpus_persists_and_is_resumable(tmp_path: Path) -> None:
     out = tmp_path / "out"
     store_path = tmp_path / "store.db"
 
-    first = driver.run_corpus(
-        tasks,
-        sequences,
-        out_dir=out,
-        repeats=2,
-        model="",
-        dry_run=True,
-        store_path=store_path,
-        seed_fn=_no_ours_payload,
+    seed_calls = {"n": 0}
+
+    def _counting_seed(*_a: object) -> dict[str, dict[str, str]]:
+        seed_calls["n"] += 1
+        return {}
+
+    first = _run_corpus(
+        tasks, sequences, out, dry_run=True, store_path=store_path, seed_fn=_counting_seed
     )
     assert first["n_tasks"] == 1
     assert first["executed"] == 1 and first["reused"] == 0
+    assert seed_calls["n"] == 1
     assert (out / "w-0.json").is_file()
     assert "SEPARATES" in first["per_task"][0]["verdict"]
 
-    # Re-run: the persisted result is reused, nothing re-executed.
-    second = driver.run_corpus(
-        tasks,
-        sequences,
-        out_dir=out,
-        repeats=2,
-        model="",
-        dry_run=True,
-        store_path=store_path,
-        seed_fn=_no_ours_payload,
+    # Re-run: the persisted result is reused, nothing re-executed — and the fully-cached
+    # resume never re-seeds the ours store (the seed honors the same resumability contract).
+    second = _run_corpus(
+        tasks, sequences, out, dry_run=True, store_path=store_path, seed_fn=_counting_seed
     )
     assert second["executed"] == 0 and second["reused"] == 1
+    assert seed_calls["n"] == 1
 
 
 def _corpus_one(
@@ -363,16 +369,7 @@ def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -
     sequences, tasks = _corpus_one(tmp_path)
     out = tmp_path / "out"
     store_path = tmp_path / "store.db"
-    driver.run_corpus(
-        tasks,
-        sequences,
-        out_dir=out,
-        repeats=2,
-        model="",
-        dry_run=True,
-        store_path=store_path,
-        seed_fn=_no_ours_payload,
-    )
+    _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
 
     calls = {"n": 0}
     real_eval = driver.evaluate_task
@@ -382,16 +379,7 @@ def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -
         return real_eval(task, repeats=2, model="", dry_run=True)  # simulate, never spend
 
     monkeypatch.setattr(driver, "evaluate_task", _spy)
-    paid = driver.run_corpus(
-        tasks,
-        sequences,
-        out_dir=out,
-        repeats=2,
-        model="",
-        dry_run=False,
-        store_path=store_path,
-        seed_fn=_no_ours_payload,
-    )
+    paid = _run_corpus(tasks, sequences, out, dry_run=False, store_path=store_path)
     assert paid["executed"] == 1 and paid["reused"] == 0
     assert calls["n"] == 1
 
@@ -401,16 +389,7 @@ def test_corrupt_cache_file_is_re_executed_not_crashed(tmp_path: Path) -> None:
     out = tmp_path / "out"
     out.mkdir()
     (out / f"{tasks[0].work_id}.json").write_text("{ half-written not json", encoding="utf-8")
-    summary = driver.run_corpus(
-        tasks,
-        sequences,
-        out_dir=out,
-        repeats=2,
-        model="",
-        dry_run=True,
-        store_path=tmp_path / "store.db",
-        seed_fn=_no_ours_payload,
-    )
+    summary = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
     assert summary["executed"] == 1 and summary["reused"] == 0  # cache-miss, no crash
 
 
@@ -430,7 +409,7 @@ def test_driver_refuses_to_spend_without_token(tmp_path: Path, monkeypatch) -> N
     assert code == 2
 
 
-def test_load_corpus_orders_seeds_numerically(tmp_path: Path) -> None:
+def test_corpus_walk_orders_seeds_numerically(tmp_path: Path) -> None:
     # 10 must follow 2, not precede it (lexical would misorder past nine seeds).
     for seed in (0, 2, 10):
         seed_dir = tmp_path / str(seed)
@@ -438,7 +417,8 @@ def test_load_corpus_orders_seeds_numerically(tmp_path: Path) -> None:
         (seed_dir / "sequences.json").write_text(
             json.dumps([_toolreq_seq(f"w-{seed}").model_dump()]), encoding="utf-8"
         )
-    order = [t.work_id for t in load_corpus(tmp_path)]
+    _, tasks = load_corpus_with_sequences(tmp_path)
+    order = [t.work_id for t in tasks]
     assert order == ["w-0", "w-2", "w-10"]
 
 

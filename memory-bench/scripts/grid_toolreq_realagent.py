@@ -24,7 +24,8 @@ This is the paid ceiling driver. It STAGES but never over-reaches:
 * ``--dry-run`` runs the identical loop with a simulated memory-copying agent — no token,
   no ``claude`` — proving the arms separate end to end for FREE. Seeding the ``ours``
   store and resolving its payload are ALSO free (real ``mem`` CLI calls, no agent turn) and
-  run unconditionally, dry-run or paid alike — only ``claude -p`` is spend-gated;
+  run dry-run or paid alike (skipped only when every task is already cache-served) — only
+  ``claude -p`` is spend-gated;
 * a real run REFUSES to spend without ``CLAUDE_CODE_OAUTH_TOKEN`` and prints the exact
   ``scix-batch`` go-command + the run count / worst-case wall-clock, so the paid fire stays
   an explicit, cost-disclosed, per-action decision (Stephanie's call);
@@ -54,6 +55,9 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+# Sibling-script reuse (the gate_toolreq_offline convention): the SAME NDJSON writer and
+# payload resolver the offline gate and paid grid already use — no reimplementation.
+from gate_toolreq_offline import _write_ndjson
 from run_grid_3arm import resolve_payloads
 
 from membench.generators.toolreq_bundle_adapter import sequence_bundles, sequence_records
@@ -87,19 +91,20 @@ SeedFn = Callable[
 ]
 
 
-def arm_memory(
-    task: ToolReqRealAgentTask, arm: str, ours_payload: Mapping[str, str] | None = None
-) -> dict[str, str]:
-    """The surfaced memory per arm: nothing for ``none`` (the leak detector), the id-exact
-    opaque ceiling for ``oracle``, the genuine ``mem retrieve`` payload (rendered
-    citation+lessons text, keyed by source work_id) for ``ours``."""
-    if arm == "none":
-        return {}
-    if arm == "oracle":
-        return dict(task.oracle_memory)
-    if arm == "ours":
-        return dict(ours_payload or {})
-    raise ValueError(f"unknown arm {arm!r} (expected one of {ARMS})")
+def arm_memories(
+    task: ToolReqRealAgentTask, ours_payload: Mapping[str, str] | None = None
+) -> dict[str, dict[str, str]]:
+    """The surfaced memory per arm, resolved once per task: nothing for ``none`` (the leak
+    detector), the id-exact opaque ceiling for ``oracle``, the genuine ``mem retrieve``
+    payload (rendered citation+lessons text, keyed by source work_id) for ``ours``."""
+    memories = {
+        "none": {},
+        "oracle": dict(task.oracle_memory),
+        "ours": dict(ours_payload or {}),
+    }
+    if set(memories) != set(ARMS):
+        raise ValueError(f"arm memories {sorted(memories)} out of sync with ARMS {ARMS}")
+    return memories
 
 
 def evaluate_task(
@@ -112,6 +117,7 @@ def evaluate_task(
     channels: Sequence[MemoryChannel] = CHANNELS,
 ) -> list[ArmOutcome]:
     """Run every (arm, channel) cell for one task."""
+    memories = arm_memories(task, ours_payload)
     outcomes: list[ArmOutcome] = []
     for channel in channels:
         for arm in ARMS:
@@ -119,7 +125,7 @@ def evaluate_task(
                 run_arm(
                     arm=arm,
                     step=task.goal_step,
-                    memory=arm_memory(task, arm, ours_payload),
+                    memory=memories[arm],
                     channel=channel,
                     repeats=repeats,
                     model=model,
@@ -130,12 +136,18 @@ def evaluate_task(
     return outcomes
 
 
+# The verdict is decided by these two arms alone; every other ARMS member rides along as
+# an informational suffix (see task_verdict).
+_GATING_ARMS = ("none", "oracle")
+
+
 def task_verdict(outcomes: Sequence[ArmOutcome]) -> str:
     """The probe's per-channel verdict rule (valid again under opaque values): ``none``
-    passing means a leak; ``none`` 0 + ``oracle`` ceiling means the arms separate. ``ours``
-    never gates this call — it rides along as an informational suffix (cross-task
-    retrieval will generally NOT surface the queried task's own sequence-unique opaque
-    value, so scoring near ``none`` is the expected, honest substrate finding)."""
+    passing means a leak; ``none`` 0 + ``oracle`` ceiling means the arms separate. Arms
+    beyond ``_GATING_ARMS`` (today: ``ours``) never gate this call — each rides along as
+    an informational suffix (cross-task retrieval will generally NOT surface the queried
+    task's own sequence-unique opaque value, so ``ours`` scoring near ``none`` is the
+    expected, honest substrate finding)."""
     by = {(o.arm, o.channel): o for o in outcomes}
     lines: list[str] = []
     for channel in (c.value for c in CHANNELS):
@@ -152,15 +164,14 @@ def task_verdict(outcomes: Sequence[ArmOutcome]) -> str:
             call = f"KILL: oracle ceiling 0/{runs} — no separation"
         else:
             call = f"WEAK: none 0/{runs}, oracle {oracle_o.passes}/{runs} — add repeats"
-        ours_o = by.get(("ours", channel))
-        if ours_o is not None:
-            call += f" (ours {ours_o.passes}/{ours_o.runs})"
+        for arm in ARMS:
+            if arm in _GATING_ARMS:
+                continue
+            extra = by.get((arm, channel))
+            if extra is not None:
+                call += f" ({arm} {extra.passes}/{extra.runs})"
         lines.append(f"[{channel}] {call}")
     return " | ".join(lines)
-
-
-def _write_ndjson(path: Path, rows: Sequence[Mapping[str, object]]) -> None:
-    path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
 
 
 def seed_ours_store_and_resolve_payloads(
@@ -176,9 +187,9 @@ def seed_ours_store_and_resolve_payloads(
     arm's real retrieval payload via ``run_grid_3arm.resolve_payloads`` — the SAME
     function the paid ours-vs-builtin grid uses, no reimplementation.
 
-    FREE and unconditional: this never spends an agent turn regardless of ``--dry-run``
-    (only ``claude -p`` is spend-gated, in ``run_corpus``) — it does need a built
-    ``bin/mem``."""
+    FREE: this never spends an agent turn regardless of ``--dry-run`` (only ``claude -p``
+    is spend-gated, in ``run_corpus``, which also skips this seed entirely when every task
+    is cache-served) — it does need a built ``bin/mem``."""
     store_path.parent.mkdir(parents=True, exist_ok=True)
     records = sequence_records(sequences)
     lessons = sequence_lessons_opaque(sequences, tasks)
@@ -221,24 +232,33 @@ def run_corpus(
     and re-executed, never a crash.
 
     ``seed_fn`` seeds the ``ours`` store + resolves its payload ONCE for the whole corpus
-    (FREE, unconditional — see ``seed_ours_store_and_resolve_payloads``); it is injectable
-    so a hermetic test can stub it out without a built ``bin/mem``."""
+    (FREE — see ``seed_ours_store_and_resolve_payloads`` — and always over ALL sequences,
+    dry-run or paid alike, since cross-task retrieval needs every lesson in the store);
+    it is skipped entirely when every task is served from cache, honoring the same
+    resumability contract as ``evaluate_task``. It is injectable so a hermetic test can
+    stub it out without a built ``bin/mem``."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    ours_payloads = seed_fn(sequences, tasks, store_path, mem_bin)
+    identity = {"repeats": repeats, "dry_run": dry_run, "model": model, "arms": list(ARMS)}
+    cached_by_id: dict[str, dict[str, Any]] = {}
+    if resume:
+        for task in tasks:
+            result_path = out_dir / f"{task.work_id}.json"
+            if not result_path.is_file():
+                continue
+            try:
+                loaded = json.loads(result_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue  # corrupt/partial file -> re-execute this one task
+            if all(loaded.get(key) == value for key, value in identity.items()):
+                cached_by_id[task.work_id] = loaded
+    pending = [task for task in tasks if task.work_id not in cached_by_id]
+    ours_payloads = seed_fn(sequences, tasks, store_path, mem_bin) if pending else {}
     per_task: list[dict[str, Any]] = []
     executed = 0
     reused = 0
-    identity = {"repeats": repeats, "dry_run": dry_run, "model": model, "arms": list(ARMS)}
     for task in tasks:
         result_path = out_dir / f"{task.work_id}.json"
-        cached: dict[str, Any] | None = None
-        if resume and result_path.is_file():
-            try:
-                loaded = json.loads(result_path.read_text(encoding="utf-8"))
-                if all(loaded.get(key) == value for key, value in identity.items()):
-                    cached = loaded
-            except (json.JSONDecodeError, OSError):
-                cached = None  # corrupt/partial file -> re-execute this one task
+        cached = cached_by_id.get(task.work_id)
         if cached is not None:
             outcomes = [ArmOutcome(**row) for row in cached["outcomes"]]
             reused += 1
