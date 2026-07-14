@@ -29,9 +29,11 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from membench.harbor.agent_memory import native_memory_path
-from membench.runner.headless_agent import HeadlessAgentError, MemoryChannel
+from membench.runner import toolreq_builtin_grid as grid
+from membench.runner.headless_agent import ENV_MODEL, HeadlessAgentError, MemoryChannel
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome
 from membench.runner.toolreq_builtin import (
     ARM,
@@ -42,7 +44,12 @@ from membench.runner.toolreq_builtin import (
     run_builtin_arm,
     simulated_builtin_runner,
 )
-from membench.runner.toolreq_realagent import ToolReqRealAgentTask, adapt_sequence, load_corpus
+from membench.runner.toolreq_realagent import (
+    ToolReqRealAgentTask,
+    adapt_sequence,
+    load_corpus_with_sequences,
+    task_fingerprint,
+)
 from membench.schemas.sequence import (
     BenchmarkSequence,
     ExpectedAction,
@@ -54,7 +61,12 @@ CURRENT = "30 days"
 STALE = "90 days"
 
 
-def _toolreq_seq(seq_id: str = "w-t0") -> BenchmarkSequence:
+def _toolreq_seq(
+    seq_id: str = "w-t0", *, current: str = CURRENT, stale: str = STALE
+) -> BenchmarkSequence:
+    """One tool-requiring sequence. ``current``/``stale`` are parameters, not constants, so a test
+    can build a DIFFERENT world under the SAME (positional) work_id — which is the shape the
+    regenerated-corpus cache defect takes."""
     return BenchmarkSequence(
         sequence_id=seq_id,
         title=f"{seq_id} initiative",
@@ -62,12 +74,12 @@ def _toolreq_seq(seq_id: str = "w-t0") -> BenchmarkSequence:
             SequenceStep(
                 step_id=f"{seq_id}-s0",
                 user_request="Record.",
-                expected_memory_writes={"m-v1": f"the retention window is {STALE}"},
+                expected_memory_writes={"m-v1": f"the retention window is {stale}"},
             ),
             SequenceStep(
                 step_id=f"{seq_id}-s1",
                 user_request="Record.",
-                expected_memory_writes={"m-v2": f"the retention window is {CURRENT}"},
+                expected_memory_writes={"m-v2": f"the retention window is {current}"},
                 superseded_memory_ids=["m-v1"],
             ),
             SequenceStep(
@@ -84,7 +96,7 @@ def _toolreq_seq(seq_id: str = "w-t0") -> BenchmarkSequence:
                         requires_memory=["m-v2"],
                         requires_action=[
                             ExpectedAction(
-                                tool="apply_config", arg_values=[CURRENT], forbidden_values=[STALE]
+                                tool="apply_config", arg_values=[current], forbidden_values=[stale]
                             )
                         ],
                     )
@@ -106,7 +118,8 @@ def _corpus_one(tmp_path: Path, work_id: str = "w-0") -> list[ToolReqRealAgentTa
     (corpus / "0" / "sequences.json").write_text(
         json.dumps([_toolreq_seq(work_id).model_dump()]), encoding="utf-8"
     )
-    return load_corpus(corpus)
+    _, tasks = load_corpus_with_sequences(corpus)
+    return tasks
 
 
 def _stream_json_runner(
@@ -559,6 +572,306 @@ def test_diagnostics_is_a_plain_dataclass_not_an_arm_outcome_subtype() -> None:
     assert not hasattr(diag, "passes")
 
 
+# --- the grid (membench/runner/toolreq_builtin_grid.py) ---------------------------------
+#
+# The arm's cells, its verdict rule, and its cache identity. The RESUME CACHE itself is the
+# shared core (`membench.runner.resume_cache`, tested once in `test_resume_cache.py`); what
+# is tested here is this grid's ADOPTION of it — that the identity this grid builds actually
+# carries the inputs whose absence was the mem-mpxie defect family, and that its cells carry
+# bounds the shared schema cannot know about (engagement is a builtin-only concept).
+
+
+def _cell(
+    channel: str = "recalled", *, passes: int = 2, runs: int = 2, engaged: int = 2, leaked: int = 0
+) -> grid.BuiltinCell:
+    return grid.BuiltinCell(
+        arm=ARM,
+        channel=channel,
+        passes=passes,
+        runs=runs,
+        engaged=engaged,
+        leaked=leaked,
+        establish_tool_calls=0,
+        establish_tool_names=[],
+    )
+
+
+def test_dry_run_evaluate_task_separates_both_channels() -> None:
+    task = _task()
+    cells = grid.evaluate_task(task, repeats=2, model="", dry_run=True)
+    assert {cell.channel for cell in cells} == {"recalled", "trusted"}
+    for cell in cells:
+        assert cell.passes == cell.runs == 2
+        assert cell.engaged == 2 and cell.leaked == 0
+
+
+def test_verdict_separates_when_engaged_and_passing() -> None:
+    assert "SEPARATES" in grid.task_verdict([_cell(passes=3, runs=3, engaged=3)])
+
+
+def test_verdict_leak_outranks_pass_count() -> None:
+    assert "LEAK" in grid.task_verdict([_cell(passes=2, runs=2, engaged=0, leaked=2)])
+
+
+def test_verdict_not_engaged_when_mechanism_never_fires() -> None:
+    assert "NOT-ENGAGED" in grid.task_verdict([_cell(passes=0, runs=3, engaged=0)])
+
+
+# --- the cell's cross-field bounds: an impossible engagement claim is unconstructible ----
+
+
+def test_more_engaged_than_runs_is_unconstructible() -> None:
+    with pytest.raises(ValidationError):
+        _cell(runs=2, engaged=3)
+
+
+def test_more_leaks_than_passes_is_unconstructible() -> None:
+    # A leak IS a pass — one that happened without engagement — so it cannot outnumber the
+    # passes it is drawn from.
+    with pytest.raises(ValidationError):
+        _cell(passes=1, runs=2, engaged=0, leaked=2)
+
+
+def test_more_leaks_than_non_engaged_repeats_is_unconstructible() -> None:
+    # The same impossibility from the other side, and the one a `leaked <= passes` bound alone
+    # would miss: a leaked repeat is BY DEFINITION one that did not engage, so 2 leaks cannot
+    # coexist with 2 engaged repeats out of 2 runs. Without this a record can claim a clean
+    # sweep (engaged 2/2, passes 2/2) AND carry the leaks that deny it.
+    with pytest.raises(ValidationError):
+        _cell(passes=2, runs=2, engaged=2, leaked=2)
+
+
+def test_a_cell_whose_diagnostics_disagree_about_runs_is_refused() -> None:
+    # The arm reports `runs` on BOTH halves it returns; they are the same measurement, so a
+    # disagreement means one of the two is fabricated and the record must not be written.
+    outcome = ArmOutcome(arm=ARM, channel="recalled", passes=2, runs=2)
+    diagnostics = BuiltinDiagnostics(engaged=2, leaked=0, runs=3)
+    with pytest.raises(ValueError, match="diagnostics claim"):
+        grid._cell(outcome, diagnostics)
+
+
+# --- the resume cache, as this grid now inherits it --------------------------------------
+
+
+def test_run_corpus_persists_and_is_resumable(tmp_path: Path) -> None:
+    tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+
+    first = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert first["executed"] == 1 and first["reused"] == 0
+    assert (out / "w-0.json").is_file()
+    assert "SEPARATES" in first["per_task"][0]["verdict"]
+    assert first["separates_all_channels"] == 1
+
+    second = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert second["executed"] == 0 and second["reused"] == 1
+
+
+def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -> None:
+    tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    grid.run_corpus(tasks, out_dir=out, repeats=1, model="", dry_run=True)
+
+    calls = {"n": 0}
+    real_eval = grid.evaluate_task
+
+    def _spy(task, **_kwargs):
+        calls["n"] += 1
+        return real_eval(task, repeats=1, model="", dry_run=True)  # simulate, never spend
+
+    monkeypatch.setattr(grid, "evaluate_task", _spy)
+    paid = grid.run_corpus(tasks, out_dir=out, repeats=1, model="", dry_run=False)
+    assert paid["executed"] == 1 and paid["reused"] == 0
+    assert calls["n"] == 1
+
+
+# THE FOUR LIVE DEFECTS (mem-mpxie). Each was a real hole in this driver's hand-rolled cache on
+# 2026-07-14, each is closed by adopting the shared core, and each below is the executable case
+# that says so. They are the same shapes the 3-arm grid was already hardened against — which is
+# the whole point: the sibling re-earned them because it re-implemented the cache instead of
+# adopting it.
+
+
+def test_a_regenerated_corpus_never_reuses_the_previous_worlds_results(tmp_path: Path) -> None:
+    # (a) NO TASK FINGERPRINT. Work ids are POSITIONAL (`w-0`), so regenerating the corpus over the
+    # same `--out` reuses them. The old identity was {repeats, dry_run, model} — nothing about the
+    # WORLD — so the previous world's numbers were served at executed=0 for a task whose scoring
+    # values had changed underneath.
+    #
+    # The regenerated world here changes ONLY the superseded (stale) value, and that is the point:
+    # the stale value is never surfaced (the goal requires the CURRENT memory id) and never named in
+    # the request (the leak firewall), so BOTH prompts come out byte-identical while the scorer's
+    # `forbidden_values` — what a passing Write must NOT carry — is a different token. It is the one
+    # world change `prompt_fingerprint` structurally cannot see, which is why the identity carries
+    # `task_fingerprint` ALONGSIDE it rather than in place of it. A weaker case (changing the
+    # current value too) would move the prompts as well, and would pass with no task fingerprint at
+    # all.
+    out = tmp_path / "out"
+    tasks = _corpus_one(tmp_path)
+    first = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert first["executed"] == 1
+
+    corpus = tmp_path / "corpus"
+    (corpus / "0" / "sequences.json").write_text(
+        json.dumps([_toolreq_seq("w-0", current=CURRENT, stale="91 days").model_dump()]),
+        encoding="utf-8",
+    )
+    _, regenerated = load_corpus_with_sequences(corpus)
+    assert regenerated[0].work_id == tasks[0].work_id  # the id collides, as in the real corpus
+    assert grid.prompt_fingerprint(regenerated[0]) == grid.prompt_fingerprint(tasks[0])
+    assert task_fingerprint(regenerated[0]) != task_fingerprint(tasks[0])
+
+    second = grid.run_corpus(regenerated, out_dir=out, repeats=2, model="", dry_run=True)
+    assert second["executed"] == 1 and second["reused"] == 0, "served the previous world's numbers"
+
+
+def test_repointing_the_env_model_between_runs_is_a_miss_not_a_relabel(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # (b) RAW MODEL IN THE IDENTITY. `--model` defaults to "" and the agent then reads
+    # MEMBENCH_AGENT_MODEL, so caching the raw "" made the driver's primary independent variable
+    # invisible: run under one model, repoint the env, resume, and every task was served as
+    # `reused` with the FIRST model's numbers relabelled as the second's. The identity now stores
+    # the RESOLVED model, and `BaseRunIdentity` refuses an unresolved one structurally.
+    tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+
+    monkeypatch.setenv(ENV_MODEL, "model-one")
+    first = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert first["executed"] == 1
+
+    monkeypatch.setenv(ENV_MODEL, "model-two")
+    second = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert second["executed"] == 1 and second["reused"] == 0, "relabelled one model as another"
+
+
+def test_a_newer_writers_extra_identity_field_is_a_miss_not_a_subset_match(tmp_path: Path) -> None:
+    # (c) SUBSET IDENTITY COMPARISON. The old check was
+    # `any(loaded.get(key) != value for key, value in identity.items())`, so a record carrying a
+    # field the reader did not know about — a NEWER writer's file, read by an older binary —
+    # matched on the fields they happened to share and was served as `reused`. The identity is now
+    # a NESTED strict model with extra="forbid", so acceptance is a whole-object ==.
+    tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+
+    result_path = out / "w-0.json"
+    record = json.loads(result_path.read_text(encoding="utf-8"))
+    record["identity"]["a_field_a_newer_writer_added"] = "surely harmless"
+    result_path.write_text(json.dumps(record), encoding="utf-8")
+
+    resumed = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert resumed["executed"] == 1 and resumed["reused"] == 0
+
+
+def test_deeply_nested_json_is_a_miss_not_a_recursionerror_killing_the_sweep(
+    tmp_path: Path,
+) -> None:
+    # (d) NARROW PARSE BOUNDARY. The old loader caught (OSError, ValueError) only, and
+    # `json.loads` raises RecursionError — NOT a ValueError — on deeply nested input. One such
+    # file (disk rot, a truncated write, a hand edit) escaped the loader and killed the whole
+    # PAID sweep mid-resume. Every rejection is now a miss.
+    tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "w-0.json").write_bytes(b"[" * 200_000)
+    summary = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert summary["executed"] == 1 and summary["reused"] == 0
+
+
+def test_the_prompt_fingerprint_covers_the_establish_leg_not_just_the_goal(tmp_path: Path) -> None:
+    # The arm sends TWO prompts per cell and the establish leg is the one under test — it is what
+    # has to persist the fact. A fingerprint over the goal leg alone would call two runs identical
+    # while the establish prompt (the independent variable of the whole arm) differed, and serve
+    # the old wording's numbers for the new one.
+    tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    first = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert first["executed"] == 1
+
+    import membench.runner.toolreq_builtin as tb
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(tb, "_ESTABLISH_INSTRUCTION", "Remember these. (reworded)")
+        second = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert second["executed"] == 1 and second["reused"] == 0, "the establish prompt is not hashed"
+
+
+def _not_engaged_grid(task: ToolReqRealAgentTask, **_kwargs: object) -> list[grid.BuiltinCell]:
+    """An `evaluate_task` stand-in returning a full but NON-separating grid, so a cache HIT and a
+    cache MISS yield DIFFERENT headline numbers and the assertion can tell them apart instead of
+    accidentally agreeing with the bug."""
+    return [_cell(channel.value, passes=0, runs=2, engaged=0) for channel in grid.CHANNELS]
+
+
+def test_a_partial_cell_grid_never_credits_a_both_channel_separation(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # A cache SHORT a channel must be a MISS: a one-channel record would satisfy "separated on BOTH
+    # channels" while `trusted` was never evaluated — and on the PAID identity that verdict is
+    # credited with zero `claude -p` calls made.
+    tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    truth = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert truth["separates_all_channels"] == 1  # both channels really do separate
+
+    result_path = out / "w-0.json"
+    record = json.loads(result_path.read_text(encoding="utf-8"))
+    record["outcomes"] = record["outcomes"][:1]  # drop the `trusted` channel
+    result_path.write_text(json.dumps(record), encoding="utf-8")
+
+    monkeypatch.setattr(grid, "evaluate_task", _not_engaged_grid)
+    summary = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert summary["executed"] == 1 and summary["reused"] == 0
+    assert summary["separates_all_channels"] == 0  # re-measured, not replayed from half a grid
+    assert len(json.loads(result_path.read_text())["outcomes"]) == len(grid.CHANNELS)
+
+
+def test_a_duplicate_channel_cache_never_credits_a_both_channel_separation(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # The dual of the missing-channel case, and NOT caught by an arity check alone: two copies of
+    # the `recalled` cell has the right count and the wrong coverage. `trusted` was never measured,
+    # yet every kind is SEPARATES, so the both-channel headline would be credited off one channel
+    # counted twice.
+    tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+
+    result_path = out / "w-0.json"
+    record = json.loads(result_path.read_text(encoding="utf-8"))
+    record["outcomes"] = [record["outcomes"][0], record["outcomes"][0]]
+    result_path.write_text(json.dumps(record), encoding="utf-8")
+
+    monkeypatch.setattr(grid, "evaluate_task", _not_engaged_grid)
+    summary = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert summary["executed"] == 1 and summary["reused"] == 0
+    assert summary["separates_all_channels"] == 0
+
+
+def test_a_forged_leak_free_verdict_is_a_miss(tmp_path: Path, monkeypatch) -> None:
+    # The verdict is DERIVED, so a persisted one may only be the one its rows imply — and the
+    # summary a human reads (`leaked`, `not_engaged`, `separates_all_channels`) is built from
+    # these strings. A record whose rows say LEAK and whose verdict says SEPARATES agrees with the
+    # run on every other field, so nothing else in it can refuse it.
+    tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+
+    result_path = out / "w-0.json"
+    record = json.loads(result_path.read_text(encoding="utf-8"))
+    for row in record["outcomes"]:  # the rows now say LEAK...
+        row["engaged"] = 0
+        row["leaked"] = row["passes"]
+    result_path.write_text(json.dumps(record), encoding="utf-8")  # ...but the verdict still says
+    assert "SEPARATES" in record["verdict"]  # SEPARATES
+
+    monkeypatch.setattr(grid, "evaluate_task", _not_engaged_grid)
+    summary = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert summary["executed"] == 1 and summary["reused"] == 0
+    assert summary["leaked"] == [] and summary["separates_all_channels"] == 0
+
+
 # --- driver (scripts/grid_toolreq_builtin.py) -------------------------------------------
 
 _SCRIPTS = str(Path(__file__).resolve().parents[1] / "scripts")
@@ -568,207 +881,15 @@ if _SCRIPTS not in sys.path:
 import grid_toolreq_builtin as driver  # noqa: E402
 
 
-def test_dry_run_evaluate_task_separates_both_channels() -> None:
-    task = _task()
-    cells = driver.evaluate_task(task, repeats=2, model="", dry_run=True)
-    assert {outcome.channel for outcome, _ in cells} == {"recalled", "trusted"}
-    for outcome, diag in cells:
-        assert outcome.passes == outcome.runs == 2
-        assert diag.engaged == 2 and diag.leaked == 0
-
-
-def test_verdict_separates_when_engaged_and_passing() -> None:
-    cells = [
-        (
-            ArmOutcome(arm="builtin", channel="recalled", passes=3, runs=3),
-            BuiltinDiagnostics(engaged=3, leaked=0, runs=3),
-        )
-    ]
-    assert "SEPARATES" in driver.task_verdict(cells)
-
-
-def test_verdict_leak_outranks_pass_count() -> None:
-    cells = [
-        (
-            ArmOutcome(arm="builtin", channel="recalled", passes=2, runs=2),
-            BuiltinDiagnostics(engaged=0, leaked=2, runs=2),
-        )
-    ]
-    assert "LEAK" in driver.task_verdict(cells)
-
-
-def test_verdict_not_engaged_when_mechanism_never_fires() -> None:
-    cells = [
-        (
-            ArmOutcome(arm="builtin", channel="recalled", passes=0, runs=3),
-            BuiltinDiagnostics(engaged=0, leaked=0, runs=3),
-        )
-    ]
-    assert "NOT-ENGAGED" in driver.task_verdict(cells)
-
-
-def test_run_corpus_persists_and_is_resumable(tmp_path: Path) -> None:
-    tasks = _corpus_one(tmp_path)
-    out = tmp_path / "out"
-
-    first = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
-    assert first["executed"] == 1 and first["reused"] == 0
-    assert (out / "w-0.json").is_file()
-    assert "SEPARATES" in first["per_task"][0]["verdict"]
-
-    second = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
-    assert second["executed"] == 0 and second["reused"] == 1
-
-
-# The cache identity every driver test below runs under. A hostile payload must carry it
-# to be a MEANINGFUL miss test: a payload that mismatches the identity is rejected at the
-# identity check and never reaches the cell-construction branch the test means to exercise.
-_IDENTITY_MATCHING = {"work_id": "w-0", "repeats": 2, "dry_run": True, "model": ""}
-
-
-@pytest.mark.parametrize(
-    "payload",
-    [
-        pytest.param(b"{ half-written not json", id="malformed-json"),
-        pytest.param(
-            json.dumps({"work_id": "w-0", "repeats": 2, "dry_run": True, "model": ""}).encode(),
-            id="schema-mismatch-missing-cells",
-        ),
-        pytest.param(b"[]", id="non-dict-top-level"),
-        pytest.param(b"\xff\xfe\x00corrupt", id="invalid-utf8"),
-        pytest.param(
-            json.dumps(_IDENTITY_MATCHING | {"cells": []}).encode(),
-            id="empty-cells-list",
-        ),
-        pytest.param(
-            json.dumps(_IDENTITY_MATCHING | {"cells": {}}).encode(),
-            id="cells-not-a-list",
-        ),
-    ],
-)
-def test_hostile_cache_file_is_re_executed_not_crashed(tmp_path: Path, payload: bytes) -> None:
-    # Every hostile persisted-result shape is a MISS per run_corpus's guarantee ("treated
-    # as a miss and re-executed, never a crash"): malformed JSON text, a valid-JSON
-    # record missing "cells" (older schema), a syntactically-valid non-dict top level,
-    # invalid UTF-8 bytes (disk rot, manual edit), and — the last two, which MATCH the
-    # identity and so reach the cell-construction branch — a "cells" that is empty or is
-    # not a list at all. Both of those construct ZERO cells without raising, so without a
-    # shape check they load as a HIT holding no measurement, and the task silently drops
-    # out of the separates/leaked/not_engaged accounting while still counting as `reused`.
-    tasks = _corpus_one(tmp_path)
-    out = tmp_path / "out"
-    out.mkdir()
-    (out / "w-0.json").write_bytes(payload)
-    summary = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
-    assert summary["executed"] == 1 and summary["reused"] == 0
-
-
-def test_type_hostile_cache_counts_are_re_executed_not_crashed(tmp_path: Path) -> None:
-    # A cache that parses, matches the identity, and constructs both dataclasses — but
-    # with string counts — must be a miss. Unvalidated, it survives the cache-load guard
-    # and crashes later at _cell_kind's `runs > 0` (TypeError: str > int), outside the
-    # except. Built by mutating a REAL dry-run record so the shape can't drift.
-    tasks = _corpus_one(tmp_path)
-    out = tmp_path / "out"
-    first = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
-    assert first["executed"] == 1
-    result_path = out / "w-0.json"
-    record = json.loads(result_path.read_text(encoding="utf-8"))
-    for cell in record["cells"]:
-        # Stringify exactly the trio _cell_kind compares equal before `runs > 0`, so the
-        # equality checks pass and the unfixed code reaches the crashing comparison.
-        cell["outcome"]["passes"] = str(cell["outcome"]["passes"])
-        cell["outcome"]["runs"] = str(cell["outcome"]["runs"])
-        cell["diagnostics"]["engaged"] = str(cell["diagnostics"]["engaged"])
-    result_path.write_text(json.dumps(record), encoding="utf-8")
-    summary = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
-    assert summary["executed"] == 1 and summary["reused"] == 0
-
-
-def _cached_record(out: Path, work_id: str = "w-0") -> tuple[Path, dict]:
-    """The persisted record for one task, as JSON — mutate it, write it back, re-run."""
-    result_path = out / f"{work_id}.json"
-    return result_path, json.loads(result_path.read_text(encoding="utf-8"))
-
-
-def _not_engaged_grid(
-    task: ToolReqRealAgentTask, **_kwargs: object
-) -> list[tuple[ArmOutcome, BuiltinDiagnostics]]:
-    """An `evaluate_task` stand-in returning a full but NON-separating grid, so a cache HIT
-    and a cache MISS yield DIFFERENT headline numbers and the assertion can tell them apart
-    instead of accidentally agreeing with the bug."""
-    return [
-        (
-            ArmOutcome(arm="builtin", channel=channel.value, passes=0, runs=2),
-            BuiltinDiagnostics(engaged=0, leaked=0, runs=2),
-        )
-        for channel in driver.CHANNELS
-    ]
-
-
-def test_partial_cell_grid_never_credits_a_both_channel_separation(
-    tmp_path: Path, monkeypatch
-) -> None:
-    # A cache SHORT a channel must be a MISS. run_corpus scores the headline as
-    # `kinds and all(kind == "SEPARATES" ...)` over whatever cells the loader hands back,
-    # so a one-channel record satisfies "separated on BOTH channels" while `trusted` was
-    # never evaluated — and on the PAID identity that verdict is credited with zero
-    # `claude -p` calls made. A partial result reading as full coverage is exactly what
-    # the rig forbids (mem-xe2p enforce_mechanism_fires).
-    tasks = _corpus_one(tmp_path)
-    out = tmp_path / "out"
-    truth = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
-    assert truth["separates_all_channels"] == 1  # both channels really do separate
-
-    result_path, record = _cached_record(out)
-    record["cells"] = record["cells"][:1]  # drop the `trusted` channel
-    result_path.write_text(json.dumps(record), encoding="utf-8")
-
-    monkeypatch.setattr(driver, "evaluate_task", _not_engaged_grid)
-    summary = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
-    assert summary["executed"] == 1 and summary["reused"] == 0
-    assert summary["separates_all_channels"] == 0  # re-measured, not replayed from half a grid
-    assert len(_cached_record(out)[1]["cells"]) == len(driver.CHANNELS)  # rewritten whole
-
-
-def test_duplicate_channel_cache_never_credits_a_both_channel_separation(
-    tmp_path: Path, monkeypatch
-) -> None:
-    # The dual of the missing-channel case, and NOT caught by a length check alone: two
-    # copies of the `recalled` cell has the right arity and the wrong coverage. `trusted`
-    # was never measured, yet every kind is SEPARATES, so the both-channel headline would
-    # be credited off one channel counted twice. This is why the loader compares the
-    # cells' CHANNELS rather than just counting them.
-    tasks = _corpus_one(tmp_path)
-    out = tmp_path / "out"
-    driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
-
-    result_path, record = _cached_record(out)
-    record["cells"] = [record["cells"][0], record["cells"][0]]
-    result_path.write_text(json.dumps(record), encoding="utf-8")
-
-    monkeypatch.setattr(driver, "evaluate_task", _not_engaged_grid)
-    summary = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
-    assert summary["executed"] == 1 and summary["reused"] == 0
-    assert summary["separates_all_channels"] == 0
-
-
-def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -> None:
-    tasks = _corpus_one(tmp_path)
-    out = tmp_path / "out"
-    driver.run_corpus(tasks, out_dir=out, repeats=1, model="", dry_run=True)
-
-    calls = {"n": 0}
-    real_eval = driver.evaluate_task
-
-    def _spy(task, **_kwargs):
-        calls["n"] += 1
-        return real_eval(task, repeats=1, model="", dry_run=True)  # simulate, never spend
-
-    monkeypatch.setattr(driver, "evaluate_task", _spy)
-    paid = driver.run_corpus(tasks, out_dir=out, repeats=1, model="", dry_run=False)
-    assert paid["executed"] == 1 and paid["reused"] == 0
-    assert calls["n"] == 1
+def _engaging_arm(task, *, repeats: int, channel: MemoryChannel, **_kwargs):
+    """A `run_builtin_arm` stand-in that engages and passes every repeat — HONESTLY: it reports the
+    repeats it was asked for and the channel it was given, so the cells it produces are a real grid
+    the schema will accept. A fake that hardcoded one channel would now be refused as a duplicated
+    cell, which is the schema doing its job."""
+    return (
+        ArmOutcome(arm=ARM, channel=channel.value, passes=repeats, runs=repeats),
+        BuiltinDiagnostics(engaged=repeats, leaked=0, runs=repeats),
+    )
 
 
 def test_driver_refuses_to_spend_without_token(tmp_path: Path, monkeypatch) -> None:
@@ -785,13 +906,34 @@ def test_driver_refuses_to_spend_without_token(tmp_path: Path, monkeypatch) -> N
     assert code == 2
 
 
+def test_repeats_below_one_is_refused_at_the_flag(tmp_path: Path) -> None:
+    # `--repeats 0` runs zero agent turns per cell and would persist 0/0 rows that the verdict rule
+    # reads as a confident NOT-ENGAGED for a task that was NEVER EVALUATED. The schema refuses the
+    # record (repeats/runs are both >= 1); the flag refuses it first, with a message that says why.
+    _corpus_one(tmp_path)
+    with pytest.raises(SystemExit) as exit_info:
+        driver.main(
+            [
+                "--corpus-dir",
+                str(tmp_path / "corpus"),
+                "--out",
+                str(tmp_path / "out"),
+                "--repeats",
+                "0",
+                "--dry-run",
+            ]
+        )
+    assert exit_info.value.code == 2
+
+
 def test_preflight_halts_when_native_memory_never_engages(tmp_path: Path, monkeypatch) -> None:
     _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
 
-    def _never_engages(task, **_kwargs):
-        return ArmOutcome(arm="builtin", channel="recalled", passes=0, runs=1), BuiltinDiagnostics(
-            engaged=0, leaked=0, runs=1
+    def _never_engages(task, *, repeats: int, channel: MemoryChannel, **_kwargs):
+        return (
+            ArmOutcome(arm=ARM, channel=channel.value, passes=0, runs=repeats),
+            BuiltinDiagnostics(engaged=0, leaked=0, runs=repeats),
         )
 
     monkeypatch.setattr(driver, "run_builtin_arm", _never_engages)
@@ -802,10 +944,9 @@ def test_preflight_halts_when_native_memory_never_engages(tmp_path: Path, monkey
 def test_preflight_agent_error_halts_diagnosed_not_raw_traceback(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
-    # The most likely REAL preflight failure is an erroring/flaky/timed-out `claude -p`
-    # call (HeadlessAgentError), not a clean not-engaged diagnosis. main() must convert
-    # it into the documented diagnosed PREFLIGHT HALT (exit 3, same as the not-engaged
-    # halt), never let a raw traceback propagate out of the driver.
+    # The most likely REAL preflight failure is an erroring/flaky/timed-out `claude -p` call
+    # (HeadlessAgentError), not a clean not-engaged diagnosis. main() must convert it into the
+    # documented diagnosed PREFLIGHT HALT (exit 3), never let a raw traceback propagate out.
     _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
 
@@ -823,26 +964,19 @@ def test_preflight_agent_error_halts_diagnosed_not_raw_traceback(
 def test_sweep_agent_error_halts_diagnosed_with_resume_pointer(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
-    # The preflight is not the only paid boundary: a HeadlessAgentError mid-sweep (the
-    # rate-limit at paid call 50 of 180) must get the same diagnosed-halt treatment —
-    # exit 3, pointing at the persisted per-task results for a cheap resume — never a
-    # raw traceback out of the driver during the expensive phase.
+    # The preflight is not the only paid boundary: a HeadlessAgentError mid-sweep (the rate-limit at
+    # paid call 50 of 180) must get the same diagnosed-halt treatment — exit 3, pointing at the
+    # persisted per-task results for a cheap resume — never a raw traceback during the expensive
+    # phase. The sweep runs through the GRID, so that is where the failing arm is patched.
     _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
 
     def _raises(task, **_kwargs):
         raise HeadlessAgentError("claude -p failed: simulated mid-sweep rate-limit")
 
-    monkeypatch.setattr(driver, "run_builtin_arm", _raises)
-    code = driver.main(
-        [
-            "--corpus-dir",
-            str(tmp_path / "corpus"),
-            "--out",
-            str(tmp_path / "out"),
-            "--skip-preflight",
-        ]
-    )
+    monkeypatch.setattr(driver, "run_builtin_arm", _engaging_arm)  # the preflight passes...
+    monkeypatch.setattr(grid, "run_builtin_arm", _raises)  # ...and the sweep then dies
+    code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
     assert code == 3
     err = capsys.readouterr().err
     assert "SWEEP HALT" in err
@@ -856,17 +990,16 @@ def test_preflight_proceeds_when_engaged(tmp_path: Path, monkeypatch) -> None:
 
     calls = {"n": 0}
 
-    def _always_engages(task, **_kwargs):
+    def _spy(task, **kwargs):
         calls["n"] += 1
-        return ArmOutcome(arm="builtin", channel="recalled", passes=1, runs=1), BuiltinDiagnostics(
-            engaged=1, leaked=0, runs=1
-        )
+        return _engaging_arm(task, **kwargs)
 
-    monkeypatch.setattr(driver, "run_builtin_arm", _always_engages)
+    monkeypatch.setattr(driver, "run_builtin_arm", _spy)
+    monkeypatch.setattr(grid, "run_builtin_arm", _spy)
     code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
     assert code == 0
     # once for the preflight + once per (task x channel) cell in the sweep
-    assert calls["n"] == 1 + len(driver.CHANNELS)
+    assert calls["n"] == 1 + len(grid.CHANNELS)
 
 
 def test_skip_preflight_bypasses_the_real_preflight_call(tmp_path: Path, monkeypatch) -> None:
@@ -875,13 +1008,12 @@ def test_skip_preflight_bypasses_the_real_preflight_call(tmp_path: Path, monkeyp
 
     calls = {"n": 0}
 
-    def _spy(task, **_kwargs):
+    def _spy(task, **kwargs):
         calls["n"] += 1
-        return ArmOutcome(arm="builtin", channel="recalled", passes=1, runs=1), BuiltinDiagnostics(
-            engaged=1, leaked=0, runs=1
-        )
+        return _engaging_arm(task, **kwargs)
 
     monkeypatch.setattr(driver, "run_builtin_arm", _spy)
+    monkeypatch.setattr(grid, "run_builtin_arm", _spy)
     code = driver.main(
         [
             "--corpus-dir",
@@ -893,4 +1025,19 @@ def test_skip_preflight_bypasses_the_real_preflight_call(tmp_path: Path, monkeyp
     )
     assert code == 0
     # no +1 for a preflight call — only the sweep's per-channel cells
-    assert calls["n"] == len(driver.CHANNELS)
+    assert calls["n"] == len(grid.CHANNELS)
+
+
+def test_the_driver_writes_the_summary_the_grid_reserves(tmp_path: Path, monkeypatch) -> None:
+    # The summary lands in the SAME directory as the per-task results, so its name is one the tasks
+    # are not allowed to claim (resume_cache.assert_usable_work_ids). Driver and grid must therefore
+    # agree on that name — a second copy of the string is how a task quietly overwrites the summary,
+    # or the summary a task's result.
+    _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setattr(driver, "run_builtin_arm", _engaging_arm)
+    monkeypatch.setattr(grid, "run_builtin_arm", _engaging_arm)
+
+    assert driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(out)]) == 0
+    assert (out / grid.SUMMARY_NAME).is_file()

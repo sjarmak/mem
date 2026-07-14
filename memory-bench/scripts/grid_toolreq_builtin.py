@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """mem-rk41.3.2 — builtin native-memory persistent-env arm, staged over the tool-requiring corpus.
 
-The ``builtin`` sibling to ``grid_toolreq_realagent.py``'s none/oracle ceiling sweep:
-for every frozen tool-requiring task, run ``membench.runner.toolreq_builtin.run_builtin_arm``
-under both memory-trust channels — TWO real ``claude -p`` calls per repeat (establish,
-then a bare goal call) sharing one sandbox cwd + one ``CLAUDE_CONFIG_DIR``, so Claude
-Code's own native memory is the sole continuity channel. It does NOT run ``none``,
-``oracle`` (mem-rk41.3), or ``ours`` (mem-rk41.3.1) — this script is builtin-only.
+The ``builtin`` sibling to ``grid_toolreq_realagent.py``'s none/oracle/ours sweep: for every frozen
+tool-requiring task, run ``membench.runner.toolreq_builtin.run_builtin_arm`` under both memory-trust
+channels — TWO real ``claude -p`` calls per repeat (establish, then a bare goal call) sharing one
+sandbox cwd + one ``CLAUDE_CONFIG_DIR``, so Claude Code's own native memory is the sole continuity
+channel. It does NOT run ``none``, ``oracle`` (mem-rk41.3) or ``ours`` (mem-rk41.3.1).
 
 This is the paid ceiling driver. It STAGES but never over-reaches:
 
@@ -24,6 +23,11 @@ This is the paid ceiling driver. It STAGES but never over-reaches:
 * per-task results persist to ``--out/<work_id>.json`` and are REUSED on re-run, so a
   token-expiry or OOM mid-sweep does not re-pay for finished tasks.
 
+This file is the SHELL: argparse, the spend gate, the preflight, and printing. The grid — the arm's
+cells, the verdict rule, the fingerprints, and the resume cache whose every defect an untyped
+``scripts/`` cache has shipped before — is ``membench.runner.toolreq_builtin_grid`` on top of the
+shared ``membench.runner.resume_cache``, inside ``mypy --strict``. Read the cache invariant there.
+
     # FREE — prove the two-call establish/goal wiring end to end:
     uv run python scripts/grid_toolreq_builtin.py --corpus-dir fixtures/worlds-tool --dry-run
 
@@ -38,196 +42,18 @@ import argparse
 import json
 import os
 import sys
-from collections.abc import Mapping, Sequence
-from dataclasses import asdict, fields
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, get_type_hints
 
-from membench.runner.headless_agent import DEFAULT_TIMEOUT_S, HeadlessAgentError, MemoryChannel
-from membench.runner.realagent_probe import ArmOutcome
+from membench.runner.headless_agent import CHANNELS, DEFAULT_TIMEOUT_S, HeadlessAgentError
 from membench.runner.toolreq_builtin import BuiltinDiagnostics, run_builtin_arm
-from membench.runner.toolreq_realagent import ToolReqRealAgentTask, load_corpus
+from membench.runner.toolreq_builtin_grid import CALLS_PER_REPEAT, SUMMARY_NAME, run_corpus
+from membench.runner.toolreq_realagent import ToolReqRealAgentTask, load_corpus_with_sequences
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CORPUS = PROJECT_ROOT / "memory-bench/fixtures/worlds-tool"
 DEFAULT_OUT = PROJECT_ROOT / ".mem/toolreq-builtin"
 ENV_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN"
-
-CHANNELS = (MemoryChannel.RECALLED, MemoryChannel.TRUSTED)
-CALLS_PER_REPEAT = 2  # establish + goal — double none/oracle's 1-call cost
-
-
-Cell = tuple[ArmOutcome, BuiltinDiagnostics]
-
-
-def evaluate_task(
-    task: ToolReqRealAgentTask, *, repeats: int, model: str, dry_run: bool
-) -> list[Cell]:
-    """Run every channel cell for one task."""
-    return [
-        run_builtin_arm(task, repeats=repeats, model=model, dry_run=dry_run, channel=channel)
-        for channel in CHANNELS
-    ]
-
-
-def _cell_kind(outcome: ArmOutcome, diag: BuiltinDiagnostics) -> tuple[str, str]:
-    """Classify one cell into its (kind, display-line). Returning both from one branch
-    ladder is what keeps `task_verdict` (display) and `run_corpus` (summary counts) from
-    desyncing — they read the same tuple rather than two chains that must agree.
-
-    Priority: a LEAK (pass without engagement) outranks everything else — it means the
-    shared sandbox let a Write scavenge a stale file, not that builtin memory worked.
-    Otherwise: full engagement + full pass separates; zero engagement means the mechanism
-    never fired (the mem-hb9o precedent); partial is WEAK. The `runs > 0` clause is NOT
-    redundant — `--repeats 0` would otherwise report SEPARATES off zero measurement."""
-    runs = outcome.runs
-    if diag.leaked:
-        return "LEAK", f"LEAK: {diag.leaked}/{runs} passed WITHOUT engaging native memory"
-    if outcome.passes == runs and diag.engaged == runs and runs > 0:
-        return "SEPARATES", f"SEPARATES: {outcome.passes}/{runs} (engaged {diag.engaged}/{runs})"
-    if diag.engaged == 0:
-        return "NOT-ENGAGED", f"NOT-ENGAGED: the fact never reached native memory (0/{runs})"
-    return "WEAK", f"WEAK: {outcome.passes}/{runs} passed, engaged {diag.engaged}/{runs}"
-
-
-def task_verdict(cells: Sequence[Cell]) -> str:
-    """Human-readable per-channel verdict line, built from `_cell_kind`."""
-    return " | ".join(
-        f"[{outcome.channel}] {_cell_kind(outcome, diag)[1]}" for outcome, diag in cells
-    )
-
-
-def _int_fields_ok(obj: ArmOutcome | BuiltinDiagnostics) -> bool:
-    """True iff every int-annotated field on ``obj`` actually holds an int.
-
-    ``dataclass(**...)`` never type-checks, so a cache with string counts constructs fine
-    and only crashes later at ``_cell_kind``'s ``runs > 0``. Driving the check off the
-    dataclass definitions (rather than a hand-list of today's fields) means adding a new
-    count field cannot silently reopen that path."""
-    hints = get_type_hints(type(obj))
-    return all(
-        isinstance(getattr(obj, field.name), int)
-        for field in fields(obj)
-        if hints[field.name] is int
-    )
-
-
-def _load_cached_cells(result_path: Path, identity: Mapping[str, object]) -> list[Cell] | None:
-    """One persisted per-task result -> its cells, or ``None`` = cache miss.
-
-    ``run_corpus``'s guarantee ("a corrupt or partial cache file is treated as a miss and
-    re-executed, never a crash") lives HERE, as explicit miss branches rather than an
-    ever-widening except tuple: unreadable or non-UTF-8 bytes, malformed JSON, a non-dict
-    top level, an identity mismatch, schema drift, type-hostile counts, and a cell grid
-    that does not cover exactly ``CHANNELS`` are all misses.
-
-    That last branch is load-bearing on the PAID path: ``run_corpus`` derives the
-    ``separates_all_channels`` headline from these cells, so a grid missing a channel
-    (truncated write, or a channel added since the file was written) or repeating one
-    twice would report full coverage for a channel no ``claude -p`` call ever ran.
-    Comparing the cells' channels against ``CHANNELS`` pins arity, identity, and order in
-    one check; a partial grid must be re-executed, not scored."""
-    try:
-        loaded = json.loads(result_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        # ValueError subsumes json.JSONDecodeError (malformed JSON text) and
-        # UnicodeDecodeError (invalid UTF-8 bytes).
-        return None
-    if not isinstance(loaded, dict):
-        return None
-    if any(loaded.get(key) != value for key, value in identity.items()):
-        return None
-    rows = loaded.get("cells")
-    if not isinstance(rows, list):
-        # absent (older schema) or not a grid at all — a dict or scalar would otherwise
-        # iterate to zero cells and load as a HIT holding no measurement.
-        return None
-    try:
-        cells = [
-            (ArmOutcome(**row["outcome"]), BuiltinDiagnostics(**row["diagnostics"])) for row in rows
-        ]
-    except (KeyError, TypeError):
-        # schema drift: missing/renamed keys, non-mapping rows, or an older result
-        # written before a field was added.
-        return None
-    if [outcome.channel for outcome, _ in cells] != [channel.value for channel in CHANNELS]:
-        return None
-    if not all(_int_fields_ok(outcome) and _int_fields_ok(diag) for outcome, diag in cells):
-        return None
-    return cells
-
-
-def run_corpus(
-    tasks: Sequence[ToolReqRealAgentTask],
-    *,
-    out_dir: Path,
-    repeats: int,
-    model: str,
-    dry_run: bool,
-    resume: bool = True,
-) -> dict[str, Any]:
-    """Evaluate every task, persisting one ``<work_id>.json`` each. A persisted result is
-    reused only when its ``(repeats, dry_run, model)`` identity matches — a FREE dry-run's
-    simulated result can never satisfy a PAID run over the same ``--out``. A corrupt or
-    partial cache file is treated as a miss and re-executed, never a crash."""
-    out_dir.mkdir(parents=True, exist_ok=True)
-    per_task: list[dict[str, Any]] = []
-    executed = 0
-    reused = 0
-    separates = 0
-    leaked: list[str] = []
-    not_engaged: list[str] = []
-    identity = {"repeats": repeats, "dry_run": dry_run, "model": model}
-    for task in tasks:
-        result_path = out_dir / f"{task.work_id}.json"
-        cached_cells: list[Cell] | None = None
-        if resume and result_path.is_file():
-            cached_cells = _load_cached_cells(result_path, identity)
-        if cached_cells is not None:
-            cells = cached_cells
-            reused += 1
-        else:
-            cells = evaluate_task(task, repeats=repeats, model=model, dry_run=dry_run)
-            executed += 1
-        record = {
-            "work_id": task.work_id,
-            **identity,
-            "cells": [
-                {"outcome": asdict(outcome), "diagnostics": asdict(diag)} for outcome, diag in cells
-            ],
-            "verdict": task_verdict(cells),
-        }
-        if cached_cells is None:
-            # Atomic publish: write a sibling temp file then rename, so a kill mid-write
-            # leaves either the old result or the new one, never a half-written JSON the
-            # next resume trips on.
-            tmp_path = result_path.with_suffix(".json.tmp")
-            tmp_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
-            tmp_path.replace(result_path)
-        per_task.append(record)
-        kinds = [kind for kind, _ in (_cell_kind(outcome, diag) for outcome, diag in cells)]
-        # Count SEPARATES against len(CHANNELS), never `all(...)` over whatever cells we
-        # happen to hold: `all([])` is vacuously True, so an empty or short grid would
-        # credit "separates on BOTH channels" off a measurement that covered neither.
-        # `_load_cached_cells` already refuses to hand back a short grid; this is the
-        # second lock on the same headline, stated positively.
-        if kinds.count("SEPARATES") == len(CHANNELS):
-            separates += 1
-        if "LEAK" in kinds:
-            leaked.append(task.work_id)
-        if "NOT-ENGAGED" in kinds:
-            not_engaged.append(task.work_id)
-    return {
-        "n_tasks": len(tasks),
-        "executed": executed,
-        "reused": reused,
-        "dry_run": dry_run,
-        "repeats": repeats,
-        "per_task": per_task,
-        "separates_all_channels": separates,
-        "leaked": leaked,
-        "not_engaged": not_engaged,
-    }
 
 
 def _print_go_command(n_tasks: int, repeats: int, out_dir: Path, corpus_dir: Path) -> None:
@@ -287,8 +113,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    # `--repeats 0` runs zero agent turns per cell and persists 0/0 rows, which the verdict rule
+    # would read as a confident "NOT-ENGAGED: the fact never reached native memory (0/0)" for a task
+    # that was NEVER EVALUATED. Refuse it at the flag, with a message that says why;
+    # `BaseRunIdentity.repeats` / `BaseCellOutcome.runs` (both >= 1) are the structural backstop.
+    if args.repeats < 1:
+        parser.error("--repeats must be >= 1; 0 evaluates nothing and fabricates a 0/0 verdict")
+
     corpus_dir = args.corpus_dir
-    tasks = load_corpus(corpus_dir)
+    _, tasks = load_corpus_with_sequences(corpus_dir)
     if args.limit is not None:
         tasks = tasks[: args.limit]
     if not tasks:
@@ -350,7 +183,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 3
     for record in summary["per_task"]:
         print(f"  {record['work_id']:<24} {record['verdict']}")
-    summary_path = args.out / "summary-toolreq-builtin.json"
+    summary_path = args.out / SUMMARY_NAME
     summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(
         f"\n{summary['separates_all_channels']}/{summary['n_tasks']} task(s) separate on both "

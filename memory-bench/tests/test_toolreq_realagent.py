@@ -28,6 +28,7 @@ from pydantic import ValidationError
 
 from membench.metrics.scorers import states_value
 from membench.runner import toolreq_grid as grid
+from membench.runner.resume_cache import load_cached
 from membench.runner.toolreq_realagent import (
     ToolReqRealAgentTask,
     adapt_sequence,
@@ -741,7 +742,9 @@ def test_empty_flag_contradicting_the_ours_rows_is_a_miss(tmp_path: Path) -> Non
     # the file's OWN identity, unchanged — so the miss is the rows/flag contradiction
     # (CachedResult's cross-row validator), not an identity mismatch
     identity = grid.RunIdentity(**record["identity"])
-    assert grid._load_cached(result_path, identity) is None, "accepted a fabricated ours cell"
+    assert (
+        load_cached(result_path, identity, grid.CachedResult) is None
+    ), "accepted a fabricated ours cell"
 
 
 def test_a_cached_identity_carrying_an_unknown_field_is_a_miss(tmp_path: Path) -> None:
@@ -821,7 +824,9 @@ def test_a_forged_verdict_is_a_miss(tmp_path: Path) -> None:
     result_path.write_text(json.dumps(record), encoding="utf-8")
 
     identity = grid.RunIdentity(**record["identity"])
-    assert grid._load_cached(result_path, identity) is None, "accepted a verdict its rows deny"
+    assert (
+        load_cached(result_path, identity, grid.CachedResult) is None
+    ), "accepted a verdict its rows deny"
 
     resumed = _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
     assert (resumed["executed"], resumed["reused"]) == (1, 0)
@@ -853,21 +858,6 @@ def test_cell_outcome_mirrors_every_arm_outcome_field() -> None:
     assert {f.name for f in dataclasses.fields(grid.ArmOutcome)} == set(
         grid.CellOutcome.model_fields
     )
-
-
-def test_the_digest_sorts_mapping_keys_but_never_reorders_a_list() -> None:
-    """The fingerprints hash canonical JSON, and both halves of that are load-bearing.
-
-    Keys SORT: `task_fingerprint` hashes `goal_step.model_dump()`, whose key order is the pydantic
-    field-DECLARATION order — so a plain `json.dumps` would turn reordering two fields of
-    SequenceStep, a no-op that moves nothing executed and nothing scored, into a total miss that
-    re-spends the whole paid grid.
-
-    Lists DON'T: every input whose order IS a measured input (oracle_memory, the ours payload, the
-    prompt cells) is passed as a list of pairs, because insertion order is the order the memory
-    lines are rendered into the prompt."""
-    assert grid._digest({"a": 1, "b": 2}) == grid._digest({"b": 2, "a": 1})
-    assert grid._digest([("a", 1), ("b", 2)]) != grid._digest([("b", 2), ("a", 1)])
 
 
 def test_repeats_zero_is_refused_and_never_caches_a_0_of_0_verdict(tmp_path: Path) -> None:

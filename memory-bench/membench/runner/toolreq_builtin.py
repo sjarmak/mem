@@ -57,7 +57,12 @@ from pathlib import Path
 
 from membench.harbor.agent_memory import NATIVE_MEMORY_GLOB, native_memory_path
 from membench.metrics.scorers import states_value
-from membench.runner.headless_agent import CliRunner, HeadlessClaudeAgent, MemoryChannel
+from membench.runner.headless_agent import (
+    CliRunner,
+    HeadlessClaudeAgent,
+    MemoryChannel,
+    build_agent_prompt,
+)
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome, score_goal_action
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask
 from membench.runtime import StepContext
@@ -83,6 +88,20 @@ def _establish_step(task: ToolReqRealAgentTask) -> SequenceStep:
         step_id=f"{task.work_id}-establish",
         user_request=_ESTABLISH_INSTRUCTION,
         available_tools=[],  # H3: no --allowedTools clamp on CC's own memory-write path
+    )
+
+
+def cell_prompts(task: ToolReqRealAgentTask, channel: MemoryChannel) -> tuple[str, str]:
+    """The exact two prompts one ``(builtin, channel)`` cell sends to ``claude -p``: the establish
+    leg's (facts surfaced under the channel's trust framing) and the goal leg's (BARE — the whole
+    point of the arm is that nothing but native memory carries the fact across).
+
+    It lives beside ``run_builtin_arm``, and mirrors its two ``run_step`` calls, so the grid's cache
+    identity fingerprints the prompts this arm ACTUALLY sends rather than a copy of them that can
+    drift out from under it (``toolreq_builtin_grid.prompt_fingerprint``)."""
+    return (
+        build_agent_prompt(_establish_step(task), dict(task.oracle_memory), channel),
+        build_agent_prompt(task.goal_step, {}, channel),
     )
 
 

@@ -94,6 +94,11 @@ class MemoryChannel(StrEnum):
     TRUSTED = "trusted"
 
 
+# Every trust framing a grid sweeps — the enum's own members, so a channel added above joins the
+# grids automatically rather than being re-listed (identically) in each of them.
+CHANNELS: tuple[MemoryChannel, ...] = tuple(MemoryChannel)
+
+
 _RECALLED_HEADER = (
     "## Retrieved memory from earlier sessions\n" "The following may be relevant to the task:"
 )

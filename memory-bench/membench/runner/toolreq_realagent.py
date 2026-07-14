@@ -57,6 +57,7 @@ from membench.generators.toolreq_bundle_adapter import (
 )
 from membench.metrics.scorers import states_value
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL
+from membench.runner.resume_cache import digest
 from membench.schemas.sequence import (
     BenchmarkSequence,
     ExpectedAction,
@@ -85,13 +86,42 @@ class ToolReqRealAgentTask:
     current_opaque_values: tuple[str, ...]
 
 
+def task_fingerprint(task: ToolReqRealAgentTask) -> str:
+    """Identifies the WORLD a cached result was measured against — everything about the task that
+    determines what is EXECUTED and how it is SCORED, not merely the authored values.
+
+    It lives HERE, beside the task it fingerprints, because BOTH paid grids over this corpus (the
+    none/oracle/ours ceiling and the builtin native-memory arm) need it and neither should have to
+    import the other's arms to get it.
+
+    Work ids are positional (``w-0``, ``w-1``), so a regenerated corpus reuses them and, without
+    this, a re-run over the same ``--out`` reports the PREVIOUS world's numbers at executed=0.
+    ``goal_step`` is hashed whole (a pydantic ``model_dump`` covers new fields automatically): it is
+    the prompt actually sent AND carries the ``outcome_checks`` the run is graded against, so an
+    adapter change that leaves the authored values untouched still moves the measurement.
+
+    ``oracle_memory`` is hashed in ITS OWN ORDER, deliberately: ``build_agent_prompt`` renders
+    ``available_memory.items()``, so insertion order IS the order of lines in the prompt, and a
+    sorted hash would call two different surfaced-memory prompts identical.
+    ``current_opaque_values`` IS sorted, and that is consistent rather than contradictory — it never
+    reaches a prompt, only the scorer's membership test, so its order is not a measured input."""
+    return digest(
+        {
+            "work_id": task.work_id,
+            "oracle_memory": list(task.oracle_memory.items()),
+            "current_opaque_values": sorted(task.current_opaque_values),
+            "goal_step": task.goal_step.model_dump(mode="json"),
+        }
+    )
+
+
 def _opaque(sequence_id: str, value: str, kind: str) -> str:
     """A deterministic, unguessable token for ``value`` within ``sequence_id``. Hashing
     ``(sequence_id, value)`` makes the SAME value in different sequences distinct (no
     cross-task collision) while staying reproducible (no wall clock, no RNG). ``kind``
     (CURRENT / STALE) is a human-readable tag only; the hash carries the uniqueness."""
-    digest = hashlib.sha1(f"{sequence_id}|{value}".encode()).hexdigest()[:12]
-    return f"{_OPAQUE_PREFIX}-{digest}-{kind}"
+    hashed = hashlib.sha1(f"{sequence_id}|{value}".encode()).hexdigest()[:12]
+    return f"{_OPAQUE_PREFIX}-{hashed}-{kind}"
 
 
 def _substitute(text: str, value_map: dict[str, str]) -> str:
