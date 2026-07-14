@@ -1,4 +1,4 @@
-"""mem-rk41.3 — the synthetic tool-requiring world -> real-agent task adapter + driver.
+"""mem-rk41.3 — the synthetic tool-requiring world -> real-agent task adapter + grid.
 
 Covers the two invariants the paid none/oracle ceiling-at-scale rests on:
 
@@ -24,8 +24,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from membench.metrics.scorers import states_value
+from membench.runner import toolreq_grid as grid
 from membench.runner.toolreq_realagent import (
     ToolReqRealAgentTask,
     adapt_sequence,
@@ -69,9 +71,12 @@ def _run_corpus(
     store_path: Path,
     seed_fn: Callable[..., dict[str, dict[str, str]]] = _no_ours_payload,
 ) -> dict[str, Any]:
-    """driver.run_corpus with the hermetic test wiring (repeats=2, no model, stubbed
-    seed_fn) — only what a test actually varies rides in its call."""
-    return driver.run_corpus(
+    """grid.run_corpus with the hermetic test wiring (repeats=2, no model, stubbed
+    seed_fn) — only what a test actually varies rides in its call.
+
+    mem_bin is handed to seed_fn and nowhere else, so the stubbed seeder never touches it;
+    it is not part of the run identity (the resolved PAYLOAD is — see payload_fingerprint)."""
+    return grid.run_corpus(
         tasks,
         sequences,
         out_dir=out,
@@ -79,6 +84,7 @@ def _run_corpus(
         model="",
         dry_run=dry_run,
         store_path=store_path,
+        mem_bin=str(MEM_BIN),
         seed_fn=seed_fn,
     )
 
@@ -290,9 +296,9 @@ def test_sequence_lessons_opaque_rejects_order_mismatch() -> None:
 
 def test_dry_run_arms_separate_per_task() -> None:
     task = adapt_sequence(_toolreq_seq())
-    outcomes = driver.evaluate_task(task, repeats=2, model="", dry_run=True)
+    outcomes = grid.evaluate_task(task, repeats=2, model="", dry_run=True)
     by = {(o.arm, o.channel): o for o in outcomes}
-    for channel in (c.value for c in driver.CHANNELS):
+    for channel in (c.value for c in grid.CHANNELS):
         assert by[("none", channel)].passes == 0
         assert by[("oracle", channel)].passes == by[("oracle", channel)].runs == 2
         # No ours_payload injected -> `ours` behaves like `none` (empty surfaced memory).
@@ -303,11 +309,11 @@ def test_ours_arm_dry_run_passes_when_payload_states_current_value() -> None:
     task = adapt_sequence(_toolreq_seq())
     (current_opaque,) = task.current_opaque_values
     ours_payload = {"w-prior": f"the retention window is {current_opaque}"}
-    outcomes = driver.evaluate_task(
+    outcomes = grid.evaluate_task(
         task, repeats=2, model="", dry_run=True, ours_payload=ours_payload
     )
     by = {(o.arm, o.channel): o for o in outcomes}
-    for channel in (c.value for c in driver.CHANNELS):
+    for channel in (c.value for c in grid.CHANNELS):
         assert by[("ours", channel)].passes == by[("ours", channel)].runs == 2
 
 
@@ -316,11 +322,11 @@ def test_ours_arm_dry_run_honest_non_pass_when_payload_lacks_current_value() -> 
     # task's own sequence-unique opaque value cannot make the simulated agent pass.
     task = adapt_sequence(_toolreq_seq())
     ours_payload = {"w-prior": "an unrelated retrieved fact about something else entirely"}
-    outcomes = driver.evaluate_task(
+    outcomes = grid.evaluate_task(
         task, repeats=2, model="", dry_run=True, ours_payload=ours_payload
     )
     by = {(o.arm, o.channel): o for o in outcomes}
-    for channel in (c.value for c in driver.CHANNELS):
+    for channel in (c.value for c in grid.CHANNELS):
         assert by[("ours", channel)].passes == 0
 
 
@@ -382,13 +388,13 @@ def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -
     _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
 
     calls = {"n": 0}
-    real_eval = driver.evaluate_task
+    real_eval = grid.evaluate_task
 
     def _spy(task, **_kwargs):
         calls["n"] += 1
         return real_eval(task, repeats=2, model="", dry_run=True)  # simulate, never spend
 
-    monkeypatch.setattr(driver, "evaluate_task", _spy)
+    monkeypatch.setattr(grid, "evaluate_task", _spy)
     paid = _run_corpus(tasks, sequences, out, dry_run=False, store_path=store_path)
     assert paid["executed"] == 1 and paid["reused"] == 0
     assert calls["n"] == 1
@@ -510,12 +516,12 @@ def test_a_mutated_cache_record_is_a_miss_and_is_re_measured(
     result_path = out / f"{tasks[0].work_id}.json"
     record = json.loads(result_path.read_text(encoding="utf-8"))
     full = len(record["outcomes"])
-    assert full == len(driver.ARMS) * len(driver.CHANNELS)
+    assert full == len(grid.ARMS) * len(grid.CHANNELS)
 
     mutated = mutate(record["outcomes"])
     assert (len(mutated) == full) is keeps_arity, why
     cells = {(row.get("arm"), row.get("channel")) for row in mutated}
-    assert (cells == driver.expected_cells()) is keeps_coverage, why
+    assert (cells == grid.expected_cells()) is keeps_coverage, why
     record["outcomes"] = mutated
     result_path.write_text(json.dumps(record), encoding="utf-8")
 
@@ -524,7 +530,7 @@ def test_a_mutated_cache_record_is_a_miss_and_is_re_measured(
     # and the re-executed task is fully re-measured, not scored on the mutated remains
     re_measured = summary["per_task"][0]
     assert len(re_measured["outcomes"]) == full
-    assert {(o["arm"], o["channel"]) for o in re_measured["outcomes"]} == driver.expected_cells()
+    assert {(o["arm"], o["channel"]) for o in re_measured["outcomes"]} == grid.expected_cells()
     assert "KILL" not in re_measured["verdict"] and "SEPARATES" in re_measured["verdict"]
     assert summary["separates_all_channels"] == 1
 
@@ -557,7 +563,7 @@ def test_regenerated_corpus_never_reuses_the_previous_worlds_results(tmp_path: P
     )
     seqs_b, tasks_b = load_corpus_with_sequences(corpus_b)
     assert tasks_b[0].work_id == tasks_a[0].work_id  # the id collides, as in the real corpus
-    assert driver.task_fingerprint(tasks_b[0]) != driver.task_fingerprint(tasks_a[0])
+    assert grid.task_fingerprint(tasks_b[0]) != grid.task_fingerprint(tasks_a[0])
 
     second = _run_corpus(tasks_b, seqs_b, out, dry_run=True, store_path=store_path)
     assert (second["executed"], second["reused"]) == (1, 0), "reused another world's result"
@@ -584,7 +590,7 @@ def test_fingerprint_tracks_the_executed_prompt_not_just_the_authored_values(
     assert drifted.current_opaque_values == task.current_opaque_values
     assert drifted.goal_step.user_request != task.goal_step.user_request
 
-    assert driver.task_fingerprint(drifted) != driver.task_fingerprint(task)
+    assert grid.task_fingerprint(drifted) != grid.task_fingerprint(task)
 
 
 def test_switching_the_resolved_model_invalidates_the_cache(tmp_path: Path, monkeypatch) -> None:
@@ -611,7 +617,8 @@ def test_switching_the_resolved_model_invalidates_the_cache(tmp_path: Path, monk
         1,
         0,
     ), "served model-a's numbers as model-b"
-    assert switched["per_task"][0]["model"] == "model-b"  # the RESOLVED model is recorded
+    # the RESOLVED model is recorded (in the nested identity)
+    assert switched["per_task"][0]["identity"]["model"] == "model-b"
 
 
 def test_a_changed_ours_payload_invalidates_the_cache(tmp_path: Path) -> None:
@@ -667,7 +674,7 @@ def test_reordered_ours_payload_invalidates_the_cache(tmp_path: Path) -> None:
         # identical CONTENT, retrieval ranked them the other way round
         return {work_id: {"w-b": "fact B", "w-a": "fact A"}}
 
-    assert driver.payload_fingerprint({"w-a": "A", "w-b": "B"}) != driver.payload_fingerprint(
+    assert grid.payload_fingerprint({"w-a": "A", "w-b": "B"}) != grid.payload_fingerprint(
         {"w-b": "B", "w-a": "A"}
     )
 
@@ -701,9 +708,9 @@ def test_reordered_oracle_memory_invalidates_the_cache(tmp_path: Path) -> None:
 
     assert list(forward) != list(reversed_order)  # same content, different order
     assert forward == reversed_order
-    assert driver.task_fingerprint(
+    assert grid.task_fingerprint(
         dataclasses.replace(task, oracle_memory=forward)
-    ) != driver.task_fingerprint(
+    ) != grid.task_fingerprint(
         dataclasses.replace(task, oracle_memory=reversed_order)
     ), "the ceiling arm's prompt changed but the fingerprint did not"
 
@@ -722,7 +729,8 @@ def test_empty_flag_contradicting_the_ours_rows_is_a_miss(tmp_path: Path) -> Non
 
     result_path = out / f"{tasks[0].work_id}.json"
     record = json.loads(result_path.read_text())
-    assert record["ours_retrieval_empty"] is True  # w-0 is lifecycle-earliest: LOO gives no priors
+    # w-0 is lifecycle-earliest: LOO gives no priors
+    assert record["identity"]["ours_retrieval_empty"] is True
 
     # forge a spent-looking ours measurement while keeping the never-ran flag
     for row in record["outcomes"]:
@@ -730,33 +738,105 @@ def test_empty_flag_contradicting_the_ours_rows_is_a_miss(tmp_path: Path) -> Non
             row["passes"] = row["runs"]
     result_path.write_text(json.dumps(record))
 
-    identity = {k: record[k] for k in record if k not in ("work_id", "outcomes", "verdict")}
-    assert driver._load_cached(result_path, identity) is None, "accepted a fabricated ours cell"
+    # the file's OWN identity, unchanged — so the miss is the rows/flag contradiction
+    # (CachedResult's cross-row validator), not an identity mismatch
+    identity = grid.RunIdentity(**record["identity"])
+    assert grid._load_cached(result_path, identity) is None, "accepted a fabricated ours cell"
+
+
+def test_a_cached_identity_carrying_an_unknown_field_is_a_miss(tmp_path: Path) -> None:
+    """THE subset hole, and the reason the identity is a model instead of a dict.
+
+    The predecessor accepted a file whose identity matched as a SUBSET:
+    ``any(loaded.get(k) != v for k, v in identity.items())`` walks only the keys THIS reader
+    thought to enumerate. A record written by a NEWER binary — one that measures under a
+    dimension this reader has never heard of (say a decoding temperature, or a second channel)
+    — agrees on every field they share and is served as ``reused``. The reader publishes a number
+    measured under conditions it cannot even name.
+
+    ``extra="forbid"`` + whole-object ``==`` turns that into a miss, which is the fail-safe
+    direction: a miss re-measures (costing a run), an acceptance publishes someone else's."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    store_path = tmp_path / "store.db"
+    first = _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
+    assert (first["executed"], first["reused"]) == (1, 0)
+
+    result_path = out / f"{tasks[0].work_id}.json"
+    record = json.loads(result_path.read_text(encoding="utf-8"))
+    # every field this reader KNOWS about is untouched and still agrees — the file differs only
+    # by a dimension it has never heard of, which is exactly what a subset walk cannot see
+    record["identity"]["temperature"] = 0.7
+    result_path.write_text(json.dumps(record), encoding="utf-8")
+
+    resumed = _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
+    assert (resumed["executed"], resumed["reused"]) == (
+        1,
+        0,
+    ), "served a result measured under an identity dimension the reader cannot name"
+
+
+def test_a_cached_record_in_the_old_spread_identity_shape_is_a_miss(tmp_path: Path) -> None:
+    """The migration case: files already on disk from the predecessor spread the identity across
+    the record's top level instead of nesting it. Nesting is what makes acceptance a whole-object
+    ``==`` rather than a field-by-field walk, so the old shape must MISS and be re-measured — and
+    it must do so as a cache miss, not as an unhandled ValidationError escaping mid-resume and
+    killing a paid sweep."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    store_path = tmp_path / "store.db"
+    _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
+
+    result_path = out / f"{tasks[0].work_id}.json"
+    record = json.loads(result_path.read_text(encoding="utf-8"))
+    # rewrite it the way the predecessor wrote it: identity spread, no nested key
+    legacy = {k: v for k, v in record.items() if k != "identity"} | record["identity"]
+    assert "identity" not in legacy and legacy["model"] == ""  # genuinely the old shape
+    result_path.write_text(json.dumps(legacy), encoding="utf-8")
+
+    resumed = _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
+    assert (resumed["executed"], resumed["reused"]) == (1, 0), "accepted a legacy-shaped record"
+    # and the re-measured file is written back in the current shape
+    rewritten = json.loads(result_path.read_text(encoding="utf-8"))
+    assert "identity" in rewritten and "model" not in rewritten
 
 
 def test_repeats_zero_is_refused_and_never_caches_a_0_of_0_verdict(tmp_path: Path) -> None:
     """--repeats 0 runs zero agent turns and persists six 0/0 rows, which task_verdict reads as a
     confident 'KILL: oracle ceiling 0/0 -- no separation' for a task that was NEVER EVALUATED.
-    _valid_cell's `runs == repeats` guard is VACUOUSLY TRUE at 0, so the file caches clean and
-    every resume serves it as `reused`. This is the same 0/0 hole an earlier fix believed it had
+    The predecessor's `runs == repeats` guard was VACUOUSLY TRUE at 0, so the file cached clean and
+    every resume served it as `reused`. This is the same 0/0 hole an earlier fix believed it had
     closed -- it only closed it for repeats >= 1."""
     # the argument gate refuses it outright
     with pytest.raises(SystemExit):
         driver.main(["--repeats", "0", "--dry-run", "--corpus-dir", str(tmp_path)])
 
-    # and the cache-loader backstop refuses a 0/0 row even if one reaches disk
-    assert (
-        driver._valid_cell({"arm": "oracle", "channel": "recalled", "passes": 0, "runs": 0}, 0)
-        is False
-    )
+    # and the parse boundary refuses a 0/0 row even if one reaches disk -- the survivor of the
+    # deleted `_valid_cell` ladder is CellOutcome.runs (ge=1), which rejects the same input
+    # structurally instead of by hand-written guard
+    with pytest.raises(ValidationError):
+        grid.CellOutcome(arm="oracle", channel="recalled", passes=0, runs=0)
+    # ... and the identity cannot even claim repeats=0 (RunIdentity.repeats, ge=1)
+    with pytest.raises(ValidationError):
+        grid.RunIdentity(
+            repeats=0,
+            dry_run=True,
+            model="",
+            arms=list(grid.ARMS),
+            protocol=grid.EXECUTION_PROTOCOL,
+            task_fingerprint="x",
+            ours_payload_fingerprint="x",
+            prompt_fingerprint="x",
+            ours_retrieval_empty=False,
+        )
 
     # a sweep of nothing must not be able to publish a verdict
     zero = [
-        driver.ArmOutcome(arm=arm, channel=channel.value, passes=0, runs=0)
-        for channel in driver.CHANNELS
-        for arm in driver.ARMS
+        grid.ArmOutcome(arm=arm, channel=channel.value, passes=0, runs=0)
+        for channel in grid.CHANNELS
+        for arm in grid.ARMS
     ]
-    assert "KILL" in driver.task_verdict(zero)  # this is exactly what must never be cacheable
+    assert "KILL" in grid.task_verdict(zero)  # this is exactly what must never be cacheable
 
 
 def test_duplicate_work_ids_are_refused(tmp_path: Path) -> None:
@@ -776,7 +856,7 @@ def test_duplicate_work_ids_are_refused(tmp_path: Path) -> None:
 
 
 def prompt_fp(task: ToolReqRealAgentTask, payload: dict[str, str]) -> str:
-    return driver.prompt_fingerprint(task, payload)
+    return grid.prompt_fingerprint(task, payload)
 
 
 def test_prompt_fingerprint_catches_what_a_field_model_misses(tmp_path: Path) -> None:
@@ -829,10 +909,10 @@ def test_forged_not_empty_flag_with_a_fabricated_ours_cell_is_a_miss(tmp_path: P
 
     result_path = out / f"{tasks[0].work_id}.json"
     record = json.loads(result_path.read_text())
-    assert record["ours_retrieval_empty"] is True
+    assert record["identity"]["ours_retrieval_empty"] is True
 
     # forge: claim ours WAS measured, and that it passed everything
-    record["ours_retrieval_empty"] = False
+    record["identity"]["ours_retrieval_empty"] = False
     for row in record["outcomes"]:
         if row["arm"] == "ours":
             row["passes"] = row["runs"]
@@ -936,14 +1016,14 @@ def test_empty_ours_payload_is_none_equivalent_and_never_spends(
     sequences, tasks = _corpus_one(tmp_path)
     seen: list[str] = []
 
-    def _spy_run_arm(*, arm: str, channel, repeats: int, **_kwargs: Any) -> driver.ArmOutcome:
+    def _spy_run_arm(*, arm: str, channel, repeats: int, **_kwargs: Any) -> grid.ArmOutcome:
         seen.append(arm)  # a real paid cell would spawn `claude -p` here
-        return driver.ArmOutcome(
+        return grid.ArmOutcome(
             arm=arm, channel=channel.value, passes=repeats if arm == "oracle" else 0, runs=repeats
         )
 
-    monkeypatch.setattr(driver, "run_arm", _spy_run_arm)
-    summary = driver.run_corpus(
+    monkeypatch.setattr(grid, "run_arm", _spy_run_arm)
+    summary = grid.run_corpus(
         tasks,
         sequences,
         out_dir=tmp_path / "out",
@@ -951,15 +1031,16 @@ def test_empty_ours_payload_is_none_equivalent_and_never_spends(
         model="sonnet",
         dry_run=False,  # PAID path — the one that must not burn a turn on an empty payload
         store_path=tmp_path / "store.db",
+        mem_bin=str(MEM_BIN),
         seed_fn=_no_ours_payload,  # resolves to {} -> empty payload for every task
     )
 
     assert "ours" not in seen, "spent a paid run on an empty `ours` payload"
     record = summary["per_task"][0]
-    assert record["ours_retrieval_empty"] is True
+    assert record["identity"]["ours_retrieval_empty"] is True
     by = {(o["arm"], o["channel"]): o for o in record["outcomes"]}
-    assert len(by) == len(driver.ARMS) * len(driver.CHANNELS)  # ours still reported, not dropped
-    for channel in driver.CHANNELS:
+    assert len(by) == len(grid.ARMS) * len(grid.CHANNELS)  # ours still reported, not dropped
+    for channel in grid.CHANNELS:
         ours, none = by[("ours", channel.value)], by[("none", channel.value)]
         assert (ours["passes"], ours["runs"]) == (none["passes"], none["runs"])
 
@@ -970,15 +1051,15 @@ def test_non_empty_ours_payload_still_spends(tmp_path: Path, monkeypatch) -> Non
     sequences, tasks = _corpus_one(tmp_path)
     seen: list[str] = []
 
-    def _spy_run_arm(*, arm: str, channel, repeats: int, **_kwargs: Any) -> driver.ArmOutcome:
+    def _spy_run_arm(*, arm: str, channel, repeats: int, **_kwargs: Any) -> grid.ArmOutcome:
         seen.append(arm)
-        return driver.ArmOutcome(arm=arm, channel=channel.value, passes=0, runs=repeats)
+        return grid.ArmOutcome(arm=arm, channel=channel.value, passes=0, runs=repeats)
 
     def _payload(*_args: object) -> dict[str, dict[str, str]]:
         return {tasks[0].work_id: {"lesson-1": "the retention window is TOKEN-abc"}}
 
-    monkeypatch.setattr(driver, "run_arm", _spy_run_arm)
-    summary = driver.run_corpus(
+    monkeypatch.setattr(grid, "run_arm", _spy_run_arm)
+    summary = grid.run_corpus(
         tasks,
         sequences,
         out_dir=tmp_path / "out",
@@ -986,10 +1067,11 @@ def test_non_empty_ours_payload_still_spends(tmp_path: Path, monkeypatch) -> Non
         model="sonnet",
         dry_run=False,
         store_path=tmp_path / "store.db",
+        mem_bin=str(MEM_BIN),
         seed_fn=_payload,
     )
-    assert seen.count("ours") == len(driver.CHANNELS)
-    assert summary["per_task"][0]["ours_retrieval_empty"] is False
+    assert seen.count("ours") == len(grid.CHANNELS)
+    assert summary["per_task"][0]["identity"]["ours_retrieval_empty"] is False
 
 
 def test_driver_refuses_to_spend_without_token(tmp_path: Path, monkeypatch) -> None:
@@ -1102,9 +1184,9 @@ def test_multi_subject_opaquifies_reward_and_surfaces_all_facts() -> None:
 
 def test_multi_subject_arms_separate_dry_run() -> None:
     task = adapt_sequence(_multi_subject_seq())
-    outcomes = driver.evaluate_task(task, repeats=2, model="", dry_run=True)
+    outcomes = grid.evaluate_task(task, repeats=2, model="", dry_run=True)
     by = {(o.arm, o.channel): o for o in outcomes}
-    for channel in (c.value for c in driver.CHANNELS):
+    for channel in (c.value for c in grid.CHANNELS):
         assert by[("none", channel)].passes == 0
         assert by[("oracle", channel)].passes == 2
 
