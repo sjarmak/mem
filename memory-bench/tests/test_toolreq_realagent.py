@@ -554,6 +554,33 @@ def test_fingerprint_tracks_the_executed_prompt_not_just_the_authored_values(
     assert driver.task_fingerprint(drifted) != driver.task_fingerprint(task)
 
 
+def test_switching_the_resolved_model_invalidates_the_cache(tmp_path: Path, monkeypatch) -> None:
+    """``--model`` defaults to "" and the agent then resolves it from MEMBENCH_AGENT_MODEL, so
+    caching the RAW flag makes the driver's primary independent variable invisible: run the
+    sweep under one model, repoint the env var, resume, and every cached task is served as
+    ``reused`` with the FIRST model's numbers relabelled as the second's. The identity must
+    carry the RESOLVED model."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    store_path = tmp_path / "store.db"
+
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "model-a")
+    first = _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
+    assert (first["executed"], first["reused"]) == (1, 0)
+
+    same = _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
+    assert (same["executed"], same["reused"]) == (0, 1)  # unchanged model still resumes
+
+    # `--model` is still "" — only the env var the agent actually resolves through moved.
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "model-b")
+    switched = _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
+    assert (switched["executed"], switched["reused"]) == (
+        1,
+        0,
+    ), "served model-a's numbers as model-b"
+    assert switched["per_task"][0]["model"] == "model-b"  # the RESOLVED model is recorded
+
+
 def test_unknown_arm_or_channel_cache_is_a_miss(tmp_path: Path) -> None:
     """A row naming an arm/channel outside the grid (schema drift across a rename) is a miss."""
     sequences, tasks = _corpus_one(tmp_path)

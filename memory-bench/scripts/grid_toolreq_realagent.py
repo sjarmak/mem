@@ -65,7 +65,7 @@ from run_grid_3arm import resolve_payloads
 from membench.generators.toolreq_bundle_adapter import sequence_bundles, sequence_records
 from membench.mem_cli import run_mem_json
 from membench.memory_systems.ours_system import _default_runner
-from membench.runner.headless_agent import DEFAULT_TIMEOUT_S, MemoryChannel
+from membench.runner.headless_agent import DEFAULT_TIMEOUT_S, ENV_MODEL, MemoryChannel
 from membench.runner.realagent_probe import ArmOutcome, run_arm
 from membench.runner.toolreq_realagent import (
     ToolReqRealAgentTask,
@@ -428,7 +428,18 @@ def run_corpus(
     resumability contract as ``evaluate_task``. It is injectable so a hermetic test can
     stub it out without a built ``bin/mem``."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    run_identity = {"repeats": repeats, "dry_run": dry_run, "model": model, "arms": list(ARMS)}
+    # The model the agent will ACTUALLY run, not the raw flag. `--model` defaults to "" and
+    # HeadlessClaudeAgent then resolves it from MEMBENCH_AGENT_MODEL, so caching the raw ""
+    # makes the driver's primary independent variable invisible: run the sweep under one
+    # model, point the env var at another, resume, and every cached task is served as
+    # `reused` with the FIRST model's numbers relabelled as the second's.
+    resolved_model = model or os.environ.get(ENV_MODEL, "")
+    run_identity = {
+        "repeats": repeats,
+        "dry_run": dry_run,
+        "model": resolved_model,
+        "arms": list(ARMS),
+    }
     # Per-task, because the world fingerprint is per-task: same knobs, different corpus -> miss.
     identity_of = {
         task.work_id: {**run_identity, "task_fingerprint": task_fingerprint(task)} for task in tasks
