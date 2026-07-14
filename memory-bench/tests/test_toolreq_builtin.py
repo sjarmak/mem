@@ -23,6 +23,8 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+import pytest
+
 from membench.harbor.agent_memory import native_memory_path
 from membench.runner.headless_agent import HeadlessAgentError, MemoryChannel
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome
@@ -34,7 +36,7 @@ from membench.runner.toolreq_builtin import (
     run_builtin_arm,
     simulated_builtin_runner,
 )
-from membench.runner.toolreq_realagent import adapt_sequence
+from membench.runner.toolreq_realagent import ToolReqRealAgentTask, adapt_sequence, load_corpus
 from membench.schemas.sequence import (
     BenchmarkSequence,
     ExpectedAction,
@@ -88,6 +90,17 @@ def _toolreq_seq(seq_id: str = "w-t0") -> BenchmarkSequence:
 
 def _task(seq_id: str = "w-t0"):
     return adapt_sequence(_toolreq_seq(seq_id))
+
+
+def _corpus_one(tmp_path: Path, work_id: str = "w-0") -> list[ToolReqRealAgentTask]:
+    """Seed a one-task frozen corpus under ``tmp_path/corpus`` and load it — the same
+    scaffold every driver test needs (mirrors ``test_toolreq_realagent._corpus_one``)."""
+    corpus = tmp_path / "corpus"
+    (corpus / "0").mkdir(parents=True)
+    (corpus / "0" / "sequences.json").write_text(
+        json.dumps([_toolreq_seq(work_id).model_dump()]), encoding="utf-8"
+    )
+    return load_corpus(corpus)
 
 
 def _stream_json_runner(
@@ -377,15 +390,7 @@ def test_verdict_not_engaged_when_mechanism_never_fires() -> None:
 
 
 def test_run_corpus_persists_and_is_resumable(tmp_path: Path) -> None:
-    seed_dir = tmp_path / "corpus" / "0"
-    seed_dir.mkdir(parents=True)
-    seq = _toolreq_seq("w-0")
-    seed_dir_file = seed_dir / "sequences.json"
-    seed_dir_file.write_text(json.dumps([seq.model_dump()]), encoding="utf-8")
-
-    from membench.runner.toolreq_realagent import load_corpus
-
-    tasks = load_corpus(tmp_path / "corpus")
+    tasks = _corpus_one(tmp_path)
     out = tmp_path / "out"
 
     first = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
@@ -397,76 +402,27 @@ def test_run_corpus_persists_and_is_resumable(tmp_path: Path) -> None:
     assert second["executed"] == 0 and second["reused"] == 1
 
 
-def test_corrupt_cache_file_is_re_executed_not_crashed(tmp_path: Path) -> None:
-    from membench.runner.toolreq_realagent import load_corpus
-
-    seed_dir = tmp_path / "corpus" / "0"
-    seed_dir.mkdir(parents=True)
-    (seed_dir / "sequences.json").write_text(
-        json.dumps([_toolreq_seq("w-0").model_dump()]), encoding="utf-8"
-    )
-    tasks = load_corpus(tmp_path / "corpus")
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param(b"{ half-written not json", id="malformed-json"),
+        pytest.param(
+            json.dumps({"work_id": "w-0", "repeats": 2, "dry_run": True, "model": ""}).encode(),
+            id="schema-mismatch-missing-cells",
+        ),
+        pytest.param(b"[]", id="non-dict-top-level"),
+        pytest.param(b"\xff\xfe\x00corrupt", id="invalid-utf8"),
+    ],
+)
+def test_hostile_cache_file_is_re_executed_not_crashed(tmp_path: Path, payload: bytes) -> None:
+    # Every hostile persisted-result shape is a MISS per run_corpus's guarantee ("treated
+    # as a miss and re-executed, never a crash"): malformed JSON text, a valid-JSON
+    # record missing "cells" (older schema), a syntactically-valid non-dict top level,
+    # and invalid UTF-8 bytes (disk rot, manual edit).
+    tasks = _corpus_one(tmp_path)
     out = tmp_path / "out"
     out.mkdir()
-    (out / "w-0.json").write_text("{ half-written not json", encoding="utf-8")
-    summary = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
-    assert summary["executed"] == 1 and summary["reused"] == 0  # cache-miss, no crash
-
-
-def test_schema_mismatched_cache_file_is_re_executed_not_crashed(tmp_path: Path) -> None:
-    # Valid JSON, matching identity, but missing "cells" (e.g. written by an older
-    # version before a BuiltinDiagnostics field existed) — must fall back to re-execute,
-    # not raise KeyError/TypeError and kill the whole resumed sweep.
-    from membench.runner.toolreq_realagent import load_corpus
-
-    seed_dir = tmp_path / "corpus" / "0"
-    seed_dir.mkdir(parents=True)
-    (seed_dir / "sequences.json").write_text(
-        json.dumps([_toolreq_seq("w-0").model_dump()]), encoding="utf-8"
-    )
-    tasks = load_corpus(tmp_path / "corpus")
-    out = tmp_path / "out"
-    out.mkdir()
-    (out / "w-0.json").write_text(
-        json.dumps({"work_id": "w-0", "repeats": 2, "dry_run": True, "model": ""}),
-        encoding="utf-8",
-    )
-    summary = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
-    assert summary["executed"] == 1 and summary["reused"] == 0
-
-
-def test_non_dict_cache_file_is_re_executed_not_crashed(tmp_path: Path) -> None:
-    # Syntactically valid JSON, but a non-dict top level (e.g. a bare list) -> the
-    # identity check's loaded.get(key) must not raise AttributeError and kill the sweep.
-    from membench.runner.toolreq_realagent import load_corpus
-
-    seed_dir = tmp_path / "corpus" / "0"
-    seed_dir.mkdir(parents=True)
-    (seed_dir / "sequences.json").write_text(
-        json.dumps([_toolreq_seq("w-0").model_dump()]), encoding="utf-8"
-    )
-    tasks = load_corpus(tmp_path / "corpus")
-    out = tmp_path / "out"
-    out.mkdir()
-    (out / "w-0.json").write_text("[]", encoding="utf-8")
-    summary = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
-    assert summary["executed"] == 1 and summary["reused"] == 0
-
-
-def test_invalid_utf8_cache_file_is_re_executed_not_crashed(tmp_path: Path) -> None:
-    # Externally corrupted cache bytes (disk rot, manual edit) that aren't valid UTF-8
-    # raise UnicodeDecodeError from read_text — a miss per the docstring, never a crash.
-    from membench.runner.toolreq_realagent import load_corpus
-
-    seed_dir = tmp_path / "corpus" / "0"
-    seed_dir.mkdir(parents=True)
-    (seed_dir / "sequences.json").write_text(
-        json.dumps([_toolreq_seq("w-0").model_dump()]), encoding="utf-8"
-    )
-    tasks = load_corpus(tmp_path / "corpus")
-    out = tmp_path / "out"
-    out.mkdir()
-    (out / "w-0.json").write_bytes(b"\xff\xfe\x00corrupt")
+    (out / "w-0.json").write_bytes(payload)
     summary = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
     assert summary["executed"] == 1 and summary["reused"] == 0
 
@@ -476,14 +432,7 @@ def test_type_hostile_cache_counts_are_re_executed_not_crashed(tmp_path: Path) -
     # with string counts — must be a miss. Unvalidated, it survives the cache-load guard
     # and crashes later at _cell_kind's `runs > 0` (TypeError: str > int), outside the
     # except. Built by mutating a REAL dry-run record so the shape can't drift.
-    from membench.runner.toolreq_realagent import load_corpus
-
-    seed_dir = tmp_path / "corpus" / "0"
-    seed_dir.mkdir(parents=True)
-    (seed_dir / "sequences.json").write_text(
-        json.dumps([_toolreq_seq("w-0").model_dump()]), encoding="utf-8"
-    )
-    tasks = load_corpus(tmp_path / "corpus")
+    tasks = _corpus_one(tmp_path)
     out = tmp_path / "out"
     first = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
     assert first["executed"] == 1
@@ -501,14 +450,7 @@ def test_type_hostile_cache_counts_are_re_executed_not_crashed(tmp_path: Path) -
 
 
 def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -> None:
-    from membench.runner.toolreq_realagent import load_corpus
-
-    seed_dir = tmp_path / "corpus" / "0"
-    seed_dir.mkdir(parents=True)
-    (seed_dir / "sequences.json").write_text(
-        json.dumps([_toolreq_seq("w-0").model_dump()]), encoding="utf-8"
-    )
-    tasks = load_corpus(tmp_path / "corpus")
+    tasks = _corpus_one(tmp_path)
     out = tmp_path / "out"
     driver.run_corpus(tasks, out_dir=out, repeats=1, model="", dry_run=True)
 
@@ -526,11 +468,7 @@ def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -
 
 
 def test_driver_refuses_to_spend_without_token(tmp_path: Path, monkeypatch) -> None:
-    seed_dir = tmp_path / "corpus" / "0"
-    seed_dir.mkdir(parents=True)
-    (seed_dir / "sequences.json").write_text(
-        json.dumps([_toolreq_seq("w-0").model_dump()]), encoding="utf-8"
-    )
+    _corpus_one(tmp_path)
     monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
 
     def _boom(*_a: object, **_k: object) -> object:
@@ -544,11 +482,7 @@ def test_driver_refuses_to_spend_without_token(tmp_path: Path, monkeypatch) -> N
 
 
 def test_preflight_halts_when_native_memory_never_engages(tmp_path: Path, monkeypatch) -> None:
-    seed_dir = tmp_path / "corpus" / "0"
-    seed_dir.mkdir(parents=True)
-    (seed_dir / "sequences.json").write_text(
-        json.dumps([_toolreq_seq("w-0").model_dump()]), encoding="utf-8"
-    )
+    _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
 
     def _never_engages(task, **_kwargs):
@@ -568,11 +502,7 @@ def test_preflight_agent_error_halts_diagnosed_not_raw_traceback(
     # call (HeadlessAgentError), not a clean not-engaged diagnosis. main() must convert
     # it into the documented diagnosed PREFLIGHT HALT (exit 3, same as the not-engaged
     # halt), never let a raw traceback propagate out of the driver.
-    seed_dir = tmp_path / "corpus" / "0"
-    seed_dir.mkdir(parents=True)
-    (seed_dir / "sequences.json").write_text(
-        json.dumps([_toolreq_seq("w-0").model_dump()]), encoding="utf-8"
-    )
+    _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
 
     def _raises(task, **_kwargs):
@@ -586,12 +516,38 @@ def test_preflight_agent_error_halts_diagnosed_not_raw_traceback(
     assert "simulated rate-limit" in err  # the halt carries the underlying failure
 
 
-def test_preflight_proceeds_when_engaged(tmp_path: Path, monkeypatch) -> None:
-    seed_dir = tmp_path / "corpus" / "0"
-    seed_dir.mkdir(parents=True)
-    (seed_dir / "sequences.json").write_text(
-        json.dumps([_toolreq_seq("w-0").model_dump()]), encoding="utf-8"
+def test_sweep_agent_error_halts_diagnosed_with_resume_pointer(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    # The preflight is not the only paid boundary: a HeadlessAgentError mid-sweep (the
+    # rate-limit at paid call 50 of 180) must get the same diagnosed-halt treatment —
+    # exit 3, pointing at the persisted per-task results for a cheap resume — never a
+    # raw traceback out of the driver during the expensive phase.
+    _corpus_one(tmp_path)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+
+    def _raises(task, **_kwargs):
+        raise HeadlessAgentError("claude -p failed: simulated mid-sweep rate-limit")
+
+    monkeypatch.setattr(driver, "run_builtin_arm", _raises)
+    code = driver.main(
+        [
+            "--corpus-dir",
+            str(tmp_path / "corpus"),
+            "--out",
+            str(tmp_path / "out"),
+            "--skip-preflight",
+        ]
     )
+    assert code == 3
+    err = capsys.readouterr().err
+    assert "SWEEP HALT" in err
+    assert "simulated mid-sweep rate-limit" in err  # carries the underlying failure
+    assert "re-run" in err  # and points at the resume path
+
+
+def test_preflight_proceeds_when_engaged(tmp_path: Path, monkeypatch) -> None:
+    _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
 
     calls = {"n": 0}
@@ -610,11 +566,7 @@ def test_preflight_proceeds_when_engaged(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_skip_preflight_bypasses_the_real_preflight_call(tmp_path: Path, monkeypatch) -> None:
-    seed_dir = tmp_path / "corpus" / "0"
-    seed_dir.mkdir(parents=True)
-    (seed_dir / "sequences.json").write_text(
-        json.dumps([_toolreq_seq("w-0").model_dump()]), encoding="utf-8"
-    )
+    _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
 
     calls = {"n": 0}

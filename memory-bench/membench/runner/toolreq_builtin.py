@@ -136,28 +136,28 @@ def simulated_builtin_runner(current_values: Collection[str]) -> CliRunner:
                 # establish call: honestly persist iff the arm surfaced every value
                 memory_path.parent.mkdir(parents=True, exist_ok=True)
                 memory_path.write_text(" ".join(values), encoding="utf-8")
-            elif memory_path.is_file() and all(
-                value in memory_path.read_text(encoding="utf-8") for value in values
-            ):
-                # goal call: re-surface iff the establish call actually persisted it
-                events.append(
-                    {
-                        "type": "assistant",
-                        "message": {
-                            "content": [
-                                {
-                                    "type": "tool_use",
-                                    "name": REAL_TOOL,
-                                    "input": {
-                                        "file_path": CONFIG_FILE,
-                                        "content": " ".join(values),
-                                    },
-                                }
-                            ],
-                            "usage": {"input_tokens": 0, "output_tokens": 0},
-                        },
-                    }
-                )
+            elif memory_path.is_file():
+                persisted = memory_path.read_text(encoding="utf-8")  # once, not per value
+                if all(value in persisted for value in values):
+                    # goal call: re-surface iff the establish call actually persisted it
+                    events.append(
+                        {
+                            "type": "assistant",
+                            "message": {
+                                "content": [
+                                    {
+                                        "type": "tool_use",
+                                        "name": REAL_TOOL,
+                                        "input": {
+                                            "file_path": CONFIG_FILE,
+                                            "content": " ".join(values),
+                                        },
+                                    }
+                                ],
+                                "usage": {"input_tokens": 0, "output_tokens": 0},
+                            },
+                        }
+                    )
         events.append({"type": "result", "result": "done"})
         stdout = "\n".join(json.dumps(event) for event in events)
         return subprocess.CompletedProcess(argv_list, returncode=0, stdout=stdout, stderr="")

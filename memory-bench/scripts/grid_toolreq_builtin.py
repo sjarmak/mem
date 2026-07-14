@@ -38,10 +38,10 @@ import argparse
 import json
 import os
 import sys
-from collections.abc import Sequence
-from dataclasses import asdict
+from collections.abc import Mapping, Sequence
+from dataclasses import asdict, fields
 from pathlib import Path
-from typing import Any
+from typing import Any, get_type_hints
 
 from membench.runner.headless_agent import DEFAULT_TIMEOUT_S, HeadlessAgentError, MemoryChannel
 from membench.runner.realagent_probe import ArmOutcome
@@ -105,6 +105,54 @@ def task_verdict(cells: Sequence[Cell]) -> str:
     return " | ".join(lines)
 
 
+def _int_fields_ok(obj: ArmOutcome | BuiltinDiagnostics) -> bool:
+    """True iff every int-annotated field on ``obj`` actually holds an int.
+
+    Schema-driven (``dataclasses.fields``), not a hand-list of whatever fields the
+    scoring path reads today: ``dataclass(**...)`` never type-checks, so a cache with
+    (e.g.) string counts constructs fine and only crashes later at ``_cell_kind``'s
+    ``runs > 0``. Deriving the check from the dataclass definitions means adding a new
+    count field can never silently reopen that path."""
+    hints = get_type_hints(type(obj))
+    return all(
+        isinstance(getattr(obj, field.name), int)
+        for field in fields(obj)
+        if hints[field.name] is int
+    )
+
+
+def _load_cached_cells(result_path: Path, identity: Mapping[str, object]) -> list[Cell] | None:
+    """One persisted per-task result -> its cells, or ``None`` = cache miss.
+
+    ``run_corpus``'s guarantee ("a corrupt or partial cache file is treated as a miss
+    and re-executed, never a crash") lives HERE, as explicit miss branches instead of
+    an ever-widening except tuple: unreadable or non-UTF-8 bytes, malformed JSON, a
+    non-dict top level, an identity mismatch, schema drift, and type-hostile counts
+    are all misses."""
+    try:
+        loaded = json.loads(result_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        # ValueError subsumes json.JSONDecodeError (malformed JSON text) and
+        # UnicodeDecodeError (invalid UTF-8 bytes).
+        return None
+    if not isinstance(loaded, dict):
+        return None
+    if any(loaded.get(key) != value for key, value in identity.items()):
+        return None
+    try:
+        cells = [
+            (ArmOutcome(**row["outcome"]), BuiltinDiagnostics(**row["diagnostics"]))
+            for row in loaded["cells"]
+        ]
+    except (KeyError, TypeError):
+        # schema drift: missing/renamed keys, non-mapping rows, or an older result
+        # written before a field was added.
+        return None
+    if not all(_int_fields_ok(outcome) and _int_fields_ok(diag) for outcome, diag in cells):
+        return None
+    return cells
+
+
 def run_corpus(
     tasks: Sequence[ToolReqRealAgentTask],
     *,
@@ -130,36 +178,7 @@ def run_corpus(
         result_path = out_dir / f"{task.work_id}.json"
         cached_cells: list[Cell] | None = None
         if resume and result_path.is_file():
-            try:
-                loaded = json.loads(result_path.read_text(encoding="utf-8"))
-                if all(loaded.get(key) == value for key, value in identity.items()):
-                    candidate = [
-                        (ArmOutcome(**row["outcome"]), BuiltinDiagnostics(**row["diagnostics"]))
-                        for row in loaded["cells"]
-                    ]
-                    # dataclass(**...) never type-checks its fields: a cache whose counts
-                    # are (e.g.) strings constructs fine here but crashes later in
-                    # `_cell_kind`'s `runs > 0` — OUTSIDE this guard. Reject type-hostile
-                    # counts as a miss NOW, while the except below still catches it.
-                    for outcome, diag in candidate:
-                        counts = (outcome.passes, outcome.runs, diag.engaged, diag.leaked)
-                        if not all(isinstance(count, int) for count in counts):
-                            raise TypeError("cached cell counts are not ints")
-                    cached_cells = candidate
-            except (
-                json.JSONDecodeError,
-                UnicodeDecodeError,
-                OSError,
-                KeyError,
-                TypeError,
-                AttributeError,
-            ):
-                # corrupt/partial file (malformed JSON or invalid UTF-8 bytes), a schema
-                # mismatch (e.g. an older result written before a BuiltinDiagnostics field
-                # was added), a syntactically valid but non-dict top level (e.g. "[]" ->
-                # loaded.get raises AttributeError), or type-hostile counts (above)
-                # -> re-execute this one task rather than crash the whole resumed sweep.
-                cached_cells = None
+            cached_cells = _load_cached_cells(result_path, identity)
         if cached_cells is not None:
             cells = cached_cells
             reused += 1
@@ -300,9 +319,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"toolreq builtin-arm sweep: {mode}; {len(tasks)} task(s) x {len(CHANNELS)} channel x "
         f"{args.repeats} repeat x {CALLS_PER_REPEAT} calls/repeat"
     )
-    summary = run_corpus(
-        tasks, out_dir=args.out, repeats=args.repeats, model=args.model, dry_run=args.dry_run
-    )
+    try:
+        summary = run_corpus(
+            tasks, out_dir=args.out, repeats=args.repeats, model=args.model, dry_run=args.dry_run
+        )
+    except HeadlessAgentError as exc:
+        # The preflight is not the only paid boundary: a rate-limited/flaky/timed-out
+        # `claude -p` mid-sweep gets the same diagnosed-halt treatment, never a raw
+        # traceback. Finished tasks are already persisted, so resuming is cheap.
+        print(
+            f"SWEEP HALT: a real agent call failed mid-sweep ({exc}) — stopping instead "
+            f"of spending into a broken link. Finished tasks are persisted under "
+            f"{args.out} and are REUSED on re-run: re-run the same command to resume "
+            "once the underlying failure (network, rate limit, CLI issue) is resolved.",
+            file=sys.stderr,
+        )
+        return 3
     for record in summary["per_task"]:
         print(f"  {record['work_id']:<24} {record['verdict']}")
     summary_path = args.out / "summary-toolreq-builtin.json"
