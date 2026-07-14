@@ -34,12 +34,13 @@ from membench.runner.resume_cache import (
     BaseCachedResult,
     BaseCellOutcome,
     BaseRunIdentity,
+    Evaluation,
     corpus_summary,
-    digest,
+    invocation_digest,
     render_verdict,
     run_cached_corpus,
 )
-from membench.runner.toolreq_builtin import ARM, BuiltinDiagnostics, cell_prompts, run_builtin_arm
+from membench.runner.toolreq_builtin import ARM, BuiltinDiagnostics, cell_calls, run_builtin_arm
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask, task_fingerprint
 
 # The run summary, written into the SAME directory as the per-task `<work_id>.json` results —
@@ -47,11 +48,15 @@ from membench.runner.toolreq_realagent import ToolReqRealAgentTask, task_fingerp
 SUMMARY_NAME = "summary-toolreq-builtin.json"
 
 # The executing/scoring CODE this grid's cached cells were measured under
-# (BaseRunIdentity.protocol): `run_builtin_arm` (the establish/goal pair, the cwd firewall, the
-# config-dir seed), `_memory_engaged`, `build_agent_prompt`, the stream-json parser,
-# `score_goal_action`, DEFAULT_TIMEOUT_S.
-# BUMP on any change to those that could move a result.
-EXECUTION_PROTOCOL = 1
+# (BaseRunIdentity.protocol) — what MOVES A RESULT while every fingerprint stays identical:
+# `run_builtin_arm`'s cwd firewall (`_wipe_cwd_contents`) and config-dir seed (`_seed_config_dir`),
+# `_memory_engaged` + NATIVE_MEMORY_GLOB, the stream-json parser, `score_goal_action`,
+# DEFAULT_TIMEOUT_S, and `simulated_builtin_runner` (which decides the ENTIRE dry-run measurement —
+# free runs only, since `dry_run` is itself in the identity).
+# NOT here, because `invocation_fingerprint` now carries them: the prompts, --allowedTools, --model,
+# --strict-mcp-config, and the legs' count and order.
+# BUMP on any change to the former that could move a result.
+EXECUTION_PROTOCOL = 2
 
 CALLS_PER_REPEAT = 2  # establish + goal — double none/oracle's 1-call cost
 
@@ -136,14 +141,18 @@ def _cell(outcome: ArmOutcome, diagnostics: BuiltinDiagnostics) -> BuiltinCell:
 
 def evaluate_task(
     task: ToolReqRealAgentTask, *, repeats: int, model: str, dry_run: bool
-) -> list[BuiltinCell]:
-    """Run every channel cell for one task."""
-    return [
-        _cell(
-            *run_builtin_arm(task, repeats=repeats, model=model, dry_run=dry_run, channel=channel)
-        )
+) -> Evaluation:
+    """Run every channel cell for one task, and hand back the invocations they made alongside the
+    rows they scored — the cache checks the second against this run's identity before it will
+    publish the first (``resume_cache.run_cached_corpus``)."""
+    runs = [
+        run_builtin_arm(task, repeats=repeats, model=model, dry_run=dry_run, channel=channel)
         for channel in CHANNELS
     ]
+    return Evaluation(
+        outcomes=[_cell(outcome, diagnostics) for outcome, diagnostics, _calls in runs],
+        calls=[calls for _outcome, _diagnostics, calls in runs],
+    )
 
 
 # The verdict kinds, most severe first. `cell_kind` returns one of these and the summary counts
@@ -178,14 +187,16 @@ def task_verdict(cells: Sequence[BuiltinCell]) -> str:
     return render_verdict([(cell.channel, *cell_kind(cell)) for cell in cells])
 
 
-def prompt_fingerprint(task: ToolReqRealAgentTask) -> str:
-    """Hashes the PROMPTS THEMSELVES — every prompt every cell will send to ``claude -p``.
+def invocation_fingerprint(task: ToolReqRealAgentTask, *, model: str) -> str:
+    """Hashes the COMMAND LINES THEMSELVES — every ``claude -p`` argv every cell will spawn.
 
-    BOTH legs, per channel. The establish leg is the one under test (it must persist the fact) and
-    the goal leg is the one scored; hashing only the second would call two runs identical while the
-    first differed. The pair comes from ``toolreq_builtin.cell_prompts``, beside the ``run_step``
-    calls it mirrors, so this cannot fingerprint a prompt the arm no longer sends."""
-    return digest([(channel.value, *cell_prompts(task, channel)) for channel in CHANNELS])
+    Rendered from ``toolreq_builtin.cell_legs`` through ``toolreq_builtin.cell_agent``: the same
+    legs ``run_builtin_arm`` executes, through the same agent it executes them with. So this cannot
+    fingerprint an invocation the arm does not make — it is not a copy of the arm's behaviour kept
+    beside it, it is the arm's own plan. The write boundary then checks the RECORDED invocations
+    against it (``resume_cache.run_cached_corpus``), which is what catches a leg the plan never
+    declared."""
+    return invocation_digest(cell_calls(task, channel, model=model) for channel in CHANNELS)
 
 
 class BuiltinCachedResult(BaseCachedResult[BaseRunIdentity, BuiltinCell]):
@@ -195,7 +206,7 @@ class BuiltinCachedResult(BaseCachedResult[BaseRunIdentity, BuiltinCell]):
     The identity is ``BaseRunIdentity`` unextended: unlike the ``ours`` arm, ``builtin`` retrieves
     nothing from an external store — its memory is the agent's own, established in-band by the first
     leg — so there is no cross-task payload to hash. Everything that varies what it executes is in
-    the task and in the prompts, and both are already fingerprinted."""
+    the task and in the command lines, and both are already fingerprinted."""
 
     @classmethod
     def expected_cells(cls) -> set[tuple[str, str]]:
@@ -217,7 +228,7 @@ def _identity(
         model=resolved_model,
         protocol=EXECUTION_PROTOCOL,
         task_fingerprint=task_fingerprint(task),
-        prompt_fingerprint=prompt_fingerprint(task),
+        invocation_fingerprint=invocation_fingerprint(task, model=resolved_model),
     )
 
 
@@ -244,7 +255,9 @@ def run_corpus(
         identity_of=lambda task: _identity(
             task, repeats=repeats, resolved_model=resolved_model, dry_run=dry_run
         ),
-        evaluate=lambda task: evaluate_task(task, repeats=repeats, model=model, dry_run=dry_run),
+        evaluate=lambda task: evaluate_task(
+            task, repeats=repeats, model=resolved_model, dry_run=dry_run
+        ),
         summary_name=SUMMARY_NAME,
         resume=resume,
     )

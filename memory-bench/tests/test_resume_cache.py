@@ -21,13 +21,15 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from membench.runner.headless_agent import ENV_MODEL
+from membench.runner.headless_agent import ENV_MODEL, CellCalls
 from membench.runner.resume_cache import (
     BaseCachedResult,
     BaseCellOutcome,
     BaseRunIdentity,
+    Evaluation,
     assert_usable_work_ids,
     digest,
+    invocation_digest,
     load_cached,
     run_cached_corpus,
 )
@@ -64,6 +66,14 @@ class _Result(BaseCachedResult[_Identity, _Cell]):
         ]
 
 
+def _calls(goal: str = "goal-prompt") -> list[CellCalls]:
+    """The stand-in grid's plan: one cell per channel, each a single `claude -p` invocation."""
+    return [
+        CellCalls(arm="a", channel=channel, calls=(("claude", "-p", f"[{channel}] {goal}"),))
+        for channel in ("recalled", "trusted")
+    ]
+
+
 def _identity(**overrides: object) -> _Identity:
     fields: dict[str, object] = {
         "repeats": 2,
@@ -71,7 +81,7 @@ def _identity(**overrides: object) -> _Identity:
         "model": "",
         "protocol": 1,
         "task_fingerprint": "fp-task",
-        "prompt_fingerprint": "fp-prompt",
+        "invocation_fingerprint": invocation_digest(_calls()),
     }
     return _Identity(**(fields | overrides))  # type: ignore[arg-type]
 
@@ -83,18 +93,24 @@ def _cells(passes: int = 2, runs: int = 2) -> list[_Cell]:
     ]
 
 
-def _evaluate(_task: _Task) -> list[_Cell]:
-    return _cells()
+def _evaluate(_task: _Task) -> Evaluation:
+    return Evaluation(outcomes=_cells(), calls=_calls())
 
 
-def _run(tasks: Sequence[_Task], out: Path, identity: _Identity | None = None, resume: bool = True):
+def _run(
+    tasks: Sequence[_Task],
+    out: Path,
+    identity: _Identity | None = None,
+    resume: bool = True,
+    evaluate=_evaluate,
+):
     ident = identity if identity is not None else _identity()
     return run_cached_corpus(
         tasks,
         out_dir=out,
         result_cls=_Result,
         identity_of=lambda _task: ident,
-        evaluate=_evaluate,
+        evaluate=evaluate,
         summary_name=SUMMARY_NAME,
         resume=resume,
     )
@@ -116,6 +132,94 @@ def test_the_digest_sorts_mapping_keys_but_never_reorders_a_list() -> None:
     lines are rendered into the prompt."""
     assert digest({"a": 1, "b": 2}) == digest({"b": 2, "a": 1})
     assert digest([("a", 1), ("b", 2)]) != digest([("b", 2), ("a", 1)])
+
+
+def test_the_cells_sort_but_a_cells_own_calls_never_reorder() -> None:
+    """The two halves of ``invocation_digest``, and each is load-bearing in the OPPOSITE direction.
+
+    CELLS sort: a cell is an independent ``claude -p`` run in its own sandbox, self-labeled by
+    (arm, channel), so the order the grid's loop happens to visit them in moves nothing executed and
+    nothing scored — sorting keeps a reordered loop a cache HIT rather than a full paid re-spend.
+
+    A cell's CALLS do not: its legs share a cwd and a config dir and run in SEQUENCE (establish,
+    then goal), so their order IS a measured input. Swap the two and the builtin arm establishes the
+    fact into a directory it then wipes, and measures a guaranteed 0/N. A digest that called that
+    the same run as the un-swapped one would serve the pre-swap numbers as post-swap measurements —
+    this bead's own defect, reintroduced by its fix."""
+    recalled = CellCalls(arm="a", channel="recalled", calls=(("claude", "-p", "x"),))
+    trusted = CellCalls(arm="a", channel="trusted", calls=(("claude", "-p", "y"),))
+    assert invocation_digest([recalled, trusted]) == invocation_digest([trusted, recalled])
+
+    legs = CellCalls(
+        arm="b", channel="recalled", calls=(("claude", "-p", "establish"), ("claude", "-p", "goal"))
+    )
+    swapped = CellCalls(
+        arm="b", channel="recalled", calls=(("claude", "-p", "goal"), ("claude", "-p", "establish"))
+    )
+    assert invocation_digest([legs]) != invocation_digest([swapped])
+
+
+def test_two_records_for_one_cell_are_refused() -> None:
+    """A cell runs ONE cycle, so two records for it cannot both describe what it did. Merging them
+    would let a second, fabricated record silently overwrite the measured one."""
+    cell = CellCalls(arm="a", channel="recalled", calls=(("claude", "-p", "x"),))
+    with pytest.raises(ValueError, match="two invocation records"):
+        invocation_digest([cell, cell])
+
+
+# --- the write boundary: a measurement may not be published under an identity that does not
+# --- describe the invocations it actually made -------------------------------------------
+
+
+def test_a_task_that_sent_a_prompt_its_identity_does_not_fingerprint_is_refused(
+    tmp_path: Path,
+) -> None:
+    """THE bond this module exists to enforce. ``identity_of`` and ``evaluate`` are injected
+    INDEPENDENTLY, so nothing but this check binds the hashed invocation to the sent one: a grid
+    whose plan drifts from what its arms execute would otherwise persist a real measurement under a
+    fingerprint describing a prompt it never sent, and every later resume would serve it.
+
+    The record must NOT reach disk. A refused measurement that still wrote its file would be served
+    by the very next resume — the failure it exists to prevent, one run later."""
+    out = tmp_path / "out"
+
+    def _drifted(_task: _Task) -> Evaluation:
+        return Evaluation(outcomes=_cells(), calls=_calls(goal="a prompt the plan never modelled"))
+
+    with pytest.raises(ValueError, match="no longer what its arms execute"):
+        _run([_Task("w-0")], out, evaluate=_drifted)
+    assert not (out / "w-0.json").exists(), "a refused measurement was published anyway"
+
+
+def test_a_leg_the_plan_never_declared_is_refused(tmp_path: Path) -> None:
+    """The failure mode that decides the SEAM. Recording what an arm *says* it sent — a prompt field
+    on its step result, a list it appends to — is a MODEL of the wire: add a leg to the arm and
+    forget BOTH to declare it in the plan and to record it (one omission, two symptoms, the
+    likeliest edit of all) and the sent record still equals the plan. Recording off the CLI
+    runner instead sees the call whether or not anyone declared it, so the undeclared leg lands
+    in the cycle and moves the digest."""
+    out = tmp_path / "out"
+
+    def _extra_leg(_task: _Task) -> Evaluation:
+        undeclared = [
+            CellCalls(arm=c.arm, channel=c.channel, calls=(*c.calls, ("claude", "-p", "leg 2")))
+            for c in _calls()
+        ]
+        return Evaluation(outcomes=_cells(), calls=undeclared)
+
+    with pytest.raises(ValueError, match="no longer what its arms execute"):
+        _run([_Task("w-0")], out, evaluate=_extra_leg)
+    assert not (out / "w-0.json").exists()
+
+
+def test_a_matching_measurement_publishes_and_then_resumes(tmp_path: Path) -> None:
+    """The honest path: the invocations sent hash to the identity they were measured under, so the
+    record publishes — and is then served on resume like any other."""
+    out = tmp_path / "out"
+    first = _run([_Task("w-0")], out)
+    assert (first.executed, first.reused) == (1, 0)
+    second = _run([_Task("w-0")], out)
+    assert (second.executed, second.reused) == (0, 1)
 
 
 # --- the model rule, made structural ---------------------------------------------------

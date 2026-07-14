@@ -28,7 +28,8 @@ from pydantic import ValidationError
 
 from membench.metrics.scorers import states_value
 from membench.runner import toolreq_grid as grid
-from membench.runner.resume_cache import load_cached
+from membench.runner.realagent_probe import cell_calls
+from membench.runner.resume_cache import invocation_digest, load_cached
 from membench.runner.toolreq_realagent import (
     ToolReqRealAgentTask,
     adapt_sequence,
@@ -297,7 +298,7 @@ def test_sequence_lessons_opaque_rejects_order_mismatch() -> None:
 
 def test_dry_run_arms_separate_per_task() -> None:
     task = adapt_sequence(_toolreq_seq())
-    outcomes = grid.evaluate_task(task, repeats=2, model="", dry_run=True)
+    outcomes = grid.evaluate_task(task, repeats=2, model="", dry_run=True).outcomes
     by = {(o.arm, o.channel): o for o in outcomes}
     for channel in (c.value for c in grid.CHANNELS):
         assert by[("none", channel)].passes == 0
@@ -312,7 +313,7 @@ def test_ours_arm_dry_run_passes_when_payload_states_current_value() -> None:
     ours_payload = {"w-prior": f"the retention window is {current_opaque}"}
     outcomes = grid.evaluate_task(
         task, repeats=2, model="", dry_run=True, ours_payload=ours_payload
-    )
+    ).outcomes
     by = {(o.arm, o.channel): o for o in outcomes}
     for channel in (c.value for c in grid.CHANNELS):
         assert by[("ours", channel)].passes == by[("ours", channel)].runs == 2
@@ -325,7 +326,7 @@ def test_ours_arm_dry_run_honest_non_pass_when_payload_lacks_current_value() -> 
     ours_payload = {"w-prior": "an unrelated retrieved fact about something else entirely"}
     outcomes = grid.evaluate_task(
         task, repeats=2, model="", dry_run=True, ours_payload=ours_payload
-    )
+    ).outcomes
     by = {(o.arm, o.channel): o for o in outcomes}
     for channel in (c.value for c in grid.CHANNELS):
         assert by[("ours", channel)].passes == 0
@@ -777,7 +778,7 @@ def test_a_short_grid_under_the_empty_flag_is_a_miss_not_an_escaping_keyerror(
         arms=list(grid.ARMS),
         protocol=grid.EXECUTION_PROTOCOL,
         task_fingerprint="fp-task",
-        prompt_fingerprint="fp-prompt",
+        invocation_fingerprint="fp-invocation",
         ours_payload_fingerprint="fp-payload",
         ours_retrieval_empty=True,  # the flag the subclass validator keys on...
     )
@@ -968,7 +969,7 @@ def test_repeats_zero_is_refused_and_never_caches_a_0_of_0_verdict(tmp_path: Pat
             protocol=grid.EXECUTION_PROTOCOL,
             task_fingerprint="x",
             ours_payload_fingerprint="x",
-            prompt_fingerprint="x",
+            invocation_fingerprint="x",
             ours_retrieval_empty=False,
         )
 
@@ -998,16 +999,16 @@ def test_duplicate_work_ids_are_refused(tmp_path: Path) -> None:
 
 
 def prompt_fp(task: ToolReqRealAgentTask, payload: dict[str, str]) -> str:
-    return grid.prompt_fingerprint(task, payload)
+    return grid.invocation_fingerprint(task, payload, model="")
 
 
-def test_prompt_fingerprint_catches_what_a_field_model_misses(tmp_path: Path) -> None:
-    """The point of prompt_fingerprint: it hashes the PROMPT, not a model of the prompt.
+def test_invocation_fingerprint_catches_what_a_field_model_misses(tmp_path: Path) -> None:
+    """The point of invocation_fingerprint: it hashes the COMMAND LINE, not a model of it.
 
     Every defect in this file's history was the same shape -- the identity hashed a field-by-field
     MODEL of the executed input and the model was missing a field (memory ORDER, retrieval RANK,
     goal_step, ...). Each fix added the missing field; the next review found the next one. Hashing
-    the rendered prompt cannot be incomplete ABOUT THE PROMPT, because it is the prompt.
+    the rendered argv cannot be incomplete ABOUT THE INVOCATION, because it is the invocation.
 
     Asserted here on the two axes that already shipped as bugs (memory order on both the ours and
     the oracle arm) plus the trust channel's framing, all of which reach the prompt text."""
@@ -1030,6 +1031,40 @@ def test_prompt_fingerprint_catches_what_a_field_model_misses(tmp_path: Path) ->
 
     # and the memory CONTENT still moves it, obviously
     assert prompt_fp(task, {"a": "A"}) != prompt_fp(task, {"a": "DIFFERENT"})
+
+
+def test_the_fingerprint_is_the_invocations_the_arms_actually_send(tmp_path: Path) -> None:
+    """THE standing invariant, and it costs ZERO tokens: what the identity hashes must be what the
+    arms put on the wire.
+
+    The invocations come back RECORDED off the CLI seam (`RecordingRunner`), so this compares the
+    fingerprint against the real command lines rather than against a second rendering of them. And
+    `dry_run` swaps only the CLI RUNNER — never the prompt builder, never the argv — so the free
+    path's invocations ARE the paid path's. Re-introduce a hand-written mirror of the arms' cells
+    beside the fingerprint and let it drift by one field, and this goes RED before any money moves.
+
+    Run with a NON-EMPTY ours payload on purpose: that is when all three arms are planned and all
+    three spend, so the cell the empty-retrieval convention would otherwise skip is covered here."""
+    _, tasks = _corpus_one(tmp_path)
+    task = tasks[0]
+    payload = {"w-prior": "the retention window is TOKEN-abc"}
+    sent = grid.evaluate_task(task, repeats=2, model="", dry_run=True, ours_payload=payload).calls
+    assert invocation_digest(sent) == grid.invocation_fingerprint(task, payload, model="")
+
+
+def test_the_never_run_ours_cell_contributes_a_row_but_no_invocation(tmp_path: Path) -> None:
+    """The empty-retrieval convention, stated at the seam that now enforces it. `ours` is relabeled
+    from `none` and never spent on, so it must contribute a ROW (the grid is complete) and NO
+    invocation (it sent none). The fingerprint is over the plan, which omits it — and the identity
+    still separates the two worlds, because `ours_retrieval_empty` and `ours_payload_fingerprint`
+    are themselves identity fields."""
+    _, tasks = _corpus_one(tmp_path)
+    task = tasks[0]
+    evaluation = grid.evaluate_task(task, repeats=2, model="", dry_run=True, ours_payload={})
+
+    assert {(c.arm, c.channel) for c in evaluation.outcomes} == grid.expected_cells()
+    assert not any(c.arm == "ours" for c in evaluation.calls)
+    assert invocation_digest(evaluation.calls) == grid.invocation_fingerprint(task, {}, model="")
 
 
 def test_forged_not_empty_flag_with_a_fabricated_ours_cell_is_a_miss(tmp_path: Path) -> None:
@@ -1158,10 +1193,13 @@ def test_empty_ours_payload_is_none_equivalent_and_never_spends(
     sequences, tasks = _corpus_one(tmp_path)
     seen: list[str] = []
 
-    def _spy_run_arm(*, arm: str, channel, repeats: int, **_kwargs: Any) -> grid.ArmOutcome:
+    def _spy_run_arm(*, arm: str, channel, repeats: int, step, memory, **_kwargs: Any):
         seen.append(arm)  # a real paid cell would spawn `claude -p` here
-        return grid.ArmOutcome(
+        outcome = grid.ArmOutcome(
             arm=arm, channel=channel.value, passes=repeats if arm == "oracle" else 0, runs=repeats
+        )
+        return outcome, cell_calls(
+            arm=arm, step=step, memory=memory, channel=channel, model="sonnet"
         )
 
     monkeypatch.setattr(grid, "run_arm", _spy_run_arm)
@@ -1193,9 +1231,12 @@ def test_non_empty_ours_payload_still_spends(tmp_path: Path, monkeypatch) -> Non
     sequences, tasks = _corpus_one(tmp_path)
     seen: list[str] = []
 
-    def _spy_run_arm(*, arm: str, channel, repeats: int, **_kwargs: Any) -> grid.ArmOutcome:
+    def _spy_run_arm(*, arm: str, channel, repeats: int, step, memory, **_kwargs: Any):
         seen.append(arm)
-        return grid.ArmOutcome(arm=arm, channel=channel.value, passes=0, runs=repeats)
+        outcome = grid.ArmOutcome(arm=arm, channel=channel.value, passes=0, runs=repeats)
+        return outcome, cell_calls(
+            arm=arm, step=step, memory=memory, channel=channel, model="sonnet"
+        )
 
     def _payload(*_args: object) -> dict[str, dict[str, str]]:
         return {tasks[0].work_id: {"lesson-1": "the retention window is TOKEN-abc"}}
@@ -1326,7 +1367,7 @@ def test_multi_subject_opaquifies_reward_and_surfaces_all_facts() -> None:
 
 def test_multi_subject_arms_separate_dry_run() -> None:
     task = adapt_sequence(_multi_subject_seq())
-    outcomes = grid.evaluate_task(task, repeats=2, model="", dry_run=True)
+    outcomes = grid.evaluate_task(task, repeats=2, model="", dry_run=True).outcomes
     by = {(o.arm, o.channel): o for o in outcomes}
     for channel in (c.value for c in grid.CHANNELS):
         assert by[("none", channel)].passes == 0

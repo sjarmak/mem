@@ -33,14 +33,22 @@ from pydantic import ValidationError
 
 from membench.harbor.agent_memory import native_memory_path
 from membench.runner import toolreq_builtin_grid as grid
-from membench.runner.headless_agent import ENV_MODEL, HeadlessAgentError, MemoryChannel
+from membench.runner.headless_agent import (
+    ENV_MODEL,
+    CellCalls,
+    HeadlessAgentError,
+    MemoryChannel,
+)
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome
+from membench.runner.resume_cache import Evaluation, invocation_digest
 from membench.runner.toolreq_builtin import (
     ARM,
     SIMULATED_TOPIC_FILE,
     BuiltinDiagnostics,
     _establish_step,
     _memory_engaged,
+    cell_calls,
+    cell_legs,
     run_builtin_arm,
     simulated_builtin_runner,
 )
@@ -178,10 +186,18 @@ def test_argv_omits_allowed_tools_for_establish_but_not_goal() -> None:
     from membench.runner.headless_agent import HeadlessClaudeAgent
 
     task = _task()
-    establish_argv = HeadlessClaudeAgent(constrain_tools=True)._argv("p", _establish_step(task))
-    goal_argv = HeadlessClaudeAgent(constrain_tools=True)._argv("p", task.goal_step)
+    agent = HeadlessClaudeAgent(constrain_tools=True)
+    establish_argv = agent.argv_for(_establish_step(task), {})
+    goal_argv = agent.argv_for(task.goal_step, {})
     assert "--allowedTools" not in establish_argv
     assert "--allowedTools" in goal_argv and "Write" in goal_argv
+
+
+def _planned_calls(task: ToolReqRealAgentTask, model: str = "") -> list[CellCalls]:
+    """The invocations this task's cells are PLANNED to make — what an honest `run_builtin_arm` or
+    `evaluate_task` stand-in reports having sent. A double reporting anything else is refused at the
+    cache's write boundary, which is that check doing its job, not the double being awkward."""
+    return [cell_calls(task, channel, model=model) for channel in grid.CHANNELS]
 
 
 # --- content-based engagement gate (H2, M1) --------------------------------------------
@@ -283,7 +299,7 @@ def test_simulated_runner_goal_call_passes_iff_marker_present(tmp_path: Path) ->
 
 def test_dry_run_arm_engages_and_passes_every_repeat() -> None:
     task = _task()
-    outcome, diag = run_builtin_arm(
+    outcome, diag, _calls = run_builtin_arm(
         task, repeats=3, model="", dry_run=True, channel=MemoryChannel.RECALLED
     )
     assert outcome.arm == ARM
@@ -304,7 +320,7 @@ def test_establish_tool_calls_are_counted_not_discarded() -> None:
         tool_input={"command": "ls"},
     )
 
-    _, diag = run_builtin_arm(
+    _outcome, diag, _calls = run_builtin_arm(
         task,
         repeats=2,
         model="",
@@ -317,7 +333,7 @@ def test_establish_tool_calls_are_counted_not_discarded() -> None:
 
 def test_dry_run_arm_channel_recorded_on_outcome() -> None:
     task = _task()
-    outcome, _ = run_builtin_arm(
+    outcome, _diag, _calls = run_builtin_arm(
         task, repeats=1, model="", dry_run=True, channel=MemoryChannel.TRUSTED
     )
     assert outcome.channel == "trusted"
@@ -453,7 +469,7 @@ def test_goal_leg_cannot_scavenge_a_cwd_file_the_establish_leg_left_behind() -> 
     task = _task()
     (current_opaque,) = task.current_opaque_values
 
-    outcome, diag = run_builtin_arm(
+    outcome, diag, _calls = run_builtin_arm(
         task,
         repeats=2,
         model="",
@@ -498,7 +514,7 @@ def test_establish_tool_names_are_recorded_not_just_counted() -> None:
         tool_name="Bash",
         tool_input={"command": "ls"},
     )
-    _, diag = run_builtin_arm(
+    _outcome, diag, _calls = run_builtin_arm(
         task,
         repeats=2,
         model="",
@@ -549,7 +565,7 @@ def test_leaked_pass_without_engagement_is_flagged_not_counted_as_clean() -> Non
     task = _task()
     (current_opaque,) = task.current_opaque_values
     runner = _leaking_runner_for(current_opaque)
-    outcome, diag = run_builtin_arm(
+    outcome, diag, _calls = run_builtin_arm(
         task, repeats=2, model="", dry_run=False, channel=MemoryChannel.RECALLED, runner=runner
     )
     assert outcome.passes == 2  # score_goal_action sees a genuine Write of the current value
@@ -598,7 +614,7 @@ def _cell(
 
 def test_dry_run_evaluate_task_separates_both_channels() -> None:
     task = _task()
-    cells = grid.evaluate_task(task, repeats=2, model="", dry_run=True)
+    cells = grid.evaluate_task(task, repeats=2, model="", dry_run=True).outcomes
     assert {cell.channel for cell in cells} == {"recalled", "trusted"}
     for cell in cells:
         assert cell.passes == cell.runs == 2
@@ -672,6 +688,7 @@ def test_zeroing_leaked_on_a_real_leak_record_cannot_rewrite_the_headline(
             return (
                 ArmOutcome(arm=ARM, channel=channel.value, passes=repeats, runs=repeats),
                 BuiltinDiagnostics(engaged=engaged, leaked=leaked * repeats, runs=repeats),
+                cell_calls(task, channel, model=""),
             )
 
         return run
@@ -763,10 +780,10 @@ def test_a_regenerated_corpus_never_reuses_the_previous_worlds_results(tmp_path:
     # the stale value is never surfaced (the goal requires the CURRENT memory id) and never named in
     # the request (the leak firewall), so BOTH prompts come out byte-identical while the scorer's
     # `forbidden_values` — what a passing Write must NOT carry — is a different token. It is the one
-    # world change `prompt_fingerprint` structurally cannot see, which is why the identity carries
-    # `task_fingerprint` ALONGSIDE it rather than in place of it. A weaker case (changing the
-    # current value too) would move the prompts as well, and would pass with no task fingerprint at
-    # all.
+    # world change `invocation_fingerprint` structurally cannot see, which is why the identity
+    # carries `task_fingerprint` ALONGSIDE it rather than in place of it. A weaker case (changing
+    # the current value too) would move the command lines as well, and would pass with no task
+    # fingerprint at all.
     out = tmp_path / "out"
     tasks = _corpus_one(tmp_path)
     first = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
@@ -779,7 +796,9 @@ def test_a_regenerated_corpus_never_reuses_the_previous_worlds_results(tmp_path:
     )
     _, regenerated = load_corpus_with_sequences(corpus)
     assert regenerated[0].work_id == tasks[0].work_id  # the id collides, as in the real corpus
-    assert grid.prompt_fingerprint(regenerated[0]) == grid.prompt_fingerprint(tasks[0])
+    assert grid.invocation_fingerprint(regenerated[0], model="") == grid.invocation_fingerprint(
+        tasks[0], model=""
+    )
     assert task_fingerprint(regenerated[0]) != task_fingerprint(tasks[0])
 
     second = grid.run_corpus(regenerated, out_dir=out, repeats=2, model="", dry_run=True)
@@ -840,11 +859,34 @@ def test_deeply_nested_json_is_a_miss_not_a_recursionerror_killing_the_sweep(
     assert summary["executed"] == 1 and summary["reused"] == 0
 
 
-def test_the_prompt_fingerprint_covers_the_establish_leg_not_just_the_goal(tmp_path: Path) -> None:
-    # The arm sends TWO prompts per cell and the establish leg is the one under test — it is what
-    # has to persist the fact. A fingerprint over the goal leg alone would call two runs identical
-    # while the establish prompt (the independent variable of the whole arm) differed, and serve
-    # the old wording's numbers for the new one.
+def test_the_fingerprint_is_the_invocations_the_arm_actually_sends(tmp_path: Path) -> None:
+    """THE standing invariant, and it costs ZERO tokens: what the identity hashes must be what the
+    arm puts on the wire.
+
+    The arm's invocations are RECORDED off the CLI seam (`RecordingRunner`), so this compares the
+    fingerprint against the real command lines, not against a second rendering of them. And
+    `dry_run` swaps only the CLI RUNNER — never the prompt builder, never the argv — so the free
+    path's invocations ARE the paid path's. Re-introduce a hand-written mirror of the arm's legs
+    beside the fingerprint and let it drift by one field, and this goes RED before any money is
+    spent."""
+    task = _corpus_one(tmp_path)[0]
+    sent = [
+        run_builtin_arm(task, repeats=2, model="", dry_run=True, channel=channel)[2]
+        for channel in grid.CHANNELS
+    ]
+    assert invocation_digest(sent) == grid.invocation_fingerprint(task, model="")
+
+
+def test_changing_what_a_leg_surfaces_is_a_miss_not_a_reuse(tmp_path: Path) -> None:
+    """THE bead, executable. Surface a hint in the goal leg — memory={} becomes non-empty, the exact
+    edit the old hand-written `cell_prompts` did not track — and the identity must MOVE, so a resume
+    re-measures instead of serving pre-change numbers as post-change measurements.
+
+    It mutates the PLAN (`cell_legs`), which is what `run_builtin_arm` executes AND what
+    `invocation_fingerprint` renders. The test this replaces patched `_ESTABLISH_INSTRUCTION`, which
+    feeds both sides through the shared `_establish_step` — so it moved the executor and the hash
+    together and would have passed with the mirror fully drifted. It proved the establish leg was
+    hashed; it could not prove the hash tracked the arm."""
     tasks = _corpus_one(tmp_path)
     out = tmp_path / "out"
     first = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
@@ -852,17 +894,41 @@ def test_the_prompt_fingerprint_covers_the_establish_leg_not_just_the_goal(tmp_p
 
     import membench.runner.toolreq_builtin as tb
 
+    def _hinted_goal(task):
+        establish, goal = cell_legs(task)
+        return (establish, tb.Leg(goal.name, goal.step, {"hint": "the value you established"}))
+
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(tb, "_ESTABLISH_INSTRUCTION", "Remember these. (reworded)")
+        patch.setattr(tb, "cell_legs", _hinted_goal)
         second = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
-    assert second["executed"] == 1 and second["reused"] == 0, "the establish prompt is not hashed"
+    assert second["executed"] == 1 and second["reused"] == 0, "served the pre-change numbers"
 
 
-def _not_engaged_grid(task: ToolReqRealAgentTask, **_kwargs: object) -> list[grid.BuiltinCell]:
+def test_a_plan_that_drifts_from_its_arm_refuses_to_publish(tmp_path: Path, monkeypatch) -> None:
+    """The other half of the bond. Freeze the fingerprint at a value the arm's invocations do not
+    hash to — what a plan left behind by an edit to `run_builtin_arm` produces — and the measurement
+    must be REFUSED, not filed.
+
+    Filing it would put a real result under a command line it never sent, and the very next resume
+    would serve it. So the result file must not exist: a refused measurement that still wrote itself
+    is the failure it exists to prevent, one run later."""
+    tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    monkeypatch.setattr(grid, "invocation_fingerprint", lambda task, *, model: "a-stale-plan")
+    with pytest.raises(ValueError, match="no longer what its arms execute"):
+        grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert not (out / "w-0.json").exists(), "a refused measurement was published anyway"
+
+
+def _not_engaged_grid(task: ToolReqRealAgentTask, **_kwargs: object) -> Evaluation:
     """An `evaluate_task` stand-in returning a full but NON-separating grid, so a cache HIT and a
     cache MISS yield DIFFERENT headline numbers and the assertion can tell them apart instead of
-    accidentally agreeing with the bug."""
-    return [_cell(channel.value, passes=0, runs=2, engaged=0) for channel in grid.CHANNELS]
+    accidentally agreeing with the bug. It reports the invocations the PLAN declares: it is standing
+    in for an arm that ran, not for one that drifted."""
+    return Evaluation(
+        outcomes=[_cell(channel.value, passes=0, runs=2, engaged=0) for channel in grid.CHANNELS],
+        calls=_planned_calls(task),
+    )
 
 
 def test_a_partial_cell_grid_never_credits_a_both_channel_separation(
@@ -945,12 +1011,15 @@ import grid_toolreq_builtin as driver  # noqa: E402
 
 def _engaging_arm(task, *, repeats: int, channel: MemoryChannel, **_kwargs):
     """A `run_builtin_arm` stand-in that engages and passes every repeat — HONESTLY: it reports the
-    repeats it was asked for and the channel it was given, so the cells it produces are a real grid
-    the schema will accept. A fake that hardcoded one channel would now be refused as a duplicated
-    cell, which is the schema doing its job."""
+    repeats it was asked for, the channel it was given, and the invocations the PLAN says that
+    cell sends, so the cells it produces are a real grid the schema will accept. A fake that
+    hardcoded one channel would now be refused as a duplicated cell, and one that reported
+    invocations the plan does not declare would be refused at the cache's write boundary — both
+    are the checks doing their job."""
     return (
         ArmOutcome(arm=ARM, channel=channel.value, passes=repeats, runs=repeats),
         BuiltinDiagnostics(engaged=repeats, leaked=0, runs=repeats),
+        cell_calls(task, channel, model=""),
     )
 
 
@@ -996,6 +1065,7 @@ def test_preflight_halts_when_native_memory_never_engages(tmp_path: Path, monkey
         return (
             ArmOutcome(arm=ARM, channel=channel.value, passes=0, runs=repeats),
             BuiltinDiagnostics(engaged=0, leaked=0, runs=repeats),
+            cell_calls(task, channel, model=""),
         )
 
     monkeypatch.setattr(driver, "run_builtin_arm", _never_engages)

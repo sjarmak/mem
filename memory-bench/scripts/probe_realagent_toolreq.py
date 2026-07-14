@@ -75,8 +75,11 @@ def _run_arm(
     dry_run: bool,
 ) -> ArmOutcome:
     """This probe's single-subject arm run: delegate to the shared ``run_arm`` with the
-    probe's ``none``/``oracle`` memory and its one hardcoded current value."""
-    return run_arm(
+    probe's ``none``/``oracle`` memory and its one hardcoded current value.
+
+    The probe has no resume cache, so it drops the cycle of invocations ``run_arm`` records for the
+    grids' cache identity (``realagent_probe.run_arm``) and keeps only the score."""
+    outcome, _calls = run_arm(
         arm=arm,
         step=step,
         memory=_arm_memory(arm),
@@ -86,6 +89,7 @@ def _run_arm(
         dry_run=dry_run,
         current_values=[DEFAULT_CURRENT_VALUE],
     )
+    return outcome
 
 
 def _verdict(outcomes: list[ArmOutcome]) -> str:

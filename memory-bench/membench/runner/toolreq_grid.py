@@ -18,26 +18,28 @@ those arms send, and the verdict their rows imply. What this module adds to the 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, replace
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Self
 
 from pydantic import model_validator
 
-from membench.runner.headless_agent import CHANNELS, build_agent_prompt, resolve_model
-from membench.runner.realagent_probe import ArmOutcome, run_arm
+from membench.runner.headless_agent import CHANNELS, CellCalls, MemoryChannel, resolve_model
+from membench.runner.realagent_probe import ArmOutcome, cell_calls, run_arm
 from membench.runner.resume_cache import (
     BaseCachedResult,
     BaseCellOutcome,
     BaseRunIdentity,
     Cell,
+    Evaluation,
     corpus_summary,
     digest,
+    invocation_digest,
     render_verdict,
     run_cached_corpus,
 )
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask, task_fingerprint
-from membench.schemas.sequence import BenchmarkSequence
+from membench.schemas.sequence import BenchmarkSequence, SequenceStep
 
 __all__ = [
     "ARMS",
@@ -50,14 +52,16 @@ __all__ = [
     "WEAK",
     "CachedResult",
     "CellOutcome",
+    "PlannedCell",
     "RunIdentity",
     "SeedFn",
     "arm_memories",
     "classify_channels",
     "evaluate_task",
     "expected_cells",
+    "invocation_fingerprint",
     "payload_fingerprint",
-    "prompt_fingerprint",
+    "planned_cells",
     "run_corpus",
     "task_verdict",
 ]
@@ -69,10 +73,13 @@ ARMS = ("none", "oracle", "ours")
 SUMMARY_NAME = "summary-toolreq-realagent.json"
 
 # The executing/scoring CODE this grid's cached cells were measured under
-# (BaseRunIdentity.protocol): `run_arm`, `build_agent_prompt`, the stream-json parser,
-# `score_goal_action`, DEFAULT_TIMEOUT_S.
-# BUMP on any change to those that could move a result.
-EXECUTION_PROTOCOL = 1
+# (BaseRunIdentity.protocol) — what MOVES A RESULT while every fingerprint stays identical: the
+# stream-json parser, `score_goal_action`, DEFAULT_TIMEOUT_S, and `simulated_runner` (which decides
+# the ENTIRE dry-run measurement — free runs only, since `dry_run` is itself in the identity).
+# NOT here, because `invocation_fingerprint` now carries them: the prompts, --allowedTools, --model,
+# --strict-mcp-config, and which cells run at all.
+# BUMP on any change to the former that could move a result.
+EXECUTION_PROTOCOL = 2
 
 # Seeds the `ours` store + resolves its payload: (sequences, tasks, store_path, mem_bin)
 # -> work_id -> (source work_id -> rendered payload). Injected by the caller, never defaulted:
@@ -105,6 +112,52 @@ def arm_memories(
     return memories
 
 
+@dataclass(frozen=True)
+class PlannedCell:
+    """One ``(arm, channel)`` cell this task will actually RUN, with the step and memory it runs
+    under."""
+
+    arm: str
+    channel: MemoryChannel
+    step: SequenceStep
+    memory: Mapping[str, str]
+
+
+def planned_cells(
+    task: ToolReqRealAgentTask, ours_payload: Mapping[str, str] | None = None
+) -> list[PlannedCell]:
+    """THE definition of what this grid executes: every cell that will spawn a ``claude -p``.
+
+    ``evaluate_task`` runs it, ``invocation_fingerprint`` renders it, and ``_identity`` derives
+    ``ours_retrieval_empty`` from it, so the three cannot disagree about what the grid does. The
+    skip predicate below used to be written three ways in this file — once in the executor, once
+    (as "never skip") in the fingerprint, once in the identity flag — which is the same shape as the
+    defect this whole change exists to close, at a smaller scale.
+
+    One cell is never run: ``ours`` when its retrieval came back EMPTY — not an edge case but a
+    guarantee for the lifecycle-earliest task, which temporal LOO leaves with no priors. An empty
+    payload makes the ``ours`` prompt byte-identical to ``none``, so the cell is none-equivalent by
+    construction (delta exactly 0); running it would spend ``repeats`` real ``claude -p`` turns per
+    channel to re-measure ``none``, and would leave a flat ``(ours 0/N)`` unattributable — a
+    retrieval miss reads exactly like memory-did-not-help. The ``none`` cell is relabeled instead
+    (``evaluate_task``), and ``ours_retrieval_empty`` records which happened so the two causes stay
+    distinguishable.
+
+    So it is ABSENT from the plan, and hence from ``invocation_fingerprint``: the plan is the
+    command lines that will be SENT, and that one is not sent. Nothing is lost — an empty-payload
+    run differs from a non-empty one in ``ours_payload_fingerprint`` AND ``ours_retrieval_empty``,
+    both identity fields, and identity acceptance is a whole-object ``==``. NOTE that
+    ``expected_cells`` still includes ``ours``: the relabel produces the ROW even though no call was
+    made, and the completeness validator requires it."""
+    memories = arm_memories(task, ours_payload)
+    return [
+        PlannedCell(arm=arm, channel=channel, step=task.goal_step, memory=memories[arm])
+        for channel in CHANNELS
+        for arm in ARMS
+        if memories[arm] or arm != RETRIEVING_ARM
+    ]
+
+
 def evaluate_task(
     task: ToolReqRealAgentTask,
     *,
@@ -112,38 +165,37 @@ def evaluate_task(
     model: str,
     dry_run: bool,
     ours_payload: Mapping[str, str] | None = None,
-) -> list[ArmOutcome]:
-    """Run every (arm, channel) cell for one task.
+) -> Evaluation:
+    """Run every planned cell for one task, and hand back the invocations they made alongside the
+    rows they scored — the cache checks the second against this run's identity before it will
+    publish the first (``resume_cache.run_cached_corpus``).
 
-    One cell is never run: ``ours`` when its retrieval came back EMPTY — not an edge case but a
-    guarantee for the lifecycle-earliest task, which temporal LOO leaves with no priors. An empty
-    payload makes the ``ours`` prompt byte-identical to ``none``, so the cell is none-equivalent
-    by construction (delta exactly 0); running it would spend ``repeats`` real ``claude -p`` turns
-    per channel to re-measure ``none``, and would leave a flat ``(ours 0/N)`` unattributable — a
-    retrieval miss reads exactly like memory-did-not-help. The ``none`` cell is relabeled instead
-    (``run_grid_3arm``'s empty-retrieval convention) and ``run_corpus`` records the
-    ``ours_retrieval_empty`` flag so the two causes stay distinguishable."""
-    memories = arm_memories(task, ours_payload)
+    The never-run ``ours`` cell (see ``planned_cells``) is filled by relabeling ``none``: it
+    contributes a ROW but no invocation, which is exactly what it did."""
+    planned = {(cell.arm, cell.channel): cell for cell in planned_cells(task, ours_payload)}
     outcomes: list[ArmOutcome] = []
+    calls: list[CellCalls] = []
     for channel in CHANNELS:
         cells: dict[str, ArmOutcome] = {}
         for arm in ARMS:
-            if arm == RETRIEVING_ARM and not memories[arm]:
-                continue  # filled from `none` below — never spent on
-            cells[arm] = run_arm(
+            cell = planned.get((arm, channel))
+            if cell is None:
+                continue  # `ours`, empty retrieval — filled from `none` below, never spent on
+            cells[arm], cell_calls = run_arm(
                 arm=arm,
-                step=task.goal_step,
-                memory=memories[arm],
+                step=cell.step,
+                memory=dict(cell.memory),
                 channel=channel,
                 repeats=repeats,
                 model=model,
                 dry_run=dry_run,
                 current_values=task.current_opaque_values,
             )
+            calls.append(cell_calls)
         if RETRIEVING_ARM not in cells:
             cells[RETRIEVING_ARM] = replace(cells["none"], arm=RETRIEVING_ARM)
         outcomes.extend(cells[arm] for arm in ARMS)
-    return outcomes
+    return Evaluation(outcomes=_cells(outcomes), calls=calls)
 
 
 # The verdict is decided by these two arms alone; every other ARMS member rides along as
@@ -221,17 +273,22 @@ def payload_fingerprint(ours_payload: Mapping[str, str]) -> str:
     return digest(list(ours_payload.items()))
 
 
-def prompt_fingerprint(task: ToolReqRealAgentTask, ours_payload: Mapping[str, str]) -> str:
-    """Hashes the PROMPTS THEMSELVES — the exact text every (arm, channel) cell will send to
-    ``claude -p``. See ``BaseRunIdentity.prompt_fingerprint``: it cannot be incomplete about the
-    prompt, because it IS the prompt. Building one is string concatenation: FREE, no agent turn."""
-    memories = arm_memories(task, ours_payload)
-    cells = [
-        (arm, channel.value, build_agent_prompt(task.goal_step, memories[arm], channel))
-        for channel in CHANNELS
-        for arm in ARMS
-    ]
-    return digest(cells)
+def invocation_fingerprint(
+    task: ToolReqRealAgentTask, ours_payload: Mapping[str, str], *, model: str
+) -> str:
+    """Hashes the COMMAND LINES THEMSELVES — the exact ``claude -p`` argv every planned cell will
+    spawn. See ``BaseRunIdentity.invocation_fingerprint``: it cannot be incomplete about the
+    invocation, because it IS the invocation.
+
+    Rendered from ``planned_cells`` through ``realagent_probe.cell_agent`` — the same cells
+    ``evaluate_task`` runs, through the same agent it runs them with. Building one is string
+    assembly: FREE, no agent turn."""
+    return invocation_digest(
+        cell_calls(
+            arm=cell.arm, step=cell.step, memory=cell.memory, channel=cell.channel, model=model
+        )
+        for cell in planned_cells(task, ours_payload)
+    )
 
 
 class RunIdentity(BaseRunIdentity):
@@ -315,7 +372,13 @@ def _identity(
 
     The three payload-derived fields are bound from ONE payload object, not three lookups of it:
     they must describe the same retrieval or they describe nothing, and a fourth such field added
-    later must inherit that by construction rather than by everyone remembering the same default."""
+    later must inherit that by construction rather than by everyone remembering the same default.
+
+    ``ours_retrieval_empty`` is read off the PLAN, not recomputed as ``not ours_payload``. It
+    means "the ``ours`` cell was never run", and the plan is what decides that — asserting it
+    from a second expression is how the flag and the executor come to disagree about the very run
+    the flag is the denominator for."""
+    planned = planned_cells(task, ours_payload)
     return RunIdentity(
         repeats=repeats,
         dry_run=dry_run,
@@ -323,9 +386,9 @@ def _identity(
         arms=list(ARMS),
         protocol=EXECUTION_PROTOCOL,
         task_fingerprint=task_fingerprint(task),
-        prompt_fingerprint=prompt_fingerprint(task, ours_payload),
+        invocation_fingerprint=invocation_fingerprint(task, ours_payload, model=resolved_model),
         ours_payload_fingerprint=payload_fingerprint(ours_payload),
-        ours_retrieval_empty=not ours_payload,
+        ours_retrieval_empty=not any(cell.arm == RETRIEVING_ARM for cell in planned),
     )
 
 
@@ -366,14 +429,12 @@ def run_corpus(
             resolved_model=resolved_model,
             dry_run=dry_run,
         ),
-        evaluate=lambda task: _cells(
-            evaluate_task(
-                task,
-                repeats=repeats,
-                model=model,
-                dry_run=dry_run,
-                ours_payload=ours_payloads.get(task.work_id, {}),
-            )
+        evaluate=lambda task: evaluate_task(
+            task,
+            repeats=repeats,
+            model=resolved_model,
+            dry_run=dry_run,
+            ours_payload=ours_payloads.get(task.work_id, {}),
         ),
         summary_name=SUMMARY_NAME,
         resume=resume,

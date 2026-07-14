@@ -86,7 +86,7 @@ def preflight(task: ToolReqRealAgentTask, *, model: str) -> BuiltinDiagnostics:
     Self-diagnoses "is builtin even enabled on this account" (mem-rk41.3.2 Q3 /
     mem-xe2p's enforce_mechanism_fires doctrine) instead of letting a disabled feature
     flag silently produce an uninterpretable all-null sweep."""
-    _, diagnostics = run_builtin_arm(
+    _outcome, diagnostics, _calls = run_builtin_arm(
         task, repeats=1, model=model, dry_run=False, channel=CHANNELS[0]
     )
     return diagnostics

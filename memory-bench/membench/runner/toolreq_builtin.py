@@ -58,10 +58,12 @@ from pathlib import Path
 from membench.harbor.agent_memory import NATIVE_MEMORY_GLOB, native_memory_path
 from membench.metrics.scorers import states_value
 from membench.runner.headless_agent import (
+    CellCalls,
     CliRunner,
     HeadlessClaudeAgent,
     MemoryChannel,
-    build_agent_prompt,
+    RecordingRunner,
+    one_cycle,
 )
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome, score_goal_action
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask
@@ -91,17 +93,85 @@ def _establish_step(task: ToolReqRealAgentTask) -> SequenceStep:
     )
 
 
-def cell_prompts(task: ToolReqRealAgentTask, channel: MemoryChannel) -> tuple[str, str]:
-    """The exact two prompts one ``(builtin, channel)`` cell sends to ``claude -p``: the establish
-    leg's (facts surfaced under the channel's trust framing) and the goal leg's (BARE — the whole
-    point of the arm is that nothing but native memory carries the fact across).
+@dataclass(frozen=True)
+class Leg:
+    """One ``claude -p`` call a ``(builtin, channel)`` cell makes: the step it runs, and the
+    memory it surfaces to run it."""
 
-    It lives beside ``run_builtin_arm``, and mirrors its two ``run_step`` calls, so the grid's cache
-    identity fingerprints the prompts this arm ACTUALLY sends rather than a copy of them that can
-    drift out from under it (``toolreq_builtin_grid.prompt_fingerprint``)."""
+    name: str
+    step: SequenceStep
+    memory: Mapping[str, str]
+
+
+def cell_legs(task: ToolReqRealAgentTask) -> tuple[Leg, Leg]:
+    """The two calls one ``(builtin, channel)`` cell makes, in order.
+
+    THE definition, and the only one. ``run_builtin_arm`` EXECUTES these legs and
+    ``toolreq_builtin_grid.invocation_fingerprint`` RENDERS them, so neither can describe a call the
+    other does not make: change what a leg surfaces and both the sent command line and the cache
+    identity move together, by construction.
+
+    What this replaces was two hand-written copies of the same argument triples — a ``cell_prompts``
+    that "lives beside ``run_builtin_arm`` and mirrors its two ``run_step`` calls". Adjacency is not
+    structure. Surface a hint in the goal leg, edit only the arm, and the fingerprint stayed put:
+    every persisted cell then matched, a resumed PAID run reported ``reused``, and pre-change
+    numbers were published as post-change measurements, with nothing crashing and the suite green.
+
+    They are returned as a PAIR, not a list to loop: the two legs are not interchangeable. The cwd
+    firewall and the engagement read both happen BETWEEN them (``run_builtin_arm``), and their ORDER
+    is a measured input — swap them and the arm establishes the fact into a directory it then wipes.
+    """
     return (
-        build_agent_prompt(_establish_step(task), dict(task.oracle_memory), channel),
-        build_agent_prompt(task.goal_step, {}, channel),
+        Leg("establish", _establish_step(task), dict(task.oracle_memory)),
+        # BARE (memory={}): with the cwd emptied, native memory is the only channel left that can
+        # carry the current value into the Write call. That empty dict IS the arm's hypothesis.
+        Leg("goal", task.goal_step, {}),
+    )
+
+
+def cell_agent(
+    *,
+    model: str,
+    channel: MemoryChannel,
+    runner: CliRunner = subprocess.run,
+    cwd: str | None = None,
+    config_dir: Path | None = None,
+) -> HeadlessClaudeAgent:
+    """The agent one ``(builtin, channel)`` cell runs BOTH its legs through.
+
+    THE definition: ``run_builtin_arm`` executes through it and
+    ``toolreq_builtin_grid.invocation_fingerprint`` renders through it (``cell_calls``). ONE agent
+    drives both legs, which is what makes "establish and goal share a sandbox cwd + a
+    ``CLAUDE_CONFIG_DIR``" structural rather than a thing to assert. Safe because the per-call
+    differences are carried by the STEP, not the agent: ``--allowedTools`` is derived from
+    ``step.available_tools`` (so establish runs unconstrained and goal is Write-only), and
+    ``memory_channel`` only frames a surfaced-memory block, which the bare goal leg never has.
+
+    ``runner``, ``cwd`` and ``config_dir`` are the only things the fingerprint path leaves at their
+    defaults: none of them appears in the argv, so a rendered invocation is byte-identical to the
+    sent one without them."""
+    return HeadlessClaudeAgent(
+        model=model,
+        runner=runner,
+        memory_channel=channel,
+        constrain_tools=True,
+        cwd=cwd,
+        env=None if config_dir is None else {"CLAUDE_CONFIG_DIR": str(config_dir)},
+    )
+
+
+def cell_calls(task: ToolReqRealAgentTask, channel: MemoryChannel, *, model: str) -> CellCalls:
+    """The two command lines one ``(builtin, channel)`` cell WILL spawn — the plan, rendered from
+    the same legs the arm executes, through the same agent that executes them.
+
+    BOTH legs, in order. The establish leg is the one under test (it must persist the fact) and the
+    goal leg is the one scored; a fingerprint over the second alone would call two runs identical
+    while the first differed."""
+    agent = cell_agent(model=model, channel=channel)
+    return CellCalls(
+        arm=ARM,
+        channel=channel.value,
+        calls=tuple(tuple(agent.argv_for(leg.step, leg.memory)) for leg in cell_legs(task)),
     )
 
 
@@ -249,16 +319,24 @@ def run_builtin_arm(
     dry_run: bool,
     channel: MemoryChannel,
     runner: CliRunner | None = None,
-) -> tuple[ArmOutcome, BuiltinDiagnostics]:
+) -> tuple[ArmOutcome, BuiltinDiagnostics, CellCalls]:
     """Run ``repeats`` independent establish/goal pairs, each in a fresh sandbox cwd +
-    fresh ``CLAUDE_CONFIG_DIR``, and score the goal call externally. ``dry_run`` swaps
+    fresh ``CLAUDE_CONFIG_DIR``, score the goal call externally, and return the cycle of
+    ``claude -p`` invocations the cell ACTUALLY made alongside them. ``dry_run`` swaps
     the real ``claude -p`` for ``simulated_builtin_runner`` (no token). ``runner``
     overrides the CLI runner directly (bypassing the dry_run selection) — mainly for
     tests exercising accounting edge cases, like a pass without engagement, that the
-    honest dry-run simulator cannot itself produce."""
+    honest dry-run simulator cannot itself produce.
+
+    The two legs come from ``cell_legs`` and the agent from ``cell_agent``, so what this
+    executes and what ``toolreq_builtin_grid.invocation_fingerprint`` hashes are ONE definition.
+    The invocations are then RECORDED off the CLI seam on top of that (``RecordingRunner``): a leg
+    added here and forgotten in the plan would still be seen, because the runner sees the call
+    whether or not anyone declared it."""
     if runner is None:
         runner = simulated_builtin_runner(task.current_opaque_values) if dry_run else subprocess.run
-    establish_step = _establish_step(task)
+    recorder = RecordingRunner(runner)
+    establish_leg, goal_leg = cell_legs(task)
     passes = 0
     engaged = 0
     leaked = 0
@@ -272,19 +350,12 @@ def run_builtin_arm(
         ):
             config_dir = Path(config_dir_str)
             _seed_config_dir(config_dir)
-            # ONE agent drives both calls, which is what makes "establish and goal share a
-            # sandbox cwd + a CLAUDE_CONFIG_DIR" structural rather than a thing to assert.
-            # Safe because the per-call differences are carried by the STEP, not the agent:
-            # --allowedTools is derived from `step.available_tools` (so establish runs
-            # unconstrained and goal is Write-only), and `memory_channel` only frames a
-            # surfaced-memory block, which the bare goal call (memory={}) never has.
-            agent = HeadlessClaudeAgent(
+            agent = cell_agent(
                 model=model,
-                runner=runner,
-                memory_channel=channel,
-                constrain_tools=True,
+                channel=channel,
+                runner=recorder,
                 cwd=sandbox,
-                env={"CLAUDE_CONFIG_DIR": str(config_dir)},
+                config_dir=config_dir,
             )
 
             def _ctx(leg: str, step_id: str, i: int = i) -> StepContext:
@@ -295,9 +366,9 @@ def run_builtin_arm(
                 )
 
             establish_result = agent.run_step(
-                establish_step,
-                dict(task.oracle_memory),
-                _ctx("establish", establish_step.step_id),
+                establish_leg.step,
+                dict(establish_leg.memory),
+                _ctx(establish_leg.name, establish_leg.step.step_id),
             )
             establish_tool_calls += len(establish_result.tool_calls)
             establish_tool_names.update(call.name for call in establish_result.tool_calls)
@@ -306,10 +377,13 @@ def run_builtin_arm(
             # Close the cwd channel BEFORE the goal leg: native memory (in the config dir)
             # survives, anything the unconstrained establish leg dropped in the shared cwd
             # does not. Engagement is read above, off the config dir, so the wipe cannot
-            # affect it.
+            # affect it. This is why the legs are a PAIR and not a loop, and why their order
+            # is a measured input (`cell_legs`).
             _wipe_cwd_contents(Path(sandbox))
 
-            result = agent.run_step(task.goal_step, {}, _ctx("goal", task.goal_step.step_id))
+            result = agent.run_step(
+                goal_leg.step, dict(goal_leg.memory), _ctx(goal_leg.name, goal_leg.step.step_id)
+            )
 
         passed = score_goal_action(
             task.goal_step, tool_calls=result.tool_calls, final_answer=result.final_answer
@@ -329,4 +403,5 @@ def run_builtin_arm(
         establish_tool_calls=establish_tool_calls,
         establish_tool_names=tuple(sorted(establish_tool_names)),
     )
-    return outcome, diagnostics
+    calls = one_cycle(recorder.calls, repeats=repeats, arm=ARM, channel=channel)
+    return outcome, diagnostics, calls

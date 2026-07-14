@@ -33,9 +33,10 @@ from __future__ import annotations
 
 import os
 import subprocess
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Any
 
 from membench.armcompare import _iter_tool_use_blocks
 from membench.runner.agent import AgentStepResult
@@ -66,6 +67,54 @@ def resolve_model(model: str) -> str:
 # Injected so tests drive the parse path without spawning a real claude. Mirrors the
 # `bbon.comparative_judge.Runner` seam (same subprocess.run signature).
 CliRunner = Callable[..., "subprocess.CompletedProcess[str]"]
+
+
+@dataclass(frozen=True)
+class CellCalls:
+    """The ONE cycle of ``claude -p`` invocations a single ``(arm, channel)`` cell makes.
+
+    The unit BOTH halves of a paid grid's cache identity are built from: the grid renders the cycle
+    its plan WILL send (``invocation_fingerprint``), the arm returns the cycle it DID send (recorded
+    off the CLI seam by ``RecordingRunner``, never modelled), and ``resume_cache.run_cached_corpus``
+    refuses to publish a measurement whose sent cycles do not hash to the identity it was measured
+    under. That is what makes the fingerprint the executed input rather than a hand-written model of
+    it, one field short.
+
+    An ARGV, not a prompt. The prompt is only the third element of the command line the agent
+    actually spawns (``HeadlessClaudeAgent.argv_for``); ``--allowedTools``, ``--model`` and
+    ``--strict-mcp-config`` are the rest of it, and each moves a result while touching no task
+    field, no payload and no prompt — unclamping ``--allowedTools`` alone frees the scored goal leg.
+    Hashing the whole line puts them in the identity by construction instead of leaving them to
+    ``EXECUTION_PROTOCOL``'s manual bump.
+
+    ``calls`` is ORDERED and stays that way: a cell's legs share a cwd and a config dir and run in
+    sequence, so their order IS a measured input (see ``resume_cache.invocation_digest``)."""
+
+    arm: str
+    channel: str
+    calls: tuple[tuple[str, ...], ...]
+
+
+@dataclass(eq=False)
+class RecordingRunner:
+    """A ``CliRunner`` that records the argv of every ``claude -p`` it spawns, then delegates.
+
+    THE SEAM the cache identity is checked against — and it is the wire itself, not a report of the
+    wire. A record taken from what an arm *says* it sent (a ``prompt`` field on the step result, a
+    list the arm appends to as it goes) is one an author has to remember to update: add a leg to the
+    arm, forget both to declare it in the plan and to record it — ONE omission, two symptoms, and by
+    far the likeliest edit — and the sent record still equals the plan, so nothing fires. The runner
+    sees the call whether or not anyone declared it.
+
+    ``eq=False`` keeps the default identity ``__hash__``, so an instance stays usable as the
+    ``runner`` field of the frozen ``HeadlessClaudeAgent``."""
+
+    inner: CliRunner
+    calls: list[list[str]] = field(default_factory=list)
+
+    def __call__(self, argv: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        self.calls.append([str(arg) for arg in argv])
+        return self.inner(argv, **kwargs)
 
 
 class HeadlessAgentError(RuntimeError):
@@ -130,6 +179,40 @@ def build_agent_prompt(
         parts.append(header + "\n" + "\n".join(lines))
     parts.append(f"## Task\n{step.user_request}")
     return "\n\n".join(parts)
+
+
+def one_cycle(
+    recorded: Sequence[Sequence[str]], *, repeats: int, arm: str, channel: MemoryChannel
+) -> CellCalls:
+    """Fold a cell's whole recording into the ONE cycle it repeated — a VERIFIED collapse, never an
+    assumption.
+
+    A cell runs ``repeats`` independent, IDENTICAL cycles: same step, same surfaced memory, same
+    channel, a fresh sandbox each time. So its recording must be exactly ``repeats`` copies of one
+    leg list. Anything else is refused here rather than folded into a digest that would then
+    describe only part of what ran: an empty recording (a cell that spawned no agent measured
+    nothing), a length that does not divide, or cycles that disagree with each other.
+
+    Taking cycle 0 and trusting the rest to match is precisely the shape this refuses — it is how a
+    fingerprint ends up describing one repeat of a run whose other repeats sent something else."""
+    if not recorded:
+        raise ValueError(f"{arm}/{channel.value}: no `claude -p` call was recorded — nothing ran")
+    if len(recorded) % repeats:
+        raise ValueError(
+            f"{arm}/{channel.value}: {len(recorded)} call(s) recorded over {repeats} repeat(s) — "
+            "a cell repeats ONE cycle, so its recording must divide evenly into them"
+        )
+    width = len(recorded) // repeats
+    cycles = [
+        tuple(tuple(argv) for argv in recorded[i * width : (i + 1) * width]) for i in range(repeats)
+    ]
+    if any(cycle != cycles[0] for cycle in cycles[1:]):
+        raise ValueError(
+            f"{arm}/{channel.value}: the repeats did not send the same invocations — a cell's "
+            "repeats differ only in their sandbox, so a divergence means the executed input is not "
+            "the fixed thing the identity claims to fingerprint"
+        )
+    return CellCalls(arm=arm, channel=channel.value, calls=cycles[0])
 
 
 def _stream_usage_tokens(stream_text: str) -> tuple[int, int]:
@@ -233,7 +316,15 @@ class HeadlessClaudeAgent:
         object.__setattr__(self, "_pass_model", bool(resolved))
         object.__setattr__(self, "_resolved_model", resolved or "cli-default")
 
-    def _argv(self, prompt: str, step: SequenceStep) -> list[str]:
+    def argv_for(self, step: SequenceStep, available_memory: Mapping[str, str]) -> list[str]:
+        """The exact command line this agent will spawn for one step — the prompt is its third
+        element, and the flags around it are the rest of the executed input.
+
+        PUBLIC, and ``run_step`` goes through it, because a paid grid's cache identity IS this list:
+        the grid renders it from the plan the arm executes and hashes it (``CellCalls``). One method
+        for both is what keeps the fingerprinted invocation and the sent one from being two things
+        that merely agree today — the whole defect family this seam closes."""
+        prompt = build_agent_prompt(step, dict(available_memory), self.memory_channel)
         argv = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"]
         if self.strict_mcp:
             argv.append("--strict-mcp-config")
@@ -252,8 +343,7 @@ class HeadlessClaudeAgent:
         available_memory: dict[str, str],
         ctx: StepContext,
     ) -> AgentStepResult:
-        prompt = build_agent_prompt(step, available_memory, self.memory_channel)
-        argv = self._argv(prompt, step)
+        argv = self.argv_for(step, available_memory)
         # `env=None` is subprocess's own inherit-the-parent-environment sentinel, so the
         # default needs no special-casing at the call site.
         env = None if self.env is None else {**os.environ, **self.env}

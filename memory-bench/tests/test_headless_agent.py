@@ -19,7 +19,9 @@ from membench.runner.headless_agent import (
     HeadlessAgentError,
     HeadlessClaudeAgent,
     MemoryChannel,
+    RecordingRunner,
     build_agent_prompt,
+    one_cycle,
 )
 from membench.runner.trajectory_run import (
     run_arm_trajectories,
@@ -85,6 +87,65 @@ def test_prompt_injects_memory_block() -> None:
     assert "Retrieved memory" in prompt
     assert "[m1] prefer ripgrep" in prompt
     assert "[m2] tests live in tests/" in prompt
+
+
+# --------------------------------------------------------------------------- #
+# the CLI seam the paid grids' cache identity is checked against
+# --------------------------------------------------------------------------- #
+def _recorded(*cycles: list[list[str]]) -> list[list[str]]:
+    return [argv for cycle in cycles for argv in cycle]
+
+
+def test_the_recorder_sees_every_call_the_agent_spawns() -> None:
+    """The seam, and why it is the runner rather than the step result: a `prompt` field an arm
+    populates records what the arm MEANT to send. The runner records what went out."""
+    recorder = RecordingRunner(_fake_runner(_stream_json()))
+    agent = HeadlessClaudeAgent(runner=recorder)
+    agent.run_step(_step(tools=["Read"]), {}, _ctx())
+    agent.run_step(_step(tools=["Write"]), {}, _ctx())
+
+    assert len(recorder.calls) == 2
+    assert all(argv[:2] == ["claude", "-p"] for argv in recorder.calls)
+    assert "Read" in recorder.calls[0][-1] and "Write" in recorder.calls[1][-1]
+
+
+def test_one_cycle_folds_identical_repeats_and_keeps_leg_order() -> None:
+    """A cell repeats ONE cycle, so its recording folds back to that cycle — with the legs still in
+    the order they were sent, because that order is a measured input."""
+    cycle = [["claude", "-p", "establish"], ["claude", "-p", "goal"]]
+    folded = one_cycle(
+        _recorded(cycle, cycle, cycle), repeats=3, arm="builtin", channel=MemoryChannel.TRUSTED
+    )
+    assert folded.arm == "builtin" and folded.channel == "trusted"
+    assert folded.calls == (("claude", "-p", "establish"), ("claude", "-p", "goal"))
+
+
+@pytest.mark.parametrize(
+    "recorded, repeats, why",
+    [
+        pytest.param([], 2, "no `claude -p` call", id="nothing-ran"),
+        pytest.param(
+            [["claude", "-p", "a"], ["claude", "-p", "b"], ["claude", "-p", "a"]],
+            2,
+            "must divide evenly",
+            id="does-not-divide",
+        ),
+        pytest.param(
+            [["claude", "-p", "a"], ["claude", "-p", "DIFFERENT"]],
+            2,
+            "did not send the same invocations",
+            id="repeats-diverged",
+        ),
+    ],
+)
+def test_a_recording_that_is_not_n_identical_cycles_is_refused(
+    recorded: list[list[str]], repeats: int, why: str
+) -> None:
+    """The fold is VERIFIED, never assumed. Taking cycle 0 and trusting the rest to match is how a
+    fingerprint ends up describing one repeat of a run whose other repeats sent something else — and
+    a cell that spawned no agent at all measured nothing, so it cannot be folded into anything."""
+    with pytest.raises(ValueError, match=why):
+        one_cycle(recorded, repeats=repeats, arm="builtin", channel=MemoryChannel.RECALLED)
 
 
 # --------------------------------------------------------------------------- #
@@ -250,13 +311,13 @@ def test_trusted_channel_threads_into_prompt() -> None:
 
 def test_no_model_resolves_to_cli_default() -> None:
     agent = HeadlessClaudeAgent(runner=_fake_runner(""))
-    assert "--model" not in agent._argv("p", _step())
+    assert "--model" not in agent.argv_for(_step(), {})
     assert agent._resolved_model == "cli-default"
 
 
 def test_explicit_model_passed_and_recorded() -> None:
     agent = HeadlessClaudeAgent(runner=_fake_runner(""), model="claude-sonnet")
-    argv = agent._argv("p", _step())
+    argv = agent.argv_for(_step(), {})
     assert argv[argv.index("--model") + 1] == "claude-sonnet"
     assert agent._resolved_model == "claude-sonnet"
 
@@ -265,7 +326,7 @@ def test_env_model_resolves_and_passes_non_empty_flag(monkeypatch: pytest.Monkey
     # The env override must pass the RESOLVED model, not an empty string.
     monkeypatch.setenv(ENV_MODEL, "claude-opus")
     agent = HeadlessClaudeAgent(runner=_fake_runner(""))
-    argv = agent._argv("p", _step())
+    argv = agent.argv_for(_step(), {})
     assert argv[argv.index("--model") + 1] == "claude-opus"
     assert agent._resolved_model == "claude-opus"
 

@@ -32,11 +32,18 @@ from __future__ import annotations
 import json
 import subprocess
 import tempfile
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 
 from membench.metrics.scorers import outcome_check_passes
-from membench.runner.headless_agent import CliRunner, HeadlessClaudeAgent, MemoryChannel
+from membench.runner.headless_agent import (
+    CellCalls,
+    CliRunner,
+    HeadlessClaudeAgent,
+    MemoryChannel,
+    RecordingRunner,
+    one_cycle,
+)
 from membench.runtime import StepContext
 from membench.schemas.sequence import ExpectedAction, OutcomeCheck, SequenceStep
 from membench.schemas.trace import ToolCall
@@ -183,6 +190,47 @@ def simulated_runner(current_values: Collection[str]) -> CliRunner:
     return run
 
 
+def cell_agent(
+    *,
+    model: str,
+    channel: MemoryChannel,
+    runner: CliRunner = subprocess.run,
+    cwd: str | None = None,
+) -> HeadlessClaudeAgent:
+    """The agent one ``(arm, channel)`` cell runs under.
+
+    THE definition, and the only one: ``run_arm`` executes through it and
+    ``toolreq_grid.invocation_fingerprint`` renders the cell's command line through it
+    (``cell_calls``). A second construction of this agent beside the fingerprint is how
+    ``constrain_tools`` or ``strict_mcp`` end up set one way on the wire and another in the hash —
+    unclamping ``--allowedTools`` frees the scored goal leg while moving no task field, no payload
+    and no prompt.
+
+    ``runner`` and ``cwd`` are the only things the fingerprint path leaves at their defaults:
+    neither appears in the argv, so a rendered invocation is byte-identical to the sent one without
+    either.
+    """
+    return HeadlessClaudeAgent(
+        model=model,
+        runner=runner,
+        memory_channel=channel,
+        constrain_tools=True,  # --allowedTools Write
+        cwd=cwd,
+    )
+
+
+def cell_calls(
+    *, arm: str, step: SequenceStep, memory: Mapping[str, str], channel: MemoryChannel, model: str
+) -> CellCalls:
+    """The command line one ``(arm, channel)`` cell WILL spawn — the plan, rendered through the same
+    agent that executes it. One ``claude -p`` per repeat, so the cycle is one call long."""
+    return CellCalls(
+        arm=arm,
+        channel=channel.value,
+        calls=(tuple(cell_agent(model=model, channel=channel).argv_for(step, memory)),),
+    )
+
+
 def run_arm(
     *,
     arm: str,
@@ -193,25 +241,26 @@ def run_arm(
     model: str,
     dry_run: bool,
     current_values: Collection[str],
-) -> ArmOutcome:
-    """Run one (arm, channel) cell ``repeats`` times and score each goal action externally.
+) -> tuple[ArmOutcome, CellCalls]:
+    """Run one (arm, channel) cell ``repeats`` times, score each goal action externally, and return
+    the cycle of ``claude -p`` invocations it ACTUALLY made alongside the score.
 
     ``memory`` is the surfaced memory the arm shows the agent ({} for ``none``, the id-exact
     current value(s) for ``oracle``); the arm difference lives entirely in that dict, never
     in the scorer. ``dry_run`` swaps the real ``claude -p`` for ``simulated_runner`` (no
     token). A fresh neutral sandbox per repeat keeps ``config.json`` from bleeding across
-    trials and keeps the agent out of any mem worktree."""
-    runner = simulated_runner(current_values) if dry_run else subprocess.run
+    trials and keeps the agent out of any mem worktree.
+
+    The invocations are RECORDED off the CLI seam (``RecordingRunner``), not reported by the
+    agent: the runner sees every call this cell spawns whether or not anyone declared it, which
+    is what a ``prompt`` field on the step result could not do (see ``RecordingRunner``). The
+    cache checks them against the identity at its write boundary, so a cell cannot be published
+    under a fingerprint describing a command line it never sent."""
+    recorder = RecordingRunner(simulated_runner(current_values) if dry_run else subprocess.run)
     passes = 0
     for i in range(repeats):
         with tempfile.TemporaryDirectory(prefix=f"toolreq-{arm}-") as sandbox:
-            agent = HeadlessClaudeAgent(
-                model=model,
-                runner=runner,
-                memory_channel=channel,
-                constrain_tools=True,  # --allowedTools Write
-                cwd=sandbox,
-            )
+            agent = cell_agent(model=model, channel=channel, runner=recorder, cwd=sandbox)
             ctx = StepContext(
                 trial_id=f"{arm}-{channel.value}-{i}",
                 session_id=f"{arm}-{channel.value}",
@@ -220,4 +269,5 @@ def run_arm(
             result = agent.run_step(step, dict(memory), ctx)
         if score_goal_action(step, tool_calls=result.tool_calls, final_answer=result.final_answer):
             passes += 1
-    return ArmOutcome(arm=arm, channel=channel.value, runs=repeats, passes=passes)
+    outcome = ArmOutcome(arm=arm, channel=channel.value, runs=repeats, passes=passes)
+    return outcome, one_cycle(recorder.calls, repeats=repeats, arm=arm, channel=channel)

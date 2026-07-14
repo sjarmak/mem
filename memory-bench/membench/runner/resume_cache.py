@@ -2,11 +2,16 @@
 
 THE CACHE INVARIANT — stated once here, for every consumer, not re-argued at each check. A resumed
 paid run may reuse a persisted cell only when that cell's identity is a total function of what was
-measured: the prompts sent, the inputs the scorer grades against, and the run knobs. Every cache
+measured: the invocations sent, the inputs the scorer grades against, and the run knobs. Every cache
 defect this codebase has shipped had ONE shape — the identity hashed a MODEL of the executed input,
 the model was one field short, and the task then reported ``reused``, spent nothing, did NOT crash,
 and printed a stale or fabricated number as a real measurement. A green suite is not evidence
 against that; each such shape is an executable case in ``tests/test_resume_cache.py``.
+
+So the identity does not model the executed input, it CARRIES it: ``invocation_fingerprint`` hashes
+the exact ``claude -p`` command lines the task's cells spawn, and ``run_cached_corpus`` refuses to
+publish a measurement whose RECORDED invocations do not hash to it. The two halves are what make it
+structural rather than a convention — hash the artifact, and check the artifact against the hash.
 
 Every defense below is STRUCTURAL — a property of the schema, not of the caller — and each is
 stated at its own definition. A consumer subclasses ``BaseRunIdentity`` / ``BaseCellOutcome`` /
@@ -20,7 +25,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Generic, Protocol, Self, TypeVar
@@ -28,7 +33,7 @@ from typing import Any, Generic, Protocol, Self, TypeVar
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from membench.bbon.models import deterministic_id
-from membench.runner.headless_agent import resolve_model
+from membench.runner.headless_agent import CellCalls, resolve_model
 
 
 def digest(payload: object) -> str:
@@ -37,8 +42,36 @@ def digest(payload: object) -> str:
     Canonical (``deterministic_id`` -> RFC8785-style: object keys SORTED, list order KEPT). Sorting
     keys is what makes a field REORDER — which moves nothing executed and nothing scored — a cache
     hit rather than a full re-spend, and it is safe only because every input whose ORDER IS a
-    measured input (surfaced memory, a retrieval payload, the prompt cells) is passed as a LIST."""
+    measured input (surfaced memory, a retrieval payload, a cell's legs) is passed as a LIST."""
     return deterministic_id(payload)[:16]
+
+
+def invocation_digest(cells: Iterable[CellCalls]) -> str:
+    """The value ``BaseRunIdentity.invocation_fingerprint`` carries: every ``claude -p`` a task's
+    cells will spawn — argv and all, prompt included.
+
+    Its two halves pull in OPPOSITE directions and both are load-bearing.
+
+    The CELLS sort. Each is an independent run in its own sandbox carrying its own ``(arm,
+    channel)`` label, so the order a grid's loop happens to visit them in moves nothing executed and
+    nothing scored — sorting keeps a reordered loop a cache HIT rather than a full paid re-spend.
+
+    A cell's CALLS do not. Its legs share a cwd and a config dir and run in SEQUENCE, so their order
+    IS a measured input: swap the builtin arm's establish and goal legs and it establishes the fact
+    into a directory it then wipes, measuring a guaranteed 0/N. A digest that read that as the same
+    run as the un-swapped one would serve the pre-swap numbers as post-swap measurements — this
+    module's whole defect family, so the list stays a list. (Same two halves, same reasons, as
+    ``digest``'s canonical-JSON contract.)
+
+    Two records for one cell is refused, never merged: a cell runs ONE cycle, so they cannot both
+    describe what it did, and merging would let a fabricated record overwrite the measured one."""
+    by_cell: dict[tuple[str, str], list[list[str]]] = {}
+    for cell in cells:
+        key = (cell.arm, cell.channel)
+        if key in by_cell:
+            raise ValueError(f"two invocation records for cell {key} — a cell runs ONE cycle")
+        by_cell[key] = [list(argv) for argv in cell.calls]
+    return digest([[arm, channel, by_cell[(arm, channel)]] for arm, channel in sorted(by_cell)])
 
 
 class CacheableTask(Protocol):
@@ -89,19 +122,25 @@ class BaseRunIdentity(BaseModel):
     reject it at the flag too; this is the structural backstop, and both are deliberate.
 
     ``protocol`` covers what the fingerprints structurally CANNOT: the executing and scoring CODE. A
-    change to the agent runner, the prompt builder, the stream-json parser, the scorer or the
-    timeout moves a result without touching any task field, so every fingerprint stays identical
-    across it and a resumed sweep would serve pre-change answers as if they measured the new
-    protocol. Each grid owns its own constant and BUMPS it on such a change. It is a MANUAL gate and
-    that is its weakness: the alternative (hashing those modules' source) would invalidate the whole
-    paid grid on any comment edit and re-spend real money. It cannot cover the ``claude`` binary
-    itself (version, PATH, account config) — see the drivers' docstrings.
+    change to the stream-json parser, the scorer, the engagement check or the sandbox firewall moves
+    a result without touching any task field, so every fingerprint stays identical across it and a
+    resumed sweep would serve pre-change answers as if they measured the new protocol. Each grid
+    owns its own constant and BUMPS it on such a change. It is a MANUAL gate and that is its
+    weakness: the alternative (hashing those modules' source) would invalidate the whole paid grid
+    on any comment edit and re-spend real money. It cannot cover the ``claude`` binary itself
+    (version, PATH, account config) — see the drivers' docstrings.
 
-    ``prompt_fingerprint`` hashes the PROMPTS THEMSELVES — the exact text every cell will send to
-    ``claude -p`` — rather than a model of what goes into them, and so it cannot be incomplete
-    *about the prompt*, because it IS the prompt. It does NOT subsume ``task_fingerprint`` and is
-    carried ALONGSIDE it, never in place of it: the scorer grades fields the prompt never mentions.
-    """
+    ``invocation_fingerprint`` hashes the COMMAND LINES THEMSELVES — every ``claude -p`` argv every
+    cell will spawn, prompt included — rather than a model of what goes into them, and so it cannot
+    be incomplete *about the invocation*, because it IS the invocation. Its other half is the write
+    boundary: ``run_cached_corpus`` refuses to publish a measurement whose RECORDED invocations do
+    not hash to it (``invocation_digest``), so the two cannot be things that merely agree today.
+    Hashing the whole argv rather than just the prompt is what keeps ``--allowedTools``, ``--model``
+    and ``--strict-mcp-config`` out of ``protocol``'s manual surface: unclamping ``--allowedTools``
+    frees the scored goal leg while moving no task field, no payload and no prompt.
+
+    It does NOT subsume ``task_fingerprint`` and is carried ALONGSIDE it, never in place of it: the
+    scorer grades fields no command line mentions."""
 
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 
@@ -110,7 +149,7 @@ class BaseRunIdentity(BaseModel):
     model: str
     protocol: int
     task_fingerprint: str
-    prompt_fingerprint: str
+    invocation_fingerprint: str
 
     @model_validator(mode="after")
     def _model_is_the_one_the_agent_will_actually_run_under(self) -> Self:
@@ -315,6 +354,21 @@ def assert_usable_work_ids(tasks: Sequence[CacheableTask], summary_name: str) ->
 
 
 @dataclass(frozen=True)
+class Evaluation:
+    """What evaluating one task produced: the rows to persist, and the ``claude -p`` invocations it
+    ACTUALLY made.
+
+    The two travel together because they are one measurement. Returning only the rows is what let a
+    grid's identity describe a prompt its arms no longer send: ``identity_of`` and ``evaluate`` are
+    injected INDEPENDENTLY (see ``run_cached_corpus``), so without the invocations coming back out
+    of the evaluation there is nothing to check the identity against, and the fingerprint is left
+    resting on the author of the next edit remembering to move two files at once."""
+
+    outcomes: Sequence[BaseCellOutcome]
+    calls: Sequence[CellCalls]
+
+
+@dataclass(frozen=True)
 class CorpusRun(Generic[ResultT]):
     """What one sweep over the corpus produced, and what it COST to produce it.
 
@@ -334,7 +388,7 @@ def run_cached_corpus(
     out_dir: Path,
     result_cls: type[ResultT],
     identity_of: Callable[[TaskT], BaseRunIdentity],
-    evaluate: Callable[[TaskT], Sequence[BaseCellOutcome]],
+    evaluate: Callable[[TaskT], Evaluation],
     summary_name: str,
     resume: bool = True,
 ) -> CorpusRun[ResultT]:
@@ -345,7 +399,16 @@ def run_cached_corpus(
 
     ``identity_of`` and ``evaluate`` are injected rather than named: they are the ONLY two things
     that differ between the grids that share this cache, and injecting them is what keeps the arms,
-    the prompts and the verdict rule of one experiment out of the other's."""
+    the invocations and the verdict rule of one experiment out of the other's.
+
+    Injected INDEPENDENTLY, though — which is exactly why the write boundary below exists.
+    Nothing else binds the invocations a grid HASHES to the ones its arms SEND, and a fingerprint
+    left resting on that agreement is one edit from being a hand-written model of the executed
+    input: change what a leg surfaces, forget to move the plan, and every persisted cell still
+    matches, so a resumed PAID run reports ``reused``, spends nothing, does not crash, and
+    publishes pre-change numbers as post-change measurements. A refused measurement is expensive
+    — the ``claude -p`` calls are already made and are NOT written — and that is the cheap end of
+    this failure."""
     out_dir.mkdir(parents=True, exist_ok=True)
     assert_usable_work_ids(tasks, summary_name)
 
@@ -366,9 +429,20 @@ def run_cached_corpus(
             results.append(cached)
             reused += 1
             continue
-        outcomes = evaluate(task)
+        evaluation = evaluate(task)
+        sent = invocation_digest(evaluation.calls)
+        if sent != identity.invocation_fingerprint:
+            raise ValueError(
+                f"{task.work_id}: the `claude -p` invocations this task actually made hash to "
+                f"{sent}, but the identity it was measured under fingerprints "
+                f"{identity.invocation_fingerprint} — the grid's plan is no longer what its arms "
+                "execute. This measurement is NOT written: publishing it would file a real result "
+                "under a fingerprint describing a command line it never sent, and every cell a "
+                "later resume serves on that fingerprint would answer for a different run. Fix the "
+                "plan (or the arm) so the two are one thing again, then re-measure."
+            )
         executed += 1
-        result = result_cls.of(task.work_id, identity, outcomes)
+        result = result_cls.of(task.work_id, identity, evaluation.outcomes)
         # Atomic publish: write a sibling temp file then rename, so a kill mid-write leaves either
         # the old result or the new one, never a half-written JSON the next resume trips on.
         tmp_path = result_path.with_suffix(".json.tmp")
