@@ -7,12 +7,17 @@ Covers the invariants the bead's PLAN-REVIEW made mandatory:
 * H4 — the establish turn's facts are delivered via ``available_memory`` (like the
   oracle arm), never embedded in the instruction prose, so TRUSTED/RECALLED
   meaningfully varies the establish framing.
-* H2 — engagement is CONTENT-based (does the opaque token actually reach a native
-  ``MEMORY.md``), not file-existence — an empty scaffolded dir never counts.
+* H2 — engagement is CONTENT-based (does the opaque token actually reach native memory),
+  not file-existence — an empty scaffolded dir never counts. Native memory is an INDEX
+  plus TOPIC FILES, and the fact lands in the topic file, so the check must search both.
+* The shared sandbox cwd is FIREWALLED between the two legs: it has to be shared (the
+  memory path is keyed on its slug) but its contents are a second continuity channel that
+  ``--allowedTools`` cannot close, since an auto-loaded ``CLAUDE.md`` is not a tool call.
 * A goal PASS with engaged=False is accounted as a LEAK, not a builtin win.
-* The dry-run simulator proves the two-call shared cwd/config-dir wiring end to end
-  for zero tokens (it does not and cannot prove a real ``claude -p`` session persists
-  to ``MEMORY.md`` — that is the paid preflight's job, tested at the driver level).
+* The dry-run simulator proves the two-call shared cwd/config-dir wiring end to end for
+  zero tokens, persisting in the REAL native-memory layout so the free path guards the
+  glob (it does not and cannot prove a real ``claude -p`` session persists at all — that
+  is the paid preflight's job, tested at the driver level).
 """
 
 from __future__ import annotations
@@ -30,6 +35,7 @@ from membench.runner.headless_agent import HeadlessAgentError, MemoryChannel
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome
 from membench.runner.toolreq_builtin import (
     ARM,
+    SIMULATED_TOPIC_FILE,
     BuiltinDiagnostics,
     _establish_step,
     _memory_engaged,
@@ -195,6 +201,26 @@ def test_memory_engaged_globs_any_project_slug(tmp_path: Path) -> None:
     assert _memory_engaged(tmp_path, ["toolreq-xyz-CURRENT"]) is True
 
 
+def test_memory_engaged_true_when_the_token_lands_in_a_topic_file(tmp_path: Path) -> None:
+    # Claude Code native memory is an INDEX plus TOPIC FILES: MEMORY.md carries one-line
+    # pointers ("- [Title](topic.md) — hook") and the FACT itself lives in the sibling
+    # <topic>.md. Every native-memory dir on this box has that shape, without exception.
+    # Globbing only MEMORY.md therefore scores a WORKING builtin as engaged=0 — which on
+    # the paid path is a false PREFLIGHT HALT ("native memory may be disabled") or, with
+    # --skip-preflight, records the arm's BEST possible result (a clean 3/3 off native
+    # memory) as a LEAK. The token must be found wherever native memory actually put it.
+    memory_dir = tmp_path / "projects" / "-tmp-sandbox" / "memory"
+    memory_dir.mkdir(parents=True)
+    (memory_dir / "MEMORY.md").write_text(
+        "- [Retention window](retention-window.md) — the window to recall later\n",
+        encoding="utf-8",
+    )
+    (memory_dir / "retention-window.md").write_text(
+        "the retention window is toolreq-abc123-CURRENT", encoding="utf-8"
+    )
+    assert _memory_engaged(tmp_path, ["toolreq-abc123-CURRENT"]) is True
+
+
 # --- simulated dry-run runner (proves the two-call wiring, no tokens) ------------------
 
 
@@ -203,9 +229,11 @@ def test_simulated_runner_establish_writes_iff_prompt_carries_every_value(tmp_pa
     argv = ["claude", "-p", "carries tok-a and tok-b", "--output-format", "stream-json"]
     completed = runner(argv, env={"CLAUDE_CONFIG_DIR": str(tmp_path)}, cwd="/sandbox")
     assert completed.returncode == 0
-    memory_path = Path(native_memory_path(config_dir=str(tmp_path), workdir="/sandbox"))
-    assert memory_path.is_file()
-    assert "tok-a" in memory_path.read_text(encoding="utf-8")
+    index_path = Path(native_memory_path(config_dir=str(tmp_path), workdir="/sandbox"))
+    assert index_path.is_file()
+    # the FACT lands in the topic file, not the index — the real native-memory layout
+    topic_path = index_path.parent / SIMULATED_TOPIC_FILE
+    assert "tok-a" in topic_path.read_text(encoding="utf-8")
 
 
 def test_simulated_runner_establish_no_write_when_prompt_missing_a_value(tmp_path: Path) -> None:
@@ -334,6 +362,171 @@ def test_fresh_sandbox_and_config_dir_per_repeat() -> None:
     per_repeat_pairs = [seen[i] for i in range(0, 10, 2)]
     assert seen[0] == seen[1]  # establish and goal share one sandbox+config_dir
     assert len(set(per_repeat_pairs)) == 5  # every repeat's pair is distinct from every other
+
+
+def test_simulated_establish_persists_to_a_topic_file_not_the_index(tmp_path: Path) -> None:
+    # The simulator must write where REAL native memory writes: the fact in a <topic>.md,
+    # the index holding only a pointer. A simulator that parked the fact in MEMORY.md
+    # would be fitted to whatever the engagement check globs — which is exactly how a
+    # MEMORY.md-only glob (scoring a working builtin as engaged=0) survived a green
+    # dry-run. Pinning the layout here makes the FREE path a real guard on the glob.
+    runner = simulated_builtin_runner(["toolreq-abc123-CURRENT"])
+    cwd = tmp_path / "sandbox"
+    cwd.mkdir()
+    config_dir = tmp_path / "config"
+    runner(
+        ["claude", "-p", "facts: toolreq-abc123-CURRENT"],
+        env={"CLAUDE_CONFIG_DIR": str(config_dir)},
+        cwd=str(cwd),
+    )
+    index = Path(native_memory_path(config_dir=str(config_dir), workdir=str(cwd)))
+    topic = index.parent / SIMULATED_TOPIC_FILE
+    assert "toolreq-abc123-CURRENT" in topic.read_text(encoding="utf-8")  # fact: topic file
+    assert "toolreq-abc123-CURRENT" not in index.read_text(encoding="utf-8")  # index: pointer
+    assert _memory_engaged(config_dir, ["toolreq-abc123-CURRENT"]) is True
+
+
+# --- cwd firewall: the shared sandbox is not a second continuity channel ---------------
+
+
+def _cwd_scavenging_runner(value: str):
+    """Establish leg (no ``--allowedTools``): persists the value into a file in the SHARED
+    sandbox cwd instead of into native memory — which an unconstrained establish call is
+    free to do. Goal leg: passes iff that file is still readable. Claude Code auto-loads
+    ``CLAUDE.md``/``AGENTS.md`` from the cwd at session start with NO tool call, so a
+    Write-only ``--allowedTools`` clamp does not close this channel; only emptying the cwd
+    does."""
+
+    def run(argv, **kwargs):
+        argv_list = list(argv)
+        cwd = kwargs.get("cwd")
+        assert isinstance(cwd, str)
+        scavengeable = Path(cwd) / "CLAUDE.md"
+        events: list[dict[str, object]] = []
+        if "--allowedTools" not in argv_list:  # establish leg
+            scavengeable.write_text(f"remember: {value}", encoding="utf-8")
+        elif scavengeable.is_file() and value in scavengeable.read_text(encoding="utf-8"):
+            events.append(  # goal leg: passes off the leftover file, never touching memory
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "name": REAL_TOOL,
+                                "input": {"file_path": CONFIG_FILE, "content": value},
+                            }
+                        ],
+                        "usage": {"input_tokens": 0, "output_tokens": 0},
+                    },
+                }
+            )
+        events.append({"type": "result", "result": "done"})
+        stdout = "\n".join(json.dumps(e) for e in events)
+        return subprocess.CompletedProcess(argv_list, returncode=0, stdout=stdout, stderr="")
+
+    return run
+
+
+def test_goal_leg_cannot_scavenge_a_cwd_file_the_establish_leg_left_behind() -> None:
+    # The establish and goal legs MUST share a sandbox cwd (the native-memory path is
+    # keyed on the cwd slug), but the cwd's CONTENTS are a second, unfirewalled continuity
+    # channel outside the memory channel under test. Left open, an establish call that
+    # writes CLAUDE.md and never touches native memory still yields a passing goal leg —
+    # and because `engaged` is measured off the establish leg while `leaked` only fires on
+    # (pass AND NOT engaged), the accounting would record it as a clean builtin SEPARATES.
+    # Wiping the cwd's contents between legs closes the channel structurally: the slug (so
+    # the memory path, so continuity) is unchanged, but nothing is left to scavenge.
+    task = _task()
+    (current_opaque,) = task.current_opaque_values
+
+    outcome, diag = run_builtin_arm(
+        task,
+        repeats=2,
+        model="",
+        dry_run=False,
+        channel=MemoryChannel.RECALLED,
+        runner=_cwd_scavenging_runner(current_opaque),
+    )
+    assert outcome.passes == 0  # the leftover file is gone: nothing to scavenge
+    assert diag.engaged == 0  # and this runner never engaged native memory at all
+    assert diag.leaked == 0  # so there is no pass to misreport as a builtin win
+
+
+def test_cwd_wipe_preserves_the_sandbox_dir_so_the_memory_path_survives() -> None:
+    # The wipe must empty the cwd, never replace it: the native-memory path is derived
+    # from the cwd SLUG, so a fresh cwd between legs would silently move the memory file
+    # out from under the goal call and break the very continuity we are measuring.
+    task = _task()
+    seen_cwds: list[object] = []
+
+    def recording_runner(argv, **kwargs):
+        seen_cwds.append(kwargs.get("cwd"))
+        return subprocess.CompletedProcess(list(argv), returncode=0, stdout="", stderr="")
+
+    run_builtin_arm(
+        task,
+        repeats=1,
+        model="",
+        dry_run=False,
+        channel=MemoryChannel.RECALLED,
+        runner=recording_runner,
+    )
+    assert seen_cwds[0] == seen_cwds[1]  # establish and goal still share ONE cwd path
+
+
+def test_establish_tool_names_are_recorded_not_just_counted() -> None:
+    # The audit trail exists so a reviewer gating the PAID fire can see what the
+    # unconstrained establish call actually did — a bare count cannot answer "did it write
+    # into the shared cwd", which is the question that matters.
+    task = _task()
+    bash_happy_runner = _stream_json_runner(
+        tool_use_when=lambda argv: "--allowedTools" not in argv,  # the establish call only
+        tool_name="Bash",
+        tool_input={"command": "ls"},
+    )
+    _, diag = run_builtin_arm(
+        task,
+        repeats=2,
+        model="",
+        dry_run=False,
+        channel=MemoryChannel.RECALLED,
+        runner=bash_happy_runner,
+    )
+    assert diag.establish_tool_calls == 2
+    assert diag.establish_tool_names == ("Bash",)
+
+
+# --- the mechanism knob: a pristine config dir must have native memory ON --------------
+
+
+def test_fresh_config_dir_turns_native_memory_on() -> None:
+    # `autoMemoryEnabled` is a $CLAUDE_CONFIG_DIR/settings.json key — CONFIG-DIR-LOCAL, so
+    # this driver fully owns it (account2's settings.json on this box carries it false).
+    # Each repeat mints a PRISTINE EMPTY config dir, so without seeding it the mechanism
+    # under test would ride on whatever Claude Code's default for that key happens to be —
+    # a coin flip on the paid path, and one that would send a halted run chasing an
+    # account-level problem that does not exist.
+    task = _task()
+    seen: list[dict[str, object]] = []
+
+    def settings_recording_runner(argv, **kwargs):
+        env = kwargs.get("env") or {}
+        config_dir = Path(str(env.get("CLAUDE_CONFIG_DIR")))
+        settings = config_dir / "settings.json"
+        seen.append(json.loads(settings.read_text(encoding="utf-8")) if settings.is_file() else {})
+        return subprocess.CompletedProcess(list(argv), returncode=0, stdout="", stderr="")
+
+    run_builtin_arm(
+        task,
+        repeats=1,
+        model="",
+        dry_run=False,
+        channel=MemoryChannel.RECALLED,
+        runner=settings_recording_runner,
+    )
+    assert seen, "the runner never saw a config dir"
+    assert all(s.get("autoMemoryEnabled") is True for s in seen)
 
 
 # --- leak accounting (H2): a pass without engagement is NOT a builtin win --------------

@@ -17,9 +17,10 @@ This is the paid ceiling driver. It STAGES but never over-reaches:
   none/oracle cost per repeat: establish + goal), so the paid fire stays an explicit,
   cost-disclosed, per-action decision (Stephanie's call);
 * a real run also spends one cheap PREFLIGHT establish+check cycle before the full
-  sweep and HALTS if native memory never reached ``MEMORY.md``, so a builtin that is
-  simply switched off for this account produces a diagnosed refusal rather than an
-  uninterpretable null;
+  sweep and HALTS if the fact never reached native memory, so a mechanism that never
+  fires produces a diagnosed refusal rather than an uninterpretable null. The arm turns
+  the mechanism ON itself (``autoMemoryEnabled`` is seeded into each pristine
+  ``CLAUDE_CONFIG_DIR``), so a halt is a real finding, not an account to go fix;
 * per-task results persist to ``--out/<work_id>.json`` and are REUSED on re-run, so a
   token-expiry or OOM mid-sweep does not re-pay for finished tasks.
 
@@ -85,7 +86,7 @@ def _cell_kind(outcome: ArmOutcome, diag: BuiltinDiagnostics) -> tuple[str, str]
     if outcome.passes == runs and diag.engaged == runs and runs > 0:
         return "SEPARATES", f"SEPARATES: {outcome.passes}/{runs} (engaged {diag.engaged}/{runs})"
     if diag.engaged == 0:
-        return "NOT-ENGAGED", f"NOT-ENGAGED: native memory never reached MEMORY.md (0/{runs})"
+        return "NOT-ENGAGED", f"NOT-ENGAGED: the fact never reached native memory (0/{runs})"
     return "WEAK", f"WEAK: {outcome.passes}/{runs} passed, engaged {diag.engaged}/{runs}"
 
 
@@ -241,10 +242,10 @@ def _print_go_command(n_tasks: int, repeats: int, out_dir: Path, corpus_dir: Pat
         f"{DEFAULT_TIMEOUT_S:.0f}s timeout.\n"
         f"  Plus one PREFLIGHT establish+check cycle (2 calls) before the sweep starts.\n"
         f"  Per-task results persist to {out_dir} and are reused on re-run (resumable).\n"
-        "  RISK: builtin native-memory engagement depends on an account/pool-level "
-        "feature flag this script's CLAUDE_CONFIG_DIR plumbing cannot itself turn on — "
-        "the preflight below catches an OFF account before the full spend, but confirm "
-        "the OAuth account used has it enabled if the preflight halts (mem-rk41.3.2 Q3).\n"
+        "  MECHANISM: native memory is turned ON by this script — `autoMemoryEnabled` is a "
+        "$CLAUDE_CONFIG_DIR/settings.json key, so the pristine per-repeat config dir is "
+        "seeded with it directly. It is NOT an account/pool-level flag, and needs nothing "
+        "enabled on the OAuth account (mem-rk41.3.2 Q3).\n"
         "  To fire (Stephanie's per-action go), source the token from an account home and "
         "wrap in scix-batch:\n\n"
         f"    scix-batch -- env {ENV_OAUTH}=... \\\n"
@@ -313,9 +314,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 3
         if diag.engaged == 0:
             print(
-                "PREFLIGHT HALT: the real establish call never reached MEMORY.md — builtin "
-                "native memory may be disabled for this OAuth account/pool (mem-rk41.3.2 "
-                "Q3). Refusing to spend on the full sweep.",
+                "PREFLIGHT HALT: the real establish call never persisted the fact to native "
+                "memory (searched every .md under the config dir's memory/ — index AND topic "
+                "files). Refusing to spend on the full sweep.\n"
+                "  This is NOT an account/pool problem to go chase: `autoMemoryEnabled` is a "
+                "$CLAUDE_CONFIG_DIR/settings.json key and this script already seeds it true "
+                "in the pristine per-repeat config dir (mem-rk41.3.2 Q3). A halt here means "
+                "the mechanism genuinely did not fire — the finding the arm exists to "
+                "surface, not a misconfiguration to work around.",
                 file=sys.stderr,
             )
             return 3
