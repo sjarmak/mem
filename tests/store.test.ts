@@ -458,13 +458,10 @@ describe('lessons (append-only, D9)', () => {
     appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-03T00:00:00Z', payload: {} });
     const snapshot = maxLessonId(db) as number;
 
-    // The rig-scoped window JOINs work_records, whose PK is work_id — it has no
-    // id column of its own today, which is the only reason a bare `id <= ?` in
-    // the composed WHERE resolved at all. Give work_records an id column (what a
-    // future schema migration would do) and the bare form becomes SQLite's
-    // "ambiguous column name: id" at runtime — where computeRegressions' caller
-    // swallows it into a regressionError string rather than failing the build.
-    // Qualifying as l.id keeps the query resolvable regardless (mem-6hvha).
+    // Pins the composed WHERE's column qualification. The rig-scoped window
+    // JOINs work_records, whose PK is work_id — its having no `id` of its own
+    // is the only reason a bare `id <= ?` resolves at all. Give it one and the
+    // bare form is "ambiguous column name: id" at runtime; `l.id` is immune.
     db.exec('ALTER TABLE work_records ADD COLUMN id TEXT');
 
     expect(lastKLessons(db, 5, 'rigA', snapshot).map(l => l.work_id)).toEqual(['w-a']);
@@ -472,17 +469,14 @@ describe('lessons (append-only, D9)', () => {
 
   it('lastKLessons returns [] for an explicit null asOfLessonId (snapshot taken when the table was empty) — never the unbounded live query', () => {
     const db = openStore(':memory:');
-    // A snapshot of an empty table (maxLessonId(db) === null here) means no
-    // lessons existed yet — the correct window is empty, not "everything
-    // currently in the table," which is what an omitted (undefined) boundary
-    // means. Collapsing null into undefined would wrongly reproduce the
-    // unbounded live-query behavior for a caller that snapshotted at zero.
+    // null = "no lessons existed at snapshot time", so the window stays empty.
+    // Collapsing it into undefined would instead mean "no boundary" and
+    // reproduce the unbounded live query for a caller who snapshotted at zero.
     expect(maxLessonId(db)).toBeNull();
     appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-03T00:00:00Z', payload: {} });
 
     expect(lastKLessons(db, 5, undefined, null)).toEqual([]);
     expect(lastKLessons(db, 5, 'rigA', null)).toEqual([]);
-    // Contrast: an omitted boundary sees the lesson that now exists.
     expect(lastKLessons(db, 5).map(l => l.work_id)).toEqual(['w-a']);
   });
 

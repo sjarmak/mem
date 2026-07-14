@@ -184,14 +184,11 @@ export function lastKLessons(
 ): StoredLesson[] {
   if (k <= 0) return [];
 
-  // Same where/params accumulation idiom as `queryRecords` above, so rig and
-  // as-of compose independently. The as-of clause qualifies its column as
-  // `l.id`: a bare `id` resolves only while `work_records` has no `id` of its
-  // own, and a migration adding one would make it "ambiguous column name" at
-  // runtime — which `computeRegressions`' caller swallows into a
-  // `regressionError` string rather than failing the build (mem-6hvha). A
-  // bound `null` needs no early return: `l.id <= NULL` is SQL-unknown for
-  // every row, so the query already returns nothing.
+  // The as-of clause qualifies its column as `l.id`: a bare `id` resolves only
+  // while the joined `work_records` has no `id` of its own, and would go
+  // "ambiguous column name" at runtime the moment it gained one — which
+  // `computeRegressions`' caller swallows into a `regressionError` string
+  // rather than failing the build (mem-6hvha).
   const where: string[] = [];
   const params: (string | number | null)[] = [];
   if (rig !== undefined) {

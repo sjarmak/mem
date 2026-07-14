@@ -903,19 +903,12 @@ describe('computeRegressions', () => {
     });
     const asOfLessonId = maxLessonId(db) as number;
 
-    // Simulates importLessons running BEFORE computeRegressions (a call-order
-    // violation of the old comment-only convention): a lesson is appended
-    // after the snapshot but before the check runs, which would otherwise
-    // evict w-src from an unpinned k=1 window.
+    // An import lands between the snapshot and the check.
     appendLesson(db, { work_id: 'w-other', extracted_at: '2026-06-06T00:00:00Z', payload: {} });
 
-    // Unpinned: w-other evicts w-src from the k=1 window, so the recurrence
-    // is missed entirely — the bug this bead is about.
+    // Unpinned, w-other evicts w-src from the k=1 window and the recurrence is missed.
     expect(computeRegressions(db, 1, 'rigA').flags).toEqual([]);
 
-    // Pinned to the pre-import snapshot: w-src is still the k=1 window and
-    // its recurrence is correctly flagged, regardless of what was appended
-    // (or in what order) after the snapshot.
     const { flags } = computeRegressions(db, 1, 'rigA', asOfLessonId);
     expect(flags).toHaveLength(1);
     expect(flags[0].lesson_work_id).toBe('w-src');
@@ -925,20 +918,17 @@ describe('computeRegressions', () => {
     writeRecords(db, [closedRecord('w-src', 'rigA'), laterClosedRecord('w-later', 'rigA')]);
     expect(maxLessonId(db)).toBeNull();
 
-    // Lessons are appended after the (empty) snapshot was taken.
     appendLesson(db, {
       work_id: 'w-src',
       extracted_at: '2026-06-05T12:00:00Z',
       payload: { subtitle: 's' },
     });
 
-    // null must NOT collapse to "no boundary" (which would see w-src and
-    // flag its recurrence) — it means the window was empty at snapshot time.
+    // `computeRegressions` must forward the null rather than coerce it to
+    // "no boundary", which would see w-src and flag its recurrence.
     const { flags, skipped } = computeRegressions(db, 5, 'rigA', null);
     expect(flags).toEqual([]);
     expect(skipped).toEqual([]);
-
-    // Contrast: an omitted boundary sees the lesson that now exists.
     expect(computeRegressions(db, 5, 'rigA').flags).toHaveLength(1);
   });
 });
