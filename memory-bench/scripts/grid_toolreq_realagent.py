@@ -50,6 +50,7 @@ import json
 import os
 import sys
 import tempfile
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
@@ -81,6 +82,22 @@ ENV_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN"
 
 ARMS = ("none", "oracle", "ours")
 CHANNELS = (MemoryChannel.RECALLED, MemoryChannel.TRUSTED)
+
+# Rides in the cache identity to cover what the fingerprints structurally CANNOT: the
+# executing and scoring CODE. `task_fingerprint` and `payload_fingerprint` hash the DATA that
+# reaches the prompt, but a cached cell is equally invalidated by a change to how that data is
+# executed or graded — `run_arm`, `build_agent_prompt`, the stream-json parser,
+# `score_goal_action`, or DEFAULT_TIMEOUT_S. None of those touch any task field, so every
+# fingerprint here stays identical across such a change and a resumed sweep silently serves
+# pre-change answers as if they measured the new protocol.
+#
+# BUMP THIS when the execution or scoring path changes in a way that could move a result.
+# It is a MANUAL gate, and that is a real weakness worth naming: the alternative (hashing
+# those modules' source) would invalidate the whole paid grid on any comment edit and
+# re-spend real money, so the cheap-but-disciplined option is the deliberate trade. What it
+# does NOT and cannot cover: the `claude` binary itself (version, PATH, account config) —
+# see the driver docstring.
+EXECUTION_PROTOCOL = 1
 
 # Seeds the `ours` store + resolves its payload: (sequences, tasks, store_path, mem_bin)
 # -> work_id -> (source work_id -> rendered payload). Always over ALL tasks — the payload is
@@ -360,7 +377,14 @@ def _valid_cell(row: Any, repeats: int) -> bool:
     and ``task_verdict`` then reads ``oracle 0/0`` and fabricates a confident
     "KILL: no separation" for a task that was never evaluated, counted as ``reused``.
     ``passes > runs`` is rejected for the mirror reason: no real run produces it, and left in
-    place it inflates the oracle ceiling."""
+    place it inflates the oracle ceiling.
+
+    ``runs > 0`` is checked SEPARATELY from ``runs == repeats`` and does not merely restate it.
+    ``runs == repeats`` closes the degenerate case only while ``repeats`` is itself >= 1; under
+    ``--repeats 0`` it is vacuously true (0 == 0) and the ``0/0`` hole reopens exactly as
+    before. Guarding it here as well as in ``main`` is deliberate: the argument validation is
+    the gate, this is the backstop, and the reason to have both is that an earlier fix in this
+    file DELETED a check it believed a newer one subsumed, and re-opened a closed hole."""
     if not isinstance(row, Mapping):
         return False
     arm, channel = row.get("arm"), row.get("channel")
@@ -371,7 +395,7 @@ def _valid_cell(row: Any, repeats: int) -> bool:
         return False
     if not isinstance(passes, int) or not isinstance(runs, int):
         return False
-    return runs == repeats and 0 <= passes <= runs
+    return runs == repeats and runs > 0 and 0 <= passes <= runs
 
 
 def _load_cached(result_path: Path, identity: Mapping[str, Any]) -> _CachedTask | None:
@@ -480,7 +504,20 @@ def run_corpus(
         "dry_run": dry_run,
         "model": resolved_model,
         "arms": list(ARMS),
+        "protocol": EXECUTION_PROTOCOL,
     }
+    # Work ids key BOTH the identity map and the <work_id>.json result path, so a duplicate
+    # silently aliases two DIFFERENT tasks onto one cache file: the second overwrites the
+    # first, and on resume that single record is served for both — the second task's verdict
+    # reported as the first task's. Corpus work ids are sequence-derived and a regenerated or
+    # hand-assembled corpus can repeat one, so this is a real input, not a hypothetical. The
+    # cache is only sound if task identity is one-to-one; refuse rather than measure.
+    duplicates = sorted(id_ for id_, n in Counter(t.work_id for t in tasks).items() if n > 1)
+    if duplicates:
+        raise ValueError(
+            f"duplicate work_id(s) in the corpus: {duplicates} — each task must map to exactly "
+            "one <work_id>.json, or a resumed run serves one task's measurement for another"
+        )
     # Seeding + resolution happen BEFORE the cache is consulted, and cover EVERY task, because
     # the resolved `ours` payload is itself a measured input and therefore belongs in the cache
     # identity. It cannot be narrowed to pending tasks (an earlier revision did exactly that):
@@ -600,6 +637,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--store", type=Path, default=None, help="ours store path (default <out>/store.db)"
     )
     args = parser.parse_args(argv)
+
+    # `--repeats 0` runs zero agent turns per cell and persists six 0/0 rows, which
+    # `task_verdict` then reads as a confident "KILL: oracle ceiling 0/0 — no separation" for a
+    # task that was NEVER EVALUATED. The `_valid_cell` guard (`runs == repeats`) is vacuously
+    # true at 0, so the file caches clean and every resume reports it as `reused`. A sweep of
+    # nothing must not be able to publish a verdict.
+    if args.repeats < 1:
+        parser.error("--repeats must be >= 1; 0 evaluates nothing and fabricates a 0/0 verdict")
 
     corpus_dir = args.corpus_dir
     sequences, tasks = load_corpus_with_sequences(corpus_dir)

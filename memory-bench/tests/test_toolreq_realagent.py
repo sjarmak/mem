@@ -701,6 +701,47 @@ def test_empty_flag_contradicting_the_ours_rows_is_a_miss(tmp_path: Path) -> Non
     assert driver._load_cached(result_path, identity) is None, "accepted a fabricated ours cell"
 
 
+def test_repeats_zero_is_refused_and_never_caches_a_0_of_0_verdict(tmp_path: Path) -> None:
+    """--repeats 0 runs zero agent turns and persists six 0/0 rows, which task_verdict reads as a
+    confident 'KILL: oracle ceiling 0/0 -- no separation' for a task that was NEVER EVALUATED.
+    _valid_cell's `runs == repeats` guard is VACUOUSLY TRUE at 0, so the file caches clean and
+    every resume serves it as `reused`. This is the same 0/0 hole an earlier fix believed it had
+    closed -- it only closed it for repeats >= 1."""
+    # the argument gate refuses it outright
+    with pytest.raises(SystemExit):
+        driver.main(["--repeats", "0", "--dry-run", "--corpus-dir", str(tmp_path)])
+
+    # and the cache-loader backstop refuses a 0/0 row even if one reaches disk
+    assert (
+        driver._valid_cell({"arm": "oracle", "channel": "recalled", "passes": 0, "runs": 0}, 0)
+        is False
+    )
+
+    # a sweep of nothing must not be able to publish a verdict
+    zero = [
+        driver.ArmOutcome(arm=arm, channel=channel.value, passes=0, runs=0)
+        for channel in driver.CHANNELS
+        for arm in driver.ARMS
+    ]
+    assert "KILL" in driver.task_verdict(zero)  # this is exactly what must never be cacheable
+
+
+def test_duplicate_work_ids_are_refused(tmp_path: Path) -> None:
+    """work_id keys BOTH the identity map and the <work_id>.json path, so a duplicate aliases two
+    DIFFERENT tasks onto one cache file: the second overwrites the first and, on resume, that one
+    record is served for both -- the second task's verdict reported as the first task's. Corpus
+    work ids are sequence-derived, so a regenerated or hand-assembled corpus can repeat one."""
+    seq_a = _toolreq_seq("dup", current="AAA-CUR", stale="AAA-STALE")
+    seq_b = _toolreq_seq("dup", current="BBB-CUR", stale="BBB-STALE")
+    tasks = [adapt_sequence(seq_a), adapt_sequence(seq_b)]
+    assert tasks[0] != tasks[1] and tasks[0].work_id == tasks[1].work_id  # distinct, same id
+
+    with pytest.raises(ValueError, match="duplicate work_id"):
+        _run_corpus(
+            tasks, [seq_a, seq_b], tmp_path / "out", dry_run=True, store_path=tmp_path / "s.db"
+        )
+
+
 def test_unknown_arm_or_channel_cache_is_a_miss(tmp_path: Path) -> None:
     """A row naming an arm/channel outside the grid (schema drift across a rename) is a miss."""
     sequences, tasks = _corpus_one(tmp_path)
