@@ -904,6 +904,37 @@ def test_changing_what_a_leg_surfaces_is_a_miss_not_a_reuse(tmp_path: Path) -> N
     assert second["executed"] == 1 and second["reused"] == 0, "served the pre-change numbers"
 
 
+def test_turning_the_mechanism_off_is_a_miss_not_a_reuse(tmp_path: Path, monkeypatch) -> None:
+    """`autoMemoryEnabled` IS the mechanism under test, and it reaches the agent through a FILE in
+    `CLAUDE_CONFIG_DIR` — not through argv. So flipping it moves NO command line, NO task field and
+    (there being no store) no payload: `invocation_fingerprint` structurally cannot see it, which is
+    why the identity carries `mechanism_fingerprint` alongside it.
+
+    Without that field a resumed run serves mechanism-ON numbers as mechanism-OFF measurements —
+    which is to say, it would report the arm's headline for a setting the arm never ran under."""
+    tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    first = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert first["executed"] == 1
+
+    import membench.runner.toolreq_builtin as tb
+
+    monkeypatch.setattr(tb, "BUILTIN_SETTINGS", {"autoMemoryEnabled": False})
+    second = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert second["executed"] == 1 and second["reused"] == 0, "served the mechanism-ON numbers"
+
+
+def test_the_seeded_settings_are_the_ones_the_identity_fingerprints(tmp_path: Path) -> None:
+    """One definition, not two that agree today: the dict `_seed_config_dir` WRITES to the sandbox
+    config dir must be the dict `mechanism_fingerprint` HASHES."""
+    import membench.runner.toolreq_builtin as tb
+
+    config_dir = tmp_path / "config"
+    tb._seed_config_dir(config_dir)
+    seeded = json.loads((config_dir / "settings.json").read_text(encoding="utf-8"))
+    assert seeded == tb.BUILTIN_SETTINGS == {"autoMemoryEnabled": True}
+
+
 def test_a_plan_that_drifts_from_its_arm_refuses_to_publish(tmp_path: Path, monkeypatch) -> None:
     """The other half of the bond. Freeze the fingerprint at a value the arm's invocations do not
     hash to — what a plan left behind by an edit to `run_builtin_arm` produces — and the measurement

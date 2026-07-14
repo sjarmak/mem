@@ -66,6 +66,7 @@ from membench.runner.headless_agent import (
     one_cycle,
 )
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome, score_goal_action
+from membench.runner.resume_cache import digest
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask
 from membench.runtime import StepContext
 from membench.schemas.sequence import SequenceStep
@@ -175,6 +176,16 @@ def cell_calls(task: ToolReqRealAgentTask, channel: MemoryChannel, *, model: str
     )
 
 
+# The mechanism under test, as the literal settings dict `_seed_config_dir` writes. Named, and
+# EXPORTED, because it is a measured input the command line cannot carry: it reaches the agent
+# through a file in `CLAUDE_CONFIG_DIR`, not through argv. `toolreq_builtin_grid` hashes THIS
+# object into the cache identity (`BuiltinRunIdentity.mechanism_fingerprint`) — flip the flag and
+# every other fingerprint is unmoved (same prompts, same task, no payload), so a resumed run would
+# serve mechanism-ON numbers as mechanism-OFF measurements. A value outside the identity is not
+# defended by the checks around it.
+BUILTIN_SETTINGS: dict[str, object] = {"autoMemoryEnabled": True}
+
+
 def _seed_config_dir(config_dir: Path) -> None:
     """Turn the mechanism under test ON in a freshly-minted ``CLAUDE_CONFIG_DIR``.
 
@@ -182,10 +193,25 @@ def _seed_config_dir(config_dir: Path) -> None:
     LOCAL, so this driver owns it outright (it is NOT an account/pool-level flag; one
     account home on this box carries it ``false``). Each repeat mints a pristine empty
     config dir, so without this seed the paid run would measure native memory riding on
-    whatever the CLI's default for that key happens to be."""
+    whatever the CLI's default for that key happens to be.
+
+    It writes ``BUILTIN_SETTINGS`` rather than a literal, so the dict the cache fingerprints is the
+    same object this seeds — one definition, not two that agree today."""
     config_dir.mkdir(parents=True, exist_ok=True)
-    settings = {"autoMemoryEnabled": True}
-    (config_dir / "settings.json").write_text(json.dumps(settings, indent=2) + "\n", "utf-8")
+    (config_dir / "settings.json").write_text(
+        json.dumps(BUILTIN_SETTINGS, indent=2) + "\n", "utf-8"
+    )
+
+
+def mechanism_fingerprint() -> str:
+    """The digest of the settings this arm SEEDS into every repeat's ``CLAUDE_CONFIG_DIR``.
+
+    It lives HERE, beside ``_seed_config_dir``, and reads the module global at CALL time — so the
+    grid cannot hold a stale by-value copy of the dict from import, and the value hashed is by
+    construction the value written. A fingerprint computed from a second reference to a mutable
+    module-level dict is the defect family in miniature, at the one input the command line cannot
+    carry."""
+    return digest(BUILTIN_SETTINGS)
 
 
 def _wipe_cwd_contents(cwd: Path) -> None:

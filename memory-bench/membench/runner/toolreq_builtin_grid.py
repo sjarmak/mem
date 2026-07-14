@@ -40,7 +40,13 @@ from membench.runner.resume_cache import (
     render_verdict,
     run_cached_corpus,
 )
-from membench.runner.toolreq_builtin import ARM, BuiltinDiagnostics, cell_calls, run_builtin_arm
+from membench.runner.toolreq_builtin import (
+    ARM,
+    BuiltinDiagnostics,
+    cell_calls,
+    mechanism_fingerprint,
+    run_builtin_arm,
+)
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask, task_fingerprint
 
 # The run summary, written into the SAME directory as the per-task `<work_id>.json` results —
@@ -49,12 +55,13 @@ SUMMARY_NAME = "summary-toolreq-builtin.json"
 
 # The executing/scoring CODE this grid's cached cells were measured under
 # (BaseRunIdentity.protocol) — what MOVES A RESULT while every fingerprint stays identical:
-# `run_builtin_arm`'s cwd firewall (`_wipe_cwd_contents`) and config-dir seed (`_seed_config_dir`),
+# `run_builtin_arm`'s cwd firewall (`_wipe_cwd_contents`),
 # `_memory_engaged` + NATIVE_MEMORY_GLOB, the stream-json parser, `score_goal_action`,
 # DEFAULT_TIMEOUT_S, and `simulated_builtin_runner` (which decides the ENTIRE dry-run measurement —
 # free runs only, since `dry_run` is itself in the identity).
-# NOT here, because `invocation_fingerprint` now carries them: the prompts, --allowedTools, --model,
-# --strict-mcp-config, and the legs' count and order.
+# NOT here, because the identity now carries them: the prompts, --allowedTools, --model,
+# --strict-mcp-config, and the legs' count and order (`invocation_fingerprint`); the seeded
+# `autoMemoryEnabled` settings dict (`mechanism_fingerprint`).
 # BUMP on any change to the former that could move a result.
 EXECUTION_PROTOCOL = 2
 
@@ -199,14 +206,27 @@ def invocation_fingerprint(task: ToolReqRealAgentTask, *, model: str) -> str:
     return invocation_digest(cell_calls(task, channel, model=model) for channel in CHANNELS)
 
 
-class BuiltinCachedResult(BaseCachedResult[BaseRunIdentity, BuiltinCell]):
-    """One task's persisted builtin result. Every invariant is the shared core's; this class only
-    tells it what the grid is and how its rows classify.
+class BuiltinRunIdentity(BaseRunIdentity):
+    """What a persisted builtin cell was measured under. The knobs and the two fingerprints are
+    ``BaseRunIdentity``'s; this field is the measured input only THIS grid has.
 
-    The identity is ``BaseRunIdentity`` unextended: unlike the ``ours`` arm, ``builtin`` retrieves
-    nothing from an external store — its memory is the agent's own, established in-band by the first
-    leg — so there is no cross-task payload to hash. Everything that varies what it executes is in
-    the task and in the command lines, and both are already fingerprinted."""
+    ``mechanism_fingerprint`` hashes ``toolreq_builtin.BUILTIN_SETTINGS`` — the ``settings.json``
+    seeded into each repeat's pristine ``CLAUDE_CONFIG_DIR``, which is where ``autoMemoryEnabled``
+    turns the mechanism under test ON. It cannot ride in ``invocation_fingerprint``: it reaches the
+    agent through a FILE, not through argv, so flipping it to ``false`` leaves every command line,
+    the task, and (there being no store) the payload all identical. Without this field a resumed run
+    would serve mechanism-ON numbers as mechanism-OFF measurements — the same defect this grid's
+    cache exists to refuse, one input over.
+
+    Unlike ``ours``, ``builtin`` retrieves nothing from an external store (its memory is the agent's
+    own, established in-band by the first leg), so there is no cross-task payload to hash."""
+
+    mechanism_fingerprint: str
+
+
+class BuiltinCachedResult(BaseCachedResult[BuiltinRunIdentity, BuiltinCell]):
+    """One task's persisted builtin result. Every invariant is the shared core's; this class only
+    tells it what the grid is and how its rows classify."""
 
     @classmethod
     def expected_cells(cls) -> set[tuple[str, str]]:
@@ -220,15 +240,16 @@ class BuiltinCachedResult(BaseCachedResult[BaseRunIdentity, BuiltinCell]):
 
 def _identity(
     task: ToolReqRealAgentTask, *, repeats: int, resolved_model: str, dry_run: bool
-) -> BaseRunIdentity:
-    """The cache identity for one task (see ``BaseRunIdentity``)."""
-    return BaseRunIdentity(
+) -> BuiltinRunIdentity:
+    """The cache identity for one task (see ``BuiltinRunIdentity`` / ``BaseRunIdentity``)."""
+    return BuiltinRunIdentity(
         repeats=repeats,
         dry_run=dry_run,
         model=resolved_model,
         protocol=EXECUTION_PROTOCOL,
         task_fingerprint=task_fingerprint(task),
         invocation_fingerprint=invocation_fingerprint(task, model=resolved_model),
+        mechanism_fingerprint=mechanism_fingerprint(),
     )
 
 
