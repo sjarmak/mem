@@ -11,13 +11,13 @@ memory-trust channels. Values are OPAQUE on this path, so ``none`` can pass only
 genuine leak — the verdict rule is the probe's, restored.
 
 ``ours`` (mem-rk41.3.1) seeds a fresh ``.mem/store.db`` from the SAME corpus, using
-rk41.5's ``toolreq_bundle_adapter`` substrate (the shared value-free apply_config
-staleness signature) plus lessons whose facts state each sequence's CURRENT opaque
-value — the SAME opaque token space ``oracle`` surfaces (the load-bearing invariant: if
-``ours`` used a different value-map, its payload could never satisfy the scorer even if
-retrieval fired correctly). Cross-task retrieval will generally NOT surface the queried
-task's own sequence-unique opaque value — ``ours`` scoring near ``none`` rather than near
-``oracle`` is the expected, honest substrate finding, not a defect to work around.
+rk41.5's ``toolreq_bundle_adapter`` substrate (the shared value-free apply_config staleness
+signature) plus lessons whose facts state each sequence's CURRENT opaque value — the SAME
+opaque token space ``oracle`` surfaces. That shared value space is load-bearing: under a
+different value-map, ``ours`` could never satisfy the scorer even if retrieval fired
+correctly. Cross-task retrieval will generally NOT surface the queried task's own
+sequence-unique opaque value, so ``ours`` scoring near ``none`` rather than near ``oracle``
+is the expected, honest substrate finding, not a defect to work around.
 
 This is the paid ceiling driver. It STAGES but never over-reaches:
 
@@ -30,6 +30,17 @@ This is the paid ceiling driver. It STAGES but never over-reaches:
   an explicit, cost-disclosed, per-action decision (Stephanie's call);
 * per-task results persist to ``--out/<work_id>.json`` and are REUSED on re-run, so a
   token-expiry or OOM mid-sweep does not re-pay for finished tasks.
+
+THE CACHE INVARIANT — stated once here, not re-argued at each check. A resumed paid run may
+reuse a persisted cell only when that cell's identity is a total function of what was
+measured: the prompts sent, the inputs the scorer grades against, and the run knobs. Every
+cache defect this file has shipped had a single shape — the identity hashed a MODEL of the
+executed input, the model was one field short, and the task then reported ``reused``, spent
+nothing, did NOT crash, and printed a stale or fabricated number as a real measurement. A
+green suite is not evidence against that. Each such shape is an executable case in
+``tests/test_toolreq_realagent.py``; do not delete an identity field or a validity check
+below without a test proving the survivor covers every input the removed one did. Two
+collapses in this file have already re-opened a hole that only LOOKED subsumed.
 
 It does NOT run the ``builtin`` arm (mem-rk41.3.2): that needs a persistent native-memory
 env, separately substantial.
@@ -52,7 +63,7 @@ import sys
 import tempfile
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
@@ -89,30 +100,25 @@ ARMS = ("none", "oracle", "ours")
 CHANNELS = (MemoryChannel.RECALLED, MemoryChannel.TRUSTED)
 
 # The run summary, written into the SAME directory as the per-task `<work_id>.json` results —
-# hence a name the tasks are not allowed to claim (see run_corpus).
+# hence a name the tasks are not allowed to claim (see _assert_usable_work_ids).
 SUMMARY_NAME = "summary-toolreq-realagent.json"
 
-# Rides in the cache identity to cover what the fingerprints structurally CANNOT: the
-# executing and scoring CODE. `task_fingerprint` and `payload_fingerprint` hash the DATA that
-# reaches the prompt, but a cached cell is equally invalidated by a change to how that data is
-# executed or graded — `run_arm`, `build_agent_prompt`, the stream-json parser,
-# `score_goal_action`, or DEFAULT_TIMEOUT_S. None of those touch any task field, so every
-# fingerprint here stays identical across such a change and a resumed sweep silently serves
-# pre-change answers as if they measured the new protocol.
+# Rides in the cache identity to cover what the fingerprints structurally CANNOT: the executing
+# and scoring CODE. A change to `run_arm`, `build_agent_prompt`, the stream-json parser,
+# `score_goal_action`, or DEFAULT_TIMEOUT_S moves a result without touching any task field, so
+# every fingerprint stays identical across it and a resumed sweep would serve pre-change answers
+# as if they measured the new protocol.
 #
-# BUMP THIS when the execution or scoring path changes in a way that could move a result.
-# It is a MANUAL gate, and that is a real weakness worth naming: the alternative (hashing
-# those modules' source) would invalidate the whole paid grid on any comment edit and
-# re-spend real money, so the cheap-but-disciplined option is the deliberate trade. What it
-# does NOT and cannot cover: the `claude` binary itself (version, PATH, account config) —
-# see the driver docstring.
+# BUMP THIS when the execution or scoring path changes in a way that could move a result. It is a
+# MANUAL gate and that is its weakness: the alternative (hashing those modules' source) would
+# invalidate the whole paid grid on any comment edit and re-spend real money. It cannot cover the
+# `claude` binary itself (version, PATH, account config) — see the driver docstring.
 EXECUTION_PROTOCOL = 1
 
 # Seeds the `ours` store + resolves its payload: (sequences, tasks, store_path, mem_bin)
-# -> work_id -> (source work_id -> rendered payload). Always over ALL tasks — the payload is
-# part of the cache identity, so it cannot be narrowed to pending ones (see run_corpus).
-# Injectable so hermetic tests can stub it out without a built bin/mem (matching this
-# codebase's CliRunner/RetrieveRunner injection convention — see headless_agent.CliRunner).
+# -> work_id -> (source work_id -> rendered payload). Injectable so hermetic tests can stub it out
+# without a built bin/mem (this codebase's CliRunner/RetrieveRunner injection convention — see
+# headless_agent.CliRunner).
 SeedFn = Callable[
     [Sequence[BenchmarkSequence], Sequence[ToolReqRealAgentTask], Path, str],
     dict[str, dict[str, str]],
@@ -121,6 +127,11 @@ SeedFn = Callable[
 # The one arm whose memory can legitimately come back EMPTY: `ours` retrieves, and temporal
 # LOO admits no priors for the lifecycle-earliest task. See evaluate_task.
 RETRIEVING_ARM = "ours"
+
+
+def _digest(payload: object) -> str:
+    """The one hash used by every fingerprint below — same encoding, same width, one place."""
+    return hashlib.sha256(json.dumps(payload).encode("utf-8")).hexdigest()[:16]
 
 
 def _write_ndjson(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
@@ -158,15 +169,14 @@ def evaluate_task(
 ) -> list[ArmOutcome]:
     """Run every (arm, channel) cell for one task.
 
-    One cell is never run: ``ours`` when its retrieval came back EMPTY. That is not an edge
-    case but a guarantee for the lifecycle-earliest task, which temporal LOO leaves with no
-    priors to retrieve. An empty payload makes the ``ours`` prompt byte-identical to ``none``,
-    so the cell is none-equivalent by construction (delta exactly 0) — running it would spend
-    ``repeats`` real ``claude -p`` turns per channel to re-measure ``none``, and would leave
-    the headline ``(ours 0/N)`` unattributable: a retrieval miss reads exactly like
-    memory-did-not-help. The ``none`` cell is relabeled instead, matching
-    ``run_grid_3arm``'s empty-retrieval convention, and ``run_corpus`` records the
-    ``ours_retrieval_empty`` flag so the two causes stay distinguishable in the results."""
+    One cell is never run: ``ours`` when its retrieval came back EMPTY — not an edge case but a
+    guarantee for the lifecycle-earliest task, which temporal LOO leaves with no priors. An empty
+    payload makes the ``ours`` prompt byte-identical to ``none``, so the cell is none-equivalent
+    by construction (delta exactly 0); running it would spend ``repeats`` real ``claude -p`` turns
+    per channel to re-measure ``none``, and would leave a flat ``(ours 0/N)`` unattributable — a
+    retrieval miss reads exactly like memory-did-not-help. The ``none`` cell is relabeled instead
+    (``run_grid_3arm``'s empty-retrieval convention) and ``run_corpus`` records the
+    ``ours_retrieval_empty`` flag so the two causes stay distinguishable."""
     memories = arm_memories(task, ours_payload)
     outcomes: list[ArmOutcome] = []
     for channel in channels:
@@ -197,11 +207,10 @@ _GATING_ARMS = ("none", "oracle")
 
 def task_verdict(outcomes: Sequence[ArmOutcome]) -> str:
     """The probe's per-channel verdict rule (valid again under opaque values): ``none``
-    passing means a leak; ``none`` 0 + ``oracle`` ceiling means the arms separate. Arms
-    beyond ``_GATING_ARMS`` (today: ``ours``) never gate this call — each rides along as
-    an informational suffix (cross-task retrieval will generally NOT surface the queried
-    task's own sequence-unique opaque value, so ``ours`` scoring near ``none`` is the
-    expected, honest substrate finding)."""
+    passing means a leak; ``none`` 0 + ``oracle`` ceiling means the arms separate. Arms beyond
+    ``_GATING_ARMS`` (today: ``ours``) never gate the call — each rides along as an
+    informational suffix, because ``ours`` scoring near ``none`` is the expected substrate
+    finding, not a failure of the grid."""
     by = {(o.arm, o.channel): o for o in outcomes}
     lines: list[str] = []
     for channel in (c.value for c in CHANNELS):
@@ -232,12 +241,11 @@ def _reset_store(store_path: Path) -> None:
     """Delete any store already at ``store_path``, SQLite sidecars included, so the seed that
     follows is genuinely FRESH.
 
-    Load-bearing, not hygiene: ``lessons`` is append-only (see CLAUDE.md — three tables have
-    no FK to ``work_records`` and are never rewritten). Importing into a store left behind by
-    an EARLIER corpus therefore keeps that corpus's opaque tokens retrievable, and
-    ``resolve_payloads`` renders them straight into the live cross-task payloads — a paid
-    ``ours`` measurement quietly carrying values that are no longer in the world. The store is
-    a derived artifact of the corpus and is cheap to rebuild (FREE), so rebuild it."""
+    Load-bearing, not hygiene: ``lessons`` is append-only (CLAUDE.md), so importing into a store
+    left behind by an EARLIER corpus keeps that corpus's opaque tokens retrievable, and
+    ``resolve_payloads`` renders them straight into the live cross-task payloads — a paid ``ours``
+    measurement quietly carrying values no longer in the world. The store is a derived artifact of
+    the corpus and FREE to rebuild, so rebuild it."""
     for suffix in ("", "-wal", "-shm"):
         store_path.with_name(store_path.name + suffix).unlink(missing_ok=True)
 
@@ -248,24 +256,18 @@ def seed_ours_store_and_resolve_payloads(
     store_path: Path,
     mem_bin: str,
 ) -> dict[str, dict[str, str]]:
-    """Seed a fresh ``ours`` store with the SAME substrate the mem-rk41.5 offline gate
-    builds (``sequence_records`` — the shared value-free apply_config staleness trace
-    error) plus opaque-valued lessons (``sequence_lessons_opaque`` — the SAME opaque token
-    space ``oracle`` surfaces, the mem-rk41.3.1 invariant), then resolves the ``ours``
-    arm's real retrieval payload via ``run_grid_3arm.resolve_payloads`` — the SAME
-    function the paid ours-vs-builtin grid uses, no reimplementation.
+    """Seed a fresh ``ours`` store with the SAME substrate the mem-rk41.5 offline gate builds
+    (``sequence_records``) plus opaque-valued lessons (``sequence_lessons_opaque`` — the SAME
+    opaque token space ``oracle`` surfaces, the mem-rk41.3.1 invariant), then resolve the ``ours``
+    arm's real retrieval payload via ``run_grid_3arm.resolve_payloads``, the SAME function the
+    paid ours-vs-builtin grid uses.
 
-    The store is rebuilt from scratch on every call (``_reset_store``): seeding is FREE and
-    the store is a pure function of the corpus, so a regenerated corpus must never inherit
-    the previous one's append-only lessons.
-
-    Both the seed and the resolution cover ALL sequences, every run. Cross-task retrieval
-    needs every lesson in the store, and the resolved payload is part of the cache identity
-    (``run_corpus``), so it must be recomputed even for tasks that may end up cache-served.
-
-    FREE: this never spends an agent turn regardless of ``--dry-run`` (only ``claude -p`` is
-    spend-gated, in ``run_corpus``) — it does need a built ``bin/mem``. It runs on EVERY
-    invocation, cache-served tasks included; see ``run_corpus`` for why it cannot be skipped."""
+    FREE — real ``mem`` CLI calls, never an agent turn — and so it runs on EVERY invocation,
+    dry-run or paid, cache-served tasks included. It covers ALL sequences and is never narrowed to
+    pending tasks: cross-task retrieval needs every lesson in the store, and the resolved payload
+    is itself a measured input that rides in the cache identity (``_task_identities``), so it must
+    be recomputed to know whether a cached cell is still current. It does need a built
+    ``bin/mem``."""
     store_path.parent.mkdir(parents=True, exist_ok=True)
     _reset_store(store_path)
     records = sequence_records(sequences)
@@ -287,151 +289,83 @@ def seed_ours_store_and_resolve_payloads(
     return resolve_payloads(bundles, store_path=store_path, runner=runner)
 
 
-@dataclass(frozen=True)
-class _CachedTask:
-    """A persisted per-task result that passed every validity check in ``_load_cached``.
-
-    It carries only the outcomes. ``ours_retrieval_empty`` used to ride here too, back when the
-    flag was a value the cache CARRIED FORWARD from the file; it is now a live-computed identity
-    field, so a cached file can only be accepted when its flag already equals this run's, and
-    re-exporting it from here would just be a second source for a value the identity owns."""
-
-    outcomes: list[ArmOutcome]
-
-
 def expected_cells() -> set[tuple[str, str]]:
     """The full (arm, channel) grid one task must cover to be scored as complete."""
     return {(arm, channel.value) for arm in ARMS for channel in CHANNELS}
 
 
 def task_fingerprint(task: ToolReqRealAgentTask) -> str:
-    """Identifies the WORLD a cached result was measured against, not just the run's knobs.
+    """Identifies the WORLD a cached result was measured against — everything that determines what
+    is EXECUTED and how it is SCORED, not merely the authored values.
 
-    Without this, the cache identity is only ``(repeats, dry_run, model, arms)`` — none of
-    which change when the CORPUS is regenerated. Work ids are positional (``w-0``, ``w-1``),
-    so a fresh world reuses them, and a re-run over the same ``--out`` reports the PREVIOUS
-    world's numbers with zero cells evaluated. Reproduced before this was added: a corpus
-    with entirely different authored values returned executed=0 reused=3 and printed the old
-    world's verdicts as the new world's.
+    Work ids are positional (``w-0``, ``w-1``), so a regenerated corpus reuses them and, without
+    this, a re-run over the same ``--out`` reports the PREVIOUS world's numbers at executed=0.
+    ``goal_step`` is hashed whole (a pydantic ``model_dump`` covers new fields automatically): it
+    is the prompt actually sent AND carries the ``outcome_checks`` the run is graded against, so
+    an adapter change that leaves the authored values untouched still moves the measurement.
 
-    Hash everything that determines what is EXECUTED and how it is SCORED — not merely the
-    authored values. That distinction is the whole bug: an earlier version hashed only the
-    reward-bearing content (oracle_memory + the opaque values), which leaves ``goal_step``
-    invisible. ``goal_step`` is the prompt actually sent to ``claude -p`` and it carries the
-    ``outcome_checks`` the run is graded against, so an ADAPTER change — new bridged wording,
-    a different tool, an altered ExpectedAction — that does not happen to move the authored
-    values produced an identical fingerprint, and a resumed ``--out`` silently served
-    pre-change answers as if they measured the new prompt. That needs no corrupted file, just
-    ordinary iteration on ``adapt_sequence`` over the frozen corpus, which is exactly how this
-    repo works.
-
-    ``SequenceStep`` is a pydantic model, so ``model_dump(mode="json")`` is a stable,
-    deterministic serialization of the whole step — new fields are covered automatically
-    rather than needing to be remembered here.
-
-    ``oracle_memory`` is hashed in ITS OWN ORDER, not sorted. ``build_agent_prompt`` renders
-    the memory block by iterating ``available_memory.items()``, so the dict's insertion order
-    is literally the order the lines appear in the prompt sent to ``claude -p``. Sorting it
-    here would normalize away a difference the agent actually sees: reorder ``oracle_memory``
-    without changing its content — an ordinary edit to how ``adapt_sequence`` builds the
-    dict — and a sorted hash is IDENTICAL while the ceiling arm's prompt is not, so a resumed
-    sweep serves the pre-change measurement. The rule for this fingerprint: whatever reaches
-    the prompt, hash it the way the prompt sees it.
-
-    ``current_opaque_values`` IS sorted, and that is correct rather than inconsistent — it is
-    never rendered into a prompt. It is only membership-tested by the scorer ("does this value
-    appear in the output"), so its order is genuinely not a measured input, and sorting keeps a
-    meaningless reordering from forcing a spurious re-spend."""
-    payload = json.dumps(
+    ``oracle_memory`` is hashed in ITS OWN ORDER, deliberately: ``build_agent_prompt`` renders
+    ``available_memory.items()``, so insertion order IS the order of lines in the prompt, and a
+    sorted hash would call two different ceiling-arm prompts identical. ``current_opaque_values``
+    IS sorted, and that is consistent rather than contradictory — it never reaches a prompt, only
+    the scorer's membership test, so its order is not a measured input."""
+    return _digest(
         {
             "work_id": task.work_id,
             "oracle_memory": list(task.oracle_memory.items()),
             "current_opaque_values": sorted(task.current_opaque_values),
             "goal_step": task.goal_step.model_dump(mode="json"),
-        },
-        sort_keys=True,
+        }
     )
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
 def payload_fingerprint(ours_payload: Mapping[str, str]) -> str:
-    """Identifies the `ours` arm's actual MEASURED INPUT — the text retrieval surfaced.
+    """Identifies the ``ours`` arm's actual MEASURED INPUT — the text retrieval surfaced.
 
-    ``task_fingerprint`` is task-LOCAL, but the ``ours`` payload is not: it comes from
-    CROSS-TASK retrieval over the whole seeded store, so it moves when a sibling sequence is
-    added, when the corpus is regenerated, or when ``bin/mem``'s retrieval changes — none of
-    which touch the queried task's own fields. Hashing the payload puts all three inside the
-    cache identity without having to model any of them: whatever the cause, a different
-    injected context is a different measurement, and the cached cell must miss.
+    ``task_fingerprint`` is task-LOCAL; this payload is not. It comes from CROSS-TASK retrieval
+    over the whole seeded store, so it moves when a sibling sequence is added, when the corpus is
+    regenerated, or when ``bin/mem``'s retrieval changes — none of which touch the queried task's
+    own fields. Hashing the payload puts all three in the identity without modelling any of them.
 
-    ORDER-PRESERVING, deliberately. ``resolve_payloads`` builds this dict by iterating
-    ``mem retrieve``'s RANKED items, and ``build_agent_prompt`` then renders the memory block
-    by iterating ``available_memory.items()`` — so the dict's insertion order is retrieval's
-    rank order, and rank order is what the agent reads top-to-bottom. Retrieval can return the
-    same SET of lessons in a different ORDER (a reseed moving an FTS tiebreak, a ranking
-    change in ``bin/mem``), which is a different prompt and therefore a different measurement.
-    A sorted hash would call those two runs identical and serve the stale one."""
-    return hashlib.sha256(json.dumps(list(ours_payload.items())).encode("utf-8")).hexdigest()[:16]
+    ORDER-PRESERVING, for the same reason ``oracle_memory`` is: ``resolve_payloads`` inserts in
+    ``mem retrieve``'s RANK order and the prompt renders that order, so the same SET of lessons
+    ranked differently is a different prompt and must miss."""
+    return _digest(list(ours_payload.items()))
 
 
 def prompt_fingerprint(task: ToolReqRealAgentTask, ours_payload: Mapping[str, str]) -> str:
     """Hashes the PROMPTS THEMSELVES — the exact text every (arm, channel) cell will send to
-    ``claude -p`` — rather than a model of what goes into them.
+    ``claude -p`` — rather than a model of what goes into them, and so it cannot be incomplete
+    *about the prompt*, because it IS the prompt. Memory content, memory order, the trust
+    channel's framing, the user request, and every prompt-visible field of ``goal_step`` collapse
+    into one digest whether or not anyone remembered to enumerate them. Building a prompt is
+    string concatenation: FREE, no agent turn.
 
-    This is the answer to the defect family that has dominated this file. Every previous cache
-    bug had one shape: the identity hashed a MODEL of the executed input, and the model was
-    incomplete. It carried ``oracle_memory``'s content but not its ORDER (which the prompt
-    renders). It carried the ``ours`` payload but not its retrieval RANK. It carried the
-    authored values but not ``goal_step``, so an adapter change was invisible. Each fix
-    extended the model by one field, and the next review found the next missing field —
-    fourteen times.
-
-    Hashing the rendered prompt removes the model. Memory content, memory order, the trust
-    channel's framing, the user request, and every prompt-visible field of ``goal_step``
-    collapse into one digest that CANNOT be incomplete about the prompt, because it IS the
-    prompt. Anything that changes what the agent reads changes this hash, whether or not
-    anyone remembered to enumerate it here.
-
-    It is FREE: building a prompt is string concatenation, no agent turn.
-
-    It does NOT subsume the other fingerprints and is deliberately added ALONGSIDE them, not
-    in place of them. What the prompt cannot see still matters: the scorer (``outcome_checks``,
-    ``current_opaque_values``) grades output the prompt never mentions, and one earlier "fix"
-    in this file DELETED a check it wrongly believed a newer one subsumed and re-opened a
-    closed hole. Redundant checks are cheap; a fabricated paid number is not."""
+    It does NOT subsume the other fingerprints and is added ALONGSIDE them, never in place of
+    them: the scorer grades ``outcome_checks`` and ``current_opaque_values``, which the prompt
+    never mentions."""
     memories = arm_memories(task, ours_payload)
     cells = [
         (arm, channel.value, build_agent_prompt(task.goal_step, memories[arm], channel))
         for channel in CHANNELS
         for arm in ARMS
     ]
-    return hashlib.sha256(json.dumps(cells).encode("utf-8")).hexdigest()[:16]
+    return _digest(cells)
 
 
 def _valid_cell(row: Any, repeats: int) -> bool:
     """Is one persisted ``outcomes`` row a faithful ArmOutcome measured at THIS run's repeats?
 
-    JSON has no int/str distinction at the schema level and ``ArmOutcome`` is a plain frozen
-    dataclass that does not type-check its fields, so ``{"passes": "0"}`` constructs happily
-    and only blows up LATER, in ``task_verdict``'s ``passes > 0`` — an unhandled TypeError
-    escaping mid-resume and killing a paid sweep. Validate the VALUES here, where a bad row
-    is still just a miss. ``bool`` is excluded explicitly because it is an ``int`` subclass
-    and would otherwise sail through.
+    ``ArmOutcome`` is a plain frozen dataclass that does not type-check its fields, so
+    ``{"passes": "0"}`` constructs happily and only blows up LATER in ``task_verdict``'s
+    ``passes > 0`` — an unhandled TypeError escaping mid-resume and killing a paid sweep. Validate
+    the VALUES here, where a bad row is still just a miss. ``bool`` is excluded explicitly: it is
+    an ``int`` subclass and would otherwise sail through.
 
-    ``runs`` must equal ``repeats``. Every real write path sets it that way
-    (``run_arm`` loops ``range(repeats)``), so anything else is a corrupted record — and the
-    degenerate ``runs=0`` case is the one that bites: it satisfies ``0 <= passes <= runs``,
-    and ``task_verdict`` then reads ``oracle 0/0`` and fabricates a confident
-    "KILL: no separation" for a task that was never evaluated, counted as ``reused``.
-    ``passes > runs`` is rejected for the mirror reason: no real run produces it, and left in
-    place it inflates the oracle ceiling.
-
-    ``runs > 0`` is checked SEPARATELY from ``runs == repeats`` and does not merely restate it.
-    ``runs == repeats`` closes the degenerate case only while ``repeats`` is itself >= 1; under
-    ``--repeats 0`` it is vacuously true (0 == 0) and the ``0/0`` hole reopens exactly as
-    before. Guarding it here as well as in ``main`` is deliberate: the argument validation is
-    the gate, this is the backstop, and the reason to have both is that an earlier fix in this
-    file DELETED a check it believed a newer one subsumed, and re-opened a closed hole."""
+    ``runs > 0`` is checked SEPARATELY from ``runs == repeats`` and does not restate it: under
+    ``--repeats 0`` the equality is vacuously true, and ``0/0`` rows make ``task_verdict``
+    fabricate a confident "KILL: no separation" for a task that was never evaluated. ``main``
+    rejects ``--repeats 0`` too; this is the backstop, and both are deliberate."""
     if not isinstance(row, Mapping):
         return False
     arm, channel = row.get("arm"), row.get("channel")
@@ -445,25 +379,20 @@ def _valid_cell(row: Any, repeats: int) -> bool:
     return runs == repeats and runs > 0 and 0 <= passes <= runs
 
 
-def _load_cached(result_path: Path, identity: Mapping[str, Any]) -> _CachedTask | None:
-    """A persisted per-task result, or ``None`` meaning MISS — re-execute this task.
+def _load_cached(result_path: Path, identity: Mapping[str, Any]) -> list[ArmOutcome] | None:
+    """The persisted outcomes of a task whose identity matches this run, or ``None`` meaning MISS.
 
-    Every rejection below is a miss, never a crash, and never a partial acceptance. These
-    files are written by a sweep that can be killed mid-run and re-read by a PAID resume, so
-    the two failure modes to design against are (a) an exception escaping and killing the
-    whole sweep on one bad file, and (b) a degenerate or FOREIGN file being scored as a
-    complete task. ``identity`` carries the run's knobs AND the per-task world fingerprint
-    (see ``task_fingerprint``), so a regenerated corpus misses rather than silently reporting
-    the previous world's numbers."""
+    Every rejection is a miss, never a crash and never a partial acceptance. These files are
+    written by a sweep that can be killed mid-run and re-read by a PAID resume, so the two failure
+    modes to design against are an exception escaping and killing the whole sweep on one bad file,
+    and a degenerate or FOREIGN file being scored as a complete task."""
     try:
         loaded = json.loads(result_path.read_text(encoding="utf-8"))
     except (ValueError, OSError, RecursionError):
-        # This is a PARSE BOUNDARY over an untrusted file, so it catches by blast radius, not
-        # by enumerating what json.loads is known to raise — enumerating is what let the last
-        # two rounds through. ValueError covers JSONDecodeError and UnicodeDecodeError (both
-        # subclasses) AND the >4300-digit int-literal limit; RecursionError covers deeply
-        # nested JSON; OSError covers unreadable/directory/permission. A corrupt file is a
-        # miss; it must never kill a resumed paid sweep.
+        # A PARSE BOUNDARY over an untrusted file: catch by blast radius, not by enumerating what
+        # json.loads is known to raise. ValueError covers JSONDecodeError, UnicodeDecodeError and
+        # the >4300-digit int-literal limit; RecursionError covers deeply nested JSON; OSError
+        # covers unreadable/directory/permission.
         return None
     if not isinstance(loaded, dict):
         return None  # valid JSON of the wrong shape: null, 3, [], "cached"
@@ -480,35 +409,81 @@ def _load_cached(result_path: Path, identity: Mapping[str, Any]) -> _CachedTask 
     except TypeError:
         return None  # schema-drifted row (missing/extra field)
     # The cells must cover the grid EXACTLY — one row per (arm, channel), no dupes, no strays.
-    # BOTH halves are load-bearing, and each one alone has already shipped a bug here:
-    #   * count alone: six copies of one cell has the right arity but wrong coverage. Accepted
-    #     as complete, task_verdict emits an EMPTY verdict, and the task vanishes from the
-    #     separates/leaked accounting while still counting as `reused`.
-    #   * coverage alone: the six correct rows PLUS an extra duplicate row still cover the grid
-    #     as a SET. Accepted as complete, and since task_verdict keys by (arm, channel), the
-    #     LAST duplicate silently overwrites the real measurement — a genuine SEPARATES rewritten
-    #     into a fabricated KILL, reused with zero spend and no crash.
+    # BOTH halves are load-bearing and each alone has already shipped a bug: six copies of one
+    # cell has the right ARITY but wrong coverage (empty verdict, task vanishes from the
+    # accounting, still `reused`); the six correct rows PLUS a duplicate cover the grid as a SET
+    # but `task_verdict` keys by (arm, channel), so the last duplicate overwrites the real
+    # measurement — a genuine SEPARATES rewritten into a fabricated KILL.
     expected = expected_cells()
     if len(outcomes) != len(expected) or {(o.arm, o.channel) for o in outcomes} != expected:
         return None
-    retrieval_empty = loaded["ours_retrieval_empty"]
-    # The flag must AGREE with the rows it is filed next to. `ours_retrieval_empty` asserts the
-    # `ours` cell was never run — it was produced by relabeling `none` (evaluate_task), so it is
-    # none-equal by construction. A file claiming the flag while carrying an `ours` row that
-    # DIFFERS from its channel's `none` row is therefore self-contradictory: one of the two is
-    # fabricated, and both readings are load-bearing. The flag is the denominator that makes a
-    # flat `(ours 0/N)` attributable (retrieval surfaced nothing vs memory did not help), and the
-    # rows are the measurement. Ordinary runs cannot produce the mismatch — both derive from the
-    # same ours_payload object — so this only fires on a corrupted or hand-edited file, which is
-    # exactly the input class every other check here exists to reject. Cross-validate rather than
-    # trust: a miss costs one re-run, accepting it publishes a number nobody measured.
-    if retrieval_empty:
+    # The flag must AGREE with the rows filed next to it. `ours_retrieval_empty` asserts the `ours`
+    # cell was never run — it was relabeled from `none` (evaluate_task) and so is none-equal by
+    # construction. A file claiming the flag while carrying an `ours` row that DIFFERS from its
+    # channel's `none` row is self-contradictory: one of the two is fabricated. Ordinary runs
+    # cannot produce the mismatch (both derive from the same payload object), so this fires only
+    # on a corrupted or hand-edited file — the input class every check here exists to reject.
+    if loaded["ours_retrieval_empty"]:
         by_cell = {(o.arm, o.channel): o for o in outcomes}
         for channel in (c.value for c in CHANNELS):
             ours_o, none_o = by_cell[(RETRIEVING_ARM, channel)], by_cell[("none", channel)]
             if replace(ours_o, arm="none") != none_o:
                 return None
-    return _CachedTask(outcomes=outcomes)
+    return outcomes
+
+
+def _assert_usable_work_ids(tasks: Sequence[ToolReqRealAgentTask]) -> None:
+    """A work_id must be unique and a safe, unclaimed filename — it keys both the identity map and
+    the ``<work_id>.json`` result path.
+
+    A DUPLICATE silently aliases two different tasks onto one cache file: the second overwrites
+    the first and, on resume, that single record is served for both. An UNSAFE id is corpus data
+    used to build a filesystem path before being checked as one — it either claims the summary's
+    name (``main`` writes the summary into the same directory AFTERWARDS, overwriting that task's
+    result, which then misses forever) or carries a separator/traversal that writes outside
+    ``--out``. Corpus ids are sequence-derived and a regenerated or hand-assembled corpus can
+    produce either, so refuse rather than measure."""
+    duplicates = sorted(id_ for id_, n in Counter(t.work_id for t in tasks).items() if n > 1)
+    if duplicates:
+        raise ValueError(
+            f"duplicate work_id(s) in the corpus: {duplicates} — each task must map to exactly "
+            "one <work_id>.json, or a resumed run serves one task's measurement for another"
+        )
+    unsafe = sorted(
+        t.work_id
+        for t in tasks
+        if f"{t.work_id}.json" == SUMMARY_NAME or Path(t.work_id).name != t.work_id or not t.work_id
+    )
+    if unsafe:
+        raise ValueError(
+            f"unsafe work_id(s) for a result filename: {unsafe} — a work_id must be a plain "
+            f"filename component and must not claim the summary's name ({SUMMARY_NAME})"
+        )
+
+
+def _task_identities(
+    tasks: Sequence[ToolReqRealAgentTask],
+    ours_payloads: Mapping[str, Mapping[str, str]],
+    run_identity: Mapping[str, Any],
+) -> dict[str, dict[str, Any]]:
+    """The cache identity per task: the run's knobs plus every measured input.
+
+    ``ours_retrieval_empty`` is a first-class identity field, live-computed like the fingerprints,
+    not a value carried forward from the file. It says whether the ``ours`` cell was measured at
+    all or relabeled from ``none``, which makes it the denominator the headline is read through.
+    ``_load_cached`` cross-checks a True flag against the rows; comparing the flag HERE closes the
+    other direction, where a file claiming False carries a fabricated ``ours 2/2``. A value
+    outside the identity is not defended by the checks that surround it."""
+    return {
+        task.work_id: {
+            **run_identity,
+            "task_fingerprint": task_fingerprint(task),
+            "ours_payload_fingerprint": payload_fingerprint(ours_payloads.get(task.work_id, {})),
+            "prompt_fingerprint": prompt_fingerprint(task, ours_payloads.get(task.work_id, {})),
+            "ours_retrieval_empty": not ours_payloads.get(task.work_id, {}),
+        }
+        for task in tasks
+    }
 
 
 def run_corpus(
@@ -524,27 +499,21 @@ def run_corpus(
     seed_fn: SeedFn = seed_ours_store_and_resolve_payloads,
     resume: bool = True,
 ) -> dict[str, Any]:
-    """Evaluate every task, persisting one ``<work_id>.json`` each. A persisted result is
-    reused only when its ``(repeats, dry_run, model, arms, task_fingerprint)`` identity
-    matches — so a FREE
-    dry-run's simulated result can never satisfy a PAID run over the same ``--out`` (the
-    highest-severity confound: a paid ceiling silently reporting a fabricated pass), and a
-    pre-``ours`` cache is correctly invalidated rather than silently reused missing the new
-    arm. A corrupt or partial cache file (a process killed mid-write) is treated as a miss
-    and re-executed, never a crash.
+    """Evaluate every task, persisting one ``<work_id>.json`` each, and reuse a persisted result
+    only when its identity (see ``_task_identities``) matches this run's — so a FREE dry-run's
+    simulated result can never satisfy a PAID run over the same ``--out``, and a corrupt or
+    partial file is a miss rather than a crash.
 
-    ``seed_fn`` seeds the ``ours`` store + resolves its payload for the whole corpus, on every
-    run, BEFORE the cache is consulted (FREE — no agent turn — see
-    ``seed_ours_store_and_resolve_payloads``). It is not skipped when tasks are cache-served
-    and it is not narrowed to pending tasks: the resolved payload is a measured input and
-    rides in the identity, so it has to be recomputed to know whether a cached cell is still
-    current. It is injectable so a hermetic test can stub it out without a built ``bin/mem``."""
+    ``seed_fn`` runs BEFORE the cache is consulted and over the WHOLE corpus, every invocation,
+    even when every task is cache-served: it is free, and the payload it resolves rides in the
+    identity, so it has to be recomputed to know whether a cached cell is still current. It is
+    injectable so a hermetic test can stub it out without a built ``bin/mem``."""
     out_dir.mkdir(parents=True, exist_ok=True)
     # The model the agent will ACTUALLY run, not the raw flag. `--model` defaults to "" and
     # HeadlessClaudeAgent then resolves it from MEMBENCH_AGENT_MODEL, so caching the raw ""
-    # makes the driver's primary independent variable invisible: run the sweep under one
-    # model, point the env var at another, resume, and every cached task is served as
-    # `reused` with the FIRST model's numbers relabelled as the second's.
+    # makes the driver's primary independent variable invisible: run the sweep under one model,
+    # point the env var at another, resume, and every cached task is served as `reused` with the
+    # FIRST model's numbers relabelled as the second's.
     resolved_model = model or os.environ.get(ENV_MODEL, "")
     run_identity = {
         "repeats": repeats,
@@ -553,109 +522,40 @@ def run_corpus(
         "arms": list(ARMS),
         "protocol": EXECUTION_PROTOCOL,
     }
-    # Work ids key BOTH the identity map and the <work_id>.json result path, so a duplicate
-    # silently aliases two DIFFERENT tasks onto one cache file: the second overwrites the
-    # first, and on resume that single record is served for both — the second task's verdict
-    # reported as the first task's. Corpus work ids are sequence-derived and a regenerated or
-    # hand-assembled corpus can repeat one, so this is a real input, not a hypothetical. The
-    # cache is only sound if task identity is one-to-one; refuse rather than measure.
-    duplicates = sorted(id_ for id_, n in Counter(t.work_id for t in tasks).items() if n > 1)
-    if duplicates:
-        raise ValueError(
-            f"duplicate work_id(s) in the corpus: {duplicates} — each task must map to exactly "
-            "one <work_id>.json, or a resumed run serves one task's measurement for another"
-        )
-    # A work_id is CORPUS DATA that gets used to build a filesystem path (`<work_id>.json`), so it
-    # has to be a safe, unclaimed filename before it is trusted as one. Two ways it is not:
-    #   * it names the summary file, which main() writes into the SAME directory AFTER the
-    #     per-task results — the summary then overwrites that task's result, and every resume
-    #     re-pays for it (a corrupt-looking cache file that misses forever);
-    #   * it carries a path separator or traversal, which writes the result OUTSIDE --out.
-    # Neither fabricates a number, but both are the same root shape as the rest of this file:
-    # untrusted input consumed without being checked at the boundary it crosses.
-    unsafe = sorted(
-        t.work_id
-        for t in tasks
-        if f"{t.work_id}.json" == SUMMARY_NAME or Path(t.work_id).name != t.work_id or not t.work_id
-    )
-    if unsafe:
-        raise ValueError(
-            f"unsafe work_id(s) for a result filename: {unsafe} — a work_id must be a plain "
-            f"filename component and must not claim the summary's name ({SUMMARY_NAME})"
-        )
-    # Seeding + resolution happen BEFORE the cache is consulted, and cover EVERY task, because
-    # the resolved `ours` payload is itself a measured input and therefore belongs in the cache
-    # identity. It cannot be narrowed to pending tasks (an earlier revision did exactly that):
-    # the payload comes from CROSS-TASK retrieval, so adding a sibling sequence, regenerating
-    # the corpus, or rebuilding `bin/mem` after a retrieval fix all change what a given task
-    # retrieves while leaving that task's own fields untouched. Narrowing to pending means a
-    # cached task is never re-resolved, so the change is never noticed and a stale `ours` cell
-    # is served as current. This costs a store rebuild + N `mem retrieve` calls per run; all of
-    # it is FREE (no agent turn), and it buys an identity that is a total function of what was
-    # actually measured.
+    _assert_usable_work_ids(tasks)
     ours_payloads = seed_fn(sequences, tasks, store_path, mem_bin)
-    identity_of = {
-        task.work_id: {
-            **run_identity,
-            "task_fingerprint": task_fingerprint(task),
-            "ours_payload_fingerprint": payload_fingerprint(ours_payloads.get(task.work_id, {})),
-            # The prompts themselves — see prompt_fingerprint. The other two hash a MODEL of
-            # the executed input; this hashes the input. Kept alongside them, never instead.
-            "prompt_fingerprint": prompt_fingerprint(task, ours_payloads.get(task.work_id, {})),
-            # A FIRST-CLASS identity field, live-computed, exactly like every fingerprint above.
-            # It says whether the `ours` cell was measured at all or relabeled from `none`, which
-            # makes it the denominator the headline is read through — and a value the cache must
-            # therefore agree with. An earlier fix cross-validated it in ONE direction only (when
-            # the flag was True, the ours rows had to equal none's) and declared the hole closed.
-            # It was half closed: a file claiming False carried a fabricated `ours 2/2` straight
-            # past every check, because the flag was never compared against what THIS run resolves.
-            # Comparing it here closes both directions at once, and it is the same treatment the
-            # other measured inputs already get. Two fixes in this file have now failed by
-            # subsuming a check that only LOOKED equivalent; a flag outside the identity is not
-            # defended by the checks that surround it.
-            "ours_retrieval_empty": not ours_payloads.get(task.work_id, {}),
-        }
-        for task in tasks
-    }
-    cached_by_id: dict[str, _CachedTask] = {}
-    if resume:
-        for task in tasks:
-            result_path = out_dir / f"{task.work_id}.json"
-            if not result_path.is_file():
-                continue
-            cached = _load_cached(result_path, identity_of[task.work_id])
-            if cached is not None:
-                cached_by_id[task.work_id] = cached
+    identity_of = _task_identities(tasks, ours_payloads, run_identity)
+
     per_task: list[dict[str, Any]] = []
     executed = 0
     reused = 0
     for task in tasks:
         result_path = out_dir / f"{task.work_id}.json"
-        cached = cached_by_id.get(task.work_id)
+        identity = identity_of[task.work_id]
+        cached = _load_cached(result_path, identity) if resume and result_path.is_file() else None
         if cached is not None:
-            outcomes = cached.outcomes
+            outcomes = cached
             reused += 1
         else:
-            ours_payload = ours_payloads.get(task.work_id, {})
             outcomes = evaluate_task(
                 task,
                 repeats=repeats,
                 model=model,
                 dry_run=dry_run,
-                ours_payload=ours_payload,
+                ours_payload=ours_payloads.get(task.work_id, {}),
             )
             executed += 1
-        # `ours_retrieval_empty` is written by the identity spread, not set again here: it now
-        # rides IN the identity, so the identity is its single source. Re-stating it would give
-        # the flag a second writer that could drift from the one the cache is validated against.
+        # `ours_retrieval_empty` is written by the identity spread and never set again here: the
+        # identity is its single source, and a second writer could drift from the value the cache
+        # is validated against.
         record = {
             "work_id": task.work_id,
-            **identity_of[task.work_id],
+            **identity,
             "outcomes": [asdict(o) for o in outcomes],
             "verdict": task_verdict(outcomes),
         }
-        # Atomic publish: write a sibling temp file then rename, so a kill mid-write leaves
-        # either the old result or the new one, never a half-written JSON the next resume trips on.
+        # Atomic publish: write a sibling temp file then rename, so a kill mid-write leaves either
+        # the old result or the new one, never a half-written JSON the next resume trips on.
         tmp_path = result_path.with_suffix(".json.tmp")
         tmp_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
         tmp_path.replace(result_path)
@@ -663,9 +563,8 @@ def run_corpus(
     separates = sum(1 for r in per_task if r["verdict"].count("SEPARATES") == len(CHANNELS))
     leaked = [r["work_id"] for r in per_task if "LEAK" in r["verdict"]]
     # Attribution, not trivia: for these tasks `ours` was never actually run (empty retrieval,
-    # scored none-equivalent), so a flat ours-vs-none result over them means "retrieval
-    # surfaced nothing", NOT "memory did not help". Reading the arm without this denominator
-    # is how a retrieval miss gets misreported as a null memory effect.
+    # scored none-equivalent), so a flat ours-vs-none result over them means "retrieval surfaced
+    # nothing", NOT "memory did not help".
     empty_retrieval = [r["work_id"] for r in per_task if r["ours_retrieval_empty"]]
     return {
         "n_tasks": len(tasks),

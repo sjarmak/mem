@@ -424,51 +424,109 @@ def test_non_object_cache_is_a_miss_not_an_attributeerror(tmp_path: Path, cache_
     assert summary["executed"] == 1 and summary["reused"] == 0
 
 
-def test_partial_cache_arity_is_a_miss_never_a_silent_truncation(tmp_path: Path) -> None:
-    """A cache whose identity matches but whose ``outcomes`` list is TRUNCATED (a channel or
-    arm dropped — schema drift, or a kill mid-write that still renamed) must re-execute. If
-    it is accepted, the task is scored on a subset of its cells and the headline
-    ``separates_all_channels`` silently reads a partial run as a full one — the silent-cap
-    class the rig forbids."""
+_Rows = list[dict[str, Any]]
+
+
+@pytest.mark.parametrize(
+    ("mutate", "keeps_arity", "keeps_coverage", "why"),
+    [
+        pytest.param(
+            lambda rows: rows[:1],
+            False,
+            False,
+            "a TRUNCATED grid (schema drift, or a kill mid-write that still renamed) scores the "
+            "task on a subset of its cells, and separates_all_channels reads a partial run as a "
+            "full one — the silent-cap class the rig forbids",
+            id="truncated-grid",
+        ),
+        pytest.param(
+            lambda rows: [dict(rows[0]) for _ in rows],
+            True,
+            False,
+            "counting rows is NOT enough: len(ARMS)*len(CHANNELS) copies of ONE cell has the "
+            "right arity and covers nothing. task_verdict keys by (arm, channel), so the record "
+            "yields an EMPTY verdict and the task vanishes from the separates/leaked accounting "
+            "while still counting as reused",
+            id="duplicate-cell-right-arity",
+        ),
+        pytest.param(
+            lambda rows: [*rows, {**next(r for r in rows if r["arm"] == "oracle"), "passes": 0}],
+            False,
+            True,
+            "the mirror case, which a set-only check misses: the correct rows PLUS one extra "
+            "duplicate still cover the grid AS A SET, and task_verdict lets the LAST row for a "
+            "key win — an appended duplicate silently overwrites the real measurement, rewriting "
+            "a genuine SEPARATES into a fabricated KILL. Arity and coverage must BOTH be "
+            "checked; neither subsumes the other",
+            id="extra-duplicate-row-grid-covered",
+        ),
+        pytest.param(
+            lambda rows: [{**rows[0], "arm": "some-renamed-arm"}, *rows[1:]],
+            True,
+            False,
+            "a row naming an arm outside the grid (schema drift across a rename) keeps the arity "
+            "and breaks only the coverage, so the set check is the one that has to catch it",
+            id="unknown-arm",
+        ),
+        pytest.param(
+            lambda rows: [{**row, "passes": 0, "runs": 0} for row in rows],
+            True,
+            True,
+            "runs=0 keeps BOTH arity and coverage and satisfies 0 <= passes <= runs, so only the "
+            "runs == repeats check stands between it and acceptance. Accepted, task_verdict "
+            "reads oracle 0/0 and emits a confident 'KILL: no separation' for a task that was "
+            "never evaluated — counted as reused",
+            id="zeroed-runs",
+        ),
+        pytest.param(
+            lambda rows: [{"arm": "none", "unexpected": 1} for _ in rows],
+            True,
+            False,
+            "a row that is not a valid ArmOutcome kwargs mapping must MISS, not blow up inside "
+            "ArmOutcome(**row) outside the guard",
+            id="schema-drift",
+        ),
+    ],
+)
+def test_a_mutated_cache_record_is_a_miss_and_is_re_measured(
+    tmp_path: Path,
+    mutate: Callable[[_Rows], _Rows],
+    keeps_arity: bool,
+    keeps_coverage: bool,
+    why: str,
+) -> None:
+    """Every way a persisted record can be corrupt, degenerate, or forged must be a MISS that
+    re-executes — never an acceptance that publishes a number nobody measured.
+
+    ``keeps_arity`` / ``keeps_coverage`` pin what each mutation deliberately PRESERVES, so a case
+    cannot silently stop being adversarial in the way it claims: the rows that keep both are
+    exactly the ones no structural check can catch, and they prove the value checks are the
+    guard actually doing the work."""
     sequences, tasks = _corpus_one(tmp_path)
     out = tmp_path / "out"
-    _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+    first = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+    assert "SEPARATES" in first["per_task"][0]["verdict"]
 
     result_path = out / f"{tasks[0].work_id}.json"
     record = json.loads(result_path.read_text(encoding="utf-8"))
     full = len(record["outcomes"])
     assert full == len(driver.ARMS) * len(driver.CHANNELS)
-    record["outcomes"] = record["outcomes"][:1]  # drop every cell but one
+
+    mutated = mutate(record["outcomes"])
+    assert (len(mutated) == full) is keeps_arity, why
+    cells = {(row.get("arm"), row.get("channel")) for row in mutated}
+    assert (cells == driver.expected_cells()) is keeps_coverage, why
+    record["outcomes"] = mutated
     result_path.write_text(json.dumps(record), encoding="utf-8")
 
     summary = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
-    assert summary["executed"] == 1 and summary["reused"] == 0
-    assert len(summary["per_task"][0]["outcomes"]) == full
-
-
-def test_duplicate_cell_cache_is_a_miss_even_though_the_arity_is_right(tmp_path: Path) -> None:
-    """Counting rows is NOT enough. A cache holding len(ARMS)*len(CHANNELS) copies of the SAME
-    cell has the right arity but does not cover the grid. task_verdict keys by (arm, channel),
-    so such a record yields an EMPTY verdict — the task would then be counted as ``reused``
-    while silently vanishing from the separates/leaked accounting. The cells must cover every
-    (arm, channel) exactly once or the record is a miss."""
-    sequences, tasks = _corpus_one(tmp_path)
-    out = tmp_path / "out"
-    _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
-
-    result_path = out / f"{tasks[0].work_id}.json"
-    record = json.loads(result_path.read_text(encoding="utf-8"))
-    one_cell = record["outcomes"][0]
-    record["outcomes"] = [dict(one_cell) for _ in record["outcomes"]]  # right count, one cell
-    result_path.write_text(json.dumps(record), encoding="utf-8")
-
-    summary = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
-    assert summary["executed"] == 1 and summary["reused"] == 0
-    # and the re-executed task is scored, not silently dropped
+    assert (summary["executed"], summary["reused"]) == (1, 0), why
+    # and the re-executed task is fully re-measured, not scored on the mutated remains
+    re_measured = summary["per_task"][0]
+    assert len(re_measured["outcomes"]) == full
+    assert {(o["arm"], o["channel"]) for o in re_measured["outcomes"]} == driver.expected_cells()
+    assert "KILL" not in re_measured["verdict"] and "SEPARATES" in re_measured["verdict"]
     assert summary["separates_all_channels"] == 1
-    assert {(o["arm"], o["channel"]) for o in summary["per_task"][0]["outcomes"]} == (
-        driver.expected_cells()
-    )
 
 
 def test_regenerated_corpus_never_reuses_the_previous_worlds_results(tmp_path: Path) -> None:
@@ -503,31 +561,6 @@ def test_regenerated_corpus_never_reuses_the_previous_worlds_results(tmp_path: P
 
     second = _run_corpus(tasks_b, seqs_b, out, dry_run=True, store_path=store_path)
     assert (second["executed"], second["reused"]) == (1, 0), "reused another world's result"
-
-
-def test_extra_duplicate_row_is_a_miss_even_though_the_grid_is_covered(tmp_path: Path) -> None:
-    """The mirror of the duplicate-cell test, and the case a set-only check misses. The six
-    correct rows PLUS one extra duplicate row still cover the grid AS A SET. task_verdict keys
-    by (arm, channel), so the LAST row for a key wins — an appended duplicate silently
-    overwrites the real measurement, rewriting a genuine SEPARATES into a fabricated KILL while
-    the task is counted as `reused` with zero spend and no crash. Coverage and arity must BOTH
-    be checked; neither subsumes the other."""
-    sequences, tasks = _corpus_one(tmp_path)
-    out = tmp_path / "out"
-    first = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
-    assert "SEPARATES" in first["per_task"][0]["verdict"]
-
-    result_path = out / f"{tasks[0].work_id}.json"
-    record = json.loads(result_path.read_text(encoding="utf-8"))
-    oracle_cell = next(o for o in record["outcomes"] if o["arm"] == "oracle")
-    record["outcomes"].append({**oracle_cell, "passes": 0})  # duplicate, ceiling zeroed
-    assert {(o["arm"], o["channel"]) for o in record["outcomes"]} == driver.expected_cells()
-    result_path.write_text(json.dumps(record), encoding="utf-8")
-
-    summary = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
-    assert summary["executed"] == 1 and summary["reused"] == 0
-    verdict = summary["per_task"][0]["verdict"]
-    assert "KILL" not in verdict and "SEPARATES" in verdict  # re-measured, not overwritten
 
 
 def test_fingerprint_tracks_the_executed_prompt_not_just_the_authored_values(
@@ -742,6 +775,10 @@ def test_duplicate_work_ids_are_refused(tmp_path: Path) -> None:
         )
 
 
+def prompt_fp(task: ToolReqRealAgentTask, payload: dict[str, str]) -> str:
+    return driver.prompt_fingerprint(task, payload)
+
+
 def test_prompt_fingerprint_catches_what_a_field_model_misses(tmp_path: Path) -> None:
     """The point of prompt_fingerprint: it hashes the PROMPT, not a model of the prompt.
 
@@ -771,10 +808,6 @@ def test_prompt_fingerprint_catches_what_a_field_model_misses(tmp_path: Path) ->
 
     # and the memory CONTENT still moves it, obviously
     assert prompt_fp(task, {"a": "A"}) != prompt_fp(task, {"a": "DIFFERENT"})
-
-
-def prompt_fp(task: object, payload: dict[str, str]) -> str:
-    return driver.prompt_fingerprint(task, payload)  # type: ignore[arg-type]
 
 
 def test_forged_not_empty_flag_with_a_fabricated_ours_cell_is_a_miss(tmp_path: Path) -> None:
@@ -836,21 +869,6 @@ def test_unsafe_work_ids_are_refused(tmp_path: Path, bad_id: str) -> None:
         _run_corpus([task], [seq], tmp_path / "out", dry_run=True, store_path=tmp_path / "s.db")
 
 
-def test_unknown_arm_or_channel_cache_is_a_miss(tmp_path: Path) -> None:
-    """A row naming an arm/channel outside the grid (schema drift across a rename) is a miss."""
-    sequences, tasks = _corpus_one(tmp_path)
-    out = tmp_path / "out"
-    _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
-
-    result_path = out / f"{tasks[0].work_id}.json"
-    record = json.loads(result_path.read_text(encoding="utf-8"))
-    record["outcomes"][0]["arm"] = "some-renamed-arm"
-    result_path.write_text(json.dumps(record), encoding="utf-8")
-
-    summary = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
-    assert summary["executed"] == 1 and summary["reused"] == 0
-
-
 @pytest.mark.parametrize(
     ("field", "value"),
     [
@@ -903,45 +921,6 @@ def test_hostile_json_never_escapes_the_parse_boundary(tmp_path: Path, cache_tex
     out = tmp_path / "out"
     out.mkdir()
     (out / f"{tasks[0].work_id}.json").write_text(cache_text, encoding="utf-8")
-    summary = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
-    assert summary["executed"] == 1 and summary["reused"] == 0
-
-
-def test_cells_measured_at_another_repeat_count_are_a_miss(tmp_path: Path) -> None:
-    """A cell's ``runs`` must equal the run's ``repeats``. Nothing else can produce it
-    (``run_arm`` loops ``range(repeats)``), so a disagreeing record is corrupt. The degenerate
-    ``runs=0`` case is the dangerous one: it satisfies ``0 <= passes <= runs``, keeps full grid
-    coverage, and makes task_verdict read ``oracle 0/0`` and emit a confident
-    "KILL: no separation" for a task that was never evaluated — counted as ``reused``."""
-    sequences, tasks = _corpus_one(tmp_path)
-    out = tmp_path / "out"
-    first = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
-    assert "SEPARATES" in first["per_task"][0]["verdict"]
-
-    result_path = out / f"{tasks[0].work_id}.json"
-    record = json.loads(result_path.read_text(encoding="utf-8"))
-    for row in record["outcomes"]:  # zero every cell, leave `repeats` in the identity alone
-        row["passes"], row["runs"] = 0, 0
-    result_path.write_text(json.dumps(record), encoding="utf-8")
-
-    summary = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
-    assert summary["executed"] == 1 and summary["reused"] == 0
-    verdict = summary["per_task"][0]["verdict"]
-    assert "KILL" not in verdict and "SEPARATES" in verdict  # re-measured, not fabricated
-
-
-def test_schema_drifted_cache_row_is_a_miss_not_a_typeerror(tmp_path: Path) -> None:
-    """An ``outcomes`` row that is not a valid ``ArmOutcome`` kwargs mapping must miss, not
-    blow up in ``ArmOutcome(**row)`` outside the guard."""
-    sequences, tasks = _corpus_one(tmp_path)
-    out = tmp_path / "out"
-    _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
-
-    result_path = out / f"{tasks[0].work_id}.json"
-    record = json.loads(result_path.read_text(encoding="utf-8"))
-    record["outcomes"] = [{"arm": "none", "unexpected": 1} for _ in record["outcomes"]]
-    result_path.write_text(json.dumps(record), encoding="utf-8")
-
     summary = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
     assert summary["executed"] == 1 and summary["reused"] == 0
 
