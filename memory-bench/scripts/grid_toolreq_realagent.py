@@ -294,14 +294,26 @@ def task_fingerprint(task: ToolReqRealAgentTask) -> str:
     with entirely different authored values returned executed=0 reused=3 and printed the old
     world's verdicts as the new world's.
 
-    The reward-bearing content IS the world: the opaque values the action must carry and the
-    oracle memory that surfaces them. Hash those and a regenerated corpus invalidates its
-    stale caches automatically."""
+    Hash everything that determines what is EXECUTED and how it is SCORED — not merely the
+    authored values. That distinction is the whole bug: an earlier version hashed only the
+    reward-bearing content (oracle_memory + the opaque values), which leaves ``goal_step``
+    invisible. ``goal_step`` is the prompt actually sent to ``claude -p`` and it carries the
+    ``outcome_checks`` the run is graded against, so an ADAPTER change — new bridged wording,
+    a different tool, an altered ExpectedAction — that does not happen to move the authored
+    values produced an identical fingerprint, and a resumed ``--out`` silently served
+    pre-change answers as if they measured the new prompt. That needs no corrupted file, just
+    ordinary iteration on ``adapt_sequence`` over the frozen corpus, which is exactly how this
+    repo works.
+
+    ``SequenceStep`` is a pydantic model, so ``model_dump(mode="json")`` is a stable,
+    deterministic serialization of the whole step — new fields are covered automatically
+    rather than needing to be remembered here."""
     payload = json.dumps(
         {
             "work_id": task.work_id,
             "oracle_memory": sorted(task.oracle_memory.items()),
             "current_opaque_values": sorted(task.current_opaque_values),
+            "goal_step": task.goal_step.model_dump(mode="json"),
         },
         sort_keys=True,
     )

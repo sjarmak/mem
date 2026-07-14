@@ -16,6 +16,7 @@ resumable.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import sys
 from collections.abc import Callable
@@ -527,6 +528,30 @@ def test_extra_duplicate_row_is_a_miss_even_though_the_grid_is_covered(tmp_path:
     assert summary["executed"] == 1 and summary["reused"] == 0
     verdict = summary["per_task"][0]["verdict"]
     assert "KILL" not in verdict and "SEPARATES" in verdict  # re-measured, not overwritten
+
+
+def test_fingerprint_tracks_the_executed_prompt_not_just_the_authored_values(
+    tmp_path: Path,
+) -> None:
+    """The fingerprint must cover what is EXECUTED and SCORED, not only the reward values.
+    ``goal_step`` is the prompt actually sent to the agent and carries the outcome_checks it
+    is graded against. An ADAPTER change (new bridged wording, a different tool, an altered
+    ExpectedAction) that leaves the authored values untouched must still invalidate the cache
+    — otherwise a resumed --out serves pre-change answers as if they measured the new prompt.
+    This needs no corrupted file, only ordinary iteration on adapt_sequence."""
+    task = adapt_sequence(_toolreq_seq("w-0"))
+    drifted = dataclasses.replace(
+        task,
+        goal_step=task.goal_step.model_copy(
+            update={"user_request": "A DIFFERENT GOAL: delete the retention config instead."}
+        ),
+    )
+    # The reward-bearing content is byte-identical; only the executed prompt moved.
+    assert drifted.oracle_memory == task.oracle_memory
+    assert drifted.current_opaque_values == task.current_opaque_values
+    assert drifted.goal_step.user_request != task.goal_step.user_request
+
+    assert driver.task_fingerprint(drifted) != driver.task_fingerprint(task)
 
 
 def test_unknown_arm_or_channel_cache_is_a_miss(tmp_path: Path) -> None:
