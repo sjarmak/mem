@@ -127,8 +127,16 @@ def _load_cached_cells(result_path: Path, identity: Mapping[str, object]) -> lis
     ``run_corpus``'s guarantee ("a corrupt or partial cache file is treated as a miss
     and re-executed, never a crash") lives HERE, as explicit miss branches instead of
     an ever-widening except tuple: unreadable or non-UTF-8 bytes, malformed JSON, a
-    non-dict top level, an identity mismatch, schema drift, and type-hostile counts
-    are all misses."""
+    non-dict top level, an identity mismatch, schema drift, type-hostile counts, and a
+    cell grid that does not cover exactly ``CHANNELS`` are all misses.
+
+    That last branch is load-bearing on the PAID path. ``run_corpus`` derives the
+    ``separates_all_channels`` headline from whatever cells this returns, so a grid
+    missing a channel (truncated write, or a channel added since the file was written)
+    or repeating one twice would credit "separates on BOTH channels" off a measurement
+    that only ever covered one — full coverage reported for a channel no ``claude -p``
+    call ever ran. Comparing the cells' channels against ``CHANNELS`` pins arity,
+    identity, and order in one check; a partial grid must be re-executed, not scored."""
     try:
         loaded = json.loads(result_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -139,14 +147,20 @@ def _load_cached_cells(result_path: Path, identity: Mapping[str, object]) -> lis
         return None
     if any(loaded.get(key) != value for key, value in identity.items()):
         return None
+    rows = loaded.get("cells")
+    if not isinstance(rows, list):
+        # absent (older schema) or not a grid at all — a dict or scalar would otherwise
+        # iterate to zero cells and load as a HIT holding no measurement.
+        return None
     try:
         cells = [
-            (ArmOutcome(**row["outcome"]), BuiltinDiagnostics(**row["diagnostics"]))
-            for row in loaded["cells"]
+            (ArmOutcome(**row["outcome"]), BuiltinDiagnostics(**row["diagnostics"])) for row in rows
         ]
     except (KeyError, TypeError):
         # schema drift: missing/renamed keys, non-mapping rows, or an older result
         # written before a field was added.
+        return None
+    if [outcome.channel for outcome, _ in cells] != [channel.value for channel in CHANNELS]:
         return None
     if not all(_int_fields_ok(outcome) and _int_fields_ok(diag) for outcome, diag in cells):
         return None

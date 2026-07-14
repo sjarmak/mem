@@ -402,6 +402,12 @@ def test_run_corpus_persists_and_is_resumable(tmp_path: Path) -> None:
     assert second["executed"] == 0 and second["reused"] == 1
 
 
+# The cache identity every driver test below runs under. A hostile payload must carry it
+# to be a MEANINGFUL miss test: a payload that mismatches the identity is rejected at the
+# identity check and never reaches the cell-construction branch the test means to exercise.
+_IDENTITY_MATCHING = {"work_id": "w-0", "repeats": 2, "dry_run": True, "model": ""}
+
+
 @pytest.mark.parametrize(
     "payload",
     [
@@ -412,13 +418,25 @@ def test_run_corpus_persists_and_is_resumable(tmp_path: Path) -> None:
         ),
         pytest.param(b"[]", id="non-dict-top-level"),
         pytest.param(b"\xff\xfe\x00corrupt", id="invalid-utf8"),
+        pytest.param(
+            json.dumps(_IDENTITY_MATCHING | {"cells": []}).encode(),
+            id="empty-cells-list",
+        ),
+        pytest.param(
+            json.dumps(_IDENTITY_MATCHING | {"cells": {}}).encode(),
+            id="cells-not-a-list",
+        ),
     ],
 )
 def test_hostile_cache_file_is_re_executed_not_crashed(tmp_path: Path, payload: bytes) -> None:
     # Every hostile persisted-result shape is a MISS per run_corpus's guarantee ("treated
     # as a miss and re-executed, never a crash"): malformed JSON text, a valid-JSON
     # record missing "cells" (older schema), a syntactically-valid non-dict top level,
-    # and invalid UTF-8 bytes (disk rot, manual edit).
+    # invalid UTF-8 bytes (disk rot, manual edit), and — the last two, which MATCH the
+    # identity and so reach the cell-construction branch — a "cells" that is empty or is
+    # not a list at all. Both of those construct ZERO cells without raising, so without a
+    # shape check they load as a HIT holding no measurement, and the task silently drops
+    # out of the separates/leaked/not_engaged accounting while still counting as `reused`.
     tasks = _corpus_one(tmp_path)
     out = tmp_path / "out"
     out.mkdir()
@@ -447,6 +465,74 @@ def test_type_hostile_cache_counts_are_re_executed_not_crashed(tmp_path: Path) -
     result_path.write_text(json.dumps(record), encoding="utf-8")
     summary = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
     assert summary["executed"] == 1 and summary["reused"] == 0
+
+
+def _cached_record(out: Path, work_id: str = "w-0") -> tuple[Path, dict]:
+    """The persisted record for one task, as JSON — mutate it, write it back, re-run."""
+    result_path = out / f"{work_id}.json"
+    return result_path, json.loads(result_path.read_text(encoding="utf-8"))
+
+
+def _not_engaged_grid(
+    task: ToolReqRealAgentTask, **_kwargs: object
+) -> list[tuple[ArmOutcome, BuiltinDiagnostics]]:
+    """An `evaluate_task` stand-in returning a full but NON-separating grid, so a cache HIT
+    and a cache MISS yield DIFFERENT headline numbers and the assertion can tell them apart
+    instead of accidentally agreeing with the bug."""
+    return [
+        (
+            ArmOutcome(arm="builtin", channel=channel.value, passes=0, runs=2),
+            BuiltinDiagnostics(engaged=0, leaked=0, runs=2),
+        )
+        for channel in driver.CHANNELS
+    ]
+
+
+def test_partial_cell_grid_never_credits_a_both_channel_separation(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # A cache SHORT a channel must be a MISS. run_corpus scores the headline as
+    # `kinds and all(kind == "SEPARATES" ...)` over whatever cells the loader hands back,
+    # so a one-channel record satisfies "separated on BOTH channels" while `trusted` was
+    # never evaluated — and on the PAID identity that verdict is credited with zero
+    # `claude -p` calls made. A partial result reading as full coverage is exactly what
+    # the rig forbids (mem-xe2p enforce_mechanism_fires).
+    tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    truth = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert truth["separates_all_channels"] == 1  # both channels really do separate
+
+    result_path, record = _cached_record(out)
+    record["cells"] = record["cells"][:1]  # drop the `trusted` channel
+    result_path.write_text(json.dumps(record), encoding="utf-8")
+
+    monkeypatch.setattr(driver, "evaluate_task", _not_engaged_grid)
+    summary = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert summary["executed"] == 1 and summary["reused"] == 0
+    assert summary["separates_all_channels"] == 0  # re-measured, not replayed from half a grid
+    assert len(_cached_record(out)[1]["cells"]) == len(driver.CHANNELS)  # rewritten whole
+
+
+def test_duplicate_channel_cache_never_credits_a_both_channel_separation(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # The dual of the missing-channel case, and NOT caught by a length check alone: two
+    # copies of the `recalled` cell has the right arity and the wrong coverage. `trusted`
+    # was never measured, yet every kind is SEPARATES, so the both-channel headline would
+    # be credited off one channel counted twice. This is why the loader compares the
+    # cells' CHANNELS rather than just counting them.
+    tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+
+    result_path, record = _cached_record(out)
+    record["cells"] = [record["cells"][0], record["cells"][0]]
+    result_path.write_text(json.dumps(record), encoding="utf-8")
+
+    monkeypatch.setattr(driver, "evaluate_task", _not_engaged_grid)
+    summary = driver.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
+    assert summary["executed"] == 1 and summary["reused"] == 0
+    assert summary["separates_all_channels"] == 0
 
 
 def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -> None:
