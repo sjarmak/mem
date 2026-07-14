@@ -615,6 +615,66 @@ def test_a_changed_ours_payload_invalidates_the_cache(tmp_path: Path) -> None:
     assert (changed["executed"], changed["reused"]) == (1, 0), "reused a stale ours measurement"
 
 
+def test_reordered_ours_payload_invalidates_the_cache(tmp_path: Path) -> None:
+    """The `ours` payload's ORDER is a measured input, not incidental. resolve_payloads builds
+    the dict from `mem retrieve`'s RANKED items and build_agent_prompt renders the memory block
+    by iterating available_memory.items(), so insertion order IS the order the agent reads the
+    lessons in. Retrieval can return the same SET in a different ORDER (a reseed moving an FTS
+    tiebreak, a ranking change in bin/mem) — a different prompt, so a different measurement. A
+    sorted fingerprint would call the two runs identical and serve the stale one."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    store_path = tmp_path / "store.db"
+    work_id = tasks[0].work_id
+
+    def _rank_x(*_a: object) -> dict[str, dict[str, str]]:
+        return {work_id: {"w-a": "fact A", "w-b": "fact B"}}
+
+    def _rank_y(*_a: object) -> dict[str, dict[str, str]]:
+        # identical CONTENT, retrieval ranked them the other way round
+        return {work_id: {"w-b": "fact B", "w-a": "fact A"}}
+
+    assert driver.payload_fingerprint({"w-a": "A", "w-b": "B"}) != driver.payload_fingerprint(
+        {"w-b": "B", "w-a": "A"}
+    )
+
+    first = _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path, seed_fn=_rank_x)
+    assert (first["executed"], first["reused"]) == (1, 0)
+
+    same = _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path, seed_fn=_rank_x)
+    assert (same["executed"], same["reused"]) == (0, 1)  # unchanged rank order still resumes
+
+    flipped = _run_corpus(
+        tasks, sequences, out, dry_run=True, store_path=store_path, seed_fn=_rank_y
+    )
+    assert (flipped["executed"], flipped["reused"]) == (
+        1,
+        0,
+    ), "reused a measurement taken against a differently-ordered prompt"
+
+
+def test_reordered_oracle_memory_invalidates_the_cache(tmp_path: Path) -> None:
+    """Same hole, one field over, and on the arm that defines the CEILING the whole verdict is
+    read against. arm_memories hands `oracle` a dict(task.oracle_memory), which build_agent_prompt
+    renders in insertion order — so reordering oracle_memory without changing its content (an
+    ordinary edit to how adapt_sequence builds the dict) changes the oracle prompt. Sorting it
+    inside task_fingerprint made that change invisible and served the pre-change ceiling."""
+    _, tasks = _corpus_one(tmp_path)
+    task = tasks[0]
+    forward = dict(task.oracle_memory)
+    if len(forward) < 2:  # the fixture must actually be able to express an order
+        forward = {"m-1": "the current value is X", "m-2": "the retention window applies"}
+    reversed_order = dict(reversed(list(forward.items())))
+
+    assert list(forward) != list(reversed_order)  # same content, different order
+    assert forward == reversed_order
+    assert driver.task_fingerprint(
+        dataclasses.replace(task, oracle_memory=forward)
+    ) != driver.task_fingerprint(
+        dataclasses.replace(task, oracle_memory=reversed_order)
+    ), "the ceiling arm's prompt changed but the fingerprint did not"
+
+
 def test_unknown_arm_or_channel_cache_is_a_miss(tmp_path: Path) -> None:
     """A row naming an arm/channel outside the grid (schema drift across a rename) is a miss."""
     sequences, tasks = _corpus_one(tmp_path)

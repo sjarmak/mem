@@ -297,11 +297,25 @@ def task_fingerprint(task: ToolReqRealAgentTask) -> str:
 
     ``SequenceStep`` is a pydantic model, so ``model_dump(mode="json")`` is a stable,
     deterministic serialization of the whole step — new fields are covered automatically
-    rather than needing to be remembered here."""
+    rather than needing to be remembered here.
+
+    ``oracle_memory`` is hashed in ITS OWN ORDER, not sorted. ``build_agent_prompt`` renders
+    the memory block by iterating ``available_memory.items()``, so the dict's insertion order
+    is literally the order the lines appear in the prompt sent to ``claude -p``. Sorting it
+    here would normalize away a difference the agent actually sees: reorder ``oracle_memory``
+    without changing its content — an ordinary edit to how ``adapt_sequence`` builds the
+    dict — and a sorted hash is IDENTICAL while the ceiling arm's prompt is not, so a resumed
+    sweep serves the pre-change measurement. The rule for this fingerprint: whatever reaches
+    the prompt, hash it the way the prompt sees it.
+
+    ``current_opaque_values`` IS sorted, and that is correct rather than inconsistent — it is
+    never rendered into a prompt. It is only membership-tested by the scorer ("does this value
+    appear in the output"), so its order is genuinely not a measured input, and sorting keeps a
+    meaningless reordering from forcing a spurious re-spend."""
     payload = json.dumps(
         {
             "work_id": task.work_id,
-            "oracle_memory": sorted(task.oracle_memory.items()),
+            "oracle_memory": list(task.oracle_memory.items()),
             "current_opaque_values": sorted(task.current_opaque_values),
             "goal_step": task.goal_step.model_dump(mode="json"),
         },
@@ -318,10 +332,16 @@ def payload_fingerprint(ours_payload: Mapping[str, str]) -> str:
     added, when the corpus is regenerated, or when ``bin/mem``'s retrieval changes — none of
     which touch the queried task's own fields. Hashing the payload puts all three inside the
     cache identity without having to model any of them: whatever the cause, a different
-    injected context is a different measurement, and the cached cell must miss."""
-    return hashlib.sha256(
-        json.dumps(sorted(ours_payload.items()), sort_keys=True).encode("utf-8")
-    ).hexdigest()[:16]
+    injected context is a different measurement, and the cached cell must miss.
+
+    ORDER-PRESERVING, deliberately. ``resolve_payloads`` builds this dict by iterating
+    ``mem retrieve``'s RANKED items, and ``build_agent_prompt`` then renders the memory block
+    by iterating ``available_memory.items()`` — so the dict's insertion order is retrieval's
+    rank order, and rank order is what the agent reads top-to-bottom. Retrieval can return the
+    same SET of lessons in a different ORDER (a reseed moving an FTS tiebreak, a ranking
+    change in ``bin/mem``), which is a different prompt and therefore a different measurement.
+    A sorted hash would call those two runs identical and serve the stale one."""
+    return hashlib.sha256(json.dumps(list(ours_payload.items())).encode("utf-8")).hexdigest()[:16]
 
 
 def _valid_cell(row: Any, repeats: int) -> bool:
