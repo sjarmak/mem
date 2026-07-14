@@ -80,12 +80,10 @@ class CellCalls:
     under. That is what makes the fingerprint the executed input rather than a hand-written model of
     it, one field short.
 
-    An ARGV, not a prompt. The prompt is only the third element of the command line the agent
-    actually spawns (``HeadlessClaudeAgent.argv_for``); ``--allowedTools``, ``--model`` and
-    ``--strict-mcp-config`` are the rest of it, and each moves a result while touching no task
-    field, no payload and no prompt — unclamping ``--allowedTools`` alone frees the scored goal leg.
-    Hashing the whole line puts them in the identity by construction instead of leaving them to
-    ``EXECUTION_PROTOCOL``'s manual bump.
+    An ARGV, not a prompt: the prompt is only the third element of the command line the agent
+    actually spawns (``HeadlessClaudeAgent.argv_for``), and the flags around it move results too —
+    ``resume_cache.BaseRunIdentity.invocation_fingerprint`` is where hashing the WHOLE line rather
+    than just the prompt is argued.
 
     ``calls`` is ORDERED and stays that way: a cell's legs share a cwd and a config dir and run in
     sequence, so their order IS a measured input (see ``resume_cache.invocation_digest``)."""

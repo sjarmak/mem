@@ -181,7 +181,7 @@ def evaluate_task(
             cell = planned.get((arm, channel))
             if cell is None:
                 continue  # `ours`, empty retrieval — filled from `none` below, never spent on
-            cells[arm], cell_calls = run_arm(
+            cells[arm], sent = run_arm(
                 arm=arm,
                 step=cell.step,
                 memory=dict(cell.memory),
@@ -191,7 +191,7 @@ def evaluate_task(
                 dry_run=dry_run,
                 current_values=task.current_opaque_values,
             )
-            calls.append(cell_calls)
+            calls.append(sent)
         if RETRIEVING_ARM not in cells:
             cells[RETRIEVING_ARM] = replace(cells["none"], arm=RETRIEVING_ARM)
         outcomes.extend(cells[arm] for arm in ARMS)

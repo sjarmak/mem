@@ -92,10 +92,6 @@ def test_prompt_injects_memory_block() -> None:
 # --------------------------------------------------------------------------- #
 # the CLI seam the paid grids' cache identity is checked against
 # --------------------------------------------------------------------------- #
-def _recorded(*cycles: list[list[str]]) -> list[list[str]]:
-    return [argv for cycle in cycles for argv in cycle]
-
-
 def test_the_recorder_sees_every_call_the_agent_spawns() -> None:
     """The seam, and why it is the runner rather than the step result: a `prompt` field an arm
     populates records what the arm MEANT to send. The runner records what went out."""
@@ -113,9 +109,7 @@ def test_one_cycle_folds_identical_repeats_and_keeps_leg_order() -> None:
     """A cell repeats ONE cycle, so its recording folds back to that cycle — with the legs still in
     the order they were sent, because that order is a measured input."""
     cycle = [["claude", "-p", "establish"], ["claude", "-p", "goal"]]
-    folded = one_cycle(
-        _recorded(cycle, cycle, cycle), repeats=3, arm="builtin", channel=MemoryChannel.TRUSTED
-    )
+    folded = one_cycle(cycle * 3, repeats=3, arm="builtin", channel=MemoryChannel.TRUSTED)
     assert folded.arm == "builtin" and folded.channel == "trusted"
     assert folded.calls == (("claude", "-p", "establish"), ("claude", "-p", "goal"))
 

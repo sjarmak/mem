@@ -162,7 +162,7 @@ def simulated_runner(current_values: Collection[str]) -> CliRunner:
 
     def run(argv: Collection[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
         argv_list = list(argv)
-        # HeadlessClaudeAgent._argv builds ["claude", "-p", prompt, ...]; assert the layout
+        # HeadlessClaudeAgent.argv_for builds ["claude", "-p", prompt, ...]; assert the layout
         # so a future reordering fails loudly instead of silently never firing.
         assert argv_list[:2] == ["claude", "-p"], f"unexpected argv layout: {argv_list[:3]}"
         prompt = argv_list[2] if len(argv_list) > 2 else ""
@@ -202,9 +202,9 @@ def cell_agent(
     THE definition, and the only one: ``run_arm`` executes through it and
     ``toolreq_grid.invocation_fingerprint`` renders the cell's command line through it
     (``cell_calls``). A second construction of this agent beside the fingerprint is how
-    ``constrain_tools`` or ``strict_mcp`` end up set one way on the wire and another in the hash —
-    unclamping ``--allowedTools`` frees the scored goal leg while moving no task field, no payload
-    and no prompt.
+    ``constrain_tools`` or ``strict_mcp`` end up set one way on the wire and another in the hash,
+    and each of those flags moves a result on its own (see
+    ``resume_cache.BaseRunIdentity.invocation_fingerprint``).
 
     ``runner`` and ``cwd`` are the only things the fingerprint path leaves at their defaults:
     neither appears in the argv, so a rendered invocation is byte-identical to the sent one without

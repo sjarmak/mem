@@ -359,10 +359,9 @@ class Evaluation:
     ACTUALLY made.
 
     The two travel together because they are one measurement. Returning only the rows is what let a
-    grid's identity describe a prompt its arms no longer send: ``identity_of`` and ``evaluate`` are
-    injected INDEPENDENTLY (see ``run_cached_corpus``), so without the invocations coming back out
-    of the evaluation there is nothing to check the identity against, and the fingerprint is left
-    resting on the author of the next edit remembering to move two files at once."""
+    grid's identity describe a prompt its arms no longer send: without the invocations coming back
+    out of the evaluation there is nothing to check the identity against at the write boundary (see
+    ``run_cached_corpus``, which is where that argument is made)."""
 
     outcomes: Sequence[BaseCellOutcome]
     calls: Sequence[CellCalls]

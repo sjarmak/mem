@@ -998,7 +998,7 @@ def test_duplicate_work_ids_are_refused(tmp_path: Path) -> None:
         )
 
 
-def prompt_fp(task: ToolReqRealAgentTask, payload: dict[str, str]) -> str:
+def invocation_fp(task: ToolReqRealAgentTask, payload: dict[str, str]) -> str:
     return grid.invocation_fingerprint(task, payload, model="")
 
 
@@ -1016,21 +1016,21 @@ def test_invocation_fingerprint_catches_what_a_field_model_misses(tmp_path: Path
     task = tasks[0]
 
     # ours payload rank order -- shipped as a bug
-    assert prompt_fp(task, {"a": "A", "b": "B"}) != prompt_fp(task, {"b": "B", "a": "A"})
+    assert invocation_fp(task, {"a": "A", "b": "B"}) != invocation_fp(task, {"b": "B", "a": "A"})
 
     # oracle memory order -- shipped as a bug, on the CEILING arm
     om = {"m-1": "one", "m-2": "two"}
     fwd, rev = dataclasses.replace(task, oracle_memory=om), dataclasses.replace(
         task, oracle_memory=dict(reversed(list(om.items())))
     )
-    assert prompt_fp(fwd, {}) != prompt_fp(rev, {})
+    assert invocation_fp(fwd, {}) != invocation_fp(rev, {})
 
     # identical inputs are stable (an UNSTABLE fingerprint is the expensive direction -- it
     # would re-spend real money on every resume)
-    assert prompt_fp(task, {"a": "A"}) == prompt_fp(task, {"a": "A"})
+    assert invocation_fp(task, {"a": "A"}) == invocation_fp(task, {"a": "A"})
 
     # and the memory CONTENT still moves it, obviously
-    assert prompt_fp(task, {"a": "A"}) != prompt_fp(task, {"a": "DIFFERENT"})
+    assert invocation_fp(task, {"a": "A"}) != invocation_fp(task, {"a": "DIFFERENT"})
 
 
 def test_the_fingerprint_is_the_invocations_the_arms_actually_send(tmp_path: Path) -> None:
@@ -1193,14 +1193,14 @@ def test_empty_ours_payload_is_none_equivalent_and_never_spends(
     sequences, tasks = _corpus_one(tmp_path)
     seen: list[str] = []
 
-    def _spy_run_arm(*, arm: str, channel, repeats: int, step, memory, **_kwargs: Any):
+    def _spy_run_arm(*, arm: str, channel, repeats: int, step, memory, model: str, **_kwargs: Any):
         seen.append(arm)  # a real paid cell would spawn `claude -p` here
         outcome = grid.ArmOutcome(
             arm=arm, channel=channel.value, passes=repeats if arm == "oracle" else 0, runs=repeats
         )
-        return outcome, cell_calls(
-            arm=arm, step=step, memory=memory, channel=channel, model="sonnet"
-        )
+        # The invocations the PLAN declares, for the model it was HANDED — a double that reported
+        # anything else is refused at the cache's write boundary, which is that check doing its job.
+        return outcome, cell_calls(arm=arm, step=step, memory=memory, channel=channel, model=model)
 
     monkeypatch.setattr(grid, "run_arm", _spy_run_arm)
     summary = grid.run_corpus(
@@ -1231,12 +1231,10 @@ def test_non_empty_ours_payload_still_spends(tmp_path: Path, monkeypatch) -> Non
     sequences, tasks = _corpus_one(tmp_path)
     seen: list[str] = []
 
-    def _spy_run_arm(*, arm: str, channel, repeats: int, step, memory, **_kwargs: Any):
+    def _spy_run_arm(*, arm: str, channel, repeats: int, step, memory, model: str, **_kwargs: Any):
         seen.append(arm)
         outcome = grid.ArmOutcome(arm=arm, channel=channel.value, passes=0, runs=repeats)
-        return outcome, cell_calls(
-            arm=arm, step=step, memory=memory, channel=channel, model="sonnet"
-        )
+        return outcome, cell_calls(arm=arm, step=step, memory=memory, channel=channel, model=model)
 
     def _payload(*_args: object) -> dict[str, dict[str, str]]:
         return {tasks[0].work_id: {"lesson-1": "the retention window is TOKEN-abc"}}

@@ -33,12 +33,7 @@ from pydantic import ValidationError
 
 from membench.harbor.agent_memory import native_memory_path
 from membench.runner import toolreq_builtin_grid as grid
-from membench.runner.headless_agent import (
-    ENV_MODEL,
-    CellCalls,
-    HeadlessAgentError,
-    MemoryChannel,
-)
+from membench.runner.headless_agent import ENV_MODEL, HeadlessAgentError, MemoryChannel
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome
 from membench.runner.resume_cache import Evaluation, invocation_digest
 from membench.runner.toolreq_builtin import (
@@ -191,13 +186,6 @@ def test_argv_omits_allowed_tools_for_establish_but_not_goal() -> None:
     goal_argv = agent.argv_for(task.goal_step, {})
     assert "--allowedTools" not in establish_argv
     assert "--allowedTools" in goal_argv and "Write" in goal_argv
-
-
-def _planned_calls(task: ToolReqRealAgentTask, model: str = "") -> list[CellCalls]:
-    """The invocations this task's cells are PLANNED to make — what an honest `run_builtin_arm` or
-    `evaluate_task` stand-in reports having sent. A double reporting anything else is refused at the
-    cache's write boundary, which is that check doing its job, not the double being awkward."""
-    return [cell_calls(task, channel, model=model) for channel in grid.CHANNELS]
 
 
 # --- content-based engagement gate (H2, M1) --------------------------------------------
@@ -955,10 +943,11 @@ def _not_engaged_grid(task: ToolReqRealAgentTask, **_kwargs: object) -> Evaluati
     """An `evaluate_task` stand-in returning a full but NON-separating grid, so a cache HIT and a
     cache MISS yield DIFFERENT headline numbers and the assertion can tell them apart instead of
     accidentally agreeing with the bug. It reports the invocations the PLAN declares: it is standing
-    in for an arm that ran, not for one that drifted."""
+    in for an arm that ran, not for one that drifted (a double reporting anything else is refused at
+    the cache's write boundary, which is that check doing its job)."""
     return Evaluation(
         outcomes=[_cell(channel.value, passes=0, runs=2, engaged=0) for channel in grid.CHANNELS],
-        calls=_planned_calls(task),
+        calls=[cell_calls(task, channel, model="") for channel in grid.CHANNELS],
     )
 
 
