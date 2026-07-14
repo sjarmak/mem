@@ -55,11 +55,7 @@ STALE = "90 days"
 # care about the `ours` arm's actual payload injects this instead of the real seeder, so
 # it never needs a built bin/mem (the injectable seed_fn convention the driver documents).
 def _no_ours_payload(
-    _sequences: object,
-    _tasks: object,
-    _store_path: object,
-    _mem_bin: object,
-    _resolve_ids: object = None,
+    _sequences: object, _tasks: object, _store_path: object, _mem_bin: object
 ) -> dict[str, dict[str, str]]:
     return {}
 
@@ -353,13 +349,17 @@ def test_run_corpus_persists_and_is_resumable(tmp_path: Path) -> None:
     assert (out / "w-0.json").is_file()
     assert "SEPARATES" in first["per_task"][0]["verdict"]
 
-    # Re-run: the persisted result is reused, nothing re-executed — and the fully-cached
-    # resume never re-seeds the ours store (the seed honors the same resumability contract).
+    # Re-run: the persisted result is reused, nothing re-executed — no PAID work repeats.
+    # The seed DOES run again (n == 2), deliberately. Seeding and resolving are free, and the
+    # resolved `ours` payload is part of the cache identity, so it must be recomputed to know
+    # whether a cached cell is still current. An earlier revision skipped the seed on a
+    # fully-cached resume; that is precisely what made a stale `ours` payload (from a grown
+    # corpus or a rebuilt bin/mem) invisible and reusable.
     second = _run_corpus(
         tasks, sequences, out, dry_run=True, store_path=store_path, seed_fn=_counting_seed
     )
     assert second["executed"] == 0 and second["reused"] == 1
-    assert seed_calls["n"] == 1
+    assert seed_calls["n"] == 2
 
 
 def _corpus_one(
@@ -579,6 +579,40 @@ def test_switching_the_resolved_model_invalidates_the_cache(tmp_path: Path, monk
         0,
     ), "served model-a's numbers as model-b"
     assert switched["per_task"][0]["model"] == "model-b"  # the RESOLVED model is recorded
+
+
+def test_a_changed_ours_payload_invalidates_the_cache(tmp_path: Path) -> None:
+    """The `ours` payload is the arm's MEASURED INPUT and comes from CROSS-TASK retrieval, so it
+    moves when a sibling is added to the corpus, when the corpus is regenerated, or when
+    bin/mem's retrieval changes — none of which touch the queried task's own fields, so
+    task_fingerprint cannot see any of them. Hashing the resolved payload covers all three at
+    once: a different injected context is a different measurement and must not be reused."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    store_path = tmp_path / "store.db"
+    work_id = tasks[0].work_id
+
+    def _payload_v1(*_a: object) -> dict[str, dict[str, str]]:
+        return {work_id: {"w-prior": "lesson: the value is TOKEN-aaa"}}
+
+    def _payload_v2(*_a: object) -> dict[str, dict[str, str]]:
+        # same task, same corpus fields — retrieval now surfaces DIFFERENT text
+        return {work_id: {"w-prior": "lesson: the value is TOKEN-bbb"}}
+
+    first = _run_corpus(
+        tasks, sequences, out, dry_run=True, store_path=store_path, seed_fn=_payload_v1
+    )
+    assert (first["executed"], first["reused"]) == (1, 0)
+
+    same = _run_corpus(
+        tasks, sequences, out, dry_run=True, store_path=store_path, seed_fn=_payload_v1
+    )
+    assert (same["executed"], same["reused"]) == (0, 1)  # unchanged payload still resumes
+
+    changed = _run_corpus(
+        tasks, sequences, out, dry_run=True, store_path=store_path, seed_fn=_payload_v2
+    )
+    assert (changed["executed"], changed["reused"]) == (1, 0), "reused a stale ours measurement"
 
 
 def test_unknown_arm_or_channel_cache_is_a_miss(tmp_path: Path) -> None:

@@ -24,8 +24,7 @@ This is the paid ceiling driver. It STAGES but never over-reaches:
 * ``--dry-run`` runs the identical loop with a simulated memory-copying agent — no token,
   no ``claude`` — proving the arms separate end to end for FREE. Seeding the ``ours``
   store and resolving its payload are ALSO free (real ``mem`` CLI calls, no agent turn) and
-  run dry-run or paid alike (skipped only when every task is already cache-served) — only
-  ``claude -p`` is spend-gated;
+  run on every invocation, dry-run or paid alike — only ``claude -p`` is spend-gated;
 * a real run REFUSES to spend without ``CLAUDE_CODE_OAUTH_TOKEN`` and prints the exact
   ``scix-batch`` go-command + the run count / worst-case wall-clock, so the paid fire stays
   an explicit, cost-disclosed, per-action decision (Stephanie's call);
@@ -51,7 +50,7 @@ import json
 import os
 import sys
 import tempfile
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -83,19 +82,13 @@ ENV_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN"
 ARMS = ("none", "oracle", "ours")
 CHANNELS = (MemoryChannel.RECALLED, MemoryChannel.TRUSTED)
 
-# Seeds the `ours` store + resolves its payload: (sequences, tasks, store_path, mem_bin,
-# resolve_ids) -> work_id -> (source work_id -> rendered payload). `resolve_ids` narrows the
-# resolution step to the tasks actually being executed; seeding stays full-corpus. Injectable
-# so hermetic tests can stub it out without a built bin/mem (matching this codebase's
-# CliRunner/RetrieveRunner injection convention — see headless_agent.CliRunner).
+# Seeds the `ours` store + resolves its payload: (sequences, tasks, store_path, mem_bin)
+# -> work_id -> (source work_id -> rendered payload). Always over ALL tasks — the payload is
+# part of the cache identity, so it cannot be narrowed to pending ones (see run_corpus).
+# Injectable so hermetic tests can stub it out without a built bin/mem (matching this
+# codebase's CliRunner/RetrieveRunner injection convention — see headless_agent.CliRunner).
 SeedFn = Callable[
-    [
-        Sequence[BenchmarkSequence],
-        Sequence[ToolReqRealAgentTask],
-        Path,
-        str,
-        Collection[str],
-    ],
+    [Sequence[BenchmarkSequence], Sequence[ToolReqRealAgentTask], Path, str],
     dict[str, dict[str, str]],
 ]
 
@@ -228,7 +221,6 @@ def seed_ours_store_and_resolve_payloads(
     tasks: Sequence[ToolReqRealAgentTask],
     store_path: Path,
     mem_bin: str,
-    resolve_ids: Collection[str] | None = None,
 ) -> dict[str, dict[str, str]]:
     """Seed a fresh ``ours`` store with the SAME substrate the mem-rk41.5 offline gate
     builds (``sequence_records`` — the shared value-free apply_config staleness trace
@@ -241,13 +233,13 @@ def seed_ours_store_and_resolve_payloads(
     the store is a pure function of the corpus, so a regenerated corpus must never inherit
     the previous one's append-only lessons.
 
-    Seeding always covers ALL sequences (cross-task retrieval needs every lesson in the
-    store); ``resolve_ids`` narrows only the RESOLUTION step to the tasks that will actually
-    be executed, so a resumed sweep does not re-query the store for cache-served tasks.
+    Both the seed and the resolution cover ALL sequences, every run. Cross-task retrieval
+    needs every lesson in the store, and the resolved payload is part of the cache identity
+    (``run_corpus``), so it must be recomputed even for tasks that may end up cache-served.
 
-    FREE: this never spends an agent turn regardless of ``--dry-run`` (only ``claude -p``
-    is spend-gated, in ``run_corpus``, which also skips this seed entirely when every task
-    is cache-served) — it does need a built ``bin/mem``."""
+    FREE: this never spends an agent turn regardless of ``--dry-run`` (only ``claude -p`` is
+    spend-gated, in ``run_corpus``) — it does need a built ``bin/mem``. It runs on EVERY
+    invocation, cache-served tasks included; see ``run_corpus`` for why it cannot be skipped."""
     store_path.parent.mkdir(parents=True, exist_ok=True)
     _reset_store(store_path)
     records = sequence_records(sequences)
@@ -265,8 +257,6 @@ def seed_ours_store_and_resolve_payloads(
             [mem_bin, "import-lessons", "--file", str(lessons_path), "--store", str(store_path)]
         )
     bundles = sequence_bundles(sequences)
-    if resolve_ids is not None:
-        bundles = [bundle for bundle in bundles if bundle.work_id in resolve_ids]
     runner = _default_runner(mem_bin)
     return resolve_payloads(bundles, store_path=store_path, runner=runner)
 
@@ -318,6 +308,20 @@ def task_fingerprint(task: ToolReqRealAgentTask) -> str:
         sort_keys=True,
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def payload_fingerprint(ours_payload: Mapping[str, str]) -> str:
+    """Identifies the `ours` arm's actual MEASURED INPUT — the text retrieval surfaced.
+
+    ``task_fingerprint`` is task-LOCAL, but the ``ours`` payload is not: it comes from
+    CROSS-TASK retrieval over the whole seeded store, so it moves when a sibling sequence is
+    added, when the corpus is regenerated, or when ``bin/mem``'s retrieval changes — none of
+    which touch the queried task's own fields. Hashing the payload puts all three inside the
+    cache identity without having to model any of them: whatever the cause, a different
+    injected context is a different measurement, and the cached cell must miss."""
+    return hashlib.sha256(
+        json.dumps(sorted(ours_payload.items()), sort_keys=True).encode("utf-8")
+    ).hexdigest()[:16]
 
 
 def _valid_cell(row: Any, repeats: int) -> bool:
@@ -421,12 +425,12 @@ def run_corpus(
     arm. A corrupt or partial cache file (a process killed mid-write) is treated as a miss
     and re-executed, never a crash.
 
-    ``seed_fn`` seeds the ``ours`` store + resolves its payload ONCE for the whole corpus
-    (FREE — see ``seed_ours_store_and_resolve_payloads`` — and always over ALL sequences,
-    dry-run or paid alike, since cross-task retrieval needs every lesson in the store);
-    it is skipped entirely when every task is served from cache, honoring the same
-    resumability contract as ``evaluate_task``. It is injectable so a hermetic test can
-    stub it out without a built ``bin/mem``."""
+    ``seed_fn`` seeds the ``ours`` store + resolves its payload for the whole corpus, on every
+    run, BEFORE the cache is consulted (FREE — no agent turn — see
+    ``seed_ours_store_and_resolve_payloads``). It is not skipped when tasks are cache-served
+    and it is not narrowed to pending tasks: the resolved payload is a measured input and
+    rides in the identity, so it has to be recomputed to know whether a cached cell is still
+    current. It is injectable so a hermetic test can stub it out without a built ``bin/mem``."""
     out_dir.mkdir(parents=True, exist_ok=True)
     # The model the agent will ACTUALLY run, not the raw flag. `--model` defaults to "" and
     # HeadlessClaudeAgent then resolves it from MEMBENCH_AGENT_MODEL, so caching the raw ""
@@ -440,9 +444,24 @@ def run_corpus(
         "model": resolved_model,
         "arms": list(ARMS),
     }
-    # Per-task, because the world fingerprint is per-task: same knobs, different corpus -> miss.
+    # Seeding + resolution happen BEFORE the cache is consulted, and cover EVERY task, because
+    # the resolved `ours` payload is itself a measured input and therefore belongs in the cache
+    # identity. It cannot be narrowed to pending tasks (an earlier revision did exactly that):
+    # the payload comes from CROSS-TASK retrieval, so adding a sibling sequence, regenerating
+    # the corpus, or rebuilding `bin/mem` after a retrieval fix all change what a given task
+    # retrieves while leaving that task's own fields untouched. Narrowing to pending means a
+    # cached task is never re-resolved, so the change is never noticed and a stale `ours` cell
+    # is served as current. This costs a store rebuild + N `mem retrieve` calls per run; all of
+    # it is FREE (no agent turn), and it buys an identity that is a total function of what was
+    # actually measured.
+    ours_payloads = seed_fn(sequences, tasks, store_path, mem_bin)
     identity_of = {
-        task.work_id: {**run_identity, "task_fingerprint": task_fingerprint(task)} for task in tasks
+        task.work_id: {
+            **run_identity,
+            "task_fingerprint": task_fingerprint(task),
+            "ours_payload_fingerprint": payload_fingerprint(ours_payloads.get(task.work_id, {})),
+        }
+        for task in tasks
     }
     cached_by_id: dict[str, _CachedTask] = {}
     if resume:
@@ -453,12 +472,6 @@ def run_corpus(
             cached = _load_cached(result_path, identity_of[task.work_id])
             if cached is not None:
                 cached_by_id[task.work_id] = cached
-    pending = [task for task in tasks if task.work_id not in cached_by_id]
-    ours_payloads = (
-        seed_fn(sequences, tasks, store_path, mem_bin, {task.work_id for task in pending})
-        if pending
-        else {}
-    )
     per_task: list[dict[str, Any]] = []
     executed = 0
     reused = 0
