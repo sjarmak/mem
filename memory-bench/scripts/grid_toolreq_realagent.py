@@ -372,12 +372,17 @@ def _load_cached(result_path: Path, identity: Mapping[str, Any]) -> _CachedTask 
         outcomes = [ArmOutcome(**row) for row in rows]
     except TypeError:
         return None  # schema-drifted row (missing/extra field)
-    # The cells must cover the grid EXACTLY — one per (arm, channel), no dupes, no strays.
-    # A row-count check is not enough: six copies of the same cell has the right arity, and
-    # would be accepted as a complete task. task_verdict keys by (arm, channel), so it would
-    # then emit an EMPTY verdict, and the task would vanish from the separates/leaked
-    # accounting while still counting as `reused` — a partial run reading as a full one.
-    if {(o.arm, o.channel) for o in outcomes} != expected_cells():
+    # The cells must cover the grid EXACTLY — one row per (arm, channel), no dupes, no strays.
+    # BOTH halves are load-bearing, and each one alone has already shipped a bug here:
+    #   * count alone: six copies of one cell has the right arity but wrong coverage. Accepted
+    #     as complete, task_verdict emits an EMPTY verdict, and the task vanishes from the
+    #     separates/leaked accounting while still counting as `reused`.
+    #   * coverage alone: the six correct rows PLUS an extra duplicate row still cover the grid
+    #     as a SET. Accepted as complete, and since task_verdict keys by (arm, channel), the
+    #     LAST duplicate silently overwrites the real measurement — a genuine SEPARATES rewritten
+    #     into a fabricated KILL, reused with zero spend and no crash.
+    expected = expected_cells()
+    if len(outcomes) != len(expected) or {(o.arm, o.channel) for o in outcomes} != expected:
         return None
     return _CachedTask(outcomes=outcomes, ours_retrieval_empty=loaded["ours_retrieval_empty"])
 

@@ -504,6 +504,31 @@ def test_regenerated_corpus_never_reuses_the_previous_worlds_results(tmp_path: P
     assert (second["executed"], second["reused"]) == (1, 0), "reused another world's result"
 
 
+def test_extra_duplicate_row_is_a_miss_even_though_the_grid_is_covered(tmp_path: Path) -> None:
+    """The mirror of the duplicate-cell test, and the case a set-only check misses. The six
+    correct rows PLUS one extra duplicate row still cover the grid AS A SET. task_verdict keys
+    by (arm, channel), so the LAST row for a key wins — an appended duplicate silently
+    overwrites the real measurement, rewriting a genuine SEPARATES into a fabricated KILL while
+    the task is counted as `reused` with zero spend and no crash. Coverage and arity must BOTH
+    be checked; neither subsumes the other."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    first = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+    assert "SEPARATES" in first["per_task"][0]["verdict"]
+
+    result_path = out / f"{tasks[0].work_id}.json"
+    record = json.loads(result_path.read_text(encoding="utf-8"))
+    oracle_cell = next(o for o in record["outcomes"] if o["arm"] == "oracle")
+    record["outcomes"].append({**oracle_cell, "passes": 0})  # duplicate, ceiling zeroed
+    assert {(o["arm"], o["channel"]) for o in record["outcomes"]} == driver.expected_cells()
+    result_path.write_text(json.dumps(record), encoding="utf-8")
+
+    summary = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
+    assert summary["executed"] == 1 and summary["reused"] == 0
+    verdict = summary["per_task"][0]["verdict"]
+    assert "KILL" not in verdict and "SEPARATES" in verdict  # re-measured, not overwritten
+
+
 def test_unknown_arm_or_channel_cache_is_a_miss(tmp_path: Path) -> None:
     """A row naming an arm/channel outside the grid (schema drift across a rename) is a miss."""
     sequences, tasks = _corpus_one(tmp_path)
