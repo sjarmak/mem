@@ -716,6 +716,45 @@ def test_reordered_oracle_memory_invalidates_the_cache(tmp_path: Path) -> None:
     ), "the ceiling arm's prompt changed but the fingerprint did not"
 
 
+def test_a_short_grid_under_the_empty_flag_is_a_miss_not_an_escaping_keyerror(
+    tmp_path: Path,
+) -> None:
+    """A TRUNCATED record that also carries `ours_retrieval_empty` must be a clean MISS — and, the
+    part worth a test of its own, it must fail as a ValidationError and nothing else.
+
+    `_empty_retrieval_flag_agrees...` reads the very (arm, channel) rows the file is missing. Were
+    it to index them blindly it would raise KeyError, which is NOT a ValidationError: it would sail
+    past `load_cached`'s handler and kill a PAID resume on one bad file. Every other check here can
+    only make a record MISS; this is the one that could make the whole sweep DIE, so the validator
+    is total over its input rather than trusting the completeness check to have run first."""
+    identity = grid.RunIdentity(
+        repeats=2,
+        dry_run=True,
+        model="",
+        arms=list(grid.ARMS),
+        protocol=grid.EXECUTION_PROTOCOL,
+        task_fingerprint="fp-task",
+        prompt_fingerprint="fp-prompt",
+        ours_payload_fingerprint="fp-payload",
+        ours_retrieval_empty=True,  # the flag the subclass validator keys on...
+    )
+    # ...over a grid missing the very `ours` rows it would index.
+    rows = [grid.CellOutcome(arm="none", channel="recalled", passes=0, runs=2)]
+    result_path = tmp_path / "w-0.json"
+    result_path.write_text(
+        json.dumps(
+            {
+                "work_id": "w-0",
+                "identity": json.loads(identity.model_dump_json()),
+                "outcomes": [json.loads(row.model_dump_json()) for row in rows],
+                "verdict": "anything",
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert load_cached(result_path, identity, grid.CachedResult) is None
+
+
 def test_empty_flag_contradicting_the_ours_rows_is_a_miss(tmp_path: Path) -> None:
     """`ours_retrieval_empty` claims the ours cell was NEVER RUN — it was relabeled from `none`,
     so it is none-equal by construction. A file that sets the flag while carrying an ours row

@@ -250,12 +250,21 @@ class CachedResult(BaseCachedResult[RunIdentity, CellOutcome]):
         """``ours_retrieval_empty`` asserts the ``ours`` cell was never run — it was relabeled from
         ``none`` (evaluate_task) and so is none-equal by construction. A record claiming the flag
         while carrying an ``ours`` row that DIFFERS from its channel's ``none`` row is
-        self-contradictory: one of the two is fabricated."""
+        self-contradictory: one of the two is fabricated.
+
+        It looks its rows up with ``.get``, not ``[]``, and that is not defensiveness about a case
+        the base already rejects — it is refusing to DEPEND on the base rejecting it. Indexing
+        blindly would make this validator's safety a property of another validator running first,
+        and a raw ``KeyError`` (unlike a ``ValueError``) is not a ``ValidationError``: it would sail
+        past ``load_cached``'s handler and kill a PAID resume on one truncated file. An incomplete
+        grid is the completeness check's finding to report; this one stays total over its input."""
         if not self.identity.ours_retrieval_empty:
             return self
         by_cell = {(cell.arm, cell.channel): cell for cell in self.outcomes}
         for channel in (c.value for c in CHANNELS):
-            ours, none = by_cell[(RETRIEVING_ARM, channel)], by_cell[("none", channel)]
+            ours, none = by_cell.get((RETRIEVING_ARM, channel)), by_cell.get(("none", channel))
+            if ours is None or none is None:
+                continue
             if (ours.passes, ours.runs) != (none.passes, none.runs):
                 raise ValueError(
                     f"[{channel}] ours_retrieval_empty claims `ours` was never run, but its "
