@@ -87,12 +87,11 @@ export function distillLessonsCommand(
   // since both queries run before `distillLessons` is invoked. A failure
   // here must degrade to an empty report rather than block the import below.
   //
-  // mem-ljp8b: the K-window boundary is an explicit `maxLessonId(db)` snapshot
-  // threaded through as `asOfLessonId`, rather than relying on this block
-  // happening before `importLessons` as an unenforced convention. Passed
-  // through as returned (`number | null`, not coerced to `undefined`): `null`
-  // (an empty-at-snapshot-time `lessons` table) is a meaningful, distinct
-  // boundary from an omitted one — see `lastKLessons`.
+  // mem-ljp8b: that boundary is an explicit `maxLessonId(db)` snapshot taken
+  // here, before `importLessons` runs below, rather than an unenforced
+  // call-order convention. It is passed through as returned (`number | null`,
+  // never coerced to `undefined`) — see `lastKLessons` for why `null` is a
+  // distinct boundary, not an omitted one.
   const { records, regressions, regressionSkipped, regressionError } = withReadStore(
     ctx.options,
     db => {

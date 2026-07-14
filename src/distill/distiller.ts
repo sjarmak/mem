@@ -481,13 +481,11 @@ export function computeRegressions(
   // otherwise a multi-rig store's K-window fills with an unrelated rig's
   // lessons and this rig's own lessons are never checked, with no signal
   // that anything was skipped (the window just silently contains 0 of them).
-  // `lastKLessons` guards `k <= 0` itself (a non-positive value means "check
-  // nothing", not SQLite's `LIMIT`-with-negative-value "no limit"). `asOfLessonId`
-  // (mem-ljp8b) is the explicit form of "check lessons that existed before this
-  // run's batch" — pass a `maxLessonId(db)` snapshot (its `null` for an
-  // empty-at-snapshot-time table is meaningful and distinct from an omitted
-  // boundary — see `lastKLessons`) taken before any import, so the boundary
-  // doesn't depend on this function being called before it.
+  // `asOfLessonId` (mem-ljp8b) pins the window to the lessons that existed
+  // before this run's own batch: pass a `maxLessonId(db)` snapshot taken
+  // before any import, so the boundary doesn't depend on this function being
+  // called before it. See `lastKLessons` for the `k <= 0` and null/undefined
+  // semantics.
   const recentLessons = lastKLessons(db, k, rig, asOfLessonId);
   const flags: RegressionFlag[] = [];
   const skipped: RegressionSkip[] = [];

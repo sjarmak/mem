@@ -156,36 +156,26 @@ export function lessonsForRig(db: StoreDatabase, rig: string): StoredLesson[] {
   return rows.map(toStoredLesson);
 }
 
-/** The highest `lessons.id` currently in the store, or `null` when the table
- * is empty — the explicit as-of boundary a caller snapshots BEFORE appending
- * new lessons, so a later {@link lastKLessons}/`computeRegressions` call can
- * pin its K-window to "lessons that existed as of this snapshot" instead of
- * depending on being invoked before the append happens (mem-ljp8b: the
- * K-window's "checked before this run's own batch" invariant used to live
- * only in a call-order comment, with nothing to catch a future caller that
- * violates it). */
+/** The highest `lessons.id` in the store, or `null` when the table is empty.
+ * Snapshot it BEFORE appending new lessons and pass it back as
+ * {@link lastKLessons}' `asOfLessonId` to pin that window to the lessons that
+ * existed at snapshot time (mem-ljp8b). */
 export function maxLessonId(db: StoreDatabase): number | null {
   const row = db.prepare('SELECT MAX(id) AS id FROM lessons').get() as { id: number | null };
   return row.id;
 }
 
 /** The `k` most-recently-appended lessons (optionally rig-scoped, optionally
- * as-of a `maxLessonId` snapshot), in append (id) order — the K-past-fix
+ * as-of a {@link maxLessonId} snapshot), in append (id) order — the K-past-fix
  * regression check's window (mem-0r7l). Pushed into SQL (`ORDER BY id DESC
  * LIMIT k`, then reversed back to ascending) so the check never scans and
  * JSON-parses the full, unboundedly-growing `lessons` table just to keep the
- * last k rows the way `allLessons(...).slice(-k)` did. `k <= 0` returns `[]`
- * directly rather than passing a non-positive value to SQLite's `LIMIT`,
- * where a negative limit means "no limit" — the opposite of this function's
- * contract. `asOfLessonId`, when given as a number, excludes any lesson
- * appended after that snapshot (`id > asOfLessonId`) — an explicit temporal
- * boundary rather than the implicit "caller ran this before appending more
- * lessons" convention (mem-ljp8b). `null` (as opposed to `undefined`) means
- * the snapshot was taken from an empty `lessons` table (`maxLessonId`
- * returns `null` there) — the correct window is empty, not a live re-query,
- * so this returns `[]` rather than treating `null` the same as an omitted
- * (`undefined`) boundary. Only an omitted `asOfLessonId` falls through to
- * the live table as queried. */
+ * last k rows. `k <= 0` returns `[]` directly rather than passing a
+ * non-positive value to SQLite's `LIMIT`, where a negative limit means "no
+ * limit" — the opposite of this function's contract. `asOfLessonId` is
+ * tri-state: omitted means the live table, a number excludes lessons appended
+ * after it, and `null` (what `maxLessonId` returns for an empty table) means
+ * the window was empty at snapshot time and stays empty here. */
 export function lastKLessons(
   db: StoreDatabase,
   k: number,
@@ -194,17 +184,14 @@ export function lastKLessons(
 ): StoredLesson[] {
   if (k <= 0) return [];
 
-  // Same where/params accumulation idiom as `queryRecords` above, so the
-  // rig-scoped and asOf-scoped conditions compose independently instead of
-  // being spelled out per rig×asOf combination. Both branches alias `lessons`
-  // as `l` so the shared as-of clause can qualify its column: a bare `id <= ?`
-  // resolves in the joined branch only because `work_records`'s PK is
-  // `work_id`, so a migration giving it an `id` column would turn this into
-  // "ambiguous column name: id" at runtime — which `computeRegressions`' caller
-  // swallows into a `regressionError` string rather than failing the build
-  // (mem-6hvha). A bound `null` (an as-of-empty-table snapshot) falls through
-  // to this same clause: `l.id <= NULL` is SQL-unknown for every row, so the
-  // query itself already returns `[]` — no separate early-return needed.
+  // Same where/params accumulation idiom as `queryRecords` above, so rig and
+  // as-of compose independently. The as-of clause qualifies its column as
+  // `l.id`: a bare `id` resolves only while `work_records` has no `id` of its
+  // own, and a migration adding one would make it "ambiguous column name" at
+  // runtime — which `computeRegressions`' caller swallows into a
+  // `regressionError` string rather than failing the build (mem-6hvha). A
+  // bound `null` needs no early return: `l.id <= NULL` is SQL-unknown for
+  // every row, so the query already returns nothing.
   const where: string[] = [];
   const params: (string | number | null)[] = [];
   if (rig !== undefined) {
@@ -217,25 +204,15 @@ export function lastKLessons(
   }
   params.push(k);
   const whereSql = where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '';
+  const joinSql = rig === undefined ? '' : ' JOIN work_records wr ON wr.work_id = l.work_id';
 
-  const rows = (
-    rig === undefined
-      ? db
-          .prepare(
-            `SELECT l.id, l.work_id, l.extracted_at, l.commit_sha, l.payload
-               FROM lessons l${whereSql}
-              ORDER BY l.id DESC LIMIT ?`
-          )
-          .all(...params)
-      : db
-          .prepare(
-            `SELECT l.id, l.work_id, l.extracted_at, l.commit_sha, l.payload
-               FROM lessons l
-               JOIN work_records wr ON wr.work_id = l.work_id${whereSql}
-              ORDER BY l.id DESC LIMIT ?`
-          )
-          .all(...params)
-  ) as LessonRow[];
+  const rows = db
+    .prepare(
+      `SELECT l.id, l.work_id, l.extracted_at, l.commit_sha, l.payload
+         FROM lessons l${joinSql}${whereSql}
+        ORDER BY l.id DESC LIMIT ?`
+    )
+    .all(...params) as LessonRow[];
 
   return rows.reverse().map(toStoredLesson);
 }
