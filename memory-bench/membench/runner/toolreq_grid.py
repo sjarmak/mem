@@ -28,9 +28,7 @@ served to an older reader as its own.
 
 from __future__ import annotations
 
-import hashlib
 import json
-import os
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, replace
@@ -39,10 +37,11 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from membench.bbon.models import deterministic_id
 from membench.runner.headless_agent import (
-    ENV_MODEL,
     MemoryChannel,
     build_agent_prompt,
+    resolve_model,
 )
 from membench.runner.realagent_probe import ArmOutcome, run_arm
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask
@@ -83,8 +82,17 @@ RETRIEVING_ARM = "ours"
 
 
 def _digest(payload: object) -> str:
-    """The one hash used by every fingerprint below — same encoding, same width, one place."""
-    return hashlib.sha256(json.dumps(payload).encode("utf-8")).hexdigest()[:16]
+    """The one hash used by every fingerprint below — same encoding, same width, one place.
+
+    Canonical (``deterministic_id`` -> RFC8785-style: object keys SORTED, list order KEPT), which
+    is what a cache identity needs and a plain ``json.dumps`` is not. ``json.dumps`` serializes
+    dict keys in INSERTION order, so ``task_fingerprint``'s ``goal_step.model_dump()`` would hash
+    the pydantic field-DECLARATION order: reordering two fields in ``SequenceStep`` — a no-op that
+    moves nothing executed and nothing scored — would miss every persisted cell and re-spend the
+    whole paid grid. Sorting keys is safe precisely because every input whose ORDER IS a measured
+    input (``oracle_memory``, the ``ours`` payload, the prompt cells) is passed as a LIST, and
+    canonical JSON preserves list order."""
+    return deterministic_id(payload)[:16]
 
 
 def arm_memories(
@@ -110,7 +118,6 @@ def evaluate_task(
     model: str,
     dry_run: bool,
     ours_payload: Mapping[str, str] | None = None,
-    channels: Sequence[MemoryChannel] = CHANNELS,
 ) -> list[ArmOutcome]:
     """Run every (arm, channel) cell for one task.
 
@@ -124,7 +131,7 @@ def evaluate_task(
     ``ours_retrieval_empty`` flag so the two causes stay distinguishable."""
     memories = arm_memories(task, ours_payload)
     outcomes: list[ArmOutcome] = []
-    for channel in channels:
+    for channel in CHANNELS:
         cells: dict[str, ArmOutcome] = {}
         for arm in ARMS:
             if arm == RETRIEVING_ARM and not memories[arm]:
@@ -358,6 +365,22 @@ class CachedResult(BaseModel):
                     )
         return self
 
+    @model_validator(mode="after")
+    def _verdict_is_the_one_its_own_rows_imply(self) -> CachedResult:
+        """The verdict is DERIVED, so a persisted one may only be the one its rows produce.
+
+        Without this the field is the single unchecked value in the record: a hand-edited
+        ``"verdict": "SEPARATES: ..."`` over KILL rows passes every other check (identity intact,
+        rows intact) and `leaked` / `separates_all_channels` — the summary a human reads — are
+        built from `verdict` strings. It was harmless only by accident, because the caller happened
+        to recompute the verdict from the loaded rows and overwrite it. That is a redundancy
+        standing in for a missing invariant, which is the shape this module exists to refuse: a
+        value outside the checks is not defended by the checks around it."""
+        implied = task_verdict(self.arm_outcomes())
+        if self.verdict != implied:
+            raise ValueError(f"verdict {self.verdict!r} is not the one its rows imply: {implied!r}")
+        return self
+
     @classmethod
     def of(
         cls, work_id: str, identity: RunIdentity, outcomes: Sequence[ArmOutcome]
@@ -376,8 +399,12 @@ class CachedResult(BaseModel):
         return [ArmOutcome(**cell.model_dump()) for cell in self.outcomes]
 
 
-def _load_cached(result_path: Path, identity: RunIdentity) -> list[ArmOutcome] | None:
-    """The persisted outcomes of a task whose identity matches this run, or ``None`` meaning MISS.
+def _load_cached(result_path: Path, identity: RunIdentity) -> CachedResult | None:
+    """The persisted RECORD of a task whose identity matches this run, or ``None`` meaning MISS.
+
+    Returned whole, and reused as-is: every field it carries — rows, flag, and verdict alike — is
+    checked by ``CachedResult``, so there is nothing left for a caller to recompute and no reason
+    to rewrite the file it came from.
 
     Every rejection is a miss, never a crash and never a partial acceptance. These files are
     written by a sweep that can be killed mid-run and re-read by a PAID resume, so the two failure
@@ -397,7 +424,7 @@ def _load_cached(result_path: Path, identity: RunIdentity) -> list[ArmOutcome] |
         return None  # wrong shape, drifted type, degenerate row, or an incomplete/forged grid
     if loaded.identity != identity:
         return None  # another run's measurement (dry-run vs paid, model, repeats, arms, world...)
-    return loaded.arm_outcomes()
+    return loaded
 
 
 def _assert_usable_work_ids(tasks: Sequence[ToolReqRealAgentTask]) -> None:
@@ -439,26 +466,32 @@ def _task_identities(
 ) -> dict[str, RunIdentity]:
     """The cache identity per task: the run's knobs plus every measured input (see RunIdentity).
 
-    ``model`` is RESOLVED here, not taken raw. ``--model`` defaults to "" and
+    ``model`` is RESOLVED here, not taken raw — through ``headless_agent.resolve_model``, the same
+    rule the agent itself runs under, never a second copy of it. ``--model`` defaults to "" and
     ``HeadlessClaudeAgent`` then reads ``MEMBENCH_AGENT_MODEL``, so caching the raw "" makes the
     driver's primary independent variable invisible: run the sweep under one model, point the env
     var at another, resume, and every cached task is served as ``reused`` with the FIRST model's
-    numbers relabelled as the second's."""
-    resolved_model = model or os.environ.get(ENV_MODEL, "")
-    return {
-        task.work_id: RunIdentity(
+    numbers relabelled as the second's.
+
+    The three payload-derived fields are bound from ONE payload object, not three lookups of it:
+    they must describe the same retrieval or they describe nothing, and a fourth such field added
+    later must inherit that by construction rather than by everyone remembering the same default."""
+    resolved_model = resolve_model(model)
+    identities: dict[str, RunIdentity] = {}
+    for task in tasks:
+        payload = ours_payloads.get(task.work_id, {})
+        identities[task.work_id] = RunIdentity(
             repeats=repeats,
             dry_run=dry_run,
             model=resolved_model,
             arms=list(ARMS),
             protocol=EXECUTION_PROTOCOL,
             task_fingerprint=task_fingerprint(task),
-            ours_payload_fingerprint=payload_fingerprint(ours_payloads.get(task.work_id, {})),
-            prompt_fingerprint=prompt_fingerprint(task, ours_payloads.get(task.work_id, {})),
-            ours_retrieval_empty=not ours_payloads.get(task.work_id, {}),
+            ours_payload_fingerprint=payload_fingerprint(payload),
+            prompt_fingerprint=prompt_fingerprint(task, payload),
+            ours_retrieval_empty=not payload,
         )
-        for task in tasks
-    }
+    return identities
 
 
 def run_corpus(
@@ -497,17 +530,21 @@ def run_corpus(
         identity = identity_of[task.work_id]
         cached = _load_cached(result_path, identity) if resume and result_path.is_file() else None
         if cached is not None:
-            outcomes = cached
+            # Reused whole. Nothing is recomputed and the file is NOT rewritten: it already passed
+            # every validator, so a rewrite could only reproduce it — and a fully cache-served
+            # resume then does zero writes, leaving the results' mtimes an honest record of which
+            # tasks this run actually measured.
+            results.append(cached)
             reused += 1
-        else:
-            outcomes = evaluate_task(
-                task,
-                repeats=repeats,
-                model=model,
-                dry_run=dry_run,
-                ours_payload=ours_payloads.get(task.work_id, {}),
-            )
-            executed += 1
+            continue
+        outcomes = evaluate_task(
+            task,
+            repeats=repeats,
+            model=model,
+            dry_run=dry_run,
+            ours_payload=ours_payloads.get(task.work_id, {}),
+        )
+        executed += 1
         result = CachedResult.of(task.work_id, identity, outcomes)
         # Atomic publish: write a sibling temp file then rename, so a kill mid-write leaves either
         # the old result or the new one, never a half-written JSON the next resume trips on.

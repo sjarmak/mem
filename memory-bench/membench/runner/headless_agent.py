@@ -31,6 +31,7 @@ behavior IS the model's; no semantic judgment lives here.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -47,6 +48,20 @@ from membench.schemas.trace import ToolCall, TraceMessage
 DEFAULT_TIMEOUT_S = 600.0
 
 ENV_MODEL = "MEMBENCH_AGENT_MODEL"
+
+
+def resolve_model(model: str) -> str:
+    """The model a run actually executes under: an explicit pin, else ``MEMBENCH_AGENT_MODEL``,
+    else "" meaning the CLI's own default (which this codebase never pins and cannot see).
+
+    THE one rule, called from both the agent that runs under it and the caches that key on it.
+    A second copy of this expression is the resume-cache defect family in its purest form: the
+    cache would hash a MODEL of the executed input, and any change here — a new fallback, a
+    second env var — would leave that copy computing the old rule, so two runs on DIFFERENT
+    models hash identically and a resumed paid sweep serves one model's numbers as the other's.
+    """
+    return model or os.environ.get(ENV_MODEL, "")
+
 
 # Injected so tests drive the parse path without spawning a real claude. Mirrors the
 # `bbon.comparative_judge.Runner` seam (same subprocess.run signature).
@@ -203,9 +218,7 @@ class HeadlessClaudeAgent:
     _resolved_model: str = field(default="", init=False)
 
     def __post_init__(self) -> None:
-        import os
-
-        resolved = self.model or os.environ.get(ENV_MODEL, "")
+        resolved = resolve_model(self.model)
         object.__setattr__(self, "_pass_model", bool(resolved))
         object.__setattr__(self, "_resolved_model", resolved or "cli-default")
 

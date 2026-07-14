@@ -801,6 +801,75 @@ def test_a_cached_record_in_the_old_spread_identity_shape_is_a_miss(tmp_path: Pa
     assert "identity" in rewritten and "model" not in rewritten
 
 
+def test_a_forged_verdict_is_a_miss(tmp_path: Path) -> None:
+    """The verdict is DERIVED from the rows, so a persisted one may only be the one they imply.
+
+    It is the summary's own vocabulary: `separates_all_channels` and `leaked` are built by reading
+    these strings, not by re-deriving them from the rows. A file whose rows say KILL and whose
+    verdict string says SEPARATES agrees with this run on every other field — identity intact, grid
+    complete, flag consistent — so nothing else in the record can refuse it."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    store_path = tmp_path / "store.db"
+    _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
+
+    result_path = out / f"{tasks[0].work_id}.json"
+    record = json.loads(result_path.read_text(encoding="utf-8"))
+    assert "SEPARATES" in record["verdict"]  # the rows genuinely separate
+
+    record["verdict"] = "[recalled] LEAK: none 3/3 — value reached the prompt"
+    result_path.write_text(json.dumps(record), encoding="utf-8")
+
+    identity = grid.RunIdentity(**record["identity"])
+    assert grid._load_cached(result_path, identity) is None, "accepted a verdict its rows deny"
+
+    resumed = _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
+    assert (resumed["executed"], resumed["reused"]) == (1, 0)
+    assert resumed["leaked"] == [], "a forged verdict reached the summary"
+
+
+def test_a_cache_hit_does_not_rewrite_the_result_file(tmp_path: Path) -> None:
+    """A reused record is republished by nobody: it already passed every validator, so rewriting it
+    could only reproduce it. That keeps a fully cache-served resume at ZERO writes, which is what
+    lets the result files' mtimes say which tasks a run actually measured — and it is only sound
+    because the verdict is now checked rather than silently recomputed on the way back out."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    store_path = tmp_path / "store.db"
+    _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
+
+    result_path = out / f"{tasks[0].work_id}.json"
+    before = result_path.stat().st_mtime_ns
+
+    resumed = _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
+    assert (resumed["executed"], resumed["reused"]) == (0, 1)
+    assert result_path.stat().st_mtime_ns == before, "rewrote a result it had just reused"
+
+
+def test_cell_outcome_mirrors_every_arm_outcome_field() -> None:
+    """`CachedResult.of` builds each row as `CellOutcome(**asdict(arm_outcome))` and CellOutcome is
+    `extra="forbid"`, so a field added to ArmOutcome raises ValidationError — at PERSIST time,
+    after the paid cells are already spent, mid-sweep. Catch the drift in CI instead."""
+    assert {f.name for f in dataclasses.fields(grid.ArmOutcome)} == set(
+        grid.CellOutcome.model_fields
+    )
+
+
+def test_the_digest_sorts_mapping_keys_but_never_reorders_a_list() -> None:
+    """The fingerprints hash canonical JSON, and both halves of that are load-bearing.
+
+    Keys SORT: `task_fingerprint` hashes `goal_step.model_dump()`, whose key order is the pydantic
+    field-DECLARATION order — so a plain `json.dumps` would turn reordering two fields of
+    SequenceStep, a no-op that moves nothing executed and nothing scored, into a total miss that
+    re-spends the whole paid grid.
+
+    Lists DON'T: every input whose order IS a measured input (oracle_memory, the ours payload, the
+    prompt cells) is passed as a list of pairs, because insertion order is the order the memory
+    lines are rendered into the prompt."""
+    assert grid._digest({"a": 1, "b": 2}) == grid._digest({"b": 2, "a": 1})
+    assert grid._digest([("a", 1), ("b", 2)]) != grid._digest([("b", 2), ("a", 1)])
+
+
 def test_repeats_zero_is_refused_and_never_caches_a_0_of_0_verdict(tmp_path: Path) -> None:
     """--repeats 0 runs zero agent turns and persists six 0/0 rows, which task_verdict reads as a
     confident 'KILL: oracle ceiling 0/0 -- no separation' for a task that was NEVER EVALUATED.
