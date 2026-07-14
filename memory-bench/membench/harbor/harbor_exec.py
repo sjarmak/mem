@@ -37,6 +37,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
+from membench.harbor.env_recon import Runner
+
 # The transcript shape `grid.harvest_run_trace` consumes. A plain dict; defined as the
 # return contract here so harbor_exec does not import from grid (grid imports this).
 RunTranscript = dict[str, Any]
@@ -291,6 +293,7 @@ def run_harbor_job(
     timeout_sec: float | None = None,
     agent_version: str | None = None,
     agent_env: Mapping[str, str] | None = None,
+    runner: Runner = subprocess.run,
 ) -> Path:
     """Run one local task through ``harbor run`` and return its job dir.
 
@@ -321,7 +324,7 @@ def run_harbor_job(
     # OSErrors keep their own identity instead of being misreported as a bad binary --
     # and `harbor_exec`'s "task dir does not exist" guard sits a frame above, untouched.
     try:
-        completed = subprocess.run(
+        completed = runner(
             [harbor_bin, "run", "--config", str(config_path), "-q", "-y"],
             capture_output=True,
             text=True,
@@ -335,12 +338,12 @@ def run_harbor_job(
             f"harbor binary not found: {harbor_bin!r} -- install harbor or pass harbor_bin"
         ) from exc
     except OSError as exc:
-        # PermissionError, ENOEXEC, EACCES on cwd -- the rest of the spawn-failure family.
+        # The rest of the family -- including EACCES on the CWD, which fails the spawn
+        # without the binary itself being at fault.
         raise RuntimeError(f"could not spawn harbor run: {exc}") from exc
     except subprocess.TimeoutExpired as exc:
-        # Not an OSError, so it needs its own clause. The duration comes from the
-        # exception, not `timeout_sec` -- that parameter is Optional and would render
-        # "within Nones" on the very path where it is set.
+        # Not an OSError, so it needs a clause of its own. Quote the bound the exception
+        # actually carries rather than re-deriving it from `timeout_sec`.
         raise RuntimeError(
             f"harbor run for {task_dir} did not finish within {exc.timeout}s"
         ) from exc

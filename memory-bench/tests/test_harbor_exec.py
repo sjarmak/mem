@@ -5,7 +5,7 @@ first validated by Harbor's own `Trajectory` model (when Harbor is importable), 
 fixture is provably the same shape `harbor run` emits -- not a hand-wavy mock. A
 SUCCESSFUL `run_harbor_job` still needs Docker + a real subscription run and is not
 exercised here; its argv/guard behavior and its spawn-FAILURE ladder are, the latter
-by stubbing `subprocess.run` (a spawn that never happens needs neither).
+through the injected `runner` seam (a spawn that never succeeds needs neither).
 """
 
 import errno
@@ -403,59 +403,65 @@ def test_job_config_omits_kwargs_without_version_pin():
 
 
 def test_harbor_exec_missing_task_dir_raises_loud():
-    # Pinned to FileNotFoundError specifically, NOT (FileNotFoundError, RuntimeError):
-    # a both-accepted assertion would still pass if the spawn ladder below ever widened
-    # far enough to swallow this guard and re-report it as "harbor binary not found",
-    # which is exactly the misattribution the ladder's tight scoping exists to prevent.
+    # NOT `(FileNotFoundError, RuntimeError)`: accepting either would also pass if the
+    # spawn ladder below ever swallowed this guard and re-reported it as a bad binary.
     with pytest.raises(FileNotFoundError, match="task dir does not exist"):
         harbor_exec(Path("/nonexistent/membench-task/w1-none"))
 
 
 # --- run_harbor_job: spawn-failure diagnosis (mem-4cvj9) --------------------------
 #
-# The spawn is stubbed, so these need neither Docker nor a subscription run. Each
-# asserts the diagnosed RuntimeError -- the whole point is that NONE of these reach a
-# caller as a raw traceback: `HarborRunner` (grid.py:~138) catches nothing, so an
-# undiagnosed spawn failure kills a whole sweep with no idea which of the three it was.
+# Each rung must arrive as a diagnosed RuntimeError: `HarborRunner` catches nothing, so
+# a raw spawn traceback kills a whole sweep without saying which rung failed.
 
 
-def _spawn_job(monkeypatch, tmp_path: Path, boom: Exception, **kwargs) -> None:
-    """Call `run_harbor_job` with a `subprocess.run` that raises `boom` at spawn.
+def _spawn_job(tmp_path: Path, boom: Exception, *, timeout_sec: float | None = None) -> None:
+    """Call `run_harbor_job` with a `runner` that raises `boom` at spawn.
 
-    Never returns: the stub always raises, so the ladder is the only way out. Patching
-    the `subprocess` module attribute is the only seam -- `harbor_exec` does
-    ``import subprocess``, so there is no module-local `run` alias to swap."""
+    Never returns -- the stub always raises, so the ladder is the only way out."""
 
-    def _raise(*_a, **_kw):
+    def _raise(*_a: object, **_kw: object) -> subprocess.CompletedProcess[str]:
         raise boom
 
-    monkeypatch.setattr(subprocess, "run", _raise)
-    run_harbor_job(tmp_path / "task", jobs_dir=tmp_path / "jobs", job_name="j", **kwargs)
+    run_harbor_job(
+        tmp_path / "task",
+        jobs_dir=tmp_path / "jobs",
+        job_name="j",
+        timeout_sec=timeout_sec,
+        runner=_raise,
+    )
 
 
-def test_run_harbor_job_diagnoses_missing_harbor_binary(monkeypatch, tmp_path):
-    boom = FileNotFoundError(errno.ENOENT, "No such file or directory", "harbor")
+def test_run_harbor_job_diagnoses_missing_harbor_binary(tmp_path):
+    # No stub: point `harbor_bin` at a path that does not exist and let the REAL spawn
+    # fail, so this rung is exercised end-to-end rather than against a hand-fed error.
     with pytest.raises(RuntimeError, match="harbor binary not found"):
-        _spawn_job(monkeypatch, tmp_path, boom)
+        run_harbor_job(
+            tmp_path / "task",
+            jobs_dir=tmp_path / "jobs",
+            job_name="j",
+            harbor_bin=str(tmp_path / "absent-harbor"),
+        )
 
 
-def test_run_harbor_job_diagnoses_permission_error(monkeypatch, tmp_path):
+def test_run_harbor_job_diagnoses_permission_error(tmp_path):
+    # An OSError SUBCLASS other than FileNotFoundError must fall through to the generic
+    # clause, not get claimed by the "binary not found" one above it.
     boom = PermissionError(errno.EACCES, "Permission denied", "harbor")
     with pytest.raises(RuntimeError, match="could not spawn harbor run"):
-        _spawn_job(monkeypatch, tmp_path, boom)
+        _spawn_job(tmp_path, boom)
 
 
-def test_run_harbor_job_diagnoses_enoexec(monkeypatch, tmp_path):
+def test_run_harbor_job_diagnoses_enoexec(tmp_path):
     # ENOEXEC (non-executable binary) stays a plain OSError. ENOENT would NOT work here:
     # Python auto-maps it to FileNotFoundError, which the earlier clause would claim.
     boom = OSError(errno.ENOEXEC, "Exec format error", "harbor")
     with pytest.raises(RuntimeError, match="could not spawn harbor run"):
-        _spawn_job(monkeypatch, tmp_path, boom)
+        _spawn_job(tmp_path, boom)
 
 
-def test_run_harbor_job_diagnoses_timeout(monkeypatch, tmp_path):
-    # TimeoutExpired is not an OSError, so it reaches its own clause. The message quotes
-    # the duration off the exception rather than the Optional `timeout_sec` parameter.
+def test_run_harbor_job_diagnoses_timeout(tmp_path):
+    # TimeoutExpired is not an OSError, so it reaches a clause of its own.
     boom = subprocess.TimeoutExpired(cmd=["harbor", "run"], timeout=30.0)
     with pytest.raises(RuntimeError, match=r"did not finish within 30\.0s"):
-        _spawn_job(monkeypatch, tmp_path, boom, timeout_sec=30.0)
+        _spawn_job(tmp_path, boom, timeout_sec=30.0)
