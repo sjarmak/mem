@@ -74,9 +74,22 @@ def _print_go_command(
     n_tasks = len(tasks)
     calls = paid_call_count(tasks, repeats=repeats)
     worst_hours = calls * DEFAULT_TIMEOUT_S / 3600.0
-    # One factor for every task: the leg count is the ARM's, not the task's (`paid_call_count`), so
-    # the factorization the human reads below multiplies out to `calls` by construction.
-    per_repeat = calls_per_repeat(tasks[0])
+    # The `n_tasks x channel x repeat x per_repeat` factorization the human reads to sanity-check
+    # `calls` is only exact when every task has the same leg count; `paid_call_count` itself sums
+    # per task. Assert uniformity so a future variable `cell_legs` fails the disclosure loudly here
+    # rather than printing a factorization that disagrees with its own total.
+    if not tasks:
+        raise ValueError(
+            "no tasks to disclose a cost for — main() refuses an empty corpus before it spends"
+        )
+    per_repeat_counts = {calls_per_repeat(task) for task in tasks}
+    if len(per_repeat_counts) != 1:
+        raise ValueError(
+            f"tasks have non-uniform calls/repeat {sorted(per_repeat_counts)} — the cost "
+            "disclosure's single per-repeat factor would misdescribe the summed total; update "
+            "_print_go_command to show the per-task breakdown before spending."
+        )
+    per_repeat = per_repeat_counts.pop()
     print(
         f"REFUSING to spend: {ENV_OAUTH} is unset.\n"
         f"  This paid sweep is {calls} real `claude -p` call(s) "

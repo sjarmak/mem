@@ -1085,6 +1085,28 @@ def test_driver_refuses_to_spend_without_token(tmp_path: Path, monkeypatch) -> N
     assert code == 2
 
 
+def test_go_command_refuses_a_factorization_that_misdescribes_its_own_total(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """mem-663ga: the disclosure prints ONE `calls/repeat` factor for the whole corpus. If the leg
+    count ever varies by task that factor cannot multiply out to the summed total, so the human
+    reads a factorization that disagrees with the number it explains. Refuse to print it rather
+    than disclose a spend nobody can check."""
+    tasks = [_task("w-0"), _task("w-1")]
+    monkeypatch.setattr(grid, "cell_legs", _legs_by_task({"w-0": 2, "w-1": 3}))
+
+    with pytest.raises(ValueError, match="non-uniform calls/repeat"):
+        driver._print_go_command(tasks, 1, tmp_path / "out", tmp_path / "corpus")
+    assert "real `claude -p` call(s)" not in capsys.readouterr().out  # refused, not printed
+
+
+def test_go_command_on_an_empty_corpus_says_so(tmp_path: Path) -> None:
+    # main() refuses an empty corpus before it ever discloses a cost, so this is a caller-contract
+    # violation. It still must not read as "non-uniform calls/repeat []", which describes nothing.
+    with pytest.raises(ValueError, match="no tasks"):
+        driver._print_go_command([], 1, tmp_path / "out", tmp_path / "corpus")
+
+
 def test_repeats_below_one_is_refused_at_the_flag(tmp_path: Path) -> None:
     # `--repeats 0` runs zero agent turns per cell and would persist 0/0 rows that the verdict rule
     # reads as a confident NOT-ENGAGED for a task that was NEVER EVALUATED. The schema refuses the
@@ -1362,3 +1384,36 @@ def test_paid_call_count_scales_with_the_legs(monkeypatch) -> None:
     three_legs = grid.paid_call_count(tasks, repeats=3)
     assert three_legs == len(grid.CHANNELS) * 3 * 3 * len(tasks)
     assert three_legs > two_legs  # the disclosure moved with the leg, not stuck at 2
+
+
+def _legs_by_task(per_task: dict[str, int]):
+    """A ``cell_legs`` that BRANCHES on its task, giving ``per_task[work_id]`` legs. The test double
+    the uniform patch above cannot be: with every task on the same leg count, an exact per-task sum
+    and an ``n_tasks x calls_per_repeat(tasks[0])`` model agree, so a test built on it passes under
+    either. Only a non-uniform corpus separates them."""
+
+    def _cell_legs(task):
+        establish, goal = cell_legs(task)
+        n_extra = per_task[task.work_id] - 2
+        extra = [Leg(f"pad{i}", goal.step, {"hint": "x"}) for i in range(n_extra)]
+        return (establish, *extra, goal)
+
+    return _cell_legs
+
+
+def test_paid_call_count_is_exact_when_the_leg_count_varies_by_task(monkeypatch) -> None:
+    """mem-663ga: ``n_tasks x len(CHANNELS) x repeats x calls_per_repeat(tasks[0])`` reads the FIRST
+    task's leg count and bills every other task at it. The disclosed number is what the human
+    authorizes the spend against, so it must be the exact sum, not a model of it that happens to be
+    right while the corpus is uniform."""
+    tasks = [_task("w-0"), _task("w-1")]
+    monkeypatch.setattr(grid, "cell_legs", _legs_by_task({"w-0": 2, "w-1": 3}))
+
+    exact = len(grid.CHANNELS) * 1 * sum(grid.calls_per_repeat(task) for task in tasks)
+    assert exact == 10  # 2 channels x 1 repeat x (2 + 3) legs
+    # The regression form returns 8 here — a silent 20% under-report of real money.
+    assert grid.paid_call_count(tasks, repeats=1) == exact
+
+
+def test_paid_call_count_of_an_empty_corpus_is_zero() -> None:
+    assert grid.paid_call_count([], repeats=3) == 0

@@ -83,16 +83,15 @@ def calls_per_repeat(task: ToolReqRealAgentTask) -> int:
 
 def paid_call_count(tasks: Sequence[ToolReqRealAgentTask], *, repeats: int) -> int:
     """Total real ``claude -p`` calls the paid sweep makes across the whole corpus and both
-    channels.
+    channels. Summed per task off ``calls_per_repeat`` so a non-uniform leg count is counted exactly
+    rather than modelled as ``n_tasks x <constant>``.
 
-    The per-repeat leg count is the ARM's property, not the task's: ``cell_legs`` returns a fixed
-    pair and does not branch on its argument, so every task contributes the same factor and the
-    ``n_tasks x channel x repeat x calls/repeat`` factorization the cost disclosure prints is
-    exact by construction. Still DERIVED through ``calls_per_repeat`` rather than a literal ``2``,
-    so adding a leg moves the disclosed spend with it (mem-swp43 review reject)."""
-    if not tasks:
-        return 0
-    return len(tasks) * len(CHANNELS) * repeats * calls_per_repeat(tasks[0])
+    ``cell_legs -> tuple[Leg, Leg]`` cannot branch on its argument today, so ``n_tasks x
+    calls_per_repeat(tasks[0])`` would agree with this sum — but that is a property of an annotation
+    someone must keep true, not of this disclosure, and widening it to ``tuple[Leg, ...]`` is a
+    one-line type-clean edit. This is the number a human authorizes real money against; it stays
+    exact by construction rather than by a reachability argument (mem-663ga)."""
+    return len(CHANNELS) * repeats * sum(calls_per_repeat(task) for task in tasks)
 
 
 class BuiltinCell(BaseCellOutcome):
