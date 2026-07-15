@@ -47,7 +47,12 @@ from pathlib import Path
 
 from membench.runner.headless_agent import CHANNELS, DEFAULT_TIMEOUT_S, HeadlessAgentError
 from membench.runner.toolreq_builtin import BuiltinDiagnostics, run_builtin_arm
-from membench.runner.toolreq_builtin_grid import CALLS_PER_REPEAT, SUMMARY_NAME, run_corpus
+from membench.runner.toolreq_builtin_grid import (
+    SUMMARY_NAME,
+    calls_per_repeat,
+    paid_call_count,
+    run_corpus,
+)
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask, load_corpus_with_sequences
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -56,17 +61,22 @@ DEFAULT_OUT = PROJECT_ROOT / ".mem/toolreq-builtin"
 ENV_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN"
 
 
-def _print_go_command(n_tasks: int, repeats: int, out_dir: Path, corpus_dir: Path) -> None:
-    calls = n_tasks * len(CHANNELS) * repeats * CALLS_PER_REPEAT
+def _print_go_command(
+    tasks: Sequence[ToolReqRealAgentTask], repeats: int, out_dir: Path, corpus_dir: Path
+) -> None:
+    n_tasks = len(tasks)
+    per_repeat = calls_per_repeat(tasks[0])
+    calls = paid_call_count(tasks, repeats=repeats)
     worst_hours = calls * DEFAULT_TIMEOUT_S / 3600.0
     print(
         f"REFUSING to spend: {ENV_OAUTH} is unset.\n"
         f"  This paid sweep is {calls} real `claude -p` call(s) "
         f"({n_tasks} task x {len(CHANNELS)} channel x {repeats} repeat x "
-        f"{CALLS_PER_REPEAT} calls/repeat [establish+goal] — DOUBLE the none/oracle cost "
+        f"{per_repeat} calls/repeat [establish+goal] — DOUBLE the none/oracle cost "
         f"per repeat); worst-case wall-clock ~{worst_hours:.1f}h at the "
         f"{DEFAULT_TIMEOUT_S:.0f}s timeout.\n"
-        f"  Plus one PREFLIGHT establish+check cycle (2 calls) before the sweep starts.\n"
+        f"  Plus one PREFLIGHT establish+check cycle ({per_repeat} calls) before the sweep "
+        "starts.\n"
         f"  Per-task results persist to {out_dir} and are reused on re-run (resumable).\n"
         "  MECHANISM: native memory is turned ON by this script — `autoMemoryEnabled` is a "
         "$CLAUDE_CONFIG_DIR/settings.json key, so the pristine per-repeat config dir is "
@@ -129,7 +139,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     if not args.dry_run and not os.environ.get(ENV_OAUTH):
-        _print_go_command(len(tasks), args.repeats, args.out, corpus_dir)
+        _print_go_command(tasks, args.repeats, args.out, corpus_dir)
         return 2
 
     if not args.dry_run and not args.skip_preflight:
@@ -163,7 +173,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     mode = "DRY-RUN (simulated agent, no tokens)" if args.dry_run else "PAID real claude -p"
     print(
         f"toolreq builtin-arm sweep: {mode}; {len(tasks)} task(s) x {len(CHANNELS)} channel x "
-        f"{args.repeats} repeat x {CALLS_PER_REPEAT} calls/repeat"
+        f"{args.repeats} repeat x {calls_per_repeat(tasks[0])} calls/repeat"
     )
     try:
         summary = run_corpus(

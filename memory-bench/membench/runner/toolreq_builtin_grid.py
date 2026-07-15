@@ -44,6 +44,7 @@ from membench.runner.toolreq_builtin import (
     ARM,
     BuiltinDiagnostics,
     cell_calls,
+    cell_legs,
     mechanism_fingerprint,
     run_builtin_arm,
 )
@@ -65,7 +66,21 @@ SUMMARY_NAME = "summary-toolreq-builtin.json"
 # BUMP on any change to the former that could move a result.
 EXECUTION_PROTOCOL = 2
 
-CALLS_PER_REPEAT = 2  # establish + goal — double none/oracle's 1-call cost
+
+def calls_per_repeat(task: ToolReqRealAgentTask) -> int:
+    """Real ``claude -p`` calls one repeat of one cell makes — DERIVED from the legs the arm
+    actually executes (``cell_legs``), never a hand-written constant modelling them. The
+    refuse-to-spend gate discloses this number to the human authorizing the paid sweep; if it were a
+    literal ``2``, adding a leg (which now correctly moves the argv and the fingerprint) would leave
+    the disclosed cost under-reporting the real spend by a leg's share (mem-swp43 review reject)."""
+    return len(cell_legs(task))
+
+
+def paid_call_count(tasks: Sequence[ToolReqRealAgentTask], *, repeats: int) -> int:
+    """Total real ``claude -p`` calls the paid sweep makes across the whole corpus and both
+    channels. Summed per task off ``calls_per_repeat`` so a non-uniform leg count is counted exactly
+    rather than modelled as ``n_tasks x <constant>``."""
+    return len(CHANNELS) * repeats * sum(calls_per_repeat(task) for task in tasks)
 
 
 class BuiltinCell(BaseCellOutcome):

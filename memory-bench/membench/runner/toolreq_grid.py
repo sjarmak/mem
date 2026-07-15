@@ -18,7 +18,7 @@ those arms send, and the verdict their rows imply. What this module adds to the 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Self
 
@@ -115,12 +115,17 @@ def arm_memories(
 @dataclass(frozen=True)
 class PlannedCell:
     """One ``(arm, channel)`` cell this task will actually RUN, with the step and memory it runs
-    under."""
+    under.
+
+    ``step`` (non-frozen pydantic model) and ``memory`` (plain dict) are ``hash=False`` for the same
+    reason ``headless_agent.Leg``'s are: both are unhashable, so a frozen dataclass's auto
+    ``__hash__`` over every field would raise on first hash. Value ``__eq__`` still spans all
+    fields."""
 
     arm: str
     channel: MemoryChannel
-    step: SequenceStep
-    memory: Mapping[str, str]
+    step: SequenceStep = field(hash=False)
+    memory: Mapping[str, str] = field(hash=False)
 
 
 def planned_cells(

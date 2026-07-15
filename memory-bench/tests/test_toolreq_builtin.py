@@ -33,7 +33,15 @@ from pydantic import ValidationError
 
 from membench.harbor.agent_memory import native_memory_path
 from membench.runner import toolreq_builtin_grid as grid
-from membench.runner.headless_agent import ENV_MODEL, HeadlessAgentError, MemoryChannel
+from membench.runner.headless_agent import (
+    ENV_MODEL,
+    HeadlessAgentError,
+    Leg,
+    MemoryChannel,
+    _render_only_runner,
+    cell_agent,
+    render_cell_calls,
+)
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome
 from membench.runner.resume_cache import Evaluation, invocation_digest
 from membench.runner.toolreq_builtin import (
@@ -1193,3 +1201,76 @@ def test_the_driver_writes_the_summary_the_grid_reserves(tmp_path: Path, monkeyp
 
     assert driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(out)]) == 0
     assert (out / grid.SUMMARY_NAME).is_file()
+
+
+# --- the recorder is structure, not caller discipline (mem-swp43 review reject) --------
+
+
+def test_cell_agent_requires_an_explicit_runner() -> None:
+    """The reject: the recording seam was caller discipline. ``cell_agent`` defaulted ``runner`` to
+    ``subprocess.run``, so a new execution leg built the idiomatic way — ``cell_agent(model=...,
+    channel=...)`` — spawned a REAL, unrecorded ``claude -p``: never folded by ``one_cycle``, never
+    checked at the write boundary, published under the wrong fingerprint with a green suite.
+
+    With ``runner`` required, that reflex path is a construction-time error, not a silent real
+    spawn. An executing caller must hand in its ``RecordingRunner``; the only other caller (the
+    non-executing render path) passes an explicit sentinel."""
+    with pytest.raises(TypeError):
+        cell_agent(model="", channel=MemoryChannel.TRUSTED)  # type: ignore[call-arg]
+
+
+def test_render_only_runner_refuses_to_execute() -> None:
+    """The render path builds an agent only to call ``argv_for`` (pure — no spawn). Its sentinel
+    runner makes that explicit: if a future edit ever drives the render agent to actually execute,
+    it crashes loudly instead of issuing an untracked real call."""
+    with pytest.raises(RuntimeError, match="render argv only"):
+        _render_only_runner(["claude", "-p", "x"])
+
+
+def test_render_cell_calls_never_spawns() -> None:
+    """``render_cell_calls`` renders the plan for the fingerprint and must stay side-effect free
+    even though it now holds a real-looking agent: it only reads ``argv_for``, never runs the
+    sentinel."""
+    task = _task()
+    establish, goal = cell_legs(task)
+    rendered = render_cell_calls(
+        arm=ARM, channel=MemoryChannel.TRUSTED, legs=[establish, goal], model=""
+    )
+    assert len(rendered.calls) == 2  # establish + goal argv, no execution
+
+
+def test_a_leg_is_hashable_despite_unhashable_fields() -> None:
+    """``Leg`` carries a non-frozen pydantic ``step`` and a dict ``memory`` — both unhashable —
+    under ``frozen=True``. ``hash=False`` on those fields keeps the auto ``__hash__`` from raising
+    the first time a ``Leg`` lands in a set, while value ``__eq__`` still spans all three fields."""
+    establish, goal = cell_legs(_task())
+    assert len({establish, goal, establish}) == 2  # hashing works; the dup collapses
+
+
+# --- the disclosed paid cost is derived from the legs, not a hand-written constant -----
+
+
+def test_calls_per_repeat_is_the_leg_count() -> None:
+    task = _task()
+    assert grid.calls_per_repeat(task) == len(cell_legs(task)) == 2
+
+
+def test_paid_call_count_scales_with_the_legs(monkeypatch) -> None:
+    """The reject's second half: ``CALLS_PER_REPEAT = 2`` was a hand-written model of the leg count
+    driving the refuse-to-spend money disclosure. Add a leg — which now correctly moves the argv and
+    the fingerprint — and a literal ``2`` under-reports the spend the human authorizes. Derived from
+    ``cell_legs``, the disclosed count tracks it."""
+    tasks = [_task("w-0"), _task("w-1")]
+    two_legs = grid.paid_call_count(tasks, repeats=3)
+    assert two_legs == len(grid.CHANNELS) * 3 * 2 * len(tasks)
+
+    def _three_legs(task):
+        establish, goal = cell_legs(task)
+        extra = Leg("recall", goal.step, {"hint": "x"})
+        return (establish, extra, goal)
+
+    # `calls_per_repeat` resolves `cell_legs` in the grid module's namespace, so patch it there.
+    monkeypatch.setattr(grid, "cell_legs", _three_legs)
+    three_legs = grid.paid_call_count(tasks, repeats=3)
+    assert three_legs == len(grid.CHANNELS) * 3 * 3 * len(tasks)
+    assert three_legs > two_legs  # the disclosure moved with the leg, not stuck at 2

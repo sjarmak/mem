@@ -36,7 +36,7 @@ import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, NoReturn
 
 from membench.armcompare import _iter_tool_use_blocks
 from membench.runner.agent import AgentStepResult
@@ -101,11 +101,16 @@ class Leg:
     A cell's legs are the unit both halves of the identity are built from — ``cell_agent`` renders
     them into the plan (``render_cell_calls``) and the arm executes them — so a cell with one leg
     (the none/oracle/ours grid's goal call) and a cell with two (the builtin arm's establish + goal)
-    say so in ONE vocabulary rather than each inventing its own."""
+    say so in ONE vocabulary rather than each inventing its own.
+
+    ``step`` (a non-frozen pydantic model) and ``memory`` (a plain dict) are ``hash=False``: both
+    are unhashable at runtime, so a frozen dataclass's auto-generated ``__hash__`` over every field
+    would raise the moment a ``Leg`` were put in a set or used as a key. Value ``__eq__`` still
+    spans all three fields — this mirrors ``HeadlessClaudeAgent.env`` below."""
 
     name: str
-    step: SequenceStep
-    memory: Mapping[str, str]
+    step: SequenceStep = field(hash=False)
+    memory: Mapping[str, str] = field(hash=False)
 
 
 @dataclass(eq=False)
@@ -117,7 +122,11 @@ class RecordingRunner:
     list the arm appends to as it goes) is one an author has to remember to update: add a leg to the
     arm, forget both to declare it in the plan and to record it — ONE omission, two symptoms, and by
     far the likeliest edit — and the sent record still equals the plan, so nothing fires. The runner
-    sees the call whether or not anyone declared it.
+    sees the call whether or not anyone declared it — PROVIDED the executing agent was built with a
+    recorder. ``cell_agent`` makes that non-optional: ``runner`` has no default, so an agent that
+    executes a leg without being handed a recorder cannot be built by omission (the reflex that
+    would otherwise reopen this hole one construction site over). The render-only path passes an
+    explicit non-executing runner instead.
 
     ``eq=False`` keeps the default identity ``__hash__``, so an instance stays usable as the
     ``runner`` field of the frozen ``HeadlessClaudeAgent``."""
@@ -403,11 +412,22 @@ class HeadlessClaudeAgent:
         )
 
 
+def _render_only_runner(argv: Sequence[str], **kwargs: Any) -> NoReturn:
+    """The ``runner`` for an agent built only to RENDER argv (``render_cell_calls`` calls
+    ``argv_for``, which never executes). If it is ever actually invoked, a plan-rendering agent has
+    been made to spawn a real ``claude -p`` — the exact unrecorded call the recorder seam exists to
+    make impossible — so it fails loudly instead of running untracked."""
+    raise RuntimeError(
+        "render_cell_calls built this agent to render argv only; it must never run a claude -p. "
+        "An execution path needs a RecordingRunner, not this render sentinel."
+    )
+
+
 def cell_agent(
     *,
     model: str,
     channel: MemoryChannel,
-    runner: CliRunner = subprocess.run,
+    runner: CliRunner,
     cwd: str | None = None,
     env: Mapping[str, str] | None = None,
 ) -> HeadlessClaudeAgent:
@@ -427,9 +447,11 @@ def cell_agent(
     is Write-only), and ``memory_channel`` only frames a surfaced-memory block, which a bare leg
     never has.
 
-    ``runner``, ``cwd`` and ``env`` are the only things the fingerprint path leaves at their
-    defaults: none of them appears in the argv, so a rendered invocation is byte-identical to the
-    sent one without them."""
+    ``runner`` has NO default — an executing caller must hand in its ``RecordingRunner`` explicitly,
+    so a leg cannot be run through an unrecorded agent by omission (``render_cell_calls``, which
+    never executes, passes ``_render_only_runner``). ``cwd`` and ``env`` are the only things the
+    fingerprint path leaves at their defaults: neither appears in the argv, so a rendered invocation
+    is byte-identical to the sent one without them."""
     return HeadlessClaudeAgent(
         model=model,
         runner=runner,
@@ -448,7 +470,7 @@ def render_cell_calls(
 
     EVERY leg, in order. A fingerprint over the scored leg alone would call two runs identical while
     an earlier leg differed — and for the builtin arm the earlier leg is the one under test."""
-    agent = cell_agent(model=model, channel=channel)
+    agent = cell_agent(model=model, channel=channel, runner=_render_only_runner)
     return CellCalls(
         arm=arm,
         channel=channel.value,
