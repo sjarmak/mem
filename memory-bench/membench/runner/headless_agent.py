@@ -58,13 +58,13 @@ ENV_MODEL = "MEMBENCH_AGENT_MODEL"
 # before saying the one thing it had to say.
 VERSION_TIMEOUT_S = 30.0
 
-# What a version IS, for the purpose of naming an instrument: a dotted-numeric token, optionally
-# carrying a SemVer prerelease and/or build suffix (`-rc.1`, `+build.5`, or both). Tolerant about
-# the SHAPE (a CLI that drops the product name or ships `2.1.210-rc.1+build.5` must not halt a paid
-# sweep), strict about it BEING one — the alternative, taking a whitespace token unchecked, would
-# store "Error:" or "unknown" as the binary a cell was measured on, and a later resume would match
-# against it.
-_VERSION_TOKEN = re.compile(r"\d+(?:\.\d+)+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?")
+# What a version IS, for the purpose of naming an instrument: a dotted-numeric token, plus whatever
+# suffix the CLI hangs off it (`-rc.1`, `+build.5`, both). Tolerant about the SHAPE — nothing reads
+# this field, it only has to differ between binaries, so a suffix grammar would buy a halt on
+# `2.1.210_beta` and nothing else. Strict about it BEING one: taking a whitespace token unchecked
+# would store "Error:" or "unknown" as the binary a cell was measured on, and a later resume would
+# match against it.
+_VERSION_TOKEN = re.compile(r"\d+(?:\.\d+)+\S*")
 
 
 def resolve_model(model: str) -> str:
@@ -155,7 +155,7 @@ class HeadlessAgentError(RuntimeError):
     non-zero exit). Surfaced loudly — a failed run is not a silent empty trajectory."""
 
 
-def resolve_cli_version(runner: CliRunner = subprocess.run) -> str:
+def resolve_cli_version(runner: Runner = subprocess.run) -> str:
     """The version of the claude binary installed AT THE MOMENT THIS IS CALLED — read off the
     binary itself (``claude --version`` -> ``2.1.210 (Claude Code)`` -> ``2.1.210``), never
     modelled.
@@ -177,29 +177,14 @@ def resolve_cli_version(runner: CliRunner = subprocess.run) -> str:
     "real and unrecorded" must not be what you get by omission. This spawns no agent and measures
     nothing — there is only one honest answer to "which binary is installed", and the parameter
     exists so tests can drive the parse path without one."""
-    try:
-        completed = runner(
-            ["claude", "--version"],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=VERSION_TIMEOUT_S,
-        )
-    except FileNotFoundError as exc:
-        raise HeadlessAgentError(
-            "'claude' CLI not found — a paid run cannot name the binary it would measure on"
-        ) from exc
-    except OSError as exc:
-        raise HeadlessAgentError(f"could not spawn claude --version: {exc}") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise HeadlessAgentError(
-            f"claude --version did not respond within {VERSION_TIMEOUT_S:.0f}s"
-        ) from exc
-    if completed.returncode != 0:
-        raise HeadlessAgentError(
-            f"claude --version failed (exit {completed.returncode}): "
-            f"{(completed.stderr or completed.stdout or '').strip()}"
-        )
+    completed = run_checked(
+        ["claude", "--version"],
+        what="claude --version",
+        not_found_hint="a paid run cannot name the binary it would measure on",
+        timeout_s=VERSION_TIMEOUT_S,
+        error=HeadlessAgentError,
+        runner=runner,
+    )
     # ONE line, and the version is its first token — the shape `claude --version` prints
     # ("2.1.210 (Claude Code)"). Anchored to that rather than scanning the output for the first
     # version-shaped thing in it: a preamble (an update nag, a bundled-runtime notice —
@@ -213,7 +198,7 @@ def resolve_cli_version(runner: CliRunner = subprocess.run) -> str:
     token = lines[0].split(maxsplit=1)[0] if len(lines) == 1 else ""
     if not _VERSION_TOKEN.fullmatch(token):
         raise HeadlessAgentError(
-            f"claude --version did not print a single version line: {(completed.stdout or '')!r} "
+            f"claude --version printed no recognisable version: {(completed.stdout or '')!r} "
             "— the binary a paid run would measure on cannot be identified"
         )
     return token

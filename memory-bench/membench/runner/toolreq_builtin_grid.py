@@ -396,7 +396,7 @@ def run_corpus(
     repeats: int,
     model: str,
     dry_run: bool,
-    version_fn: Callable[[], str] = resolve_cli_version,
+    version_fn: Callable[[], str] | None = None,
     resume: bool = True,
     before_first_spend: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
@@ -415,7 +415,7 @@ def run_corpus(
     ``before_first_spend`` is forwarded, not interpreted — ``preflight_gate`` is what the driver
     passes, and the hook's contract is ``resume_cache.run_cached_corpus``'s."""
     resolved_model = resolve_model(model)
-    cli_version = "" if dry_run else version_fn()
+    cli_version = "" if dry_run else (version_fn or resolve_cli_version)()
     run = run_cached_corpus(
         tasks,
         out_dir=out_dir,

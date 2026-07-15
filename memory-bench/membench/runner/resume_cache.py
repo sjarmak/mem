@@ -172,9 +172,8 @@ class BaseRunIdentity(BaseModel):
     @model_validator(mode="after")
     def _a_paid_measurement_names_the_binary_it_was_made_on(self) -> Self:
         """``cli_version`` is bounded to exactly the runs it can describe — structural, so a grid
-        that forgets to resolve it gets a ValidationError rather than a silent identity that spans
-        two binaries. Both directions are argued at ``cli_version`` above; the messages below carry
-        them at the point of failure."""
+        that forgets to resolve it gets a ValidationError rather than an identity spanning two
+        binaries (see ``cli_version`` above)."""
         if self.dry_run and self.cli_version:
             raise ValueError(
                 f"a dry run spawns no claude binary, so it cannot have been measured on "

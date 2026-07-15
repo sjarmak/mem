@@ -418,7 +418,7 @@ def run_corpus(
     store_path: Path,
     mem_bin: str,
     seed_fn: SeedFn,
-    version_fn: Callable[[], str] = resolve_cli_version,
+    version_fn: Callable[[], str] | None = None,
     resume: bool = True,
 ) -> dict[str, Any]:
     """Evaluate every task through the shared resume cache and shape this grid's summary.
@@ -432,25 +432,18 @@ def run_corpus(
     (``BaseRunIdentity``), so this is the ONE place the rule is applied and the schema is the
     backstop, not a second copy of it.
 
-    The claude BINARY is resolved the same way and in the same place (``version_fn``, normally
-    ``headless_agent.resolve_cli_version``) — ONCE per run, so every task in one sweep is filed
-    under one instrument rather than each racing an upgrade. Only for a PAID run: a dry run spawns
-    no binary, and short-circuiting here is what keeps a free run runnable with no ``claude``
-    installed at all.
+    The claude BINARY is resolved the same way and in the same place — ONCE per run, so every task
+    in one sweep is filed under one instrument rather than each racing an upgrade. Only for a PAID
+    run: a dry run spawns no binary, and short-circuiting here is what keeps a free run runnable
+    with no ``claude`` installed at all.
 
-    ``version_fn`` is injected so a hermetic test drives the PAID path without a ``claude`` on the
-    machine, and — unlike ``seed_fn`` and ``headless_agent.CliRunner``, which are deliberately
-    un-defaulted — it DOES default to the real resolver. The convention does not transfer: those
-    seams decide whether a real, paid, unrecorded ``claude -p`` happens, so "real" must not be the
-    thing you get by omission. This one only reads ``--version``: free, and it raises rather than
-    guessing when it cannot identify the binary. What omission costs here is narrower — a paid
-    caller that forgets the stub keys its identity on whatever CLI the machine has — so the
-    default is the real resolver, which is the right answer for every production driver."""
-    # The instrument is named FIRST, before the store is seeded: a paid run that cannot identify
-    # the binary it would measure on is over, so it should end before it does that work rather
-    # than after.
+    ``version_fn`` overrides that resolver for a hermetic test; omitted, it is looked up on this
+    module at call time, so ``monkeypatch.setattr(grid, "resolve_cli_version", ...)`` reaches it
+    like every other double here. Why it defaults to the real thing where ``seed_fn`` does not is
+    argued at ``headless_agent.resolve_cli_version``."""
+    # Fail before seeding: a paid run that cannot name its binary is over.
     resolved_model = resolve_model(model)
-    cli_version = "" if dry_run else version_fn()
+    cli_version = "" if dry_run else (version_fn or resolve_cli_version)()
     ours_payloads = seed_fn(sequences, tasks, store_path, mem_bin)
 
     run = run_cached_corpus(

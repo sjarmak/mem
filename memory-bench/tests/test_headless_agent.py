@@ -17,7 +17,6 @@ from membench.runner.agent import Agent
 from membench.runner.headless_agent import (
     ENV_MODEL,
     VERSION_TIMEOUT_S,
-    CliRunner,
     HeadlessAgentError,
     HeadlessClaudeAgent,
     MemoryChannel,
@@ -33,6 +32,7 @@ from membench.runner.trajectory_run import (
     run_step_trajectory,
 )
 from membench.schemas.sequence import BenchmarkSequence, SequenceStep
+from membench.spawn import Runner
 
 
 def _step(
@@ -365,7 +365,7 @@ def test_resolve_cli_version_refuses_output_it_does_not_recognise_rather_than_gu
     thing matching would stamp node's version on the cell as the claude binary's — a value that
     looks right and names the wrong instrument, which is this module's entire defect family.
     Refusing is the cheap end: the sweep halts with a diagnostic naming the output it got."""
-    with pytest.raises(HeadlessAgentError, match="single version line"):
+    with pytest.raises(HeadlessAgentError, match="no recognisable version"):
         resolve_cli_version(
             _fake_runner("18.2.0 required, please upgrade\n2.1.210 (Claude Code)\n")
         )
@@ -381,7 +381,7 @@ def test_resolve_cli_version_refuses_output_it_does_not_recognise_rather_than_gu
     ],
 )
 def test_resolve_cli_version_refuses_to_name_an_instrument_it_cannot_identify(
-    runner: CliRunner,
+    runner: Runner,
 ) -> None:
     # A paid run that cannot name its instrument must not spend. Every one of these would
     # otherwise be stored as a `cli_version` a later resume would match against — an
@@ -402,7 +402,7 @@ def test_resolve_cli_version_raises_when_the_probe_hangs() -> None:
     def wedged(argv, **kwargs):
         raise subprocess.TimeoutExpired(cmd=argv, timeout=VERSION_TIMEOUT_S)
 
-    with pytest.raises(HeadlessAgentError, match="did not respond"):
+    with pytest.raises(HeadlessAgentError, match="did not finish within"):
         resolve_cli_version(wedged)
 
 

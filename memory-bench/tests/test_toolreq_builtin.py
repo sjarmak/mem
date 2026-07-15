@@ -71,6 +71,20 @@ from membench.schemas.sequence import (
 CURRENT = "30 days"
 STALE = "90 days"
 
+# The instrument a paid test files its identity under. Stubbed rather than resolved: the real
+# probe spawns `claude --version`, and the suite must pass on a machine with no claude installed
+# (CI is a bare ubuntu-latest).
+STUB_CLI_VERSION = "2.1.210"
+
+
+@pytest.fixture(autouse=True)
+def _pinned_cli_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Autouse, because the hole this closes is one of OMISSION: a paid test that forgets to stub
+    the probe still passes on a dev box and keys its identity on whatever CLI that box has. The
+    driver owns its own ``run_corpus`` call and rightly passes no ``version_fn``, so this is the
+    only seam that reaches it. An explicit ``version_fn=`` argument still wins over this."""
+    monkeypatch.setattr(grid, "resolve_cli_version", lambda: STUB_CLI_VERSION)
+
 
 def _toolreq_seq(
     seq_id: str = "w-t0", *, current: str = CURRENT, stale: str = STALE
@@ -813,7 +827,7 @@ def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -
 
     monkeypatch.setattr(grid, "evaluate_task", _spy)
     paid = grid.run_corpus(
-        tasks, out_dir=out, repeats=1, model="", dry_run=False, version_fn=lambda: "2.1.210"
+        tasks, out_dir=out, repeats=1, model="", dry_run=False, version_fn=lambda: STUB_CLI_VERSION
     )
     assert paid["executed"] == 1 and paid["reused"] == 0
     assert calls["n"] == 1
@@ -839,13 +853,13 @@ def test_upgrading_the_cli_between_runs_is_a_miss_not_a_relabel(
     assert (first["executed"], first["reused"]) == (1, 0)
 
     second = grid.run_corpus(
-        tasks, out_dir=out, repeats=1, model="", dry_run=False, version_fn=lambda: "2.1.210"
+        tasks, out_dir=out, repeats=1, model="", dry_run=False, version_fn=lambda: STUB_CLI_VERSION
     )
     assert (second["executed"], second["reused"]) == (1, 0), "old binary's numbers, new instrument"
 
     # ...and the same binary still resumes: the field must not make every paid run a miss.
     third = grid.run_corpus(
-        tasks, out_dir=out, repeats=1, model="", dry_run=False, version_fn=lambda: "2.1.210"
+        tasks, out_dir=out, repeats=1, model="", dry_run=False, version_fn=lambda: STUB_CLI_VERSION
     )
     assert (third["executed"], third["reused"]) == (0, 1)
 
