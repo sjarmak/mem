@@ -32,6 +32,7 @@ behavior IS the model's; no semantic judgment lives here.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -50,6 +51,20 @@ from membench.spawn import Runner, run_checked
 DEFAULT_TIMEOUT_S = 600.0
 
 ENV_MODEL = "MEMBENCH_AGENT_MODEL"
+
+# `claude --version` prints and exits — a bound this high means a wedged CLI, not a slow one.
+# Its own constant, not DEFAULT_TIMEOUT_S: that bound sizes a multi-turn agent step (minutes of
+# inference), and reusing it here would let a wedged probe stall a paid sweep for ten minutes
+# before saying the one thing it had to say.
+VERSION_TIMEOUT_S = 30.0
+
+# What a version IS, for the purpose of naming an instrument: a dotted-numeric token, optionally
+# carrying a SemVer prerelease and/or build suffix (`-rc.1`, `+build.5`, or both). Tolerant about
+# the SHAPE (a CLI that drops the product name or ships `2.1.210-rc.1+build.5` must not halt a paid
+# sweep), strict about it BEING one — the alternative, taking a whitespace token unchecked, would
+# store "Error:" or "unknown" as the binary a cell was measured on, and a later resume would match
+# against it.
+_VERSION_TOKEN = re.compile(r"\d+(?:\.\d+)+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?")
 
 
 def resolve_model(model: str) -> str:
@@ -138,6 +153,70 @@ class RecordingRunner:
 class HeadlessAgentError(RuntimeError):
     """A headless agent invocation failed unrecoverably (CLI missing, timeout, or a
     non-zero exit). Surfaced loudly — a failed run is not a silent empty trajectory."""
+
+
+def resolve_cli_version(runner: CliRunner = subprocess.run) -> str:
+    """The version of the claude binary installed AT THE MOMENT THIS IS CALLED — read off the
+    binary itself (``claude --version`` -> ``2.1.210 (Claude Code)`` -> ``2.1.210``), never
+    modelled.
+
+    The mirror of ``resolve_model``, one level down: that rule names the model a run points AT,
+    this one names the INSTRUMENT that points. Why a paid identity keys on the result, and the
+    mid-sweep residue this does NOT close (mem-z32zu), are argued once where the field lives —
+    ``resume_cache.BaseRunIdentity.cli_version``.
+
+    FREE, and that is what makes it affordable at the top of every paid run: ``--version`` prints
+    and exits — no agent turn, no token, no account.
+
+    Raises ``HeadlessAgentError`` when the instrument cannot be identified — missing CLI, a
+    non-zero exit, a hang, or output that carries no version token. A paid run that cannot name
+    what it is measuring on must not spend.
+
+    ``runner`` defaults to a real spawn, unlike ``HeadlessClaudeAgent.runner``, and the asymmetry
+    is deliberate: that seam decides whether a MEASUREMENT is recorded, simulated or untracked, so
+    "real and unrecorded" must not be what you get by omission. This spawns no agent and measures
+    nothing — there is only one honest answer to "which binary is installed", and the parameter
+    exists so tests can drive the parse path without one."""
+    try:
+        completed = runner(
+            ["claude", "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=VERSION_TIMEOUT_S,
+        )
+    except FileNotFoundError as exc:
+        raise HeadlessAgentError(
+            "'claude' CLI not found — a paid run cannot name the binary it would measure on"
+        ) from exc
+    except OSError as exc:
+        raise HeadlessAgentError(f"could not spawn claude --version: {exc}") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise HeadlessAgentError(
+            f"claude --version did not respond within {VERSION_TIMEOUT_S:.0f}s"
+        ) from exc
+    if completed.returncode != 0:
+        raise HeadlessAgentError(
+            f"claude --version failed (exit {completed.returncode}): "
+            f"{(completed.stderr or completed.stdout or '').strip()}"
+        )
+    # ONE line, and the version is its first token — the shape `claude --version` prints
+    # ("2.1.210 (Claude Code)"). Anchored to that rather than scanning the output for the first
+    # version-shaped thing in it: a preamble (an update nag, a bundled-runtime notice —
+    # "18.2.0 required, please upgrade") carries a perfectly well-shaped token of its own, and
+    # scanning would stamp THAT on the cell as the claude binary's version. A wrong version is
+    # worse here than no version: it names an instrument, so it neither halts nor misses — it
+    # just files the measurement under a lie. Unrecognised output is refused for the same reason
+    # the rest of this module refuses to model its inputs: guessing which line names the
+    # instrument is the modelling, and a halt is recoverable where a silent mislabel is not.
+    lines = [line for line in (completed.stdout or "").splitlines() if line.strip()]
+    token = lines[0].split(maxsplit=1)[0] if len(lines) == 1 else ""
+    if not _VERSION_TOKEN.fullmatch(token):
+        raise HeadlessAgentError(
+            f"claude --version did not print a single version line: {(completed.stdout or '')!r} "
+            "— the binary a paid run would measure on cannot be identified"
+        )
+    return token
 
 
 class MemoryChannel(StrEnum):

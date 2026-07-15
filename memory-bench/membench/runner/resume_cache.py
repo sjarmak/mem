@@ -127,8 +127,25 @@ class BaseRunIdentity(BaseModel):
     resumed sweep would serve pre-change answers as if they measured the new protocol. Each grid
     owns its own constant and BUMPS it on such a change. It is a MANUAL gate and that is its
     weakness: the alternative (hashing those modules' source) would invalidate the whole paid grid
-    on any comment edit and re-spend real money. It cannot cover the ``claude`` binary itself
-    (version, PATH, account config) — see the drivers' docstrings.
+    on any comment edit and re-spend real money. It still does not reach the ``claude`` binary's
+    PATH or account config — those remain uncovered, and honestly so.
+
+    ``cli_version`` is the binary a paid cell was measured ON, resolved off the instrument itself
+    (``headless_agent.resolve_cli_version``) rather than left to ``protocol``'s manual bump. The
+    two gaps are not the same kind: a scorer change is made BY the person who would bump the
+    constant, but the CLI drifts under an ``npm -g`` upgrade nobody connects to a benchmark — so
+    upgrade the CLI between a staging run and a paid resume over the same ``--out``, and every task
+    would be served as ``reused``, publishing old-binary numbers as measurements of the new
+    instrument, at ``executed=0``, with no error. A manual gate cannot close a drift nobody
+    performs on purpose. Bounded to the runs it can describe: a dry run spawns no binary (its whole
+    measurement is the simulated runner, which ``protocol`` covers) and so names none, and a paid
+    run must name one or it cannot say what it measured.
+
+    It covers drift BETWEEN runs, not WITHIN one: the version is resolved once per sweep, so a CLI
+    upgraded mid-sweep still tags later cells with the pre-sweep version. That is the narrower and
+    louder residue — it mislabels a REAL measurement rather than silently serving a stale one as a
+    cache hit — and closing it means checking each run's own stream instead of a pre-flight claim
+    (``harbor.probe_gate.assert_run_pins``; mem-z32zu).
 
     ``invocation_fingerprint`` hashes the COMMAND LINES THEMSELVES — every ``claude -p`` argv every
     cell will spawn, prompt included — rather than a model of what goes into them, and so it cannot
@@ -147,9 +164,29 @@ class BaseRunIdentity(BaseModel):
     repeats: int = Field(ge=1)
     dry_run: bool
     model: str
+    cli_version: str
     protocol: int
     task_fingerprint: str
     invocation_fingerprint: str
+
+    @model_validator(mode="after")
+    def _a_paid_measurement_names_the_binary_it_was_made_on(self) -> Self:
+        """``cli_version`` is bounded to exactly the runs it can describe — structural, so a grid
+        that forgets to resolve it gets a ValidationError rather than a silent identity that spans
+        two binaries. Both directions are argued at ``cli_version`` above; the messages below carry
+        them at the point of failure."""
+        if self.dry_run and self.cli_version:
+            raise ValueError(
+                f"a dry run spawns no claude binary, so it cannot have been measured on "
+                f"{self.cli_version!r} — dry-run identities must leave cli_version empty"
+            )
+        if not self.dry_run and not self.cli_version:
+            raise ValueError(
+                "a paid identity must name the claude binary it was measured on "
+                "(headless_agent.resolve_cli_version), or a CLI upgrade between a staging run and "
+                "a paid resume serves the old binary's numbers as the new instrument's"
+            )
+        return self
 
     @model_validator(mode="after")
     def _model_is_the_one_the_agent_will_actually_run_under(self) -> Self:

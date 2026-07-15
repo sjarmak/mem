@@ -16,6 +16,8 @@ from membench.metrics.action_impact_run import ArmStepTrajectory
 from membench.runner.agent import Agent
 from membench.runner.headless_agent import (
     ENV_MODEL,
+    VERSION_TIMEOUT_S,
+    CliRunner,
     HeadlessAgentError,
     HeadlessClaudeAgent,
     MemoryChannel,
@@ -23,6 +25,7 @@ from membench.runner.headless_agent import (
     _render_only_runner,
     build_agent_prompt,
     one_cycle,
+    resolve_cli_version,
 )
 from membench.runner.trajectory_run import (
     run_arm_trajectories,
@@ -324,6 +327,83 @@ def test_env_model_resolves_and_passes_non_empty_flag(monkeypatch: pytest.Monkey
     argv = agent.argv_for(_step(), {})
     assert argv[argv.index("--model") + 1] == "claude-opus"
     assert agent._resolved_model == "claude-opus"
+
+
+# --------------------------------------------------------------------------- #
+# mem-lw0j3: naming the INSTRUMENT — the binary, not the model it points at
+# --------------------------------------------------------------------------- #
+def test_resolve_cli_version_reads_the_version_off_the_binary() -> None:
+    # The real shape: `claude --version` -> "2.1.210 (Claude Code)". The version is the
+    # token; the product name rides along and is not part of the identity.
+    runner = _fake_runner("2.1.210 (Claude Code)\n")
+    assert resolve_cli_version(runner) == "2.1.210"
+    assert list(runner.captured["argv"]) == ["claude", "--version"]
+
+
+@pytest.mark.parametrize(
+    "stdout",
+    [
+        pytest.param("2.1.210\n", id="bare-token"),
+        pytest.param("2.2\n", id="two-component"),
+        pytest.param("2.1.210-beta.1 (Claude Code)\n", id="prerelease-suffix"),
+        pytest.param("2.1.210+build.5 (Claude Code)\n", id="build-suffix"),
+        pytest.param("2.1.210-rc.1+build.5 (Claude Code)\n", id="prerelease-and-build"),
+    ],
+)
+def test_resolve_cli_version_accepts_the_version_shapes_the_cli_emits(stdout: str) -> None:
+    # Tolerant about the SHAPE of a version, strict about it being one: a future CLI that
+    # drops the product name or ships a prerelease must not halt a paid sweep.
+    assert resolve_cli_version(_fake_runner(stdout)) == stdout.split()[0]
+
+
+def test_resolve_cli_version_refuses_output_it_does_not_recognise_rather_than_guessing() -> None:
+    """`claude --version` prints ONE line. Given more, this refuses instead of picking a line.
+
+    The failure this closes is silent, which is what makes it worth halting over: an update nag
+    or a bundled-runtime notice ahead of the version line ("18.2.0 required, please upgrade")
+    is itself a well-SHAPED version token, so a parse that scans the whole output for the first
+    thing matching would stamp node's version on the cell as the claude binary's — a value that
+    looks right and names the wrong instrument, which is this module's entire defect family.
+    Refusing is the cheap end: the sweep halts with a diagnostic naming the output it got."""
+    with pytest.raises(HeadlessAgentError, match="single version line"):
+        resolve_cli_version(
+            _fake_runner("18.2.0 required, please upgrade\n2.1.210 (Claude Code)\n")
+        )
+
+
+@pytest.mark.parametrize(
+    "runner",
+    [
+        pytest.param(_fake_runner("", returncode=1, stderr="boom"), id="non-zero-exit"),
+        pytest.param(_fake_runner("unknown\n"), id="junk"),
+        pytest.param(_fake_runner("\n"), id="empty"),
+        pytest.param(_fake_runner("Error: not logged in\n"), id="prose"),
+    ],
+)
+def test_resolve_cli_version_refuses_to_name_an_instrument_it_cannot_identify(
+    runner: CliRunner,
+) -> None:
+    # A paid run that cannot name its instrument must not spend. Every one of these would
+    # otherwise be stored as a `cli_version` a later resume would match against — an
+    # unidentified binary's numbers served as a named one's.
+    with pytest.raises(HeadlessAgentError):
+        resolve_cli_version(runner)
+
+
+def test_resolve_cli_version_raises_when_the_cli_is_missing() -> None:
+    def missing(argv, **kwargs):
+        raise FileNotFoundError(errno.ENOENT, "No such file or directory", "claude")
+
+    with pytest.raises(HeadlessAgentError, match="not found"):
+        resolve_cli_version(missing)
+
+
+def test_resolve_cli_version_raises_when_the_probe_hangs() -> None:
+    def wedged(argv, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=argv, timeout=VERSION_TIMEOUT_S)
+
+    with pytest.raises(HeadlessAgentError, match="did not respond"):
+        resolve_cli_version(wedged)
 
 
 # --------------------------------------------------------------------------- #

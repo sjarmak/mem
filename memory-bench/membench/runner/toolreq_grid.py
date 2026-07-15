@@ -30,6 +30,7 @@ from membench.runner.headless_agent import (
     Leg,
     MemoryChannel,
     render_cell_calls,
+    resolve_cli_version,
     resolve_model,
 )
 from membench.runner.realagent_probe import ArmOutcome, run_arm
@@ -84,7 +85,9 @@ SUMMARY_NAME = "summary-toolreq-realagent.json"
 # stream-json parser, `score_goal_action`, DEFAULT_TIMEOUT_S, and `simulated_runner` (which decides
 # the ENTIRE dry-run measurement — free runs only, since `dry_run` is itself in the identity).
 # NOT here, because `invocation_fingerprint` now carries them: the prompts, --allowedTools, --model,
-# --strict-mcp-config, and which cells run at all.
+# --strict-mcp-config, and which cells run at all; nor the claude binary's version, which
+# `cli_version` now carries (resolved off the instrument — a drift no one performs on purpose is not
+# a thing to bump a constant for).
 # BUMP on any change to the former that could move a result.
 EXECUTION_PROTOCOL = 2
 
@@ -376,6 +379,7 @@ def _identity(
     *,
     repeats: int,
     resolved_model: str,
+    cli_version: str,
     dry_run: bool,
 ) -> RunIdentity:
     """The cache identity for one task (see ``RunIdentity`` / ``BaseRunIdentity``).
@@ -393,6 +397,7 @@ def _identity(
         repeats=repeats,
         dry_run=dry_run,
         model=resolved_model,
+        cli_version=cli_version,
         arms=list(ARMS),
         protocol=EXECUTION_PROTOCOL,
         task_fingerprint=task_fingerprint(task),
@@ -413,6 +418,7 @@ def run_corpus(
     store_path: Path,
     mem_bin: str,
     seed_fn: SeedFn,
+    version_fn: Callable[[], str] = resolve_cli_version,
     resume: bool = True,
 ) -> dict[str, Any]:
     """Evaluate every task through the shared resume cache and shape this grid's summary.
@@ -424,9 +430,28 @@ def run_corpus(
     ``model`` is RESOLVED once here, never taken raw — through ``headless_agent.resolve_model``, the
     same rule the agent itself runs under. ``RunIdentity`` refuses an unresolved one outright
     (``BaseRunIdentity``), so this is the ONE place the rule is applied and the schema is the
-    backstop, not a second copy of it."""
-    ours_payloads = seed_fn(sequences, tasks, store_path, mem_bin)
+    backstop, not a second copy of it.
+
+    The claude BINARY is resolved the same way and in the same place (``version_fn``, normally
+    ``headless_agent.resolve_cli_version``) — ONCE per run, so every task in one sweep is filed
+    under one instrument rather than each racing an upgrade. Only for a PAID run: a dry run spawns
+    no binary, and short-circuiting here is what keeps a free run runnable with no ``claude``
+    installed at all.
+
+    ``version_fn`` is injected so a hermetic test drives the PAID path without a ``claude`` on the
+    machine, and — unlike ``seed_fn`` and ``headless_agent.CliRunner``, which are deliberately
+    un-defaulted — it DOES default to the real resolver. The convention does not transfer: those
+    seams decide whether a real, paid, unrecorded ``claude -p`` happens, so "real" must not be the
+    thing you get by omission. This one only reads ``--version``: free, and it raises rather than
+    guessing when it cannot identify the binary. What omission costs here is narrower — a paid
+    caller that forgets the stub keys its identity on whatever CLI the machine has — so the
+    default is the real resolver, which is the right answer for every production driver."""
+    # The instrument is named FIRST, before the store is seeded: a paid run that cannot identify
+    # the binary it would measure on is over, so it should end before it does that work rather
+    # than after.
     resolved_model = resolve_model(model)
+    cli_version = "" if dry_run else version_fn()
+    ours_payloads = seed_fn(sequences, tasks, store_path, mem_bin)
 
     run = run_cached_corpus(
         tasks,
@@ -437,6 +462,7 @@ def run_corpus(
             ours_payloads.get(task.work_id, {}),
             repeats=repeats,
             resolved_model=resolved_model,
+            cli_version=cli_version,
             dry_run=dry_run,
         ),
         evaluate=lambda task: evaluate_task(

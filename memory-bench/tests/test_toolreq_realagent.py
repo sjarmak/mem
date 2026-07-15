@@ -57,6 +57,10 @@ import grid_toolreq_realagent as driver  # noqa: E402
 CURRENT = "30 days"
 STALE = "90 days"
 
+# The claude binary a hermetic PAID-path test pretends to have measured on. Never resolved off
+# this machine: the suite must not key an identity on whichever CLI happens to be installed.
+STUB_CLI_VERSION = "2.1.210"
+
 
 # The default no-op seed_fn: every hermetic test that exercises run_corpus() but doesn't
 # care about the `ours` arm's actual payload injects this instead of the real seeder, so
@@ -75,12 +79,18 @@ def _run_corpus(
     dry_run: bool,
     store_path: Path,
     seed_fn: Callable[..., dict[str, dict[str, str]]] = _no_ours_payload,
+    version_fn: Callable[[], str] = lambda: STUB_CLI_VERSION,
 ) -> dict[str, Any]:
     """grid.run_corpus with the hermetic test wiring (repeats=2, no model, stubbed
-    seed_fn) — only what a test actually varies rides in its call.
+    seed_fn + version_fn) — only what a test actually varies rides in its call.
 
     mem_bin is handed to seed_fn and nowhere else, so the stubbed seeder never touches it;
-    it is not part of the run identity (the resolved PAYLOAD is — see payload_fingerprint)."""
+    it is not part of the run identity (the resolved PAYLOAD is — see payload_fingerprint).
+
+    version_fn is stubbed for the same reason seed_fn is: the real resolver spawns
+    `claude --version`, so a PAID-path case (dry_run=False) would otherwise depend on a claude
+    being installed on the machine running the suite — and would silently key its identity on
+    whatever version that machine happens to have."""
     return grid.run_corpus(
         tasks,
         sequences,
@@ -91,6 +101,7 @@ def _run_corpus(
         store_path=store_path,
         mem_bin=str(MEM_BIN),
         seed_fn=seed_fn,
+        version_fn=version_fn,
     )
 
 
@@ -593,6 +604,60 @@ def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -
     assert calls["n"] == 1
 
 
+def test_a_dry_run_never_asks_which_binary_is_installed(tmp_path: Path) -> None:
+    """A free run spawns no claude, so it must not need one to exist. If `run_corpus` resolved the
+    version unconditionally, `--dry-run` would halt on a machine with no CLI installed — the whole
+    point of the free path is that it runs anywhere."""
+    sequences, tasks = _corpus_one(tmp_path)
+
+    def _refuse() -> str:
+        raise AssertionError("a dry run must not resolve the claude binary — it spawns none")
+
+    summary = _run_corpus(
+        tasks,
+        sequences,
+        tmp_path / "out",
+        dry_run=True,
+        store_path=tmp_path / "store.db",
+        version_fn=_refuse,
+    )
+    assert summary["executed"] == 1
+
+
+def test_upgrading_the_cli_between_runs_is_a_miss_not_a_relabel(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """THE defect at the grid altitude: measure a paid sweep, upgrade the claude CLI, resume over
+    the same --out. The cells must MISS and re-measure. Both runs are spied, so neither spends."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    store_path = tmp_path / "store.db"
+    real_eval = grid.evaluate_task
+    calls = {"n": 0}
+
+    def _spy(task, **_kwargs):
+        calls["n"] += 1
+        return real_eval(task, repeats=2, model="", dry_run=True)  # simulate, never spend
+
+    monkeypatch.setattr(grid, "evaluate_task", _spy)
+    first = _run_corpus(
+        tasks, sequences, out, dry_run=False, store_path=store_path, version_fn=lambda: "2.1.173"
+    )
+    assert (first["executed"], first["reused"]) == (1, 0)
+
+    second = _run_corpus(
+        tasks, sequences, out, dry_run=False, store_path=store_path, version_fn=lambda: "2.1.210"
+    )
+    assert (second["executed"], second["reused"]) == (1, 0), "old binary's numbers, new instrument"
+    assert calls["n"] == 2
+
+    # ...and the same binary still resumes: the field must not make every paid run a miss.
+    third = _run_corpus(
+        tasks, sequences, out, dry_run=False, store_path=store_path, version_fn=lambda: "2.1.210"
+    )
+    assert (third["executed"], third["reused"]) == (0, 1)
+
+
 def test_corrupt_cache_file_is_re_executed_not_crashed(tmp_path: Path) -> None:
     sequences, tasks = _corpus_one(tmp_path)
     out = tmp_path / "out"
@@ -966,6 +1031,7 @@ def test_a_short_grid_under_the_empty_flag_is_a_miss_not_an_escaping_keyerror(
         repeats=2,
         dry_run=True,
         model="",
+        cli_version="",  # a dry run spawns no binary, so it names none
         arms=list(grid.ARMS),
         protocol=grid.EXECUTION_PROTOCOL,
         task_fingerprint="fp-task",
@@ -1156,6 +1222,10 @@ def test_repeats_zero_is_refused_and_never_caches_a_0_of_0_verdict(tmp_path: Pat
             repeats=0,
             dry_run=True,
             model="",
+            # Spelled out even though it is empty: without it the identity would raise for the
+            # MISSING field, and this case would stay green if the repeats>=1 bound ever
+            # regressed — a pass for the wrong reason.
+            cli_version="",
             arms=list(grid.ARMS),
             protocol=grid.EXECUTION_PROTOCOL,
             task_fingerprint="x",

@@ -79,6 +79,8 @@ def _identity(**overrides: object) -> _Identity:
         "repeats": 2,
         "dry_run": True,
         "model": "",
+        # The default identity is a DRY RUN, which spawns no binary — so it names none.
+        "cli_version": "",
         "protocol": 1,
         "task_fingerprint": "fp-task",
         "invocation_fingerprint": invocation_digest(_calls()),
@@ -267,6 +269,35 @@ def test_repointing_the_env_model_between_runs_is_a_miss_not_a_relabel(
     assert (second.executed, second.reused) == (1, 0), "served one model's numbers as another's"
 
 
+# --- the instrument the cells were measured ON (mem-lw0j3) -----------------------------
+
+
+def test_a_paid_identity_must_name_the_binary_it_measured_on() -> None:
+    """A paid cell is a measurement made BY a specific claude binary; an identity that cannot name
+    it matches every later resume on any binary (argued at `BaseRunIdentity.cli_version`)."""
+    with pytest.raises(ValidationError):
+        _identity(dry_run=False, cli_version="")
+
+
+def test_a_dry_run_identity_must_not_claim_a_binary() -> None:
+    """The other direction, and not symmetry for its own sake: a dry run spawns NO binary, so a
+    version stamped on it is a claim about a process that never started."""
+    with pytest.raises(ValidationError):
+        _identity(dry_run=True, cli_version="2.1.210")
+
+
+def test_upgrading_the_cli_between_runs_is_a_miss_not_a_relabel(tmp_path: Path) -> None:
+    """THE defect, end to end: measure a paid sweep, upgrade the claude CLI, resume over the same
+    --out. The cached cells must MISS and re-measure — never be served as `reused` with the old
+    binary's numbers relabelled as the new instrument's."""
+    out = tmp_path / "out"
+    first = _run([_Task("w-0")], out, _identity(dry_run=False, cli_version="2.1.173"))
+    assert (first.executed, first.reused) == (1, 0)
+
+    second = _run([_Task("w-0")], out, _identity(dry_run=False, cli_version="2.1.210"))
+    assert (second.executed, second.reused) == (1, 0), "served one binary's numbers as another's"
+
+
 def test_a_record_written_with_an_unresolved_model_is_unloadable(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -316,9 +347,12 @@ def test_a_changed_fingerprint_is_a_miss(tmp_path: Path) -> None:
 
 
 def test_a_free_dry_run_never_satisfies_a_paid_run(tmp_path: Path) -> None:
+    # A paid identity names the binary it was measured on; a dry-run one names none (see
+    # `_a_paid_measurement_names_the_binary_it_was_made_on`). `dry_run` itself is what this case
+    # turns on — the version rides along because a paid identity cannot be built without one.
     out = tmp_path / "out"
     _run([_Task("w-0")], out, _identity(dry_run=True))
-    paid = _run([_Task("w-0")], out, _identity(dry_run=False))
+    paid = _run([_Task("w-0")], out, _identity(dry_run=False, cli_version="2.1.210"))
     assert (paid.executed, paid.reused) == (1, 0)
 
 

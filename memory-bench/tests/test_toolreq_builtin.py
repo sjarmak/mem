@@ -812,9 +812,60 @@ def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -
         return real_eval(task, repeats=1, model="", dry_run=True)  # simulate, never spend
 
     monkeypatch.setattr(grid, "evaluate_task", _spy)
-    paid = grid.run_corpus(tasks, out_dir=out, repeats=1, model="", dry_run=False)
+    paid = grid.run_corpus(
+        tasks, out_dir=out, repeats=1, model="", dry_run=False, version_fn=lambda: "2.1.210"
+    )
     assert paid["executed"] == 1 and paid["reused"] == 0
     assert calls["n"] == 1
+
+
+def test_upgrading_the_cli_between_runs_is_a_miss_not_a_relabel(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Worth a case here and not only in the 3-arm suite: this grid wires its own `run_corpus`, and
+    ours-vs-builtin is a comparison BETWEEN the two grids — a drift that missed one while the other
+    reused would corrupt exactly that comparison. Both runs are spied, so neither spends."""
+    tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    real_eval = grid.evaluate_task
+
+    def _spy(task, **_kwargs):
+        return real_eval(task, repeats=1, model="", dry_run=True)  # simulate, never spend
+
+    monkeypatch.setattr(grid, "evaluate_task", _spy)
+    first = grid.run_corpus(
+        tasks, out_dir=out, repeats=1, model="", dry_run=False, version_fn=lambda: "2.1.173"
+    )
+    assert (first["executed"], first["reused"]) == (1, 0)
+
+    second = grid.run_corpus(
+        tasks, out_dir=out, repeats=1, model="", dry_run=False, version_fn=lambda: "2.1.210"
+    )
+    assert (second["executed"], second["reused"]) == (1, 0), "old binary's numbers, new instrument"
+
+    # ...and the same binary still resumes: the field must not make every paid run a miss.
+    third = grid.run_corpus(
+        tasks, out_dir=out, repeats=1, model="", dry_run=False, version_fn=lambda: "2.1.210"
+    )
+    assert (third["executed"], third["reused"]) == (0, 1)
+
+
+def test_a_dry_run_never_asks_which_binary_is_installed(tmp_path: Path) -> None:
+    """A free run spawns no claude, so it must not need one to exist — `--dry-run` has to stay
+    runnable on a machine with no CLI installed at all."""
+
+    def _refuse() -> str:
+        raise AssertionError("a dry run must not resolve the claude binary — it spawns none")
+
+    summary = grid.run_corpus(
+        _corpus_one(tmp_path),
+        out_dir=tmp_path / "out",
+        repeats=1,
+        model="",
+        dry_run=True,
+        version_fn=_refuse,
+    )
+    assert summary["executed"] == 1
 
 
 # THE FOUR LIVE DEFECTS (mem-mpxie). Each was a real hole in this driver's hand-rolled cache on

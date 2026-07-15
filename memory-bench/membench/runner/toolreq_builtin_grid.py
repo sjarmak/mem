@@ -28,7 +28,13 @@ from typing import Any, Self
 
 from pydantic import Field, model_validator
 
-from membench.runner.headless_agent import CHANNELS, CellCalls, HeadlessAgentError, resolve_model
+from membench.runner.headless_agent import (
+    CHANNELS,
+    CellCalls,
+    HeadlessAgentError,
+    resolve_cli_version,
+    resolve_model,
+)
 from membench.runner.realagent_probe import ArmOutcome
 from membench.runner.resume_cache import (
     BaseCachedResult,
@@ -62,7 +68,8 @@ SUMMARY_NAME = "summary-toolreq-builtin.json"
 # free runs only, since `dry_run` is itself in the identity).
 # NOT here, because the identity now carries them: the prompts, --allowedTools, --model,
 # --strict-mcp-config, and the legs' count and order (`invocation_fingerprint`); the seeded
-# `autoMemoryEnabled` settings dict (`mechanism_fingerprint`).
+# `autoMemoryEnabled` settings dict (`mechanism_fingerprint`); the claude binary's version
+# (`cli_version`, resolved off the instrument).
 # NOT here either, for a different reason: `preflight` / `preflight_kind`. They are a GATE on
 # whether the sweep runs at all, not a step that executes or scores a cell — the preflight's own
 # measurement is DISCARDED and never persisted (it runs at repeats=1 in a fresh TemporaryDirectory
@@ -362,13 +369,19 @@ class BuiltinCachedResult(BaseCachedResult[BuiltinRunIdentity, BuiltinCell]):
 
 
 def _identity(
-    task: ToolReqRealAgentTask, *, repeats: int, resolved_model: str, dry_run: bool
+    task: ToolReqRealAgentTask,
+    *,
+    repeats: int,
+    resolved_model: str,
+    cli_version: str,
+    dry_run: bool,
 ) -> BuiltinRunIdentity:
     """The cache identity for one task (see ``BuiltinRunIdentity`` / ``BaseRunIdentity``)."""
     return BuiltinRunIdentity(
         repeats=repeats,
         dry_run=dry_run,
         model=resolved_model,
+        cli_version=cli_version,
         protocol=EXECUTION_PROTOCOL,
         task_fingerprint=task_fingerprint(task),
         invocation_fingerprint=invocation_fingerprint(task, model=resolved_model),
@@ -383,6 +396,7 @@ def run_corpus(
     repeats: int,
     model: str,
     dry_run: bool,
+    version_fn: Callable[[], str] = resolve_cli_version,
     resume: bool = True,
     before_first_spend: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
@@ -393,15 +407,25 @@ def run_corpus(
     (``BaseRunIdentity``), so this is the ONE place the rule is applied and the schema is the
     backstop, not a second copy of it.
 
+    The claude BINARY is resolved on the same terms (``toolreq_grid.run_corpus``), and matters to
+    this grid for an EXTRA reason — ours-vs-builtin is a comparison BETWEEN grids
+    (``headless_agent.cell_agent``), so a binary drift that missed one grid while the other reused
+    would corrupt exactly that comparison.
+
     ``before_first_spend`` is forwarded, not interpreted — ``preflight_gate`` is what the driver
     passes, and the hook's contract is ``resume_cache.run_cached_corpus``'s."""
     resolved_model = resolve_model(model)
+    cli_version = "" if dry_run else version_fn()
     run = run_cached_corpus(
         tasks,
         out_dir=out_dir,
         result_cls=BuiltinCachedResult,
         identity_of=lambda task: _identity(
-            task, repeats=repeats, resolved_model=resolved_model, dry_run=dry_run
+            task,
+            repeats=repeats,
+            resolved_model=resolved_model,
+            cli_version=cli_version,
+            dry_run=dry_run,
         ),
         evaluate=lambda task: evaluate_task(
             task, repeats=repeats, model=resolved_model, dry_run=dry_run
