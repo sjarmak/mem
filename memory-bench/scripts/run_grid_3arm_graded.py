@@ -82,12 +82,13 @@ from membench.harbor.bundle_grid import (
     OursRungEvidence,
     ThreeArmRow,
     ours_rung_evidence,
+    resolve_payloads,
     signature_overlap_summary,
     summarize_grid_3arm,
 )
 from membench.harbor.probe_gate import StreamExec, pinned_stream_exec
 from membench.harbor.repro_live import LiveReproRunner
-from membench.memory_systems.ours_system import _default_runner, resolve_payloads
+from membench.memory_systems.ours_system import _default_runner
 from membench.schemas.bundle import TaskBundle
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]

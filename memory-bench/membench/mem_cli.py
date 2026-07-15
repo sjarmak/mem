@@ -13,10 +13,16 @@ the call sites should not each re-derive:
 
 Every failure raises `MemCliError` (a RuntimeError) — the pipeline break is
 always surfaced, never degraded to "no data".
+
+It also owns the CLI's INPUT format (`write_ndjson`), for the same
+one-definition reason: the seeders that feed `mem import-records/-lessons` are
+otherwise each free to spell the wire format slightly differently.
 """
 
 import json
 import subprocess
+from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any, cast
 
 # Generous bound: `mem query` over the full ~6.6k-record store completes in
@@ -28,6 +34,16 @@ DEFAULT_TIMEOUT_S = 120.0
 class MemCliError(RuntimeError):
     """A `mem` CLI invocation failed (missing binary, timeout, non-zero exit,
     malformed envelope). Carries the command for context."""
+
+
+def write_ndjson(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
+    """One JSON object per line — the import format `mem import-records/-lessons`
+    reads. Terminates every line rather than joining, so an empty `rows` writes an
+    empty file and not a stray blank line (which is not a valid record)."""
+    path.write_text(
+        "".join(json.dumps(row) + "\n" for row in rows),
+        encoding="utf-8",
+    )
 
 
 def run_mem_json(

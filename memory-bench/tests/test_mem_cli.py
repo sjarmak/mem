@@ -4,13 +4,16 @@ The seam is the one place the harness shells to the TS CLI; every failure mode
 must surface as a `MemCliError` carrying enough context to act on (the command,
 the exit/stdout detail, the build hint for a missing binary). Real subprocesses
 are exercised with tiny shell stand-ins — no TS build required.
+
+It also owns the CLI's INPUT format (`write_ndjson`), tested here for the same
+reason: every seeder that feeds `mem import-records/-lessons` spells it once.
 """
 
 import json
 
 import pytest
 
-from membench.mem_cli import MemCliError, run_mem_json
+from membench.mem_cli import MemCliError, run_mem_json, write_ndjson
 from tests.helpers import fake_mem as _fake_mem
 
 
@@ -64,3 +67,28 @@ def test_input_is_piped_to_stdin(tmp_path):
         f'stdin=$(cat); echo \'{json.dumps(envelope)}\' | sed "s/null/\\"$stdin\\"/"',
     )
     assert run_mem_json([binary, "extract-errors"], input="hello") == {"echoed": "hello"}
+
+
+# --- write_ndjson: the import format `mem import-records/-lessons` reads ---------------
+
+
+def test_write_ndjson_writes_one_terminated_json_object_per_line(tmp_path):
+    path = tmp_path / "records.ndjson"
+    write_ndjson(path, [{"work_id": "w-0"}, {"work_id": "w-1"}])
+
+    text = path.read_text(encoding="utf-8")
+    assert text == '{"work_id": "w-0"}\n{"work_id": "w-1"}\n'
+    assert [json.loads(line) for line in text.splitlines()] == [
+        {"work_id": "w-0"},
+        {"work_id": "w-1"},
+    ]
+
+
+def test_write_ndjson_writes_an_empty_file_for_no_rows(tmp_path):
+    """A blank line is not a record. Joining on the separator instead of terminating
+    each line would emit one for an empty corpus — the drift that existed while two
+    seeders each spelled this format themselves (mem-rsmq7)."""
+    path = tmp_path / "empty.ndjson"
+    write_ndjson(path, [])
+
+    assert path.read_text(encoding="utf-8") == ""

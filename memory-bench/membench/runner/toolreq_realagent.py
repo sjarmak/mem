@@ -35,7 +35,7 @@ mem-rk41.3.1 adds the ``ours`` arm's seeding half, and this module holds both en
 ``oracle_memory`` content this module already computed, and
 ``seed_ours_store_and_resolve_payloads`` imports those lessons — alongside rk41.5's value-free
 ``sequence_records`` — into a FRESH store and resolves the arm's real retrieval payload through
-``ours_system.resolve_payloads``. So a store seeded from it and the ``oracle`` arm share one
+``harbor.bundle_grid.resolve_payloads``. So a store seeded from it and the ``oracle`` arm share one
 opaque value space. The paid driver (``scripts/grid_toolreq_realagent.py``) supplies the
 repo-root ``bin/mem`` path and calls in.
 """
@@ -46,7 +46,7 @@ import hashlib
 import json
 import re
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -61,8 +61,9 @@ from membench.generators.toolreq_bundle_adapter import (
     sequence_bundles,
     sequence_records,
 )
-from membench.mem_cli import run_mem_json
-from membench.memory_systems.ours_system import _default_runner, resolve_payloads
+from membench.harbor.bundle_grid import resolve_payloads
+from membench.mem_cli import run_mem_json, write_ndjson
+from membench.memory_systems.ours_system import _default_runner
 from membench.metrics.scorers import states_value
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL
 from membench.runner.resume_cache import digest
@@ -368,14 +369,6 @@ def sequence_lessons_opaque(
     return lessons
 
 
-def _write_ndjson(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
-    """One JSON object per line — the import format `mem import-records/-lessons` reads."""
-    path.write_text(
-        "".join(json.dumps(row) + "\n" for row in rows),
-        encoding="utf-8",
-    )
-
-
 def _reset_store(store_path: Path) -> None:
     """Delete any store already at ``store_path``, SQLite sidecars included, so the seed that
     follows is genuinely FRESH.
@@ -398,8 +391,8 @@ def seed_ours_store_and_resolve_payloads(
     """Seed a fresh ``ours`` store with the SAME substrate the mem-rk41.5 offline gate builds
     (``sequence_records``) plus opaque-valued lessons (``sequence_lessons_opaque`` — the SAME
     opaque token space ``oracle`` surfaces, the mem-rk41.3.1 invariant), then resolve the ``ours``
-    arm's real retrieval payload via ``ours_system.resolve_payloads``, the SAME function the paid
-    ours-vs-builtin grid uses.
+    arm's real retrieval payload via ``harbor.bundle_grid.resolve_payloads``, the SAME function the
+    paid ours-vs-builtin grid uses.
 
     FREE — real ``mem`` CLI calls, never an agent turn — and so the paid driver runs it on EVERY
     invocation, dry-run or paid, cache-served tasks included. It covers ALL sequences and is never
@@ -415,8 +408,8 @@ def seed_ours_store_and_resolve_payloads(
         workspace_path = Path(workspace)
         records_path = workspace_path / "records.ndjson"
         lessons_path = workspace_path / "lessons.ndjson"
-        _write_ndjson(records_path, records)
-        _write_ndjson(lessons_path, lessons)
+        write_ndjson(records_path, records)
+        write_ndjson(lessons_path, lessons)
         run_mem_json(
             [mem_bin, "import-records", "--file", str(records_path), "--store", str(store_path)]
         )

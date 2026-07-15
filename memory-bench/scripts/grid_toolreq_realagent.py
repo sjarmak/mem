@@ -36,7 +36,7 @@ measured step is a typed ``membench`` call it merely wires together: the grid co
 fingerprints, and the resume cache whose every defect this file has shipped) is
 ``membench.runner.toolreq_grid``, and the ``ours``-store seeder + payload resolver are
 ``membench.runner.toolreq_realagent.seed_ours_store_and_resolve_payloads`` /
-``membench.memory_systems.ours_system.resolve_payloads``. All of it is inside ``mypy --strict``,
+``membench.harbor.bundle_grid.resolve_payloads``. All of it is inside ``mypy --strict``,
 which this file is not. Read the cache invariant in ``toolreq_grid``.
 
 It does NOT run the ``builtin`` arm (mem-rk41.3.2): that needs a persistent native-memory

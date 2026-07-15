@@ -49,11 +49,13 @@ from run_grid import load_admitted_bundles, score_runs
 
 from membench.grading.mechanism_gate import MechanismFiresGate, enforce_mechanism_fires
 from membench.harbor.bundle_grid import (
+    RETRIEVAL_SCOPE,
     GridConditionResult,
     OursRungEvidence,
     ThreeArmRow,
     as_condition,
     ours_rung_evidence,
+    resolve_payloads,
     signature_overlap_observations,
     signature_overlap_summary,
     summarize_grid_3arm,
@@ -67,11 +69,9 @@ from membench.harbor.probe_gate import (
     touches_native_memory,
 )
 from membench.memory_systems.ours_system import (
-    RETRIEVAL_SCOPE,
     OursQuery,
     RetrieveRunner,
     _default_runner,
-    resolve_payloads,
 )
 from membench.schemas.bundle import TaskBundle
 

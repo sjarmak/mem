@@ -20,6 +20,7 @@ from membench.harbor.bundle_grid import (
     load_grid_ready_work_ids,
     ours_rung_evidence,
     pair_grid,
+    resolve_payloads,
     score_grid_condition,
     summarize_grid,
     summarize_grid_3arm,
@@ -262,20 +263,85 @@ def test_ours_rung_evidence_counts_lesson_bearing_items() -> None:
     )
 
 
-def _bundle_for_evidence() -> TaskBundle:
+def _bundle_for_evidence(work_id: str = "demo-1") -> TaskBundle:
+    """A bundle that holds out its OWN work_id, so a resolver that surfaces it is
+    leaking across the LOO boundary."""
     output = ReplayResult(
         calls=(), file_diffs=(("src/app.ts", IMPL_DIFF),), replay_success_rate=0.0
     )
     return TaskBundle(
-        work_id="demo-1",
+        work_id=work_id,
         rig="demo",
         issue_title="t",
         issue_body="",
         trace_ref="/tmp/t.jsonl",
         output=output,
         env=BundleEnv(repo="demo", base_commit="0" * 40, base_image="node:22-bookworm"),
-        loo_excluded_work_ids=("demo-1",),
+        loo_excluded_work_ids=(work_id,),
     )
+
+
+# --- resolve_payloads: the bulk payload resolver, driving the SAME retrieval surface the
+# arm itself does, so the text a paid driver injects is what the arm would inject.
+
+
+def test_resolve_payloads_drops_lessonless_items_and_keys_by_source() -> None:
+    def runner(query: OursQuery) -> dict:
+        assert query.scope == "same_rig_temporal"
+        if query.work_id == "demo-a":
+            return {
+                "items": [
+                    {"work_id": "prior-1", "citation": {"x": 1}, "lessons": [{"s": "l"}]},
+                    {"work_id": "prior-2", "citation": {"x": 2}, "lessons": []},
+                ]
+            }
+        return {"items": []}
+
+    payloads = resolve_payloads(
+        [_bundle_for_evidence("demo-a"), _bundle_for_evidence("demo-b")],
+        store_path=Path("/tmp/s.db"),
+        runner=runner,
+    )
+    assert set(payloads["demo-a"]) == {"prior-1"}
+    assert "lessons" in payloads["demo-a"]["prior-1"]
+    assert payloads["demo-b"] == {}
+
+
+def test_resolve_payloads_rejects_loo_excluded_items() -> None:
+    """D6: an item inside the bundle's LOO exclusion set must never inject --
+    retrieval-v1 is contracted to exclude it, and this re-asserts."""
+    bundle = _bundle_for_evidence("demo-a")  # loo_excluded_work_ids == ("demo-a",)
+
+    def runner(query: OursQuery) -> dict:
+        return {
+            "items": [
+                {"work_id": "demo-a", "citation": {}, "lessons": [{"s": "self"}]},
+            ]
+        }
+
+    with pytest.raises(RuntimeError, match="LOO-excluded"):
+        resolve_payloads([bundle], store_path=Path("/tmp/s.db"), runner=runner)
+
+
+def test_resolve_payloads_passes_no_trace_query_through() -> None:
+    """mem-tnyo: the issue-text trigger resolves its payloads through the SAME function,
+    forming the query WITHOUT the held record's stored trace errors."""
+    seen: list[OursQuery] = []
+
+    def runner(query: OursQuery) -> dict:
+        seen.append(query)
+        return {"items": []}
+
+    resolve_payloads([_bundle_for_evidence("demo-a")], store_path=Path("/tmp/s.db"), runner=runner)
+    resolve_payloads(
+        [_bundle_for_evidence("demo-a")],
+        store_path=Path("/tmp/s.db"),
+        runner=runner,
+        no_trace_query=True,
+    )
+
+    assert seen[0].no_trace_query is False
+    assert seen[1].no_trace_query is True
 
 
 def test_summarize_grid_paired_deltas_and_rung_availability() -> None:

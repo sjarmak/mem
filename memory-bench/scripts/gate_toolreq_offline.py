@@ -20,7 +20,7 @@ Pipeline (all FREE — git/Docker/agent none of it; only the built ``mem`` CLI +
       -> mem import-lessons                            # attach lessons by work_id
       -> REUSE run_grid_3arm.{resolve_held_signatures, tier1_mechanism_gate}
               + run_grid.load_admitted_bundles
-              + ours_system.resolve_payloads   # the arm's own resolver (mem-rsmq7)
+              + bundle_grid.resolve_payloads   # the harness-side resolver (mem-rsmq7)
       -> assert the SAME gate fired
 
 HALT DISCIPLINE (this bead): this driver builds + verifies the OFFLINE gate only. It
@@ -39,7 +39,7 @@ import json
 import shutil
 import sys
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -58,13 +58,13 @@ from membench.generators.toolreq_bundle_adapter import (
 )
 from membench.generators.world_manifest import read_manifest
 from membench.grading.mechanism_gate import MechanismFiresGate
-from membench.harbor.bundle_grid import signature_overlap_observations
-from membench.mem_cli import run_mem_json
-from membench.memory_systems.ours_system import (
+from membench.harbor.bundle_grid import (
     RETRIEVAL_SCOPE,
-    _default_runner,
     resolve_payloads,
+    signature_overlap_observations,
 )
+from membench.mem_cli import run_mem_json, write_ndjson
+from membench.memory_systems.ours_system import _default_runner
 from membench.schemas.bundle import TaskBundle
 from membench.schemas.sequence import BenchmarkSequence
 
@@ -107,10 +107,6 @@ def load_toolreq_sequences(world_dir: Path) -> list[BenchmarkSequence]:
         seed=manifest.seed,
         tool_requiring=True,
     )
-
-
-def _write_ndjson(path: Path, rows: Sequence[Mapping[str, object]]) -> None:
-    path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
 
 
 def _write_bundles(bundles_dir: Path, bundles: Sequence[TaskBundle]) -> Path:
@@ -158,7 +154,7 @@ def run_offline_gate(
     records = sequence_records(sequences)
     bundles = sequence_bundles(sequences)
     records_path = out_dir / "records.ndjson"
-    _write_ndjson(records_path, records)
+    write_ndjson(records_path, records)
     manifest_path = _write_bundles(bundles_dir, bundles)
 
     run_mem_json(
@@ -173,7 +169,7 @@ def run_offline_gate(
 
     lessons = sequence_lessons(sequences, held_signatures)
     lessons_path = out_dir / "lessons.ndjson"
-    _write_ndjson(lessons_path, lessons)
+    write_ndjson(lessons_path, lessons)
     run_mem_json(
         [mem_bin, "import-lessons", "--file", str(lessons_path), "--store", str(store_path)]
     )

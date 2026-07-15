@@ -1,6 +1,6 @@
 """3-arm pilot CLI (mem-p3w): row assembly, reuse semantics, the held-signature
-covariate, and the mechanism gate. Payload resolution moved to the ``ours`` arm with
-``resolve_payloads`` (mem-rsmq7) — its tests live in ``test_ours_system``.
+covariate, and the mechanism gate. Payload resolution moved to ``harbor.bundle_grid``
+with ``resolve_payloads`` (mem-rsmq7) — its tests live in ``test_bundle_grid``.
 
 `scripts/run_grid_3arm.py` is not a package module, so it is loaded from its file
 path (the test_run_gate_probe idiom, preloading its sibling-script imports). No

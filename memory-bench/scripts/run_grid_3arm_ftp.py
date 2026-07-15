@@ -52,7 +52,12 @@ from run_grid_3arm_graded import run_validity_gates
 
 from membench.grading.graded import DEFAULT_JUDGE_ROUNDS, ClaudeRubricJudge
 from membench.grading.validity_gate import ValidityResult
-from membench.harbor.bundle_grid import OursRungEvidence, ours_rung_evidence, summarize_grid_3arm
+from membench.harbor.bundle_grid import (
+    OursRungEvidence,
+    ours_rung_evidence,
+    resolve_payloads,
+    summarize_grid_3arm,
+)
 from membench.harbor.ftp_repro import FTP_REPRO_WORKTREE_PREFIX, FtpReproRunner
 from membench.harbor.probe_gate import (
     EmptyRunError,
@@ -60,7 +65,7 @@ from membench.harbor.probe_gate import (
     detect_run_failure,
     harbor_stream_exec,
 )
-from membench.memory_systems.ours_system import _default_runner, resolve_payloads
+from membench.memory_systems.ours_system import _default_runner
 from membench.schemas.bundle import TaskBundle
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]

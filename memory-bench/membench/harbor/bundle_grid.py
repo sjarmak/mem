@@ -51,12 +51,22 @@ from membench.harbor.probe_gate import (
     metric_gap_stats,
     paired_deltas,
 )
-from membench.memory_systems.ours_system import OursQuery, RetrieveRunner, _default_runner
+from membench.memory_systems.ours_system import (
+    OursQuery,
+    RetrieveRunner,
+    _default_runner,
+    _render_payload,
+)
 from membench.schemas.bundle import TaskBundle
 
 # The grid rescores the gate's executed runs, so its conditions ARE the gate's --
 # one shared constant, not a copy to keep in sync.
 GRID_CONDITIONS: tuple[str, ...] = CONDITIONS
+
+# The realistic dual-track scope (D7) -- same-rig prior work, temporally bounded.
+# The harness's election, not the arm's: `base` owns the scope VOCABULARY and
+# `OursMemory.retrieve` reads whichever scope the harness hands it.
+RETRIEVAL_SCOPE = "same_rig_temporal"
 
 
 class GridConditionResult(BaseModel):
@@ -247,12 +257,58 @@ def pair_grid(none: GridConditionResult, oracle: GridConditionResult) -> GridPai
     return GridPair(work_id=none.work_id, none=none, oracle=oracle, deltas=deltas)
 
 
+def resolve_payloads(
+    bundles: Sequence[TaskBundle],
+    *,
+    store_path: Path,
+    runner: RetrieveRunner,
+    no_trace_query: bool = False,
+) -> dict[str, dict[str, str]]:
+    """work_id -> (source work_id -> rendered citation+lessons payload) via the
+    ours ARM's own retrieval runner, so the injected text is exactly what the arm
+    would inject. Items without lessons are dropped -- the arm's information
+    content is the lesson payload (D9); a bare citation carries none. Every item
+    is checked against the bundle's LOO exclusion set (D6): retrieval-v1 is
+    contracted to enforce that boundary, but a leak here would hand the agent its
+    own work record, so this re-asserts rather than assumes.
+
+    Harness-side, not arm-side, and so it lives HERE rather than in `ours_system`
+    (mem-rsmq7): it iterates the harness's eval object (`TaskBundle`), elects the
+    scope, and re-checks the LOO boundary -- the three things `memory_systems.base`
+    reserves to the harness ("the harness, not the arm, fixes the boundary; the
+    arm's output is re-checked against it"). `ours_rung_evidence` below is the same
+    shape over the same runner.
+
+    ``no_trace_query`` resolves the mem-tnyo issue-text-trigger payloads instead:
+    the query is formed WITHOUT the held record's stored trace errors (title /
+    task-type text only -- `mem retrieve --no-trace-query`)."""
+    payloads: dict[str, dict[str, str]] = {}
+    for bundle in bundles:
+        result = runner(
+            OursQuery(
+                work_id=bundle.work_id,
+                scope=RETRIEVAL_SCOPE,
+                store_path=str(store_path),
+                no_trace_query=no_trace_query,
+            )
+        )
+        items = [item for item in result.get("items", []) if item.get("lessons")]
+        leaked = sorted({item["work_id"] for item in items} & set(bundle.loo_excluded_work_ids))
+        if leaked:
+            raise RuntimeError(
+                f"{bundle.work_id}: retrieval returned LOO-excluded work id(s) {leaked} -- "
+                "the D6 boundary is broken; refusing to inject"
+            )
+        payloads[bundle.work_id] = {item["work_id"]: _render_payload(item) for item in items}
+    return payloads
+
+
 def ours_rung_evidence(
     bundle: TaskBundle,
     *,
     mem_bin: str,
     store_path: Path,
-    scope: str = "same_rig_temporal",
+    scope: str = RETRIEVAL_SCOPE,
     runner: RetrieveRunner | None = None,
 ) -> OursRungEvidence:
     """Measure what the ``ours`` rung WOULD inject for this bundle: retrieval-v1's
