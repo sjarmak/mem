@@ -68,34 +68,16 @@ export interface RegressionFlag {
   recurred_in: string[];
 }
 
-/** The `work_id` of the one entry in a `skipped` report that is not a lesson:
- * the orphan diagnostic's truncation notice (see {@link RegressionSkip}).
- *
- * The parens make a collision with a bd-generated id vanishingly unlikely, but
- * that is a convention rather than a proof: `work_id` is `z.string().min(1)`
- * with no format constraint (schemas/workrecord.ts), and `importLessons`
- * deliberately gates nothing (writer.ts). A colliding id would misread this one
- * diagnostic line; it could not corrupt the check itself, since the notice is
- * appended after the loop and never reaches the recurrence check. */
-export const ORPHAN_TRUNCATION_WORK_ID = '(orphan-lessons)';
-
 /** One lesson the regression check could not evaluate — its source record was
  * deleted/re-ingested, or its `extracted_at` (which crosses the unvalidated
  * `import-lessons` boundary) failed to parse. Surfaced rather than silently
  * dropped, so a skip is never indistinguishable from "checked, clean".
  *
- * Two caveats for `--json` consumers, both rig-scoped-only (mem-c7mf3). A
- * skipped ORPHAN — a lesson whose source record is absent — is NOT necessarily
- * in the K-window, and NOT necessarily in the requested rig: `rig` lives only
- * on `work_records`, so an orphan has no derivable rig and every rig's report
- * receives all of them. Read a skip as "this could not be checked", never as
- * "this lesson is mine". The over-report is deliberate and safe — a skip is a
- * diagnostic, and an orphan exits before any signature is derived, so it can
- * never become a {@link RegressionFlag}.
- *
- * The orphan slice is bounded like the window, so one final entry may carry
- * {@link ORPHAN_TRUNCATION_WORK_ID} as its `work_id` instead of a lesson's:
- * the notice that more orphans exist than were listed. */
+ * Read a skip as "this could not be checked", never as "this lesson is mine":
+ * under `--rig` a skipped orphan is neither necessarily in the K-window nor
+ * necessarily in that rig — see `orphanLessons` (store/reader.ts) for why an
+ * orphan is unattributable, and `computeRegressions` for why over-reporting one
+ * is safe (mem-c7mf3). */
 export interface RegressionSkip {
   work_id: string;
   reason: string;

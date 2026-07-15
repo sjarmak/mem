@@ -35,9 +35,13 @@ export interface DistillLessonsResult {
   /** Lessons the regression check could not evaluate (source record missing,
    * or an unparseable `extracted_at`) — surfaced rather than silently dropped.
    * With `--rig`, a skipped orphan lesson is neither necessarily in the
-   * K-window nor necessarily in that rig; see {@link RegressionSkip} for why,
-   * and for the truncation-notice entry. */
+   * K-window nor necessarily in that rig; see {@link RegressionSkip}. */
   regressionSkipped: RegressionSkip[];
+  /** `--rig` runs only: how many orphan lessons the check reported among
+   * `regressionSkipped`, out of how many exist — the slice is bounded, so
+   * these differ when orphans outnumber `--regression-window`. Null on the
+   * unscoped path and when the check failed. */
+  regressionOrphans: { reported: number; total: number } | null;
 }
 
 const DEFAULT_MODEL = 'sonnet';
@@ -61,7 +65,7 @@ const DEFAULT_MODEL = 'sonnet';
  * checked for K-past-fix regressions (report-only, see `regressions` below);
  * with `--rig` it additionally bounds how many orphan lessons — whose source
  * record is absent, and whose rig is therefore underivable — are reported as
- * skipped alongside that window (mem-c7mf3).
+ * skipped alongside that window, counted in `regressionOrphans` (mem-c7mf3).
  */
 export function distillLessonsCommand(
   ctx: CommandContext,
@@ -91,9 +95,8 @@ export function distillLessonsCommand(
   // after the model calls (mem-0xz9b) — never held open across those calls,
   // since both queries run before `distillLessons` is invoked. A failure
   // here must degrade to an empty report rather than block the import below.
-  const { records, regressions, regressionSkipped, regressionError } = withReadStore(
-    ctx.options,
-    db => {
+  const { records, regressions, regressionSkipped, regressionOrphans, regressionError } =
+    withReadStore(ctx.options, db => {
       const selected = selectCandidates(db, {
         rig,
         workIds: workIdsOpt === undefined ? undefined : workIdsOpt.split(',').filter(s => s !== ''),
@@ -106,17 +109,24 @@ export function distillLessonsCommand(
       const asOfLessonId = maxLessonId(db);
       let regressions: RegressionFlag[] = [];
       let regressionSkipped: RegressionSkip[] = [];
+      let regressionOrphans: DistillLessonsResult['regressionOrphans'] = null;
       let regressionError: string | null = null;
       try {
         const result = computeRegressions(db, parsedRegressionWindow, rig, asOfLessonId);
         regressions = result.flags;
         regressionSkipped = result.skipped;
+        regressionOrphans = result.orphans;
       } catch (error: unknown) {
         regressionError = error instanceof Error ? error.message : String(error);
       }
-      return { records: selected, regressions, regressionSkipped, regressionError };
-    }
-  );
+      return {
+        records: selected,
+        regressions,
+        regressionSkipped,
+        regressionOrphans,
+        regressionError,
+      };
+    });
 
   const distill = runner ?? claudeRunner(model ?? DEFAULT_MODEL);
   const { lessons, failures } = distillLessons(
@@ -158,6 +168,11 @@ export function distillLessonsCommand(
     for (const skip of regressionSkipped) {
       console.error(`REGRESSION CHECK SKIPPED ${skip.work_id}: ${skip.reason}`);
     }
+    if (regressionOrphans !== null && regressionOrphans.reported < regressionOrphans.total) {
+      console.error(
+        `REGRESSION CHECK: reported ${regressionOrphans.reported} of ${regressionOrphans.total} orphan lesson(s)`
+      );
+    }
   }
 
   return {
@@ -169,5 +184,6 @@ export function distillLessonsCommand(
     regressions,
     regressionError,
     regressionSkipped,
+    regressionOrphans,
   };
 }

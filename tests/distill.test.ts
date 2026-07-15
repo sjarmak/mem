@@ -15,7 +15,6 @@ import {
   selectCandidates,
   type ResolutionEvidence,
 } from '../src/distill/distiller.js';
-import { ORPHAN_TRUNCATION_WORK_ID } from '../src/distill/verify.js';
 import { WorkRecordSchema, type WorkRecord } from '../src/schemas/workrecord.js';
 import {
   appendLesson,
@@ -849,7 +848,7 @@ describe('computeRegressions', () => {
     expect(computeRegressions(db, 5, 'rigB').skipped).toEqual([orphanSkip]);
   });
 
-  it('rig-scoped: signals orphan truncation rather than silently presenting k of them as the whole population', () => {
+  it('rig-scoped: counts orphan truncation rather than silently presenting k of them as the whole population', () => {
     appendLesson(db, { work_id: 'w-o1', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
     appendLesson(db, { work_id: 'w-o2', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
     appendLesson(db, { work_id: 'w-o3', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
@@ -857,24 +856,36 @@ describe('computeRegressions', () => {
     // A rebuild that drops or renames a rig strands its whole lesson set as
     // orphans, so this is the realistic shape, not a corner. Reporting 2 and
     // saying nothing about the third would reproduce the silent-undercount
-    // bug this check exists to surface.
-    //
-    // The notice's trailing position is part of the contract, not incidental:
-    // this module's reads are order-deterministic (reader.ts:7-10), so the
-    // notice is appended once after the window rather than sorted in among
-    // rows it has no id to sort by.
-    expect(computeRegressions(db, 2, 'rigA').skipped).toEqual([
+    // bug this check exists to surface. `skipped` stays lessons-only; the gap
+    // is carried by the counts, so a consumer reads two integers rather than
+    // parsing prose out of a synthetic entry.
+    const truncated = computeRegressions(db, 2, 'rigA');
+    expect(truncated.skipped).toEqual([
       { work_id: 'w-o2', reason: 'source-record-missing' },
       { work_id: 'w-o3', reason: 'source-record-missing' },
-      { work_id: ORPHAN_TRUNCATION_WORK_ID, reason: 'orphan-lessons-truncated: reporting 2 of 3' },
     ]);
+    expect(truncated.orphans).toEqual({ reported: 2, total: 3 });
 
-    // Nothing was truncated, so no notice — the report stays quiet when it is complete.
-    expect(computeRegressions(db, 5, 'rigA').skipped).toEqual([
+    // Nothing truncated: the counts agree, which is how a consumer tells a
+    // complete report from a bounded one.
+    const complete = computeRegressions(db, 5, 'rigA');
+    expect(complete.skipped).toEqual([
       { work_id: 'w-o1', reason: 'source-record-missing' },
       { work_id: 'w-o2', reason: 'source-record-missing' },
       { work_id: 'w-o3', reason: 'source-record-missing' },
     ]);
+    expect(complete.orphans).toEqual({ reported: 3, total: 3 });
+  });
+
+  it('reports no orphan counts on the unscoped path, where orphans are already in the window', () => {
+    appendLesson(db, { work_id: 'w-orphan', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+
+    // Null is not "no orphans" — it is "not separately queried". The orphan is
+    // still reported, via the window rather than the diagnostic, so the null
+    // must not be read as a clean store.
+    const { skipped, orphans } = computeRegressions(db, 5);
+    expect(skipped).toEqual([{ work_id: 'w-orphan', reason: 'source-record-missing' }]);
+    expect(orphans).toBeNull();
   });
 
   it('checks nothing for k <= 0 on the rig path either, orphan diagnostic included', () => {

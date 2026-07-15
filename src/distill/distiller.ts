@@ -24,7 +24,6 @@ import {
   type StoreDatabase,
 } from '../store/index.js';
 import {
-  ORPHAN_TRUNCATION_WORK_ID,
   checkPriorFixRegression,
   recordSignatures,
   verifyFixEvidence,
@@ -478,7 +477,22 @@ export function computeRegressions(
   k: number = DEFAULT_REGRESSION_WINDOW,
   rig?: string,
   asOfLessonId?: number | null
-): { flags: RegressionFlag[]; skipped: RegressionSkip[] } {
+): {
+  flags: RegressionFlag[];
+  skipped: RegressionSkip[];
+  /** The rig-scoped orphan diagnostic: how many orphan lessons this run
+   * reported among `skipped`, and how many exist at the same as-of bound.
+   * `null` on the unscoped path, where orphans need no separate query — they
+   * are already in the window.
+   *
+   * `reported` is bounded at `k` to keep the diagnostic proportional, so the
+   * two can differ: a rebuild that drops or renames a rig strands its whole
+   * lesson set as orphans, and reporting 5 of 493 as though 5 were all of them
+   * would re-make the silent undercount this check exists to surface. Unlike
+   * the window's `k` — the caller's own `--regression-window` — that bound is
+   * not the caller's, so the gap is worth stating rather than assuming. */
+  orphans: { reported: number; total: number } | null;
+} {
   // Rig-scoped (mem-0r7l): matching `selectCandidates`' own `--rig` scope —
   // otherwise a multi-rig store's K-window fills with an unrelated rig's
   // lessons and this rig's own lessons are never checked, with no signal
@@ -486,28 +500,25 @@ export function computeRegressions(
   // `asOfLessonId` is forwarded as given, never coerced — see `lastKLessons`
   // for its tri-state contract (mem-ljp8b).
   const recentLessons = lastKLessons(db, k, rig, asOfLessonId);
-  // ...but a rig-scoped window expresses `wr.rig` as a JOIN, which drops orphan
-  // lessons (no `work_records` row) BEFORE the LIMIT — so the
-  // source-record-missing skip below is unreachable whenever `rig` is set, and
-  // the rig path silently undercounts its coverage by the orphan population
-  // while the unscoped path reports those same lessons. Same silent-zero shape,
-  // one level down (mem-c7mf3).
+  // ...but that rig predicate is a JOIN, which drops orphan lessons (no
+  // `work_records` row) BEFORE the LIMIT — leaving the source-record-missing
+  // skip below unreachable whenever `rig` is set, so the rig path silently
+  // undercounts its coverage by the orphan population while the unscoped path
+  // reports those same lessons. Same silent-zero shape, one level down
+  // (mem-c7mf3).
   //
-  // Orphans are queried separately rather than let into the window, because
-  // they are unattributable: `rig` lives only on `work_records`, so an orphan
-  // has no derivable rig and EVERY rig's report gets all of them. Widening the
-  // window to admit them would let a foreign rig's orphan consume this rig's k
-  // slots and push a real lesson out unchecked — trading a silent skip for a
-  // silent displacement. Reported alongside, they cost no slot, and the
-  // cross-rig over-report is safe: an orphan exits at the missing-record branch
-  // before any signature is derived, so it can only ever be a skip, never a
-  // flag.
-  const orphans =
-    rig === undefined ? { lessons: [], total: 0 } : orphanLessons(db, k, asOfLessonId);
-  // Merged by id, not appended: reads here are order-deterministic (see
-  // reader.ts' module comment) and `lastKLessons` returns append order, so
-  // `skipped` stays monotonic for the operator-facing print loop.
-  const windowLessons = [...recentLessons, ...orphans.lessons].sort((a, b) => a.id - b.id);
+  // Queried alongside the window rather than widened into it: an orphan has no
+  // derivable rig (see `orphanLessons`), so admitting one would let a foreign
+  // rig's orphan consume this rig's k slots and push a real lesson out
+  // unchecked — trading a silent skip for a silent displacement. Alongside,
+  // they cost no slot, and the cross-rig over-report is safe: an orphan exits
+  // at the missing-record branch before any signature is derived, so it can
+  // only ever be a skip, never a flag.
+  const orphans = rig === undefined ? null : orphanLessons(db, k, asOfLessonId);
+  // Interleaved by id rather than appended: both reads return append order, so
+  // merging on id keeps the operator-facing print loop in one append order
+  // across the two.
+  const windowLessons = [...recentLessons, ...(orphans?.lessons ?? [])].sort((a, b) => a.id - b.id);
   const flags: RegressionFlag[] = [];
   const skipped: RegressionSkip[] = [];
 
@@ -578,19 +589,9 @@ export function computeRegressions(
     flags.push(...checkPriorFixRegression(lesson.work_id, extractedAtUtc, candidatesBySignature));
   }
 
-  // Bounding the orphan slice at k keeps this diagnostic proportional, but a
-  // bound that reports 5 of 493 as though 5 were all of them would be the very
-  // silent undercount above, re-made here. Unlike the window's k — the caller's
-  // own `--regression-window` — this bound is not the caller's, and a rebuild
-  // that drops or renames a rig strands its whole lesson set as orphans, so the
-  // gap can be large. Say so instead. Appended once, last: the notice has no
-  // lesson id to be merged by.
-  if (orphans.total > orphans.lessons.length) {
-    skipped.push({
-      work_id: ORPHAN_TRUNCATION_WORK_ID,
-      reason: `orphan-lessons-truncated: reporting ${orphans.lessons.length} of ${orphans.total}`,
-    });
-  }
-
-  return { flags, skipped };
+  return {
+    flags,
+    skipped,
+    orphans: orphans === null ? null : { reported: orphans.lessons.length, total: orphans.total },
+  };
 }
