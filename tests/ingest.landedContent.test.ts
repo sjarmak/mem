@@ -99,6 +99,17 @@ describe('classifyLandedContent — landed ladder', () => {
     });
   });
 
+  it('propagates a bad object from is-ancestor rather than reading it as not-landed', () => {
+    // `merge-base --is-ancestor` exits 1 for "not an ancestor" but 128 for a
+    // pruned or corrupt object. Both args are already-resolved shas, so 128 is a
+    // real fault: swallowing it would send the branch down the patch-id ladder
+    // and could land it on `absent`, manufacturing a false close out of a broken
+    // object. Only the exact status 1 may be read as an answer.
+    expect(() => classifyLandedContent(input, { run: git({ isAncestor: exits(128) }) })).toThrow(
+      /git exited 128/
+    );
+  });
+
   it('reports landed-equivalent when every branch commit has a patch-id twin', () => {
     const out = classifyLandedContent(input, { run: git(twoCommitBranch([p(1), p(2)])) });
     expect(out).toEqual({

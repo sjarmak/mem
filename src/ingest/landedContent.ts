@@ -1,4 +1,10 @@
-import { type GitRunner, defaultGitRunner, isNonZeroExit, isOutputTooLarge } from './provenance.js';
+import {
+  type GitRunner,
+  defaultGitRunner,
+  exitStatus,
+  isNonZeroExit,
+  isOutputTooLarge,
+} from './provenance.js';
 
 /**
  * ingest/landedContent — decides, for one bead-named branch, whether its work is
@@ -126,13 +132,17 @@ function resolveCommit(run: GitRunner, work_dir: string, ref: string): string | 
 
 /** True when `commit` is an ancestor of `of`. `merge-base --is-ancestor` exits 1
  * for "not an ancestor"; both args are resolved shas, so any other non-zero exit
- * is a real fault and propagates. */
+ * (128 — a pruned or corrupt object) is a real fault and propagates. Guarding on
+ * the exact status rather than "exited non-zero" is what keeps that fault from
+ * reading as a negative answer: a 128 swallowed here would route the branch down
+ * the patch-id ladder and could land it on `absent`, manufacturing a false close
+ * out of a broken object. Mirrors `survives` in ingest/landed.ts. */
 function isAncestor(run: GitRunner, work_dir: string, commit: string, of: string): boolean {
   try {
     run(work_dir, ['merge-base', '--is-ancestor', commit, of]);
     return true;
   } catch (err) {
-    if (isNonZeroExit(err)) return false;
+    if (exitStatus(err) === 1) return false;
     throw err;
   }
 }
