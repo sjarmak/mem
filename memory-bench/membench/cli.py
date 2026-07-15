@@ -11,7 +11,6 @@ for a real `harbor run` (paid Claude path).
 
 import argparse
 import json
-import subprocess
 import sys
 from pathlib import Path
 from typing import cast
@@ -26,6 +25,7 @@ from membench.harbor.ftp_curate import (
     load_linked_commits,
     rig_report,
 )
+from membench.mem_cli import run_mem_json
 from membench.memory_systems import build_memory_system
 from membench.memory_systems.base import MemorySystem
 from membench.replay import run_replay
@@ -139,28 +139,19 @@ def _resolve_landing_commits(args: argparse.Namespace) -> list[str]:
 
     if args.linked_json:
         payload = json.loads(Path(args.linked_json).read_text(encoding="utf-8"))
+        # A hand-supplied file may carry the full `mem --json` {ok,data,errors}
+        # envelope or an already-unwrapped body; tolerate both.
+        inner = payload.get("data", payload) if isinstance(payload, dict) else {}
     else:
         if not args.store:
             raise SystemExit(
                 "curate-ftp needs --store (to derive links) or --linked-json/--commits"
             )
         mem_bin = args.mem_bin or str(_DEFAULT_MEM_BIN)
-        try:
-            completed = subprocess.run(
-                [mem_bin, "link-outcomes", args.rig, "--store", args.store, "--json"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-        except subprocess.CalledProcessError as exc:
-            raise SystemExit(
-                f"mem link-outcomes {args.rig} failed (exit {exc.returncode}): "
-                f"{exc.stderr.strip()}"
-            ) from None
-        payload = json.loads(completed.stdout)
+        # run_mem_json owns the envelope unwrap plus the missing-binary / timeout /
+        # non-zero-exit / malformed-stdout failure ladder (raises MemCliError).
+        inner = run_mem_json([mem_bin, "link-outcomes", args.rig, "--store", args.store])
 
-    # `mem --json` wraps results in an {ok, data, errors} envelope.
-    inner = payload.get("data", payload) if isinstance(payload, dict) else {}
     linkages = frozenset(n.strip() for n in args.linkages.split(",") if n.strip())
     return load_linked_commits(inner, linkages=linkages)
 

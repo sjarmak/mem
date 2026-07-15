@@ -36,6 +36,8 @@ from membench.harbor.ftp_curate import (
     select_pytest_modules,
     single_parent,
 )
+from membench.mem_cli import MemCliError
+from tests.helpers import fake_mem as _fake_mem
 from tests.helpers import git as _git
 
 # --- junit parsing ----------------------------------------------------------------
@@ -457,3 +459,32 @@ def test_resolve_landing_commits_from_linked_json_envelope(tmp_path: Path) -> No
     path.write_text(json.dumps(envelope), encoding="utf-8")
     args = _ftp_args(linked_json=str(path))
     assert _resolve_landing_commits(args) == ["abc"]
+
+
+def test_resolve_landing_commits_shells_mem_via_run_mem_json(tmp_path: Path) -> None:
+    # With neither override, the SHAs derive live from `mem link-outcomes` through
+    # the shared run_mem_json seam: it appends --json and unwraps the envelope.
+    envelope = {
+        "apiVersion": "v1",
+        "cmd": "link-outcomes",
+        "ok": True,
+        "data": {
+            "rig": "codeprobe",
+            "commits": [
+                {"work_id": "w1", "commit_sha": "abc", "linkage": "canonical"},
+                {"work_id": "w2", "commit_sha": "def", "linkage": "unique"},
+            ],
+        },
+    }
+    mem_bin = _fake_mem(tmp_path, f"echo '{json.dumps(envelope)}'")
+    args = _ftp_args(store=str(tmp_path / "store.db"), mem_bin=mem_bin)
+    assert _resolve_landing_commits(args) == ["abc"]
+
+
+def test_resolve_landing_commits_raises_on_mem_failure(tmp_path: Path) -> None:
+    # A non-zero `mem link-outcomes` surfaces as a loud MemCliError, never a
+    # silent empty commit list that would read as "nothing to curate".
+    mem_bin = _fake_mem(tmp_path, "echo 'no such rig' >&2; exit 3")
+    args = _ftp_args(store=str(tmp_path / "store.db"), mem_bin=mem_bin)
+    with pytest.raises(MemCliError, match=r"exit 3.*no such rig"):
+        _resolve_landing_commits(args)
