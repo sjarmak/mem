@@ -28,7 +28,7 @@ from pydantic import ValidationError
 
 from membench.metrics.scorers import states_value
 from membench.runner import toolreq_grid as grid
-from membench.runner.realagent_probe import cell_calls
+from membench.runner.headless_agent import Leg, render_cell_calls
 from membench.runner.resume_cache import invocation_digest, load_cached
 from membench.runner.toolreq_realagent import (
     ToolReqRealAgentTask,
@@ -379,6 +379,29 @@ def _corpus_one(
         json.dumps([_toolreq_seq(work_id).model_dump()]), encoding="utf-8"
     )
     return load_corpus_with_sequences(corpus)
+
+
+def _spy_run_arm(seen: list[str], *, oracle_passes: bool) -> Callable[..., Any]:
+    """A ``run_arm`` double that records which arms were RUN instead of spawning ``claude -p``.
+
+    It reports the invocations the PLAN declares, for the model it was HANDED — a double that
+    reported anything else is refused at the cache's write boundary, which is that check doing its
+    job. ``oracle_passes`` is the only thing the callers differ on."""
+
+    def _run_arm(*, arm: str, channel, repeats: int, step, memory, model: str, **_kwargs: Any):
+        seen.append(arm)  # a real paid cell would spawn `claude -p` here
+        outcome = grid.ArmOutcome(
+            arm=arm,
+            channel=channel.value,
+            passes=repeats if (oracle_passes and arm == "oracle") else 0,
+            runs=repeats,
+        )
+        sent = render_cell_calls(
+            arm=arm, channel=channel, legs=[Leg("goal", step, memory)], model=model
+        )
+        return outcome, sent
+
+    return _run_arm
 
 
 def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -> None:
@@ -1193,16 +1216,7 @@ def test_empty_ours_payload_is_none_equivalent_and_never_spends(
     sequences, tasks = _corpus_one(tmp_path)
     seen: list[str] = []
 
-    def _spy_run_arm(*, arm: str, channel, repeats: int, step, memory, model: str, **_kwargs: Any):
-        seen.append(arm)  # a real paid cell would spawn `claude -p` here
-        outcome = grid.ArmOutcome(
-            arm=arm, channel=channel.value, passes=repeats if arm == "oracle" else 0, runs=repeats
-        )
-        # The invocations the PLAN declares, for the model it was HANDED — a double that reported
-        # anything else is refused at the cache's write boundary, which is that check doing its job.
-        return outcome, cell_calls(arm=arm, step=step, memory=memory, channel=channel, model=model)
-
-    monkeypatch.setattr(grid, "run_arm", _spy_run_arm)
+    monkeypatch.setattr(grid, "run_arm", _spy_run_arm(seen, oracle_passes=True))
     summary = grid.run_corpus(
         tasks,
         sequences,
@@ -1231,15 +1245,10 @@ def test_non_empty_ours_payload_still_spends(tmp_path: Path, monkeypatch) -> Non
     sequences, tasks = _corpus_one(tmp_path)
     seen: list[str] = []
 
-    def _spy_run_arm(*, arm: str, channel, repeats: int, step, memory, model: str, **_kwargs: Any):
-        seen.append(arm)
-        outcome = grid.ArmOutcome(arm=arm, channel=channel.value, passes=0, runs=repeats)
-        return outcome, cell_calls(arm=arm, step=step, memory=memory, channel=channel, model=model)
-
     def _payload(*_args: object) -> dict[str, dict[str, str]]:
         return {tasks[0].work_id: {"lesson-1": "the retention window is TOKEN-abc"}}
 
-    monkeypatch.setattr(grid, "run_arm", _spy_run_arm)
+    monkeypatch.setattr(grid, "run_arm", _spy_run_arm(seen, oracle_passes=False))
     summary = grid.run_corpus(
         tasks,
         sequences,

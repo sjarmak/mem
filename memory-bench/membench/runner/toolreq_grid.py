@@ -24,8 +24,15 @@ from typing import Any, Self
 
 from pydantic import model_validator
 
-from membench.runner.headless_agent import CHANNELS, CellCalls, MemoryChannel, resolve_model
-from membench.runner.realagent_probe import ArmOutcome, cell_calls, run_arm
+from membench.runner.headless_agent import (
+    CHANNELS,
+    CellCalls,
+    Leg,
+    MemoryChannel,
+    render_cell_calls,
+    resolve_model,
+)
+from membench.runner.realagent_probe import ArmOutcome, run_arm
 from membench.runner.resume_cache import (
     BaseCachedResult,
     BaseCellOutcome,
@@ -39,7 +46,7 @@ from membench.runner.resume_cache import (
     run_cached_corpus,
 )
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask, task_fingerprint
-from membench.schemas.sequence import BenchmarkSequence, SequenceStep
+from membench.schemas.sequence import BenchmarkSequence
 
 __all__ = [
     "ARMS",
@@ -114,18 +121,20 @@ def arm_memories(
 
 @dataclass(frozen=True)
 class PlannedCell:
-    """One ``(arm, channel)`` cell this task will actually RUN, with the step and memory it runs
-    under.
+    """One ``(arm, channel)`` cell this task will actually RUN, and the ``claude -p`` leg it runs.
 
-    ``step`` (non-frozen pydantic model) and ``memory`` (plain dict) are ``hash=False`` for the same
-    reason ``headless_agent.Leg``'s are: both are unhashable, so a frozen dataclass's auto
-    ``__hash__`` over every field would raise on first hash. Value ``__eq__`` still spans all
-    fields."""
+    A cell carries the call it will make — a ``headless_agent.Leg``, the type ``render_cell_calls``
+    renders and the builtin grid's ``cell_legs`` returns — rather than a second copy of that call's
+    fields. This grid's cell is ONE leg: the scored goal call under the arm's surfaced memory, with
+    nothing to establish first (the fact, or its absence, IS the memory).
+
+    ``hash=False`` because a ``Leg`` holds a non-frozen pydantic step and a plain dict, so a frozen
+    dataclass's auto ``__hash__`` over every field would raise on first hash. Value ``__eq__`` still
+    spans all fields."""
 
     arm: str
     channel: MemoryChannel
-    step: SequenceStep = field(hash=False)
-    memory: Mapping[str, str] = field(hash=False)
+    leg: Leg = field(hash=False)
 
 
 def planned_cells(
@@ -156,7 +165,7 @@ def planned_cells(
     made, and the completeness validator requires it."""
     memories = arm_memories(task, ours_payload)
     return [
-        PlannedCell(arm=arm, channel=channel, step=task.goal_step, memory=memories[arm])
+        PlannedCell(arm=arm, channel=channel, leg=Leg("goal", task.goal_step, memories[arm]))
         for channel in CHANNELS
         for arm in ARMS
         if memories[arm] or arm != RETRIEVING_ARM
@@ -175,28 +184,29 @@ def evaluate_task(
     rows they scored — the cache checks the second against this run's identity before it will
     publish the first (``resume_cache.run_cached_corpus``).
 
-    The plan is ITERATED, never re-indexed and re-filtered: it is already channel-major and in
-    ``ARMS`` order, so walking it is the same traversal without a second skip predicate to keep in
-    step with ``planned_cells``'. The never-run ``ours`` cell is simply absent from it, and is
-    filled below by relabeling ``none`` — it contributes a ROW but no invocation, which is exactly
-    what it did."""
+    The plan is ITERATED ONCE, never re-indexed or re-filtered: every cell in it is run, in plan
+    order, with no second skip predicate to keep in step with ``planned_cells``'. The never-run
+    ``ours`` cell is simply absent from it, and is filled below by relabeling ``none`` — it
+    contributes a ROW but no invocation, which is exactly what it did."""
     plan = planned_cells(task, ours_payload)
-    outcomes: list[ArmOutcome] = []
     calls: list[CellCalls] = []
+    by_channel: dict[MemoryChannel, dict[str, ArmOutcome]] = {channel: {} for channel in CHANNELS}
+    for cell in plan:
+        by_channel[cell.channel][cell.arm], sent = run_arm(
+            arm=cell.arm,
+            step=cell.leg.step,
+            memory=dict(cell.leg.memory),
+            channel=cell.channel,
+            repeats=repeats,
+            model=model,
+            dry_run=dry_run,
+            current_values=task.current_opaque_values,
+        )
+        calls.append(sent)
+
+    outcomes: list[ArmOutcome] = []
     for channel in CHANNELS:
-        cells: dict[str, ArmOutcome] = {}
-        for cell in (c for c in plan if c.channel == channel):
-            cells[cell.arm], sent = run_arm(
-                arm=cell.arm,
-                step=cell.step,
-                memory=dict(cell.memory),
-                channel=channel,
-                repeats=repeats,
-                model=model,
-                dry_run=dry_run,
-                current_values=task.current_opaque_values,
-            )
-            calls.append(sent)
+        cells = by_channel[channel]
         if RETRIEVING_ARM not in cells:
             cells[RETRIEVING_ARM] = replace(cells["none"], arm=RETRIEVING_ARM)
         # `ARMS` order, not plan order: the canonical row order the scorer and the summary read.
@@ -290,9 +300,7 @@ def invocation_fingerprint(
     ``evaluate_task`` runs, through the same agent it runs them with. Building one is string
     assembly: FREE, no agent turn."""
     return invocation_digest(
-        cell_calls(
-            arm=cell.arm, step=cell.step, memory=cell.memory, channel=cell.channel, model=model
-        )
+        render_cell_calls(arm=cell.arm, channel=cell.channel, legs=[cell.leg], model=model)
         for cell in planned_cells(task, ours_payload)
     )
 

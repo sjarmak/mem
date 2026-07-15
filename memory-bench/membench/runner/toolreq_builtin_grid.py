@@ -28,7 +28,7 @@ from typing import Any, Self
 
 from pydantic import Field, model_validator
 
-from membench.runner.headless_agent import CHANNELS, resolve_model
+from membench.runner.headless_agent import CHANNELS, CellCalls, resolve_model
 from membench.runner.realagent_probe import ArmOutcome
 from membench.runner.resume_cache import (
     BaseCachedResult,
@@ -78,9 +78,16 @@ def calls_per_repeat(task: ToolReqRealAgentTask) -> int:
 
 def paid_call_count(tasks: Sequence[ToolReqRealAgentTask], *, repeats: int) -> int:
     """Total real ``claude -p`` calls the paid sweep makes across the whole corpus and both
-    channels. Summed per task off ``calls_per_repeat`` so a non-uniform leg count is counted exactly
-    rather than modelled as ``n_tasks x <constant>``."""
-    return len(CHANNELS) * repeats * sum(calls_per_repeat(task) for task in tasks)
+    channels.
+
+    The per-repeat leg count is the ARM's property, not the task's: ``cell_legs`` returns a fixed
+    pair and does not branch on its argument, so every task contributes the same factor and the
+    ``n_tasks x channel x repeat x calls/repeat`` factorization the cost disclosure prints is
+    exact by construction. Still DERIVED through ``calls_per_repeat`` rather than a literal ``2``,
+    so adding a leg moves the disclosed spend with it (mem-swp43 review reject)."""
+    if not tasks:
+        return 0
+    return len(tasks) * len(CHANNELS) * repeats * calls_per_repeat(tasks[0])
 
 
 class BuiltinCell(BaseCellOutcome):
@@ -167,14 +174,15 @@ def evaluate_task(
     """Run every channel cell for one task, and hand back the invocations they made alongside the
     rows they scored — the cache checks the second against this run's identity before it will
     publish the first (``resume_cache.run_cached_corpus``)."""
-    runs = [
-        run_builtin_arm(task, repeats=repeats, model=model, dry_run=dry_run, channel=channel)
-        for channel in CHANNELS
-    ]
-    return Evaluation(
-        outcomes=[_cell(outcome, diagnostics) for outcome, diagnostics, _calls in runs],
-        calls=[calls for _outcome, _diagnostics, calls in runs],
-    )
+    outcomes: list[BuiltinCell] = []
+    calls: list[CellCalls] = []
+    for channel in CHANNELS:
+        outcome, diagnostics, sent = run_builtin_arm(
+            task, repeats=repeats, model=model, dry_run=dry_run, channel=channel
+        )
+        outcomes.append(_cell(outcome, diagnostics))
+        calls.append(sent)
+    return Evaluation(outcomes=outcomes, calls=calls)
 
 
 # The verdict kinds, most severe first. `cell_kind` returns one of these and the summary counts

@@ -32,19 +32,17 @@ from __future__ import annotations
 import json
 import subprocess
 import tempfile
-from collections.abc import Collection, Mapping
+from collections.abc import Collection
 from dataclasses import dataclass
 
 from membench.metrics.scorers import outcome_check_passes
 from membench.runner.headless_agent import (
     CellCalls,
     CliRunner,
-    Leg,
     MemoryChannel,
     RecordingRunner,
     cell_agent,
     one_cycle,
-    render_cell_calls,
 )
 from membench.runtime import StepContext
 from membench.schemas.sequence import ExpectedAction, OutcomeCheck, SequenceStep
@@ -190,21 +188,6 @@ def simulated_runner(current_values: Collection[str]) -> CliRunner:
         return subprocess.CompletedProcess(argv_list, returncode=0, stdout=stdout, stderr="")
 
     return run
-
-
-def goal_leg(step: SequenceStep, memory: Mapping[str, str]) -> Leg:
-    """This grid's whole cell: ONE ``claude -p``, the scored goal call, under the arm's surfaced
-    memory. The builtin arm establishes its fact in an earlier leg; here the fact (or its absence)
-    IS the surfaced memory, so there is nothing to establish."""
-    return Leg("goal", step, memory)
-
-
-def cell_calls(
-    *, arm: str, step: SequenceStep, memory: Mapping[str, str], channel: MemoryChannel, model: str
-) -> CellCalls:
-    """The command line one ``(arm, channel)`` cell WILL spawn — the plan, rendered from the leg the
-    arm executes, through the agent that executes it (``headless_agent.render_cell_calls``)."""
-    return render_cell_calls(arm=arm, channel=channel, legs=[goal_leg(step, memory)], model=model)
 
 
 def run_arm(

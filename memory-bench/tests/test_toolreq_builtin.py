@@ -189,7 +189,7 @@ def test_argv_omits_allowed_tools_for_establish_but_not_goal() -> None:
     from membench.runner.headless_agent import HeadlessClaudeAgent
 
     task = _task()
-    agent = HeadlessClaudeAgent(constrain_tools=True, runner=subprocess.run)
+    agent = HeadlessClaudeAgent(constrain_tools=True, runner=_render_only_runner)
     establish_argv = agent.argv_for(_establish_step(task), {})
     goal_argv = agent.argv_for(task.goal_step, {})
     assert "--allowedTools" not in establish_argv

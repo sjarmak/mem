@@ -20,6 +20,7 @@ from membench.runner.headless_agent import (
     HeadlessClaudeAgent,
     MemoryChannel,
     RecordingRunner,
+    _render_only_runner,
     build_agent_prompt,
     one_cycle,
 )
@@ -146,7 +147,7 @@ def test_a_recording_that_is_not_n_identical_cycles_is_refused(
 # agent: argv + stream parsing
 # --------------------------------------------------------------------------- #
 def test_protocol_conformance() -> None:
-    assert isinstance(HeadlessClaudeAgent(runner=subprocess.run), Agent)
+    assert isinstance(HeadlessClaudeAgent(runner=_render_only_runner), Agent)
 
 
 def test_argv_has_stream_json_and_strict_mcp_and_tools() -> None:
@@ -340,7 +341,7 @@ def test_agent_with_env_stays_hashable() -> None:
     # `env` carries a plain (unhashable) dict on every real call site; without
     # `field(hash=False)` this would raise `TypeError: unhashable type: 'dict'` and
     # silently break the frozen dataclass's auto-generated __hash__.
-    agent = HeadlessClaudeAgent(runner=subprocess.run, env={"CLAUDE_CONFIG_DIR": "/tmp/x"})
+    agent = HeadlessClaudeAgent(runner=_render_only_runner, env={"CLAUDE_CONFIG_DIR": "/tmp/x"})
     hash(agent)  # must not raise
 
 
