@@ -146,10 +146,10 @@ def _legs_by_task(
     ``n_tasks x calls_per_repeat(tasks[0])`` model agree, so a test built on it passes under either.
     Only a non-uniform corpus separates them (mem-663ga).
 
-    The return annotation is deliberately ``tuple[Leg, ...]``, not the real ``cell_legs``'s
-    ``tuple[Leg, Leg]``: widening that pair is the one-line type-clean edit `paid_call_count`'s
-    docstring names as all it would take to make a variable leg count real. This double is what
-    that day looks like, written down now."""
+    Annotated ``tuple[Leg, ...]``, not the real ``cell_legs``'s ``tuple[Leg, Leg]``, so the double
+    can return a third leg at all. Production's pair is deliberate (its order is a measured input,
+    and the cwd firewall runs between the two), so this is a shape the real type rules out — which
+    is the point: the disclosure is pinned exact for a corpus the type cannot currently hand it."""
 
     def _cell_legs(task: ToolReqRealAgentTask) -> tuple[Leg, ...]:
         n_legs = per_task[task.work_id]
@@ -1400,13 +1400,8 @@ def test_paid_call_count_scales_with_the_legs(monkeypatch) -> None:
     two_legs = grid.paid_call_count(tasks, repeats=3)
     assert two_legs == len(grid.CHANNELS) * 3 * 2 * len(tasks)
 
-    def _three_legs(task):
-        establish, goal = cell_legs(task)
-        extra = Leg("recall", goal.step, {"hint": "x"})
-        return (establish, extra, goal)
-
     # `calls_per_repeat` resolves `cell_legs` in the grid module's namespace, so patch it there.
-    monkeypatch.setattr(grid, "cell_legs", _three_legs)
+    monkeypatch.setattr(grid, "cell_legs", _legs_by_task({"w-0": 3, "w-1": 3}))
     three_legs = grid.paid_call_count(tasks, repeats=3)
     assert three_legs == len(grid.CHANNELS) * 3 * 3 * len(tasks)
     assert three_legs > two_legs  # the disclosure moved with the leg, not stuck at 2

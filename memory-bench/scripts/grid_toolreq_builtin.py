@@ -91,9 +91,7 @@ def _print_go_command(
             "disclosure's single per-repeat factor would misdescribe the summed total; update "
             "_print_go_command to show the per-task breakdown before spending."
         )
-    # Unpack rather than `.pop()`: this re-asserts the singleton at the point of use, so the
-    # factorization's single factor cannot come from a set the guard above stopped constraining.
-    (per_repeat,) = per_repeat_counts
+    (per_repeat,) = per_repeat_counts  # singleton, by the guard above
     print(
         f"REFUSING to spend: {ENV_OAUTH} is unset.\n"
         f"  This paid sweep is {calls} real `claude -p` call(s) "

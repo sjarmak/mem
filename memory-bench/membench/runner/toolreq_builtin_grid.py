@@ -83,14 +83,13 @@ def calls_per_repeat(task: ToolReqRealAgentTask) -> int:
 
 def paid_call_count(tasks: Sequence[ToolReqRealAgentTask], *, repeats: int) -> int:
     """Total real ``claude -p`` calls the paid sweep makes across the whole corpus and both
-    channels. Summed per task off ``calls_per_repeat`` so a non-uniform leg count is counted exactly
-    rather than modelled as ``n_tasks x <constant>``.
+    channels.
 
-    ``cell_legs -> tuple[Leg, Leg]`` cannot branch on its argument today, so ``n_tasks x
-    calls_per_repeat(tasks[0])`` would agree with this sum — but that is a property of an annotation
-    someone must keep true, not of this disclosure, and widening it to ``tuple[Leg, ...]`` is a
-    one-line type-clean edit. This is the number a human authorizes real money against; it stays
-    exact by construction rather than by a reachability argument (mem-663ga)."""
+    Summed per task off ``calls_per_repeat``, never modelled as ``n_tasks x
+    calls_per_repeat(tasks[0])``: that form reads the FIRST task's leg count and bills every other
+    task at it, under-reporting silently the moment one differs. This is the number a human
+    authorizes real money against, so it is a sum, exact for any corpus, rather than a model that
+    holds only while ``cell_legs`` returns what it returns today (mem-663ga)."""
     return len(CHANNELS) * repeats * sum(calls_per_repeat(task) for task in tasks)
 
 
