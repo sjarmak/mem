@@ -22,13 +22,13 @@ not caller discipline.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, Self
 
 from pydantic import Field, model_validator
 
-from membench.runner.headless_agent import CHANNELS, CellCalls, resolve_model
+from membench.runner.headless_agent import CHANNELS, CellCalls, HeadlessAgentError, resolve_model
 from membench.runner.realagent_probe import ArmOutcome
 from membench.runner.resume_cache import (
     BaseCachedResult,
@@ -63,6 +63,11 @@ SUMMARY_NAME = "summary-toolreq-builtin.json"
 # NOT here, because the identity now carries them: the prompts, --allowedTools, --model,
 # --strict-mcp-config, and the legs' count and order (`invocation_fingerprint`); the seeded
 # `autoMemoryEnabled` settings dict (`mechanism_fingerprint`).
+# NOT here either, for a different reason: `preflight` / `preflight_kind`. They are a GATE on
+# whether the sweep runs at all, not a step that executes or scores a cell — the preflight's own
+# measurement is DISCARDED and never persisted (it runs at repeats=1 in a fresh TemporaryDirectory
+# + CLAUDE_CONFIG_DIR and leaves nothing the sweep reads), so no cached cell moves when they change
+# and a bump would only re-spend the whole paid grid for zero information.
 # BUMP on any change to the former that could move a result.
 EXECUTION_PROTOCOL = 2
 
@@ -217,6 +222,108 @@ def task_verdict(cells: Sequence[BuiltinCell]) -> str:
     return render_verdict([(cell.channel, *cell_kind(cell)) for cell in cells])
 
 
+# The two preflight-only kinds. `preflight_kind` otherwise reuses `cell_kind`'s LEAK / NOT-ENGAGED
+# above: the gate and the grid diagnose the same two conditions, so they say them in ONE vocabulary
+# rather than a second set of names that drift from the first. They are NOT summary kinds — the
+# preflight measures one cell at repeats=1 and its measurement is discarded — so SEPARATES (a
+# both-channel claim) and WEAK (a partial-repeat claim) have nothing to say about it.
+ENGAGED = "ENGAGED"
+AGENT_ERROR = "AGENT-ERROR"
+
+
+class PreflightHaltError(RuntimeError):
+    """The preflight's refusal to authorize the paid sweep, carrying the DIAGNOSIS that produced it.
+
+    Raised out of the ``before_first_spend`` hook, so it aborts the sweep before its first
+    measured task (``resume_cache.run_cached_corpus``). It carries the ``(kind, line)`` and NOT
+    the prose: the shell prints what a human should DO about each kind, which is IO policy;
+    which kind it IS is a decision about a measurement, and lives here under the type checker.
+
+    A distinct type rather than a ``HeadlessAgentError``: a preflight failure and a mid-sweep
+    agent failure are different findings with different counsel (nothing has been measured yet
+    vs. finished tasks are persisted and the run is resumable), and the driver must not report
+    the first as the
+    second."""
+
+    def __init__(self, kind: str, line: str) -> None:
+        super().__init__(line)
+        self.kind = kind
+        self.line = line
+
+
+def preflight(task: ToolReqRealAgentTask, *, model: str) -> BuiltinDiagnostics:
+    """One real establish+check cycle (repeats=1, so one cell's worth of legs —
+    ``calls_per_repeat(task)`` calls) BEFORE the full paid sweep. Self-diagnoses "is builtin even
+    enabled on this account" (mem-rk41.3.2 Q3 / mem-xe2p's enforce_mechanism_fires doctrine) instead
+    of letting a disabled feature flag silently produce an uninterpretable all-null sweep.
+
+    Its measurement is DISCARDED, deliberately and permanently: a repeats=1 measurement cannot
+    satisfy a repeats=3 identity (``resume_cache`` bounds ``runs`` to the identity's
+    ``repeats``), so persisting it as a cell would need a second identity and a second grid to
+    hold it."""
+    _outcome, diagnostics, _calls = run_builtin_arm(
+        task, repeats=1, model=model, dry_run=False, channel=CHANNELS[0]
+    )
+    return diagnostics
+
+
+def preflight_kind(diagnostics: BuiltinDiagnostics) -> tuple[str, str]:
+    """Classify the preflight cycle into its (kind, display-line) — ``cell_kind``'s shape, and for
+    its reason: both halves out of ONE branch, so the kind the gate ACTS on and the line the human
+    READS cannot desync.
+
+    Same priority as ``cell_kind``, and that ordering is the whole point of returning a kind rather
+    than a bool. ``engaged == 0`` alone is one bit short: it reads a LEAK (the goal leg PASSED with
+    no native memory — the sandbox cwd firewall handed the answer over, the most severe thing this
+    arm can find) as "the mechanism never fired", and those want opposite responses from a human. A
+    bool gate reported both as the latter."""
+    if diagnostics.leaked:
+        return LEAK, (
+            f"the goal leg PASSED without engaging native memory ({diagnostics.leaked}/"
+            f"{diagnostics.runs}) — the sandbox handed the answer over"
+        )
+    if diagnostics.engaged == 0:
+        return NOT_ENGAGED, (
+            "the real establish call never persisted the fact to native memory (searched every "
+            ".md under the config dir's memory/ — index AND topic files)"
+        )
+    return ENGAGED, f"native memory engaged ({diagnostics.engaged}/{diagnostics.runs})"
+
+
+def preflight_gate(
+    task: ToolReqRealAgentTask, *, model: str, announce: Callable[[str], None]
+) -> Callable[[], None]:
+    """The paid preflight as the hook ``run_cached_corpus`` fires immediately before the first task
+    it will MEASURE (``resume_cache.run_cached_corpus``, ``before_first_spend``).
+
+    A hook rather than a step the driver runs ahead of the sweep, because the gate must cost exactly
+    what the sweep costs: a fully cache-served resume measures nothing, so there is nothing for a
+    mechanism check to protect and it must not spend (mem-dblue — it did, twice, on every resume
+    attempt, which is the axis the cache exists to zero out). Only the loop knows that.
+
+    ``announce`` is injected for the same reason ``identity_of`` and ``evaluate`` are: what to SAY
+    about a diagnosis is the shell's, what a diagnosis IS is this module's."""
+
+    def _gate() -> None:
+        announce("PREFLIGHT: one real establish+check cycle before the full sweep...")
+        try:
+            diagnostics = preflight(task, model=model)
+        except HeadlessAgentError as exc:
+            # Converted, not propagated: raw, this would leave the hook as a HeadlessAgentError and
+            # the driver would report a preflight failure — nothing measured, nothing to resume —
+            # under its mid-sweep SWEEP HALT counsel, which points the human at a resume that has
+            # no finished tasks to skip.
+            raise PreflightHaltError(
+                AGENT_ERROR, f"the real establish/goal call failed ({exc})"
+            ) from exc
+        kind, line = preflight_kind(diagnostics)
+        if kind != ENGAGED:
+            raise PreflightHaltError(kind, line)
+        announce(f"PREFLIGHT OK: {line} on {task.work_id}; proceeding.")
+
+    return _gate
+
+
 def invocation_fingerprint(task: ToolReqRealAgentTask, *, model: str) -> str:
     """Hashes the COMMAND LINES THEMSELVES — every ``claude -p`` argv every cell will spawn.
 
@@ -284,13 +391,18 @@ def run_corpus(
     model: str,
     dry_run: bool,
     resume: bool = True,
+    before_first_spend: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     """Evaluate every task through the shared resume cache and shape this grid's summary.
 
     ``model`` is RESOLVED once here, never taken raw — through ``headless_agent.resolve_model``, the
     same rule the agent itself runs under. ``BuiltinRunIdentity`` refuses an unresolved one outright
     (``BaseRunIdentity``), so this is the ONE place the rule is applied and the schema is the
-    backstop, not a second copy of it."""
+    backstop, not a second copy of it.
+
+    ``before_first_spend`` is forwarded, not interpreted (``preflight_gate`` is what the driver
+    passes): the cache fires it once before the first task this run MEASURES, and never on a resume
+    that measures nothing."""
     resolved_model = resolve_model(model)
     run = run_cached_corpus(
         tasks,
@@ -304,6 +416,7 @@ def run_corpus(
         ),
         summary_name=SUMMARY_NAME,
         resume=resume,
+        before_first_spend=before_first_spend,
     )
     results = run.results
     kinds = {r.work_id: r.kinds for r in results}

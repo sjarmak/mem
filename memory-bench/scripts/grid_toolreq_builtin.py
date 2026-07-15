@@ -15,18 +15,21 @@ This is the paid ceiling driver. It STAGES but never over-reaches:
   ``scix-batch`` go-command + the call count / worst-case wall-clock (double the
   none/oracle cost per repeat: establish + goal), so the paid fire stays an explicit,
   cost-disclosed, per-action decision (Stephanie's call);
-* a real run also spends one cheap PREFLIGHT establish+check cycle before the full
-  sweep and HALTS if the fact never reached native memory, so a mechanism that never
-  fires produces a diagnosed refusal rather than an uninterpretable null. The arm turns
-  the mechanism ON itself (``autoMemoryEnabled`` is seeded into each pristine
+* a real run also spends one cheap PREFLIGHT establish+check cycle before the first task
+  it will MEASURE and HALTS if the fact never reached native memory, so a mechanism that
+  never fires produces a diagnosed refusal rather than an uninterpretable null. The arm
+  turns the mechanism ON itself (``autoMemoryEnabled`` is seeded into each pristine
   ``CLAUDE_CONFIG_DIR``), so a halt is a real finding, not an account to go fix;
 * per-task results persist to ``--out/<work_id>.json`` and are REUSED on re-run, so a
-  token-expiry or OOM mid-sweep does not re-pay for finished tasks.
+  token-expiry or OOM mid-sweep does not re-pay for finished tasks — and a resume served
+  entirely from that cache measures nothing, so it spends NOTHING, preflight included
+  (mem-dblue).
 
-This file is the SHELL: argparse, the spend gate, the preflight, and printing. The grid — the arm's
-cells, the verdict rule, the fingerprints, and the resume cache whose every defect an untyped
-``scripts/`` cache has shipped before — is ``membench.runner.toolreq_builtin_grid`` on top of the
-shared ``membench.runner.resume_cache``, inside ``mypy --strict``. Read the cache invariant there.
+This file is the SHELL: argparse, the spend gate, and printing. The grid — the arm's cells, the
+verdict rule, the fingerprints, the preflight and its halt rule, and the resume cache whose every
+defect an untyped ``scripts/`` cache has shipped before — is
+``membench.runner.toolreq_builtin_grid`` on top of the shared ``membench.runner.resume_cache``,
+inside ``mypy --strict``. Read the cache invariant there.
 
     # FREE — prove the two-call establish/goal wiring end to end:
     uv run python scripts/grid_toolreq_builtin.py --corpus-dir fixtures/worlds-tool --dry-run
@@ -46,11 +49,15 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from membench.runner.headless_agent import CHANNELS, DEFAULT_TIMEOUT_S, HeadlessAgentError
-from membench.runner.toolreq_builtin import BuiltinDiagnostics, run_builtin_arm
 from membench.runner.toolreq_builtin_grid import (
+    AGENT_ERROR,
+    LEAK,
+    NOT_ENGAGED,
     SUMMARY_NAME,
+    PreflightHaltError,
     calls_per_repeat,
     paid_call_count,
+    preflight_gate,
     run_corpus,
 )
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask, load_corpus_with_sequences
@@ -77,8 +84,8 @@ def _print_go_command(
         f"{per_repeat} calls/repeat [establish+goal] — {per_repeat}x the none/oracle "
         f"1-call/repeat cost); worst-case wall-clock ~{worst_hours:.1f}h at the "
         f"{DEFAULT_TIMEOUT_S:.0f}s timeout.\n"
-        f"  Plus one PREFLIGHT establish+check cycle ({per_repeat} calls) before the sweep "
-        "starts.\n"
+        f"  Plus one PREFLIGHT establish+check cycle ({per_repeat} calls) before the first "
+        "task actually measured — and none at all if every task is already cached.\n"
         f"  Per-task results persist to {out_dir} and are reused on re-run (resumable).\n"
         "  MECHANISM: native memory is turned ON by this script — `autoMemoryEnabled` is a "
         "$CLAUDE_CONFIG_DIR/settings.json key, so the pristine per-repeat config dir is "
@@ -93,15 +100,29 @@ def _print_go_command(
     )
 
 
-def preflight(task: ToolReqRealAgentTask, *, model: str) -> BuiltinDiagnostics:
-    """One real establish+check cycle (repeats=1, so one cell's worth of legs —
-    ``calls_per_repeat(task)`` calls) BEFORE the full paid sweep. Self-diagnoses "is builtin even
-    enabled on this account" (mem-rk41.3.2 Q3 / mem-xe2p's enforce_mechanism_fires doctrine) instead
-    of letting a disabled feature flag silently produce an uninterpretable all-null sweep."""
-    _outcome, diagnostics, _calls = run_builtin_arm(
-        task, repeats=1, model=model, dry_run=False, channel=CHANNELS[0]
-    )
-    return diagnostics
+# What a human should DO about each halt kind. The counsel is the shell's (IO policy); which kind a
+# preflight IS is a decision about a measurement and lives in the grid, under the type checker
+# (`preflight_kind`). Keyed by kind so a new kind there is a KeyError here, not a silent generic.
+_HALT_COUNSEL = {
+    AGENT_ERROR: (
+        "This is a diagnosed halt, not a mechanism-disabled verdict (mem-rk41.3.2 Q3); "
+        "retry once the underlying failure (network, rate limit, CLI issue) is resolved."
+    ),
+    NOT_ENGAGED: (
+        "This is NOT an account/pool problem to go chase: `autoMemoryEnabled` is a "
+        "$CLAUDE_CONFIG_DIR/settings.json key and this script already seeds it true in the "
+        "pristine per-repeat config dir (mem-rk41.3.2 Q3). A halt here means the mechanism "
+        "genuinely did not fire — the finding the arm exists to surface, not a "
+        "misconfiguration to work around."
+    ),
+    LEAK: (
+        "The mechanism is not what failed — the ISOLATION is. The goal leg answered with "
+        "native memory disengaged, so the sandbox cwd carried the fact between the legs and "
+        "every cell this sweep would measure is uninterpretable for the same reason. Fix the "
+        "firewall before spending; a NOT-ENGAGED verdict from this corpus cannot be trusted "
+        "while a leg can pass without the mechanism."
+    ),
+}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -144,33 +165,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         _print_go_command(tasks, args.repeats, args.out, corpus_dir)
         return 2
 
-    if not args.dry_run and not args.skip_preflight:
-        print("PREFLIGHT: one real establish+check cycle before the full sweep...")
-        try:
-            diag = preflight(tasks[0], model=args.model)
-        except HeadlessAgentError as exc:
-            print(
-                f"PREFLIGHT HALT: the real establish/goal call failed ({exc}) — refusing "
-                "to spend on the full sweep. This is a diagnosed halt, not a mechanism-"
-                "disabled verdict (mem-rk41.3.2 Q3); retry once the underlying failure "
-                "(network, rate limit, CLI issue) is resolved.",
-                file=sys.stderr,
-            )
-            return 3
-        if diag.engaged == 0:
-            print(
-                "PREFLIGHT HALT: the real establish call never persisted the fact to native "
-                "memory (searched every .md under the config dir's memory/ — index AND topic "
-                "files). Refusing to spend on the full sweep.\n"
-                "  This is NOT an account/pool problem to go chase: `autoMemoryEnabled` is a "
-                "$CLAUDE_CONFIG_DIR/settings.json key and this script already seeds it true "
-                "in the pristine per-repeat config dir (mem-rk41.3.2 Q3). A halt here means "
-                "the mechanism genuinely did not fire — the finding the arm exists to "
-                "surface, not a misconfiguration to work around.",
-                file=sys.stderr,
-            )
-            return 3
-        print(f"PREFLIGHT OK: native memory engaged on {tasks[0].work_id}; proceeding.")
+    # Handed to the cache as a hook rather than run here, so it costs exactly what the sweep costs:
+    # it fires once immediately before the first task the run will MEASURE, and a resume served
+    # entirely from the cache never reaches one — zero paid calls, where this driver used to spend
+    # two on every resume attempt (mem-dblue). `--dry-run` spends nothing by definition, so it takes
+    # no gate at all.
+    gate = (
+        None
+        if args.dry_run or args.skip_preflight
+        else preflight_gate(tasks[0], model=args.model, announce=print)
+    )
 
     mode = "DRY-RUN (simulated agent, no tokens)" if args.dry_run else "PAID real claude -p"
     print(
@@ -179,8 +183,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     try:
         summary = run_corpus(
-            tasks, out_dir=args.out, repeats=args.repeats, model=args.model, dry_run=args.dry_run
+            tasks,
+            out_dir=args.out,
+            repeats=args.repeats,
+            model=args.model,
+            dry_run=args.dry_run,
+            before_first_spend=gate,
         )
+    except PreflightHaltError as halt:
+        # What keeps a preflight agent-error out of the SWEEP HALT arm below is the CONVERSION at
+        # the gate, not this arm's position: the two are sibling RuntimeErrors, neither catches the
+        # other. The distinction is worth the type — a preflight failure has measured nothing, so
+        # the mid-sweep counsel ("finished tasks are persisted, re-run to resume") would point the
+        # operator at a resume with nothing to skip.
+        print(
+            f"PREFLIGHT HALT: {halt.line}. Refusing to spend on the full sweep.\n"
+            f"  {_HALT_COUNSEL[halt.kind]}",
+            file=sys.stderr,
+        )
+        return 3
     except HeadlessAgentError as exc:
         # The preflight is not the only paid boundary: a rate-limited/flaky/timed-out
         # `claude -p` mid-sweep gets the same diagnosed-halt treatment, never a raw

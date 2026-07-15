@@ -121,16 +121,21 @@ def _task(seq_id: str = "w-t0"):
     return adapt_sequence(_toolreq_seq(seq_id))
 
 
-def _corpus_one(tmp_path: Path, work_id: str = "w-0") -> list[ToolReqRealAgentTask]:
-    """Seed a one-task frozen corpus under ``tmp_path/corpus`` and load it — the same
-    scaffold every driver test needs (mirrors ``test_toolreq_realagent._corpus_one``)."""
+def _corpus(tmp_path: Path, *work_ids: str) -> list[ToolReqRealAgentTask]:
+    """Seed a frozen corpus of ``work_ids`` under ``tmp_path/corpus`` and load it."""
     corpus = tmp_path / "corpus"
     (corpus / "0").mkdir(parents=True)
     (corpus / "0" / "sequences.json").write_text(
-        json.dumps([_toolreq_seq(work_id).model_dump()]), encoding="utf-8"
+        json.dumps([_toolreq_seq(work_id).model_dump() for work_id in work_ids]), encoding="utf-8"
     )
     _, tasks = load_corpus_with_sequences(corpus)
     return tasks
+
+
+def _corpus_one(tmp_path: Path, work_id: str = "w-0") -> list[ToolReqRealAgentTask]:
+    """Seed a one-task frozen corpus under ``tmp_path/corpus`` and load it — the same
+    scaffold every driver test needs (mirrors ``test_toolreq_realagent._corpus_one``)."""
+    return _corpus(tmp_path, work_id)
 
 
 def _stream_json_runner(
@@ -1104,7 +1109,7 @@ def test_preflight_halts_when_native_memory_never_engages(tmp_path: Path, monkey
     _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
 
-    monkeypatch.setattr(driver, "run_builtin_arm", _builtin_arm(passes=False, engaged=False))
+    monkeypatch.setattr(grid, "run_builtin_arm", _builtin_arm(passes=False, engaged=False))
     code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
     assert code == 3
 
@@ -1121,11 +1126,12 @@ def test_preflight_agent_error_halts_diagnosed_not_raw_traceback(
     def _raises(task, **_kwargs):
         raise HeadlessAgentError("claude -p failed: simulated rate-limit")
 
-    monkeypatch.setattr(driver, "run_builtin_arm", _raises)
+    monkeypatch.setattr(grid, "run_builtin_arm", _raises)
     code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
     assert code == 3
     err = capsys.readouterr().err
     assert "PREFLIGHT HALT" in err
+    assert "SWEEP HALT" not in err  # the preflight's own counsel, not the mid-sweep one
     assert "simulated rate-limit" in err  # the halt carries the underlying failure
 
 
@@ -1135,19 +1141,26 @@ def test_sweep_agent_error_halts_diagnosed_with_resume_pointer(
     # The preflight is not the only paid boundary: a HeadlessAgentError mid-sweep (the rate-limit at
     # paid call 50 of 180) must get the same diagnosed-halt treatment — exit 3, pointing at the
     # persisted per-task results for a cheap resume — never a raw traceback during the expensive
-    # phase. The sweep runs through the GRID, so that is where the failing arm is patched.
+    # phase, and never under the PREFLIGHT HALT counsel (which says nothing was measured).
+    #
+    # Preflight and sweep both spend through `grid.run_builtin_arm` now, so "the preflight passed
+    # and the sweep then died" is a double that succeeds ONCE and raises after — not two patches.
     _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
 
-    def _raises(task, **_kwargs):
+    def _passes_once_then_raises(task, **kwargs):
+        if not calls:
+            calls.append("preflight")
+            return _engaging_arm(task, **kwargs)
         raise HeadlessAgentError("claude -p failed: simulated mid-sweep rate-limit")
 
-    monkeypatch.setattr(driver, "run_builtin_arm", _engaging_arm)  # the preflight passes...
-    monkeypatch.setattr(grid, "run_builtin_arm", _raises)  # ...and the sweep then dies
+    calls: list[str] = []
+    monkeypatch.setattr(grid, "run_builtin_arm", _passes_once_then_raises)
     code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
     assert code == 3
     err = capsys.readouterr().err
     assert "SWEEP HALT" in err
+    assert "PREFLIGHT HALT" not in err  # the preflight passed; this is the mid-sweep boundary
     assert "simulated mid-sweep rate-limit" in err  # carries the underlying failure
     assert "re-run" in err  # and points at the resume path
 
@@ -1157,9 +1170,7 @@ def test_preflight_proceeds_when_engaged(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
 
     calls: list[str] = []
-    spy = _builtin_arm(calls, engaged=True)
-    monkeypatch.setattr(driver, "run_builtin_arm", spy)
-    monkeypatch.setattr(grid, "run_builtin_arm", spy)
+    monkeypatch.setattr(grid, "run_builtin_arm", _builtin_arm(calls, engaged=True))
     code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
     assert code == 0
     # once for the preflight + once per (task x channel) cell in the sweep
@@ -1171,9 +1182,7 @@ def test_skip_preflight_bypasses_the_real_preflight_call(tmp_path: Path, monkeyp
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
 
     calls: list[str] = []
-    spy = _builtin_arm(calls, engaged=True)
-    monkeypatch.setattr(driver, "run_builtin_arm", spy)
-    monkeypatch.setattr(grid, "run_builtin_arm", spy)
+    monkeypatch.setattr(grid, "run_builtin_arm", _builtin_arm(calls, engaged=True))
     code = driver.main(
         [
             "--corpus-dir",
@@ -1196,11 +1205,81 @@ def test_the_driver_writes_the_summary_the_grid_reserves(tmp_path: Path, monkeyp
     _corpus_one(tmp_path)
     out = tmp_path / "out"
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
-    monkeypatch.setattr(driver, "run_builtin_arm", _engaging_arm)
     monkeypatch.setattr(grid, "run_builtin_arm", _engaging_arm)
 
     assert driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(out)]) == 0
     assert (out / grid.SUMMARY_NAME).is_file()
+
+
+def test_a_fully_cache_served_resume_spends_nothing(tmp_path: Path, monkeypatch) -> None:
+    """THE BEAD (mem-dblue). The driver ran its preflight unconditionally, before the cache was ever
+    consulted — so a resume with every task already persisted still spent 2 real `claude -p` calls
+    (worst case ~20 min of wall clock) to measure something it then discarded, and re-spent them on
+    every further resume attempt. That waste was proportional to the number of RESUME ATTEMPTS,
+    which is precisely the axis the cache exists to zero out; the driver's own SWEEP HALT counsel
+    ("re-run the same command to resume") prescribes the loop that multiplies it.
+
+    Fires ZERO paid calls now: the preflight is a hook the cache fires before the first task it will
+    MEASURE, and a fully served resume never reaches one. The mem-xe2p mechanism-fires gate still
+    holds — nothing is measured here, so there is nothing for it to protect."""
+    args = ["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")]
+    _corpus(tmp_path, "w-0", "w-1")
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+
+    first: list[str] = []
+    monkeypatch.setattr(grid, "run_builtin_arm", _builtin_arm(first, engaged=True))
+    assert driver.main(args) == 0
+    assert first, "the cold run must spend — otherwise the resume proves nothing"
+
+    def _boom(*_a: object, **_k: object) -> object:
+        raise AssertionError("a fully cache-served resume must not spend a single paid call")
+
+    monkeypatch.setattr(grid, "run_builtin_arm", _boom)
+    assert driver.main(args) == 0
+
+
+def test_a_partial_resume_preflights_exactly_once(tmp_path: Path, monkeypatch) -> None:
+    # The other half of the gate: a resume that still has a task to measure DOES spend the preflight
+    # — once, not once per remaining task — so the mechanism check keeps protecting every run that
+    # actually measures something.
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    out = tmp_path / "out"
+
+    _corpus(tmp_path, "w-0")
+    monkeypatch.setattr(grid, "run_builtin_arm", _builtin_arm(engaged=True))
+    assert driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(out)]) == 0
+
+    # A second task joins the corpus: w-0 is served from the cache, w-1 must be measured.
+    resumed = tmp_path / "resumed"
+    _corpus(resumed, "w-0", "w-1")
+    calls: list[str] = []
+    monkeypatch.setattr(grid, "run_builtin_arm", _builtin_arm(calls, engaged=True))
+    assert driver.main(["--corpus-dir", str(resumed / "corpus"), "--out", str(out)]) == 0
+    # one preflight + w-1's cells only; w-0's cells were reused
+    assert len(calls) == 1 + len(grid.CHANNELS)
+
+
+def test_a_preflight_leak_is_not_reported_as_a_mechanism_that_never_fired(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """``engaged == 0`` is one bit short, and the two bits want opposite responses from a human.
+
+    A bool gate read BOTH `engaged=0, leaked=1` — the goal leg PASSED without native memory, so the
+    sandbox cwd firewall handed the answer over, the most severe thing this arm can find — and
+    `engaged=0, leaked=0` as "the mechanism genuinely did not fire". For the leak that is FALSE, and
+    the driver's counsel told the operator to accept it as the arm's own finding rather than go fix
+    the isolation that invalidates every cell the sweep would measure."""
+    _corpus_one(tmp_path)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setattr(grid, "run_builtin_arm", _builtin_arm(engaged=False, leaked=True))
+
+    assert (
+        driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")]) == 3
+    )
+    err = capsys.readouterr().err
+    assert "PASSED without engaging native memory" in err
+    assert "ISOLATION" in err  # the leak's counsel: fix the firewall
+    assert "genuinely did not fire" not in err  # NOT the never-fired counsel
 
 
 # --- the recorder is structure, not caller discipline (mem-swp43 review reject) --------

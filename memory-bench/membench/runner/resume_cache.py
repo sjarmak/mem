@@ -390,6 +390,7 @@ def run_cached_corpus(
     evaluate: Callable[[TaskT], Evaluation],
     summary_name: str,
     resume: bool = True,
+    before_first_spend: Callable[[], None] | None = None,
 ) -> CorpusRun[ResultT]:
     """Evaluate every task, persisting one ``<work_id>.json`` each, and reuse a persisted result
     only when its identity matches this run's — so a FREE dry-run's simulated result can never
@@ -399,6 +400,24 @@ def run_cached_corpus(
     ``identity_of`` and ``evaluate`` are injected rather than named: they are the ONLY two things
     that differ between the grids that share this cache, and injecting them is what keeps the arms,
     the invocations and the verdict rule of one experiment out of the other's.
+
+    ``before_first_spend`` is injected for the SAME reason and is the third of them: a driver's paid
+    warm-up — a preflight cycle, a mechanism check — that must fire once if this run will measure
+    anything and NOT AT ALL if it will not. It is a hook rather than something the driver runs ahead
+    of the call because this loop is the only thing that knows what it will spend on. A driver that
+    computed the miss set itself would keep a MODEL of that decision — this module's defect family
+    one input over (see the invariant above: the identity does not model the executed input, it
+    CARRIES it) — and the model drifts the moment the two disagree about a knob: pass
+    ``resume=False`` here and the driver's probe still reports "nothing to do", so its warm-up is
+    skipped and the full corpus is re-measured with no preflight at all. Fired from INSIDE the
+    loop, the hook cannot
+    disagree with the loop; it fires against the same cache read the loop acts on.
+
+    It fires LATE — immediately before the first task that reaches ``evaluate``, never at the top —
+    so ``assert_usable_work_ids`` and every cache hit ahead of it speak FIRST, and a corpus that is
+    fully served or cannot be measured at all costs zero paid calls. Raising from it aborts the run
+    before anything is measured, which is how a driver halts a sweep it has diagnosed as not worth
+    spending on.
 
     Injected INDEPENDENTLY, though — which is exactly why the write boundary below exists.
     Nothing else binds the invocations a grid HASHES to the ones its arms SEND, and a fingerprint
@@ -414,6 +433,7 @@ def run_cached_corpus(
     results: list[ResultT] = []
     executed = 0
     reused = 0
+    warmed_up = False
     for task in tasks:
         result_path = out_dir / f"{task.work_id}.json"
         identity = identity_of(task)
@@ -428,6 +448,15 @@ def run_cached_corpus(
             results.append(cached)
             reused += 1
             continue
+        if before_first_spend is not None and not warmed_up:
+            # Its own flag rather than `executed == 0`, which today would be equivalent only because
+            # the write boundary below RAISES: nothing reaches a second miss with `executed` still
+            # 0. That makes the equivalence a property of the refusal being fatal, not of the guard
+            # — soften that raise to a skip and `executed == 0` silently re-fires a PAID warm-up on
+            # the next miss. The flag says what it means and does not depend on where the
+            # accounting sits.
+            warmed_up = True
+            before_first_spend()
         evaluation = evaluate(task)
         sent = invocation_digest(evaluation.calls)
         if sent != identity.invocation_fingerprint:

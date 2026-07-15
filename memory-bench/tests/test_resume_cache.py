@@ -103,6 +103,7 @@ def _run(
     identity: _Identity | None = None,
     resume: bool = True,
     evaluate=_evaluate,
+    before_first_spend=None,
 ):
     ident = identity if identity is not None else _identity()
     return run_cached_corpus(
@@ -113,6 +114,7 @@ def _run(
         evaluate=evaluate,
         summary_name=SUMMARY_NAME,
         resume=resume,
+        before_first_spend=before_first_spend,
     )
 
 
@@ -525,6 +527,81 @@ def test_a_leftover_temp_file_is_never_read_as_a_result(tmp_path: Path) -> None:
     run = _run([_Task("w-0")], out)
     assert (run.executed, run.reused) == (1, 0)
     assert not (out / "w-0.json.tmp").exists()  # the publish replaced it
+
+
+# --- a paid warm-up fires with the SPEND, not with the invocation ----------------------
+
+
+def test_before_first_spend_fires_once_immediately_before_the_first_measured_task(
+    tmp_path: Path,
+) -> None:
+    """The hook's whole contract in one order assertion: it fires ONCE, it fires LATE (after the
+    cached task is served, not at the top of the loop), and it fires BEFORE the first task that
+    spends — never between the later ones."""
+    out = tmp_path / "out"
+    _run([_Task("w-0")], out)  # w-0 is now cached at this identity; w-1 and w-2 are not
+
+    order: list[str] = []
+
+    def _recording_evaluate(task: _Task) -> Evaluation:
+        order.append(f"measure:{task.work_id}")
+        return _evaluate(task)
+
+    run = _run(
+        [_Task("w-0"), _Task("w-1"), _Task("w-2")],
+        out,
+        evaluate=_recording_evaluate,
+        before_first_spend=lambda: order.append("warm-up"),
+    )
+    assert (run.executed, run.reused) == (2, 1)
+    assert order == ["warm-up", "measure:w-1", "measure:w-2"]
+
+
+def test_before_first_spend_never_fires_on_a_fully_cache_served_resume(tmp_path: Path) -> None:
+    """The property the hook exists for (mem-dblue). A driver's paid warm-up — a preflight, a
+    mechanism check — costs real `claude -p` calls, and a resume that measures NOTHING has nothing
+    for it to protect. The waste it replaces was proportional to the number of RESUME ATTEMPTS,
+    which is precisely the axis this cache exists to zero out."""
+    out = tmp_path / "out"
+    _run([_Task("w-0"), _Task("w-1")], out)
+
+    def _boom() -> None:
+        raise AssertionError("the warm-up must NOT fire when the run measures nothing")
+
+    run = _run([_Task("w-0"), _Task("w-1")], out, before_first_spend=_boom)
+    assert (run.executed, run.reused) == (0, 2)
+
+
+def test_raising_from_before_first_spend_aborts_before_anything_is_measured(
+    tmp_path: Path,
+) -> None:
+    """A warm-up that refuses is how a driver halts a sweep it has diagnosed as not worth spending
+    on, so the raise must land BEFORE the first `evaluate` — not after the call it was meant to
+    prevent."""
+    out = tmp_path / "out"
+
+    def _gate() -> None:
+        raise RuntimeError("diagnosed: refusing to spend")
+
+    def _evaluate_boom(_task: _Task) -> Evaluation:
+        raise AssertionError("the warm-up refused; nothing may be measured")
+
+    with pytest.raises(RuntimeError, match="refusing to spend"):
+        _run([_Task("w-0")], out, evaluate=_evaluate_boom, before_first_spend=_gate)
+    assert not (out / "w-0.json").exists()
+
+
+def test_before_first_spend_fires_after_the_work_id_check(tmp_path: Path) -> None:
+    """Ordering, and the reason the hook is injected into the LOOP rather than run by the driver
+    ahead of it. A driver that computed the miss set itself would fire its paid warm-up first and
+    only THEN reach this refusal — spending real calls on a corpus that was never going to be
+    measured. Inside the loop, the free structural check always speaks first."""
+
+    def _boom() -> None:
+        raise AssertionError("a corpus that cannot be measured must cost nothing")
+
+    with pytest.raises(ValueError, match="duplicate work_id"):
+        _run([_Task("w-0"), _Task("w-0")], tmp_path / "out", before_first_spend=_boom)
 
 
 def test_the_verdict_string_and_the_counted_kinds_come_from_one_ladder() -> None:
