@@ -4,9 +4,9 @@ verdict rule, and the measured inputs only this experiment has.
 The pure half of ``scripts/grid_toolreq_realagent.py``, and it lives HERE rather than there for one
 reason: ``scripts/`` is not type-checked. CI runs ``mypy --strict membench`` only, and every
 resume-cache defect this code has shipped lived in an untyped script. The driver keeps its
-argparse/main, its ``ours``-store seeder (which reaches into a sibling script) and its printing;
-everything that decides what is EXECUTED, what is SCORED, and what may be REUSED is inside the type
-checker.
+argparse/main, its repo-root path constants, and its printing; everything that decides what is
+EXECUTED, what is SCORED, and what may be REUSED is inside the type checker — the ``ours``-store
+seeder included (``toolreq_realagent.seed_ours_store_and_resolve_payloads``, mem-rsmq7).
 
 The RESUME CACHE is not here — it is ``membench.runner.resume_cache``, shared with the builtin grid
 (``toolreq_builtin_grid``). Read the cache invariant there; this module supplies only what is
@@ -90,9 +90,9 @@ EXECUTION_PROTOCOL = 2
 
 # Seeds the `ours` store + resolves its payload: (sequences, tasks, store_path, mem_bin)
 # -> work_id -> (source work_id -> rendered payload). Injected by the caller, never defaulted:
-# the real seeder depends on a script-resident payload resolver and a built `bin/mem`, neither of
-# which belongs under `membench/`, and a hermetic test stubs it out (this codebase's
-# CliRunner/RetrieveRunner injection convention — see headless_agent.CliRunner).
+# the real seeder (`toolreq_realagent.seed_ours_store_and_resolve_payloads`) needs a built
+# `bin/mem`, whose repo-root path only the driver knows, and a hermetic test stubs it out (this
+# codebase's CliRunner/RetrieveRunner injection convention — see headless_agent.CliRunner).
 SeedFn = Callable[
     [Sequence[BenchmarkSequence], Sequence[ToolReqRealAgentTask], Path, str],
     dict[str, dict[str, str]],

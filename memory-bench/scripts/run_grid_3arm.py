@@ -67,10 +67,11 @@ from membench.harbor.probe_gate import (
     touches_native_memory,
 )
 from membench.memory_systems.ours_system import (
+    RETRIEVAL_SCOPE,
     OursQuery,
     RetrieveRunner,
     _default_runner,
-    _render_payload,
+    resolve_payloads,
 )
 from membench.schemas.bundle import TaskBundle
 
@@ -88,9 +89,6 @@ DEFAULT_MEM_BIN = str(PROJECT_ROOT / "bin/mem")
 # fresh run's stream post-hoc -- a drifted run aborts with nothing persisted.
 DEFAULT_MODEL = "claude-sonnet-4-6"
 DEFAULT_CLI_VERSION = "2.1.173"
-
-# The realistic dual-track scope (D7) -- same-rig prior work, temporally bounded.
-RETRIEVAL_SCOPE = "same_rig_temporal"
 
 # The Option-A mechanism under test and its mechanical covariate (mem-xe2p). The
 # gate itself is mechanism-parameterized -- a grid testing a different mechanism
@@ -120,45 +118,6 @@ def tier1_mechanism_gate(
     )
     print(f"mechanism-fires gate: {gate.reason}")
     return gate
-
-
-def resolve_payloads(
-    bundles: Sequence[TaskBundle],
-    *,
-    store_path: Path,
-    runner: RetrieveRunner,
-    no_trace_query: bool = False,
-) -> dict[str, dict[str, str]]:
-    """work_id -> (source work_id -> rendered citation+lessons payload) via the
-    ours ARM's own retrieval runner, so the injected text is exactly what the arm
-    would inject. Items without lessons are dropped -- the arm's information
-    content is the lesson payload (D9); a bare citation carries none. Every item
-    is checked against the bundle's LOO exclusion set (D6): retrieval-v1 is
-    contracted to enforce that boundary, but a leak here would hand the agent its
-    own work record, so the driver re-asserts rather than assumes.
-
-    ``no_trace_query`` resolves the mem-tnyo issue-text-trigger payloads instead:
-    the query is formed WITHOUT the held record's stored trace errors (title /
-    task-type text only -- `mem retrieve --no-trace-query`)."""
-    payloads: dict[str, dict[str, str]] = {}
-    for bundle in bundles:
-        result = runner(
-            OursQuery(
-                work_id=bundle.work_id,
-                scope=RETRIEVAL_SCOPE,
-                store_path=str(store_path),
-                no_trace_query=no_trace_query,
-            )
-        )
-        items = [item for item in result.get("items", []) if item.get("lessons")]
-        leaked = sorted({item["work_id"] for item in items} & set(bundle.loo_excluded_work_ids))
-        if leaked:
-            raise RuntimeError(
-                f"{bundle.work_id}: retrieval returned LOO-excluded work id(s) {leaked} -- "
-                "the D6 boundary is broken; refusing to inject"
-            )
-        payloads[bundle.work_id] = {item["work_id"]: _render_payload(item) for item in items}
-    return payloads
 
 
 def resolve_held_signatures(

@@ -45,7 +45,6 @@ from run_grid_3arm import (
     assemble_rows,
     builtin_surface_evidence,
     resolve_held_signatures,
-    resolve_payloads,
     scrub_unfinished_jobs,
     tier1_mechanism_gate,
 )
@@ -61,7 +60,7 @@ from membench.harbor.probe_gate import (
     detect_run_failure,
     harbor_stream_exec,
 )
-from membench.memory_systems.ours_system import _default_runner
+from membench.memory_systems.ours_system import _default_runner, resolve_payloads
 from membench.schemas.bundle import TaskBundle
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]

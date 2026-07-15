@@ -18,8 +18,9 @@ Pipeline (all FREE — git/Docker/agent none of it; only the built ``mem`` CLI +
       -> resolve_held_signatures (mem retrieve)        # the CANONICAL full+relaxed sigs
       -> toolreq_bundle_adapter.sequence_lessons       # facts embed those sigs verbatim
       -> mem import-lessons                            # attach lessons by work_id
-      -> REUSE run_grid_3arm.{load_admitted_bundles, resolve_payloads,
-                              resolve_held_signatures, tier1_mechanism_gate}
+      -> REUSE run_grid_3arm.{resolve_held_signatures, tier1_mechanism_gate}
+              + run_grid.load_admitted_bundles
+              + ours_system.resolve_payloads   # the arm's own resolver (mem-rsmq7)
       -> assert the SAME gate fired
 
 HALT DISCIPLINE (this bead): this driver builds + verifies the OFFLINE gate only. It
@@ -42,16 +43,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-# Sibling-script reuse (the test_run_grid_3arm idiom): these three live in run_grid_3arm,
+# Sibling-script reuse (the test_run_grid_3arm idiom): these two live in run_grid_3arm,
 # load_admitted_bundles in run_grid. Importing here runs the SAME gate the paid driver
 # runs — no reimplementation, no drift.
 from run_grid import load_admitted_bundles
-from run_grid_3arm import (
-    RETRIEVAL_SCOPE,
-    resolve_held_signatures,
-    resolve_payloads,
-    tier1_mechanism_gate,
-)
+from run_grid_3arm import resolve_held_signatures, tier1_mechanism_gate
 
 from membench.generators.enterprise_workflow import materialize_world
 from membench.generators.nemo.world_builder import read_world
@@ -64,7 +60,11 @@ from membench.generators.world_manifest import read_manifest
 from membench.grading.mechanism_gate import MechanismFiresGate
 from membench.harbor.bundle_grid import signature_overlap_observations
 from membench.mem_cli import run_mem_json
-from membench.memory_systems.ours_system import _default_runner
+from membench.memory_systems.ours_system import (
+    RETRIEVAL_SCOPE,
+    _default_runner,
+    resolve_payloads,
+)
 from membench.schemas.bundle import TaskBundle
 from membench.schemas.sequence import BenchmarkSequence
 

@@ -32,8 +32,10 @@ from membench.runner.headless_agent import Leg, render_cell_calls
 from membench.runner.resume_cache import invocation_digest, load_cached
 from membench.runner.toolreq_realagent import (
     ToolReqRealAgentTask,
+    _reset_store,
     adapt_sequence,
     load_corpus_with_sequences,
+    seed_ours_store_and_resolve_payloads,
     sequence_lessons_opaque,
 )
 from membench.schemas.sequence import (
@@ -1381,7 +1383,30 @@ def test_multi_subject_arms_separate_dry_run() -> None:
         assert by[("oracle", channel)].passes == 2
 
 
-# --- ours seeding (real mem CLI, skips like test_pipeline_e2e when the TS build is absent)
+# --- ours seeding
+
+
+def test_reset_store_removes_the_db_and_its_sqlite_sidecars(tmp_path: Path) -> None:
+    """The seed's freshness rests on this six-line delete. SQLite keeps committed data the
+    main file does not yet hold in the -wal sidecar, so leaving -wal/-shm behind can restore
+    the previous corpus's rows on the next open — the store would not be fresh. All three go."""
+    store_path = tmp_path / "store.db"
+    sidecars = [store_path.with_name(store_path.name + s) for s in ("", "-wal", "-shm")]
+    for path in sidecars:
+        path.write_text("previous corpus", encoding="utf-8")
+
+    _reset_store(store_path)
+
+    assert not [p for p in sidecars if p.exists()]
+
+
+def test_reset_store_is_a_no_op_when_no_store_exists(tmp_path: Path) -> None:
+    """The FIRST seed of a run resets a store path that does not exist yet — that is the
+    normal path, not an error (`missing_ok`)."""
+    _reset_store(tmp_path / "store.db")  # must not raise
+
+
+# --- ours seeding, end to end (real mem CLI; skips like test_pipeline_e2e when TS is unbuilt)
 
 
 def test_ours_seeding_retrieves_cross_task_never_leaks_own_id_or_realistic_value(
@@ -1396,7 +1421,7 @@ def test_ours_seeding_retrieves_cross_task_never_leaks_own_id_or_realistic_value
 
     seqs = [_toolreq_seq("w-0"), _toolreq_seq("w-1")]
     tasks = [adapt_sequence(seq) for seq in seqs]
-    payloads = driver.seed_ours_store_and_resolve_payloads(
+    payloads = seed_ours_store_and_resolve_payloads(
         seqs, tasks, tmp_path / "store.db", str(MEM_BIN)
     )
 
@@ -1431,8 +1456,8 @@ def test_reseeding_a_store_never_surfaces_the_previous_corpus(tmp_path: Path) ->
     old_tasks = [adapt_sequence(seq) for seq in old]
     new_tasks = [adapt_sequence(seq) for seq in new]
 
-    driver.seed_ours_store_and_resolve_payloads(old, old_tasks, store_path, str(MEM_BIN))
-    payloads = driver.seed_ours_store_and_resolve_payloads(new, new_tasks, store_path, str(MEM_BIN))
+    seed_ours_store_and_resolve_payloads(old, old_tasks, store_path, str(MEM_BIN))
+    payloads = seed_ours_store_and_resolve_payloads(new, new_tasks, store_path, str(MEM_BIN))
 
     # w-1 holds out its own lesson, so what it sees cross-task is w-0's — which corpus's?
     surfaced = " ".join(payloads["w-1"].values())

@@ -1,4 +1,6 @@
-"""3-arm pilot CLI (mem-p3w): payload resolution, row assembly, reuse semantics.
+"""3-arm pilot CLI (mem-p3w): row assembly, reuse semantics, the held-signature
+covariate, and the mechanism gate. Payload resolution moved to the ``ours`` arm with
+``resolve_payloads`` (mem-rsmq7) — its tests live in ``test_ours_system``.
 
 `scripts/run_grid_3arm.py` is not a package module, so it is loaded from its file
 path (the test_run_gate_probe idiom, preloading its sibling-script imports). No
@@ -70,26 +72,6 @@ def _write(grid_dir: Path, result: GridConditionResult) -> None:
     path.write_text(result.model_dump_json(indent=2) + "\n", encoding="utf-8")
 
 
-def test_resolve_payloads_drops_lessonless_items_and_keys_by_source() -> None:
-    def runner(query: OursQuery) -> dict:
-        assert query.scope == "same_rig_temporal"
-        if query.work_id == "demo-a":
-            return {
-                "items": [
-                    {"work_id": "prior-1", "citation": {"x": 1}, "lessons": [{"s": "l"}]},
-                    {"work_id": "prior-2", "citation": {"x": 2}, "lessons": []},
-                ]
-            }
-        return {"items": []}
-
-    payloads = three_arm_cli.resolve_payloads(
-        [_bundle("demo-a"), _bundle("demo-b")], store_path=Path("/tmp/s.db"), runner=runner
-    )
-    assert set(payloads["demo-a"]) == {"prior-1"}
-    assert "lessons" in payloads["demo-a"]["prior-1"]
-    assert payloads["demo-b"] == {}
-
-
 def test_assemble_rows_reuses_none_clean_for_empty_retrieval(tmp_path: Path) -> None:
     grid_dir = tmp_path / "grid"
     # demo-a has a payload-bearing ours run; demo-b's retrieval was empty.
@@ -124,22 +106,6 @@ def test_assemble_rows_raises_on_missing_leg(tmp_path: Path) -> None:
         three_arm_cli.assemble_rows([_bundle("demo-a")], {"demo-a": {}}, grid_dir)
 
 
-def test_resolve_payloads_rejects_loo_excluded_items() -> None:
-    """D6: an item inside the bundle's LOO exclusion set must never inject --
-    retrieval-v1 is contracted to exclude it, and the driver re-asserts."""
-    bundle = _bundle("demo-a")  # loo_excluded_work_ids == ("demo-a",)
-
-    def runner(query: OursQuery) -> dict:
-        return {
-            "items": [
-                {"work_id": "demo-a", "citation": {}, "lessons": [{"s": "self"}]},
-            ]
-        }
-
-    with pytest.raises(RuntimeError, match="LOO-excluded"):
-        three_arm_cli.resolve_payloads([bundle], store_path=Path("/tmp/s.db"), runner=runner)
-
-
 def test_scrub_unfinished_jobs_removes_only_resultless_pilot_dirs(tmp_path: Path) -> None:
     """The ghost-trap guard: a job dir without its probe result file is a corpse
     from a died run -- remove it so resume re-executes instead of re-harvesting
@@ -162,23 +128,7 @@ def test_scrub_unfinished_jobs_removes_only_resultless_pilot_dirs(tmp_path: Path
     assert (jobs / "demo-a.none").is_dir()  # cached gate job: never touched
 
 
-# --- mem-tnyo: issue-text trigger resolution + held-signature covariate input ---------
-
-
-def test_resolve_payloads_passes_no_trace_query_through() -> None:
-    seen: list[OursQuery] = []
-
-    def runner(query: OursQuery) -> dict:
-        seen.append(query)
-        return {"items": []}
-
-    three_arm_cli.resolve_payloads([_bundle("demo-a")], store_path=Path("/tmp/s.db"), runner=runner)
-    three_arm_cli.resolve_payloads(
-        [_bundle("demo-a")], store_path=Path("/tmp/s.db"), runner=runner, no_trace_query=True
-    )
-
-    assert seen[0].no_trace_query is False
-    assert seen[1].no_trace_query is True
+# --- mem-tnyo: held-signature covariate input -----------------------------------------
 
 
 def test_resolve_held_signatures_reads_the_retrieval_envelope() -> None:

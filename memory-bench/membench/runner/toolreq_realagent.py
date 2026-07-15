@@ -30,11 +30,14 @@ ZFC: a deterministic projection of authored ground truth — no model call, no s
 judgment. The one authored thing is the opaque token (a hash of ``(sequence_id, value)``);
 the reward structure is the sequence's own ``requires_action``.
 
-mem-rk41.3.1 adds the ``ours`` arm's seeding half: ``sequence_lessons_opaque`` authors a
-lesson per sequence whose facts state the SAME opaque ``oracle_memory`` content this
-module already computed, so a store seeded from it and the ``oracle`` arm share one
-opaque value space (``scripts/grid_toolreq_realagent.seed_ours_store_and_resolve_payloads``
-imports this alongside rk41.5's value-free ``sequence_records``).
+mem-rk41.3.1 adds the ``ours`` arm's seeding half, and this module holds both ends of it:
+``sequence_lessons_opaque`` authors a lesson per sequence whose facts state the SAME opaque
+``oracle_memory`` content this module already computed, and
+``seed_ours_store_and_resolve_payloads`` imports those lessons — alongside rk41.5's value-free
+``sequence_records`` — into a FRESH store and resolves the arm's real retrieval payload through
+``ours_system.resolve_payloads``. So a store seeded from it and the ``oracle`` arm share one
+opaque value space. The paid driver (``scripts/grid_toolreq_realagent.py``) supplies the
+repo-root ``bin/mem`` path and calls in.
 """
 
 from __future__ import annotations
@@ -42,7 +45,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections.abc import Sequence
+import tempfile
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -54,7 +58,11 @@ from membench.generators.toolreq_bundle_adapter import (
     _authored_values,
     _goal_step,
     _lifecycle,
+    sequence_bundles,
+    sequence_records,
 )
+from membench.mem_cli import run_mem_json
+from membench.memory_systems.ours_system import _default_runner, resolve_payloads
 from membench.metrics.scorers import states_value
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL
 from membench.runner.resume_cache import digest
@@ -358,3 +366,63 @@ def sequence_lessons_opaque(
             }
         )
     return lessons
+
+
+def _write_ndjson(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
+    """One JSON object per line — the import format `mem import-records/-lessons` reads."""
+    path.write_text(
+        "".join(json.dumps(row) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+
+
+def _reset_store(store_path: Path) -> None:
+    """Delete any store already at ``store_path``, SQLite sidecars included, so the seed that
+    follows is genuinely FRESH.
+
+    Load-bearing, not hygiene: ``lessons`` is append-only (CLAUDE.md), so importing into a store
+    left behind by an EARLIER corpus keeps that corpus's opaque tokens retrievable, and
+    ``resolve_payloads`` renders them straight into the live cross-task payloads — a paid ``ours``
+    measurement quietly carrying values no longer in the world. The store is a derived artifact of
+    the corpus and FREE to rebuild, so rebuild it."""
+    for suffix in ("", "-wal", "-shm"):
+        store_path.with_name(store_path.name + suffix).unlink(missing_ok=True)
+
+
+def seed_ours_store_and_resolve_payloads(
+    sequences: Sequence[BenchmarkSequence],
+    tasks: Sequence[ToolReqRealAgentTask],
+    store_path: Path,
+    mem_bin: str,
+) -> dict[str, dict[str, str]]:
+    """Seed a fresh ``ours`` store with the SAME substrate the mem-rk41.5 offline gate builds
+    (``sequence_records``) plus opaque-valued lessons (``sequence_lessons_opaque`` — the SAME
+    opaque token space ``oracle`` surfaces, the mem-rk41.3.1 invariant), then resolve the ``ours``
+    arm's real retrieval payload via ``ours_system.resolve_payloads``, the SAME function the paid
+    ours-vs-builtin grid uses.
+
+    FREE — real ``mem`` CLI calls, never an agent turn — and so the paid driver runs it on EVERY
+    invocation, dry-run or paid, cache-served tasks included. It covers ALL sequences and is never
+    narrowed to pending tasks: cross-task retrieval needs every lesson in the store, and the
+    resolved payload is itself a measured input that rides in the cache identity
+    (``toolreq_grid.RunIdentity``), so it must be recomputed to know whether a cached cell is still
+    current. It does need a built ``mem`` CLI, whose path the caller supplies as ``mem_bin``."""
+    store_path.parent.mkdir(parents=True, exist_ok=True)
+    _reset_store(store_path)
+    records = sequence_records(sequences)
+    lessons = sequence_lessons_opaque(sequences, tasks)
+    with tempfile.TemporaryDirectory(prefix="toolreq-ours-seed-") as workspace:
+        workspace_path = Path(workspace)
+        records_path = workspace_path / "records.ndjson"
+        lessons_path = workspace_path / "lessons.ndjson"
+        _write_ndjson(records_path, records)
+        _write_ndjson(lessons_path, lessons)
+        run_mem_json(
+            [mem_bin, "import-records", "--file", str(records_path), "--store", str(store_path)]
+        )
+        run_mem_json(
+            [mem_bin, "import-lessons", "--file", str(lessons_path), "--store", str(store_path)]
+        )
+    bundles = sequence_bundles(sequences)
+    runner = _default_runner(mem_bin)
+    return resolve_payloads(bundles, store_path=store_path, runner=runner)
