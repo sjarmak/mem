@@ -1465,6 +1465,7 @@ def test_empty_ours_payload_is_none_equivalent_and_never_spends(
         store_path=tmp_path / "store.db",
         mem_bin=str(MEM_BIN),
         seed_fn=_no_ours_payload,  # resolves to {} -> empty payload for every task
+        version_fn=lambda: STUB_CLI_VERSION,
     )
 
     assert "ours" not in seen, "spent a paid run on an empty `ours` payload"
@@ -1497,6 +1498,7 @@ def test_non_empty_ours_payload_still_spends(tmp_path: Path, monkeypatch) -> Non
         store_path=tmp_path / "store.db",
         mem_bin=str(MEM_BIN),
         seed_fn=_payload,
+        version_fn=lambda: STUB_CLI_VERSION,
     )
     assert seen.count("ours") == len(grid.CHANNELS)
     assert summary["per_task"][0]["identity"]["ours_retrieval_empty"] is False
