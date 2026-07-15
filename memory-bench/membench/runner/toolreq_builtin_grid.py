@@ -234,16 +234,14 @@ AGENT_ERROR = "AGENT-ERROR"
 class PreflightHaltError(RuntimeError):
     """The preflight's refusal to authorize the paid sweep, carrying the DIAGNOSIS that produced it.
 
-    Raised out of the ``before_first_spend`` hook, so it aborts the sweep before its first
-    measured task (``resume_cache.run_cached_corpus``). It carries the ``(kind, line)`` and NOT
-    the prose: the shell prints what a human should DO about each kind, which is IO policy;
-    which kind it IS is a decision about a measurement, and lives here under the type checker.
+    Raised out of the ``before_first_spend`` hook, so it aborts the sweep before its first measured
+    task (``resume_cache.run_cached_corpus``). It carries the ``(kind, line)`` and NOT the prose:
+    what a human should DO about each kind is the shell's IO policy; which kind it IS is a decision
+    about a measurement and lives here, under the type checker.
 
-    A distinct type rather than a ``HeadlessAgentError``: a preflight failure and a mid-sweep
-    agent failure are different findings with different counsel (nothing has been measured yet
-    vs. finished tasks are persisted and the run is resumable), and the driver must not report
-    the first as the
-    second."""
+    A distinct type from ``HeadlessAgentError`` because the two want opposite counsel: a preflight
+    halt has measured nothing, while a mid-sweep failure leaves finished tasks persisted and the run
+    resumable."""
 
     def __init__(self, kind: str, line: str) -> None:
         super().__init__(line)
@@ -268,15 +266,13 @@ def preflight(task: ToolReqRealAgentTask, *, model: str) -> BuiltinDiagnostics:
 
 
 def preflight_kind(diagnostics: BuiltinDiagnostics) -> tuple[str, str]:
-    """Classify the preflight cycle into its (kind, display-line) — ``cell_kind``'s shape, and for
+    """Classify the preflight cycle into its (kind, display-line) — ``cell_kind``'s shape and for
     its reason: both halves out of ONE branch, so the kind the gate ACTS on and the line the human
     READS cannot desync.
 
-    Same priority as ``cell_kind``, and that ordering is the whole point of returning a kind rather
-    than a bool. ``engaged == 0`` alone is one bit short: it reads a LEAK (the goal leg PASSED with
-    no native memory — the sandbox cwd firewall handed the answer over, the most severe thing this
-    arm can find) as "the mechanism never fired", and those want opposite responses from a human. A
-    bool gate reported both as the latter."""
+    Same priority as ``cell_kind``, which is why this returns a kind rather than a bool: ``engaged
+    == 0`` alone reads a LEAK as "the mechanism never fired", and the two want opposite responses
+    from a human."""
     if diagnostics.leaked:
         return LEAK, (
             f"the goal leg PASSED without engaging native memory ({diagnostics.leaked}/"
@@ -294,12 +290,11 @@ def preflight_gate(
     task: ToolReqRealAgentTask, *, model: str, announce: Callable[[str], None]
 ) -> Callable[[], None]:
     """The paid preflight as the hook ``run_cached_corpus`` fires immediately before the first task
-    it will MEASURE (``resume_cache.run_cached_corpus``, ``before_first_spend``).
+    it will MEASURE (``resume_cache.before_first_spend``, whose contract this relies on).
 
-    A hook rather than a step the driver runs ahead of the sweep, because the gate must cost exactly
-    what the sweep costs: a fully cache-served resume measures nothing, so there is nothing for a
-    mechanism check to protect and it must not spend (mem-dblue — it did, twice, on every resume
-    attempt, which is the axis the cache exists to zero out). Only the loop knows that.
+    A hook rather than a step the driver runs ahead of the sweep, so the gate costs exactly what the
+    sweep costs: a fully cache-served resume measures nothing, so there is nothing for a mechanism
+    check to protect and it must not spend (mem-dblue).
 
     ``announce`` is injected for the same reason ``identity_of`` and ``evaluate`` are: what to SAY
     about a diagnosis is the shell's, what a diagnosis IS is this module's."""
@@ -400,9 +395,8 @@ def run_corpus(
     (``BaseRunIdentity``), so this is the ONE place the rule is applied and the schema is the
     backstop, not a second copy of it.
 
-    ``before_first_spend`` is forwarded, not interpreted (``preflight_gate`` is what the driver
-    passes): the cache fires it once before the first task this run MEASURES, and never on a resume
-    that measures nothing."""
+    ``before_first_spend`` is forwarded, not interpreted — ``preflight_gate`` is what the driver
+    passes, and the hook's contract is ``resume_cache.run_cached_corpus``'s."""
     resolved_model = resolve_model(model)
     run = run_cached_corpus(
         tasks,

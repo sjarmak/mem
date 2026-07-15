@@ -165,11 +165,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         _print_go_command(tasks, args.repeats, args.out, corpus_dir)
         return 2
 
-    # Handed to the cache as a hook rather than run here, so it costs exactly what the sweep costs:
-    # it fires once immediately before the first task the run will MEASURE, and a resume served
-    # entirely from the cache never reaches one — zero paid calls, where this driver used to spend
-    # two on every resume attempt (mem-dblue). `--dry-run` spends nothing by definition, so it takes
-    # no gate at all.
+    # A hook rather than a step run here, so it costs what the sweep costs: a resume served entirely
+    # from the cache measures nothing and so spends nothing, preflight included (mem-dblue).
+    # `--dry-run` spends nothing by definition, so it takes no gate at all.
     gate = (
         None
         if args.dry_run or args.skip_preflight

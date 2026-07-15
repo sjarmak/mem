@@ -1212,16 +1212,12 @@ def test_the_driver_writes_the_summary_the_grid_reserves(tmp_path: Path, monkeyp
 
 
 def test_a_fully_cache_served_resume_spends_nothing(tmp_path: Path, monkeypatch) -> None:
-    """THE BEAD (mem-dblue). The driver ran its preflight unconditionally, before the cache was ever
-    consulted — so a resume with every task already persisted still spent 2 real `claude -p` calls
-    (worst case ~20 min of wall clock) to measure something it then discarded, and re-spent them on
-    every further resume attempt. That waste was proportional to the number of RESUME ATTEMPTS,
-    which is precisely the axis the cache exists to zero out; the driver's own SWEEP HALT counsel
-    ("re-run the same command to resume") prescribes the loop that multiplies it.
+    """Regression test for mem-dblue: a fully cache-served resume must fire ZERO paid `claude -p`
+    calls, preflight included. The driver used to preflight before the cache was ever consulted, so
+    every resume attempt re-spent 2 real calls (worst case ~20 min) on a measurement it discarded —
+    waste proportional to the resume attempts the cache exists to make free.
 
-    Fires ZERO paid calls now: the preflight is a hook the cache fires before the first task it will
-    MEASURE, and a fully served resume never reaches one. The mem-xe2p mechanism-fires gate still
-    holds — nothing is measured here, so there is nothing for it to protect."""
+    The mem-xe2p mechanism-fires gate still holds: nothing is measured here, so nothing needs it."""
     args = ["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")]
     _corpus(tmp_path, "w-0", "w-1")
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")

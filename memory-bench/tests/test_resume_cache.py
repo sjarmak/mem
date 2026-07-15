@@ -558,10 +558,8 @@ def test_before_first_spend_fires_once_immediately_before_the_first_measured_tas
 
 
 def test_before_first_spend_never_fires_on_a_fully_cache_served_resume(tmp_path: Path) -> None:
-    """The property the hook exists for (mem-dblue). A driver's paid warm-up — a preflight, a
-    mechanism check — costs real `claude -p` calls, and a resume that measures NOTHING has nothing
-    for it to protect. The waste it replaces was proportional to the number of RESUME ATTEMPTS,
-    which is precisely the axis this cache exists to zero out."""
+    """The property the hook exists for (mem-dblue). A driver's paid warm-up costs real `claude -p`
+    calls, and a resume that measures NOTHING has nothing for it to protect."""
     out = tmp_path / "out"
     _run([_Task("w-0"), _Task("w-1")], out)
 
