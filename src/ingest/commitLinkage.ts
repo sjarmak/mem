@@ -58,13 +58,30 @@ export function extractPr(message: string): number | null {
   return last;
 }
 
-/** Candidate work-id tokens in a message: segments joined by `-` or `_` with an
+/** A fresh matcher for work-id compounds: segments joined by `-` or `_` with an
  * optional dotted child suffix (`gascity-dashboard-2j8e.7`, `gc-00lpsm`, and the
- * underscore rigs `scix_experiments-0c73`, `migration_evals-0qd2`). The extractor
- * is deliberately permissive — precision comes from intersecting whole tokens
- * with the known id set, which also makes matching boundary-exact: a parent id
- * `...-2j8e` cannot match inside a child `...-2j8e.7`. */
-const ID_TOKEN_RE = /[a-z0-9]+(?:[_-][a-z0-9]+)+(?:\.[a-z0-9]+)?/gi;
+ * underscore rigs `scix_experiments-0c73`, `migration_evals-0qd2`).
+ *
+ * This is the one home for the id GRAMMAR. What a caller does with a compound
+ * once matched is the caller's rule and they legitimately differ: this module
+ * takes each compound WHOLE (a commit message delimits ids with punctuation, so
+ * the compound IS the id), while ingest/falseClose enumerates segment-aligned
+ * sub-spans (a branch name embeds the id in a longer name, with no delimiter).
+ * The grammar underneath both must not drift — a rig with a new id shape has to
+ * be a single edit, or commit-linkage and the false-close join silently stop
+ * matching it in different ways.
+ *
+ * Returned from a factory rather than shared as a constant because a `/g` regex
+ * carries a mutable `lastIndex`; callers that use anything but `matchAll` (which
+ * clones) need their own instance. */
+export const newIdTokenRe = (): RegExp => /[a-z0-9]+(?:[_-][a-z0-9]+)+(?:\.[a-z0-9]+)?/gi;
+
+/** Candidate work-id tokens in a message. Hoisted: `matchAll` clones the regex,
+ * so this instance's `lastIndex` is never advanced. The extractor is deliberately
+ * permissive — precision comes from intersecting whole tokens with the known id
+ * set, which also makes matching boundary-exact: a parent id `...-2j8e` cannot
+ * match inside a child `...-2j8e.7`. */
+const ID_TOKEN_RE = newIdTokenRe();
 
 /** The known work ids referenced verbatim by `message`, as exact-token matches
  * against `workIds`. */

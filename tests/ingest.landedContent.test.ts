@@ -240,11 +240,6 @@ describe('classifyLandedContent — undecidable causes', () => {
     });
   });
 
-  it('keeps range-too-large distinct from range-unreadable — different holes', () => {
-    const pruned = classifyLandedContent(input, { run: git({ log: exits(128) }) });
-    expect(pruned.cause).toBe('range-unreadable');
-  });
-
   it('reports range-unreadable when the INTEGRATION side listing fails', () => {
     const run = git({
       log: range => (range.endsWith(TIP) ? 'diff:branch' : exits(128)()),

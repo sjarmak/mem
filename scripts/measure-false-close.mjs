@@ -188,27 +188,39 @@ for (const rig of rigs) {
   // right: mem's local main is 53 commits AHEAD of its remote (workers never
   // push), while gpk's is 14 BEHIND upstream. combineRefVerdicts takes the
   // strongest verdict, making the rate a lower bound rather than an artifact of
-  // ref selection. The remote is included only once resolved, so a pinned tip of
-  // null can only ever be the local integration branch.
-  const pinned = { [integration]: tipOf(integration) };
-  if (authRemote !== null) {
-    const remoteRef = `${authRemote}/${integration}`;
-    const remoteTip = tipOf(remoteRef);
-    if (remoteTip !== null) pinned[remoteRef] = remoteTip;
+  // ref selection.
+  //
+  // One rule for every candidate: pin it iff it resolves. A ref that does not is
+  // not a landing target, so it is dropped rather than pinned to null — a null
+  // anchor is not a pin, and carrying one would put a guaranteed-undecidable
+  // entry in every branch's per_ref array and write it into the report.
+  const candidateRefs = [
+    integration,
+    ...(authRemote === null ? [] : [`${authRemote}/${integration}`]),
+  ];
+  const pinned = {};
+  for (const ref of candidateRefs) {
+    const tip = tipOf(ref);
+    if (tip !== null) pinned[ref] = tip;
   }
   const integrationRefs = Object.keys(pinned);
-  if (pinned[integration] === null && integrationRefs.length === 1) {
+  if (integrationRefs.length === 0) {
     // Every branch would drop to `integration-unresolvable` and masquerade as a
     // coverage hole. Skip with a reason instead.
-    skip(`integration ref ${integration} does not resolve`);
+    skip(`no integration ref resolves (tried ${candidateRefs.join(', ')})`);
     continue;
   }
 
   const decided = joined.map(j => {
     const per_ref = integrationRefs.map(ref => ({
       ref,
+      // Decided against the PINNED tip, not the ref name: re-resolving the name
+      // per branch would both re-read a ref this loop already resolved and let a
+      // ref that moves mid-run decide different branches against different
+      // commits — exactly what pinning exists to prevent. classifyLandedContent
+      // resolves a 40-hex sha to itself, so the ladder is unchanged.
       result: classifyLandedContent(
-        { work_dir: entry.dir, branch: j.ref, integration: ref },
+        { work_dir: entry.dir, branch: j.ref, integration: pinned[ref] },
         { run: gitRunner }
       ),
     }));

@@ -1,3 +1,4 @@
+import { newIdTokenRe } from './commitLinkage.js';
 import type {
   LandedContentResult,
   LandedContentVerdict,
@@ -58,23 +59,15 @@ import { isLanded } from './landedContent.js';
  * keyed by.
  */
 function idCandidates(name: string): Set<string> {
-  // Constructed per call, not hoisted to module scope: a shared /g regex carries
-  // a mutable lastIndex. `matchAll` clones it and is safe today, but a later
-  // `.test()`/`.exec()` on a hoisted constant would silently corrupt this loop's
-  // start positions. A fresh literal costs nothing and removes the hazard.
-  // Same shape as commitLinkage's ID_TOKEN_RE: a hyphen/underscore compound with
-  // an optional dotted child suffix.
-  const compounds = /[a-z0-9]+(?:[_-][a-z0-9]+)+(?:\.[a-z0-9]+)?/gi;
   const candidates = new Set<string>();
-  for (const m of name.matchAll(compounds)) {
-    // Capturing the separator keeps it in the split output: `parts` alternates
-    // segment, separator, segment, … so segment k is parts[2k], and the span
-    // from segment i through j is a verbatim slice of the original compound.
+  for (const m of name.matchAll(newIdTokenRe())) {
+    // Capturing the separator keeps it in the split output, so `parts` alternates
+    // segment, separator, segment, … Stepping by 2 walks the segments, and each
+    // slice is therefore a verbatim run of the original compound.
     const parts = m[0].toLowerCase().split(/([_-])/);
-    const nSegments = (parts.length + 1) / 2;
-    for (let i = 0; i < nSegments; i++) {
-      for (let j = i; j < nSegments; j++) {
-        candidates.add(parts.slice(2 * i, 2 * j + 1).join(''));
+    for (let start = 0; start < parts.length; start += 2) {
+      for (let end = start; end < parts.length; end += 2) {
+        candidates.add(parts.slice(start, end + 1).join(''));
       }
     }
   }

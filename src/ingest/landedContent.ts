@@ -245,21 +245,13 @@ export interface LandedContentOptions {
 }
 
 /**
- * Decide whether `input.branch`'s work is present on `input.integration`.
+ * Decide whether `input.branch`'s work is present on `input.integration`, walking
+ * the {@link LandedContentVerdict} ladder in the order that type declares.
  *
- * The ladder, strongest evidence first:
- *
- * 1. `landed-direct` — the tip is an ancestor of integration. No patch needed.
- * 2. `landed-equivalent` — every content-bearing commit has a patch-id twin.
- *    Covers rebase and cherry-pick, where the shas differ but the content does not.
- * 3. `landed-squashed` — the combined diff's patch-id appears as a single
- *    integration commit. Checked BEFORE `partial` because a squash-merge
- *    generally leaves no individual commit's patch-id intact, so a squashed
- *    branch that happens to share one trivial commit with integration would
- *    otherwise be misread as a partial landing.
- * 4. `partial` — some commits landed, some did not. A real state in this corpus,
- *    not an error: it is what a hand-cherry-picked subset looks like.
- * 5. `absent` — no twin at any granularity.
+ * The one ordering that is not self-evident: `landed-squashed` is checked BEFORE
+ * `partial`, because a squash-merge generally leaves no individual commit's
+ * patch-id intact — so a squashed branch that happens to share one trivial commit
+ * with integration would otherwise be misread as a partial landing.
  *
  * Patch-ids are compared only within `merge_base..tip` vs `merge_base..integration`.
  * Scoping the integration side to the fork point is what keeps the comparison
@@ -327,9 +319,10 @@ export function classifyLandedContent(
  * from the denominator rather than count it as a failure — see `tallyRig`.
  *
  * Written as an exhaustive switch rather than a lookup set so that adding a
- * verdict to {@link LandedContentVerdict} fails to compile here. A set would
- * accept a new `landed-*` verdict silently and classify it as NOT landed —
- * quietly inflating the false-close rate this module exists to measure.
+ * verdict to {@link LandedContentVerdict} fails to compile here (the declared
+ * `boolean` return has no case to satisfy it). A set would accept a new
+ * `landed-*` verdict silently and classify it as NOT landed — quietly inflating
+ * the false-close rate this module exists to measure.
  */
 export function isLanded(verdict: LandedContentVerdict): boolean {
   switch (verdict) {
@@ -341,9 +334,5 @@ export function isLanded(verdict: LandedContentVerdict): boolean {
     case 'absent':
     case 'undecidable':
       return false;
-    default: {
-      const exhaustive: never = verdict;
-      return exhaustive;
-    }
   }
 }
