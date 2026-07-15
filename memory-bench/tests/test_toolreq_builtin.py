@@ -138,6 +138,32 @@ def _corpus_one(tmp_path: Path, work_id: str = "w-0") -> list[ToolReqRealAgentTa
     return _corpus(tmp_path, work_id)
 
 
+def _legs_by_task(
+    per_task: dict[str, int],
+) -> Callable[[ToolReqRealAgentTask], tuple[Leg, ...]]:
+    """A ``cell_legs`` that BRANCHES on its task, giving ``per_task[work_id]`` legs. The test double
+    a uniform patch cannot be: with every task on the same leg count, an exact per-task sum and an
+    ``n_tasks x calls_per_repeat(tasks[0])`` model agree, so a test built on it passes under either.
+    Only a non-uniform corpus separates them (mem-663ga).
+
+    The return annotation is deliberately ``tuple[Leg, ...]``, not the real ``cell_legs``'s
+    ``tuple[Leg, Leg]``: widening that pair is the one-line type-clean edit `paid_call_count`'s
+    docstring names as all it would take to make a variable leg count real. This double is what
+    that day looks like, written down now."""
+
+    def _cell_legs(task: ToolReqRealAgentTask) -> tuple[Leg, ...]:
+        n_legs = per_task[task.work_id]
+        # A double that pads to a count it cannot reach would return the establish+goal pair for
+        # any n_legs <= 2 and silently test nothing — the same "the number is a MODEL of the real
+        # one" failure this fixture exists to catch, one level up.
+        assert n_legs >= 2, f"cell_legs is at least the establish+goal pair; got {n_legs}"
+        establish, goal = cell_legs(task)
+        extra = [Leg(f"pad{i}", goal.step, {"hint": "x"}) for i in range(n_legs - 2)]
+        return (establish, *extra, goal)
+
+    return _cell_legs
+
+
 def _stream_json_runner(
     *, tool_use_when: Callable[[list[str]], bool], tool_name: str, tool_input: dict[str, object]
 ):
@@ -1384,21 +1410,6 @@ def test_paid_call_count_scales_with_the_legs(monkeypatch) -> None:
     three_legs = grid.paid_call_count(tasks, repeats=3)
     assert three_legs == len(grid.CHANNELS) * 3 * 3 * len(tasks)
     assert three_legs > two_legs  # the disclosure moved with the leg, not stuck at 2
-
-
-def _legs_by_task(per_task: dict[str, int]):
-    """A ``cell_legs`` that BRANCHES on its task, giving ``per_task[work_id]`` legs. The test double
-    the uniform patch above cannot be: with every task on the same leg count, an exact per-task sum
-    and an ``n_tasks x calls_per_repeat(tasks[0])`` model agree, so a test built on it passes under
-    either. Only a non-uniform corpus separates them."""
-
-    def _cell_legs(task):
-        establish, goal = cell_legs(task)
-        n_extra = per_task[task.work_id] - 2
-        extra = [Leg(f"pad{i}", goal.step, {"hint": "x"}) for i in range(n_extra)]
-        return (establish, *extra, goal)
-
-    return _cell_legs
 
 
 def test_paid_call_count_is_exact_when_the_leg_count_varies_by_task(monkeypatch) -> None:
