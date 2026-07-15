@@ -160,6 +160,43 @@ def _stream_json_runner(
     return run
 
 
+def _builtin_arm(
+    seen: list[str] | None = None,
+    *,
+    passes: bool = True,
+    engaged: bool,
+    leaked: bool = False,
+) -> Callable[..., object]:
+    """A `run_builtin_arm` double that reports every repeat the same way — HONESTLY: the repeats it
+    was asked for, the channel it was given, and the invocations the PLAN says that cell sends, so
+    the cells it produces are a real grid the schema will accept. A fake that hardcoded one channel
+    would be refused as a duplicated cell, and one that reported invocations the plan does not
+    declare would be refused at the cache's write boundary — both are the checks doing their job.
+
+    The three booleans are the only thing this file's callers differ on, and folding them into one
+    factory is what keeps the third tuple element (`cell_calls`) written ONCE: it was hand-copied
+    into each double before, so every move of `run_builtin_arm`'s return shape was three edits and
+    a missed one would leave a double silently disagreeing with the write boundary it must satisfy.
+    Mirrors `test_toolreq_realagent._spy_run_arm`, including its optional `seen` recorder."""
+
+    def run(task, *, repeats: int, channel: MemoryChannel, **_kwargs):
+        if seen is not None:
+            seen.append(channel.value)  # a real paid cell would spawn `claude -p` here
+        return (
+            ArmOutcome(
+                arm=ARM, channel=channel.value, passes=repeats if passes else 0, runs=repeats
+            ),
+            BuiltinDiagnostics(
+                engaged=repeats if engaged else 0,
+                leaked=repeats if leaked else 0,
+                runs=repeats,
+            ),
+            cell_calls(task, channel, model=""),
+        )
+
+    return run
+
+
 # --- establish step (H3, H4) ----------------------------------------------------------
 
 
@@ -679,19 +716,9 @@ def test_zeroing_leaked_on_a_real_leak_record_cannot_rewrite_the_headline(
     # itself is exactly the one nothing else can refuse.
     tasks = _corpus_one(tmp_path)
 
-    def _arm(engaged: int, leaked: int):
-        def run(task, *, repeats: int, channel: MemoryChannel, **_kwargs):
-            return (
-                ArmOutcome(arm=ARM, channel=channel.value, passes=repeats, runs=repeats),
-                BuiltinDiagnostics(engaged=engaged, leaked=leaked * repeats, runs=repeats),
-                cell_calls(task, channel, model=""),
-            )
-
-        return run
-
     # The verdict a genuinely NOT-ENGAGED grid produces — taken from a real run, never hand-typed,
     # so the forgery is exactly what a self-consistent record would say.
-    monkeypatch.setattr(grid, "run_builtin_arm", _arm(engaged=2, leaked=0))
+    monkeypatch.setattr(grid, "run_builtin_arm", _builtin_arm(engaged=True))
     engaged_out = tmp_path / "engaged"
     grid.run_corpus(tasks, out_dir=engaged_out, repeats=2, model="", dry_run=True)
     not_engaged_verdict = json.loads((engaged_out / "w-0.json").read_text())["verdict"].replace(
@@ -699,7 +726,7 @@ def test_zeroing_leaked_on_a_real_leak_record_cannot_rewrite_the_headline(
     )
 
     out = tmp_path / "out"
-    monkeypatch.setattr(grid, "run_builtin_arm", _arm(engaged=0, leaked=1))
+    monkeypatch.setattr(grid, "run_builtin_arm", _builtin_arm(engaged=False, leaked=True))
     truth = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
     assert truth["leaked"] == ["w-0"] and truth["not_engaged"] == []
 
@@ -1036,19 +1063,7 @@ if _SCRIPTS not in sys.path:
 
 import grid_toolreq_builtin as driver  # noqa: E402
 
-
-def _engaging_arm(task, *, repeats: int, channel: MemoryChannel, **_kwargs):
-    """A `run_builtin_arm` stand-in that engages and passes every repeat — HONESTLY: it reports the
-    repeats it was asked for, the channel it was given, and the invocations the PLAN says that
-    cell sends, so the cells it produces are a real grid the schema will accept. A fake that
-    hardcoded one channel would now be refused as a duplicated cell, and one that reported
-    invocations the plan does not declare would be refused at the cache's write boundary — both
-    are the checks doing their job."""
-    return (
-        ArmOutcome(arm=ARM, channel=channel.value, passes=repeats, runs=repeats),
-        BuiltinDiagnostics(engaged=repeats, leaked=0, runs=repeats),
-        cell_calls(task, channel, model=""),
-    )
+_engaging_arm = _builtin_arm(engaged=True)
 
 
 def test_driver_refuses_to_spend_without_token(tmp_path: Path, monkeypatch) -> None:
@@ -1089,14 +1104,7 @@ def test_preflight_halts_when_native_memory_never_engages(tmp_path: Path, monkey
     _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
 
-    def _never_engages(task, *, repeats: int, channel: MemoryChannel, **_kwargs):
-        return (
-            ArmOutcome(arm=ARM, channel=channel.value, passes=0, runs=repeats),
-            BuiltinDiagnostics(engaged=0, leaked=0, runs=repeats),
-            cell_calls(task, channel, model=""),
-        )
-
-    monkeypatch.setattr(driver, "run_builtin_arm", _never_engages)
+    monkeypatch.setattr(driver, "run_builtin_arm", _builtin_arm(passes=False, engaged=False))
     code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
     assert code == 3
 
@@ -1148,32 +1156,24 @@ def test_preflight_proceeds_when_engaged(tmp_path: Path, monkeypatch) -> None:
     _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
 
-    calls = {"n": 0}
-
-    def _spy(task, **kwargs):
-        calls["n"] += 1
-        return _engaging_arm(task, **kwargs)
-
-    monkeypatch.setattr(driver, "run_builtin_arm", _spy)
-    monkeypatch.setattr(grid, "run_builtin_arm", _spy)
+    calls: list[str] = []
+    spy = _builtin_arm(calls, engaged=True)
+    monkeypatch.setattr(driver, "run_builtin_arm", spy)
+    monkeypatch.setattr(grid, "run_builtin_arm", spy)
     code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
     assert code == 0
     # once for the preflight + once per (task x channel) cell in the sweep
-    assert calls["n"] == 1 + len(grid.CHANNELS)
+    assert len(calls) == 1 + len(grid.CHANNELS)
 
 
 def test_skip_preflight_bypasses_the_real_preflight_call(tmp_path: Path, monkeypatch) -> None:
     _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
 
-    calls = {"n": 0}
-
-    def _spy(task, **kwargs):
-        calls["n"] += 1
-        return _engaging_arm(task, **kwargs)
-
-    monkeypatch.setattr(driver, "run_builtin_arm", _spy)
-    monkeypatch.setattr(grid, "run_builtin_arm", _spy)
+    calls: list[str] = []
+    spy = _builtin_arm(calls, engaged=True)
+    monkeypatch.setattr(driver, "run_builtin_arm", spy)
+    monkeypatch.setattr(grid, "run_builtin_arm", spy)
     code = driver.main(
         [
             "--corpus-dir",
@@ -1185,7 +1185,7 @@ def test_skip_preflight_bypasses_the_real_preflight_call(tmp_path: Path, monkeyp
     )
     assert code == 0
     # no +1 for a preflight call — only the sweep's per-channel cells
-    assert calls["n"] == len(grid.CHANNELS)
+    assert len(calls) == len(grid.CHANNELS)
 
 
 def test_the_driver_writes_the_summary_the_grid_reserves(tmp_path: Path, monkeypatch) -> None:

@@ -18,7 +18,7 @@ those arms send, and the verdict their rows imply. What this module adds to the 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Self
 
@@ -126,15 +126,11 @@ class PlannedCell:
     A cell carries the call it will make — a ``headless_agent.Leg``, the type ``render_cell_calls``
     renders and the builtin grid's ``cell_legs`` returns — rather than a second copy of that call's
     fields. This grid's cell is ONE leg: the scored goal call under the arm's surfaced memory, with
-    nothing to establish first (the fact, or its absence, IS the memory).
-
-    ``hash=False`` because a ``Leg`` holds a non-frozen pydantic step and a plain dict, so a frozen
-    dataclass's auto ``__hash__`` over every field would raise on first hash. Value ``__eq__`` still
-    spans all fields."""
+    nothing to establish first (the fact, or its absence, IS the memory)."""
 
     arm: str
     channel: MemoryChannel
-    leg: Leg = field(hash=False)
+    leg: Leg
 
 
 def planned_cells(
