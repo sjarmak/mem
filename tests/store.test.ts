@@ -11,7 +11,6 @@ import {
   importLessons,
   lastKLessons,
   lessonsFor,
-  lessonsForRig,
   linksFor,
   maxLessonId,
   openStore,
@@ -356,29 +355,6 @@ describe('lessons (append-only, D9)', () => {
     const lessons = allLessons(db);
     expect(lessons.map(l => l.work_id)).toEqual(['demo-1a2b', 'demo-2b3c']);
     expect(lessons[1].commit_sha).toBe('def456');
-  });
-
-  it('lessonsForRig lists only lessons whose source record is in that rig, in append order', () => {
-    const db = openStore(':memory:');
-    writeRecords(db, [
-      fullRecord({ work_id: 'w-a', rig: 'rigA' }),
-      fullRecord({ work_id: 'w-b', rig: 'rigB' }),
-    ]);
-    appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-03T00:00:00Z', payload: {} });
-    appendLesson(db, { work_id: 'w-b', extracted_at: '2026-06-04T00:00:00Z', payload: {} });
-    appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-05T00:00:00Z', payload: {} });
-
-    expect(lessonsForRig(db, 'rigA').map(l => l.work_id)).toEqual(['w-a', 'w-a']);
-    expect(lessonsForRig(db, 'rigB').map(l => l.work_id)).toEqual(['w-b']);
-    expect(lessonsForRig(db, 'rigC')).toEqual([]);
-  });
-
-  it("lessonsForRig excludes a lesson whose source record no longer exists (can't attribute it to any rig)", () => {
-    const db = openStore(':memory:');
-    appendLesson(db, { work_id: 'w-orphan', extracted_at: '2026-06-03T00:00:00Z', payload: {} });
-
-    expect(lessonsForRig(db, 'rigA')).toEqual([]);
-    expect(allLessons(db)).toHaveLength(1);
   });
 
   it('lastKLessons returns the k most-recently-appended lessons, in append order', () => {

@@ -135,27 +135,6 @@ export function allLessons(db: StoreDatabase): StoredLesson[] {
   return rows.map(toStoredLesson);
 }
 
-/** Lessons whose source work_record is in `rig`, in append (id) order
- * (mem-0r7l): the K-past-fix regression check's rig-scoped window. Lessons
- * carry no FK to work_records (Decision 9), so this is an INNER JOIN — a
- * lesson whose source record no longer exists can't be attributed to any
- * rig and is correctly absent here (its own `getRecord` lookup would fail
- * the same way in `computeRegressions` regardless). An unscoped `--rig`-less
- * caller should use {@link allLessons} instead; this is deliberately narrower. */
-export function lessonsForRig(db: StoreDatabase, rig: string): StoredLesson[] {
-  const rows = db
-    .prepare(
-      `SELECT l.id, l.work_id, l.extracted_at, l.commit_sha, l.payload
-         FROM lessons l
-         JOIN work_records wr ON wr.work_id = l.work_id
-        WHERE wr.rig = ?
-        ORDER BY l.id`
-    )
-    .all(rig) as LessonRow[];
-
-  return rows.map(toStoredLesson);
-}
-
 /** The highest `lessons.id` in the store, or `null` when the table is empty.
  * Snapshot it BEFORE appending new lessons and pass it back as
  * {@link lastKLessons}' `asOfLessonId` to pin that window to the lessons that

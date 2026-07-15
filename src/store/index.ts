@@ -32,7 +32,6 @@ export {
   getRecord,
   lastKLessons,
   lessonsFor,
-  lessonsForRig,
   linksFor,
   maxLessonId,
   queryRecords,
