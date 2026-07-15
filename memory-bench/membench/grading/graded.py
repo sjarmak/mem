@@ -64,9 +64,9 @@ from membench.grading.judge import Rubric, RubricCriterion, score_completion
 from membench.judge_config import (
     IsolatedClaudeCallsite,
     IsolatedJudgeConfig,
-    Runner,
     run_isolated_claude,
 )
+from membench.spawn import Runner
 
 # Judge score and the mechanical reference disagree by more than this -> flag the run
 # for review (EB rescore comparator's 0.3 threshold).

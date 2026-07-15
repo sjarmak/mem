@@ -34,7 +34,7 @@ import typing
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from membench.bundle.replay import ReplayResult, Runner
+from membench.bundle.replay import ReplayResult
 from membench.schemas.bundle import (
     BundleEnv,
     BundleVerification,
@@ -42,6 +42,7 @@ from membench.schemas.bundle import (
     FtpType,
     TaskBundle,
 )
+from membench.spawn import Runner
 
 # Anchor bundles carry a ground-truth git diff, not a replayed one: no mutation
 # calls were applied, and the diff is exact. 1.0 says "authoritative", distinct

@@ -206,7 +206,7 @@ def test_run_step_raises_on_timeout() -> None:
     def runner(argv, **kwargs):
         raise subprocess.TimeoutExpired(argv, 600)
 
-    with pytest.raises(HeadlessAgentError, match="did not respond"):
+    with pytest.raises(HeadlessAgentError, match="did not finish within"):
         HeadlessClaudeAgent(runner=runner).run_step(_step(), {}, _ctx())
 
 

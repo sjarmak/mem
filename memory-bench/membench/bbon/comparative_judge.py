@@ -32,9 +32,9 @@ from membench.bbon.models import Attempt, Judgment, NarrativeDiff, deterministic
 from membench.judge_config import (
     IsolatedClaudeCallsite,
     IsolatedJudgeConfig,
-    Runner,
     run_isolated_claude,
 )
+from membench.spawn import Runner
 
 DEFAULT_PROMPT_VERSION = "v1"
 

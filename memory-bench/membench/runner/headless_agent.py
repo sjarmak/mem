@@ -43,6 +43,7 @@ from membench.runner.agent import AgentStepResult
 from membench.runtime import StepContext
 from membench.schemas.sequence import SequenceStep
 from membench.schemas.trace import ToolCall, TraceMessage
+from membench.spawn import run_checked
 
 # A real agent step (multi-turn tool use) can take minutes; a bound this high means a
 # wedged CLI, not slow inference — surfaced as an error, never an indefinite hang.
@@ -375,33 +376,16 @@ class HeadlessClaudeAgent:
         # `env=None` is subprocess's own inherit-the-parent-environment sentinel, so the
         # default needs no special-casing at the call site.
         env = None if self.env is None else {**os.environ, **self.env}
-        try:
-            completed = self.runner(
-                argv,
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=self.timeout_s,
-                cwd=self.cwd,
-                env=env,
-            )
-        except FileNotFoundError as exc:
-            raise HeadlessAgentError(
-                "'claude' CLI not found — install it to run the headless agent"
-            ) from exc
-        except OSError as exc:
-            # PermissionError, ENOEXEC, EACCES on cwd — the whole spawn-failure
-            # family must surface as a diagnosed halt, never a raw traceback.
-            raise HeadlessAgentError(f"could not spawn claude -p: {exc}") from exc
-        except subprocess.TimeoutExpired as exc:
-            raise HeadlessAgentError(
-                f"claude -p did not respond within {self.timeout_s:.0f}s"
-            ) from exc
-        if completed.returncode != 0:
-            raise HeadlessAgentError(
-                f"claude -p failed (exit {completed.returncode}): "
-                f"{(completed.stderr or completed.stdout or '').strip()}"
-            )
+        completed = run_checked(
+            argv,
+            what="claude -p",
+            not_found_hint="install it to run the headless agent",
+            timeout_s=self.timeout_s,
+            error=HeadlessAgentError,
+            runner=self.runner,
+            cwd=self.cwd,
+            env=env,
+        )
 
         stream_text = completed.stdout or ""
         input_tokens, output_tokens = _stream_usage_tokens(stream_text)

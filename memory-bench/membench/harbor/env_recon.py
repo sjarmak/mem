@@ -20,9 +20,11 @@ build/test toolchain, which is the residual faithfulness risk surfaced here, not
 """
 
 import subprocess
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
+
+from membench.spawn import Runner
 
 # rig -> local working clone. HOST-SPECIFIC spike configuration (these are the rigs
 # present in the held-out corpus that have a local repo on this machine). Injectable
@@ -51,10 +53,6 @@ DEFAULT_BASE_IMAGES: Mapping[str, str] = {
 DEFAULT_BASE_IMAGE = "ubuntu:24.04"
 
 _ARCHIVE_NAME = "repo.tar"
-
-# A subprocess.run-shaped callable, injectable so commit resolution + archiving are
-# testable against a real temp repo without monkeypatching the module.
-Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 
 
 def resolve_base_commit(

@@ -47,7 +47,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import subprocess
 import tempfile
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -60,6 +59,7 @@ from membench.memory_systems.filesystem_system import _safe_name
 from membench.memory_systems.local_stack import LocalModelStack
 from membench.runtime import StepContext
 from membench.schemas.memory_event import MemoryBackend, MemoryEvent, MemoryOperation
+from membench.spawn import run_checked
 
 # Synthesised page ids are namespaced under this prefix so they can NEVER collide with
 # a harness-issued raw ``memory_id`` (OpenWiki names wiki files after source paths, which
@@ -74,6 +74,10 @@ _OPENWIKI_PROVIDER = "openai-compatible"
 # the CLI drives a local LLM, so a cold model load can be slow, but a hang past this is
 # a wedged process, not a slow run — it must surface as a loud error, never block forever.
 DEFAULT_CLI_TIMEOUT_S = 120.0
+
+# The git snapshot is three local plumbing commands over a handful of freshly-written
+# files; anything near this bound is a wedged git, not slow work.
+_GIT_TIMEOUT_S = 30.0
 
 
 class OpenWikiCliError(RuntimeError):
@@ -137,33 +141,19 @@ WikiCliRunner = Callable[[list[str], Path, Mapping[str, str]], str]
 
 def _default_cli_runner(argv: list[str], cwd: Path, env: Mapping[str, str]) -> str:
     """Run ``openwiki`` non-interactively and return stdout, with ``env`` overlaid on the
-    process environment. Time-bounded and typed: a missing binary, a timeout, or a
-    non-zero exit all raise ``OpenWikiCliError`` with context (the trust-boundary timeout
-    convention the repo already sets in ``mem_cli.run_mem_json``) — a hang or failure is
-    surfaced, never a silent empty wiki."""
-    cmd = " ".join(argv)
-    merged = {**os.environ, **env}
-    try:
-        proc = subprocess.run(
-            argv,
-            cwd=cwd,
-            env=merged,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=DEFAULT_CLI_TIMEOUT_S,
-        )
-    except FileNotFoundError as exc:
-        raise OpenWikiCliError(
-            f"{argv[0]!r} not found — install the OpenWiki CLI first (npm i -g openwiki)"
-        ) from exc
-    except subprocess.TimeoutExpired as exc:
-        raise OpenWikiCliError(f"{cmd} timed out after {DEFAULT_CLI_TIMEOUT_S:.0f}s") from exc
-    if proc.returncode != 0:
-        raise OpenWikiCliError(
-            f"{cmd} failed (exit {proc.returncode}): {proc.stderr.strip() or proc.stdout.strip()}"
-        )
-    return proc.stdout
+    process environment. Time-bounded and typed: every spawn failure — missing binary, an
+    unspawnable one, a timeout, a non-zero exit — raises ``OpenWikiCliError`` with context
+    via the shared ``spawn.run_checked`` ladder, so a hang or failure is surfaced, never a
+    silent empty wiki."""
+    return run_checked(
+        argv,
+        what=" ".join(argv),
+        not_found_hint="install the OpenWiki CLI first (npm i -g openwiki)",
+        timeout_s=DEFAULT_CLI_TIMEOUT_S,
+        error=OpenWikiCliError,
+        cwd=cwd,
+        env={**os.environ, **env},
+    ).stdout
 
 
 def _git_snapshot(workdir: Path) -> None:
@@ -171,7 +161,10 @@ def _git_snapshot(workdir: Path) -> None:
     ``code`` mode reads git context to decide what to document — verified empirically
     (mem-nul9j): with no commit it writes nothing or a degenerate page, with a commit it
     synthesises structured pages. A pinned identity + no-gpg-sign keeps this hermetic and
-    non-interactive; any git failure raises ``OpenWikiCliError`` (never a silent skip)."""
+    non-interactive; any git failure raises ``OpenWikiCliError`` (never a silent skip) —
+    including the missing-git, unspawnable-git and timeout rungs this loop set a bound for
+    but never caught until it moved onto the shared ladder (mem-o9plh). Each step keeps its
+    own identity in the message: ``what`` is that step's own argv."""
     steps = [
         ["git", "init", "-q"],
         ["git", "add", "-A"],
@@ -191,13 +184,14 @@ def _git_snapshot(workdir: Path) -> None:
         ],
     ]
     for step in steps:
-        proc = subprocess.run(
-            step, cwd=workdir, capture_output=True, text=True, check=False, timeout=30.0
+        run_checked(
+            step,
+            what=" ".join(step),
+            not_found_hint="install git — the OpenWiki code mode reads git context",
+            timeout_s=_GIT_TIMEOUT_S,
+            error=OpenWikiCliError,
+            cwd=workdir,
         )
-        if proc.returncode != 0:
-            raise OpenWikiCliError(
-                f"{' '.join(step)} failed (exit {proc.returncode}): {proc.stderr.strip()}"
-            )
 
 
 def _openwiki_env(stack: LocalModelStack) -> dict[str, str]:

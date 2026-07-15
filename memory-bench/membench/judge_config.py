@@ -49,15 +49,13 @@ grading.
 from __future__ import annotations
 
 import os
-import subprocess
 import tempfile
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
-# A subprocess.run-shaped callable, injectable so tests never spawn a real claude.
-Runner = Callable[..., "subprocess.CompletedProcess[str]"]
+from membench.spawn import Runner, run_checked
 
 # The env var that redirects the entire ``claude`` config surface (skills, rules,
 # agents, CLAUDE.md, settings) to a chosen directory.
@@ -200,43 +198,36 @@ def run_isolated_claude(
     output_format_json: bool = True,
 ) -> str:
     """One headless ``claude -p`` spawn under the isolation surface -- the single
-    choke point every callsite shares (mem-hv9l), so an isolation change (a new
-    flag, a new env rule) lands everywhere at once instead of drifting per copy.
-    The subprocess env is assembled FRESH per call (`isolated_judge_env`) so a
+    choke point every ``claude`` callsite shares (mem-hv9l), so an isolation change
+    (a new flag, a new env rule) lands everywhere at once instead of drifting per
+    copy. The subprocess env is assembled FRESH per call (`isolated_judge_env`) so a
     credential refreshed mid-run is never shipped stale. ``model`` None omits the
-    ``--model`` flag (the CLI's own default). Every failure -- missing binary,
-    timeout, non-zero exit -- raises via ``error`` with the root cause attached,
-    never a default reply. Returns raw stdout; callers own reply parsing."""
+    ``--model`` flag (the CLI's own default). Returns raw stdout; callers own reply
+    parsing.
+
+    This choke point is drawn around THE CLAUDE BINARY -- the isolation surface and
+    the argv are what it owns. The spawn-and-diagnose ladder underneath it is a
+    WIDER seam than that (every shelling site needs it, claude or not), so it lives
+    in ``spawn.run_checked``; drawing both circles at this radius is what let the
+    ladder drift per copy in the first place (mem-o9plh). ``error`` is this
+    function's own contribution to that helper: the factory that keeps each
+    caller's exception type while sharing one ladder."""
     argv = ["claude", "-p", prompt]
     if output_format_json:
         argv += ["--output-format", "json"]
     if model is not None:
         argv += ["--model", model]
     argv += list(isolation.extra_argv)
-    try:
-        completed = runner(
-            argv,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=timeout_s,
-            env=isolated_judge_env(isolation.config_dir),
-            cwd=isolation.cwd,
-        )
-    except FileNotFoundError as exc:
-        raise error(f"'claude' CLI not found -- install it to run the {callsite}") from exc
-    except OSError as exc:
-        # PermissionError, ENOEXEC, EACCES on cwd -- the whole spawn-failure
-        # family must surface as a diagnosed error, never a raw traceback.
-        raise error(f"could not spawn claude -p for the {callsite}: {exc}") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise error(f"claude -p did not respond within {timeout_s:.0f}s") from exc
-    if completed.returncode != 0:
-        raise error(
-            f"claude -p failed (exit {completed.returncode}): "
-            f"{completed.stderr.strip() or completed.stdout.strip()}"
-        )
-    return completed.stdout
+    return run_checked(
+        argv,
+        what=f"claude -p for the {callsite}",
+        not_found_hint=f"install it to run the {callsite}",
+        timeout_s=timeout_s,
+        error=error,
+        runner=runner,
+        env=isolated_judge_env(isolation.config_dir),
+        cwd=isolation.cwd,
+    ).stdout
 
 
 class IsolatedClaudeCallsite:

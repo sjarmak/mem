@@ -56,7 +56,7 @@ import json
 import posixpath
 import subprocess
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
@@ -71,14 +71,12 @@ from pydantic import (
 )
 
 from membench.harbor.harbor_exec import _FILE_TOOLS
+from membench.spawn import Runner
 
 # The replayable subset of harbor_exec's file tools: structured path AND structured
 # content. (Read carries no mutation; NotebookEdit mutates but not as text substitution.)
 MutationTool = Literal["Edit", "Write", "MultiEdit"]
 _MUTATION_TOOLS: tuple[MutationTool, ...] = ("Edit", "Write", "MultiEdit")
-
-# A subprocess.run-shaped callable, injectable for testability (env_recon's pattern).
-Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 
 
 class ReplayOutcome(StrEnum):

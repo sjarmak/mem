@@ -202,7 +202,7 @@ def test_claude_judge_nonzero_exit_raises(tmp_path) -> None:  # type: ignore[no-
         return subprocess.CompletedProcess(argv, 1, stdout="", stderr="quota exceeded")
 
     judge = ClaudeRubricJudge(runner=runner, isolation=prepare_isolated_judge(base=tmp_path))
-    with pytest.raises(RuntimeError, match="claude -p failed"):
+    with pytest.raises(RuntimeError, match=r"claude -p for the .*failed \(exit 1\).*quota"):
         judge.score("t", "c", graded_rubric())
 
 

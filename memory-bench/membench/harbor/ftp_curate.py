@@ -43,8 +43,9 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
-from membench.harbor.probe_gate import Runner, _add_worktree, _remove_worktree
+from membench.harbor.probe_gate import _add_worktree, _remove_worktree
 from membench.harbor.repro_live import TEST_TIMEOUT_SEC
+from membench.spawn import Runner
 
 # Worktree basename prefix for ftp curation -- distinct from repro's "repro-" so a
 # sweep of either never force-removes the other's checkouts.

@@ -37,7 +37,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
-from membench.harbor.env_recon import Runner
+from membench.spawn import Runner, run_checked
 
 # The transcript shape `grid.harvest_run_trace` consumes. A plain dict; defined as the
 # return contract here so harbor_exec does not import from grid (grid imports this).
@@ -302,10 +302,11 @@ def run_harbor_job(
     (the OAuth token) that would otherwise block on stdin; ``-q`` suppresses the live
     UI. A non-zero exit raises -- a failed run is never silently a clean trace.
 
-    Every way the spawn itself can fail raises a DIAGNOSED `RuntimeError` too: a missing
-    binary, any other spawn OSError (permissions, ENOEXEC), and a timeout. `HarborRunner`
-    (grid.py) catches nothing on this path, so an undiagnosed spawn failure would kill a
-    whole sweep with a raw traceback that says nothing about which of the three it was.
+    Every way the spawn itself can fail raises a DIAGNOSED `RuntimeError` too -- a missing
+    binary, any other spawn OSError (permissions, ENOEXEC), and a timeout -- via the shared
+    `spawn.run_checked` ladder. `HarborRunner` (grid.py) catches nothing on this path, so an
+    undiagnosed spawn failure would kill a whole sweep with a raw traceback that says
+    nothing about which of the three it was.
 
     ``agent_env`` relocates ``CLAUDE_CONFIG_DIR`` for the probe path (`build_job_config`)."""
     jobs_dir.mkdir(parents=True, exist_ok=True)
@@ -323,35 +324,13 @@ def run_harbor_job(
     # Only the SPAWN is guarded. The mkdir/write_text above stay outside, so their
     # OSErrors keep their own identity instead of being misreported as a bad binary --
     # and `harbor_exec`'s "task dir does not exist" guard sits a frame above, untouched.
-    try:
-        completed = runner(
-            [harbor_bin, "run", "--config", str(config_path), "-q", "-y"],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=timeout_sec,
-        )
-    except FileNotFoundError as exc:
-        # Ordered before OSError -- FileNotFoundError is a subclass, so the reverse order
-        # would make this specific wording dead code.
-        raise RuntimeError(
-            f"harbor binary not found: {harbor_bin!r} -- install harbor or pass harbor_bin"
-        ) from exc
-    except OSError as exc:
-        # The rest of the family -- including EACCES on the CWD, which fails the spawn
-        # without the binary itself being at fault.
-        raise RuntimeError(f"could not spawn harbor run: {exc}") from exc
-    except subprocess.TimeoutExpired as exc:
-        # Not an OSError, so it needs a clause of its own. Quote the bound the exception
-        # actually carries rather than re-deriving it from `timeout_sec`.
-        raise RuntimeError(
-            f"harbor run for {task_dir} did not finish within {exc.timeout}s"
-        ) from exc
-    if completed.returncode != 0:
-        raise RuntimeError(
-            f"harbor run for {task_dir} failed (exit {completed.returncode}): "
-            f"{completed.stderr.strip() or completed.stdout.strip()}"
-        )
+    run_checked(
+        [harbor_bin, "run", "--config", str(config_path), "-q", "-y"],
+        what=f"harbor run for {task_dir}",
+        not_found_hint="install harbor or pass harbor_bin",
+        timeout_s=timeout_sec,
+        runner=runner,
+    )
     return jobs_dir / job_name
 
 

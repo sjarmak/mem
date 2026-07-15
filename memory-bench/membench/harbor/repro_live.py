@@ -44,8 +44,9 @@ from pathlib import Path
 
 from membench.grading.dual_verifier import ReproOutcome, is_test_path
 from membench.harbor.env_recon import DEFAULT_RIG_REPOS
-from membench.harbor.probe_gate import Runner, _add_worktree, _remove_worktree
+from membench.harbor.probe_gate import _add_worktree, _remove_worktree
 from membench.schemas.bundle import TaskBundle
+from membench.spawn import Runner
 
 # Dependency-manifest basenames: an applied diff touching one of these invalidates
 # the cached install (step 4 above).

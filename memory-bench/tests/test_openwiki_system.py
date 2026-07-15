@@ -26,12 +26,15 @@ from membench.memory_systems import build_memory_system
 from membench.memory_systems.consolidation import ConsolidationCapable
 from membench.memory_systems.openwiki_system import (
     ConcatWikiSynthesizer,
+    OpenWikiCliError,
     OpenWikiMemory,
     WikiCliRunner,
     WikiPage,
     WikiSynthesisResult,
     WikiSynthesizer,
     _CliWikiSynthesizer,
+    _default_cli_runner,
+    _git_snapshot,
     _parse_background_tokens,
     default_openwiki_synthesizer,
 )
@@ -366,3 +369,57 @@ def test_page_id_namespaced_away_from_raw_id_collision() -> None:
     (page,) = synth.synthesize(sources={"a": "raw-a"}).pages
     assert page.page_id == "openwiki-page-a"
     assert page.page_id != "a"
+
+
+# --------------------------------------------------------------------------- #
+# the shell seam's failure ladder (mem-o9plh)
+#
+# `_default_cli_runner` and `_git_snapshot` both spawn; both are on the shared
+# `spawn.run_checked` ladder, which owns the rung ORDER. What each site owns is
+# its own error TYPE and its own install hint -- that is what these assert. The
+# rungs themselves are proven once in tests/test_spawn.py.
+# --------------------------------------------------------------------------- #
+def test_cli_runner_missing_binary_names_the_openwiki_fix(tmp_path) -> None:
+    with pytest.raises(OpenWikiCliError, match="npm i -g openwiki"):
+        _default_cli_runner([str(tmp_path / "absent-openwiki")], tmp_path, {})
+
+
+def test_cli_runner_unspawnable_binary_surfaces_as_openwiki_error(tmp_path) -> None:
+    # Present but not executable -> PermissionError, NOT FileNotFoundError. This rung
+    # was omitted here until mem-o9plh, letting a raw OSError escape the seam's contract.
+    binary = tmp_path / "unexecutable-openwiki"
+    binary.write_text("#!/bin/sh\necho hi\n", encoding="utf-8")
+    binary.chmod(0o644)
+    with pytest.raises(OpenWikiCliError, match="could not spawn"):
+        _default_cli_runner([str(binary)], tmp_path, {})
+
+
+def test_cli_runner_nonzero_exit_carries_stderr(tmp_path) -> None:
+    binary = tmp_path / "failing-openwiki"
+    binary.write_text("#!/bin/sh\necho 'no provider configured' >&2\nexit 4\n", encoding="utf-8")
+    binary.chmod(0o755)
+    with pytest.raises(OpenWikiCliError, match=r"exit 4.*no provider configured"):
+        _default_cli_runner([str(binary)], tmp_path, {})
+
+
+def test_cli_runner_overlays_env_on_the_process_environment(tmp_path) -> None:
+    # The seam's contract: `env` overlays os.environ rather than replacing it, so the
+    # spawn keeps PATH while taking OpenWiki's provider config.
+    binary = tmp_path / "echoing-openwiki"
+    binary.write_text('#!/bin/sh\necho "$OPENWIKI_MODEL_ID"\n', encoding="utf-8")
+    binary.chmod(0o755)
+    assert _default_cli_runner([str(binary)], tmp_path, {"OPENWIKI_MODEL_ID": "m1"}) == "m1\n"
+
+
+def test_git_snapshot_commits_the_sources(tmp_path) -> None:
+    (tmp_path / "a.md").write_text("raw-a", encoding="utf-8")
+    _git_snapshot(tmp_path)
+    assert (tmp_path / ".git").is_dir()
+
+
+def test_git_snapshot_failure_names_the_step_that_failed(tmp_path) -> None:
+    # Nothing to commit -> `git commit` exits non-zero. The message must name THAT step,
+    # not just "git": per-step error identity is what the loop had before the sweep and
+    # must keep after it.
+    with pytest.raises(OpenWikiCliError, match=r"git .*commit.*failed \(exit 1\)"):
+        _git_snapshot(tmp_path)

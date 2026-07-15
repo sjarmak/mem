@@ -435,7 +435,7 @@ def _spawn_job(tmp_path: Path, boom: Exception, *, timeout_sec: float | None = N
 def test_run_harbor_job_diagnoses_missing_harbor_binary(tmp_path):
     # No stub: point `harbor_bin` at a path that does not exist and let the REAL spawn
     # fail, so this rung is exercised end-to-end rather than against a hand-fed error.
-    with pytest.raises(RuntimeError, match="harbor binary not found"):
+    with pytest.raises(RuntimeError, match=r"absent-harbor.*not found.*install harbor"):
         run_harbor_job(
             tmp_path / "task",
             jobs_dir=tmp_path / "jobs",

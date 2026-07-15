@@ -7,7 +7,6 @@ from membench.bundle.replay import (
     MutationCall,
     ReplayOutcome,
     ReplayResult,
-    Runner,
     effective_work_dir,
     gold_diff,
     infer_work_dir,
@@ -16,6 +15,7 @@ from membench.bundle.replay import (
     replay_calls,
     replay_transcript,
 )
+from membench.spawn import Runner
 
 __all__ = [
     "CallReplay",

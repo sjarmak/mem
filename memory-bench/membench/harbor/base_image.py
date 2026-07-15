@@ -28,7 +28,8 @@ import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 
-from membench.harbor.env_recon import Runner, render_dockerfile, write_repo_archive
+from membench.harbor.env_recon import render_dockerfile, write_repo_archive
+from membench.spawn import Runner
 
 _log = logging.getLogger(__name__)
 

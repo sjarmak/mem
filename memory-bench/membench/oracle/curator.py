@@ -35,10 +35,10 @@ from membench._claude_cli import unwrap_cli_json
 from membench.judge_config import (
     IsolatedClaudeCallsite,
     IsolatedJudgeConfig,
-    Runner,
     run_isolated_claude,
 )
 from membench.oracle.consensus import BackendResult
+from membench.spawn import Runner
 
 logger = logging.getLogger(__name__)
 

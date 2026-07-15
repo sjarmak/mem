@@ -45,7 +45,6 @@ from membench.grading.validity_gate import ValidityResult
 from membench.harbor.memory_inject import signature_overlap
 from membench.harbor.probe_gate import (
     CONDITIONS,
-    Runner,
     harvest_candidate,
     load_stream,
     metric_gap_stats,
@@ -58,6 +57,7 @@ from membench.memory_systems.ours_system import (
     _render_payload,
 )
 from membench.schemas.bundle import TaskBundle
+from membench.spawn import Runner
 
 # The grid rescores the gate's executed runs, so its conditions ARE the gate's --
 # one shared constant, not a copy to keep in sync.

@@ -237,7 +237,7 @@ def test_claude_timeout_raises(tmp_path: Any) -> None:
         raise subprocess.TimeoutExpired(cmd="claude", timeout=90.0)
 
     judge = ClaudeComparativeJudge(runner=runner, isolation=prepare_isolated_judge(base=tmp_path))
-    with pytest.raises(ComparativeJudgeError, match="did not respond"):
+    with pytest.raises(ComparativeJudgeError, match="did not finish within"):
         judge.complete("p")
 
 

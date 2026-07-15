@@ -29,7 +29,8 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from membench.judge_config import IsolatedJudgeConfig, Runner, run_isolated_claude
+from membench.judge_config import IsolatedJudgeConfig, run_isolated_claude
+from membench.spawn import Runner
 
 # Mirror of MODEL_TASK_TAXONOMY in src/ingest/task-type.ts — keep in sync.
 TAXONOMY = frozenset(

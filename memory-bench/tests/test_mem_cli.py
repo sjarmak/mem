@@ -28,6 +28,17 @@ def test_missing_binary_names_the_fix(tmp_path):
         run_mem_json([str(tmp_path / "absent-mem"), "query"])
 
 
+def test_unspawnable_binary_surfaces_as_mem_cli_error(tmp_path):
+    # A present-but-not-executable binary raises PermissionError, NOT
+    # FileNotFoundError -- the rung this seam omitted until mem-o9plh, which let a
+    # raw OSError escape past `MemCliError` and out of the seam's contract.
+    binary = tmp_path / "unexecutable-mem"
+    binary.write_text("#!/bin/sh\necho hi\n", encoding="utf-8")
+    binary.chmod(0o644)
+    with pytest.raises(MemCliError, match="could not spawn"):
+        run_mem_json([str(binary), "query"])
+
+
 def test_nonzero_exit_carries_stderr(tmp_path):
     binary = _fake_mem(tmp_path, "echo 'no store at .mem/store.db' >&2; exit 3")
     with pytest.raises(MemCliError, match=r"exit 3.*no store"):
@@ -49,7 +60,7 @@ def test_error_envelope_raises_with_errors(tmp_path):
 
 def test_timeout_is_bounded_and_loud(tmp_path):
     binary = _fake_mem(tmp_path, "sleep 5")
-    with pytest.raises(MemCliError, match="timed out"):
+    with pytest.raises(MemCliError, match="did not finish within"):
         run_mem_json([binary, "query"], timeout_s=0.2)
 
 

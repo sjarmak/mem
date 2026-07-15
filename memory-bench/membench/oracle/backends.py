@@ -18,17 +18,14 @@ import json
 import logging
 import os
 import subprocess
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from membench.oracle.consensus import BackendResult
+from membench.spawn import Runner
 
 logger = logging.getLogger(__name__)
-
-# A subprocess.run-shaped callable, injected so tests never spawn a real process
-# (the env_recon / comparative_judge runner idiom).
-Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 
 DEFAULT_GREP_TIMEOUT_S = 30.0
 DEFAULT_SG_TIMEOUT_S = 60.0

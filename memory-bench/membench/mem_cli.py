@@ -6,8 +6,9 @@ to `mem ... --json` and unwrap the same success envelope (`{apiVersion, cmd,
 ok, data, errors}`). This module owns that seam once, with the failure modes
 the call sites should not each re-derive:
 
-- a missing binary names the fix (build the TS CLI), not a bare FileNotFoundError;
-- a hang is bounded by a timeout and surfaces as a loud error, never a stuck run;
+- the spawn itself (missing binary named with its fix, spawn OSErrors, timeout,
+  non-zero exit) is diagnosed by `spawn.run_checked`, this module's ladder being
+  one of the six that used to re-derive it (mem-o9plh);
 - exit-0-but-malformed stdout is reported with the command and a stdout excerpt,
   not a bare JSONDecodeError with no context.
 
@@ -20,10 +21,11 @@ otherwise each free to spell the wire format slightly differently.
 """
 
 import json
-import subprocess
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
+
+from membench.spawn import run_checked
 
 # Generous bound: `mem query` over the full ~6.6k-record store completes in
 # seconds; anything beyond this is a hung server or a wedged subprocess, not a
@@ -56,27 +58,14 @@ def run_mem_json(
     is piped to the process's stdin (e.g. `mem extract-errors` reads its input
     that way)."""
     cmd = " ".join(argv)
-    try:
-        completed = subprocess.run(
-            [*argv, "--json"],
-            input=input,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=timeout_s,
-        )
-    except FileNotFoundError as exc:
-        raise MemCliError(
-            f"{argv[0]!r} not found — build the TS CLI first (npm run build at the repo root)"
-        ) from exc
-    except subprocess.TimeoutExpired as exc:
-        raise MemCliError(f"{cmd} timed out after {timeout_s:.0f}s") from exc
-
-    if completed.returncode != 0:
-        raise MemCliError(
-            f"{cmd} failed (exit {completed.returncode}): "
-            f"{completed.stderr.strip() or completed.stdout.strip()}"
-        )
+    completed = run_checked(
+        [*argv, "--json"],
+        what=cmd,
+        not_found_hint="build the TS CLI first (npm run build at the repo root)",
+        timeout_s=timeout_s,
+        error=MemCliError,
+        input=input,
+    )
     try:
         envelope: dict[str, Any] = json.loads(completed.stdout)
     except json.JSONDecodeError as exc:

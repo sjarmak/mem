@@ -88,6 +88,7 @@ from membench.harbor.memory_inject import (
 from membench.harbor.shuffled_condition import SHUFFLED, ShuffledSelection
 from membench.harbor.task_env import NetworkMode, environment_network
 from membench.schemas.bundle import TaskBundle
+from membench.spawn import Runner
 
 # The gate's two conditions (plan §9.2): the stateless floor and the cheap ceiling.
 CONDITIONS: tuple[str, ...] = ("none", "oracle")
@@ -179,9 +180,6 @@ _FIXED_INSTRUCTION = (
 AGENT_TIMEOUT_SEC = 2400.0
 
 _WORKTREE_PREFIX = "probe-cand-"
-
-# A subprocess.run-shaped callable, injectable for tests (env_recon's pattern).
-Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 
 # Executes one prepared task dir and returns the run's RAW Claude Code stream-json
 # transcript text -- the source both `harvest_candidate` (mutation calls) and

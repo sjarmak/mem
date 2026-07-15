@@ -41,8 +41,9 @@ from pathlib import Path
 from membench.grading.dual_verifier import ReproOutcome
 from membench.harbor.env_recon import DEFAULT_RIG_REPOS
 from membench.harbor.ftp_curate import run_container_pytest, select_pytest_modules
-from membench.harbor.probe_gate import Runner, _add_worktree, _remove_worktree
+from membench.harbor.probe_gate import _add_worktree, _remove_worktree
 from membench.schemas.bundle import TaskBundle
+from membench.spawn import Runner
 
 # Distinct from repro's "repro-" and the curator's "ftp-" so an exit-sweep of any
 # one prefix never force-removes another runner's live checkouts.
