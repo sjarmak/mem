@@ -34,6 +34,7 @@ export {
   lessonsFor,
   linksFor,
   maxLessonId,
+  orphanLessons,
   queryRecords,
   runsFor,
   SEARCH_ERROR_DEFAULT_LIMIT,

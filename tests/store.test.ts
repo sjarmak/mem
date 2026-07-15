@@ -14,6 +14,7 @@ import {
   linksFor,
   maxLessonId,
   openStore,
+  orphanLessons,
   queryRecords,
   runsFor,
   searchErrorMessages,
@@ -387,6 +388,87 @@ describe('lessons (append-only, D9)', () => {
     expect(lastKLessons(db, 1, 'rigA').map(l => l.work_id)).toEqual(['w-a']);
     expect(lastKLessons(db, 5, 'rigA').map(l => l.work_id)).toEqual(['w-a']);
     expect(lastKLessons(db, 5, 'rigC')).toEqual([]);
+  });
+
+  it('lastKLessons rig-scoped excludes an orphan lesson, whose work_id has no work_records row', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [fullRecord({ work_id: 'w-a', rig: 'rigA' })]);
+    appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-03T00:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-orphan', extracted_at: '2026-06-04T00:00:00Z', payload: {} });
+
+    // Unscoped there is no join, so the orphan is in the window — and reaches
+    // `computeRegressions`' source-record-missing skip report.
+    expect(lastKLessons(db, 5).map(l => l.work_id)).toEqual(['w-a', 'w-orphan']);
+    // Rig-scoped, the INNER JOIN drops it: rig lives only on work_records
+    // (schema.ts:33), so an orphan is unattributable and cannot match `wr.rig`.
+    // This asymmetry is deliberate — `orphanLessons` restores the diagnostic
+    // rather than the window (mem-c7mf3).
+    expect(lastKLessons(db, 5, 'rigA').map(l => l.work_id)).toEqual(['w-a']);
+  });
+
+  it('lastKLessons rig-scoped: an orphan consumes no k-slot, since the join filters before LIMIT', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [
+      fullRecord({ work_id: 'w-a', rig: 'rigA' }),
+      fullRecord({ work_id: 'w-b', rig: 'rigA' }),
+    ]);
+    appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-03T00:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-orphan', extracted_at: '2026-06-04T00:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-b', extracted_at: '2026-06-05T00:00:00Z', payload: {} });
+
+    // The orphan is appended BETWEEN the two real lessons, so a post-LIMIT
+    // filter would return only w-b here. Pinning the pre-LIMIT semantics: k=2
+    // yields 2 real lessons, never 1 real + 1 displaced slot.
+    expect(lastKLessons(db, 2, 'rigA').map(l => l.work_id)).toEqual(['w-a', 'w-b']);
+  });
+
+  it('orphanLessons returns the k most-recent orphans in append order, plus the untruncated total', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [fullRecord({ work_id: 'w-a', rig: 'rigA' })]);
+    appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-03T00:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-o1', extracted_at: '2026-06-04T00:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-o2', extracted_at: '2026-06-05T00:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-o3', extracted_at: '2026-06-06T00:00:00Z', payload: {} });
+
+    // w-a has a record, so it is not an orphan and never appears here.
+    expect(orphanLessons(db, 5).lessons.map(l => l.work_id)).toEqual(['w-o1', 'w-o2', 'w-o3']);
+    expect(orphanLessons(db, 5).total).toBe(3);
+
+    // `total` is the untruncated population, so the caller can say "reporting
+    // 2 of 3" rather than silently presenting 2 as the whole of it.
+    const truncated = orphanLessons(db, 2);
+    expect(truncated.lessons.map(l => l.work_id)).toEqual(['w-o2', 'w-o3']);
+    expect(truncated.total).toBe(3);
+  });
+
+  it('orphanLessons returns nothing for k <= 0, never SQLite LIMIT-with-negative-value "no limit"', () => {
+    const db = openStore(':memory:');
+    appendLesson(db, { work_id: 'w-orphan', extracted_at: '2026-06-03T00:00:00Z', payload: {} });
+
+    // Same footgun `lastKLessons` guards (reader.ts:152-154): `LIMIT -1` means
+    // "no limit". `total` stays 0 too — a truncation signal computed off a
+    // window that is switched off would be a report about nothing.
+    expect(orphanLessons(db, 0)).toEqual({ lessons: [], total: 0 });
+    expect(orphanLessons(db, -1)).toEqual({ lessons: [], total: 0 });
+  });
+
+  it('orphanLessons honors the asOfLessonId tri-state, bounding the total alongside the window', () => {
+    const db = openStore(':memory:');
+    appendLesson(db, { work_id: 'w-o1', extracted_at: '2026-06-03T00:00:00Z', payload: {} });
+    const snapshot = maxLessonId(db) as number;
+    appendLesson(db, { work_id: 'w-o2', extracted_at: '2026-06-04T00:00:00Z', payload: {} });
+
+    expect(orphanLessons(db, 5).lessons.map(l => l.work_id)).toEqual(['w-o1', 'w-o2']);
+
+    // A number excludes orphans appended after it — `total` included, or a
+    // snapshot read would report "1 of 2" against a window that only has 1.
+    const asOf = orphanLessons(db, 5, snapshot);
+    expect(asOf.lessons.map(l => l.work_id)).toEqual(['w-o1']);
+    expect(asOf.total).toBe(1);
+
+    // Explicit null = "no lessons existed at snapshot time", so the window
+    // stays empty rather than collapsing into the unbounded live query.
+    expect(orphanLessons(db, 5, null)).toEqual({ lessons: [], total: 0 });
   });
 
   it('maxLessonId returns null for an empty table and the highest id otherwise', () => {

@@ -32,9 +32,11 @@ export interface DistillLessonsResult {
    * indistinguishable from a clean one; the already-committed import (if
    * any) is never rolled back on account of this. */
   regressionError: string | null;
-  /** Lessons in the K-window the regression check could not evaluate (source
-   * record missing, or an unparseable `extracted_at`) — surfaced rather than
-   * silently dropped. */
+  /** Lessons the regression check could not evaluate (source record missing,
+   * or an unparseable `extracted_at`) — surfaced rather than silently dropped.
+   * With `--rig`, a skipped orphan lesson is neither necessarily in the
+   * K-window nor necessarily in that rig; see {@link RegressionSkip} for why,
+   * and for the truncation-notice entry. */
   regressionSkipped: RegressionSkip[];
 }
 
@@ -56,7 +58,10 @@ const DEFAULT_MODEL = 'sonnet';
  * call — surfaced as a `no-resolution-evidence` failure. Admitted lessons
  * carry a mechanical `evidence_kind` provenance tag. `--regression-window`
  * (default 5) sets how many of the most-recently-appended lessons are
- * checked for K-past-fix regressions (report-only, see `regressions` below).
+ * checked for K-past-fix regressions (report-only, see `regressions` below);
+ * with `--rig` it additionally bounds how many orphan lessons — whose source
+ * record is absent, and whose rig is therefore underivable — are reported as
+ * skipped alongside that window (mem-c7mf3).
  */
 export function distillLessonsCommand(
   ctx: CommandContext,

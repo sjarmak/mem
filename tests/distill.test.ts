@@ -15,6 +15,7 @@ import {
   selectCandidates,
   type ResolutionEvidence,
 } from '../src/distill/distiller.js';
+import { ORPHAN_TRUNCATION_WORK_ID } from '../src/distill/verify.js';
 import { WorkRecordSchema, type WorkRecord } from '../src/schemas/workrecord.js';
 import {
   appendLesson,
@@ -765,6 +766,132 @@ describe('computeRegressions', () => {
     expect(skipped).toEqual([{ work_id: 'w-deleted', reason: 'source-record-missing' }]);
   });
 
+  it('rig-scoped: still reports an orphan lesson as source-record-missing, which the window JOIN alone would hide', () => {
+    writeRecords(db, [closedRecord('w-src', 'rigA')]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+    appendLesson(db, {
+      work_id: 'w-orphan',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    // `lastKLessons`' rig JOIN filters the orphan out pre-LIMIT, which made
+    // this skip branch unreachable whenever a rig was set — a rig-scoped run
+    // silently undercounted its coverage by the orphan population while an
+    // unscoped run reported those same lessons (mem-c7mf3).
+    const { skipped } = computeRegressions(db, 5, 'rigA');
+    expect(skipped).toEqual([{ work_id: 'w-orphan', reason: 'source-record-missing' }]);
+  });
+
+  it('rig-scoped: an orphan can only ever be skipped, never flagged — the over-report stays a diagnostic', () => {
+    // Structural, and pinned because it is the safety argument for the
+    // cross-rig over-report below: an orphan exits at the
+    // missing-source-record branch before any signature is derived, so it can
+    // never reach the recurrence check — even here, where a later record
+    // carrying the same signature is present and ready to be recurred.
+    writeRecords(db, [laterClosedRecord('w-later', 'rigA')]);
+    appendLesson(db, {
+      work_id: 'w-orphan',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    const { flags, skipped } = computeRegressions(db, 5, 'rigA');
+    expect(flags).toEqual([]);
+    expect(skipped).toEqual([{ work_id: 'w-orphan', reason: 'source-record-missing' }]);
+  });
+
+  it('rig-scoped: an orphan consumes no k-slot — the real lessons still fill the window', () => {
+    writeRecords(db, [
+      closedRecord('w-a', 'rigA'),
+      closedRecord('w-b', 'rigA', {
+        trace: { jsonl_path: '/t/w-b.jsonl', errors: [tsError('src/b.ts')] },
+      }),
+      laterClosedRecord('w-later', 'rigA'),
+    ]);
+    appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-orphan', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-b', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+
+    // The anti-widened-window invariant: the orphan is reported ALONGSIDE the
+    // k-window, never inside it. The orphan is appended BETWEEN the two real
+    // lessons, so a window widened to admit orphans would hold [w-orphan, w-b]
+    // at k=2 and evict w-a — unchecked, with no signal, the very failure
+    // rig-scoping exists to prevent.
+    //
+    // `flags` is what makes that eviction observable: w-later recurs w-a's
+    // signature and NOT w-b's (different file => different signature), so
+    // losing w-a empties `flags`. Asserting only `skipped` would not catch it
+    // — the widened window yields the same single orphan skip either way.
+    const { flags, skipped } = computeRegressions(db, 2, 'rigA');
+    expect(flags.map(f => f.lesson_work_id)).toEqual(['w-a']);
+    expect(skipped).toEqual([{ work_id: 'w-orphan', reason: 'source-record-missing' }]);
+  });
+
+  it('rig-scoped: reports the same orphan to every rig, since an orphan is unattributable', () => {
+    writeRecords(db, [closedRecord('w-a', 'rigA'), closedRecord('w-b', 'rigB')]);
+    appendLesson(db, { work_id: 'w-a', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-b', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-orphan', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+
+    // Pinning the accepted trade, not incidental behavior: rig lives only on
+    // work_records (schema.ts:33), so an orphan has no derivable rig and
+    // surfaces in EVERY rig's report — rig B's orphan lands in rig A's. That
+    // is deliberate. Over-reporting a could-not-check diagnostic is strictly
+    // safer than silently under-covering, and per the test above an orphan can
+    // never become a flag, so the leak cannot fabricate a regression claim.
+    const orphanSkip = { work_id: 'w-orphan', reason: 'source-record-missing' };
+    expect(computeRegressions(db, 5, 'rigA').skipped).toEqual([orphanSkip]);
+    expect(computeRegressions(db, 5, 'rigB').skipped).toEqual([orphanSkip]);
+  });
+
+  it('rig-scoped: signals orphan truncation rather than silently presenting k of them as the whole population', () => {
+    appendLesson(db, { work_id: 'w-o1', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-o2', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+    appendLesson(db, { work_id: 'w-o3', extracted_at: '2026-06-05T12:00:00Z', payload: {} });
+
+    // A rebuild that drops or renames a rig strands its whole lesson set as
+    // orphans, so this is the realistic shape, not a corner. Reporting 2 and
+    // saying nothing about the third would reproduce the silent-undercount
+    // bug this check exists to surface.
+    //
+    // The notice's trailing position is part of the contract, not incidental:
+    // this module's reads are order-deterministic (reader.ts:7-10), so the
+    // notice is appended once after the window rather than sorted in among
+    // rows it has no id to sort by.
+    expect(computeRegressions(db, 2, 'rigA').skipped).toEqual([
+      { work_id: 'w-o2', reason: 'source-record-missing' },
+      { work_id: 'w-o3', reason: 'source-record-missing' },
+      { work_id: ORPHAN_TRUNCATION_WORK_ID, reason: 'orphan-lessons-truncated: reporting 2 of 3' },
+    ]);
+
+    // Nothing was truncated, so no notice — the report stays quiet when it is complete.
+    expect(computeRegressions(db, 5, 'rigA').skipped).toEqual([
+      { work_id: 'w-o1', reason: 'source-record-missing' },
+      { work_id: 'w-o2', reason: 'source-record-missing' },
+      { work_id: 'w-o3', reason: 'source-record-missing' },
+    ]);
+  });
+
+  it('checks nothing for k <= 0 on the rig path either, orphan diagnostic included', () => {
+    appendLesson(db, {
+      work_id: 'w-orphan',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    // The unscoped k<=0 test above cannot cover this: with no rig, the orphan
+    // concat never fires. An orphan query missing `lastKLessons`' negative-k
+    // guard would return every orphan in the store from a check the caller
+    // switched off.
+    expect(computeRegressions(db, 0, 'rigA').skipped).toEqual([]);
+    expect(computeRegressions(db, -1, 'rigA').skipped).toEqual([]);
+  });
+
   it('does NOT flag a same-signature recurrence in a different rig (no cross-rig confusion)', () => {
     writeRecords(db, [
       closedRecord('w-src', 'rigA'),
@@ -930,5 +1057,25 @@ describe('computeRegressions', () => {
     expect(flags).toEqual([]);
     expect(skipped).toEqual([]);
     expect(computeRegressions(db, 5, 'rigA').flags).toHaveLength(1);
+  });
+
+  it('reports no orphan for an explicit null asOfLessonId, even though the orphan exists by check time', () => {
+    expect(maxLessonId(db)).toBeNull();
+    appendLesson(db, {
+      work_id: 'w-orphan',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    // The null-asOf test above has no orphan in its fixture, so it passes
+    // whether or not the orphan query honors the tri-state. This one pins it:
+    // a null bound must reach the orphan query as `l.id <= NULL` (false for
+    // every row), never be dropped by a falsy check into the live query.
+    expect(computeRegressions(db, 5, 'rigA', null).skipped).toEqual([]);
+    // Live (no snapshot), the same orphan IS reported — so the assertion
+    // above is the null bound biting, not an absent orphan.
+    expect(computeRegressions(db, 5, 'rigA').skipped).toEqual([
+      { work_id: 'w-orphan', reason: 'source-record-missing' },
+    ]);
   });
 });

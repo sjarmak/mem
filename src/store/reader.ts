@@ -193,6 +193,59 @@ export function lastKLessons(
   return rows.reverse().map(toStoredLesson);
 }
 
+/** The `k` most-recently-appended ORPHAN lessons — those whose `work_id` has no
+ * `work_records` row — in append (id) order, plus `total`: the untruncated
+ * orphan count, so a caller reporting a bounded slice can say "2 of 3" rather
+ * than present `k` of them as the whole population.
+ *
+ * An orphan is an expected state, not corruption (Decision 9): lessons carry no
+ * FK to `work_records` precisely so a lesson survives its record's
+ * delete/re-ingest and may be extracted before the record lands. Orphans are
+ * also unattributable — `rig` lives only on `work_records`, so this query
+ * *cannot* be rig-scoped and deliberately is not. {@link lastKLessons}' own
+ * rig-scoped window drops orphans pre-LIMIT (its JOIN is the rig predicate);
+ * this is how `computeRegressions` surfaces them anyway, alongside that window
+ * rather than inside it (mem-c7mf3).
+ *
+ * `NOT EXISTS` rather than a `LEFT JOIN ... IS NULL` anti-join: it leaves
+ * `lessons l` the only table in the outer FROM, so the ambiguous-column failure
+ * {@link lastKLessons} must actively defend against (mem-6hvha) cannot arise
+ * here at all, and it probes `work_records`' `work_id` primary key directly.
+ * `k <= 0` and `asOfLessonId` follow {@link lastKLessons}' contracts exactly —
+ * including a negative `k` returning nothing rather than SQLite's "no limit".
+ * `total` honors the same as-of bound as the window: counted live against a
+ * pinned window it would report "1 of 2" for a snapshot that held every orphan
+ * there was. */
+export function orphanLessons(
+  db: StoreDatabase,
+  k: number,
+  asOfLessonId?: number | null
+): { lessons: StoredLesson[]; total: number } {
+  if (k <= 0) return { lessons: [], total: 0 };
+
+  const isOrphan = 'NOT EXISTS (SELECT 1 FROM work_records wr WHERE wr.work_id = l.work_id)';
+  // Binding an explicit null yields `l.id <= NULL` → NULL → false for every
+  // row, which IS the tri-state's "empty at snapshot time" answer; a falsy
+  // check here would instead drop the clause and reproduce the live query.
+  const whereSql = asOfLessonId === undefined ? isOrphan : `${isOrphan} AND l.id <= ?`;
+  const asOfParams: (number | null)[] = asOfLessonId === undefined ? [] : [asOfLessonId];
+
+  const rows = db
+    .prepare(
+      `SELECT l.id, l.work_id, l.extracted_at, l.commit_sha, l.payload
+         FROM lessons l
+        WHERE ${whereSql}
+        ORDER BY l.id DESC LIMIT ?`
+    )
+    .all(...asOfParams, k) as LessonRow[];
+
+  const { total } = db
+    .prepare(`SELECT COUNT(*) AS total FROM lessons l WHERE ${whereSql}`)
+    .get(...asOfParams) as { total: number };
+
+  return { lessons: rows.reverse().map(toStoredLesson), total };
+}
+
 /** Every work id reachable from `workId` over `supersedes` links, traversed as
  * undirected edges (ancestors AND descendants — both are "the same work" for the
  * Decision-6 leave-one-out exclusion), sorted; `workId` itself is excluded
