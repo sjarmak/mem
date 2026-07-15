@@ -165,9 +165,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         _print_go_command(tasks, args.repeats, args.out, corpus_dir)
         return 2
 
-    # A hook rather than a step run here, so it costs what the sweep costs: a resume served entirely
-    # from the cache measures nothing and so spends nothing, preflight included (mem-dblue).
-    # `--dry-run` spends nothing by definition, so it takes no gate at all.
+    # Why a hook rather than a step run here: `preflight_gate`. `--dry-run` spends nothing by
+    # definition, so it takes no gate at all.
     gate = (
         None
         if args.dry_run or args.skip_preflight
