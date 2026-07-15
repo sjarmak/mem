@@ -189,7 +189,7 @@ def test_argv_omits_allowed_tools_for_establish_but_not_goal() -> None:
     from membench.runner.headless_agent import HeadlessClaudeAgent
 
     task = _task()
-    agent = HeadlessClaudeAgent(constrain_tools=True)
+    agent = HeadlessClaudeAgent(constrain_tools=True, runner=subprocess.run)
     establish_argv = agent.argv_for(_establish_step(task), {})
     goal_argv = agent.argv_for(task.goal_step, {})
     assert "--allowedTools" not in establish_argv
@@ -1217,6 +1217,19 @@ def test_cell_agent_requires_an_explicit_runner() -> None:
     non-executing render path) passes an explicit sentinel."""
     with pytest.raises(TypeError):
         cell_agent(model="", channel=MemoryChannel.TRUSTED)  # type: ignore[call-arg]
+
+
+def test_headless_claude_agent_requires_a_runner() -> None:
+    """The reject, one construction site DOWN: ``cell_agent`` is a wrapper, and guarding only it
+    still left ``HeadlessClaudeAgent(...)`` — the class that actually spawns — defaulting ``runner``
+    to ``subprocess.run``. Constructing it directly (already precedented at
+    ``scripts/smoke_realrun_trajectory.py``) reproduced the unrecorded-execution defeat verbatim.
+    The default is gone from the executing class itself, so no construction path — wrapper or direct
+    — can run a leg through an unrecorded agent by omission."""
+    from membench.runner.headless_agent import HeadlessClaudeAgent
+
+    with pytest.raises(TypeError):
+        HeadlessClaudeAgent(model="")  # type: ignore[call-arg]
 
 
 def test_render_only_runner_refuses_to_execute() -> None:

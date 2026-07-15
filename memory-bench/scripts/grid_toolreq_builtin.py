@@ -65,15 +65,26 @@ def _print_go_command(
     tasks: Sequence[ToolReqRealAgentTask], repeats: int, out_dir: Path, corpus_dir: Path
 ) -> None:
     n_tasks = len(tasks)
-    per_repeat = calls_per_repeat(tasks[0])
     calls = paid_call_count(tasks, repeats=repeats)
     worst_hours = calls * DEFAULT_TIMEOUT_S / 3600.0
+    # The `n_tasks x channel x repeat x per_repeat` factorization the human reads to sanity-check
+    # `calls` is only exact when every task has the same leg count; `paid_call_count` itself sums
+    # per task. Assert uniformity so a future variable `cell_legs` fails the disclosure loudly here
+    # rather than printing a factorization that disagrees with its own total.
+    per_repeat_counts = {calls_per_repeat(task) for task in tasks}
+    if len(per_repeat_counts) != 1:
+        raise ValueError(
+            f"tasks have non-uniform calls/repeat {sorted(per_repeat_counts)} — the cost "
+            "disclosure's single per-repeat factor would misdescribe the summed total; update "
+            "_print_go_command to show the per-task breakdown before spending."
+        )
+    per_repeat = per_repeat_counts.pop()
     print(
         f"REFUSING to spend: {ENV_OAUTH} is unset.\n"
         f"  This paid sweep is {calls} real `claude -p` call(s) "
         f"({n_tasks} task x {len(CHANNELS)} channel x {repeats} repeat x "
-        f"{per_repeat} calls/repeat [establish+goal] — DOUBLE the none/oracle cost "
-        f"per repeat); worst-case wall-clock ~{worst_hours:.1f}h at the "
+        f"{per_repeat} calls/repeat [establish+goal] — {per_repeat}x the none/oracle "
+        f"1-call/repeat cost); worst-case wall-clock ~{worst_hours:.1f}h at the "
         f"{DEFAULT_TIMEOUT_S:.0f}s timeout.\n"
         f"  Plus one PREFLIGHT establish+check cycle ({per_repeat} calls) before the sweep "
         "starts.\n"
@@ -92,10 +103,10 @@ def _print_go_command(
 
 
 def preflight(task: ToolReqRealAgentTask, *, model: str) -> BuiltinDiagnostics:
-    """One real establish+check cycle (2 calls, repeats=1) BEFORE the full paid sweep.
-    Self-diagnoses "is builtin even enabled on this account" (mem-rk41.3.2 Q3 /
-    mem-xe2p's enforce_mechanism_fires doctrine) instead of letting a disabled feature
-    flag silently produce an uninterpretable all-null sweep."""
+    """One real establish+check cycle (repeats=1, so one cell's worth of legs —
+    ``calls_per_repeat(task)`` calls) BEFORE the full paid sweep. Self-diagnoses "is builtin even
+    enabled on this account" (mem-rk41.3.2 Q3 / mem-xe2p's enforce_mechanism_fires doctrine) instead
+    of letting a disabled feature flag silently produce an uninterpretable all-null sweep."""
     _outcome, diagnostics, _calls = run_builtin_arm(
         task, repeats=1, model=model, dry_run=False, channel=CHANNELS[0]
     )

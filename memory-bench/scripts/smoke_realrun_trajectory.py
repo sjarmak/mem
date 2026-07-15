@@ -19,6 +19,7 @@ judge call) and writes no results — the gated 5-axis numbers are mem-lvp.19.
 
 from __future__ import annotations
 
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -55,7 +56,8 @@ def main(argv: list[str]) -> int:
     # confound the memory variable under test).
     with tempfile.TemporaryDirectory(prefix="mem-lvp22-smoke-") as sandbox:
         print(f"[smoke] sandbox cwd: {sandbox}")
-        agent = HeadlessClaudeAgent(constrain_tools=False, cwd=sandbox)
+        # A real, unrecorded spawn: this smoke runs live claude, it is not on the cache path.
+        agent = HeadlessClaudeAgent(constrain_tools=False, cwd=sandbox, runner=subprocess.run)
         traj = run_step_trajectory(agent, step, arm="none", sequence_id=seq.sequence_id)
 
     print(f"[smoke] status={traj.status} attempt_steps={len(traj.steps)}")

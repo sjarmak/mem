@@ -36,7 +36,7 @@ import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, NoReturn
+from typing import NoReturn
 
 from membench.armcompare import _iter_tool_use_blocks
 from membench.runner.agent import AgentStepResult
@@ -134,7 +134,7 @@ class RecordingRunner:
     inner: CliRunner
     calls: list[list[str]] = field(default_factory=list)
 
-    def __call__(self, argv: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+    def __call__(self, argv: Sequence[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         self.calls.append([str(arg) for arg in argv])
         return self.inner(argv, **kwargs)
 
@@ -300,21 +300,27 @@ def _tool_calls_from_stream(stream_text: str) -> list[ToolCall]:
     return calls
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class HeadlessClaudeAgent:
     """A real `claude -p` agent. ``model`` pins the CLI model (left empty it reads
     ``MEMBENCH_AGENT_MODEL`` then falls back to the CLI default, recorded as
-    ``cli-default``). ``runner`` is injected so tests exercise the parse path with no
-    real claude. ``strict_mcp`` keeps ``--strict-mcp-config`` on (the boot-hang guard);
+    ``cli-default``). ``strict_mcp`` keeps ``--strict-mcp-config`` on (the boot-hang guard);
     ``constrain_tools`` passes the step's ``available_tools`` as ``--allowedTools``.
     ``memory_channel`` selects how surfaced memory is FRAMED (see `MemoryChannel`): the
     default low-trust ``RECALLED`` block, or the ``TRUSTED`` ground-truth block of the
-    pjh8.2 upper-bound probe."""
+    pjh8.2 upper-bound probe.
+
+    ``runner`` has NO default and must be passed explicitly. It is THE seam that decides whether a
+    ``claude -p`` is recorded (a ``RecordingRunner``, on the paid-grid path), simulated (dry-run),
+    or a real unrecorded spawn (``subprocess.run``). A default of ``subprocess.run`` here would make
+    "real, unrecorded" the thing you get by omission — the caller-discipline hole the resume-cache
+    identity exists to close, one construction site below its ``cell_agent`` wrapper. Requiring it
+    forces every construction — wrapper or direct — to name which of the three it wants."""
 
     agent_config_id: str = "headless-claude"
     model: str = ""
     timeout_s: float = DEFAULT_TIMEOUT_S
-    runner: CliRunner = subprocess.run
+    runner: CliRunner
     strict_mcp: bool = True
     constrain_tools: bool = True
     memory_channel: MemoryChannel = MemoryChannel.RECALLED
@@ -412,7 +418,7 @@ class HeadlessClaudeAgent:
         )
 
 
-def _render_only_runner(argv: Sequence[str], **kwargs: Any) -> NoReturn:
+def _render_only_runner(argv: Sequence[str], **kwargs: object) -> NoReturn:
     """The ``runner`` for an agent built only to RENDER argv (``render_cell_calls`` calls
     ``argv_for``, which never executes). If it is ever actually invoked, a plan-rendering agent has
     been made to spawn a real ``claude -p`` — the exact unrecorded call the recorder seam exists to
