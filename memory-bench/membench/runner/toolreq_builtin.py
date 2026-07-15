@@ -337,17 +337,18 @@ def run_builtin_arm(
                 env={"CLAUDE_CONFIG_DIR": str(config_dir)},
             )
 
-            def _ctx(leg: str, step_id: str, i: int = i) -> StepContext:
+            # Takes the `Leg` WHOLE rather than two of its fields: nothing at a call site can pair
+            # one leg's label with another leg's step, and a third leg needs no third hand-copied
+            # unpack. `i` is pinned as a default — the legs are run inside this loop (B023).
+            def _ctx(leg: Leg, i: int = i) -> StepContext:
                 return StepContext(
-                    trial_id=f"{ARM}-{channel.value}-{i}-{leg}",
+                    trial_id=f"{ARM}-{channel.value}-{i}-{leg.name}",
                     session_id=f"{ARM}-{channel.value}-{i}",
-                    step_id=step_id,
+                    step_id=leg.step.step_id,
                 )
 
             establish_result = agent.run_step(
-                establish_leg.step,
-                dict(establish_leg.memory),
-                _ctx(establish_leg.name, establish_leg.step.step_id),
+                establish_leg.step, dict(establish_leg.memory), _ctx(establish_leg)
             )
             establish_tool_calls += len(establish_result.tool_calls)
             establish_tool_names.update(call.name for call in establish_result.tool_calls)
@@ -360,9 +361,7 @@ def run_builtin_arm(
             # is a measured input (`cell_legs`).
             _wipe_cwd_contents(Path(sandbox))
 
-            result = agent.run_step(
-                goal_leg.step, dict(goal_leg.memory), _ctx(goal_leg.name, goal_leg.step.step_id)
-            )
+            result = agent.run_step(goal_leg.step, dict(goal_leg.memory), _ctx(goal_leg))
 
         passed = score_goal_action(
             task.goal_step, tool_calls=result.tool_calls, final_answer=result.final_answer
