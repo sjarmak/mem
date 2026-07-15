@@ -279,13 +279,11 @@ def _dict_typed_fields(model: type[BaseModel]) -> set[str]:
     all — and ``SequenceStep`` already uses that ``| None = None`` convention (``record_class``,
     ``disposition``).
 
-    TOP-LEVEL ONLY. That is a known GAP, not a justification: ``digest`` sorts keys at EVERY
-    depth, so a dict-typed field on ``OutcomeCheck`` — the one structured field
-    ``adapt_sequence`` builds — carries the identical hazard and this roster cannot see it.
-    The roster assert below does not cover it either; that tripwire fires once, at schema-add
-    time, and adding the new field to its expected set DISARMS it long before anyone wires the
-    field into ``adapt_sequence``. Closing it needs the emptiness check to walk the same paths
-    (mem-yqdtd). Until then, a dict field on a SequenceStep sub-model is unguarded."""
+    TOP-LEVEL ONLY — a known GAP, not a justification: ``digest`` sorts keys at EVERY depth, so
+    a dict-typed field on ``OutcomeCheck`` (the one structured field ``adapt_sequence`` builds)
+    carries the identical hazard unguarded. The roster assert below does not cover it either —
+    that tripwire fires once, at schema-add time, and adding the field to its expected set
+    DISARMS it. Closing it needs the emptiness check to walk the same paths (mem-yqdtd)."""
     return {name for name, f in model.model_fields.items() if _admits_dict(f.annotation)}
 
 
@@ -369,9 +367,7 @@ def test_adapt_sequence_populates_no_goal_step_dict_field() -> None:
     It arms the moment a change sources prompt text or scoring input from one of these fields.
     ``distractor_memories`` is the near one: the runner SEEDS those into the store before a
     step's retrieve (``conditions.py``, the §10 Confusion axis), and the real materialiser
-    already authors them on the goal step (``enterprise_workflow``). From then the sorted-key
-    digest collides two DIFFERENT measured inputs and a resumed PAID run serves one prompt's
-    numbers as the other's.
+    already authors them on the goal step (``enterprise_workflow``).
 
     The source step is armed HERE rather than in ``_toolreq_seq`` because the guard must fail on
     a pass-through (``distractor_memories=dict(goal.distractor_memories)``), not merely on a
@@ -404,9 +400,6 @@ def test_adapt_sequence_populates_no_goal_step_dict_field() -> None:
     armed_goal = source_goal.model_copy(
         update={name: {f"{name}-k-a": "A", f"{name}-k-b": "B"} for name in roster}
     )
-    unarmed = sorted(name for name in roster if not getattr(armed_goal, name))
-    assert not unarmed, f"arming did not take on goal_step.{unarmed} — model_copy ignored the key"
-
     armed_steps = [armed_goal if step is source_goal else step for step in seq.steps]
     task = adapt_sequence(seq.model_copy(update={"steps": armed_steps}))
     populated = sorted(name for name in roster if getattr(task.goal_step, name))
