@@ -247,6 +247,112 @@ def test_opacity_deterministic_and_sequence_unique() -> None:
     assert a1.current_opaque_values != b.current_opaque_values
 
 
+def _goal_step_dict_fields(task: ToolReqRealAgentTask) -> dict[str, dict[str, Any]]:
+    """Every field of ``goal_step`` whose dumped value is a dict — i.e. every field whose
+    keys are DATA, and whose order ``task_fingerprint`` therefore erases.
+
+    Derived from the dump rather than named, for the reason ``task_fingerprint`` hashes
+    ``goal_step`` whole: a hardcoded roster is one field short the day SequenceStep grows a
+    fourth. TOP-LEVEL ONLY, and that depth is forced: sub-models dump to field-name-keyed
+    dicts, so a recursive walk would flag every ``outcome_checks`` entry — whose key order
+    is pydantic's declaration order, the safe case digest() sorts on purpose. The residual
+    gap is a data dict added INSIDE OutcomeCheck/ExpectedAction: nested in a list, invisible
+    here, and a live construction site (adapt_sequence populates outcome_checks). Both carry
+    scalars and lists only today, so the exposure is currently zero."""
+    return {
+        name: value
+        for name, value in task.goal_step.model_dump(mode="json").items()
+        if isinstance(value, dict)
+    }
+
+
+def test_task_fingerprint_cannot_see_key_order_in_a_goal_step_dict_field() -> None:
+    """The hazard the guard below exists for, shown on the concrete task type.
+
+    ``digest`` is canonical JSON: object keys SORT, list order is KEPT
+    (``test_resume_cache.test_the_digest_sorts_mapping_keys_but_never_reorders_a_list``).
+    That contract is safe only while every input whose ORDER is measured reaches it as a
+    LIST — which ``task_fingerprint`` honours for ``oracle_memory`` (hashed as ``.items()``)
+    but cannot honour for a dict nested inside ``goal_step.model_dump()``. So two goal_steps
+    differing ONLY in one dict field's key order fingerprint IDENTICALLY, and nothing else
+    would catch it: those fields never reach the argv, so ``invocation_fingerprint`` is
+    blind to them entirely. ``task_fingerprint`` is the only place they could register, and
+    it is the place that sorts them. Content moves it; order does not.
+
+    Asserted at the ``task_fingerprint`` level, not the digest level: that fact is already
+    pinned in test_resume_cache, and it is the CONSEQUENCE here that matters. If this goes
+    RED the fingerprint was taught to preserve these fields' order (the bead's second
+    remedy) — at which point the guard below is dead and should go."""
+    task = adapt_sequence(_toolreq_seq())
+    dict_fields = _goal_step_dict_fields(task)
+    # else an emptied roster makes every assertion below vacuous and this test green
+    assert dict_fields, "no dict-valued field on goal_step — the hazard below is unprovable"
+    for field in dict_fields:
+        forward = dataclasses.replace(
+            task, goal_step=task.goal_step.model_copy(update={field: {"k-a": "A", "k-b": "B"}})
+        )
+        reversed_order = dataclasses.replace(
+            task, goal_step=task.goal_step.model_copy(update={field: {"k-b": "B", "k-a": "A"}})
+        )
+        # same content, different order — the fingerprint sees no difference
+        assert getattr(forward.goal_step, field) == getattr(reversed_order.goal_step, field)
+        assert grid.task_fingerprint(forward) == grid.task_fingerprint(reversed_order), (
+            f"goal_step.{field} key order became visible to task_fingerprint — if that was "
+            "deliberate, delete the guard test below; it is now dead"
+        )
+
+    # The contrast that makes the above a design and not an oversight: a LIST field's order
+    # is preserved, because a list is how digest() is told an order is a measured input.
+    reads_fwd = dataclasses.replace(
+        task, goal_step=task.goal_step.model_copy(update={"expected_memory_reads": ["a", "b"]})
+    )
+    reads_rev = dataclasses.replace(
+        task, goal_step=task.goal_step.model_copy(update={"expected_memory_reads": ["b", "a"]})
+    )
+    assert grid.task_fingerprint(reads_fwd) != grid.task_fingerprint(reads_rev)
+
+
+def test_adapt_sequence_populates_no_goal_step_dict_field() -> None:
+    """The guard, and the reason the collision above is survivable: ``adapt_sequence`` leaves
+    every data dict on the goal_step EMPTY, so there is no key order to lose.
+
+    Not a live defect — a landmine, pinned so it cannot become one silently. Nothing on this
+    path reads these fields (``build_agent_prompt`` reads ``step.user_request``,
+    ``score_goal_action`` reads ``step.outcome_checks``, ``realagent_probe`` mentions none of
+    them), so two colliding records render byte-identical prompts and score identically: the
+    cache hit is CORRECT. It arms the moment a change sources prompt text or scoring input
+    from one of them — ``distractor_memories`` is the near one, since the runner SEEDS those
+    into the store before a step's retrieve (the §10 Confusion axis, exactly what a future
+    toolreq arm would want). From then the sorted-key digest silently collides two DIFFERENT
+    measured inputs and a resumed PAID run serves one prompt's numbers as the other's: the
+    identity-hashes-a-model-one-field-short family this grid exists to prevent, re-entered
+    by the back door.
+
+    Caught in CI rather than fixed in ``task_fingerprint`` because that fix is a no-op that
+    is not free: all three fields are empty and ``canonicalize({})`` is ``"{}"``, so hashing
+    them as item lists changes no behavior while moving every fingerprint — a full PAID
+    re-spend for nothing. That call belongs to the moment a field with real semantics exists
+    to make it for."""
+    task = adapt_sequence(_toolreq_seq())
+    dict_fields = _goal_step_dict_fields(task)
+    # the enumeration must actually be finding the fields it claims to guard
+    assert set(dict_fields) == {
+        "environment_state",
+        "expected_memory_writes",
+        "distractor_memories",
+    }, "SequenceStep's data-dict roster moved — confirm the new field is order-irrelevant"
+
+    populated = {name: value for name, value in dict_fields.items() if value}
+    assert not populated, (
+        f"adapt_sequence now populates goal_step.{sorted(populated)} — task_fingerprint "
+        "hashes goal_step via canonical JSON, which SORTS object keys, so two goal_steps "
+        "differing only in this field's key order now fingerprint identically and a resumed "
+        "PAID run can serve one prompt's numbers as the other's. Either keep the field out "
+        "of the goal_step, or make task_fingerprint hash it as a LIST of items (which "
+        "invalidates the persisted cache — free before the paid run, not after)."
+    )
+
+
 # --- corpus loader ------------------------------------------------------------------
 
 
