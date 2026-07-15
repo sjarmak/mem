@@ -43,7 +43,7 @@ import shutil
 import sqlite3
 import subprocess
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -52,8 +52,7 @@ from membench.bundle.assemble import Rejection, assemble_bundle
 from membench.bundle.replay import effective_work_dir, parse_mutation_calls, replay_calls
 from membench.harbor.env_recon import DEFAULT_RIG_REPOS
 from membench.schemas.bundle import TaskBundle
-
-Runner = Callable[..., "subprocess.CompletedProcess[str]"]
+from membench.spawn import Runner
 
 DEFAULT_STORE = Path("/home/ds/projects/mem/.mem/store.db")
 DEFAULT_RANKING = Path("/home/ds/projects/mem/.mem/select-ranking.json")

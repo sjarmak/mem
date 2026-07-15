@@ -20,7 +20,8 @@ from membench.harbor.base_image import (
     build_base_image,
     build_codeprobe_base_image,
 )
-from membench.harbor.env_recon import Runner, render_dockerfile
+from membench.harbor.env_recon import render_dockerfile
+from membench.spawn import Runner
 
 
 def test_render_dockerfile_without_install_steps_is_unchanged() -> None:

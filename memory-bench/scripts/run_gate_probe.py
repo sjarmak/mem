@@ -49,7 +49,6 @@ from membench.harbor.probe_gate import (
     MemoryNotConsumedError,
     ProbeConditionResult,
     ProbePair,
-    Runner,
     StreamExec,
     build_probe_task,
     harbor_stream_exec,
@@ -60,6 +59,7 @@ from membench.harbor.probe_gate import (
 )
 from membench.harbor.shuffled_condition import SHUFFLED, ShuffledSelection
 from membench.schemas.bundle import TaskBundle
+from membench.spawn import Runner
 
 DEFAULT_BUNDLES_DIR = Path("/home/ds/projects/mem/.mem/bundles")
 DEFAULT_PROBE_DIR = Path("/home/ds/projects/mem/.mem/probe")

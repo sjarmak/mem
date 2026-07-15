@@ -1,42 +1,19 @@
-"""The one spawn-and-diagnose choke point (mem-o9plh).
+"""The one spawn-and-diagnose choke point for RAISING subprocess sites.
 
-A raising subprocess site needs the same four rungs, in this exact order:
+Such a site needs the same four rungs — binary absent, spawn failed, timed out,
+non-zero exit — in an order with a subclass trap in it (see ``run_checked``).
+Every hand-rolled copy has to re-derive that order, and re-derivation is how it
+goes wrong: route new raising spawns here instead.
 
-1. ``FileNotFoundError`` — the binary is absent; the message must name the FIX,
-   not just the fact (build the TS CLI, ``npm i -g openwiki``, install harbor);
-2. ``OSError`` — the REST of the spawn-failure family (PermissionError, ENOEXEC,
-   EACCES on cwd). Must come AFTER FileNotFoundError, which is a subclass: the
-   reverse order makes the specific rung dead code;
-3. ``subprocess.TimeoutExpired`` — not an OSError, so it needs a clause of its
-   own or a hang escapes as a raw traceback;
-4. a non-zero exit — a failed run is never silently a clean result.
+``error`` is an exception FACTORY rather than a fixed type, which is what lets
+one ladder serve callers with different error contracts: it unifies the ORDER
+and COMPLETENESS of the rungs while each site keeps its own exception TYPE. Only
+``what`` and ``not_found_hint`` are per-site.
 
-Rung 2's ordering constraint is knowledge each hand-rolled ladder had to
-re-derive, and demonstrably did not (mem-o9plh audited the copies). Knowledge
-that must be re-derived per site, and is not, belongs in one function.
-
-``error`` is why one ladder can serve callers with different error contracts: it
-is an exception FACTORY, lifted from ``judge_config.run_isolated_claude``, so
-the ladder unifies the ORDER and COMPLETENESS of the rungs while each site keeps
-its own exception TYPE. What stays per-site is only what is genuinely per-site:
-``what`` (the label the messages are built around) and ``not_found_hint`` (the
-fix to name when the binary is missing). The message FRAME is deliberately
-uniform — it is the shape, and the shape is the point.
-
-Scope: RAISING spawn sites. A site whose contract is report-and-continue rather
-than raise (``oracle/backends.py`` returns ``BackendResult(available=False)`` —
-a backend that drops out is reported, not fatal) is NOT a caller: a factory
-unifies which exception is raised, not raise-vs-return.
-
-NOT yet swept: mem-o9plh converted the six sites that had a ladder to share.
-Several raising git/docker spawns (``harbor/env_recon``, ``bundle/replay``,
-``harbor/probe_gate``, ``harbor/base_image``, the ftp_* modules) still catch
-NOTHING around the spawn, so a missing or unspawnable binary there is still a
-raw traceback. They already type their seam as ``Runner``, so routing them here
-is mechanical — see mem-o9plh's follow-up.
-
-ZFC: pure plumbing — process spawn, exception ordering, message assembly. No
-semantic judgment.
+A site whose contract is report-and-continue rather than raise
+(``oracle/backends.py`` returns ``BackendResult(available=False)`` — a backend
+that drops out is reported, not fatal) is NOT a caller: a factory unifies which
+exception is raised, not raise-vs-return.
 """
 
 from __future__ import annotations
@@ -46,10 +23,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 # A subprocess.run-shaped callable, injectable so tests never spawn a real
-# process. The canonical definition: modules import it from here rather than
-# restating it (it had been copied five times). `runner.headless_agent.CliRunner`
-# is the same shape under an older name, kept for now -- it spans modules with no
-# spawn-ladder involvement, so folding it in is a rename, not this bead's concern.
+# process. The canonical definition -- import it from here rather than restating it.
 Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 
 
@@ -68,9 +42,8 @@ def run_checked(
     """Spawn ``argv`` and return the completed process, or raise ``error(...)``
     with the root cause attached.
 
-    Captures stdout/stderr as text and never raises ``CalledProcessError``
-    (``check=False``): a non-zero exit is diagnosed here with the command's own
-    stderr, which says more than the exception would.
+    ``check=False``: a non-zero exit is diagnosed here with the command's own
+    stderr rather than as a bare ``CalledProcessError``.
 
     ``what`` names the command in prose ("harbor run", "claude -p for the
     comparative judge"); ``not_found_hint`` names the fix for a missing binary.
@@ -80,9 +53,8 @@ def run_checked(
     ``str`` as well as ``Path`` because subprocess does and callers hold it both
     ways.
 
-    The timeout message quotes ``exc.timeout`` — the bound the exception
-    actually carries — rather than re-deriving it from ``timeout_s``, so it
-    stays accurate even where the caller's bound is None.
+    The timeout message quotes ``exc.timeout`` rather than ``timeout_s`` so it
+    stays accurate where the caller's bound is None.
     """
     try:
         completed = runner(
@@ -108,7 +80,7 @@ def run_checked(
     if completed.returncode != 0:
         # `.strip() or .strip()`, not `(a or b).strip()`: a whitespace-only stderr
         # must still fall through to stdout, or the diagnosis loses the one line
-        # that says what went wrong. Four of the six converted sites had it this way.
+        # that says what went wrong.
         raise error(
             f"{what} failed (exit {completed.returncode}): "
             f"{(completed.stderr or '').strip() or (completed.stdout or '').strip()}"

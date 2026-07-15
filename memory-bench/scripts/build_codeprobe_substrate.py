@@ -65,8 +65,9 @@ from membench.harbor.ftp_curate import (
     select_pytest_modules,
     single_parent,
 )
-from membench.harbor.probe_gate import Runner, _remove_worktree
+from membench.harbor.probe_gate import _remove_worktree
 from membench.harbor.repro_live import TEST_TIMEOUT_SEC
+from membench.spawn import Runner
 
 RIG = "codeprobe"
 

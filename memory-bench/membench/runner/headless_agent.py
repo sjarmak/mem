@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import os
 import subprocess
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import NoReturn
@@ -43,7 +43,7 @@ from membench.runner.agent import AgentStepResult
 from membench.runtime import StepContext
 from membench.schemas.sequence import SequenceStep
 from membench.schemas.trace import ToolCall, TraceMessage
-from membench.spawn import run_checked
+from membench.spawn import Runner, run_checked
 
 # A real agent step (multi-turn tool use) can take minutes; a bound this high means a
 # wedged CLI, not slow inference — surfaced as an error, never an indefinite hang.
@@ -63,11 +63,6 @@ def resolve_model(model: str) -> str:
     models hash identically and a resumed paid sweep serves one model's numbers as the other's.
     """
     return model or os.environ.get(ENV_MODEL, "")
-
-
-# Injected so tests drive the parse path without spawning a real claude. Mirrors the
-# `bbon.comparative_judge.Runner` seam (same subprocess.run signature).
-CliRunner = Callable[..., "subprocess.CompletedProcess[str]"]
 
 
 @dataclass(frozen=True)
@@ -116,7 +111,7 @@ class Leg:
 
 @dataclass(eq=False)
 class RecordingRunner:
-    """A ``CliRunner`` that records the argv of every ``claude -p`` it spawns, then delegates.
+    """A ``Runner`` that records the argv of every ``claude -p`` it spawns, then delegates.
 
     THE SEAM the cache identity is checked against — and it is the wire itself, not a report of the
     wire. A record taken from what an arm *says* it sent (a ``prompt`` field on the step result, a
@@ -132,7 +127,7 @@ class RecordingRunner:
     ``eq=False`` keeps the default identity ``__hash__``, so an instance stays usable as the
     ``runner`` field of the frozen ``HeadlessClaudeAgent``."""
 
-    inner: CliRunner
+    inner: Runner
     calls: list[list[str]] = field(default_factory=list)
 
     def __call__(self, argv: Sequence[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -321,7 +316,7 @@ class HeadlessClaudeAgent:
     agent_config_id: str = "headless-claude"
     model: str = ""
     timeout_s: float = DEFAULT_TIMEOUT_S
-    runner: CliRunner
+    runner: Runner
     strict_mcp: bool = True
     constrain_tools: bool = True
     memory_channel: MemoryChannel = MemoryChannel.RECALLED
@@ -417,7 +412,7 @@ def cell_agent(
     *,
     model: str,
     channel: MemoryChannel,
-    runner: CliRunner,
+    runner: Runner,
     cwd: str | None = None,
     env: Mapping[str, str] | None = None,
 ) -> HeadlessClaudeAgent:

@@ -38,7 +38,6 @@ from dataclasses import dataclass
 from membench.metrics.scorers import outcome_check_passes
 from membench.runner.headless_agent import (
     CellCalls,
-    CliRunner,
     MemoryChannel,
     RecordingRunner,
     cell_agent,
@@ -47,6 +46,7 @@ from membench.runner.headless_agent import (
 from membench.runtime import StepContext
 from membench.schemas.sequence import ExpectedAction, OutcomeCheck, SequenceStep
 from membench.schemas.trace import ToolCall
+from membench.spawn import Runner
 
 # The real Claude Code tool the abstract goal is bridged onto, and the file it writes.
 REAL_TOOL = "Write"
@@ -153,8 +153,8 @@ class ArmOutcome:
     runs: int
 
 
-def simulated_runner(current_values: Collection[str]) -> CliRunner:
-    """A ``CliRunner`` stand-in that SIMULATES an honest memory-copying agent: it Writes
+def simulated_runner(current_values: Collection[str]) -> Runner:
+    """A ``Runner`` stand-in that SIMULATES an honest memory-copying agent: it Writes
     the current value(s) iff EVERY one appears in the prompt (i.e. the arm surfaced them),
     else it makes no tool call. This proves the arm wiring + external scorer discriminate
     end to end offline — it is NOT a measurement of real agent behaviour."""

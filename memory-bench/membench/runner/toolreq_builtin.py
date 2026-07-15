@@ -59,7 +59,6 @@ from membench.harbor.agent_memory import NATIVE_MEMORY_GLOB, native_memory_path
 from membench.metrics.scorers import states_value
 from membench.runner.headless_agent import (
     CellCalls,
-    CliRunner,
     Leg,
     MemoryChannel,
     RecordingRunner,
@@ -72,6 +71,7 @@ from membench.runner.resume_cache import digest
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask
 from membench.runtime import StepContext
 from membench.schemas.sequence import SequenceStep
+from membench.spawn import Runner
 
 ARM = "builtin"
 
@@ -219,7 +219,7 @@ class BuiltinDiagnostics:
     establish_tool_names: tuple[str, ...] = ()
 
 
-def simulated_builtin_runner(current_values: Collection[str]) -> CliRunner:
+def simulated_builtin_runner(current_values: Collection[str]) -> Runner:
     """Dry-run stand-in for BOTH builtin calls: the establish call honestly persists the
     values in Claude Code's REAL native-memory layout (an ``MEMORY.md`` index pointing at
     a ``<topic>.md`` that carries the fact) iff its prompt carried every current value
@@ -297,7 +297,7 @@ def run_builtin_arm(
     model: str,
     dry_run: bool,
     channel: MemoryChannel,
-    runner: CliRunner | None = None,
+    runner: Runner | None = None,
 ) -> tuple[ArmOutcome, BuiltinDiagnostics, CellCalls]:
     """Run ``repeats`` independent establish/goal pairs, each in a fresh sandbox cwd +
     fresh ``CLAUDE_CONFIG_DIR``, score the goal call externally, and return the cycle of

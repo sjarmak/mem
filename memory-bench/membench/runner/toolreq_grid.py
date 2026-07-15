@@ -92,7 +92,7 @@ EXECUTION_PROTOCOL = 2
 # -> work_id -> (source work_id -> rendered payload). Injected by the caller, never defaulted:
 # the real seeder (`toolreq_realagent.seed_ours_store_and_resolve_payloads`) needs a built
 # `bin/mem`, whose repo-root path only the driver knows, and a hermetic test stubs it out (this
-# codebase's CliRunner/RetrieveRunner injection convention — see headless_agent.CliRunner).
+# codebase's Runner/RetrieveRunner injection convention — see spawn.Runner).
 SeedFn = Callable[
     [Sequence[BenchmarkSequence], Sequence[ToolReqRealAgentTask], Path, str],
     dict[str, dict[str, str]],
