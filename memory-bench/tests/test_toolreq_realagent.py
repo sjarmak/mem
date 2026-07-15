@@ -19,13 +19,14 @@ from __future__ import annotations
 import dataclasses
 import json
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any, ForwardRef, get_args, get_origin
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
+from membench.generators.toolreq_bundle_adapter import _goal_step
 from membench.metrics.scorers import states_value
 from membench.runner import toolreq_grid as grid
 from membench.runner.headless_agent import Leg, render_cell_calls
@@ -247,6 +248,83 @@ def test_opacity_deterministic_and_sequence_unique() -> None:
     assert a1.current_opaque_values != b.current_opaque_values
 
 
+def _admits_dict(annotation: Any) -> bool:
+    """Whether ``annotation`` can carry a dict, unwrapping unions and generic args.
+
+    ``Mapping`` counts alongside ``dict``: ``digest`` sorts by the SHAPE it serialises, not by
+    the declared type. Bare ``dict``/``Mapping`` count too — ``get_origin`` answers ``None``
+    for an unsubscripted one, so testing only the origin would let ``field: dict`` escape the
+    roster exactly the way this roster exists to stop.
+
+    Raises on an annotation it cannot classify rather than answering False: a silent "not a
+    dict" is the failure this whole guard is about."""
+    if annotation is dict or annotation is Mapping:
+        return True
+    if isinstance(annotation, ForwardRef):
+        raise TypeError(
+            f"unresolved annotation {annotation!r} — the roster cannot classify it, and "
+            "guessing False here would silently drop a dict field out of the guard below"
+        )
+    if get_origin(annotation) in (dict, Mapping):
+        return True
+    return any(_admits_dict(arg) for arg in get_args(annotation))
+
+
+def _dict_typed_fields(model: type[BaseModel]) -> set[str]:
+    """``model``'s field names whose ANNOTATION admits a dict — the ones whose key order
+    ``digest`` would sort away.
+
+    Read from annotations, never from a dumped instance: a ``dict[str, str] | None`` field
+    dumps to ``None`` until something sets it, so an instance-shaped roster never sees it at
+    all — and ``SequenceStep`` already uses that ``| None = None`` convention (``record_class``,
+    ``disposition``).
+
+    TOP-LEVEL ONLY. That is a known GAP, not a justification: ``digest`` sorts keys at EVERY
+    depth, so a dict-typed field on ``OutcomeCheck`` — the one structured field
+    ``adapt_sequence`` builds — carries the identical hazard and this roster cannot see it.
+    The roster assert below does not cover it either; that tripwire fires once, at schema-add
+    time, and adding the new field to its expected set DISARMS it long before anyone wires the
+    field into ``adapt_sequence``. Closing it needs the emptiness check to walk the same paths
+    (mem-yqdtd). Until then, a dict field on a SequenceStep sub-model is unguarded."""
+    return {name for name, f in model.model_fields.items() if _admits_dict(f.annotation)}
+
+
+def test_the_dict_typed_roster_reads_annotations_because_a_dumped_instance_lies() -> None:
+    """Pins ``_dict_typed_fields`` against the blind spot it exists for.
+
+    ``SequenceStep`` today has no Optional-dict and no ``Mapping`` field, so BOTH branches that
+    make this roster better than the dumped-instance one it replaced are unreachable from the
+    real schema — a walker that handled neither would produce an identical roster and an
+    identical green. This synthetic tree is the only thing here that can be RED today."""
+
+    class _Sub(BaseModel):
+        nested: dict[str, str] = Field(default_factory=dict)
+
+    class _Probe(BaseModel):
+        plain: dict[str, Any] = Field(default_factory=dict)
+        optional: dict[str, str] | None = None  # dumps to None until set — the blind spot
+        mapping: Mapping[str, str] = Field(default_factory=dict)
+        # Unparameterized on purpose (hence the ignore): get_origin() answers None for it.
+        bare: dict = Field(default_factory=dict)  # type: ignore[type-arg]
+        annotated: Annotated[dict[str, str], "meta"] = Field(default_factory=dict)
+        text: str | None = None  # control: Optional, but never a dict
+        names: list[str] = Field(default_factory=list)  # control: generic, but never a dict
+        subs: list[_Sub] = Field(default_factory=list)  # the top-level-only gap, stated
+
+    assert _dict_typed_fields(_Probe) == {"plain", "optional", "mapping", "bare", "annotated"}
+    # Why annotations: this is the roster the rejected guard built, on the same model.
+    assert {n for n, v in _Probe().model_dump().items() if isinstance(v, dict)} == {
+        "plain",
+        "mapping",
+        "bare",
+        "annotated",
+    }, "a dumped instance stopped hiding the Optional-dict field — _dict_typed_fields can simplify"
+
+    # An annotation the roster cannot classify must be loud, never a silent "not a dict".
+    with pytest.raises(TypeError, match="unresolved annotation"):
+        _admits_dict(ForwardRef("Undefined"))
+
+
 def test_task_fingerprint_cannot_see_key_order_in_a_goal_step_dict_field() -> None:
     """The hazard the guard below exists for, on the field that would arm it first.
 
@@ -262,54 +340,78 @@ def test_task_fingerprint_cannot_see_key_order_in_a_goal_step_dict_field() -> No
     assert list(forward) != list(reversed_order)  # same content, different order
     assert forward == reversed_order
 
-    assert grid.task_fingerprint(
-        dataclasses.replace(
-            task, goal_step=task.goal_step.model_copy(update={"distractor_memories": forward})
+    def fingerprint_with(distractors: dict[str, str]) -> str:
+        return grid.task_fingerprint(
+            dataclasses.replace(
+                task,
+                goal_step=task.goal_step.model_copy(update={"distractor_memories": distractors}),
+            )
         )
-    ) == grid.task_fingerprint(
-        dataclasses.replace(
-            task,
-            goal_step=task.goal_step.model_copy(update={"distractor_memories": reversed_order}),
-        )
+
+    # Positive control, and it is load-bearing: model_copy(update=) silently accepts an
+    # UNKNOWN key, which never reaches model_dump — so under a misspelt field name the
+    # equality below holds against an untouched baseline and asserts nothing at all.
+    forward_fingerprint = fingerprint_with(forward)
+    assert forward_fingerprint != grid.task_fingerprint(task), (
+        "populating goal_step.distractor_memories did not move the fingerprint — the field "
+        "name no longer exists on SequenceStep and this test is hashing an unchanged task"
+    )
+    assert forward_fingerprint == fingerprint_with(
+        reversed_order
     ), "goal_step key order became visible to task_fingerprint — the guard below is now dead"
 
 
 def test_adapt_sequence_populates_no_goal_step_dict_field() -> None:
-    """The guard: ``adapt_sequence`` leaves every data dict on the goal_step EMPTY, so there
-    is no key order to lose and the collision above is survivable. Not a live defect — a
-    landmine, pinned so it cannot become one silently.
+    """The guard: ``adapt_sequence`` leaves every data dict on the goal_step EMPTY even when
+    its SOURCE step populates them, so there is no key order to lose and the collision above is
+    survivable. Not a live defect — a landmine, pinned so it cannot become one silently.
 
-    It arms the moment a change sources prompt text or scoring input from one of these
-    fields. ``distractor_memories`` is the near one: the runner SEEDS those into the store
-    before a step's retrieve (``conditions.py``, the §10 Confusion axis). From then the
-    sorted-key digest collides two DIFFERENT measured inputs and a resumed PAID run serves
-    one prompt's numbers as the other's.
+    It arms the moment a change sources prompt text or scoring input from one of these fields.
+    ``distractor_memories`` is the near one: the runner SEEDS those into the store before a
+    step's retrieve (``conditions.py``, the §10 Confusion axis), and the real materialiser
+    already authors them on the goal step (``enterprise_workflow``). From then the sorted-key
+    digest collides two DIFFERENT measured inputs and a resumed PAID run serves one prompt's
+    numbers as the other's.
+
+    The source step is armed HERE rather than in ``_toolreq_seq`` because the guard must fail on
+    a pass-through (``distractor_memories=dict(goal.distractor_memories)``), not merely on a
+    hardcoded populate — and a shared fixture carrying ``environment_state`` /
+    ``expected_memory_writes`` the materialiser never authors would falsify its own
+    mirrors-the-frozen-shape contract, inviting a later reader to restore fidelity by deleting
+    exactly this arming. Every roster field is armed, because ``populated`` is a union: one
+    armed field would prove the assert fires while leaving the other two able to sail past.
 
     Guarded here rather than by hashing these fields as item lists in ``task_fingerprint``
-    because order-sensitivity is a PER-FIELD call there: ``oracle_memory`` is hashed in its
-    own order because it renders to prompt lines, ``current_opaque_values`` is sorted because
-    it never does. Whether a dict field's order is a measured input is only answerable once
-    the field has a consumer, and this test forces that call at the moment it gains one.
-
-    The roster is derived from the dump, not named: ``task_fingerprint`` hashes ``goal_step``
-    whole, so a hardcoded list is one field short the day SequenceStep grows a fourth.
-    TOP-LEVEL ONLY — sub-models dump to field-name-keyed dicts, whose key order is pydantic's
-    declaration order, the safe case digest() sorts on purpose."""
-    task = adapt_sequence(_toolreq_seq())
-    dict_fields = {
-        name: value
-        for name, value in task.goal_step.model_dump(mode="json").items()
-        if isinstance(value, dict)
-    }
-    assert set(dict_fields) == {
+    because order-sensitivity is a PER-FIELD call there: ``oracle_memory`` is hashed in its own
+    order because it renders to prompt lines, ``current_opaque_values`` is sorted because it
+    never does. Whether a dict field's order is a measured input is only answerable once the
+    field has a consumer, and this test forces that call at the moment it gains one."""
+    roster = _dict_typed_fields(SequenceStep)
+    assert roster == {
         "environment_state",
         "expected_memory_writes",
         "distractor_memories",
     }, "SequenceStep's data-dict roster moved — confirm the new field is order-irrelevant"
 
-    populated = {name: value for name, value in dict_fields.items() if value}
+    # Arm every roster field on the SOURCE goal step. Keyed off the roster, so a renamed
+    # field cannot leave a stale literal here silently arming nothing — and off _goal_step,
+    # so the arming follows the step adapt_sequence actually reads. `steps[-1]` would agree
+    # today and diverge the moment the fixture grows a trailing step without outcome_checks,
+    # arming a step the adapter never looks at and leaving this guard green under a
+    # pass-through.
+    seq = _toolreq_seq()
+    source_goal = _goal_step(seq)
+    armed_goal = source_goal.model_copy(
+        update={name: {f"{name}-k-a": "A", f"{name}-k-b": "B"} for name in roster}
+    )
+    unarmed = sorted(name for name in roster if not getattr(armed_goal, name))
+    assert not unarmed, f"arming did not take on goal_step.{unarmed} — model_copy ignored the key"
+
+    armed_steps = [armed_goal if step is source_goal else step for step in seq.steps]
+    task = adapt_sequence(seq.model_copy(update={"steps": armed_steps}))
+    populated = sorted(name for name in roster if getattr(task.goal_step, name))
     assert not populated, (
-        f"adapt_sequence now populates goal_step.{sorted(populated)} — task_fingerprint "
+        f"adapt_sequence now populates goal_step.{populated} — task_fingerprint "
         "hashes goal_step via canonical JSON, which SORTS object keys, so two goal_steps "
         "differing only in this field's key order now fingerprint identically and a resumed "
         "PAID run can serve one prompt's numbers as the other's. Either keep the field out "
