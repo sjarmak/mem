@@ -150,21 +150,54 @@ export function toGitUtc(started_at: string): string {
 }
 
 /** Runs `git -C <workDir> <args...>` and returns stdout. Injected so the
- * mapping is testable without a checked-out repo. */
-export type GitRunner = (workDir: string, args: string[]) => string;
+ * mapping is testable without a checked-out repo. `stdin` feeds the command's
+ * standard input — needed only by `git patch-id`, the one primitive in the
+ * content-landing ladder (ingest/landedContent) that reads its diff from stdin
+ * rather than from arguments. It is optional, so a runner written before it
+ * existed — including every two-argument test fake — still satisfies the type. */
+export type GitRunner = (workDir: string, args: string[], stdin?: string) => string;
 
 /** Default runner: invokes the real `git` CLI. */
-export const defaultGitRunner: GitRunner = (workDir, args) =>
+export const defaultGitRunner: GitRunner = (workDir, args, stdin) =>
   execFileSync('git', ['-C', workDir, ...args], {
     encoding: 'utf8',
     maxBuffer: 16 * 1024 * 1024,
+    ...(stdin === undefined ? {} : { input: stdin }),
   });
+
+/** Read one property off a thrown value. The `as` cast is compile-time only, so
+ * a bare `err.code` would throw a TypeError of its own when `err` is `null` or
+ * `undefined` — turning a diagnostic helper into a second failure that masks the
+ * first. `unknown` in, so the guard belongs here rather than at each call site. */
+function errProp(err: unknown, key: 'status' | 'code'): unknown {
+  return typeof err === 'object' && err !== null
+    ? (err as Record<string, unknown>)[key]
+    : undefined;
+}
 
 /** True when `execFileSync` failed because git exited non-zero (as opposed to
  * the binary being missing). A non-zero exit — work_dir gone, unknown branch —
  * is an expected "unresolved" outcome; a missing `git` binary is not. */
 export function isNonZeroExit(err: unknown): boolean {
-  return typeof (err as { status?: unknown }).status === 'number';
+  return typeof errProp(err, 'status') === 'number';
+}
+
+/** True when a git call failed because its output was too large to read back.
+ * Node reports this two ways, and both mean the same thing, so both are matched:
+ * `ENOBUFS` when the output passes the runner's `maxBuffer` (the child is
+ * killed), and `ERR_STRING_TOO_LONG` when it passes V8's maximum string length
+ * (~512MB) while being decoded. Raising `maxBuffer` only converts the first into
+ * the second, so a caller cannot escape this by buying a bigger buffer.
+ *
+ * It is NOT a misconfiguration and NOT a non-zero exit: git was asked a valid
+ * question whose answer is too big to materialize. Callers that walk history hit
+ * it on repos whose local branch trails its remote by thousands of commits
+ * (CodeScaleBench: 1196, whose range diff exceeds 512MB). Distinguishing it lets
+ * such a range degrade to a recorded, per-cause coverage hole instead of killing
+ * a cross-rig sweep — while a missing binary still propagates. */
+export function isOutputTooLarge(err: unknown): boolean {
+  const code = errProp(err, 'code');
+  return code === 'ENOBUFS' || code === 'ERR_STRING_TOO_LONG';
 }
 
 /** The exit code of a git failure, or undefined when the failure was not a
@@ -172,7 +205,7 @@ export function isNonZeroExit(err: unknown): boolean {
  * documented status codes — `merge-base --is-ancestor` returns 1 for "not an
  * ancestor" vs 128 for a bad object — from a real misconfiguration. */
 export function exitStatus(err: unknown): number | undefined {
-  const status = (err as { status?: unknown }).status;
+  const status = errProp(err, 'status');
   return typeof status === 'number' ? status : undefined;
 }
 
