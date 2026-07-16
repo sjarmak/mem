@@ -61,10 +61,10 @@ from membench.runner.toolreq_builtin_grid import (
     NOT_ENGAGED,
     SUMMARY_NAME,
     PreflightHaltError,
-    calls_per_repeat,
     paid_call_count,
     preflight_gate,
     run_corpus,
+    uniform_calls_per_repeat,
 )
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask, load_corpus_with_sequences
 
@@ -87,17 +87,10 @@ def _print_go_command(
     calls = paid_call_count(tasks, repeats=repeats)
     worst_hours = calls * DEFAULT_TIMEOUT_S / 3600.0
     # The `n_tasks x channel x repeat x per_repeat` factorization the human reads to sanity-check
-    # `calls` is only exact when every task has the same leg count; `paid_call_count` itself sums
-    # per task. Assert uniformity so a future variable `cell_legs` fails the disclosure loudly here
-    # rather than printing a factorization that disagrees with its own total.
-    per_repeat_counts = {calls_per_repeat(task) for task in tasks}
-    if len(per_repeat_counts) != 1:
-        raise ValueError(
-            f"tasks have non-uniform calls/repeat {sorted(per_repeat_counts)} — the cost "
-            "disclosure's single per-repeat factor would misdescribe the summed total; update "
-            "_print_go_command to show the per-task breakdown before spending."
-        )
-    (per_repeat,) = per_repeat_counts  # singleton, by the guard above
+    # `calls` is only exact when every task has the same leg count (`paid_call_count` itself sums
+    # per task). `uniform_calls_per_repeat` returns that single factor or refuses a non-uniform
+    # corpus before the disclosure prints.
+    per_repeat = uniform_calls_per_repeat(tasks)
     print(
         f"REFUSING to spend: {ENV_OAUTH} is unset.\n"
         f"  This paid sweep is {calls} real `claude -p` call(s) "
@@ -201,9 +194,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
 
     mode = "DRY-RUN (simulated agent, no tokens)" if args.dry_run else "PAID real claude -p"
+    # Same factor, same guard as the refuse-to-spend disclosure: on the AUTHORIZED path this banner
+    # is the FIRST surface to disclose the sweep's shape (the go-command runs only when the token is
+    # UNSET, i.e. only when nothing spends), so it reads the per-repeat factor through
+    # `uniform_calls_per_repeat` rather than off `tasks[0]` — which would misstate a non-uniform
+    # corpus at the moment the sweep starts spending (mem-de455).
+    per_repeat = uniform_calls_per_repeat(tasks)
     print(
         f"toolreq builtin-arm sweep: {mode}; {len(tasks)} task(s) x {len(CHANNELS)} channel x "
-        f"{args.repeats} repeat x {calls_per_repeat(tasks[0])} calls/repeat"
+        f"{args.repeats} repeat x {per_repeat} calls/repeat"
     )
     try:
         summary = run_corpus(

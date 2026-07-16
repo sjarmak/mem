@@ -1337,6 +1337,38 @@ def test_go_command_on_an_empty_corpus_says_so(tmp_path: Path) -> None:
         driver._print_go_command([], 1, tmp_path / "out", tmp_path / "corpus")
 
 
+def test_the_pre_sweep_banner_refuses_a_factorization_that_misdescribes_its_own_total(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """mem-de455: the guard above protects the REFUSE path (``_print_go_command``, reached only when
+    the token is unset — the path that spends NOTHING). main()'s pre-sweep banner is on the
+    AUTHORIZED path: on a paid run the go-command never fires, so the banner is the FIRST surface to
+    disclose the sweep's shape, and it printed at the moment real money starts moving. It modelled
+    ``calls/repeat`` off ``tasks[0]`` unguarded, so a non-uniform corpus would misstate the sweep as
+    it begins. Drive the banner through ``main(--dry-run)`` (the same banner line, no tokens) with a
+    corpus whose leg count branches per task: it must refuse here too, exactly like the disclosure.
+
+    A uniform-corpus test cannot fail on this (the tasks[0] model and the summed total agree when
+    every task has the same leg count) — which is how this shape shipped three times under a green
+    suite. Only the branching ``_legs_by_task`` double separates them."""
+    _corpus(tmp_path, "w-0", "w-1")
+    monkeypatch.setattr(grid, "cell_legs", _legs_by_task({"w-0": 2, "w-1": 3}))
+
+    with pytest.raises(ValueError, match="non-uniform calls/repeat"):
+        driver.main(
+            [
+                "--corpus-dir",
+                str(tmp_path / "corpus"),
+                "--out",
+                str(tmp_path / "out"),
+                "--dry-run",
+            ]
+        )
+    # Refused before it printed: the lying banner line never reached stdout, and the dry-run sweep
+    # that follows it never ran.
+    assert "toolreq builtin-arm sweep" not in capsys.readouterr().out
+
+
 def test_repeats_below_one_is_refused_at_the_flag(tmp_path: Path) -> None:
     # `--repeats 0` runs zero agent turns per cell and would persist 0/0 rows that the verdict rule
     # reads as a confident NOT-ENGAGED for a task that was NEVER EVALUATED. The schema refuses the

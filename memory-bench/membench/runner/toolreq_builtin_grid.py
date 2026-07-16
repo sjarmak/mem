@@ -102,6 +102,29 @@ def paid_call_count(tasks: Sequence[ToolReqRealAgentTask], *, repeats: int) -> i
     return len(CHANNELS) * repeats * sum(calls_per_repeat(task) for task in tasks)
 
 
+def uniform_calls_per_repeat(tasks: Sequence[ToolReqRealAgentTask]) -> int:
+    """The one ``calls_per_repeat`` every task in ``tasks`` shares — the per-repeat factor a cost
+    factorization (``n_tasks x channel x repeat x per_repeat``) multiplies out to
+    ``paid_call_count``'s summed total. Raises when the corpus is NON-UNIFORM: then no single factor
+    reproduces that sum, so any factorization printed would misdescribe the number it explains.
+
+    The single home for that guard. Both surfaces that factorize the cost — the refuse-to-spend
+    disclosure (``_print_go_command``, the REFUSE path) and main()'s pre-sweep banner (the
+    AUTHORIZED path, printed as the sweep starts spending) — read the factor from here, so the check
+    lives once (mem-de455) rather than as a second copy free to drift from the first (mem-swp43).
+    Callers refuse an empty corpus first; an empty ``tasks`` raises here too, but with this generic
+    non-uniform message rather than a caller-specific one."""
+    per_repeat_counts = {calls_per_repeat(task) for task in tasks}
+    if len(per_repeat_counts) != 1:
+        raise ValueError(
+            f"tasks have non-uniform calls/repeat {sorted(per_repeat_counts)} — a single "
+            "per-repeat factor cannot reproduce paid_call_count's summed total; show a per-task "
+            "breakdown before spending."
+        )
+    (per_repeat,) = per_repeat_counts  # singleton, by the guard above
+    return per_repeat
+
+
 class BuiltinCell(BaseCellOutcome):
     """One persisted ``(builtin, channel)`` row: the score AND the engagement diagnostics that make
     the score interpretable.
