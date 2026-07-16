@@ -80,6 +80,13 @@ class GrepResolver:
                 available=False,
                 error=f"git grep timed out at {self.timeout_s:.0f}s",
             )
+        except OSError as exc:
+            # PermissionError / ENOEXEC / EACCES on the spawn -- a non-executable git
+            # or an unreadable repo_root. FileNotFoundError (a subclass) is handled
+            # above, so this degrades the backend rather than crashing consensus.
+            return BackendResult(
+                backend=self.name, available=False, error=f"git grep spawn failed: {exc}"
+            )
         # git grep: 0 = matches, 1 = no matches (both fine), >=2 = real error.
         if completed.returncode >= 2:
             return BackendResult(
@@ -156,6 +163,13 @@ class SourcegraphResolver:
                 backend=self.name,
                 available=False,
                 error=f"src search timed out at {self.timeout_s:.0f}s",
+            )
+        except OSError as exc:
+            # PermissionError / ENOEXEC / EACCES on the spawn -- a non-executable src
+            # CLI. FileNotFoundError (a subclass) is handled above, so this degrades
+            # the backend to single-backend mode rather than raising out of resolve().
+            return BackendResult(
+                backend=self.name, available=False, error=f"src search spawn failed: {exc}"
             )
         if completed.returncode != 0:
             return BackendResult(

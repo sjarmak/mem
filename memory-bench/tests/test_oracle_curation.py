@@ -41,6 +41,18 @@ def _completed(
     return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr=stderr)
 
 
+def _spawn_nonexec(binary):
+    """A runner that really spawns a present-but-non-executable stand-in, so the OS
+    raises PermissionError -- an OSError that is NOT FileNotFoundError, the rung the
+    resolvers must degrade rather than let escape. cf. the chmod 0o644 trick in
+    tests/test_mem_cli.py and tests/test_openwiki_system.py."""
+
+    def runner(argv, **kw):
+        return subprocess.run([str(binary), *list(argv)[1:]], **kw)
+
+    return runner
+
+
 def _repo_with(root: Path, *files: str) -> Path:
     """Write each ``files`` path under ``root`` so a Tier-2 curator can read its
     snippet (the curator quarantines candidates it cannot read)."""
@@ -463,6 +475,19 @@ def test_grep_resolver_git_missing_is_unavailable():
     assert not res.available
 
 
+def test_grep_resolver_permission_error_degrades_not_raises(tmp_path):
+    # A present-but-non-executable git raises PermissionError -- an OSError that is
+    # NOT FileNotFoundError. The resolver's never-raises contract must degrade it to
+    # available=False rather than let it escape and kill the consensus pass.
+    binary = tmp_path / "git"
+    binary.write_text("#!/bin/sh\ntrue\n", encoding="utf-8")
+    binary.chmod(0o644)
+    res = GrepResolver(runner=_spawn_nonexec(binary)).resolve(
+        "sym", defining_file="s.ts", repo_root=REPO
+    )
+    assert not res.available and "git grep" in (res.error or "")
+
+
 # --- SourcegraphResolver ---------------------------------------------------------
 
 
@@ -512,6 +537,20 @@ def test_sg_resolver_non_json_is_unavailable():
     )
     res = r.resolve("sym", defining_file="s.ts", repo_root=REPO)
     assert not res.available
+
+
+def test_sg_resolver_permission_error_degrades_not_raises(tmp_path):
+    # A present-but-non-executable src CLI raises PermissionError -- an OSError that
+    # is NOT FileNotFoundError. The never-raises contract must report available=False
+    # rather than let it escape past resolve().
+    env = {ENV_SG_ENDPOINT: "https://sg", ENV_SG_TOKEN: "tok"}
+    binary = tmp_path / "src"
+    binary.write_text("#!/bin/sh\ntrue\n", encoding="utf-8")
+    binary.chmod(0o644)
+    res = SourcegraphResolver(sg_repo="r", env=env, runner=_spawn_nonexec(binary)).resolve(
+        "sym", defining_file="s.ts", repo_root=REPO
+    )
+    assert not res.available and "src search" in (res.error or "")
 
 
 # --- build_oracle_context --------------------------------------------------------
