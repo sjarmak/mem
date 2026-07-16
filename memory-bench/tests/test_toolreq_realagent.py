@@ -267,29 +267,22 @@ def test_opacity_deterministic_and_sequence_unique() -> None:
 def _admits_dict(annotation: Any) -> bool:
     """Whether ``annotation`` can carry a dict, unwrapping unions and generic args.
 
-    The whole ``Mapping`` ABC family counts alongside ``dict``: ``digest`` sorts by the SHAPE it
-    serialises, not by the declared type, and a ``MutableMapping``/``OrderedDict``/``defaultdict``
-    field ``model_dump()``s to an order-preserving plain dict just like ``dict`` does. So the test
-    is structural — ``issubclass(..., Mapping)`` — not identity against a two-sentinel list, which
-    saw only ``dict`` and ``Mapping`` and let every other Mapping subtype through. Bare
-    (unsubscripted) mappings count too — ``get_origin`` answers ``None`` for one, so testing only
-    the origin would let ``field: dict`` escape the roster exactly the way this roster exists to
-    stop.
+    Any ``Mapping`` subtype counts alongside ``dict`` — ``digest`` sorts by serialised SHAPE, and
+    a ``MutableMapping``/``OrderedDict``/``defaultdict`` field ``model_dump()``s to a plain dict
+    just as ``dict`` does, so the test is structural (``issubclass(..., Mapping)``). Bare
+    (unsubscripted) mappings need the class check too — ``get_origin`` answers ``None`` for one, so
+    testing only the origin would let ``field: dict`` escape the roster this exists to enforce.
 
-    Raises ONLY on an unresolved ``ForwardRef`` — the one annotation it genuinely cannot classify
-    without a resolution context, where a silent "not a dict" is the failure this guard is about.
-    Every other annotation is classified structurally, so nothing else falls through to a silent
-    False."""
+    Raises on an unresolved ``ForwardRef`` — the one annotation it cannot classify without a
+    resolution context, where a silent False is exactly the failure this guard is about."""
     if isinstance(annotation, ForwardRef):
         raise TypeError(
             f"unresolved annotation {annotation!r} — the roster cannot classify it, and "
             "guessing False here would silently drop a dict field out of the guard below"
         )
-    if isinstance(annotation, type) and issubclass(annotation, Mapping):
-        return True
-    origin = get_origin(annotation)
-    if isinstance(origin, type) and issubclass(origin, Mapping):
-        return True
+    for candidate in (annotation, get_origin(annotation)):
+        if isinstance(candidate, type) and issubclass(candidate, Mapping):
+            return True
     return any(_admits_dict(arg) for arg in get_args(annotation))
 
 
@@ -325,8 +318,7 @@ def test_the_dict_typed_roster_reads_annotations_because_a_dumped_instance_lies(
         plain: dict[str, Any] = Field(default_factory=dict)
         optional: dict[str, str] | None = None  # dumps to None until set — the blind spot
         mapping: Mapping[str, str] = Field(default_factory=dict)
-        # The Mapping-ABC family beyond the two `is` sentinels: identity against (dict, Mapping)
-        # misses every one of these, yet each model_dump()s to an order-preserving plain dict.
+        # Mapping-ABC subtypes: each model_dump()s to a plain dict, none is `is dict`/`is Mapping`.
         mutable: MutableMapping[str, str] = Field(default_factory=dict)
         ordered: OrderedDict[str, str] = Field(default_factory=OrderedDict)
         defaulted: defaultdict[str, str] = Field(default_factory=lambda: defaultdict(str))
