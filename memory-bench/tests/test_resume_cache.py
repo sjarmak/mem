@@ -793,11 +793,7 @@ def test_the_verdict_string_and_the_counted_kinds_come_from_one_ladder() -> None
 # --- corpus_summary is the one owner of the cross-grid headline keys (mem-d9v8k) -------
 
 
-class _VerdictCell(BaseCellOutcome):
-    pass
-
-
-class _VerdictResult(BaseCachedResult[_Identity, _VerdictCell]):
+class _VerdictResult(BaseCachedResult[_Identity, _Cell]):
     """A stand-in whose ``classify`` emits the SHARED verdict kinds, so ``corpus_summary``'s
     ``separates_all_channels`` / ``leaked`` are exercised at the CORE that now owns them rather than
     only end-to-end through a grid: ``passes == runs`` -> SEPARATES, ``passes == 0`` -> WEAK, else
@@ -808,7 +804,7 @@ class _VerdictResult(BaseCachedResult[_Identity, _VerdictCell]):
         return {("a", "recalled"), ("a", "trusted")}
 
     @classmethod
-    def classify(cls, outcomes: Sequence[_VerdictCell]) -> list[tuple[str, str, str]]:
+    def classify(cls, outcomes: Sequence[_Cell]) -> list[tuple[str, str, str]]:
         out: list[tuple[str, str, str]] = []
         for c in outcomes:
             kind = SEPARATES if c.passes == c.runs else WEAK if c.passes == 0 else LEAK
@@ -818,8 +814,8 @@ class _VerdictResult(BaseCachedResult[_Identity, _VerdictCell]):
 
 def _verdict_result(work_id: str, recalled: int, trusted: int) -> _VerdictResult:
     cells = [
-        _VerdictCell(arm="a", channel="recalled", passes=recalled, runs=2),
-        _VerdictCell(arm="a", channel="trusted", passes=trusted, runs=2),
+        _Cell(arm="a", channel="recalled", passes=recalled, runs=2),
+        _Cell(arm="a", channel="trusted", passes=trusted, runs=2),
     ]
     return _VerdictResult.of(work_id, _identity(), cells)
 

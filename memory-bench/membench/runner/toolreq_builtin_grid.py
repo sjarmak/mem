@@ -449,8 +449,8 @@ def run_corpus(
     results = run.results
     return {
         **corpus_summary(tasks, run, dry_run=dry_run, repeats=repeats, n_channels=len(CHANNELS)),
-        # `not_engaged` is the builtin grid's OWN headline — the kind the 3-arm grid has no room
-        # for, and the point of the arm — so it stays here, not in corpus_summary where no other
-        # grid would emit it. separates_all_channels / leaked now come from that one owner.
+        # `not_engaged` is the builtin grid's OWN headline (see NOT_ENGAGED) — it stays here, not in
+        # corpus_summary where no other grid would emit it. separates_all_channels / leaked now come
+        # from that one owner.
         "not_engaged": [r.work_id for r in results if NOT_ENGAGED in r.kinds],
     }

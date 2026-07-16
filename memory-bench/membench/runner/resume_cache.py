@@ -612,14 +612,14 @@ def corpus_summary(
     # result, so a work_id-keyed dict would buy nothing over a list while quietly depending on
     # work_id uniqueness (a value outside the checks is not defended by the checks) — and this
     # function is public, callable on a hand-built CorpusRun that never ran assert_usable_work_ids.
-    kinds = [r.kinds for r in run.results]
+    kinds = [(r.work_id, r.kinds) for r in run.results]
     return {
         "n_tasks": len(tasks),
         "executed": run.executed,
         "reused": run.reused,
         "dry_run": dry_run,
         "repeats": repeats,
-        "separates_all_channels": sum(1 for k in kinds if k.count(SEPARATES) == n_channels),
-        "leaked": [r.work_id for r, k in zip(run.results, kinds, strict=True) if LEAK in k],
+        "separates_all_channels": sum(1 for _w, k in kinds if k.count(SEPARATES) == n_channels),
+        "leaked": [w for w, k in kinds if LEAK in k],
         "per_task": [r.model_dump(mode="json") for r in run.results],
     }
