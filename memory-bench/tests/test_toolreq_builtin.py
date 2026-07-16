@@ -1217,6 +1217,34 @@ def test_driver_refuses_to_spend_without_a_named_model(tmp_path: Path, monkeypat
     assert code == 2
 
 
+def test_an_unidentifiable_cli_version_refuses_before_the_preflight_spends(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # mem-84wwq: the third pre-spend refusal gate, alongside no-token and no-model. The live window
+    # is a `claude` that serves `-p` fine but whose `--version` is unparseable or times out —
+    # `resolve_cli_version` raises `HeadlessAgentError` for exactly that case, and the paid identity
+    # stakes an invariant on it ("a paid run that cannot name its instrument must not spend"). The
+    # version must therefore be read BEFORE the `before_first_spend` preflight fires its one real
+    # establish+check cycle — else that cycle's `claude -p` calls burn before the halt. Locked at
+    # the driver level because the driver owns its own `run_corpus` call, and the ordering (probe,
+    # then the preflight hook that spends inside `run_cached_corpus`) is a property of that call.
+    _corpus_one(tmp_path)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")  # paid path must name a model (mem-bzv2p)
+
+    def _unidentifiable() -> str:
+        raise HeadlessAgentError("claude --version printed no recognisable version")
+
+    monkeypatch.setattr(grid, "resolve_cli_version", _unidentifiable)
+
+    def _boom(*_a: object, **_k: object) -> object:
+        raise AssertionError("must NOT spend a preflight `claude -p` before the version is named")
+
+    monkeypatch.setattr(grid, "run_builtin_arm", _boom)
+    code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
+    assert code == 3  # a diagnosed halt, and — via `_boom` — not a single paid call
+
+
 def test_go_command_refuses_a_factorization_that_misdescribes_its_own_total(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
