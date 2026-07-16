@@ -83,7 +83,6 @@ __all__ = [
     "WEAK",
     "BuiltinCachedResult",
     "BuiltinCell",
-    "BuiltinRunIdentity",
     "PreflightHaltError",
     "calls_per_repeat",
     "cell_kind",
@@ -111,7 +110,7 @@ SUMMARY_NAME = "summary-toolreq-builtin.json"
 # free runs only, since `dry_run` is itself in the identity).
 # NOT here, because the identity now carries them: the prompts, --allowedTools, --model,
 # --strict-mcp-config, and the legs' count and order (`invocation_fingerprint`); the seeded
-# `autoMemoryEnabled` settings dict (`mechanism_fingerprint`); the claude binary's version
+# `autoMemoryEnabled` settings dict (`settings_fingerprint`); the claude binary's version
 # (`cli_version`, resolved off the instrument).
 # NOT here either, for a different reason: `preflight` / `preflight_kind`. They are a GATE on
 # whether the sweep runs at all, not a step that executes or scores a cell — the preflight's own
@@ -417,27 +416,18 @@ def planned_calls(task: ToolReqRealAgentTask, *, model: str) -> list[CellCalls]:
     return [cell_calls(task, channel, model=model) for channel in CHANNELS]
 
 
-class BuiltinRunIdentity(BaseRunIdentity):
-    """What a persisted builtin cell was measured under. The knobs and the two fingerprints are
-    ``BaseRunIdentity``'s; this field is the measured input only THIS grid has.
-
-    ``mechanism_fingerprint`` hashes ``toolreq_builtin.BUILTIN_SETTINGS`` — the ``settings.json``
-    seeded into each repeat's pristine ``CLAUDE_CONFIG_DIR``, which is where ``autoMemoryEnabled``
-    turns the mechanism under test ON. It cannot ride in ``invocation_fingerprint``: it reaches the
-    agent through a FILE, not through argv, so flipping it to ``false`` leaves every command line,
-    the task, and (there being no store) the payload all identical. Without this field a resumed run
-    would serve mechanism-ON numbers as mechanism-OFF measurements — the same defect this grid's
-    cache exists to refuse, one input over.
-
-    Unlike ``ours``, ``builtin`` retrieves nothing from an external store (its memory is the agent's
-    own, established in-band by the first leg), so there is no cross-task payload to hash."""
-
-    mechanism_fingerprint: str
-
-
-class BuiltinCachedResult(BaseCachedResult[BuiltinRunIdentity, BuiltinCell]):
+class BuiltinCachedResult(BaseCachedResult[BaseRunIdentity, BuiltinCell]):
     """One task's persisted builtin result. Every invariant is the shared core's; this class only
-    tells it what the grid is and how its rows classify."""
+    tells it what the grid is and how its rows classify.
+
+    The identity is plain ``BaseRunIdentity``: this grid seeds ``autoMemoryEnabled: True`` into each
+    repeat's ``CLAUDE_CONFIG_DIR`` — the measured input the argv cannot carry — and that surface now
+    rides in the shared ``settings_fingerprint`` (``_identity`` fills it from
+    ``toolreq_builtin.mechanism_fingerprint``), the field this grid first shipped as its own
+    ``mechanism_fingerprint`` and which was generalized onto the base once the none/oracle/ours grid
+    needed the identical protection (mem-mv67o). Unlike ``ours``, ``builtin`` retrieves nothing from
+    an external store, so there is no cross-task payload field to add — the subclass carries none.
+    """
 
     @classmethod
     def expected_cells(cls) -> set[tuple[str, str]]:
@@ -457,13 +447,19 @@ def _identity(
     cli_version: str,
     dry_run: bool,
     invocation_fingerprint: str,
-) -> BuiltinRunIdentity:
-    """The cache identity for one task (see ``BuiltinRunIdentity`` / ``BaseRunIdentity``).
+) -> BaseRunIdentity:
+    """The cache identity for one task (see ``BaseRunIdentity``).
 
     ``invocation_fingerprint`` is not computed here — ``resume_cache.CachePlan.lookup`` derives it
     from ``planned_calls`` and hands it in, refusing an identity that carries any other value, so
-    the grid cannot author the field by a route of its own."""
-    return BuiltinRunIdentity(
+    the grid cannot author the field by a route of its own.
+
+    ``settings_fingerprint`` carries this grid's seeded ``CLAUDE_CONFIG_DIR`` surface — the
+    ``autoMemoryEnabled: True`` dict ``mechanism_fingerprint`` hashes — a measured input the argv
+    cannot carry (it reaches the agent through a FILE). It is the shared base field, filled here
+    from the arm's own ``mechanism_fingerprint`` so the value is unchanged from when it was this
+    grid's private ``mechanism_fingerprint`` field."""
+    return BaseRunIdentity(
         repeats=repeats,
         dry_run=dry_run,
         model=resolved_model,
@@ -471,7 +467,7 @@ def _identity(
         protocol=EXECUTION_PROTOCOL,
         task_fingerprint=task_fingerprint(task),
         invocation_fingerprint=invocation_fingerprint,
-        mechanism_fingerprint=mechanism_fingerprint(),
+        settings_fingerprint=mechanism_fingerprint(),
     )
 
 
@@ -483,7 +479,7 @@ def cache_plan(
     dry_run: bool,
     version_fn: Callable[[], str] | None = None,
     resume: bool = True,
-) -> CachePlan[ToolReqRealAgentTask, BuiltinRunIdentity, BuiltinCell]:
+) -> CachePlan[ToolReqRealAgentTask, BaseRunIdentity, BuiltinCell]:
     """This grid's ``resume_cache.CachePlan`` — what decides whether a persisted cell may be
     reused, read by both ``run_corpus`` and ``remaining_tasks``. Built here rather than assembled at
     each call site, so a knob cannot reach one and miss the other — see ``CachePlan``.
@@ -492,8 +488,8 @@ def cache_plan(
     rule the agent itself runs under, CALLED and never copied. ``run_corpus`` calls it too, for the
     model it hands ``evaluate``; that is the one rule applied twice to one input, not a second copy
     of it, and the two cannot disagree without moving the argv the plan hashes — which the write
-    boundary refuses. ``BuiltinRunIdentity`` refuses an unresolved model outright
-    (``BaseRunIdentity``), so the schema is the backstop rather than a rule restated here.
+    boundary refuses. ``BaseRunIdentity`` refuses an unresolved model outright, so the schema is the
+    backstop rather than a rule restated here.
 
     The claude BINARY is resolved on the same terms (``toolreq_grid.cache_plan``), and matters to
     this grid for an EXTRA reason — ours-vs-builtin is a comparison BETWEEN grids

@@ -52,7 +52,6 @@ semantic judgment.
 
 from __future__ import annotations
 
-import json
 import shutil
 import subprocess
 import tempfile
@@ -72,6 +71,7 @@ from membench.runner.headless_agent import (
     cell_agent,
     render_cell_calls,
     result_event,
+    seed_config_dir,
     serialize_stream,
 )
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome, score_goal_action
@@ -141,7 +141,7 @@ def cell_calls(task: ToolReqRealAgentTask, channel: MemoryChannel, *, model: str
 # The mechanism under test, as the literal settings dict `_seed_config_dir` writes. Named, and
 # EXPORTED, because it is a measured input the command line cannot carry: it reaches the agent
 # through a file in `CLAUDE_CONFIG_DIR`, not through argv. `toolreq_builtin_grid` hashes THIS
-# object into the cache identity (`BuiltinRunIdentity.mechanism_fingerprint`) — flip the flag and
+# object into the cache identity (`BaseRunIdentity.settings_fingerprint`) — flip the flag and
 # every other fingerprint is unmoved (same prompts, same task, no payload), so a resumed run would
 # serve mechanism-ON numbers as mechanism-OFF measurements. A value outside the identity is not
 # defended by the checks around it.
@@ -160,15 +160,13 @@ def _seed_config_dir(config_dir: Path) -> None:
     config dir, so without this seed the paid run would measure native memory riding on
     whatever the CLI's default for that key happens to be.
 
-    It writes ``BUILTIN_SETTINGS`` rather than a literal, so the dict the cache fingerprints is the
-    same object this seeds — one definition, not two that agree today. ``json.dumps`` only
-    fast-paths ``isinstance(obj, dict)``, so the frozen mapping is unwrapped to a plain ``dict``
-    here, at the one call site that needs it — ``digest``'s ``canonicalize`` already branches on
+    Delegates to the shared ``headless_agent.seed_config_dir`` (the config-surface owner both grids
+    seed through), binding this arm's frozen ``BUILTIN_SETTINGS`` — so the dict the cache
+    fingerprints is the same object this seeds, one definition, not two that agree today. The shared
+    seeder unwraps the ``MappingProxyType`` to a plain ``dict`` before ``json.dumps`` (which only
+    fast-paths ``isinstance(obj, dict)``); ``digest``'s ``canonicalize`` already branches on
     ``Mapping``, so ``mechanism_fingerprint`` needs no such unwrap."""
-    config_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "settings.json").write_text(
-        json.dumps(dict(BUILTIN_SETTINGS), indent=2) + "\n", "utf-8"
-    )
+    seed_config_dir(config_dir, BUILTIN_SETTINGS)
 
 
 def mechanism_fingerprint() -> str:

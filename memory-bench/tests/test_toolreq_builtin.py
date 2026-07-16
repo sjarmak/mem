@@ -1047,7 +1047,8 @@ def test_turning_the_mechanism_off_is_a_miss_not_a_reuse(tmp_path: Path, monkeyp
     """`autoMemoryEnabled` IS the mechanism under test, and it reaches the agent through a FILE in
     `CLAUDE_CONFIG_DIR` — not through argv. So flipping it moves NO command line, NO task field and
     (there being no store) no payload: `invocation_fingerprint` structurally cannot see it, which is
-    why the identity carries `mechanism_fingerprint` alongside it.
+    why the identity carries `settings_fingerprint` alongside it (the shared base field this grid
+    fills from `mechanism_fingerprint`).
 
     Without that field a resumed run serves mechanism-ON numbers as mechanism-OFF measurements —
     which is to say, it would report the arm's headline for a setting the arm never ran under."""

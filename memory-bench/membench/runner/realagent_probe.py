@@ -30,8 +30,10 @@ provide (that IS the adapter cost this probe gates).
 from __future__ import annotations
 
 import subprocess
+import tempfile
 from collections.abc import Collection
 from dataclasses import dataclass
+from pathlib import Path
 
 from membench.metrics.scorers import outcome_check_passes
 from membench.runner.headless_agent import (
@@ -40,8 +42,10 @@ from membench.runner.headless_agent import (
     assistant_event,
     cell_agent,
     result_event,
+    seed_config_dir,
     serialize_stream,
 )
+from membench.runner.resume_cache import digest
 from membench.runner.sandbox import paid_sandbox
 from membench.runtime import StepContext
 from membench.schemas.sequence import ExpectedAction, OutcomeCheck, SequenceStep
@@ -180,6 +184,28 @@ def simulated_runner(current_values: Collection[str]) -> Runner:
     return run
 
 
+# The config surface this grid seeds into every cell's fresh ``CLAUDE_CONFIG_DIR`` — the settings
+# the real ``claude -p`` reads its ``~/.claude`` from. Native memory is a CONFOUND for the
+# surfaced-memory arms (none/oracle/ours measure whether the PROMPT drove the tool; the agent's own
+# native-memory feature would be a second, uncontrolled channel), so it is declared OFF here rather
+# than left to whichever ambient home launched the sweep. It is a measured input the command line
+# cannot carry — it reaches the agent through a FILE — so ``toolreq_grid`` hashes it into the cache
+# identity (``resume_cache.BaseRunIdentity.settings_fingerprint``); flip this dict and every other
+# fingerprint is unmoved (same prompts, same task, no store), so a resumed run would otherwise serve
+# native-memory-OFF numbers as ON measurements. The builtin arm is the mirror: it seeds the SAME key
+# ``True`` because native memory IS its mechanism under test (``toolreq_builtin.BUILTIN_SETTINGS``).
+PROBE_SETTINGS: dict[str, object] = {"autoMemoryEnabled": False}
+
+
+def probe_settings_fingerprint() -> str:
+    """The digest of the settings this grid seeds into every repeat's ``CLAUDE_CONFIG_DIR``.
+
+    Reads the module global at CALL time — so the identity cannot hold a stale by-value copy of the
+    dict from import, and the value hashed is by construction the value ``run_arm`` writes. The
+    mirror of ``toolreq_builtin.mechanism_fingerprint`` (same base field, same reason)."""
+    return digest(PROBE_SETTINGS)
+
+
 def run_arm(
     *,
     arm: str,
@@ -204,6 +230,16 @@ def run_arm(
     neutral — see ``sandbox`` for what that means and why the check cannot live in the cwd
     (mem-rx11w).
 
+    Each repeat also mints a fresh, seeded ``CLAUDE_CONFIG_DIR`` (``PROBE_SETTINGS`` via
+    ``seed_config_dir``) and hands it to ``cell_agent`` as ``env``, so the real ``claude -p`` reads
+    its ``~/.claude`` from that empty dir rather than inheriting the operator's ambient home — the
+    mem-mv67o vector, where two account homes with different ``autoMemoryEnabled`` shared one cache.
+    ``env``/``cwd`` never appear in the argv, so this moves no ``invocation_fingerprint``; the
+    seeded surface is a cache-identity input through ``settings_fingerprint`` instead
+    (``toolreq_grid``).
+    The seed happens on the dry-run path too: it costs nothing the simulated runner reads, and
+    keeping the one code path is what makes the fresh-config-dir guarantee testable for free.
+
     The invocations are RECORDED off the CLI seam, not reported by the agent, and NOT returned by
     this function: it opens its per-cell ``RecordingRunner`` through the caller's ``recorder`` and
     hands back only the score. ``run_cached_corpus`` OWNS the recorder and reads ``recorded()``
@@ -217,8 +253,19 @@ def run_arm(
     )
     passes = 0
     for i in range(repeats):
-        with paid_sandbox(f"toolreq-{arm}-") as sandbox:
-            agent = cell_agent(model=model, channel=channel, runner=cell_runner, cwd=str(sandbox))
+        with (
+            paid_sandbox(f"toolreq-{arm}-") as sandbox,
+            tempfile.TemporaryDirectory(prefix=f"toolreq-{arm}-config-") as config_dir_str,
+        ):
+            config_dir = Path(config_dir_str)
+            seed_config_dir(config_dir, PROBE_SETTINGS)
+            agent = cell_agent(
+                model=model,
+                channel=channel,
+                runner=cell_runner,
+                cwd=str(sandbox),
+                env={"CLAUDE_CONFIG_DIR": str(config_dir)},
+            )
             ctx = StepContext(
                 trial_id=f"{arm}-{channel.value}-{i}",
                 session_id=f"{arm}-{channel.value}",

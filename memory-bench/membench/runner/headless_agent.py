@@ -38,6 +38,7 @@ import subprocess
 from collections.abc import Mapping, Sequence
 from dataclasses import MISSING, dataclass, field
 from enum import StrEnum
+from pathlib import Path
 from typing import NoReturn
 
 from membench.armcompare import _iter_tool_use_blocks
@@ -586,6 +587,32 @@ def _render_only_runner(argv: Sequence[str], **kwargs: object) -> NoReturn:
         "render_cell_calls built this agent to render argv only; it must never run a claude -p. "
         "An execution path needs a RecordingRunner, not this render sentinel."
     )
+
+
+def seed_config_dir(config_dir: Path, settings: Mapping[str, object]) -> None:
+    """Create ``config_dir`` if needed and write ``settings`` as its ``settings.json``.
+
+    THE shared config-surface seeder, imported by every paid grid that runs a real ``claude -p``
+    (the builtin arm, the none/oracle/ours arms). A cell passes the seeded dir as
+    ``env={"CLAUDE_CONFIG_DIR": ...}`` to ``cell_agent`` so the agent reads its USER/GLOBAL config
+    (``~/.claude``: settings.json, CLAUDE.md, hooks, MCP) from THIS empty dir rather than inheriting
+    whichever ambient home launched the sweep — the mem-mv67o vector, where two account homes with
+    different ``autoMemoryEnabled`` shared one cache because nothing in the identity disagreed.
+
+    ``settings`` is a MEASURED INPUT the command line cannot carry: it reaches the agent through
+    this FILE, not through argv, so a grid must fingerprint it separately
+    (``resume_cache.BaseRunIdentity.settings_fingerprint``). Each grid declares the dict it seeds
+    (the builtin arm's ``autoMemoryEnabled: True``, the probe's ``autoMemoryEnabled: False``) and
+    seeds it through here, so the dict written and the dict hashed are one thing. ``settings`` is
+    unwrapped to a plain ``dict`` before ``json.dumps``, which only fast-paths ``isinstance(obj,
+    dict)`` and raises ``TypeError`` on the frozen ``MappingProxyType`` the builtin arm passes
+    (``toolreq_builtin.BUILTIN_SETTINGS``).
+
+    It scopes ONLY ``~/.claude``: per the Claude Code docs the CLI also walks the cwd's ANCESTORS
+    for ``CLAUDE.md`` and reads its own ``TMPDIR``, neither of which a seeded ``CLAUDE_CONFIG_DIR``
+    isolates (mem-rx11w). Those are separate inputs, out of scope here."""
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "settings.json").write_text(json.dumps(dict(settings), indent=2) + "\n", "utf-8")
 
 
 def cell_agent(

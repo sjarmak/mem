@@ -18,9 +18,10 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import subprocess
 import sys
 from collections import OrderedDict, defaultdict
-from collections.abc import Callable, Mapping, MutableMapping
+from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from pathlib import Path
 from typing import Annotated, Any, ForwardRef, NoReturn, get_args, get_origin
 
@@ -29,9 +30,17 @@ from pydantic import BaseModel, Field, ValidationError
 
 from membench.generators.toolreq_bundle_adapter import _goal_step
 from membench.metrics.scorers import states_value
+from membench.runner import realagent_probe as probe
 from membench.runner import toolreq_grid as grid
-from membench.runner.headless_agent import CellCalls, CellRecorder, Leg, render_cell_calls
-from membench.runner.resume_cache import invocation_digest, load_cached
+from membench.runner.headless_agent import (
+    CellCalls,
+    CellRecorder,
+    Leg,
+    MemoryChannel,
+    render_cell_calls,
+    seed_config_dir,
+)
+from membench.runner.resume_cache import digest, invocation_digest, load_cached
 from membench.runner.toolreq_realagent import (
     ToolReqRealAgentTask,
     _reset_store,
@@ -46,6 +55,7 @@ from membench.schemas.sequence import (
     OutcomeCheck,
     SequenceStep,
 )
+from membench.spawn import Runner
 from tests.paths import DIST_MAIN, MEM_BIN, require_mem_cli
 from tests.toolreq_helpers import (
     CURRENT,
@@ -737,6 +747,111 @@ def test_upgrading_the_cli_between_runs_is_a_miss_not_a_relabel(
     assert (third["executed"], third["reused"]) == (0, 1)
 
 
+def test_flipping_the_probe_settings_is_a_miss_not_a_reuse(tmp_path: Path, monkeypatch) -> None:
+    """``PROBE_SETTINGS`` (native memory declared OFF) is a measured input the 3-arm grid seeds into
+    every cell's fresh ``CLAUDE_CONFIG_DIR`` — and it reaches the agent through a FILE, not argv. So
+    flipping it moves NO command line, NO task field and (there being no store) no payload:
+    ``invocation_fingerprint`` structurally cannot see it, which is why ``RunIdentity`` carries
+    ``settings_fingerprint`` (from ``probe_settings_fingerprint``) alongside it.
+
+    This is mem-mv67o at the 3-arm grid's altitude — the mirror of the builtin grid's
+    ``test_turning_the_mechanism_off_is_a_miss_not_a_reuse``. Without the field a resumed sweep
+    would serve numbers measured under one native-memory setting as measurements of another."""
+    sequences, tasks = corpus_one(tmp_path)
+    out = tmp_path / "out"
+    store_path = tmp_path / "store.db"
+    first = _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
+    assert (first["executed"], first["reused"]) == (1, 0)
+
+    monkeypatch.setattr(probe, "PROBE_SETTINGS", {"autoMemoryEnabled": True})
+    second = _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
+    assert (second["executed"], second["reused"]) == (1, 0), "served the native-memory-OFF numbers"
+
+    # ...and the same settings still resume: the field must not make every run a miss.
+    third = _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
+    assert (third["executed"], third["reused"]) == (0, 1)
+
+
+def test_the_probe_seeds_the_settings_its_identity_fingerprints(tmp_path: Path) -> None:
+    """One definition, not two that agree today: the dict the 3-arm grid WRITES into every cell's
+    ``CLAUDE_CONFIG_DIR`` (``seed_config_dir(config_dir, PROBE_SETTINGS)`` inside ``run_arm``) must
+    be the dict its identity HASHES (``probe_settings_fingerprint``). The mirror of the builtin
+    grid's
+    ``test_the_seeded_settings_are_the_ones_the_identity_fingerprints``."""
+    config_dir = tmp_path / "config"
+    seed_config_dir(config_dir, probe.PROBE_SETTINGS)
+    seeded = json.loads((config_dir / "settings.json").read_text(encoding="utf-8"))
+    assert seeded == probe.PROBE_SETTINGS == {"autoMemoryEnabled": False}
+    assert probe.probe_settings_fingerprint() == digest(seeded)
+
+
+def test_run_arm_seeds_a_fresh_config_dir_never_the_ambient_home(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """THE bead reproduction, closed by construction. ``run_arm`` must hand ``claude -p`` a fresh,
+    seeded ``CLAUDE_CONFIG_DIR`` per repeat, so the agent reads its ``~/.claude`` (settings.json,
+    CLAUDE.md, hooks, MCP) from an empty dir the grid controls — NOT from whichever operator home
+    launched the sweep. Before the fix ``run_arm`` left ``env`` unset, so ``claude -p`` inherited
+    the ambient ``CLAUDE_CONFIG_DIR`` and two account homes with different ``autoMemoryEnabled``
+    shared one cache.
+
+    ``env`` never reaches argv, so the recorded invocation is unchanged; the capture is off the
+    runner seam. ``settings.json`` is read INSIDE the runner because ``run_arm`` mints the dir as a
+    ``TemporaryDirectory`` that is already gone by the time it returns."""
+    # An ambient home the launching shell "exported" — an inherited config would surface as this.
+    ambient = tmp_path / "ambient-home"
+    ambient.mkdir()
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(ambient))
+
+    seen: list[dict[str, object]] = []
+    real_simulated = probe.simulated_runner
+
+    def _capturing(current_values: Sequence[str]) -> Runner:
+        inner = real_simulated(current_values)
+
+        def run(argv: Sequence[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            env = kwargs.get("env")
+            config_dir: str | None = None
+            seeded: object = None
+            if isinstance(env, Mapping):
+                raw = env.get("CLAUDE_CONFIG_DIR")
+                if isinstance(raw, str):
+                    config_dir = raw
+                    settings_path = Path(raw) / "settings.json"
+                    if settings_path.is_file():
+                        seeded = json.loads(settings_path.read_text(encoding="utf-8"))
+            seen.append({"config_dir": config_dir, "seeded": seeded})
+            return inner(argv, **kwargs)
+
+        return run
+
+    monkeypatch.setattr(probe, "simulated_runner", _capturing)
+
+    task = adapt_sequence(toolreq_seq())
+    probe.run_arm(
+        arm="none",
+        step=task.goal_step,
+        memory={},
+        channel=MemoryChannel.RECALLED,
+        repeats=2,
+        model="",
+        dry_run=True,
+        current_values=task.current_opaque_values,
+        recorder=CellRecorder(),
+    )
+
+    assert len(seen) == 2, "each repeat runs the agent once"
+    for call in seen:
+        config_dir = call["config_dir"]
+        assert (
+            config_dir is not None
+        ), "run_arm left env unset — claude -p inherited the ambient home"
+        assert Path(config_dir) != ambient, "run_arm handed the agent the operator's ambient home"
+        assert call["seeded"] == {"autoMemoryEnabled": False}, "native memory not declared OFF"
+    # Fresh PER REPEAT: a shared config dir would let native-memory state bleed across trials.
+    assert seen[0]["config_dir"] != seen[1]["config_dir"]
+
+
 def test_corrupt_cache_file_is_re_executed_not_crashed(tmp_path: Path) -> None:
     sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
@@ -1115,6 +1230,7 @@ def test_a_short_grid_under_the_empty_flag_is_a_miss_not_an_escaping_keyerror(
         protocol=grid.EXECUTION_PROTOCOL,
         task_fingerprint="fp-task",
         invocation_fingerprint="fp-invocation",
+        settings_fingerprint="fp-settings",
         ours_payload_fingerprint="fp-payload",
         ours_retrieval_empty=True,  # the flag the subclass validator keys on...
     )
@@ -1314,6 +1430,7 @@ def test_repeats_zero_is_refused_and_never_caches_a_0_of_0_verdict(tmp_path: Pat
             arms=list(grid.ARMS),
             protocol=grid.EXECUTION_PROTOCOL,
             task_fingerprint="x",
+            settings_fingerprint="x",
             ours_payload_fingerprint="x",
             invocation_fingerprint="x",
             ours_retrieval_empty=False,

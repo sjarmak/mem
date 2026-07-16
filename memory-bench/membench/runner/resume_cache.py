@@ -197,7 +197,19 @@ class BaseRunIdentity(BaseModel):
     moving no task field, no payload and no prompt.
 
     It does NOT subsume ``task_fingerprint`` and is carried ALONGSIDE it, never in place of it: the
-    scorer grades fields no command line mentions."""
+    scorer grades fields no command line mentions.
+
+    ``settings_fingerprint`` hashes the ``settings.json`` a grid seeds into every cell's fresh
+    ``CLAUDE_CONFIG_DIR`` (``headless_agent.seed_config_dir``) — the config surface the real
+    ``claude -p`` reads its ``~/.claude`` from. It is the counterpart of ``invocation_fingerprint``
+    for a measured input the argv CANNOT carry: the settings reach the agent through a FILE, not the
+    command line, so ``autoMemoryEnabled`` (and, generalizing, any seeded config) moves a result
+    while every other fingerprint stays identical — same prompts, same task, same (or absent)
+    payload. Without it a resumed sweep serves numbers measured under one config surface as
+    measurements of another; the builtin grid shipped this field first as ``mechanism_fingerprint``
+    and it is generalized here so every grid that seeds a config dir declares what it seeded by
+    construction. Each grid supplies the digest of the dict IT seeds; a grid that seeds nothing has
+    no honest value to carry and this field would not apply to it (every current grid seeds one)."""
 
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 
@@ -208,6 +220,7 @@ class BaseRunIdentity(BaseModel):
     protocol: int
     task_fingerprint: str
     invocation_fingerprint: str
+    settings_fingerprint: str
 
     @model_validator(mode="after")
     def _a_paid_measurement_names_the_binary_it_was_made_on(self) -> Self:

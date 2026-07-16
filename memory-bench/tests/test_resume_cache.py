@@ -95,6 +95,7 @@ def _identity(**overrides: object) -> _Identity:
         "protocol": 1,
         "task_fingerprint": "fp-task",
         "invocation_fingerprint": invocation_digest(_calls()),
+        "settings_fingerprint": "fp-settings",
     }
     return _Identity(**(fields | overrides))  # type: ignore[arg-type]
 

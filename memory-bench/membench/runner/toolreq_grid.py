@@ -36,7 +36,7 @@ from membench.runner.headless_agent import (
     resolve_cli_version,
     resolve_model,
 )
-from membench.runner.realagent_probe import ArmOutcome, run_arm
+from membench.runner.realagent_probe import ArmOutcome, probe_settings_fingerprint, run_arm
 from membench.runner.resume_cache import (
     LEAK,
     SEPARATES,
@@ -399,7 +399,10 @@ def worst_case_paid_call_count(tasks: Sequence[ToolReqRealAgentTask], *, repeats
 
 class RunIdentity(BaseRunIdentity):
     """What a persisted cell was measured under. The shared knobs and fingerprints are
-    ``BaseRunIdentity``'s; these three fields are the measured inputs only THIS grid has.
+    ``BaseRunIdentity``'s — including ``settings_fingerprint``, which pins the
+    ``CLAUDE_CONFIG_DIR`` this grid seeds each cell under (``realagent_probe.PROBE_SETTINGS``,
+    native memory declared OFF), the field that closes mem-mv67o's ambient-``~/.claude`` cache
+    collision. These three fields are the measured inputs only THIS grid has.
 
     ``ours_payload_fingerprint`` is the retrieval the ``ours`` arm actually surfaced — cross-task,
     so it moves when nothing about the queried task did (see ``payload_fingerprint``).
@@ -500,6 +503,7 @@ def _identity(
         protocol=EXECUTION_PROTOCOL,
         task_fingerprint=task_fingerprint(task),
         invocation_fingerprint=invocation_fingerprint,
+        settings_fingerprint=probe_settings_fingerprint(),
         ours_payload_fingerprint=payload_fingerprint(ours_payload),
         ours_retrieval_empty=not any(cell.arm == RETRIEVING_ARM for cell in planned),
     )
