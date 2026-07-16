@@ -25,7 +25,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import pytest
@@ -36,6 +36,7 @@ from membench.runner import toolreq_builtin_grid as grid
 from membench.runner.headless_agent import (
     ENV_MODEL,
     CellCalls,
+    CellRecorder,
     HeadlessAgentError,
     Leg,
     MemoryChannel,
@@ -44,7 +45,7 @@ from membench.runner.headless_agent import (
     render_cell_calls,
 )
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome
-from membench.runner.resume_cache import Evaluation, invocation_digest
+from membench.runner.resume_cache import invocation_digest
 from membench.runner.toolreq_builtin import (
     ARM,
     SIMULATED_TOPIC_FILE,
@@ -206,6 +207,22 @@ def _stream_json_runner(
     return run
 
 
+def _noop_cli_runner(argv: Sequence[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(list(argv), returncode=0, stdout="", stderr="")
+
+
+def _record_plan(
+    recorder: CellRecorder, task, channel: MemoryChannel, repeats: int, model: str = ""
+):
+    """Record the plan's invocations THROUGH the recorder — the real arm records off the CLI seam,
+    so a double must too, or ``run_cached_corpus`` (which hashes what the recorder SAW, not a value
+    the double returned — mem-9gvej) refuses the cell as a plan/execution mismatch."""
+    runner = recorder.cell(_noop_cli_runner, arm=ARM, channel=channel, repeats=repeats)
+    for _ in range(repeats):
+        for argv in cell_calls(task, channel, model=model).calls:
+            runner(argv)
+
+
 def _builtin_arm(
     seen: list[str] | None = None,
     *,
@@ -225,9 +242,22 @@ def _builtin_arm(
     a missed one would leave a double silently disagreeing with the write boundary it must satisfy.
     Mirrors `test_toolreq_realagent._spy_run_arm`, including its optional `seen` recorder."""
 
-    def run(task, *, repeats: int, channel: MemoryChannel, model: str = "", **_kwargs):
+    def run(
+        task,
+        *,
+        repeats: int,
+        channel: MemoryChannel,
+        recorder: CellRecorder,
+        model: str = "",
+        **_kwargs,
+    ):
         if seen is not None:
             seen.append(channel.value)  # a real paid cell would spawn `claude -p` here
+        # Record the plan's invocations, honouring the model the grid resolved exactly as the real
+        # arm does — else the recorded argv omits `--model` while a pinned identity carries it, and
+        # the write boundary rejects the cell as a plan/execution mismatch (mem-bzv2p pins a model
+        # on paid runs).
+        _record_plan(recorder, task, channel, repeats, model=model)
         return (
             ArmOutcome(
                 arm=ARM, channel=channel.value, passes=repeats if passes else 0, runs=repeats
@@ -237,10 +267,6 @@ def _builtin_arm(
                 leaked=repeats if leaked else 0,
                 runs=repeats,
             ),
-            # Honour the model the grid resolved, exactly as the real arm does — else the recorded
-            # argv omits `--model` while a pinned identity carries it, and the write boundary
-            # rejects the cell as a plan/execution mismatch (mem-bzv2p pins a model on paid runs).
-            cell_calls(task, channel, model=model),
         )
 
     return run
@@ -381,8 +407,13 @@ def test_simulated_runner_goal_call_passes_iff_marker_present(tmp_path: Path) ->
 
 def test_dry_run_arm_engages_and_passes_every_repeat() -> None:
     task = _task()
-    outcome, diag, _calls = run_builtin_arm(
-        task, repeats=3, model="", dry_run=True, channel=MemoryChannel.RECALLED
+    outcome, diag = run_builtin_arm(
+        task,
+        repeats=3,
+        model="",
+        dry_run=True,
+        channel=MemoryChannel.RECALLED,
+        recorder=CellRecorder(),
     )
     assert outcome.arm == ARM
     assert outcome.passes == outcome.runs == 3
@@ -402,21 +433,27 @@ def test_establish_tool_calls_are_counted_not_discarded() -> None:
         tool_input={"command": "ls"},
     )
 
-    _outcome, diag, _calls = run_builtin_arm(
+    _outcome, diag = run_builtin_arm(
         task,
         repeats=2,
         model="",
         dry_run=False,
         channel=MemoryChannel.RECALLED,
         runner=bash_happy_runner,
+        recorder=CellRecorder(),
     )
     assert diag.establish_tool_calls == 2  # one Bash call per repeat's establish leg
 
 
 def test_dry_run_arm_channel_recorded_on_outcome() -> None:
     task = _task()
-    outcome, _diag, _calls = run_builtin_arm(
-        task, repeats=1, model="", dry_run=True, channel=MemoryChannel.TRUSTED
+    outcome, _diag = run_builtin_arm(
+        task,
+        repeats=1,
+        model="",
+        dry_run=True,
+        channel=MemoryChannel.TRUSTED,
+        recorder=CellRecorder(),
     )
     assert outcome.channel == "trusted"
 
@@ -437,7 +474,13 @@ def test_goal_call_is_bare_under_either_channel(channel: MemoryChannel) -> None:
         return subprocess.CompletedProcess(list(argv), returncode=0, stdout="", stderr="")
 
     run_builtin_arm(
-        task, repeats=1, model="", dry_run=False, channel=channel, runner=recording_runner
+        task,
+        repeats=1,
+        model="",
+        dry_run=False,
+        channel=channel,
+        runner=recording_runner,
+        recorder=CellRecorder(),
     )
     establish_prompt, goal_prompt = prompts
     assert value in establish_prompt  # establish is handed the fact...
@@ -467,6 +510,7 @@ def test_fresh_sandbox_and_config_dir_per_repeat() -> None:
         dry_run=False,
         channel=MemoryChannel.RECALLED,
         runner=recording_runner,
+        recorder=CellRecorder(),
     )
     # 2 calls (establish + goal) per repeat, both sharing the SAME pair within a repeat.
     assert len(seen) == 10
@@ -551,13 +595,14 @@ def test_goal_leg_cannot_scavenge_a_cwd_file_the_establish_leg_left_behind() -> 
     task = _task()
     (current_opaque,) = task.current_opaque_values
 
-    outcome, diag, _calls = run_builtin_arm(
+    outcome, diag = run_builtin_arm(
         task,
         repeats=2,
         model="",
         dry_run=False,
         channel=MemoryChannel.RECALLED,
         runner=_cwd_scavenging_runner(current_opaque),
+        recorder=CellRecorder(),
     )
     assert outcome.passes == 0  # the leftover file is gone: nothing to scavenge
     assert diag.engaged == 0  # and this runner never engaged native memory at all
@@ -582,6 +627,7 @@ def test_cwd_wipe_preserves_the_sandbox_dir_so_the_memory_path_survives() -> Non
         dry_run=False,
         channel=MemoryChannel.RECALLED,
         runner=recording_runner,
+        recorder=CellRecorder(),
     )
     assert seen_cwds[0] == seen_cwds[1]  # establish and goal still share ONE cwd path
 
@@ -596,13 +642,14 @@ def test_establish_tool_names_are_recorded_not_just_counted() -> None:
         tool_name="Bash",
         tool_input={"command": "ls"},
     )
-    _outcome, diag, _calls = run_builtin_arm(
+    _outcome, diag = run_builtin_arm(
         task,
         repeats=2,
         model="",
         dry_run=False,
         channel=MemoryChannel.RECALLED,
         runner=bash_happy_runner,
+        recorder=CellRecorder(),
     )
     assert diag.establish_tool_calls == 2
     assert diag.establish_tool_names == ("Bash",)
@@ -635,6 +682,7 @@ def test_fresh_config_dir_turns_native_memory_on() -> None:
         dry_run=False,
         channel=MemoryChannel.RECALLED,
         runner=settings_recording_runner,
+        recorder=CellRecorder(),
     )
     assert seen, "the runner never saw a config dir"
     assert all(s.get("autoMemoryEnabled") is True for s in seen)
@@ -647,8 +695,14 @@ def test_leaked_pass_without_engagement_is_flagged_not_counted_as_clean() -> Non
     task = _task()
     (current_opaque,) = task.current_opaque_values
     runner = _leaking_runner_for(current_opaque)
-    outcome, diag, _calls = run_builtin_arm(
-        task, repeats=2, model="", dry_run=False, channel=MemoryChannel.RECALLED, runner=runner
+    outcome, diag = run_builtin_arm(
+        task,
+        repeats=2,
+        model="",
+        dry_run=False,
+        channel=MemoryChannel.RECALLED,
+        runner=runner,
+        recorder=CellRecorder(),
     )
     assert outcome.passes == 2  # score_goal_action sees a genuine Write of the current value
     assert diag.engaged == 0  # but native memory never actually persisted anything
@@ -696,7 +750,7 @@ def _cell(
 
 def test_dry_run_evaluate_task_separates_both_channels() -> None:
     task = _task()
-    cells = grid.evaluate_task(task, repeats=2, model="", dry_run=True).outcomes
+    cells = grid.evaluate_task(task, repeats=2, model="", dry_run=True, recorder=CellRecorder())
     assert {cell.channel for cell in cells} == {"recalled", "trusted"}
     for cell in cells:
         assert cell.passes == cell.runs == 2
@@ -828,8 +882,11 @@ def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -
     def _spy(task, **_kwargs):
         calls["n"] += 1
         # dry_run simulates (never spends) but keeps the grid's resolved model, so the recorded
-        # argv matches a pinned paid identity's invocation_fingerprint (mem-bzv2p).
-        return real_eval(task, repeats=1, model=_kwargs["model"], dry_run=True)
+        # argv matches a pinned paid identity's invocation_fingerprint (mem-bzv2p). The recorder is
+        # owned by run_cached_corpus and threaded straight through.
+        return real_eval(
+            task, repeats=1, model=_kwargs["model"], dry_run=True, recorder=_kwargs["recorder"]
+        )
 
     monkeypatch.setattr(grid, "evaluate_task", _spy)
     paid = grid.run_corpus(
@@ -856,8 +913,11 @@ def test_upgrading_the_cli_between_runs_is_a_miss_not_a_relabel(
 
     def _spy(task, **_kwargs):
         # dry_run simulates (never spends) but keeps the grid's resolved model, so the recorded
-        # argv matches a pinned paid identity's invocation_fingerprint (mem-bzv2p).
-        return real_eval(task, repeats=1, model=_kwargs["model"], dry_run=True)
+        # argv matches a pinned paid identity's invocation_fingerprint (mem-bzv2p). The recorder is
+        # owned by run_cached_corpus and threaded straight through.
+        return real_eval(
+            task, repeats=1, model=_kwargs["model"], dry_run=True, recorder=_kwargs["recorder"]
+        )
 
     monkeypatch.setattr(grid, "evaluate_task", _spy)
     first = grid.run_corpus(
@@ -1012,10 +1072,12 @@ def test_the_fingerprint_is_the_invocations_the_arm_actually_sends(tmp_path: Pat
     beside the fingerprint and let it drift by one field, and this goes RED before any money is
     spent."""
     task = _corpus_one(tmp_path)[0]
-    sent = [
-        run_builtin_arm(task, repeats=2, model="", dry_run=True, channel=channel)[2]
-        for channel in grid.CHANNELS
-    ]
+    sent = []
+    for channel in grid.CHANNELS:
+        recorder = CellRecorder()
+        run_builtin_arm(task, repeats=2, model="", dry_run=True, channel=channel, recorder=recorder)
+        (cell,) = recorder.recorded()  # what the CLI seam actually saw, folded to one cycle
+        sent.append(cell)
     assert invocation_digest(sent) == invocation_digest(grid.planned_calls(task, model=""))
 
 
@@ -1099,16 +1161,17 @@ def test_a_plan_that_drifts_from_its_arm_refuses_to_publish(tmp_path: Path, monk
     assert not (out / "w-0.json").exists(), "a refused measurement was published anyway"
 
 
-def _not_engaged_grid(task: ToolReqRealAgentTask, **_kwargs: object) -> Evaluation:
+def _not_engaged_grid(
+    task: ToolReqRealAgentTask, *, repeats: int, recorder: CellRecorder, **_kwargs: object
+) -> list[grid.BuiltinCell]:
     """An `evaluate_task` stand-in returning a full but NON-separating grid, so a cache HIT and a
     cache MISS yield DIFFERENT headline numbers and the assertion can tell them apart instead of
-    accidentally agreeing with the bug. It reports the invocations the PLAN declares: it is standing
-    in for an arm that ran, not for one that drifted (a double reporting anything else is refused at
-    the cache's write boundary, which is that check doing its job)."""
-    return Evaluation(
-        outcomes=[_cell(channel.value, passes=0, runs=2, engaged=0) for channel in grid.CHANNELS],
-        calls=[cell_calls(task, channel, model="") for channel in grid.CHANNELS],
-    )
+    accidentally agreeing with the bug. It RECORDS the invocations the PLAN declares through the
+    recorder: it stands in for an arm that ran, not for one that drifted (a double that recorded
+    anything else is refused at the cache's write boundary, which is that check doing its job)."""
+    for channel in grid.CHANNELS:
+        _record_plan(recorder, task, channel, repeats)
+    return [_cell(channel.value, passes=0, runs=2, engaged=0) for channel in grid.CHANNELS]
 
 
 def test_a_partial_cell_grid_never_credits_a_both_channel_separation(

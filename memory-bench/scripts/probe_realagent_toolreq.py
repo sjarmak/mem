@@ -37,7 +37,11 @@ from __future__ import annotations
 import argparse
 import os
 
-from membench.runner.headless_agent import MemoryChannel, a_paid_run_needs_a_model
+from membench.runner.headless_agent import (
+    CellRecorder,
+    MemoryChannel,
+    a_paid_run_needs_a_model,
+)
 from membench.runner.realagent_probe import (
     DEFAULT_CURRENT_VALUE,
     ArmOutcome,
@@ -85,9 +89,9 @@ def _run_arm(
     """This probe's single-subject arm run: delegate to the shared ``run_arm`` with the
     probe's ``none``/``oracle`` memory and its one hardcoded current value.
 
-    The probe has no resume cache, so it drops the cycle of invocations ``run_arm`` records for the
-    grids' cache identity (``realagent_probe.run_arm``) and keeps only the score."""
-    outcome, _calls = run_arm(
+    The probe has no resume cache, so it passes a throwaway ``CellRecorder`` (never read back) and
+    keeps only the score (``realagent_probe.run_arm``)."""
+    outcome = run_arm(
         arm=arm,
         step=step,
         memory=_arm_memory(arm),
@@ -96,6 +100,7 @@ def _run_arm(
         model=model,
         dry_run=dry_run,
         current_values=[DEFAULT_CURRENT_VALUE],
+        recorder=CellRecorder(),
     )
     return outcome
 

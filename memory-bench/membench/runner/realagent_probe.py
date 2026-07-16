@@ -37,11 +37,9 @@ from dataclasses import dataclass
 
 from membench.metrics.scorers import outcome_check_passes
 from membench.runner.headless_agent import (
-    CellCalls,
+    CellRecorder,
     MemoryChannel,
-    RecordingRunner,
     cell_agent,
-    one_cycle,
 )
 from membench.runtime import StepContext
 from membench.schemas.sequence import ExpectedAction, OutcomeCheck, SequenceStep
@@ -200,9 +198,10 @@ def run_arm(
     model: str,
     dry_run: bool,
     current_values: Collection[str],
-) -> tuple[ArmOutcome, CellCalls]:
+    recorder: CellRecorder,
+) -> ArmOutcome:
     """Run one (arm, channel) cell ``repeats`` times, score each goal action externally, and return
-    the cycle of ``claude -p`` invocations it ACTUALLY made alongside the score.
+    the score.
 
     ``memory`` is the surfaced memory the arm shows the agent ({} for ``none``, the id-exact
     current value(s) for ``oracle``); the arm difference lives entirely in that dict, never
@@ -210,16 +209,21 @@ def run_arm(
     token). A fresh neutral sandbox per repeat keeps ``config.json`` from bleeding across
     trials and keeps the agent out of any mem worktree.
 
-    The invocations are RECORDED off the CLI seam (``RecordingRunner``), not reported by the
-    agent: the runner sees every call this cell spawns whether or not anyone declared it, which
-    is what a ``prompt`` field on the step result could not do (see ``RecordingRunner``). The
-    cache checks them against the identity at its write boundary, so a cell cannot be published
-    under a fingerprint describing a command line it never sent."""
-    recorder = RecordingRunner(simulated_runner(current_values) if dry_run else subprocess.run)
+    The invocations are RECORDED off the CLI seam, not reported by the agent, and NOT returned by
+    this function: it opens its per-cell ``RecordingRunner`` through the caller's ``recorder`` and
+    hands back only the score. ``run_cached_corpus`` OWNS the recorder and reads ``recorded()``
+    itself, so a cell cannot be published under a fingerprint describing a command line it never
+    sent, and no caller can substitute a recording the seam did not take (see ``CellRecorder``)."""
+    cell_runner = recorder.cell(
+        simulated_runner(current_values) if dry_run else subprocess.run,
+        arm=arm,
+        channel=channel,
+        repeats=repeats,
+    )
     passes = 0
     for i in range(repeats):
         with tempfile.TemporaryDirectory(prefix=f"toolreq-{arm}-") as sandbox:
-            agent = cell_agent(model=model, channel=channel, runner=recorder, cwd=sandbox)
+            agent = cell_agent(model=model, channel=channel, runner=cell_runner, cwd=sandbox)
             ctx = StepContext(
                 trial_id=f"{arm}-{channel.value}-{i}",
                 session_id=f"{arm}-{channel.value}",
@@ -228,5 +232,4 @@ def run_arm(
             result = agent.run_step(step, dict(memory), ctx)
         if score_goal_action(step, tool_calls=result.tool_calls, final_answer=result.final_answer):
             passes += 1
-    outcome = ArmOutcome(arm=arm, channel=channel.value, runs=repeats, passes=passes)
-    return outcome, one_cycle(recorder.calls, repeats=repeats, arm=arm, channel=channel)
+    return ArmOutcome(arm=arm, channel=channel.value, runs=repeats, passes=passes)

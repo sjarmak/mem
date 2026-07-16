@@ -31,6 +31,7 @@ from pydantic import Field, model_validator
 from membench.runner.headless_agent import (
     CHANNELS,
     CellCalls,
+    CellRecorder,
     HeadlessAgentError,
     resolve_cli_version,
     resolve_model,
@@ -40,7 +41,6 @@ from membench.runner.resume_cache import (
     BaseCachedResult,
     BaseCellOutcome,
     BaseRunIdentity,
-    Evaluation,
     corpus_summary,
     render_verdict,
     run_cached_corpus,
@@ -178,20 +178,19 @@ def _cell(outcome: ArmOutcome, diagnostics: BuiltinDiagnostics) -> BuiltinCell:
 
 
 def evaluate_task(
-    task: ToolReqRealAgentTask, *, repeats: int, model: str, dry_run: bool
-) -> Evaluation:
-    """Run every channel cell for one task, and hand back the invocations they made alongside the
-    rows they scored — the cache checks the second against this run's identity before it will
-    publish the first (``resume_cache.run_cached_corpus``)."""
+    task: ToolReqRealAgentTask, *, repeats: int, model: str, dry_run: bool, recorder: CellRecorder
+) -> list[BuiltinCell]:
+    """Run every channel cell for one task and hand back the rows they scored. The invocations are
+    recorded THROUGH the ``recorder`` — ``run_cached_corpus`` owns it and checks the recording
+    against this run's identity before it will publish (``resume_cache.run_cached_corpus``); this
+    function never returns the invocations."""
     outcomes: list[BuiltinCell] = []
-    calls: list[CellCalls] = []
     for channel in CHANNELS:
-        outcome, diagnostics, sent = run_builtin_arm(
-            task, repeats=repeats, model=model, dry_run=dry_run, channel=channel
+        outcome, diagnostics = run_builtin_arm(
+            task, repeats=repeats, model=model, dry_run=dry_run, channel=channel, recorder=recorder
         )
         outcomes.append(_cell(outcome, diagnostics))
-        calls.append(sent)
-    return Evaluation(outcomes=outcomes, calls=calls)
+    return outcomes
 
 
 # The verdict kinds, most severe first. `cell_kind` returns one of these and the summary counts
@@ -263,8 +262,11 @@ def preflight(task: ToolReqRealAgentTask, *, model: str) -> BuiltinDiagnostics:
     satisfy a repeats=3 identity (``resume_cache`` bounds ``runs`` to the identity's
     ``repeats``), so persisting it as a cell would need a second identity and a second grid to
     hold it."""
-    _outcome, diagnostics, _calls = run_builtin_arm(
-        task, repeats=1, model=model, dry_run=False, channel=CHANNELS[0]
+    # A throwaway recorder: preflight's invocations are discarded (never fingerprinted), so its
+    # recording is not read back — the recorder exists only because `run_builtin_arm` records
+    # through one.
+    _outcome, diagnostics = run_builtin_arm(
+        task, repeats=1, model=model, dry_run=False, channel=CHANNELS[0], recorder=CellRecorder()
     )
     return diagnostics
 
@@ -435,8 +437,8 @@ def run_corpus(
             dry_run=dry_run,
             invocation_fingerprint=invocation_fingerprint,
         ),
-        evaluate=lambda task: evaluate_task(
-            task, repeats=repeats, model=resolved_model, dry_run=dry_run
+        evaluate=lambda task, recorder: evaluate_task(
+            task, repeats=repeats, model=resolved_model, dry_run=dry_run, recorder=recorder
         ),
         summary_name=SUMMARY_NAME,
         resume=resume,

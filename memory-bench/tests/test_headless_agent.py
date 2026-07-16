@@ -8,6 +8,7 @@ from __future__ import annotations
 import errno
 import json
 import subprocess
+from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
@@ -152,6 +153,32 @@ def test_a_recording_that_is_not_n_identical_cycles_is_refused(
 # --------------------------------------------------------------------------- #
 def test_protocol_conformance() -> None:
     assert isinstance(HeadlessClaudeAgent(runner=_render_only_runner), Agent)
+
+
+def test_a_subclass_that_re_adds_a_runner_default_is_refused() -> None:
+    """mem-9gvej fix (2): the subclass-re-adds-default vector. A frozen kw_only subclass can declare
+    ``runner: Runner = subprocess.run`` and mypy --strict reports NO error — reopening the "real and
+    unrecorded, by omission" hole the base removed. ``__post_init__`` introspects the CONCRETE
+    class's field default, so it REFUSES such a subclass (both a plain default and a
+    ``default_factory``) while still ALLOWING the base with an explicit runner. A ``callable()``
+    check would NOT catch this: ``subprocess.run`` is callable."""
+
+    @dataclass(frozen=True, kw_only=True)
+    class _DefaultRunner(HeadlessClaudeAgent):
+        runner: Runner = subprocess.run
+
+    with pytest.raises(TypeError, match="runner"):
+        _DefaultRunner()
+
+    @dataclass(frozen=True, kw_only=True)
+    class _FactoryRunner(HeadlessClaudeAgent):
+        runner: Runner = field(default_factory=lambda: subprocess.run)
+
+    with pytest.raises(TypeError, match="runner"):
+        _FactoryRunner()
+
+    # the base with an explicit runner still constructs — the guard fires only on a defaulted field.
+    HeadlessClaudeAgent(runner=_render_only_runner)
 
 
 def test_argv_has_stream_json_and_strict_mcp_and_tools() -> None:

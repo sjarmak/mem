@@ -35,7 +35,7 @@ import os
 import re
 import subprocess
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import MISSING, dataclass, field
 from enum import StrEnum
 from typing import NoReturn
 
@@ -320,6 +320,37 @@ def one_cycle(
     return CellCalls(arm=arm, channel=channel.value, calls=cycles[0])
 
 
+@dataclass(eq=False)
+class CellRecorder:
+    """The seam that OWNS the executed invocations. ``run_cached_corpus`` creates one, hands it to
+    ``evaluate``, and reads ``recorded()`` ITSELF — so the argv hashed at the write boundary are the
+    ones the CLI seam SAW, never a value ``evaluate`` returned. An arm no longer hands back a
+    ``CellCalls`` at all: it opens a per-``(arm, channel)`` ``RecordingRunner`` via ``cell`` and
+    drives its ``repeats`` cycles through it. That is what closes the last route by which a caller
+    could supply the hashed invocations — the write boundary once trusted ``Evaluation.calls``, an
+    ordinary value nothing bound to the wire (mem-9gvej).
+
+    The repeats-fold happens HERE, in ``recorded()``, not the arm: the ``(arm, channel, repeats)``
+    labels are captured at ``cell`` time, so ``one_cycle`` collapses each recorder exactly as the
+    in-arm fold used to — same divide/agree/non-empty refusals, off a recorder the caller cannot
+    detach from."""
+
+    _cells: list[tuple[str, MemoryChannel, int, RecordingRunner]] = field(default_factory=list)
+
+    def cell(
+        self, inner: Runner, *, arm: str, channel: MemoryChannel, repeats: int
+    ) -> RecordingRunner:
+        runner = RecordingRunner(inner)
+        self._cells.append((arm, channel, repeats, runner))
+        return runner
+
+    def recorded(self) -> list[CellCalls]:
+        return [
+            one_cycle(runner.calls, repeats=repeats, arm=arm, channel=channel)
+            for arm, channel, repeats, runner in self._cells
+        ]
+
+
 def _stream_usage_tokens(stream_text: str) -> tuple[int, int]:
     """Sum (input, output) token usage across the stream's events. Claude Code stamps
     ``usage`` on assistant message events; an event without one contributes 0. Absent
@@ -423,6 +454,16 @@ class HeadlessClaudeAgent:
     _resolved_model: str = field(default="", init=False)
 
     def __post_init__(self) -> None:
+        runner_field = type(self).__dataclass_fields__["runner"]
+        if runner_field.default is not MISSING or runner_field.default_factory is not MISSING:
+            raise TypeError(
+                f"{type(self).__name__}.runner has a default — every HeadlessClaudeAgent, base or "
+                "subclass, must make `runner` mandatory so 'real and unrecorded' is never what you "
+                "get by omission. A frozen kw_only subclass that re-adds `runner = <default>` "
+                "reopens the resume-cache hole the RecordingRunner seam closes (mem-9gvej). A "
+                "`callable(runner)` check does NOT close it: subprocess.run is callable. Declare "
+                "`runner` with no default."
+            )
         resolved = resolve_model(self.model)
         object.__setattr__(self, "_pass_model", bool(resolved))
         object.__setattr__(self, "_resolved_model", resolved or "cli-default")

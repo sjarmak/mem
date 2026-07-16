@@ -59,11 +59,10 @@ from membench.harbor.agent_memory import NATIVE_MEMORY_GLOB, native_memory_path
 from membench.metrics.scorers import states_value
 from membench.runner.headless_agent import (
     CellCalls,
+    CellRecorder,
     Leg,
     MemoryChannel,
-    RecordingRunner,
     cell_agent,
-    one_cycle,
     render_cell_calls,
 )
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome, score_goal_action
@@ -297,25 +296,28 @@ def run_builtin_arm(
     model: str,
     dry_run: bool,
     channel: MemoryChannel,
+    recorder: CellRecorder,
     runner: Runner | None = None,
-) -> tuple[ArmOutcome, BuiltinDiagnostics, CellCalls]:
+) -> tuple[ArmOutcome, BuiltinDiagnostics]:
     """Run ``repeats`` independent establish/goal pairs, each in a fresh sandbox cwd +
-    fresh ``CLAUDE_CONFIG_DIR``, score the goal call externally, and return the cycle of
-    ``claude -p`` invocations the cell ACTUALLY made alongside them. ``dry_run`` swaps
-    the real ``claude -p`` for ``simulated_builtin_runner`` (no token). ``runner``
-    overrides the CLI runner directly (bypassing the dry_run selection) — mainly for
-    tests exercising accounting edge cases, like a pass without engagement, that the
-    honest dry-run simulator cannot itself produce.
+    fresh ``CLAUDE_CONFIG_DIR``, score the goal call externally, and return the score plus
+    engagement diagnostics. ``dry_run`` swaps the real ``claude -p`` for
+    ``simulated_builtin_runner`` (no token).
+
+    Two runner seams, not to be confused: ``runner`` is the INNER CLI runner to wrap (overriding the
+    dry_run selection — mainly for tests exercising accounting edge cases, like a pass without
+    engagement, that the honest dry-run simulator cannot itself produce); ``recorder`` is the
+    seam that RECORDS it. This function opens its per-cell ``RecordingRunner`` through
+    ``recorder.cell(...)`` and returns NO invocations — ``run_cached_corpus`` owns the recorder and
+    reads ``recorded()`` itself, so a cell's argv can never be a value this function handed back.
 
     The two legs come from ``cell_legs`` and the agent from ``cell_agent``, so what this
     executes and what ``toolreq_builtin_grid.planned_calls`` renders (for ``run_cached_corpus`` to
-    hash into the identity) are ONE definition.
-    The invocations are then RECORDED off the CLI seam on top of that (``RecordingRunner``): a leg
-    added here and forgotten in the plan would still be seen, because the runner sees the call
-    whether or not anyone declared it."""
+    hash into the identity) are ONE definition. A leg added here and forgotten in the plan is still
+    seen, because the recorder sees the call whether or not anyone declared it."""
     if runner is None:
         runner = simulated_builtin_runner(task.current_opaque_values) if dry_run else subprocess.run
-    recorder = RecordingRunner(runner)
+    cell_runner = recorder.cell(runner, arm=ARM, channel=channel, repeats=repeats)
     establish_leg, goal_leg = cell_legs(task)
     passes = 0
     engaged = 0
@@ -333,7 +335,7 @@ def run_builtin_arm(
             agent = cell_agent(
                 model=model,
                 channel=channel,
-                runner=recorder,
+                runner=cell_runner,
                 cwd=sandbox,
                 env={"CLAUDE_CONFIG_DIR": str(config_dir)},
             )
@@ -382,5 +384,4 @@ def run_builtin_arm(
         establish_tool_calls=establish_tool_calls,
         establish_tool_names=tuple(sorted(establish_tool_names)),
     )
-    calls = one_cycle(recorder.calls, repeats=repeats, arm=ARM, channel=channel)
-    return outcome, diagnostics, calls
+    return outcome, diagnostics

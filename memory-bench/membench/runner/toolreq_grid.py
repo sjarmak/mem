@@ -27,6 +27,7 @@ from pydantic import model_validator
 from membench.runner.headless_agent import (
     CHANNELS,
     CellCalls,
+    CellRecorder,
     Leg,
     MemoryChannel,
     render_cell_calls,
@@ -39,7 +40,6 @@ from membench.runner.resume_cache import (
     BaseCellOutcome,
     BaseRunIdentity,
     Cell,
-    Evaluation,
     corpus_summary,
     digest,
     render_verdict,
@@ -176,21 +176,23 @@ def evaluate_task(
     repeats: int,
     model: str,
     dry_run: bool,
+    recorder: CellRecorder,
     ours_payload: Mapping[str, str] | None = None,
-) -> Evaluation:
-    """Run every planned cell for one task, and hand back the invocations they made alongside the
-    rows they scored — the cache checks the second against this run's identity before it will
-    publish the first (``resume_cache.run_cached_corpus``).
+) -> list[CellOutcome]:
+    """Run every planned cell for one task and hand back the rows they scored. The invocations are
+    recorded THROUGH the ``recorder`` — ``run_cached_corpus`` owns it and checks the recording
+    against this run's identity before it will publish (``resume_cache.run_cached_corpus``); this
+    function never returns the invocations, so it cannot hand back a value that merely agrees with
+    the plan.
 
     The plan is ITERATED ONCE, never re-indexed or re-filtered: every cell in it is run, in plan
     order, with no second skip predicate to keep in step with ``planned_cells``'. The never-run
     ``ours`` cell is simply absent from it, and is filled below by relabeling ``none`` — it
     contributes a ROW but no invocation, which is exactly what it did."""
     plan = planned_cells(task, ours_payload)
-    calls: list[CellCalls] = []
     by_channel: dict[MemoryChannel, dict[str, ArmOutcome]] = {channel: {} for channel in CHANNELS}
     for cell in plan:
-        by_channel[cell.channel][cell.arm], sent = run_arm(
+        by_channel[cell.channel][cell.arm] = run_arm(
             arm=cell.arm,
             step=cell.leg.step,
             memory=dict(cell.leg.memory),
@@ -199,8 +201,8 @@ def evaluate_task(
             model=model,
             dry_run=dry_run,
             current_values=task.current_opaque_values,
+            recorder=recorder,
         )
-        calls.append(sent)
 
     outcomes: list[ArmOutcome] = []
     for channel in CHANNELS:
@@ -209,7 +211,7 @@ def evaluate_task(
             cells[RETRIEVING_ARM] = replace(cells["none"], arm=RETRIEVING_ARM)
         # `ARMS` order, not plan order: the canonical row order the scorer and the summary read.
         outcomes.extend(cells[arm] for arm in ARMS)
-    return Evaluation(outcomes=_cells(outcomes), calls=calls)
+    return _cells(outcomes)
 
 
 # The verdict is decided by these two arms alone; every other ARMS member rides along as
@@ -469,11 +471,12 @@ def run_corpus(
             dry_run=dry_run,
             invocation_fingerprint=invocation_fingerprint,
         ),
-        evaluate=lambda task: evaluate_task(
+        evaluate=lambda task, recorder: evaluate_task(
             task,
             repeats=repeats,
             model=resolved_model,
             dry_run=dry_run,
+            recorder=recorder,
             ours_payload=ours_payloads.get(task.work_id, {}),
         ),
         summary_name=SUMMARY_NAME,

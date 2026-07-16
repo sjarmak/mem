@@ -14,6 +14,7 @@ mention arms, so neither does its test. The two real consumers' end-to-end cases
 from __future__ import annotations
 
 import json
+import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,12 +22,11 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from membench.runner.headless_agent import ENV_MODEL, CellCalls
+from membench.runner.headless_agent import ENV_MODEL, CellCalls, CellRecorder, MemoryChannel
 from membench.runner.resume_cache import (
     BaseCachedResult,
     BaseCellOutcome,
     BaseRunIdentity,
-    Evaluation,
     assert_usable_work_ids,
     digest,
     invocation_digest,
@@ -95,8 +95,25 @@ def _cells(passes: int = 2, runs: int = 2) -> list[_Cell]:
     ]
 
 
-def _evaluate(_task: _Task) -> Evaluation:
-    return Evaluation(outcomes=_cells(), calls=_calls())
+def _noop_runner(argv: Sequence[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(list(argv), 0, "", "")
+
+
+def _record(recorder: CellRecorder, goal: str = "goal-prompt", *, extra_leg: bool = False) -> None:
+    """Record the stand-in grid's plan THROUGH the recorder — what an honest arm does: open a
+    per-cell ``RecordingRunner`` and spawn its ``claude -p`` through it. Doubles RECORD, never
+    RETURN, a cycle: after mem-9gvej ``run_cached_corpus`` hashes what the seam SAW, so a double
+    that fabricated a ``calls`` value could no longer make the write boundary agree with itself."""
+    for channel in ("recalled", "trusted"):
+        runner = recorder.cell(_noop_runner, arm="a", channel=MemoryChannel(channel), repeats=1)
+        runner(("claude", "-p", f"[{channel}] {goal}"))
+        if extra_leg:
+            runner(("claude", "-p", "leg 2"))
+
+
+def _evaluate(_task: _Task, recorder: CellRecorder) -> list[_Cell]:
+    _record(recorder)
+    return _cells()
 
 
 def _run(
@@ -193,8 +210,9 @@ def test_a_task_that_sent_a_prompt_its_identity_does_not_fingerprint_is_refused(
     by the very next resume — the failure it exists to prevent, one run later."""
     out = tmp_path / "out"
 
-    def _drifted(_task: _Task) -> Evaluation:
-        return Evaluation(outcomes=_cells(), calls=_calls(goal="a prompt the plan never modelled"))
+    def _drifted(_task: _Task, recorder: CellRecorder) -> list[_Cell]:
+        _record(recorder, goal="a prompt the plan never modelled")
+        return _cells()
 
     with pytest.raises(ValueError, match="no longer what its arms execute"):
         _run([_Task("w-0")], out, evaluate=_drifted)
@@ -210,15 +228,32 @@ def test_a_leg_the_plan_never_declared_is_refused(tmp_path: Path) -> None:
     in the cycle and moves the digest."""
     out = tmp_path / "out"
 
-    def _extra_leg(_task: _Task) -> Evaluation:
-        undeclared = [
-            CellCalls(arm=c.arm, channel=c.channel, calls=(*c.calls, ("claude", "-p", "leg 2")))
-            for c in _calls()
-        ]
-        return Evaluation(outcomes=_cells(), calls=undeclared)
+    def _extra_leg(_task: _Task, recorder: CellRecorder) -> list[_Cell]:
+        # An undeclared second leg is SPAWNED through the recorder — the runner sees it whether or
+        # not the plan declared it, so it lands in the cycle and moves the digest.
+        _record(recorder, extra_leg=True)
+        return _cells()
 
     with pytest.raises(ValueError, match="no longer what its arms execute"):
         _run([_Task("w-0")], out, evaluate=_extra_leg)
+    assert not (out / "w-0.json").exists()
+
+
+def test_the_write_boundary_hashes_the_recorders_calls_not_the_evaluators(tmp_path: Path) -> None:
+    """THE mem-9gvej bond. The write boundary once hashed ``Evaluation.calls`` — an ordinary value
+    ``evaluate`` RETURNED, which nothing bound to the wire; a future author could return the plan's
+    own rendering (the check checks the caller's model against itself) or spawn a leg through a bare
+    runner the recorder never saw. ``Evaluation`` is gone: ``run_cached_corpus`` OWNS the
+    ``CellRecorder`` and hashes what the recorder SAW. The observable proof is that an ``evaluate``
+    which scores a full grid but never drives the recorder — records nothing — is refused and
+    publishes nothing. A caller structurally cannot supply the hashed invocations."""
+    out = tmp_path / "out"
+
+    def _unrecorded(_task: _Task, _recorder: CellRecorder) -> list[_Cell]:
+        return _cells()  # scores the rows, but drives NOTHING through the recorder
+
+    with pytest.raises(ValueError, match="no longer what its arms execute"):
+        _run([_Task("w-0")], out, evaluate=_unrecorded)
     assert not (out / "w-0.json").exists()
 
 
@@ -251,7 +286,7 @@ def test_an_identity_whose_fingerprint_is_not_the_plans_is_refused_before_any_sp
     must not run."""
     out = tmp_path / "out"
 
-    def _measuring_evaluate(_task: _Task) -> Evaluation:
+    def _measuring_evaluate(_task: _Task, _recorder: CellRecorder) -> list[_Cell]:
         raise AssertionError("refused for a divergent fingerprint, yet the task still measured")
 
     def _authors_its_own_fingerprint(_task: _Task, _fp: str) -> _Identity:
@@ -670,9 +705,9 @@ def test_before_first_spend_fires_once_immediately_before_the_first_measured_tas
 
     order: list[str] = []
 
-    def _recording_evaluate(task: _Task) -> Evaluation:
+    def _recording_evaluate(task: _Task, recorder: CellRecorder) -> list[_Cell]:
         order.append(f"measure:{task.work_id}")
-        return _evaluate(task)
+        return _evaluate(task, recorder)
 
     run = _run(
         [_Task("w-0"), _Task("w-1"), _Task("w-2")],
@@ -708,7 +743,7 @@ def test_raising_from_before_first_spend_aborts_before_anything_is_measured(
     def _gate() -> None:
         raise RuntimeError("diagnosed: refusing to spend")
 
-    def _evaluate_boom(_task: _Task) -> Evaluation:
+    def _evaluate_boom(_task: _Task, _recorder: CellRecorder) -> list[_Cell]:
         raise AssertionError("the warm-up refused; nothing may be measured")
 
     with pytest.raises(RuntimeError, match="refusing to spend"):

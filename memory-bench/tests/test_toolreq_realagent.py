@@ -18,8 +18,9 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import subprocess
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Annotated, Any, ForwardRef, get_args, get_origin
 
@@ -29,7 +30,7 @@ from pydantic import BaseModel, Field, ValidationError
 from membench.generators.toolreq_bundle_adapter import _goal_step
 from membench.metrics.scorers import states_value
 from membench.runner import toolreq_grid as grid
-from membench.runner.headless_agent import CellCalls, Leg, render_cell_calls
+from membench.runner.headless_agent import CellCalls, CellRecorder, Leg, render_cell_calls
 from membench.runner.resume_cache import invocation_digest, load_cached
 from membench.runner.toolreq_realagent import (
     ToolReqRealAgentTask,
@@ -480,7 +481,7 @@ def test_sequence_lessons_opaque_rejects_order_mismatch() -> None:
 
 def test_dry_run_arms_separate_per_task() -> None:
     task = adapt_sequence(_toolreq_seq())
-    outcomes = grid.evaluate_task(task, repeats=2, model="", dry_run=True).outcomes
+    outcomes = grid.evaluate_task(task, repeats=2, model="", dry_run=True, recorder=CellRecorder())
     by = {(o.arm, o.channel): o for o in outcomes}
     for channel in (c.value for c in grid.CHANNELS):
         assert by[("none", channel)].passes == 0
@@ -494,8 +495,8 @@ def test_ours_arm_dry_run_passes_when_payload_states_current_value() -> None:
     (current_opaque,) = task.current_opaque_values
     ours_payload = {"w-prior": f"the retention window is {current_opaque}"}
     outcomes = grid.evaluate_task(
-        task, repeats=2, model="", dry_run=True, ours_payload=ours_payload
-    ).outcomes
+        task, repeats=2, model="", dry_run=True, recorder=CellRecorder(), ours_payload=ours_payload
+    )
     by = {(o.arm, o.channel): o for o in outcomes}
     for channel in (c.value for c in grid.CHANNELS):
         assert by[("ours", channel)].passes == by[("ours", channel)].runs == 2
@@ -507,8 +508,8 @@ def test_ours_arm_dry_run_honest_non_pass_when_payload_lacks_current_value() -> 
     task = adapt_sequence(_toolreq_seq())
     ours_payload = {"w-prior": "an unrelated retrieved fact about something else entirely"}
     outcomes = grid.evaluate_task(
-        task, repeats=2, model="", dry_run=True, ours_payload=ours_payload
-    ).outcomes
+        task, repeats=2, model="", dry_run=True, recorder=CellRecorder(), ours_payload=ours_payload
+    )
     by = {(o.arm, o.channel): o for o in outcomes}
     for channel in (c.value for c in grid.CHANNELS):
         assert by[("ours", channel)].passes == 0
@@ -563,6 +564,10 @@ def _corpus_one(
     return load_corpus_with_sequences(corpus)
 
 
+def _noop_cli_runner(argv: Sequence[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(list(argv), returncode=0, stdout="", stderr="")
+
+
 def _spy_run_arm(seen: list[str], *, oracle_passes: bool) -> Callable[..., Any]:
     """A ``run_arm`` double that records which arms were RUN instead of spawning ``claude -p``.
 
@@ -570,7 +575,17 @@ def _spy_run_arm(seen: list[str], *, oracle_passes: bool) -> Callable[..., Any]:
     reported anything else is refused at the cache's write boundary, which is that check doing its
     job. ``oracle_passes`` is the only thing the callers differ on."""
 
-    def _run_arm(*, arm: str, channel, repeats: int, step, memory, model: str, **_kwargs: Any):
+    def _run_arm(
+        *,
+        arm: str,
+        channel,
+        repeats: int,
+        step,
+        memory,
+        model: str,
+        recorder: CellRecorder,
+        **_kwargs: Any,
+    ):
         seen.append(arm)  # a real paid cell would spawn `claude -p` here
         outcome = grid.ArmOutcome(
             arm=arm,
@@ -578,10 +593,17 @@ def _spy_run_arm(seen: list[str], *, oracle_passes: bool) -> Callable[..., Any]:
             passes=repeats if (oracle_passes and arm == "oracle") else 0,
             runs=repeats,
         )
-        sent = render_cell_calls(
+        # Record the plan's invocations THROUGH the recorder — the real arm records off the CLI
+        # seam, so a double must too, or run_cached_corpus (which hashes what the recorder SAW,
+        # not a value it returned — mem-9gvej) refuses the cell as a plan/execution mismatch.
+        planned = render_cell_calls(
             arm=arm, channel=channel, legs=[Leg("goal", step, memory)], model=model
         )
-        return outcome, sent
+        runner = recorder.cell(_noop_cli_runner, arm=arm, channel=channel, repeats=repeats)
+        for _ in range(repeats):
+            for argv in planned.calls:
+                runner(argv)
+        return outcome
 
     return _run_arm
 
@@ -600,8 +622,11 @@ def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -
     def _spy(task, **_kwargs):
         calls["n"] += 1
         # dry_run simulates (never spends) but keeps the grid's resolved model, so the recorded
-        # argv matches a pinned paid identity's invocation_fingerprint (mem-bzv2p).
-        return real_eval(task, repeats=2, model=_kwargs["model"], dry_run=True)
+        # argv matches a pinned paid identity's invocation_fingerprint (mem-bzv2p). The recorder is
+        # owned by run_cached_corpus and threaded straight through.
+        return real_eval(
+            task, repeats=2, model=_kwargs["model"], dry_run=True, recorder=_kwargs["recorder"]
+        )
 
     monkeypatch.setattr(grid, "evaluate_task", _spy)
     paid = _run_corpus(tasks, sequences, out, dry_run=False, store_path=store_path, model="sonnet")
@@ -643,8 +668,11 @@ def test_upgrading_the_cli_between_runs_is_a_miss_not_a_relabel(
     def _spy(task, **_kwargs):
         calls["n"] += 1
         # dry_run simulates (never spends) but keeps the grid's resolved model, so the recorded
-        # argv matches a pinned paid identity's invocation_fingerprint (mem-bzv2p).
-        return real_eval(task, repeats=2, model=_kwargs["model"], dry_run=True)
+        # argv matches a pinned paid identity's invocation_fingerprint (mem-bzv2p). The recorder is
+        # owned by run_cached_corpus and threaded straight through.
+        return real_eval(
+            task, repeats=2, model=_kwargs["model"], dry_run=True, recorder=_kwargs["recorder"]
+        )
 
     monkeypatch.setattr(grid, "evaluate_task", _spy)
     first = _run_corpus(
@@ -1334,7 +1362,11 @@ def test_the_fingerprint_is_the_invocations_the_arms_actually_send(tmp_path: Pat
     _, tasks = _corpus_one(tmp_path)
     task = tasks[0]
     payload = {"w-prior": "the retention window is TOKEN-abc"}
-    sent = grid.evaluate_task(task, repeats=2, model="", dry_run=True, ours_payload=payload).calls
+    recorder = CellRecorder()
+    grid.evaluate_task(
+        task, repeats=2, model="", dry_run=True, recorder=recorder, ours_payload=payload
+    )
+    sent = recorder.recorded()  # what the CLI seam actually saw, owned by run_cached_corpus
     assert invocation_digest(sent) == invocation_digest(grid.planned_calls(task, payload, model=""))
 
 
@@ -1346,13 +1378,15 @@ def test_the_never_run_ours_cell_contributes_a_row_but_no_invocation(tmp_path: P
     are themselves identity fields."""
     _, tasks = _corpus_one(tmp_path)
     task = tasks[0]
-    evaluation = grid.evaluate_task(task, repeats=2, model="", dry_run=True, ours_payload={})
-
-    assert {(c.arm, c.channel) for c in evaluation.outcomes} == grid.expected_cells()
-    assert not any(c.arm == "ours" for c in evaluation.calls)
-    assert invocation_digest(evaluation.calls) == invocation_digest(
-        grid.planned_calls(task, {}, model="")
+    recorder = CellRecorder()
+    outcomes = grid.evaluate_task(
+        task, repeats=2, model="", dry_run=True, recorder=recorder, ours_payload={}
     )
+    sent = recorder.recorded()
+
+    assert {(c.arm, c.channel) for c in outcomes} == grid.expected_cells()
+    assert not any(c.arm == "ours" for c in sent)
+    assert invocation_digest(sent) == invocation_digest(grid.planned_calls(task, {}, model=""))
 
 
 def test_a_plan_that_drifts_from_its_arms_refuses_to_publish(tmp_path: Path, monkeypatch) -> None:
@@ -1678,7 +1712,7 @@ def test_multi_subject_opaquifies_reward_and_surfaces_all_facts() -> None:
 
 def test_multi_subject_arms_separate_dry_run() -> None:
     task = adapt_sequence(_multi_subject_seq())
-    outcomes = grid.evaluate_task(task, repeats=2, model="", dry_run=True).outcomes
+    outcomes = grid.evaluate_task(task, repeats=2, model="", dry_run=True, recorder=CellRecorder())
     by = {(o.arm, o.channel): o for o in outcomes}
     for channel in (c.value for c in grid.CHANNELS):
         assert by[("none", channel)].passes == 0

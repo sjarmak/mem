@@ -38,7 +38,7 @@ from typing import Any, Generic, Protocol, Self, TypeVar
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from membench.bbon.models import deterministic_id
-from membench.runner.headless_agent import CellCalls, resolve_model
+from membench.runner.headless_agent import CellCalls, CellRecorder, resolve_model
 
 
 def digest(payload: object) -> str:
@@ -438,20 +438,6 @@ def assert_usable_work_ids(tasks: Sequence[CacheableTask], summary_name: str) ->
 
 
 @dataclass(frozen=True)
-class Evaluation:
-    """What evaluating one task produced: the rows to persist, and the ``claude -p`` invocations it
-    ACTUALLY made.
-
-    The two travel together because they are one measurement. Returning only the rows is what let a
-    grid's identity describe a prompt its arms no longer send: without the invocations coming back
-    out of the evaluation there is nothing to check the identity against at the write boundary (see
-    ``run_cached_corpus``, which is where that argument is made)."""
-
-    outcomes: Sequence[BaseCellOutcome]
-    calls: Sequence[CellCalls]
-
-
-@dataclass(frozen=True)
 class CorpusRun(Generic[ResultT]):
     """What one sweep over the corpus produced, and what it COST to produce it.
 
@@ -472,7 +458,7 @@ def run_cached_corpus(
     result_cls: type[ResultT],
     plan_of: Callable[[TaskT], Sequence[CellCalls]],
     identity_of: Callable[[TaskT, str], BaseRunIdentity],
-    evaluate: Callable[[TaskT], Evaluation],
+    evaluate: Callable[[TaskT, CellRecorder], Sequence[BaseCellOutcome]],
     summary_name: str,
     resume: bool = True,
     before_first_spend: Callable[[], None] | None = None,
@@ -506,19 +492,23 @@ def run_cached_corpus(
     paid calls. Raising from it aborts the run before anything is measured — how a driver halts a
     sweep it has diagnosed as not worth spending on.
 
-    ``plan_of`` (what the arms WILL send) and ``evaluate`` (what they DID) are injected
-    INDEPENDENTLY, though — which is exactly why the write boundary below exists. Nothing else
-    binds them, and a plan left resting on its agreement with the executor is one edit from
-    describing a command line the arms no longer send: change what a leg surfaces, forget to move
-    the plan, and every persisted cell still matches, so a resumed PAID run reports ``reused``,
-    spends nothing, does not crash, and publishes pre-change numbers as post-change measurements. A
-    refused measurement is expensive — the ``claude -p`` calls are already made and are NOT written
-    — and that is the cheap end of this failure.
+    ``plan_of`` (what the arms WILL send) and the run's RECORDING (what they DID) are still
+    independent measurements — which is why the write boundary below exists. But ``evaluate``
+    no longer HANDS BACK the recording: this loop creates the ``CellRecorder``, passes it in, and
+    reads ``recorded()`` itself. So the value hashed at the write boundary is the argv the CLI seam
+    SAW, never a ``calls`` an ``evaluate`` returned — the last route by which a caller could make
+    the check tautological (return the plan's rendering, or spawn a leg through a bare runner the
+    recorder never saw) is closed structurally, not by caller discipline (mem-9gvej). A plan left
+    resting on its agreement with the executor is still one edit from a command line the
+    arms no longer send: change what a leg surfaces, forget to move the plan, and the recording no
+    longer matches, so a resumed PAID run refuses rather than publishing pre-change numbers as
+    post-change measurements. A refused measurement is expensive — the ``claude -p`` calls are
+    already made and are NOT written — and that is the cheap end of this failure.
 
-    What this seam DID close is the third route: the fingerprint is derived from ``plan_of`` HERE,
-    not authored inside ``identity_of``, so a grid can no longer carry a fingerprint computed by any
-    route other than its plan — and that check fires on a cache HIT too, not only on the miss the
-    write boundary sees."""
+    What this seam closed on the PLAN side is the third route: the fingerprint is derived from
+    ``plan_of`` HERE, not authored inside ``identity_of``, so a grid can no longer carry a
+    fingerprint computed by any route other than its plan — and that check fires on a cache HIT too,
+    not only on the miss the write boundary sees."""
     out_dir.mkdir(parents=True, exist_ok=True)
     assert_usable_work_ids(tasks, summary_name)
 
@@ -562,8 +552,9 @@ def run_cached_corpus(
             # re-fires a PAID warm-up on the next miss.
             warmed_up = True
             before_first_spend()
-        evaluation = evaluate(task)
-        sent = invocation_digest(evaluation.calls)
+        recorder = CellRecorder()
+        outcomes = evaluate(task, recorder)
+        sent = invocation_digest(recorder.recorded())
         if sent != plan_fingerprint:
             raise ValueError(
                 f"{task.work_id}: the `claude -p` invocations this task actually made hash to "
@@ -575,7 +566,7 @@ def run_cached_corpus(
                 "plan (or the arm) so the two are one thing again, then re-measure."
             )
         executed += 1
-        result = result_cls.of(task.work_id, identity, evaluation.outcomes)
+        result = result_cls.of(task.work_id, identity, outcomes)
         # Atomic publish: write a sibling temp file then rename, so a kill mid-write leaves either
         # the old result or the new one, never a half-written JSON the next resume trips on.
         tmp_path = result_path.with_suffix(".json.tmp")
