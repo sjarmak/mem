@@ -20,7 +20,8 @@ import dataclasses
 import json
 import subprocess
 import sys
-from collections.abc import Callable, Mapping, Sequence
+from collections import OrderedDict, defaultdict
+from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from pathlib import Path
 from typing import Annotated, Any, ForwardRef, get_args, get_origin
 
@@ -266,21 +267,28 @@ def test_opacity_deterministic_and_sequence_unique() -> None:
 def _admits_dict(annotation: Any) -> bool:
     """Whether ``annotation`` can carry a dict, unwrapping unions and generic args.
 
-    ``Mapping`` counts alongside ``dict``: ``digest`` sorts by the SHAPE it serialises, not by
-    the declared type. Bare ``dict``/``Mapping`` count too — ``get_origin`` answers ``None``
-    for an unsubscripted one, so testing only the origin would let ``field: dict`` escape the
-    roster exactly the way this roster exists to stop.
+    The whole ``Mapping`` ABC family counts alongside ``dict``: ``digest`` sorts by the SHAPE it
+    serialises, not by the declared type, and a ``MutableMapping``/``OrderedDict``/``defaultdict``
+    field ``model_dump()``s to an order-preserving plain dict just like ``dict`` does. So the test
+    is structural — ``issubclass(..., Mapping)`` — not identity against a two-sentinel list, which
+    saw only ``dict`` and ``Mapping`` and let every other Mapping subtype through. Bare
+    (unsubscripted) mappings count too — ``get_origin`` answers ``None`` for one, so testing only
+    the origin would let ``field: dict`` escape the roster exactly the way this roster exists to
+    stop.
 
-    Raises on an annotation it cannot classify rather than answering False: a silent "not a
-    dict" is the failure this whole guard is about."""
-    if annotation is dict or annotation is Mapping:
-        return True
+    Raises ONLY on an unresolved ``ForwardRef`` — the one annotation it genuinely cannot classify
+    without a resolution context, where a silent "not a dict" is the failure this guard is about.
+    Every other annotation is classified structurally, so nothing else falls through to a silent
+    False."""
     if isinstance(annotation, ForwardRef):
         raise TypeError(
             f"unresolved annotation {annotation!r} — the roster cannot classify it, and "
             "guessing False here would silently drop a dict field out of the guard below"
         )
-    if get_origin(annotation) in (dict, Mapping):
+    if isinstance(annotation, type) and issubclass(annotation, Mapping):
+        return True
+    origin = get_origin(annotation)
+    if isinstance(origin, type) and issubclass(origin, Mapping):
         return True
     return any(_admits_dict(arg) for arg in get_args(annotation))
 
@@ -317,6 +325,11 @@ def test_the_dict_typed_roster_reads_annotations_because_a_dumped_instance_lies(
         plain: dict[str, Any] = Field(default_factory=dict)
         optional: dict[str, str] | None = None  # dumps to None until set — the blind spot
         mapping: Mapping[str, str] = Field(default_factory=dict)
+        # The Mapping-ABC family beyond the two `is` sentinels: identity against (dict, Mapping)
+        # misses every one of these, yet each model_dump()s to an order-preserving plain dict.
+        mutable: MutableMapping[str, str] = Field(default_factory=dict)
+        ordered: OrderedDict[str, str] = Field(default_factory=OrderedDict)
+        defaulted: defaultdict[str, str] = Field(default_factory=lambda: defaultdict(str))
         # Unparameterized on purpose (hence the ignore): get_origin() answers None for it.
         bare: dict = Field(default_factory=dict)  # type: ignore[type-arg]
         annotated: Annotated[dict[str, str], "meta"] = Field(default_factory=dict)
@@ -324,11 +337,23 @@ def test_the_dict_typed_roster_reads_annotations_because_a_dumped_instance_lies(
         names: list[str] = Field(default_factory=list)  # control: generic, but never a dict
         subs: list[_Sub] = Field(default_factory=list)  # the top-level-only gap, stated
 
-    assert _dict_typed_fields(_Probe) == {"plain", "optional", "mapping", "bare", "annotated"}
+    assert _dict_typed_fields(_Probe) == {
+        "plain",
+        "optional",
+        "mapping",
+        "mutable",
+        "ordered",
+        "defaulted",
+        "bare",
+        "annotated",
+    }
     # Why annotations: this is the roster the rejected guard built, on the same model.
     assert {n for n, v in _Probe().model_dump().items() if isinstance(v, dict)} == {
         "plain",
         "mapping",
+        "mutable",
+        "ordered",
+        "defaulted",
         "bare",
         "annotated",
     }, "a dumped instance stopped hiding the Optional-dict field — _dict_typed_fields can simplify"
