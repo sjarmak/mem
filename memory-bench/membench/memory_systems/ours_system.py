@@ -28,7 +28,7 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NotRequired, TypedDict, cast
 
 from membench.mem_cli import run_mem_json
 from membench.memory_systems.base import (
@@ -58,12 +58,47 @@ class OursQuery:
     no_trace_query: bool = False
 
 
+class RetrievedItem(TypedDict):
+    """One retrieval-v1 item as `mem retrieve --json` emits it, narrowed to the
+    fields this arm consumes (D9): the source `work_id`, its citation, and the
+    consumed — never re-distilled — lesson payloads. The live envelope carries
+    more per item (rig, title, match tier, matched signatures); those are not
+    read here, so enumerating them would only invite stale drift. What this
+    buys: an access whose key does not match a declared field — a typo, or a
+    stale name after this TypedDict is updated to a CLI rename — is a compile-
+    time `mypy --strict` error at the access site, not a runtime `KeyError`
+    inside a paid run. It does NOT auto-detect a CLI rename that no one mirrors
+    here: keeping this in sync with `src/retrieve/retrieval.ts` is still a
+    manual step; the type only makes a wrong access loud once it is."""
+
+    work_id: str
+    citation: dict[str, Any]
+    lessons: list[dict[str, Any]]
+
+
+class RetrieveEnvelope(TypedDict):
+    """The `mem retrieve --json` success envelope's `data`. `items` is the ranked
+    result; the three precision-guard counters (Decision-10) are `NotRequired`
+    because the arm reads each through a `.get(..., default)` — an injected test
+    runner may return `{"items": [...]}` alone and the arm still resolves. This
+    is a test-ergonomics choice, not the wire contract: the live CLI always
+    populates all three (`src/retrieve/retrieval.ts` declares them required),
+    so a direct-indexing consumer would be safe against the real envelope."""
+
+    items: list[RetrievedItem]
+    total_matched: NotRequired[int]
+    near_duplicate_top: NotRequired[bool]
+    fts_truncated: NotRequired[bool]
+
+
 # A runner returns retrieval-v1's `RetrievalResult` (the CLI `--json` envelope's
-# `data`). Injectable so the arm is testable without a built CLI or a real store.
-RetrieveRunner = Callable[[OursQuery], dict[str, Any]]
+# `data`) typed as a `RetrieveEnvelope`, so a typo'd or CLI-renamed field is a
+# `mypy --strict` error at the access site rather than a `KeyError` inside a paid
+# run. Injectable so the arm is testable without a built CLI or a real store.
+RetrieveRunner = Callable[[OursQuery], RetrieveEnvelope]
 
 
-def _render_payload(item: dict[str, Any]) -> str:
+def _render_payload(item: RetrievedItem) -> str:
     """Render one retrieved item as the injected memory text: the citation plus
     the consumed (not rewritten) lesson payloads, canonically serialized so the
     injected-context volume (Decision-10 precision guard) is deterministic."""
@@ -80,9 +115,11 @@ def _default_runner(mem_bin: str) -> RetrieveRunner:
     """Shell out to `mem retrieve <work_id> --scope ... --store ...` through the
     shared seam (`mem_cli.run_mem_json`: timeout, missing-binary and
     malformed-envelope context). A failed retrieval always raises — it is never
-    silently treated as "no memory"."""
+    silently treated as "no memory". The CLI's stdout is untyped JSON, so the
+    envelope is `cast` to `RetrieveEnvelope` at this one trust boundary rather
+    than validated field-by-field."""
 
-    def run(query: OursQuery) -> dict[str, Any]:
+    def run(query: OursQuery) -> RetrieveEnvelope:
         argv = [
             mem_bin,
             "retrieve",
@@ -96,7 +133,7 @@ def _default_runner(mem_bin: str) -> RetrieveRunner:
             argv += ["--limit", str(query.limit)]
         if query.no_trace_query:
             argv.append("--no-trace-query")
-        return run_mem_json(argv)
+        return cast(RetrieveEnvelope, run_mem_json(argv))
 
     return run
 
