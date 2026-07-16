@@ -77,6 +77,10 @@ DEFAULT_OUT = PROJECT_ROOT / ".mem/toolreq-realagent"
 DEFAULT_MEM_BIN = str(PROJECT_ROOT / "bin/mem")
 ENV_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN"
 
+# The channel-non-uniform plan shape the disclosed paid-call count is FOR (see toolreq_grid): one
+# string so the two spend disclosures below cannot describe the same fire two different ways.
+_PAID_SHAPE = "none once + oracle,ours per channel"
+
 
 def _print_go_command(
     tasks: Sequence[ToolReqRealAgentTask], repeats: int, out_dir: Path, corpus_dir: Path
@@ -92,7 +96,7 @@ def _print_go_command(
     print(
         f"REFUSING to spend: {ENV_OAUTH} is unset.\n"
         f"  This paid sweep is at most {runs} real `claude -p` run(s) "
-        f"({n_tasks} task x {repeats} repeat; none once + oracle,ours per channel); "
+        f"({n_tasks} task x {repeats} repeat; {_PAID_SHAPE}); "
         f"worst-case wall-clock ~{worst_hours:.1f}h at the {DEFAULT_TIMEOUT_S:.0f}s timeout.\n"
         f"  Per-task results persist to {out_dir} and are reused on re-run (resumable).\n"
         "  To fire (Stephanie's per-action go), source the token from an account home and "
@@ -154,7 +158,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(
         f"toolreq real-agent sweep: {mode}; {len(tasks)} task(s) x {args.repeats} repeat; "
         f"up to {worst_case_paid_call_count(tasks, repeats=args.repeats)} `claude -p` call(s) "
-        "(none once + oracle,ours per channel)"
+        f"({_PAID_SHAPE})"
     )
     store_path = args.store if args.store is not None else args.out / "store.db"
     summary = run_corpus(

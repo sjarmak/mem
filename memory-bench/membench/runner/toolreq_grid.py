@@ -116,7 +116,7 @@ RETRIEVING_ARM = "ours"
 # would buy byte-identical `claude -p` calls and spend `none`'s sample twice for one measurement
 # (mem-dg5fm). CHANNELS[0] is an arbitrary-but-fixed choice among channel-equivalent options; the
 # byte-identity that makes it sound is locked by test_none_prompt_is_byte_identical_across_channels
-# (the sibling builtin grid already treats CHANNELS[0] as its canonical channel).
+# (the sibling builtin grid likewise uses CHANNELS[0] as its arbitrary preflight channel).
 NONE_CHANNEL: MemoryChannel = CHANNELS[0]
 
 
@@ -219,10 +219,11 @@ def evaluate_task(
     the plan.
 
     The plan is ITERATED ONCE, never re-indexed or re-filtered: every cell in it is run, in plan
-    order, with no second skip predicate to keep in step with ``planned_cells``'. Two cells the plan
-    omits are FILLED below by relabeling — each contributing a ROW but no invocation, exactly what
-    it did: the channel-invariant ``none`` cell, measured once and relabeled into every channel,
-    and the never-run empty-retrieval ``ours`` cell, relabeled from that channel's ``none``."""
+    order, with no second skip predicate to keep in step with ``planned_cells``'. Every cell the
+    plan OMITS — the channel-invariant ``none`` under each non-canonical channel, the never-run
+    empty-retrieval ``ours`` — is an empty-memory cell, so all are FILLED below from the single
+    canonical ``none`` row by one relabel: each contributes a ROW but no invocation, exactly what
+    it did."""
     plan = planned_cells(task, ours_payload)
     by_channel: dict[MemoryChannel, dict[str, ArmOutcome]] = {channel: {} for channel in CHANNELS}
     for cell in plan:
@@ -238,18 +239,17 @@ def evaluate_task(
             recorder=recorder,
         )
 
-    # `none` was measured ONCE, under NONE_CHANNEL (its empty-memory prompt is channel-invariant);
-    # relabel that single row into every channel. Read it BEFORE the loop writes each channel's
-    # `none` back — `replace` is non-mutating, so the reference stays valid.
-    none_cell = by_channel[NONE_CHANNEL]["none"]
+    # Every arm the plan OMITS is an empty-memory cell — `none` under each non-canonical channel,
+    # and `ours` on an empty retrieval — so it is none-equivalent by construction and was measured
+    # once, as the single canonical `none` row. Fill each by relabeling that one row. Read it BEFORE
+    # the loop; `replace` is non-mutating, so the reference stays valid as cells are filled.
+    canonical = by_channel[NONE_CHANNEL]["none"]
     outcomes: list[ArmOutcome] = []
     for channel in CHANNELS:
         cells = by_channel[channel]
-        cells["none"] = replace(none_cell, channel=channel.value)
-        if RETRIEVING_ARM not in cells:
-            # `ours` with an empty retrieval was never planned — relabel it from this channel's
-            # (relabeled) `none`, the same none-equivalent-by-construction row.
-            cells[RETRIEVING_ARM] = replace(cells["none"], arm=RETRIEVING_ARM)
+        for arm in ARMS:
+            if arm not in cells:  # absent => empty memory => relabel the canonical `none` row
+                cells[arm] = replace(canonical, arm=arm, channel=channel.value)
         # `ARMS` order, not plan order: the canonical row order the scorer and the summary read.
         outcomes.extend(cells[arm] for arm in ARMS)
     return _cells(outcomes)
