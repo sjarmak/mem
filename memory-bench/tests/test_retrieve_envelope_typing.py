@@ -72,12 +72,24 @@ def consume(run: OldRunner) -> Any:
 """
 
 
-def _run_mypy(tmp_path: Path, source: str) -> subprocess.CompletedProcess[str]:
+@pytest.fixture(scope="module")
+def mypy_cache(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """One mypy cache shared across the three probes. The costly work is analysing
+    the real `membench` import graph the probes pull in; with a per-test cache each
+    probe re-does it cold (~3s each). Sharing one cache lets the first probe warm it
+    and the rest reuse it (~0.4s each). Isolation is unaffected — each probe module
+    still lives under its own per-test `tmp_path`, so only the analysis cache (keyed
+    on the byte-identical `membench` sources) is shared, never a probe."""
+    return tmp_path_factory.mktemp("mypy_cache")
+
+
+def _run_mypy(tmp_path: Path, cache_dir: Path, source: str) -> subprocess.CompletedProcess[str]:
     """Type-check one probe module with the project's mypy under `--strict`.
 
     `--follow-imports=silent` resolves the real `membench` types (so the probe is
     honest) while suppressing errors inside the followed package — the only error
-    surfaced is the probe's own. A tmp cache dir keeps the run isolated."""
+    surfaced is the probe's own. The probe lives under the per-test `tmp_path`;
+    `cache_dir` is the module-shared mypy cache (see `mypy_cache`)."""
     mypy = shutil.which("mypy")
     if mypy is None:
         pytest.skip("mypy not installed")
@@ -91,7 +103,7 @@ def _run_mypy(tmp_path: Path, source: str) -> subprocess.CompletedProcess[str]:
             "--follow-imports=silent",
             "--no-error-summary",
             "--cache-dir",
-            str(tmp_path / "mypy_cache"),
+            str(cache_dir),
             str(probe),
         ],
         cwd=_REPO_ROOT,
@@ -101,13 +113,13 @@ def _run_mypy(tmp_path: Path, source: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_correct_key_type_checks_clean(tmp_path: Path) -> None:
-    result = _run_mypy(tmp_path, _CORRECT)
+def test_correct_key_type_checks_clean(tmp_path: Path, mypy_cache: Path) -> None:
+    result = _run_mypy(tmp_path, mypy_cache, _CORRECT)
     assert result.returncode == 0, f"expected clean, got:\n{result.stdout}{result.stderr}"
 
 
-def test_typoed_key_is_a_typeddict_error_naming_the_key(tmp_path: Path) -> None:
-    result = _run_mypy(tmp_path, _TYPO)
+def test_typoed_key_is_a_typeddict_error_naming_the_key(tmp_path: Path, mypy_cache: Path) -> None:
+    result = _run_mypy(tmp_path, mypy_cache, _TYPO)
     assert result.returncode != 0, "typo'd key should fail --strict but passed"
     out = result.stdout + result.stderr
     # The error must name the key and the TypedDict, not just fail vaguely.
@@ -116,11 +128,13 @@ def test_typoed_key_is_a_typeddict_error_naming_the_key(tmp_path: Path) -> None:
     assert "typeddict-item" in out, out
 
 
-def test_old_dict_any_runner_stays_green_on_the_same_bogus_access(tmp_path: Path) -> None:
+def test_old_dict_any_runner_stays_green_on_the_same_bogus_access(
+    tmp_path: Path, mypy_cache: Path
+) -> None:
     # The regression pin: the pre-bead `dict[str, Any]` runner accepts the exact
     # typo the TypedDict rejects. If this ever starts failing, the envelope is no
     # longer `Any` at the seam by accident — but that is the TypedDict's job now.
-    result = _run_mypy(tmp_path, _OLD_DICT_ANY)
+    result = _run_mypy(tmp_path, mypy_cache, _OLD_DICT_ANY)
     assert result.returncode == 0, (
         "dict[str, Any] should type the bogus access as Any and stay green, "
         f"proving why --strict missed it before the TypedDict:\n{result.stdout}{result.stderr}"

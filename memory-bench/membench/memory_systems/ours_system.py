@@ -102,8 +102,10 @@ def _render_payload(item: RetrievedItem) -> str:
     """Render one retrieved item as the injected memory text: the citation plus
     the consumed (not rewritten) lesson payloads, canonically serialized so the
     injected-context volume (Decision-10 precision guard) is deterministic."""
-    citation = item.get("citation", {})
-    lessons = item.get("lessons", [])
+    # `citation`/`lessons` are required `RetrievedItem` keys, so index directly —
+    # same as `item["work_id"]` at the call site; no defensive `.get` default.
+    citation = item["citation"]
+    lessons = item["lessons"]
     return json.dumps(
         {"citation": citation, "lessons": lessons},
         sort_keys=True,
