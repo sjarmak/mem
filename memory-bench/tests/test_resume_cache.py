@@ -24,10 +24,15 @@ from pydantic import ValidationError
 
 from membench.runner.headless_agent import ENV_MODEL, CellCalls, CellRecorder, MemoryChannel
 from membench.runner.resume_cache import (
+    LEAK,
+    SEPARATES,
+    WEAK,
     BaseCachedResult,
     BaseCellOutcome,
     BaseRunIdentity,
+    CorpusRun,
     assert_usable_work_ids,
+    corpus_summary,
     digest,
     invocation_digest,
     load_cached,
@@ -783,3 +788,70 @@ def test_the_verdict_string_and_the_counted_kinds_come_from_one_ladder() -> None
     assert _Result.of("w-1", _identity(), mixed).kinds == ["PASS", "FAIL"]
     # The kinds are not recoverable from the rendered line by any string match — that is the point.
     assert "PASS" not in _Result.of("w-1", _identity(), mixed).verdict
+
+
+# --- corpus_summary is the one owner of the cross-grid headline keys (mem-d9v8k) -------
+
+
+class _VerdictCell(BaseCellOutcome):
+    pass
+
+
+class _VerdictResult(BaseCachedResult[_Identity, _VerdictCell]):
+    """A stand-in whose ``classify`` emits the SHARED verdict kinds, so ``corpus_summary``'s
+    ``separates_all_channels`` / ``leaked`` are exercised at the CORE that now owns them rather than
+    only end-to-end through a grid: ``passes == runs`` -> SEPARATES, ``passes == 0`` -> WEAK, else
+    LEAK."""
+
+    @classmethod
+    def expected_cells(cls) -> set[tuple[str, str]]:
+        return {("a", "recalled"), ("a", "trusted")}
+
+    @classmethod
+    def classify(cls, outcomes: Sequence[_VerdictCell]) -> list[tuple[str, str, str]]:
+        out: list[tuple[str, str, str]] = []
+        for c in outcomes:
+            kind = SEPARATES if c.passes == c.runs else WEAK if c.passes == 0 else LEAK
+            out.append((c.channel, kind, f"{kind}: {c.passes}/{c.runs}"))
+        return out
+
+
+def _verdict_result(work_id: str, recalled: int, trusted: int) -> _VerdictResult:
+    cells = [
+        _VerdictCell(arm="a", channel="recalled", passes=recalled, runs=2),
+        _VerdictCell(arm="a", channel="trusted", passes=trusted, runs=2),
+    ]
+    return _VerdictResult.of(work_id, _identity(), cells)
+
+
+def test_corpus_summary_owns_separates_all_channels_and_leaked() -> None:
+    """The two headline keys EVERY grid emits live in ``corpus_summary`` — the one owner — never
+    copied into each grid's ``run_corpus`` where the two could rename a kind and drift a headline
+    apart with nothing failing (mem-d9v8k). LEAK/SEPARATES/WEAK are the shared vocabulary the grids
+    EXTEND, declared beside the summary that counts them.
+
+    The count is against ``n_channels``, NEVER ``all()`` over whatever kinds a result happens to
+    hold: a result that SEPARATES on one channel but not the other must not be credited as
+    separating on all of them, and an empty grid must credit nothing."""
+    results = [
+        _verdict_result("all-sep", recalled=2, trusted=2),  # SEPARATES, SEPARATES
+        _verdict_result("one-sep", recalled=2, trusted=0),  # SEPARATES, WEAK  -> not all channels
+        _verdict_result("leaks", recalled=1, trusted=2),  # LEAK, SEPARATES
+    ]
+    run = CorpusRun(results=results, executed=3, reused=0)
+    summary = corpus_summary(
+        [_Task(r.work_id) for r in results], run, dry_run=False, repeats=2, n_channels=2
+    )
+    assert summary["separates_all_channels"] == 1  # only "all-sep"
+    assert summary["leaked"] == ["leaks"]
+    # the accounting keys ride along from the same owner
+    assert summary["n_tasks"] == 3
+    assert (summary["executed"], summary["reused"]) == (3, 0)
+
+    empty = corpus_summary(
+        [], CorpusRun(results=[], executed=0, reused=0), dry_run=False, repeats=2, n_channels=2
+    )
+    assert (
+        empty["separates_all_channels"] == 0
+    )  # all() over nothing is vacuously true; a count is not
+    assert empty["leaked"] == []

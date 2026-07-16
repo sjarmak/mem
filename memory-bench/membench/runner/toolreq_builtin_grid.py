@@ -38,6 +38,9 @@ from membench.runner.headless_agent import (
 )
 from membench.runner.realagent_probe import ArmOutcome
 from membench.runner.resume_cache import (
+    LEAK,
+    SEPARATES,
+    WEAK,
     BaseCachedResult,
     BaseCellOutcome,
     BaseRunIdentity,
@@ -193,12 +196,11 @@ def evaluate_task(
     return outcomes
 
 
-# The verdict kinds, most severe first. `cell_kind` returns one of these and the summary counts
-# them; `NOT-ENGAGED` is the kind the 3-arm grid has no room for, and it is the point of the arm.
-LEAK = "LEAK"
-SEPARATES = "SEPARATES"
+# The verdict kind only THIS grid has; LEAK/SEPARATES/WEAK are the shared vocabulary imported from
+# resume_cache, the owner corpus_summary counts them from. `cell_kind` returns one kind per cell and
+# the summary counts them: `NOT-ENGAGED` is the kind the 3-arm grid has no room for, and it is the
+# point of the arm.
 NOT_ENGAGED = "NOT-ENGAGED"
-WEAK = "WEAK"
 
 
 def cell_kind(cell: BuiltinCell) -> tuple[str, str]:
@@ -445,16 +447,10 @@ def run_corpus(
         before_first_spend=before_first_spend,
     )
     results = run.results
-    kinds = {r.work_id: r.kinds for r in results}
     return {
-        **corpus_summary(tasks, run, dry_run=dry_run, repeats=repeats),
-        # Counted against len(CHANNELS), never `all(...)` over whatever cells we happen to hold:
-        # `all([])` is vacuously True, so an empty or short grid would credit "separates on BOTH
-        # channels" off a measurement that covered neither. The schema already refuses a short grid;
-        # this is the second lock on the same headline, stated positively.
-        "separates_all_channels": sum(
-            1 for r in results if kinds[r.work_id].count(SEPARATES) == len(CHANNELS)
-        ),
-        "leaked": [r.work_id for r in results if LEAK in kinds[r.work_id]],
-        "not_engaged": [r.work_id for r in results if NOT_ENGAGED in kinds[r.work_id]],
+        **corpus_summary(tasks, run, dry_run=dry_run, repeats=repeats, n_channels=len(CHANNELS)),
+        # `not_engaged` is the builtin grid's OWN headline — the kind the 3-arm grid has no room
+        # for, and the point of the arm — so it stays here, not in corpus_summary where no other
+        # grid would emit it. separates_all_channels / leaked now come from that one owner.
+        "not_engaged": [r.work_id for r in results if NOT_ENGAGED in r.kinds],
     }

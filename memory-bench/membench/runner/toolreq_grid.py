@@ -36,6 +36,9 @@ from membench.runner.headless_agent import (
 )
 from membench.runner.realagent_probe import ArmOutcome, run_arm
 from membench.runner.resume_cache import (
+    LEAK,
+    SEPARATES,
+    WEAK,
     BaseCachedResult,
     BaseCellOutcome,
     BaseRunIdentity,
@@ -218,12 +221,11 @@ def evaluate_task(
 # an informational suffix (see classify_channels).
 _GATING_ARMS = ("none", "oracle")
 
-# The verdict kinds. `classify_channels` returns one of these per channel and the summary COUNTS
-# them; nothing derives a headline by matching substrings of the rendered line.
-LEAK = "LEAK"
-SEPARATES = "SEPARATES"
+# The verdict kind only THIS grid has; LEAK/SEPARATES/WEAK are the shared vocabulary imported from
+# resume_cache, the owner corpus_summary counts them from. `classify_channels` returns one kind per
+# channel and the summary COUNTS them; nothing derives a headline by matching substrings of the
+# rendered line.
 KILL = "KILL"
-WEAK = "WEAK"
 
 
 def classify_channels(outcomes: Sequence[Cell]) -> list[tuple[str, str, str]]:
@@ -483,16 +485,8 @@ def run_corpus(
         resume=resume,
     )
     results = run.results
-    kinds = {r.work_id: r.kinds for r in results}
     return {
-        **corpus_summary(tasks, run, dry_run=dry_run, repeats=repeats),
-        # Counted against len(CHANNELS), never `all(...)` over whatever cells we happen to hold:
-        # `all([])` is vacuously True, so an empty or short grid would credit "separates on BOTH
-        # channels" off a measurement that covered neither.
-        "separates_all_channels": sum(
-            1 for r in results if kinds[r.work_id].count(SEPARATES) == len(CHANNELS)
-        ),
-        "leaked": [r.work_id for r in results if LEAK in kinds[r.work_id]],
+        **corpus_summary(tasks, run, dry_run=dry_run, repeats=repeats, n_channels=len(CHANNELS)),
         # Attribution, not trivia: for these tasks `ours` was never actually run (empty retrieval,
         # scored none-equivalent), so a flat ours-vs-none result over them means "retrieval
         # surfaced nothing", NOT "memory did not help".

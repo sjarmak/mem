@@ -118,6 +118,17 @@ def render_verdict(classified: Sequence[tuple[str, str, str]]) -> str:
     return " | ".join(f"[{channel}] {line}" for channel, _kind, line in classified)
 
 
+# The verdict kinds shared by every grid that reports through ``corpus_summary``: SEPARATES and LEAK
+# are the two the summary COUNTS across all of them, WEAK the shared "partial, add repeats" rung.
+# Declared HERE — beside the renderer that lays a ladder out and the summary keyed on them — rather
+# than re-declared per grid: two copies of ``"SEPARATES"`` is exactly the drift a resume cache
+# exists to refuse, and it would sit one import from the key that counts it. Each grid EXTENDS this
+# with the kind only it has (``toolreq_grid``: KILL; the builtin grid: NOT-ENGAGED).
+LEAK = "LEAK"
+SEPARATES = "SEPARATES"
+WEAK = "WEAK"
+
+
 class BaseRunIdentity(BaseModel):
     """What a persisted cell was measured under: the run's knobs, and every measured input a grid
     has in common. A consumer subclasses this to add the inputs only it has.
@@ -582,15 +593,33 @@ def corpus_summary(
     *,
     dry_run: bool,
     repeats: int,
+    n_channels: int,
 ) -> dict[str, Any]:
-    """The summary keys EVERY grid emits: what the run covered, what it cost, and the rows behind
-    both. Each grid spreads this and adds only its own headline, so the accounting a paid run is
-    read through has one owner rather than a copy per grid that can drift apart."""
+    """The summary keys EVERY grid emits: what the run covered, what it cost, the two verdict counts
+    every grid shares, and the rows behind them all. Each grid spreads this and adds only its OWN
+    headline (``toolreq_grid``: ``ours_empty_retrieval``; the builtin grid: ``not_engaged``), so the
+    accounting a paid run is read through — the two shared counts included — has one owner rather
+    than a copy per grid that can drift apart. That is why they live HERE and not inline in each
+    ``run_corpus``: they were computed identically in both, one rename from meaning two things.
+
+    ``separates_all_channels`` counts the tasks whose EVERY channel separated, against
+    ``n_channels`` and never ``all(...)`` over the kinds a result happens to hold: ``all([])`` is
+    vacuously True, so an empty or short grid would be credited "separates on every channel" off a
+    measurement that covered none. ``leaked`` is the tasks any of whose channels leaked. Both read
+    ``r.kinds`` — the per-channel kinds off the same ladder that produced each result's ``verdict``
+    — so a headline is never recovered by substring-matching a rendered line."""
+    # Memoized positionally, not by work_id: each result's kinds is read only for that same
+    # result, so a work_id-keyed dict would buy nothing over a list while quietly depending on
+    # work_id uniqueness (a value outside the checks is not defended by the checks) — and this
+    # function is public, callable on a hand-built CorpusRun that never ran assert_usable_work_ids.
+    kinds = [r.kinds for r in run.results]
     return {
         "n_tasks": len(tasks),
         "executed": run.executed,
         "reused": run.reused,
         "dry_run": dry_run,
         "repeats": repeats,
+        "separates_all_channels": sum(1 for k in kinds if k.count(SEPARATES) == n_channels),
+        "leaked": [r.work_id for r, k in zip(run.results, kinds, strict=True) if LEAK in k],
         "per_task": [r.model_dump(mode="json") for r in run.results],
     }
