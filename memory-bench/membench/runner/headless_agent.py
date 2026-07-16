@@ -107,11 +107,12 @@ class CellCalls:
     """The ONE cycle of ``claude -p`` invocations a single ``(arm, channel)`` cell makes.
 
     The unit BOTH halves of a paid grid's cache identity are built from: the grid renders the cycle
-    its plan WILL send (``invocation_fingerprint``), the arm returns the cycle it DID send (recorded
-    off the CLI seam by ``RecordingRunner``, never modelled), and ``resume_cache.run_cached_corpus``
-    refuses to publish a measurement whose sent cycles do not hash to the identity it was measured
-    under. That is what makes the fingerprint the executed input rather than a hand-written model of
-    it, one field short.
+    its plan WILL send (a grid's ``planned_calls``, which ``resume_cache.run_cached_corpus`` hashes
+    into ``invocation_fingerprint``), the arm returns the cycle it DID send (recorded off the CLI
+    seam by ``RecordingRunner``, never modelled), and ``resume_cache.run_cached_corpus`` refuses to
+    publish a measurement whose sent cycles do not hash to the identity it was measured under. That
+    is what makes the fingerprint the executed input rather than a hand-written model of it, one
+    field short.
 
     An ARGV, not a prompt: the prompt is only the third element of the command line the agent
     actually spawns (``HeadlessClaudeAgent.argv_for``), and the flags around it move results too —

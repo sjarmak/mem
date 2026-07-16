@@ -13,6 +13,11 @@ the exact ``claude -p`` command lines the task's cells spawn, and ``run_cached_c
 publish a measurement whose RECORDED invocations do not hash to it. The two halves are what make it
 structural rather than a convention — hash the artifact, and check the artifact against the hash.
 
+And the fingerprint is not a value a grid supplies at all: ``run_cached_corpus`` computes it ITSELF
+from the grid's ``plan_of`` (``invocation_digest``) and refuses any ``identity_of`` that returns a
+different one — before the cache is consulted, so a fully cache-served resume, which never reaches
+the write boundary, is checked too. A grid can no longer author the field by a route of its own.
+
 Every defense below is STRUCTURAL — a property of the schema, not of the caller — and each is
 stated at its own definition. A consumer subclasses ``BaseRunIdentity`` / ``BaseCellOutcome`` /
 ``BaseCachedResult`` to add its own measured inputs and cell fields, and supplies ``expected_cells``
@@ -156,12 +161,16 @@ class BaseRunIdentity(BaseModel):
 
     ``invocation_fingerprint`` hashes the COMMAND LINES THEMSELVES — every ``claude -p`` argv every
     cell will spawn, prompt included — rather than a model of what goes into them, and so it cannot
-    be incomplete *about the invocation*, because it IS the invocation. Its other half is the write
+    be incomplete *about the invocation*, because it IS the invocation. It is not authored here
+    either: ``run_cached_corpus`` derives it from the grid's ``plan_of`` and refuses any identity
+    that carries a different value, before the cache is consulted. Its other half is the write
     boundary: ``run_cached_corpus`` refuses to publish a measurement whose RECORDED invocations do
-    not hash to it (``invocation_digest``), so the two cannot be things that merely agree today.
-    Hashing the whole argv rather than just the prompt is what keeps ``--allowedTools``, ``--model``
-    and ``--strict-mcp-config`` out of ``protocol``'s manual surface: unclamping ``--allowedTools``
-    frees the scored goal leg while moving no task field, no payload and no prompt.
+    not hash to it (``invocation_digest``), so the two cannot be things that merely agree today —
+    and between the two checks, one fires on a cache HIT and the other on a MISS, so neither path is
+    served under a fingerprint that is not the plan's. Hashing the whole argv rather than just the
+    prompt is what keeps ``--allowedTools``, ``--model`` and ``--strict-mcp-config`` out of
+    ``protocol``'s manual surface: unclamping ``--allowedTools`` frees the scored goal leg while
+    moving no task field, no payload and no prompt.
 
     It does NOT subsume ``task_fingerprint`` and is carried ALONGSIDE it, never in place of it: the
     scorer grades fields no command line mentions."""
@@ -461,7 +470,8 @@ def run_cached_corpus(
     *,
     out_dir: Path,
     result_cls: type[ResultT],
-    identity_of: Callable[[TaskT], BaseRunIdentity],
+    plan_of: Callable[[TaskT], Sequence[CellCalls]],
+    identity_of: Callable[[TaskT, str], BaseRunIdentity],
     evaluate: Callable[[TaskT], Evaluation],
     summary_name: str,
     resume: bool = True,
@@ -472,9 +482,18 @@ def run_cached_corpus(
     satisfy a PAID run over the same ``--out``, and a corrupt or partial file is a miss rather than
     a crash.
 
-    ``identity_of`` and ``evaluate`` are injected rather than named: they are the ONLY two things
-    that differ between the grids that share this cache, and injecting them is what keeps the arms,
-    the invocations and the verdict rule of one experiment out of the other's.
+    ``plan_of``, ``identity_of`` and ``evaluate`` are injected rather than named: they are the only
+    things that differ between the grids that share this cache, and injecting them is what keeps the
+    arms, the invocations and the verdict rule of one experiment out of the other's.
+
+    ``plan_of`` returns the ``claude -p`` cycles a task's cells WILL spawn, and THIS function — not
+    the grid — hashes them into ``invocation_fingerprint`` (``invocation_digest``) and hands the
+    value to ``identity_of``. So ``invocation_fingerprint`` is no longer a field any grid can author
+    by a route of its own: whatever ``identity_of`` returns must carry exactly the digest computed
+    here (checked below, for EVERY task, before any spend), and the write boundary then checks the
+    RECORDED invocations against that SAME value. The grid supplies one plan; the fingerprint the
+    identity is compared under and the fingerprint the arms are held to are one thing, owned by this
+    seam rather than two call sites that happen to agree today.
 
     ``before_first_spend`` is a driver's paid warm-up — a preflight cycle, a mechanism check — and
     is injected for the same reason: it must fire once if this run will measure anything and NOT AT
@@ -487,14 +506,19 @@ def run_cached_corpus(
     paid calls. Raising from it aborts the run before anything is measured — how a driver halts a
     sweep it has diagnosed as not worth spending on.
 
-    Injected INDEPENDENTLY, though — which is exactly why the write boundary below exists.
-    Nothing else binds the invocations a grid HASHES to the ones its arms SEND, and a fingerprint
-    left resting on that agreement is one edit from being a hand-written model of the executed
-    input: change what a leg surfaces, forget to move the plan, and every persisted cell still
-    matches, so a resumed PAID run reports ``reused``, spends nothing, does not crash, and
-    publishes pre-change numbers as post-change measurements. A refused measurement is expensive
-    — the ``claude -p`` calls are already made and are NOT written — and that is the cheap end of
-    this failure."""
+    ``plan_of`` (what the arms WILL send) and ``evaluate`` (what they DID) are injected
+    INDEPENDENTLY, though — which is exactly why the write boundary below exists. Nothing else
+    binds them, and a plan left resting on its agreement with the executor is one edit from
+    describing a command line the arms no longer send: change what a leg surfaces, forget to move
+    the plan, and every persisted cell still matches, so a resumed PAID run reports ``reused``,
+    spends nothing, does not crash, and publishes pre-change numbers as post-change measurements. A
+    refused measurement is expensive — the ``claude -p`` calls are already made and are NOT written
+    — and that is the cheap end of this failure.
+
+    What this seam DID close is the third route: the fingerprint is derived from ``plan_of`` HERE,
+    not authored inside ``identity_of``, so a grid can no longer carry a fingerprint computed by any
+    route other than its plan — and that check fires on a cache HIT too, not only on the miss the
+    write boundary sees."""
     out_dir.mkdir(parents=True, exist_ok=True)
     assert_usable_work_ids(tasks, summary_name)
 
@@ -504,7 +528,23 @@ def run_cached_corpus(
     warmed_up = False
     for task in tasks:
         result_path = out_dir / f"{task.work_id}.json"
-        identity = identity_of(task)
+        # The fingerprint is computed HERE, from the plan, and the identity is checked to carry
+        # exactly it — for every task, before any spend and whether it hits or misses. A grid that
+        # returned any other value in `invocation_fingerprint` (a fingerprint built by a route the
+        # plan does not own) is refused at construction, so the write boundary below is no longer
+        # the ONLY place the invocation is bound to the plan: a fully cache-served resume, which
+        # never reaches `evaluate`, is checked here too.
+        plan_fingerprint = invocation_digest(plan_of(task))
+        identity = identity_of(task, plan_fingerprint)
+        if identity.invocation_fingerprint != plan_fingerprint:
+            raise ValueError(
+                f"{task.work_id}: the identity carries invocation_fingerprint "
+                f"{identity.invocation_fingerprint}, but this run's plan hashes to "
+                f"{plan_fingerprint} — the fingerprint is computed by run_cached_corpus from "
+                "plan_of and handed to identity_of, so an identity carrying any other value "
+                "authored the field by a route the plan does not own. Pass through the fingerprint "
+                "you were given; do not recompute it."
+            )
         # No is_file() probe first: load_cached is TOTAL over its path — a missing file raises
         # OSError inside it and is a miss like every other rejection.
         cached = load_cached(result_path, identity, result_cls) if resume else None
@@ -524,11 +564,11 @@ def run_cached_corpus(
             before_first_spend()
         evaluation = evaluate(task)
         sent = invocation_digest(evaluation.calls)
-        if sent != identity.invocation_fingerprint:
+        if sent != plan_fingerprint:
             raise ValueError(
                 f"{task.work_id}: the `claude -p` invocations this task actually made hash to "
                 f"{sent}, but the identity it was measured under fingerprints "
-                f"{identity.invocation_fingerprint} — the grid's plan is no longer what its arms "
+                f"{plan_fingerprint} — the grid's plan is no longer what its arms "
                 "execute. This measurement is NOT written: publishing it would file a real result "
                 "under a fingerprint describing a command line it never sent, and every cell a "
                 "later resume serves on that fingerprint would answer for a different run. Fix the "

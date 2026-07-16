@@ -35,6 +35,7 @@ from membench.harbor.agent_memory import native_memory_path
 from membench.runner import toolreq_builtin_grid as grid
 from membench.runner.headless_agent import (
     ENV_MODEL,
+    CellCalls,
     HeadlessAgentError,
     Leg,
     MemoryChannel,
@@ -921,7 +922,7 @@ def test_a_regenerated_corpus_never_reuses_the_previous_worlds_results(tmp_path:
     # the stale value is never surfaced (the goal requires the CURRENT memory id) and never named in
     # the request (the leak firewall), so BOTH prompts come out byte-identical while the scorer's
     # `forbidden_values` — what a passing Write must NOT carry — is a different token. It is the one
-    # world change `invocation_fingerprint` structurally cannot see, which is why the identity
+    # world change the invocation fingerprint structurally cannot see, which is why the identity
     # carries `task_fingerprint` ALONGSIDE it rather than in place of it. A weaker case (changing
     # the current value too) would move the command lines as well, and would pass with no task
     # fingerprint at all.
@@ -937,8 +938,8 @@ def test_a_regenerated_corpus_never_reuses_the_previous_worlds_results(tmp_path:
     )
     _, regenerated = load_corpus_with_sequences(corpus)
     assert regenerated[0].work_id == tasks[0].work_id  # the id collides, as in the real corpus
-    assert grid.invocation_fingerprint(regenerated[0], model="") == grid.invocation_fingerprint(
-        tasks[0], model=""
+    assert invocation_digest(grid.planned_calls(regenerated[0], model="")) == invocation_digest(
+        grid.planned_calls(tasks[0], model="")
     )
     assert task_fingerprint(regenerated[0]) != task_fingerprint(tasks[0])
 
@@ -1015,7 +1016,7 @@ def test_the_fingerprint_is_the_invocations_the_arm_actually_sends(tmp_path: Pat
         run_builtin_arm(task, repeats=2, model="", dry_run=True, channel=channel)[2]
         for channel in grid.CHANNELS
     ]
-    assert invocation_digest(sent) == grid.invocation_fingerprint(task, model="")
+    assert invocation_digest(sent) == invocation_digest(grid.planned_calls(task, model=""))
 
 
 def test_changing_what_a_leg_surfaces_is_a_miss_not_a_reuse(tmp_path: Path) -> None:
@@ -1086,7 +1087,13 @@ def test_a_plan_that_drifts_from_its_arm_refuses_to_publish(tmp_path: Path, monk
     is the failure it exists to prevent, one run later."""
     tasks = _corpus_one(tmp_path)
     out = tmp_path / "out"
-    monkeypatch.setattr(grid, "invocation_fingerprint", lambda task, *, model: "a-stale-plan")
+    # A plan whose command lines the arm's invocations do not hash to — what an edit to
+    # `run_builtin_arm` that moved the argv without moving the plan produces.
+    stale_plan = [
+        CellCalls(arm=grid.ARM, channel=channel.value, calls=(("claude", "-p", "a-stale-plan"),))
+        for channel in grid.CHANNELS
+    ]
+    monkeypatch.setattr(grid, "planned_calls", lambda task, *, model: stale_plan)
     with pytest.raises(ValueError, match="no longer what its arms execute"):
         grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
     assert not (out / "w-0.json").exists(), "a refused measurement was published anyway"

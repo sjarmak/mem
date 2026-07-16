@@ -100,9 +100,9 @@ def cell_legs(task: ToolReqRealAgentTask) -> tuple[Leg, Leg]:
     """The two calls one ``(builtin, channel)`` cell makes, in order.
 
     THE definition, and the only one. ``run_builtin_arm`` EXECUTES these legs and
-    ``toolreq_builtin_grid.invocation_fingerprint`` RENDERS them, so neither can describe a call the
-    other does not make: change what a leg surfaces and both the sent command line and the cache
-    identity move together, by construction.
+    ``toolreq_builtin_grid.planned_calls`` RENDERS them into the plan ``run_cached_corpus`` hashes,
+    so neither can describe a call the other does not make: change what a leg surfaces and both the
+    sent command line and the cache identity move together, by construction.
 
     What this replaces was two hand-written copies of the same argument triples — a ``cell_prompts``
     that "lives beside ``run_builtin_arm`` and mirrors its two ``run_step`` calls". Adjacency is not
@@ -308,7 +308,8 @@ def run_builtin_arm(
     honest dry-run simulator cannot itself produce.
 
     The two legs come from ``cell_legs`` and the agent from ``cell_agent``, so what this
-    executes and what ``toolreq_builtin_grid.invocation_fingerprint`` hashes are ONE definition.
+    executes and what ``toolreq_builtin_grid.planned_calls`` renders (for ``run_cached_corpus`` to
+    hash into the identity) are ONE definition.
     The invocations are then RECORDED off the CLI seam on top of that (``RecordingRunner``): a leg
     added here and forgotten in the plan would still be seen, because the runner sees the call
     whether or not anyone declared it."""

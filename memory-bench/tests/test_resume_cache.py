@@ -106,13 +106,19 @@ def _run(
     resume: bool = True,
     evaluate=_evaluate,
     before_first_spend=None,
+    identity_of=None,
+    plan_of=lambda _task: _calls(),
 ):
     ident = identity if identity is not None else _identity()
     return run_cached_corpus(
         tasks,
         out_dir=out,
         result_cls=_Result,
-        identity_of=lambda _task: ident,
+        plan_of=plan_of,
+        # The fingerprint run_cached_corpus derives from `plan_of` is handed in as `_fp`; the
+        # default identity carries exactly it (`_calls()` hashed both here and in `_identity`), so
+        # the seam guarantee holds and these cases exercise everything downstream of it.
+        identity_of=identity_of if identity_of is not None else (lambda _task, _fp: ident),
         evaluate=evaluate,
         summary_name=SUMMARY_NAME,
         resume=resume,
@@ -224,6 +230,57 @@ def test_a_matching_measurement_publishes_and_then_resumes(tmp_path: Path) -> No
     assert (first.executed, first.reused) == (1, 0)
     second = _run([_Task("w-0")], out)
     assert (second.executed, second.reused) == (0, 1)
+
+
+# --- the fingerprint is owned by the seam, not authored by the grid (mem-3of76) ---------
+
+
+def test_an_identity_whose_fingerprint_is_not_the_plans_is_refused_before_any_spend(
+    tmp_path: Path,
+) -> None:
+    """The residue mem-swp43 left one construction site up: the identity's
+    ``invocation_fingerprint`` used to be built by the grid, on a route of its own, and only the
+    write boundary — which fires on a MISS — ever checked it against what the arms sent. A third
+    grid, or one refactor, that
+    computed the field by any other route published fine and then served stale numbers on resume.
+
+    ``run_cached_corpus`` now derives the fingerprint from ``plan_of`` and hands it to
+    ``identity_of``; an identity that carries any OTHER value is refused at construction, before the
+    cache is even consulted, so the field can no longer be authored by a divergent route. A driver
+    (``_measuring_evaluate``) that would spend is installed to prove the refusal lands FIRST: it
+    must not run."""
+    out = tmp_path / "out"
+
+    def _measuring_evaluate(_task: _Task) -> Evaluation:
+        raise AssertionError("refused for a divergent fingerprint, yet the task still measured")
+
+    def _authors_its_own_fingerprint(_task: _Task, _fp: str) -> _Identity:
+        # Ignores the fingerprint the seam handed it and computes one by a route of its own.
+        return _identity(invocation_fingerprint=digest("a plan the arms do not send"))
+
+    with pytest.raises(ValueError, match="authored the field by a route the plan does not own"):
+        _run(
+            [_Task("w-0")],
+            out,
+            identity_of=_authors_its_own_fingerprint,
+            evaluate=_measuring_evaluate,
+        )
+    assert not (out / "w-0.json").exists()
+
+
+def test_a_divergent_fingerprint_is_refused_on_a_cache_hit_too(tmp_path: Path) -> None:
+    """The half the write boundary structurally cannot reach: a fully cache-served resume never
+    calls ``evaluate``, so before this seam nothing re-checked its stored fingerprint against the
+    plan. Publish a task honestly, then resume with an ``identity_of`` that authors a divergent
+    fingerprint — the run must be refused at the seam, not served as ``reused``."""
+    out = tmp_path / "out"
+    assert _run([_Task("w-0")], out).executed == 1
+
+    def _authors_its_own_fingerprint(_task: _Task, _fp: str) -> _Identity:
+        return _identity(invocation_fingerprint=digest("a plan the arms do not send"))
+
+    with pytest.raises(ValueError, match="authored the field by a route the plan does not own"):
+        _run([_Task("w-0")], out, identity_of=_authors_its_own_fingerprint)
 
 
 # --- the model rule, made structural ---------------------------------------------------

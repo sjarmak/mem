@@ -42,7 +42,6 @@ from membench.runner.resume_cache import (
     BaseRunIdentity,
     Evaluation,
     corpus_summary,
-    invocation_digest,
     render_verdict,
     run_cached_corpus,
 )
@@ -324,16 +323,18 @@ def preflight_gate(
     return _gate
 
 
-def invocation_fingerprint(task: ToolReqRealAgentTask, *, model: str) -> str:
-    """Hashes the COMMAND LINES THEMSELVES — every ``claude -p`` argv every cell will spawn.
+def planned_calls(task: ToolReqRealAgentTask, *, model: str) -> list[CellCalls]:
+    """The ``claude -p`` cycles every cell WILL spawn — the plan ``run_cached_corpus`` hashes into
+    ``invocation_fingerprint`` and checks the recorded invocations against.
 
-    Rendered from ``toolreq_builtin.cell_legs`` through ``headless_agent.cell_agent``: the same
-    legs ``run_builtin_arm`` executes, through the same agent it executes them with. So this cannot
-    fingerprint an invocation the arm does not make — it is not a copy of the arm's behaviour kept
-    beside it, it is the arm's own plan. The write boundary then checks the RECORDED invocations
-    against it (``resume_cache.run_cached_corpus``), which is what catches a leg the plan never
-    declared."""
-    return invocation_digest(cell_calls(task, channel, model=model) for channel in CHANNELS)
+    Rendered from ``toolreq_builtin.cell_legs`` through ``cell_calls``: the same legs
+    ``run_builtin_arm`` executes, through the same rendering. So the plan cannot describe an
+    invocation the arm does not make — it is not a copy of the arm's behaviour kept beside it, it is
+    the arm's own plan. This grid hands the cache the plan and never authors the fingerprint field
+    itself: the seam digests it and refuses an identity that carries any other value, and the write
+    boundary then checks the RECORDED invocations against it (``resume_cache.run_cached_corpus``),
+    which is what catches a leg the plan never declared."""
+    return [cell_calls(task, channel, model=model) for channel in CHANNELS]
 
 
 class BuiltinRunIdentity(BaseRunIdentity):
@@ -375,8 +376,13 @@ def _identity(
     resolved_model: str,
     cli_version: str,
     dry_run: bool,
+    invocation_fingerprint: str,
 ) -> BuiltinRunIdentity:
-    """The cache identity for one task (see ``BuiltinRunIdentity`` / ``BaseRunIdentity``)."""
+    """The cache identity for one task (see ``BuiltinRunIdentity`` / ``BaseRunIdentity``).
+
+    ``invocation_fingerprint`` is not computed here — ``resume_cache.run_cached_corpus`` derives it
+    from ``planned_calls`` and hands it in, refusing an identity that carries any other value, so
+    the grid cannot author the field by a route of its own."""
     return BuiltinRunIdentity(
         repeats=repeats,
         dry_run=dry_run,
@@ -384,7 +390,7 @@ def _identity(
         cli_version=cli_version,
         protocol=EXECUTION_PROTOCOL,
         task_fingerprint=task_fingerprint(task),
-        invocation_fingerprint=invocation_fingerprint(task, model=resolved_model),
+        invocation_fingerprint=invocation_fingerprint,
         mechanism_fingerprint=mechanism_fingerprint(),
     )
 
@@ -420,12 +426,14 @@ def run_corpus(
         tasks,
         out_dir=out_dir,
         result_cls=BuiltinCachedResult,
-        identity_of=lambda task: _identity(
+        plan_of=lambda task: planned_calls(task, model=resolved_model),
+        identity_of=lambda task, invocation_fingerprint: _identity(
             task,
             repeats=repeats,
             resolved_model=resolved_model,
             cli_version=cli_version,
             dry_run=dry_run,
+            invocation_fingerprint=invocation_fingerprint,
         ),
         evaluate=lambda task: evaluate_task(
             task, repeats=repeats, model=resolved_model, dry_run=dry_run

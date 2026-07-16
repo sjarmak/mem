@@ -42,7 +42,6 @@ from membench.runner.resume_cache import (
     Evaluation,
     corpus_summary,
     digest,
-    invocation_digest,
     render_verdict,
     run_cached_corpus,
 )
@@ -67,8 +66,8 @@ __all__ = [
     "classify_channels",
     "evaluate_task",
     "expected_cells",
-    "invocation_fingerprint",
     "payload_fingerprint",
+    "planned_calls",
     "planned_cells",
     "run_corpus",
     "task_verdict",
@@ -141,7 +140,7 @@ def planned_cells(
 ) -> list[PlannedCell]:
     """THE definition of what this grid executes: every cell that will spawn a ``claude -p``.
 
-    ``evaluate_task`` runs it, ``invocation_fingerprint`` renders it, and ``_identity`` derives
+    ``evaluate_task`` runs it, ``planned_calls`` renders it, and ``_identity`` derives
     ``ours_retrieval_empty`` from it, so the three cannot disagree about what the grid does. The
     skip predicate below used to be written three ways in this file — once in the executor, once
     (as "never skip") in the fingerprint, once in the identity flag — which is the same shape as the
@@ -288,20 +287,23 @@ def payload_fingerprint(ours_payload: Mapping[str, str]) -> str:
     return digest(list(ours_payload.items()))
 
 
-def invocation_fingerprint(
+def planned_calls(
     task: ToolReqRealAgentTask, ours_payload: Mapping[str, str], *, model: str
-) -> str:
-    """Hashes the COMMAND LINES THEMSELVES — the exact ``claude -p`` argv every planned cell will
-    spawn. See ``BaseRunIdentity.invocation_fingerprint``: it cannot be incomplete about the
-    invocation, because it IS the invocation.
+) -> list[CellCalls]:
+    """The ``claude -p`` cycles every planned cell WILL spawn — the plan ``run_cached_corpus``
+    hashes into ``invocation_fingerprint`` and checks the recorded invocations against.
 
-    Rendered from ``planned_cells`` through ``headless_agent.cell_agent`` — the same cells
-    ``evaluate_task`` runs, through the same agent it runs them with. Building one is string
+    Rendered from ``planned_cells`` through ``headless_agent.render_cell_calls`` — the same cells
+    ``evaluate_task`` runs, through the same rendering ``run_arm`` records off the CLI seam. This
+    grid hands the cache the PLAN and never authors the fingerprint field itself: the seam digests
+    this and refuses an identity that carries any other value (see
+    ``resume_cache.run_cached_corpus`` and ``BaseRunIdentity.invocation_fingerprint``, which argues
+    why hashing the whole argv cannot be incomplete about the invocation). Building one is string
     assembly: FREE, no agent turn."""
-    return invocation_digest(
+    return [
         render_cell_calls(arm=cell.arm, channel=cell.channel, legs=[cell.leg], model=model)
         for cell in planned_cells(task, ours_payload)
-    )
+    ]
 
 
 class RunIdentity(BaseRunIdentity):
@@ -381,8 +383,13 @@ def _identity(
     resolved_model: str,
     cli_version: str,
     dry_run: bool,
+    invocation_fingerprint: str,
 ) -> RunIdentity:
     """The cache identity for one task (see ``RunIdentity`` / ``BaseRunIdentity``).
+
+    ``invocation_fingerprint`` is not computed here — ``resume_cache.run_cached_corpus`` derives it
+    from ``planned_calls`` and hands it in, and refuses an identity that carries any other value. So
+    the grid cannot author the field by a route of its own; it passes through the one the seam owns.
 
     The three payload-derived fields are bound from ONE payload object, not three lookups of it:
     they must describe the same retrieval or they describe nothing, and a fourth such field added
@@ -401,7 +408,7 @@ def _identity(
         arms=list(ARMS),
         protocol=EXECUTION_PROTOCOL,
         task_fingerprint=task_fingerprint(task),
-        invocation_fingerprint=invocation_fingerprint(task, ours_payload, model=resolved_model),
+        invocation_fingerprint=invocation_fingerprint,
         ours_payload_fingerprint=payload_fingerprint(ours_payload),
         ours_retrieval_empty=not any(cell.arm == RETRIEVING_ARM for cell in planned),
     )
@@ -450,13 +457,17 @@ def run_corpus(
         tasks,
         out_dir=out_dir,
         result_cls=CachedResult,
-        identity_of=lambda task: _identity(
+        plan_of=lambda task: planned_calls(
+            task, ours_payloads.get(task.work_id, {}), model=resolved_model
+        ),
+        identity_of=lambda task, invocation_fingerprint: _identity(
             task,
             ours_payloads.get(task.work_id, {}),
             repeats=repeats,
             resolved_model=resolved_model,
             cli_version=cli_version,
             dry_run=dry_run,
+            invocation_fingerprint=invocation_fingerprint,
         ),
         evaluate=lambda task: evaluate_task(
             task,

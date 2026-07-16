@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field, ValidationError
 from membench.generators.toolreq_bundle_adapter import _goal_step
 from membench.metrics.scorers import states_value
 from membench.runner import toolreq_grid as grid
-from membench.runner.headless_agent import Leg, render_cell_calls
+from membench.runner.headless_agent import CellCalls, Leg, render_cell_calls
 from membench.runner.resume_cache import invocation_digest, load_cached
 from membench.runner.toolreq_realagent import (
     ToolReqRealAgentTask,
@@ -1285,11 +1285,11 @@ def test_duplicate_work_ids_are_refused(tmp_path: Path) -> None:
 
 
 def invocation_fp(task: ToolReqRealAgentTask, payload: dict[str, str]) -> str:
-    return grid.invocation_fingerprint(task, payload, model="")
+    return invocation_digest(grid.planned_calls(task, payload, model=""))
 
 
 def test_invocation_fingerprint_catches_what_a_field_model_misses(tmp_path: Path) -> None:
-    """The point of invocation_fingerprint: it hashes the COMMAND LINE, not a model of it.
+    """The point of the invocation fingerprint: it hashes the COMMAND LINE, not a model of it.
 
     Every defect in this file's history was the same shape -- the identity hashed a field-by-field
     MODEL of the executed input and the model was missing a field (memory ORDER, retrieval RANK,
@@ -1335,7 +1335,7 @@ def test_the_fingerprint_is_the_invocations_the_arms_actually_send(tmp_path: Pat
     task = tasks[0]
     payload = {"w-prior": "the retention window is TOKEN-abc"}
     sent = grid.evaluate_task(task, repeats=2, model="", dry_run=True, ours_payload=payload).calls
-    assert invocation_digest(sent) == grid.invocation_fingerprint(task, payload, model="")
+    assert invocation_digest(sent) == invocation_digest(grid.planned_calls(task, payload, model=""))
 
 
 def test_the_never_run_ours_cell_contributes_a_row_but_no_invocation(tmp_path: Path) -> None:
@@ -1350,7 +1350,28 @@ def test_the_never_run_ours_cell_contributes_a_row_but_no_invocation(tmp_path: P
 
     assert {(c.arm, c.channel) for c in evaluation.outcomes} == grid.expected_cells()
     assert not any(c.arm == "ours" for c in evaluation.calls)
-    assert invocation_digest(evaluation.calls) == grid.invocation_fingerprint(task, {}, model="")
+    assert invocation_digest(evaluation.calls) == invocation_digest(
+        grid.planned_calls(task, {}, model="")
+    )
+
+
+def test_a_plan_that_drifts_from_its_arms_refuses_to_publish(tmp_path: Path, monkeypatch) -> None:
+    """The run_corpus-level bond, the realagent grid's own copy of the builtin grid's
+    ``test_a_plan_that_drifts_from_its_arm_refuses_to_publish``. Freeze the plan at command lines
+    the arms' invocations do not hash to — what an edit to ``run_arm`` or the prompt builder that
+    moved the argv without moving ``planned_calls`` produces — and the measurement must be REFUSED
+    at the write boundary, not filed: a refused measurement that still wrote its file would be
+    served by the very next resume."""
+    sequences, tasks = _corpus_one(tmp_path)
+    out = tmp_path / "out"
+    stale_plan = [
+        CellCalls(arm="none", channel=channel.value, calls=(("claude", "-p", "a-stale-plan"),))
+        for channel in grid.CHANNELS
+    ]
+    monkeypatch.setattr(grid, "planned_calls", lambda task, ours_payload, *, model: stale_plan)
+    with pytest.raises(ValueError, match="no longer what its arms execute"):
+        _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "s.db")
+    assert not (out / "w-0.json").exists(), "a refused measurement was published anyway"
 
 
 def test_forged_not_empty_flag_with_a_fabricated_ours_cell_is_a_miss(tmp_path: Path) -> None:
