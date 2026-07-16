@@ -59,7 +59,11 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from membench.runner.headless_agent import DEFAULT_TIMEOUT_S, a_paid_run_needs_a_model
+from membench.runner.headless_agent import (
+    DEFAULT_TIMEOUT_S,
+    REFUSE_UNPINNED_MODEL,
+    a_paid_run_needs_a_model,
+)
 from membench.runner.toolreq_grid import ARMS, CHANNELS, SUMMARY_NAME, run_corpus
 from membench.runner.toolreq_realagent import (
     load_corpus_with_sequences,
@@ -71,16 +75,6 @@ DEFAULT_CORPUS = PROJECT_ROOT / "memory-bench/fixtures/worlds-tool"
 DEFAULT_OUT = PROJECT_ROOT / ".mem/toolreq-realagent"
 DEFAULT_MEM_BIN = str(PROJECT_ROOT / "bin/mem")
 ENV_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN"
-
-# A paid sweep left unpinned executes under the CLI's own default — a model this codebase never
-# records — so its cache identity keys on "" and would serve one model's numbers as another's on a
-# resume across a model change (mem-bzv2p). Refuse before spending; resume_cache is the backstop.
-_REFUSE_UNPINNED_MODEL = (
-    "REFUSING to spend: no model named. An unpinned paid run executes under the CLI's own\n"
-    '  default, which this benchmark never records — its cache identity would key on "" and\n'
-    "  serve one model's numbers as another's on a resume across a model change.\n"
-    "  Pass --model <id>, or set MEMBENCH_AGENT_MODEL, then re-run (or --dry-run for free)."
-)
 
 
 def _print_go_command(n_tasks: int, repeats: int, out_dir: Path, corpus_dir: Path) -> None:
@@ -144,7 +138,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     if a_paid_run_needs_a_model(args.model, dry_run=args.dry_run):
-        print(_REFUSE_UNPINNED_MODEL)
+        print(REFUSE_UNPINNED_MODEL)
         return 2
 
     mode = "DRY-RUN (simulated agent, no tokens)" if args.dry_run else "PAID real claude -p"

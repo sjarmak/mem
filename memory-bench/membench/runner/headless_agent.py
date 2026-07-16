@@ -91,6 +91,17 @@ def a_paid_run_needs_a_model(model: str, *, dry_run: bool) -> bool:
     return not dry_run and not resolve_model(model)
 
 
+# The refusal a paid grid prints when ``a_paid_run_needs_a_model`` fires — held here beside the rule
+# so the grid drivers defer to one string rather than hand-copy it (mem-bzv2p). The probe keeps its
+# own shorter variant: it names no cache identity to serve because it caches nothing.
+REFUSE_UNPINNED_MODEL = (
+    "REFUSING to spend: no model named. An unpinned paid run executes under the CLI's own\n"
+    '  default, which this benchmark never records — its cache identity would key on "" and\n'
+    "  serve one model's numbers as another's on a resume across a model change.\n"
+    "  Pass --model <id>, or set MEMBENCH_AGENT_MODEL, then re-run (or --dry-run for free)."
+)
+
+
 @dataclass(frozen=True)
 class CellCalls:
     """The ONE cycle of ``claude -p`` invocations a single ``(arm, channel)`` cell makes.
