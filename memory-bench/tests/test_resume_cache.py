@@ -291,10 +291,14 @@ def test_upgrading_the_cli_between_runs_is_a_miss_not_a_relabel(tmp_path: Path) 
     --out. The cached cells must MISS and re-measure — never be served as `reused` with the old
     binary's numbers relabelled as the new instrument's."""
     out = tmp_path / "out"
-    first = _run([_Task("w-0")], out, _identity(dry_run=False, cli_version="2.1.173"))
+    first = _run(
+        [_Task("w-0")], out, _identity(dry_run=False, cli_version="2.1.173", model="sonnet")
+    )
     assert (first.executed, first.reused) == (1, 0)
 
-    second = _run([_Task("w-0")], out, _identity(dry_run=False, cli_version="2.1.210"))
+    second = _run(
+        [_Task("w-0")], out, _identity(dry_run=False, cli_version="2.1.210", model="sonnet")
+    )
     assert (second.executed, second.reused) == (1, 0), "served one binary's numbers as another's"
 
 
@@ -311,6 +315,36 @@ def test_a_record_written_with_an_unresolved_model_is_unloadable(
     monkeypatch.setenv(ENV_MODEL, "model-two")
     result_path = out / "w-0.json"
     assert load_cached(result_path, _identity(model="model-two"), _Result) is None
+
+
+# --- the model a paid cell RAN UNDER (mem-bzv2p) ---------------------------------------
+
+
+def test_a_paid_identity_must_name_the_model_it_ran_under(monkeypatch) -> None:
+    """THE defect: a paid cell left unpinned names no model, and "" is not one — it is a RULE the
+    CLI evaluates, against inputs this codebase never sees. `ANTHROPIC_MODEL` is the one that
+    prompted this (the CLI honours it as a selector; only an explicit `--model` overrides it), but
+    naming it is beside the point: `settings.json`'s model key reaches the CLI through a FILE, and
+    the alias remaps (`ANTHROPIC_DEFAULT_SONNET_MODEL`) move even a pinned `sonnet`. Enumerating
+    them is what `resume_cache`'s whole thesis refuses. So the gate is on the ANSWER, not the
+    inputs: two sweeps on genuinely different models both store "", match on every field, and the
+    resume publishes one model's numbers as the other's at `executed=0` with nothing raised.
+
+    The env is cleared so this asserts THIS gate and not
+    `_model_is_the_one_the_agent_will_actually_run_under` — with `MEMBENCH_AGENT_MODEL` set, "" is
+    already unconstructible for a different reason and the test would pass without the gate."""
+    monkeypatch.delenv(ENV_MODEL, raising=False)
+    with pytest.raises(ValidationError, match="cannot name the model"):
+        _identity(dry_run=False, cli_version="2.1.210", model="")
+
+
+def test_a_dry_run_identity_may_leave_the_model_to_the_cli(monkeypatch) -> None:
+    """The asymmetry with `cli_version` is deliberate, not an oversight. That field is REFUSED on a
+    dry run (a version stamped on a process that never started is a false claim); this one is
+    merely ALLOWED to be empty. A dry run spawns no model to misname and spends nothing on it, and
+    a plan for the CLI's default is a legitimate thing to fingerprint for free."""
+    monkeypatch.delenv(ENV_MODEL, raising=False)
+    assert _identity(dry_run=True, model="").model == ""
 
 
 # --- whole-object identity -------------------------------------------------------------
@@ -352,7 +386,9 @@ def test_a_free_dry_run_never_satisfies_a_paid_run(tmp_path: Path) -> None:
     # turns on — the version rides along because a paid identity cannot be built without one.
     out = tmp_path / "out"
     _run([_Task("w-0")], out, _identity(dry_run=True))
-    paid = _run([_Task("w-0")], out, _identity(dry_run=False, cli_version="2.1.210"))
+    paid = _run(
+        [_Task("w-0")], out, _identity(dry_run=False, cli_version="2.1.210", model="sonnet")
+    )
     assert (paid.executed, paid.reused) == (1, 0)
 
 

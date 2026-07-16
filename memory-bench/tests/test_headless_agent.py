@@ -22,6 +22,7 @@ from membench.runner.headless_agent import (
     MemoryChannel,
     RecordingRunner,
     _render_only_runner,
+    a_paid_run_needs_a_model,
     build_agent_prompt,
     one_cycle,
     resolve_cli_version,
@@ -327,6 +328,20 @@ def test_env_model_resolves_and_passes_non_empty_flag(monkeypatch: pytest.Monkey
     argv = agent.argv_for(_step(), {})
     assert argv[argv.index("--model") + 1] == "claude-opus"
     assert agent._resolved_model == "claude-opus"
+
+
+def test_a_paid_run_needs_a_model_only_when_paid_and_unpinned(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The ONE spend-refusal rule the three drivers defer to (mem-bzv2p): refuse only a PAID run
+    that resolves to no model. A dry run never needs one; an explicit pin or MEMBENCH_AGENT_MODEL
+    satisfies it."""
+    monkeypatch.delenv(ENV_MODEL, raising=False)
+    assert a_paid_run_needs_a_model("", dry_run=False) is True  # paid + unpinned -> refuse
+    assert a_paid_run_needs_a_model("", dry_run=True) is False  # dry run never needs a model
+    assert a_paid_run_needs_a_model("sonnet", dry_run=False) is False  # explicit pin
+    monkeypatch.setenv(ENV_MODEL, "claude-opus")
+    assert a_paid_run_needs_a_model("", dry_run=False) is False  # MEMBENCH_AGENT_MODEL names it
 
 
 # --------------------------------------------------------------------------- #

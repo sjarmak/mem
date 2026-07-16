@@ -80,6 +80,17 @@ def resolve_model(model: str) -> str:
     return model or os.environ.get(ENV_MODEL, "")
 
 
+def a_paid_run_needs_a_model(model: str, *, dry_run: bool) -> bool:
+    """Whether a spend must be REFUSED for naming no model — the ONE place this rule lives, so the
+    paid drivers all defer to it rather than hand-copy ``not dry_run and not resolve_model(...)``.
+
+    A paid run whose ``resolve_model`` is empty executes under the CLI's own default, which no cache
+    identity records, so a resume across a model change would serve one model's numbers as another's
+    (mem-bzv2p; ``resume_cache.BaseRunIdentity._a_paid_run_names_the_model_it_executed_under`` is
+    the schema backstop). A dry run spawns nothing and may leave the model to the CLI."""
+    return not dry_run and not resolve_model(model)
+
+
 @dataclass(frozen=True)
 class CellCalls:
     """The ONE cycle of ``claude -p`` invocations a single ``(arm, channel)`` cell makes.

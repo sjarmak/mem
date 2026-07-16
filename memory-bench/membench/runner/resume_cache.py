@@ -130,6 +130,13 @@ class BaseRunIdentity(BaseModel):
     on any comment edit and re-spend real money. It still does not reach the ``claude`` binary's
     PATH or account config — those remain uncovered, and honestly so.
 
+    ``model`` is the model a paid cell RAN UNDER, and is defended twice: it must be a fixed point of
+    ``resolve_model`` (``_model_is_the_one_the_agent_will_actually_run_under``, so a repointed
+    ``MEMBENCH_AGENT_MODEL`` is a miss not a relabel) AND, on the paid path, it must NAME a model
+    (``_a_paid_run_names_the_model_it_executed_under``, so ``""`` — a deferral to the CLI's own
+    default nothing here records — cannot be persisted as a measurement). A dry run may leave it
+    empty. Like ``cli_version`` it is asserted here, not observed off the run's stream; mem-bzv2p.
+
     ``cli_version`` is the binary a paid cell was measured ON, resolved off the instrument itself
     (``headless_agent.resolve_cli_version``) rather than left to ``protocol``'s manual bump. The
     two gaps are not the same kind: a scorer change is made BY the person who would bump the
@@ -197,6 +204,38 @@ class BaseRunIdentity(BaseModel):
                 f"model {self.model!r} is not the one the agent would run under ({resolved!r}): a "
                 "cache identity must store the RESOLVED model (headless_agent.resolve_model), or a "
                 "repointed MEMBENCH_AGENT_MODEL serves one model's numbers as another's"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _a_paid_run_names_the_model_it_executed_under(self) -> Self:
+        """The paid side of ``model``, bounded like ``cli_version`` — structural, so a driver that
+        fires the sweep unpinned gets a ValidationError rather than an identity that names no model.
+
+        The fixed-point check above keeps ``model`` honest ABOUT ``resolve_model``, but ``""`` is a
+        fixed point of that rule (an unpinned run, no ``MEMBENCH_AGENT_MODEL``) and ``""`` is not a
+        model: it defers to the CLI's OWN default, a rule the CLI evaluates against inputs this
+        codebase never sees (``ANTHROPIC_MODEL``, ``settings.json``, the
+        ``ANTHROPIC_DEFAULT_*_MODEL`` aliases). So two paid sweeps on genuinely different models
+        both store ``""``, match on every field, and the resume serves one model's numbers as the
+        other's at ``executed=0`` with nothing raised — this module's whole defect family, at the
+        input the identity most loudly claims to cover. A paid identity must therefore NAME a model;
+        a dry run spawns none to
+        misname and may leave it empty (its plan for the CLI default is a legitimate free
+        fingerprint — the asymmetry with ``cli_version``, which a dry run is REFUSED, is that a
+        version stamped on a process that never started is a false claim while an empty model is
+        merely a deferral).
+
+        Only a backstop: the ``model`` that reaches the identity is ASSERTED, not OBSERVED off the
+        run's own stream the way ``harbor.probe_gate.assert_run_pins`` reads a fresh run's init
+        event. The drivers refuse the unpinned spend first; this refuses to PERSIST it (mem-bzv2p).
+        """
+        if not self.dry_run and not self.model:
+            raise ValueError(
+                "a paid identity cannot name the model it ran under: an unpinned paid run defers "
+                "to the CLI's own default (ANTHROPIC_MODEL, settings.json, alias remaps), which "
+                "this codebase never records, so its identity matches every later resume on any "
+                "model — pin --model, or set MEMBENCH_AGENT_MODEL, so the executed model is named"
             )
         return self
 

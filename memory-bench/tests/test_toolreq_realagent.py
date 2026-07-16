@@ -78,11 +78,14 @@ def _run_corpus(
     *,
     dry_run: bool,
     store_path: Path,
+    model: str = "",
     seed_fn: Callable[..., dict[str, dict[str, str]]] = _no_ours_payload,
     version_fn: Callable[[], str] = lambda: STUB_CLI_VERSION,
 ) -> dict[str, Any]:
-    """grid.run_corpus with the hermetic test wiring (repeats=2, no model, stubbed
-    seed_fn + version_fn) — only what a test actually varies rides in its call.
+    """grid.run_corpus with the hermetic test wiring (repeats=2, stubbed seed_fn + version_fn) —
+    only what a test actually varies rides in its call. ``model`` defaults to "" (the CLI default,
+    legitimate on a dry run); a PAID-path case (dry_run=False) must pin one or the identity refuses
+    to name the model it ran under (resume_cache; mem-bzv2p).
 
     mem_bin is handed to seed_fn and nowhere else, so the stubbed seeder never touches it;
     it is not part of the run identity (the resolved PAYLOAD is — see payload_fingerprint).
@@ -96,7 +99,7 @@ def _run_corpus(
         sequences,
         out_dir=out,
         repeats=2,
-        model="",
+        model=model,
         dry_run=dry_run,
         store_path=store_path,
         mem_bin=str(MEM_BIN),
@@ -596,10 +599,12 @@ def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -
 
     def _spy(task, **_kwargs):
         calls["n"] += 1
-        return real_eval(task, repeats=2, model="", dry_run=True)  # simulate, never spend
+        # dry_run simulates (never spends) but keeps the grid's resolved model, so the recorded
+        # argv matches a pinned paid identity's invocation_fingerprint (mem-bzv2p).
+        return real_eval(task, repeats=2, model=_kwargs["model"], dry_run=True)
 
     monkeypatch.setattr(grid, "evaluate_task", _spy)
-    paid = _run_corpus(tasks, sequences, out, dry_run=False, store_path=store_path)
+    paid = _run_corpus(tasks, sequences, out, dry_run=False, store_path=store_path, model="sonnet")
     assert paid["executed"] == 1 and paid["reused"] == 0
     assert calls["n"] == 1
 
@@ -637,23 +642,43 @@ def test_upgrading_the_cli_between_runs_is_a_miss_not_a_relabel(
 
     def _spy(task, **_kwargs):
         calls["n"] += 1
-        return real_eval(task, repeats=2, model="", dry_run=True)  # simulate, never spend
+        # dry_run simulates (never spends) but keeps the grid's resolved model, so the recorded
+        # argv matches a pinned paid identity's invocation_fingerprint (mem-bzv2p).
+        return real_eval(task, repeats=2, model=_kwargs["model"], dry_run=True)
 
     monkeypatch.setattr(grid, "evaluate_task", _spy)
     first = _run_corpus(
-        tasks, sequences, out, dry_run=False, store_path=store_path, version_fn=lambda: "2.1.173"
+        tasks,
+        sequences,
+        out,
+        dry_run=False,
+        store_path=store_path,
+        model="sonnet",
+        version_fn=lambda: "2.1.173",
     )
     assert (first["executed"], first["reused"]) == (1, 0)
 
     second = _run_corpus(
-        tasks, sequences, out, dry_run=False, store_path=store_path, version_fn=lambda: "2.1.210"
+        tasks,
+        sequences,
+        out,
+        dry_run=False,
+        store_path=store_path,
+        model="sonnet",
+        version_fn=lambda: "2.1.210",
     )
     assert (second["executed"], second["reused"]) == (1, 0), "old binary's numbers, new instrument"
     assert calls["n"] == 2
 
     # ...and the same binary still resumes: the field must not make every paid run a miss.
     third = _run_corpus(
-        tasks, sequences, out, dry_run=False, store_path=store_path, version_fn=lambda: "2.1.210"
+        tasks,
+        sequences,
+        out,
+        dry_run=False,
+        store_path=store_path,
+        model="sonnet",
+        version_fn=lambda: "2.1.210",
     )
     assert (third["executed"], third["reused"]) == (0, 1)
 
@@ -1514,6 +1539,24 @@ def test_driver_refuses_to_spend_without_token(tmp_path: Path, monkeypatch) -> N
 
     def _boom(*_a: object, **_k: object) -> object:
         raise AssertionError("must NOT spawn claude when the spend gate fires")
+
+    monkeypatch.setattr(_rp.subprocess, "run", _boom)
+    code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
+    assert code == 2
+
+
+def test_driver_refuses_to_spend_without_a_named_model(tmp_path: Path, monkeypatch) -> None:
+    # mem-bzv2p: token present, but no model named (no --model, no MEMBENCH_AGENT_MODEL) -> exit 2
+    # and never spawn claude. Same financial-safety contract as the token gate; an unpinned paid run
+    # keys its cache identity on "" and would serve one model's numbers as another's on resume. The
+    # gate fires in main() before run_corpus/seed_fn, so it needs no built bin/mem.
+    _corpus_one(tmp_path)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.delenv("MEMBENCH_AGENT_MODEL", raising=False)
+    from membench.runner import realagent_probe as _rp
+
+    def _boom(*_a: object, **_k: object) -> object:
+        raise AssertionError("must NOT spawn claude when the model gate fires")
 
     monkeypatch.setattr(_rp.subprocess, "run", _boom)
     code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])

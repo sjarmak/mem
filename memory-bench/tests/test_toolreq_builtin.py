@@ -224,7 +224,7 @@ def _builtin_arm(
     a missed one would leave a double silently disagreeing with the write boundary it must satisfy.
     Mirrors `test_toolreq_realagent._spy_run_arm`, including its optional `seen` recorder."""
 
-    def run(task, *, repeats: int, channel: MemoryChannel, **_kwargs):
+    def run(task, *, repeats: int, channel: MemoryChannel, model: str = "", **_kwargs):
         if seen is not None:
             seen.append(channel.value)  # a real paid cell would spawn `claude -p` here
         return (
@@ -236,7 +236,10 @@ def _builtin_arm(
                 leaked=repeats if leaked else 0,
                 runs=repeats,
             ),
-            cell_calls(task, channel, model=""),
+            # Honour the model the grid resolved, exactly as the real arm does — else the recorded
+            # argv omits `--model` while a pinned identity carries it, and the write boundary
+            # rejects the cell as a plan/execution mismatch (mem-bzv2p pins a model on paid runs).
+            cell_calls(task, channel, model=model),
         )
 
     return run
@@ -823,11 +826,18 @@ def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -
 
     def _spy(task, **_kwargs):
         calls["n"] += 1
-        return real_eval(task, repeats=1, model="", dry_run=True)  # simulate, never spend
+        # dry_run simulates (never spends) but keeps the grid's resolved model, so the recorded
+        # argv matches a pinned paid identity's invocation_fingerprint (mem-bzv2p).
+        return real_eval(task, repeats=1, model=_kwargs["model"], dry_run=True)
 
     monkeypatch.setattr(grid, "evaluate_task", _spy)
     paid = grid.run_corpus(
-        tasks, out_dir=out, repeats=1, model="", dry_run=False, version_fn=lambda: STUB_CLI_VERSION
+        tasks,
+        out_dir=out,
+        repeats=1,
+        model="sonnet",
+        dry_run=False,
+        version_fn=lambda: STUB_CLI_VERSION,
     )
     assert paid["executed"] == 1 and paid["reused"] == 0
     assert calls["n"] == 1
@@ -844,22 +854,34 @@ def test_upgrading_the_cli_between_runs_is_a_miss_not_a_relabel(
     real_eval = grid.evaluate_task
 
     def _spy(task, **_kwargs):
-        return real_eval(task, repeats=1, model="", dry_run=True)  # simulate, never spend
+        # dry_run simulates (never spends) but keeps the grid's resolved model, so the recorded
+        # argv matches a pinned paid identity's invocation_fingerprint (mem-bzv2p).
+        return real_eval(task, repeats=1, model=_kwargs["model"], dry_run=True)
 
     monkeypatch.setattr(grid, "evaluate_task", _spy)
     first = grid.run_corpus(
-        tasks, out_dir=out, repeats=1, model="", dry_run=False, version_fn=lambda: "2.1.173"
+        tasks, out_dir=out, repeats=1, model="sonnet", dry_run=False, version_fn=lambda: "2.1.173"
     )
     assert (first["executed"], first["reused"]) == (1, 0)
 
     second = grid.run_corpus(
-        tasks, out_dir=out, repeats=1, model="", dry_run=False, version_fn=lambda: STUB_CLI_VERSION
+        tasks,
+        out_dir=out,
+        repeats=1,
+        model="sonnet",
+        dry_run=False,
+        version_fn=lambda: STUB_CLI_VERSION,
     )
     assert (second["executed"], second["reused"]) == (1, 0), "old binary's numbers, new instrument"
 
     # ...and the same binary still resumes: the field must not make every paid run a miss.
     third = grid.run_corpus(
-        tasks, out_dir=out, repeats=1, model="", dry_run=False, version_fn=lambda: STUB_CLI_VERSION
+        tasks,
+        out_dir=out,
+        repeats=1,
+        model="sonnet",
+        dry_run=False,
+        version_fn=lambda: STUB_CLI_VERSION,
     )
     assert (third["executed"], third["reused"]) == (0, 1)
 
@@ -1176,6 +1198,25 @@ def test_driver_refuses_to_spend_without_token(tmp_path: Path, monkeypatch) -> N
     assert code == 2
 
 
+def test_driver_refuses_to_spend_without_a_named_model(tmp_path: Path, monkeypatch) -> None:
+    # mem-bzv2p: the model-side spend guard. A token is present (the OAUTH gate passes) but no model
+    # is named — no --model, no MEMBENCH_AGENT_MODEL — so the run would key its cache identity on
+    # "" (the CLI's own default) and serve one model's numbers as another's on resume. Exit 2 and
+    # never spawn claude, and refuse BEFORE the preflight gate (which would itself spend).
+    _corpus_one(tmp_path)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.delenv("MEMBENCH_AGENT_MODEL", raising=False)
+
+    def _boom(*_a: object, **_k: object) -> object:
+        raise AssertionError("must NOT spawn claude when the model gate fires")
+
+    import membench.runner.toolreq_builtin as tb
+
+    monkeypatch.setattr(tb.subprocess, "run", _boom)
+    code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
+    assert code == 2
+
+
 def test_go_command_refuses_a_factorization_that_misdescribes_its_own_total(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
@@ -1221,6 +1262,7 @@ def test_repeats_below_one_is_refused_at_the_flag(tmp_path: Path) -> None:
 def test_preflight_halts_when_native_memory_never_engages(tmp_path: Path, monkeypatch) -> None:
     _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")  # paid path must name a model (mem-bzv2p)
 
     monkeypatch.setattr(grid, "run_builtin_arm", _builtin_arm(passes=False, engaged=False))
     code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
@@ -1235,6 +1277,7 @@ def test_preflight_agent_error_halts_diagnosed_not_raw_traceback(
     # documented diagnosed PREFLIGHT HALT (exit 3), never let a raw traceback propagate out.
     _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")  # paid path must name a model (mem-bzv2p)
 
     def _raises(task, **_kwargs):
         raise HeadlessAgentError("claude -p failed: simulated rate-limit")
@@ -1260,6 +1303,7 @@ def test_sweep_agent_error_halts_diagnosed_with_resume_pointer(
     # and the sweep then died" is a double that succeeds ONCE and raises after — not two patches.
     _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")  # paid path must name a model (mem-bzv2p)
 
     def _passes_once_then_raises(task, **kwargs):
         if not calls:
@@ -1281,6 +1325,7 @@ def test_sweep_agent_error_halts_diagnosed_with_resume_pointer(
 def test_preflight_proceeds_when_engaged(tmp_path: Path, monkeypatch) -> None:
     _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")  # paid path must name a model (mem-bzv2p)
 
     calls: list[str] = []
     monkeypatch.setattr(grid, "run_builtin_arm", _builtin_arm(calls, engaged=True))
@@ -1293,6 +1338,7 @@ def test_preflight_proceeds_when_engaged(tmp_path: Path, monkeypatch) -> None:
 def test_skip_preflight_bypasses_the_real_preflight_call(tmp_path: Path, monkeypatch) -> None:
     _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")  # paid path must name a model (mem-bzv2p)
 
     calls: list[str] = []
     monkeypatch.setattr(grid, "run_builtin_arm", _builtin_arm(calls, engaged=True))
@@ -1318,6 +1364,7 @@ def test_the_driver_writes_the_summary_the_grid_reserves(tmp_path: Path, monkeyp
     _corpus_one(tmp_path)
     out = tmp_path / "out"
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")  # paid path must name a model (mem-bzv2p)
     monkeypatch.setattr(grid, "run_builtin_arm", _engaging_arm)
 
     assert driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(out)]) == 0
@@ -1334,6 +1381,7 @@ def test_a_fully_cache_served_resume_spends_nothing(tmp_path: Path, monkeypatch)
     args = ["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")]
     _corpus(tmp_path, "w-0", "w-1")
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")  # paid path must name a model (mem-bzv2p)
 
     first: list[str] = []
     monkeypatch.setattr(grid, "run_builtin_arm", _builtin_arm(first, engaged=True))
@@ -1352,6 +1400,7 @@ def test_a_partial_resume_preflights_exactly_once(tmp_path: Path, monkeypatch) -
     # — once, not once per remaining task — so the mechanism check keeps protecting every run that
     # actually measures something.
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")  # paid path must name a model (mem-bzv2p)
     out = tmp_path / "out"
 
     _corpus(tmp_path, "w-0")
@@ -1380,6 +1429,7 @@ def test_a_preflight_leak_is_not_reported_as_a_mechanism_that_never_fired(
     the isolation that invalidates every cell the sweep would measure."""
     _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")  # paid path must name a model (mem-bzv2p)
     monkeypatch.setattr(grid, "run_builtin_arm", _builtin_arm(engaged=False, leaked=True))
 
     assert (

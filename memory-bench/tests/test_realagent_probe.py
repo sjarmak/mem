@@ -100,6 +100,24 @@ def test_spend_gate_refuses_and_never_invokes_claude_without_token(monkeypatch) 
     assert main() == 2
 
 
+def test_spend_gate_refuses_without_a_named_model(monkeypatch) -> None:
+    # mem-bzv2p: token present but no model named (no --model, no MEMBENCH_AGENT_MODEL) must also
+    # exit 2 and never spawn claude — this probe keeps no cache, but shares the spend gate the grids
+    # are held to, where an unpinned run's identity keys on "" and serves one model's numbers as
+    # another's.
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.delenv("MEMBENCH_AGENT_MODEL", raising=False)
+    monkeypatch.setattr(sys, "argv", ["probe", "--repeats", "1"])
+
+    def _boom(*_a: object, **_k: object) -> object:
+        raise AssertionError("subprocess.run must NOT be called when the model gate fires")
+
+    from membench.runner import realagent_probe as _rp
+
+    monkeypatch.setattr(_rp.subprocess, "run", _boom)
+    assert main() == 2
+
+
 def test_dry_run_arm_wiring_discriminates_end_to_end() -> None:
     # The dry-run path (simulated memory-copying agent) must show the arms separate:
     # none never gets the value in its prompt (fails), oracle does (passes) — no claude.

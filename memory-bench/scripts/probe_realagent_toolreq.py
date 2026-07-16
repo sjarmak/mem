@@ -37,7 +37,7 @@ from __future__ import annotations
 import argparse
 import os
 
-from membench.runner.headless_agent import MemoryChannel
+from membench.runner.headless_agent import MemoryChannel, a_paid_run_needs_a_model
 from membench.runner.realagent_probe import (
     DEFAULT_CURRENT_VALUE,
     ArmOutcome,
@@ -52,6 +52,14 @@ from membench.schemas.sequence import SequenceStep
 __all__ = ["ArmOutcome", "main"]
 
 ENV_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN"
+# A paid probe left unpinned executes under the CLI's own default — a model this codebase never
+# records — so a resume across a model change could serve one model's numbers as another's
+# (mem-bzv2p). This probe keeps no cache, but it shares the spend gate the grids are held to.
+_REFUSE_UNPINNED_MODEL = (
+    "REFUSING to spend: no model named. An unpinned paid run executes under the CLI's own\n"
+    "  default, which this benchmark never records.\n"
+    "  Pass --model <id>, or set MEMBENCH_AGENT_MODEL, then re-run (or --dry-run for free)."
+)
 ARMS = ("none", "oracle")
 CHANNELS = (MemoryChannel.RECALLED, MemoryChannel.TRUSTED)
 
@@ -116,7 +124,11 @@ def _verdict(outcomes: list[ArmOutcome]) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--repeats", type=int, default=3, help="runs per (arm, channel) — stochastic")
-    ap.add_argument("--model", default="", help="pins --model; empty reads MEMBENCH_AGENT_MODEL")
+    ap.add_argument(
+        "--model",
+        default="",
+        help="pins --model; else MEMBENCH_AGENT_MODEL; a paid run refuses if neither names one",
+    )
     ap.add_argument(
         "--dry-run", action="store_true", help="simulate the agent; no token, no claude"
     )
@@ -128,6 +140,10 @@ def main() -> int:
             "  (~/.claude-homes/accountN/.claude/.credentials.json) and re-run under scix-batch,\n"
             "  or pass --dry-run to prove the wiring for free."
         )
+        return 2
+
+    if a_paid_run_needs_a_model(args.model, dry_run=args.dry_run):
+        print(_REFUSE_UNPINNED_MODEL)
         return 2
 
     step = build_probe_step()

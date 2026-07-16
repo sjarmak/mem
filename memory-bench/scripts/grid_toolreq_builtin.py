@@ -48,7 +48,12 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from membench.runner.headless_agent import CHANNELS, DEFAULT_TIMEOUT_S, HeadlessAgentError
+from membench.runner.headless_agent import (
+    CHANNELS,
+    DEFAULT_TIMEOUT_S,
+    HeadlessAgentError,
+    a_paid_run_needs_a_model,
+)
 from membench.runner.toolreq_builtin_grid import (
     AGENT_ERROR,
     LEAK,
@@ -66,6 +71,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CORPUS = PROJECT_ROOT / "memory-bench/fixtures/worlds-tool"
 DEFAULT_OUT = PROJECT_ROOT / ".mem/toolreq-builtin"
 ENV_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN"
+
+# A paid sweep left unpinned executes under the CLI's own default — a model this codebase never
+# records — so its cache identity keys on "" and would serve one model's numbers as another's on a
+# resume across a model change (mem-bzv2p). Refuse before spending; resume_cache is the backstop.
+_REFUSE_UNPINNED_MODEL = (
+    "REFUSING to spend: no model named. An unpinned paid run executes under the CLI's own\n"
+    '  default, which this benchmark never records — its cache identity would key on "" and\n'
+    "  serve one model's numbers as another's on a resume across a model change.\n"
+    "  Pass --model <id>, or set MEMBENCH_AGENT_MODEL, then re-run (or --dry-run for free)."
+)
 
 
 def _print_go_command(
@@ -146,7 +161,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--repeats", type=int, default=3, help="runs per (task, channel)")
     parser.add_argument(
-        "--model", default="", help="pins --model; empty reads MEMBENCH_AGENT_MODEL"
+        "--model",
+        default="",
+        help="pins --model; else MEMBENCH_AGENT_MODEL; a paid run refuses if neither names one",
     )
     parser.add_argument(
         "--limit", type=int, default=None, help="evaluate only the first N tasks (smoke subset)"
@@ -178,6 +195,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if not args.dry_run and not os.environ.get(ENV_OAUTH):
         _print_go_command(tasks, args.repeats, args.out, corpus_dir)
+        return 2
+
+    if a_paid_run_needs_a_model(args.model, dry_run=args.dry_run):
+        print(_REFUSE_UNPINNED_MODEL)
         return 2
 
     # Why a hook rather than a step run here: `preflight_gate`. `--dry-run` spends nothing by
