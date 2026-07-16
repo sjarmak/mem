@@ -64,8 +64,9 @@ from membench.runner.headless_agent import (
     REFUSE_UNPINNED_MODEL,
     a_paid_run_needs_a_model,
 )
-from membench.runner.toolreq_grid import ARMS, CHANNELS, SUMMARY_NAME, run_corpus
+from membench.runner.toolreq_grid import SUMMARY_NAME, run_corpus, worst_case_paid_call_count
 from membench.runner.toolreq_realagent import (
+    ToolReqRealAgentTask,
     load_corpus_with_sequences,
     seed_ours_store_and_resolve_payloads,
 )
@@ -77,13 +78,21 @@ DEFAULT_MEM_BIN = str(PROJECT_ROOT / "bin/mem")
 ENV_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN"
 
 
-def _print_go_command(n_tasks: int, repeats: int, out_dir: Path, corpus_dir: Path) -> None:
-    runs = n_tasks * len(ARMS) * len(CHANNELS) * repeats
+def _print_go_command(
+    tasks: Sequence[ToolReqRealAgentTask], repeats: int, out_dir: Path, corpus_dir: Path
+) -> None:
+    # DERIVED from the plan (worst_case_paid_call_count), never `n_tasks x arm x channel x repeat`:
+    # `none` is measured ONCE per task (channel-invariant; mem-dg5fm), so a hardcoded
+    # `len(ARMS) x len(CHANNELS)` would over-disclose the fire by `n_tasks x repeats` calls. The
+    # grid is now channel-NON-uniform (RECALLED runs none+oracle+ours, TRUSTED runs oracle+ours),
+    # so there is no honest single `x channel` factor to print — the total and shape ARE the gate.
+    n_tasks = len(tasks)
+    runs = worst_case_paid_call_count(tasks, repeats=repeats)
     worst_hours = runs * DEFAULT_TIMEOUT_S / 3600.0
     print(
         f"REFUSING to spend: {ENV_OAUTH} is unset.\n"
-        f"  This paid sweep is {runs} real `claude -p` run(s) "
-        f"({n_tasks} task x {len(ARMS)} arm x {len(CHANNELS)} channel x {repeats} repeat); "
+        f"  This paid sweep is at most {runs} real `claude -p` run(s) "
+        f"({n_tasks} task x {repeats} repeat; none once + oracle,ours per channel); "
         f"worst-case wall-clock ~{worst_hours:.1f}h at the {DEFAULT_TIMEOUT_S:.0f}s timeout.\n"
         f"  Per-task results persist to {out_dir} and are reused on re-run (resumable).\n"
         "  To fire (Stephanie's per-action go), source the token from an account home and "
@@ -134,7 +143,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     if not args.dry_run and not os.environ.get(ENV_OAUTH):
-        _print_go_command(len(tasks), args.repeats, args.out, corpus_dir)
+        _print_go_command(tasks, args.repeats, args.out, corpus_dir)
         return 2
 
     if a_paid_run_needs_a_model(args.model, dry_run=args.dry_run):
@@ -143,8 +152,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     mode = "DRY-RUN (simulated agent, no tokens)" if args.dry_run else "PAID real claude -p"
     print(
-        f"toolreq real-agent sweep: {mode}; {len(tasks)} task(s) x {len(ARMS)} arm x "
-        f"{len(CHANNELS)} channel x {args.repeats} repeat"
+        f"toolreq real-agent sweep: {mode}; {len(tasks)} task(s) x {args.repeats} repeat; "
+        f"up to {worst_case_paid_call_count(tasks, repeats=args.repeats)} `claude -p` call(s) "
+        "(none once + oracle,ours per channel)"
     )
     store_path = args.store if args.store is not None else args.out / "store.db"
     summary = run_corpus(

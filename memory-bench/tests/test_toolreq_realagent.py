@@ -532,6 +532,80 @@ def test_ours_arm_dry_run_honest_non_pass_when_payload_lacks_current_value() -> 
         assert by[("ours", channel)].passes == 0
 
 
+def test_none_prompt_is_byte_identical_across_channels() -> None:
+    """The invariant the none-arm dedup (mem-dg5fm) rests on: `none` surfaces empty memory, so
+    ``build_agent_prompt`` renders the bare request under EITHER channel and the WHOLE ``claude -p``
+    argv is byte-identical across RECALLED and TRUSTED. ``evaluate_task`` measures `none` ONCE
+    (``NONE_CHANNEL``) and relabels the row into every channel; that is sound ONLY while the two
+    argvs are the same command line. Standing regression guard: if a channel-dependent block were
+    ever emitted for empty memory, the dedup would publish one channel's `none` measurement as
+    another's that was never sent — and this goes RED first. Compares ``.calls`` (the argv), NOT the
+    whole ``CellCalls`` whose ``channel`` label legitimately differs."""
+    task = adapt_sequence(_toolreq_seq())
+    none_leg = Leg("goal", task.goal_step, {})  # empty surfaced memory IS the `none` control
+    argv_by_channel = {
+        channel: render_cell_calls(arm="none", channel=channel, legs=[none_leg], model="").calls
+        for channel in grid.CHANNELS
+    }
+    argvs = list(argv_by_channel.values())
+    assert all(a == argvs[0] for a in argvs[1:]), (
+        f"`none` argv differs across channels: {argv_by_channel} — paying it once and relabeling "
+        "would mislabel one channel's measurement as another's"
+    )
+
+
+def test_none_is_planned_once_not_per_channel() -> None:
+    """Post-dedup (mem-dg5fm): the PLAN carries exactly ONE `none` cell (channel-invariant, so paid
+    once), while `oracle` and a non-empty `ours` are planned per channel. The plan is what
+    ``invocation_fingerprint`` hashes, so one `none` cell here is one paid `claude -p` for `none`.
+    """
+    task = adapt_sequence(_toolreq_seq())
+    payload = {"w-prior": "the retention window is TOKEN-abc"}  # non-empty -> `ours` planned too
+    plan = grid.planned_cells(task, payload)
+    none_cells = [c for c in plan if c.arm == "none"]
+    assert len(none_cells) == 1, f"`none` planned {len(none_cells)}x, expected once: {plan}"
+    assert none_cells[0].channel == grid.NONE_CHANNEL
+    for arm in ("oracle", "ours"):
+        assert {c.channel for c in plan if c.arm == arm} == set(grid.CHANNELS)
+
+
+def test_none_is_paid_once_per_task(monkeypatch) -> None:
+    """The point of the dedup (mem-dg5fm): ``evaluate_task`` spawns `claude -p` for `none` ONCE per
+    task, not once per channel. `oracle` still runs per channel. Spied, so no real spend."""
+    task = adapt_sequence(_toolreq_seq())
+    seen: list[str] = []
+    monkeypatch.setattr(grid, "run_arm", _spy_run_arm(seen, oracle_passes=True))
+    grid.evaluate_task(task, repeats=2, model="", dry_run=True, recorder=CellRecorder())
+    assert seen.count("none") == 1, f"paid `none` {seen.count('none')}x, expected once: {seen}"
+    assert seen.count("oracle") == len(grid.CHANNELS)
+
+
+def test_none_row_is_relabeled_into_every_channel() -> None:
+    """`none` is measured once but must still contribute a ROW to every channel (the grid stays
+    complete), and those rows carry the SAME passes/runs — the channel is not a real variable for an
+    empty-memory prompt, so measuring it twice was pure waste (mem-dg5fm)."""
+    task = adapt_sequence(_toolreq_seq())
+    outcomes = grid.evaluate_task(task, repeats=2, model="", dry_run=True, recorder=CellRecorder())
+    by = {(o.arm, o.channel): o for o in outcomes}
+    assert {(o.arm, o.channel) for o in outcomes} == grid.expected_cells()  # complete grid
+    none_rows = [by[("none", c.value)] for c in grid.CHANNELS]
+    assert all((r.passes, r.runs) == (none_rows[0].passes, none_rows[0].runs) for r in none_rows)
+
+
+def test_worst_case_paid_call_count_reflects_the_none_dedup() -> None:
+    """The cost a paid fire is authorized against (``grid_toolreq_realagent._print_go_command``) is
+    DERIVED from ``planned_cells``, so it drops from 6 to 5 cells/task the moment `none` is deduped
+    — never a hardcoded ``len(ARMS)*len(CHANNELS)``. Worst case = `ours` retrieves for every task
+    (empty-retrieval tasks relabel `ours` from `none` and spend less; the pre-seed disclosure cannot
+    know which, so it bills the ceiling)."""
+    task = adapt_sequence(_toolreq_seq())
+    expected_per_task = 1 + (len(grid.ARMS) - 1) * len(grid.CHANNELS)  # none once + oracle,ours x2
+    assert grid.worst_case_calls_per_task(task) == expected_per_task
+    assert expected_per_task < len(grid.ARMS) * len(grid.CHANNELS)  # strictly below the naive grid
+    tasks = [task, adapt_sequence(_toolreq_seq("w-b"))]
+    assert grid.worst_case_paid_call_count(tasks, repeats=3) == 3 * expected_per_task * len(tasks)
+
+
 def test_run_corpus_persists_and_is_resumable(tmp_path: Path) -> None:
     seed_dir = tmp_path / "corpus" / "0"
     seed_dir.mkdir(parents=True)
@@ -1633,6 +1707,26 @@ def test_driver_refuses_to_spend_without_a_named_model(tmp_path: Path, monkeypat
     monkeypatch.setattr(_rp.subprocess, "run", _boom)
     code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
     assert code == 2
+
+
+def test_driver_discloses_the_plan_derived_paid_call_count(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """The refuse-to-spend gate discloses the REAL (plan-derived) paid call count — the number a
+    human authorizes money against — NOT the pre-dedup ``len(ARMS)*len(CHANNELS)`` product.
+    ``scripts/`` is untyped (why the count lives in the typed grid), so this pins the wiring: a
+    regression back to the hardcoded formula would over-disclose the `none`-deduped fire by
+    ``n_tasks*repeats`` calls. mem-dg5fm."""
+    _corpus_one(tmp_path)  # writes a 1-task corpus under tmp_path/corpus
+    _, tasks = load_corpus_with_sequences(tmp_path / "corpus")
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
+    assert code == 2  # refused to spend (no token) — the gate that prints the disclosure
+    out = capsys.readouterr().out
+    disclosed = grid.worst_case_paid_call_count(tasks, repeats=3)  # driver default --repeats 3
+    assert f"{disclosed} real" in out, out
+    # the dedup is disclosed, not hidden: the pre-dedup product would have been strictly larger
+    assert disclosed < len(tasks) * len(grid.ARMS) * len(grid.CHANNELS) * 3
 
 
 def test_corpus_walk_orders_seeds_numerically(tmp_path: Path) -> None:

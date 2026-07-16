@@ -57,6 +57,7 @@ __all__ = [
     "EXECUTION_PROTOCOL",
     "KILL",
     "LEAK",
+    "NONE_CHANNEL",
     "SEPARATES",
     "SUMMARY_NAME",
     "WEAK",
@@ -74,6 +75,8 @@ __all__ = [
     "planned_cells",
     "run_corpus",
     "task_verdict",
+    "worst_case_calls_per_task",
+    "worst_case_paid_call_count",
 ]
 
 ARMS = ("none", "oracle", "ours")
@@ -106,6 +109,15 @@ SeedFn = Callable[
 # The one arm whose memory can legitimately come back EMPTY: `ours` retrieves, and temporal
 # LOO admits no priors for the lifecycle-earliest task. See evaluate_task.
 RETRIEVING_ARM = "ours"
+
+# `none` surfaces empty memory, so `build_agent_prompt` renders the same bare-request prompt under
+# every channel: the cell is channel-INVARIANT. It is therefore measured ONCE, under this canonical
+# channel, and its row is relabeled into every other channel (evaluate_task). Paying it per channel
+# would buy byte-identical `claude -p` calls and spend `none`'s sample twice for one measurement
+# (mem-dg5fm). CHANNELS[0] is an arbitrary-but-fixed choice among channel-equivalent options; the
+# byte-identity that makes it sound is locked by test_none_prompt_is_byte_identical_across_channels
+# (the sibling builtin grid already treats CHANNELS[0] as its canonical channel).
+NONE_CHANNEL: MemoryChannel = CHANNELS[0]
 
 
 def arm_memories(
@@ -145,31 +157,49 @@ def planned_cells(
 
     ``evaluate_task`` runs it, ``planned_calls`` renders it, and ``_identity`` derives
     ``ours_retrieval_empty`` from it, so the three cannot disagree about what the grid does. The
-    skip predicate below used to be written three ways in this file — once in the executor, once
-    (as "never skip") in the fingerprint, once in the identity flag — which is the same shape as the
-    defect this whole change exists to close, at a smaller scale.
+    skip/dedup predicates below used to be written three ways in this file — once in the executor,
+    once (as "never skip") in the fingerprint, once in the identity flag — the same defect shape,
+    at a smaller scale, that this whole change exists to close.
 
-    One cell is never run: ``ours`` when its retrieval came back EMPTY — not an edge case but a
-    guarantee for the lifecycle-earliest task, which temporal LOO leaves with no priors. An empty
-    payload makes the ``ours`` prompt byte-identical to ``none``, so the cell is none-equivalent by
-    construction (delta exactly 0); running it would spend ``repeats`` real ``claude -p`` turns per
-    channel to re-measure ``none``, and would leave a flat ``(ours 0/N)`` unattributable — a
-    retrieval miss reads exactly like memory-did-not-help. The ``none`` cell is relabeled instead
-    (``evaluate_task``), and ``ours_retrieval_empty`` records which happened so the two causes stay
-    distinguishable.
+    Two cells are handled off the plain per-channel grid — both because a channel is not a real
+    variable for them, so paying per channel would buy byte-identical ``claude -p`` calls:
 
-    So it is ABSENT from the plan, and hence from ``invocation_fingerprint``: the plan is the
-    command lines that will be SENT, and that one is not sent. Nothing is lost — an empty-payload
-    run differs from a non-empty one in ``ours_payload_fingerprint`` AND ``ours_retrieval_empty``,
-    both identity fields, and identity acceptance is a whole-object ``==``. NOTE that
-    ``expected_cells`` still includes ``ours``: the relabel produces the ROW even though no call was
-    made, and the completeness validator requires it."""
+    * ``none`` is planned ONCE, under ``NONE_CHANNEL``. Its surfaced memory is always empty, so
+      ``build_agent_prompt`` renders the bare request under EVERY channel and the cell is
+      channel-invariant. ``evaluate_task`` measures it once and relabels the row into every channel;
+      planning it per channel would spend ``none``'s sample twice for one measurement (mem-dg5fm).
+
+    * ``ours`` when its retrieval came back EMPTY is planned NOT AT ALL — not an edge case but a
+      guarantee for the lifecycle-earliest task, which temporal LOO leaves with no priors. An empty
+      payload makes the ``ours`` prompt byte-identical to ``none``, so it is none-equivalent by
+      construction (delta exactly 0); running it would spend ``repeats`` real ``claude -p`` turns
+      per channel to re-measure ``none``, and would leave a flat ``(ours 0/N)`` unattributable — a
+      retrieval miss reads exactly like memory-did-not-help. The ``none`` cell is relabeled instead
+      (``evaluate_task``), and ``ours_retrieval_empty`` records which happened so the two causes
+      stay distinguishable.
+
+    So both are ABSENT from the plan they would otherwise fill, and hence from
+    ``invocation_fingerprint``: the plan is the command lines that will be SENT, and those are not
+    sent. Nothing is lost — an empty-payload run differs from a non-empty one in
+    ``ours_payload_fingerprint`` AND ``ours_retrieval_empty``, both identity fields, and identity
+    acceptance is a whole-object ``==``. NOTE that ``expected_cells`` still includes ``none`` and
+    ``ours`` for every channel: the relabels produce the ROWS even though fewer calls were made, and
+    the completeness validator requires them."""
     memories = arm_memories(task, ours_payload)
+
+    def _goal(arm: str) -> Leg:
+        return Leg("goal", task.goal_step, memories[arm])
+
+    # `none` once (channel-invariant), every other arm per channel — `ours` only when its retrieval
+    # surfaced something (else it is relabeled from `none`, never planned). The one dedup/skip site.
     return [
-        PlannedCell(arm=arm, channel=channel, leg=Leg("goal", task.goal_step, memories[arm]))
-        for channel in CHANNELS
-        for arm in ARMS
-        if memories[arm] or arm != RETRIEVING_ARM
+        PlannedCell(arm="none", channel=NONE_CHANNEL, leg=_goal("none")),
+        *(
+            PlannedCell(arm=arm, channel=channel, leg=_goal(arm))
+            for channel in CHANNELS
+            for arm in ARMS
+            if arm != "none" and (memories[arm] or arm != RETRIEVING_ARM)
+        ),
     ]
 
 
@@ -189,9 +219,10 @@ def evaluate_task(
     the plan.
 
     The plan is ITERATED ONCE, never re-indexed or re-filtered: every cell in it is run, in plan
-    order, with no second skip predicate to keep in step with ``planned_cells``'. The never-run
-    ``ours`` cell is simply absent from it, and is filled below by relabeling ``none`` — it
-    contributes a ROW but no invocation, which is exactly what it did."""
+    order, with no second skip predicate to keep in step with ``planned_cells``'. Two cells the plan
+    omits are FILLED below by relabeling — each contributing a ROW but no invocation, exactly what
+    it did: the channel-invariant ``none`` cell, measured once and relabeled into every channel,
+    and the never-run empty-retrieval ``ours`` cell, relabeled from that channel's ``none``."""
     plan = planned_cells(task, ours_payload)
     by_channel: dict[MemoryChannel, dict[str, ArmOutcome]] = {channel: {} for channel in CHANNELS}
     for cell in plan:
@@ -207,10 +238,17 @@ def evaluate_task(
             recorder=recorder,
         )
 
+    # `none` was measured ONCE, under NONE_CHANNEL (its empty-memory prompt is channel-invariant);
+    # relabel that single row into every channel. Read it BEFORE the loop writes each channel's
+    # `none` back — `replace` is non-mutating, so the reference stays valid.
+    none_cell = by_channel[NONE_CHANNEL]["none"]
     outcomes: list[ArmOutcome] = []
     for channel in CHANNELS:
         cells = by_channel[channel]
+        cells["none"] = replace(none_cell, channel=channel.value)
         if RETRIEVING_ARM not in cells:
+            # `ours` with an empty retrieval was never planned — relabel it from this channel's
+            # (relabeled) `none`, the same none-equivalent-by-construction row.
             cells[RETRIEVING_ARM] = replace(cells["none"], arm=RETRIEVING_ARM)
         # `ARMS` order, not plan order: the canonical row order the scorer and the summary read.
         outcomes.extend(cells[arm] for arm in ARMS)
@@ -308,6 +346,38 @@ def planned_calls(
         render_cell_calls(arm=cell.arm, channel=cell.channel, legs=[cell.leg], model=model)
         for cell in planned_cells(task, ours_payload)
     ]
+
+
+# A non-empty `ours` payload the WORST-CASE cost disclosure prices against: it makes `ours` present
+# in the plan for every channel (planned_cells keys ours' inclusion on payload truthiness), which is
+# the most `claude -p` a task can spend. A module-private sentinel, never a real retrieval.
+_WORST_CASE_OURS_PAYLOAD: Mapping[str, str] = {"_worst_case_retrieval": "present"}
+
+
+def worst_case_calls_per_task(task: ToolReqRealAgentTask) -> int:
+    """The most real ``claude -p`` calls one repeat of one task can spend across BOTH channels —
+    DERIVED from ``planned_cells`` (one goal leg per cell), never a hand-written
+    ``len(ARMS) * len(CHANNELS)`` that would re-count the deduped ``none`` cell twice. ``none`` is
+    measured once (channel-invariant; mem-dg5fm), so this is 5 and not 6 for the current roster,
+    and the moment the plan shape changes it moves with the plan rather than lying by a constant —
+    the mem-swp43 / mem-663ga review precedent, on the sibling builtin grid's ``calls_per_repeat``.
+
+    WORST case because ``ours`` with an empty retrieval is relabeled from ``none`` and spends
+    nothing; the pre-seed cost disclosure cannot yet know which tasks retrieve, so it prices every
+    task as if ``ours`` retrieved (the ceiling). Over-disclosing the ceiling is the safe direction —
+    and unlike the builtin grid's EXACT ``calls_per_repeat`` this is an upper bound, hence the name.
+    """
+    return len(planned_cells(task, _WORST_CASE_OURS_PAYLOAD))
+
+
+def worst_case_paid_call_count(tasks: Sequence[ToolReqRealAgentTask], *, repeats: int) -> int:
+    """Worst-case total real ``claude -p`` calls the paid sweep makes across the whole corpus — the
+    number a human authorizes money against (``grid_toolreq_realagent._print_go_command``). Summed
+    per task off ``worst_case_calls_per_task``, never
+    ``n_tasks * worst_case_calls_per_task(tasks[0])`` (which would bill every task at the first's
+    shape); exact-summed for any corpus and moves with the plan. No separate ``len(CHANNELS)``
+    factor — ``planned_cells`` already spans both channels."""
+    return repeats * sum(worst_case_calls_per_task(task) for task in tasks)
 
 
 class RunIdentity(BaseRunIdentity):
