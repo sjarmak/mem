@@ -169,11 +169,10 @@ function pipedPatchIds(
 
 /** A caller-owned memo of {@link rangePatchIds} results, keyed by the full
  * argument tuple `${work_dir}\x00${base}\x00${tip}`. Caller-owned, never a module
- * global: the tests inject a fresh fake runner per case, so a shared cache would
- * serve one case's fake output to the next; a real sweep wants one cache per rig
- * so each rig's maps free at the loop boundary. The value is a `ReadonlyMap` so a
- * cached walk cannot be mutated in place by a later caller — the type enforces
- * what a docstring could only ask for. */
+ * global: a sweep wants one cache per rig so each rig's maps free at the loop
+ * boundary. The value is a `ReadonlyMap` so a cached walk cannot be mutated in
+ * place by a later caller — the type enforces what a docstring could only ask
+ * for. */
 export type LandedContentCache = Map<string, ReadonlyMap<string, string>>;
 
 /** Patch-ids of every content-bearing commit in `base..tip`, keyed to the commit
@@ -183,12 +182,11 @@ export type LandedContentCache = Map<string, ReadonlyMap<string, string>>;
  * has no patch-id of its own to match.
  *
  * The walk is a pure function of `(work_dir, base, tip)` over an immutable,
- * content-addressed DAG, so `cache` (when present) memoizes it verbatim. Both
- * `base` and `tip` are the full 40-hex shas already resolved by the caller, so
- * the key is injective without escaping; the `\x00` separator is belt-and-braces
- * (no POSIX path holds a NUL) and is written as an escape, not a raw byte, so the
- * file stays greppable (a raw NUL reads as binary — see mem-y2x7n). `base` is in
- * the key deliberately: widening the range to a shared superset would dissolve
+ * content-addressed DAG, so `cache` (when present) memoizes it verbatim. `base`
+ * and `tip` are full 40-hex shas, so the joined key is injective; the `\x00`
+ * separator is written as an escape, not a raw byte, so the file stays greppable
+ * (a raw NUL reads as binary — see mem-y2x7n). `base` is in the key deliberately:
+ * widening the range to a shared superset would dissolve
  * the fork-point scoping that {@link classifyLandedContent} documents, which is
  * the rejected alternative from this bead's history — do not collapse it to `tip`.
  *

@@ -83,6 +83,19 @@ const git = (h: Handlers): Fake => ({
   },
 });
 
+/** Records every pipe arg vector while delegating to the real fake, so a test
+ * can assert which `log`/`diff` listings actually ran. */
+const counting = (fake: Fake): { runPipe: GitPipeRunner; calls: string[][] } => {
+  const calls: string[][] = [];
+  return {
+    calls,
+    runPipe: (workDir, args) => {
+      calls.push(args);
+      return fake.runPipe(workDir, args);
+    },
+  };
+};
+
 /** The common shape: the branch carries commits 1 and 2; integration carries
  * whichever of them `landedIds` names, plus its own unrelated commit 9. */
 const twoCommitBranch = (landedIds: readonly string[], combinedLands = false): Handlers => ({
@@ -274,32 +287,15 @@ describe('classifyLandedContent — git invocation contract', () => {
     // script rather than passed by this caller, and is covered by its own
     // tests (tests/ingest.provenance.test.ts).
     const fake = git(twoCommitBranch([p(1)]));
-    const piped: string[][] = [];
-    const runPipe: GitPipeRunner = (workDir, args) => {
-      piped.push(args);
-      return fake.runPipe(workDir, args);
-    };
+    const { runPipe, calls } = counting(fake);
     classifyLandedContent(input, { ...fake, runPipe });
-    expect(piped.map(a => a[0])).toEqual(['log', 'log', 'diff']);
-    expect(piped.every(a => a.includes('--no-color'))).toBe(true);
-    expect(piped.find(a => a[0] === 'log')).toContain('--no-merges');
+    expect(calls.map(a => a[0])).toEqual(['log', 'log', 'diff']);
+    expect(calls.every(a => a.includes('--no-color'))).toBe(true);
+    expect(calls.find(a => a[0] === 'log')).toContain('--no-merges');
   });
 });
 
 describe('classifyLandedContent — range cache', () => {
-  /** Records every pipe arg vector while delegating to the real fake, so a test
-   * can assert which `log`/`diff` listings actually ran. */
-  const counting = (fake: Fake): { runPipe: GitPipeRunner; calls: string[][] } => {
-    const calls: string[][] = [];
-    return {
-      calls,
-      runPipe: (workDir, args) => {
-        calls.push(args);
-        return fake.runPipe(workDir, args);
-      },
-    };
-  };
-
   it('reuses both range walks across calls, leaving only the uncached combined diff', () => {
     // A `partial` fixture, so the combined-diff pipe runs and its absence from
     // the cache is observable. The first call's ['log','log','diff'] is also the

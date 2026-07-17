@@ -204,11 +204,9 @@ for (const rig of rigs) {
     continue;
   }
 
-  // One patch-id range cache per rig, not per module: every branch here shares
-  // entry.dir, and branches sharing a merge base (a convoy cut from one tip, or
-  // a branch decided against both refs with a common fork point) re-list the
-  // same base..head history otherwise. Allocated inside the rig loop so each
-  // rig's maps free at the loop boundary rather than accumulating across 18 rigs.
+  // One range cache per rig, allocated inside the loop so each rig's maps free
+  // at the boundary rather than accumulating across 18 rigs. See
+  // LandedContentCache for why per-rig and what the shared walks are.
   const cache = new Map();
 
   const decided = joined.map(j => {
