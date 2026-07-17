@@ -1221,10 +1221,16 @@ def test_empty_flag_contradicting_the_ours_rows_is_a_miss(tmp_path: Path) -> Non
     for row in record["outcomes"]:
         if row["arm"] == "ours":
             row["passes"] = row["runs"]
+
+    # recompute the verdict FROM the forged rows, so the sibling verdict-derivation check
+    # (`_verdict_is_the_one_its_own_rows_imply`, which runs first) cannot refuse the file on
+    # its own — a self-consistent forgery is the one the empty-flag cross-check must catch.
+    forged_outcomes = [grid.CellOutcome(**row) for row in record["outcomes"]]
+    record["verdict"] = grid.CachedResult.implied_verdict(forged_outcomes)
     result_path.write_text(json.dumps(record))
 
     # the file's OWN identity, unchanged — so the miss is the rows/flag contradiction
-    # (CachedResult's cross-row validator), not an identity mismatch
+    # (CachedResult's cross-row validator), not an identity mismatch or a stale verdict
     identity = grid.RunIdentity(**record["identity"])
     assert (
         load_cached(result_path, identity, grid.CachedResult) is None
