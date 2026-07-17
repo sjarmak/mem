@@ -1678,3 +1678,57 @@ def test_paid_call_count_is_exact_when_the_leg_count_varies_by_task(monkeypatch)
 
 def test_paid_call_count_of_an_empty_corpus_is_zero() -> None:
     assert grid.paid_call_count([], repeats=3) == 0
+
+
+# --- the permission gate on the unconstrained establish leg (mem-5yobo) -------------------
+#
+# H3 is INTENTIONAL and load-bearing: the establish leg passes `available_tools=[]`, so no
+# `--allowedTools` clamp is put on Claude Code's own memory-write path. That is the hypothesis
+# the builtin arm exists to test and it is NOT what these pin.
+#
+# What they pin is the thing actually holding the blast radius, which today is held by nothing
+# executable: corpus-authored text flows verbatim into that unconstrained prompt under a header
+# telling the agent to treat it as fact, and `headless_agent.run_step` hands the child
+# `{**os.environ, **self.env}` — the OAuth token included. The default permission gate is what
+# stands between that and a hostile `sequences.json`, and it is one flag away.
+#
+# NOTE ON WHAT THESE ARE WORTH: no bypass flag appears anywhere in this repo today, so these are
+# green by construction. They are regression pins against a FUTURE edit, not evidence of a hole
+# that was open. Both routes to the same blast radius are covered, because only one goes through
+# argv: a `permissions` key in the seeded settings.json would never touch a command line.
+
+_BYPASS_FLAGS = (
+    "--dangerously-skip-permissions",
+    "--permission-mode",
+    "bypassPermissions",
+    "acceptEdits",
+)
+
+
+@pytest.mark.parametrize("channel", [MemoryChannel.RECALLED, MemoryChannel.TRUSTED])
+def test_no_bypass_flag_reaches_the_argv_of_any_leg(channel) -> None:
+    # Rendered through `cell_calls` -> `render_cell_calls` -> the same `cell_agent`/`argv_for` the
+    # arm executes through, so this reads the real command lines and not a model of them.
+    for argv in cell_calls(_task(), channel, model="sonnet").calls:
+        flat = " ".join(argv)
+        for flag in _BYPASS_FLAGS:
+            assert flag not in flat, f"{flag} reached the argv: {argv}"
+
+
+def test_the_establish_leg_is_unconstrained_but_not_permission_bypassed() -> None:
+    """The two halves of H3, pinned together so neither can drift into the other.
+
+    Unconstrained (no `--allowedTools`) is the hypothesis and must STAY. Permission-bypassed is
+    not part of it and must never arrive — the absence of the clamp is exactly why the gate below
+    it has to hold."""
+    establish = cell_calls(_task(), MemoryChannel.RECALLED, model="sonnet").calls[0]
+    assert "--allowedTools" not in establish  # H3 intact
+    for flag in _BYPASS_FLAGS:
+        assert flag not in " ".join(establish)
+
+
+def test_the_seeded_settings_carry_no_permissions_key() -> None:
+    """The route to the same blast radius that never touches argv: `_seed_config_dir` writes
+    BUILTIN_SETTINGS into the establish leg's CLAUDE_CONFIG_DIR, so a permissions block added
+    there would widen the unconstrained leg without any command line moving."""
+    assert set(BUILTIN_SETTINGS) == {"autoMemoryEnabled"}
