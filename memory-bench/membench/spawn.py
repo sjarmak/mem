@@ -34,17 +34,24 @@ Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 # which `sk-ant-` does not match. Verified end-to-end by review: a stub CLI failing with that
 # key on stderr surfaced it in full.
 #
-# Widening is the SAFE direction here. Over-redaction costs a token of diagnosis; under-
-# redaction puts a live credential in a CI log. `sk-[A-Za-z0-9_-]+` is still anchored on a
-# real, shared vendor prefix rather than a guess at what a secret looks like -- no entropy
-# scoring, no KEY=VALUE sniffing.
+# The `\b` is not decoration. `sk-` is a substring of ordinary words this codebase's own
+# diagnostics are full of -- taSK-types, diSK-, riSK-, briSK- -- and without the boundary the
+# redaction eats them: `no task-types.json found` came out as `no ta<redacted-credential>.json`,
+# swallowing the exact filename the operator needed. `--task-types` is a real flag here and
+# `task-types.json` a real artifact path, so that was live, not hypothetical.
 #
-# It is NOT a general secret scanner, and the env is inherited wholesale (`{**os.environ,
-# **self.env}`), so a non-`sk-` vendor token an operator has exported can still be echoed
-# by a child that chooses to. Bounding THAT is the env-surface question (mem-jwp3c), not a
-# regex's job. mem never writes a token to these channels itself; this fires when a CLI
-# echoes its OWN auth back.
-_CREDENTIAL = re.compile(r"sk-[A-Za-z0-9_-]+")
+# Which is the correction to "widen, over-redaction is the safe direction": it is the safe
+# direction only where it costs nothing to READ. A redaction that eats real diagnostics
+# trains people to ignore it. Anchored on a word boundary + a real shared vendor prefix --
+# still no entropy scoring, no KEY=VALUE sniffing.
+#
+# It is NOT a general secret scanner. The env is inherited wholesale (`{**os.environ,
+# **self.env}`), so a differently-shaped vendor token an operator has exported can still be
+# echoed by a child that chooses to -- `sgp_` (Sourcegraph) is a live example, and
+# `oracle/backends.py` echoes one raw today (mem-zls5s). Bounding THAT is the env-surface
+# question (mem-jwp3c), not a regex's job. mem never writes a token to these channels
+# itself; this fires when a CLI echoes its OWN auth back.
+_CREDENTIAL = re.compile(r"\bsk-[A-Za-z0-9_-]+")
 _REDACTED = "<redacted-credential>"
 
 # The window the child's own output gets in the diagnosis. HEAD AND TAIL, not head alone:

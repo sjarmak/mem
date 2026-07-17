@@ -127,8 +127,10 @@ def test_the_non_envelope_diagnosis_redacts_before_it_slices(tmp_path):
     ordering rule the shared sanitiser follows, restated here because this call does its own
     cutting.
     """
-    padding = "y" * 190
-    binary = _fake_mem(tmp_path, f"echo '{padding}sk-ant-oat01-STRADDLECANARY0123456789'")
+    # The token sits AFTER a separator (as a real one does -- "token sk-...", "key=sk-...")
+    # and starts near char 190, so the 200-char cut lands inside it.
+    padding = "y" * 184
+    binary = _fake_mem(tmp_path, f"echo '{padding} token sk-ant-oat01-STRADDLECANARY0123456789'")
     with pytest.raises(MemCliError) as caught:
         run_mem_json([binary, "query"])
     assert "sk-ant" not in str(caught.value)  # no live prefix survived the slice

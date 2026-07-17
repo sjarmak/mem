@@ -260,6 +260,30 @@ def test_a_token_on_stdout_is_redacted_when_stdout_is_the_diagnosis() -> None:
     assert "boom" in str(caught.value)
 
 
+@pytest.mark.parametrize(
+    "diagnosis",
+    [
+        pytest.param(
+            "no task-types.json found at /home/ds/.mem/task-types.json", id="artifact-path"
+        ),
+        pytest.param("unknown flag --task-types", id="real-flag"),
+        pytest.param("disk-usage high, risk-scored run aborted", id="ordinary-words"),
+    ],
+)
+def test_a_word_containing_sk_is_not_mistaken_for_a_credential(diagnosis: str) -> None:
+    """`sk-` is a SUBSTRING of this codebase's own vocabulary: taSK-types, diSK-, riSK-.
+
+    Without a word boundary the redaction ate them -- `no task-types.json found` surfaced as
+    `no ta<redacted-credential>.json`, swallowing the filename the operator needs, on a real
+    flag (`--task-types`) and a real artifact path. Over-redaction is only the "safe
+    direction" while it costs nothing to read; a redaction that eats real diagnostics trains
+    people to ignore it."""
+    with pytest.raises(RuntimeError) as caught:
+        _run(_ok_runner(stderr=diagnosis, returncode=1))
+    assert diagnosis in str(caught.value)  # survives intact, nothing redacted
+    assert "redacted" not in str(caught.value)
+
+
 def test_an_unbounded_child_output_is_truncated() -> None:
     with pytest.raises(RuntimeError) as caught:
         _run(_ok_runner(stderr="x" * 100_000, returncode=1))
