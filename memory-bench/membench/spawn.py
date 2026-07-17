@@ -18,6 +18,7 @@ exception is raised, not raise-vs-return.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -25,6 +26,21 @@ from pathlib import Path
 # A subprocess.run-shaped callable, injectable so tests never spawn a real
 # process. The canonical definition -- import it from here rather than restating it.
 Runner = Callable[..., "subprocess.CompletedProcess[str]"]
+
+# Both credential shapes that can reach this choke point: `sk-ant-oat01-...` (the OAuth
+# token the paid grid hands every child) and `sk-ant-api03-...` (an API key). One pattern
+# covers both, and nothing speculative is added -- these are the only credentials any of
+# the callers pass. mem never puts a token on the child's output channels itself; this
+# fires when a CLI echoes its OWN auth back on failure.
+_CREDENTIAL = re.compile(r"sk-ant-[A-Za-z0-9_-]+")
+_REDACTED = "<redacted-credential>"
+
+# The window the child's own output gets in the diagnosis. HEAD AND TAIL, not head alone:
+# `claude -p --output-format stream-json` puts a whole event stream on stdout and the
+# operative line lands at the end, while a usage error lands at the start. A head-only
+# window would drop exactly the line the operator needs on half the callers.
+_HEAD_CHARS = 2_000
+_TAIL_CHARS = 2_000
 
 
 def run_checked(
@@ -81,8 +97,26 @@ def run_checked(
         # `.strip() or .strip()`, not `(a or b).strip()`: a whitespace-only stderr
         # must still fall through to stdout, or the diagnosis loses the one line
         # that says what went wrong.
-        raise error(
-            f"{what} failed (exit {completed.returncode}): "
-            f"{(completed.stderr or '').strip() or (completed.stdout or '').strip()}"
-        )
+        #
+        # Select FIRST, then sanitise: redacting or truncating before this line could
+        # blank a real stderr into whitespace and silently move the fallback above --
+        # the selection is the pinned rung, so nothing may run ahead of it.
+        detail = (completed.stderr or "").strip() or (completed.stdout or "").strip()
+        raise error(f"{what} failed (exit {completed.returncode}): {_sanitised(detail)}")
     return completed
+
+
+def _sanitised(detail: str) -> str:
+    """The child's own output, made fit for the log this diagnosis ends up in.
+
+    The message built from this is PRINTED -- the paid grid drivers echo it on their
+    SWEEP HALT arm -- so the child's output is untrusted text bound for a CI log, and it
+    gets both properties here rather than at each of the callers: it is redacted, and it
+    is bounded. Order is fixed: redact before truncating, so a token straddling the cut
+    cannot survive as a fragment on either side of it.
+    """
+    detail = _CREDENTIAL.sub(_REDACTED, detail)
+    if len(detail) <= _HEAD_CHARS + _TAIL_CHARS:
+        return detail
+    dropped = len(detail) - _HEAD_CHARS - _TAIL_CHARS
+    return f"{detail[:_HEAD_CHARS]}\n... <{dropped} chars truncated> ...\n{detail[-_TAIL_CHARS:]}"

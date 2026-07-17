@@ -200,3 +200,67 @@ def test_root_cause_is_chained_for_diagnosis() -> None:
     with pytest.raises(_BoomError) as caught:
         _run(_raising_runner(boom), error=_BoomError)
     assert caught.value.__cause__ is boom
+
+
+# --------------------------------------------------------------------------- #
+# rung 5: the non-zero diagnosis is a LOG artifact -- bound it and redact it
+#
+# The message this rung builds is printed to the console/CI log by the paid grid
+# drivers (`grid_toolreq_builtin.py`'s SWEEP HALT arm), so the child's own output
+# reaches a log verbatim. Two properties are asserted here rather than at the six
+# call sites, for the reason the module exists: the child is untrusted output, and
+# every hand-rolled copy would have to re-derive both.
+#
+# Redaction runs AFTER the stderr/stdout selection above, never before: the rung-4
+# whitespace test pins that a blank stderr falls through to stdout, and redacting
+# first could blank a real message and silently move that selection.
+# --------------------------------------------------------------------------- #
+def test_an_oauth_token_on_the_childs_stderr_is_redacted() -> None:
+    # mem never puts the token on this channel; this fires if the CLI echoes its own
+    # auth on failure. Reproduced by the security reviewer with a canary.
+    leaky = "AuthenticationError: invalid token sk-ant-oat01-AAAA-BBBB_CC"
+    with pytest.raises(RuntimeError) as caught:
+        _run(_ok_runner(stderr=leaky, returncode=1))
+    assert "sk-ant-oat01-AAAA-BBBB_CC" not in str(caught.value)
+    assert "sk-ant" not in str(caught.value)
+    assert "AuthenticationError" in str(caught.value)  # the diagnosis survives
+
+
+def test_an_api_key_shape_is_redacted_too() -> None:
+    with pytest.raises(RuntimeError) as caught:
+        _run(_ok_runner(stderr="401 from sk-ant-api03-ZZZZ999", returncode=1))
+    assert "sk-ant-api03-ZZZZ999" not in str(caught.value)
+    assert "401 from" in str(caught.value)
+
+
+def test_a_token_on_stdout_is_redacted_when_stdout_is_the_diagnosis() -> None:
+    # `claude -p --output-format stream-json` puts the WHOLE event stream on stdout, so
+    # a non-zero exit with an empty stderr routes stdout into the printed exception.
+    # Redacting only stderr would cover the half least likely to carry the secret.
+    with pytest.raises(RuntimeError) as caught:
+        _run(_ok_runner(stdout="boom sk-ant-oat01-LEAK", stderr="", returncode=1))
+    assert "sk-ant-oat01-LEAK" not in str(caught.value)
+    assert "boom" in str(caught.value)
+
+
+def test_an_unbounded_child_output_is_truncated() -> None:
+    with pytest.raises(RuntimeError) as caught:
+        _run(_ok_runner(stderr="x" * 100_000, returncode=1))
+    assert len(str(caught.value)) < 10_000
+
+
+def test_truncation_keeps_the_head_and_the_tail() -> None:
+    # `mem query` and `harbor run` put the actionable line at the END; a head-only
+    # window would drop exactly the line the operator needs.
+    payload = "FIRST-LINE" + ("x" * 100_000) + "LAST-LINE"
+    with pytest.raises(RuntimeError) as caught:
+        _run(_ok_runner(stderr=payload, returncode=1))
+    assert "FIRST-LINE" in str(caught.value)
+    assert "LAST-LINE" in str(caught.value)
+
+
+def test_a_short_diagnosis_is_passed_through_unmarked() -> None:
+    # Truncation must not announce itself on output that was never truncated.
+    with pytest.raises(RuntimeError) as caught:
+        _run(_ok_runner(stderr="no such rig", returncode=3))
+    assert "truncated" not in str(caught.value)
