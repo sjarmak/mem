@@ -28,6 +28,7 @@ import sys
 import tempfile
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 from pydantic import ValidationError
@@ -1837,6 +1838,15 @@ def test_an_unpinned_paid_run_is_refused_before_a_go_command_it_could_not_price(
 # --- ancestor firewall: the sandbox's PARENT CHAIN is not a third continuity channel ----
 
 
+def _never_spent_runner(argv: Sequence[str], **kwargs: object) -> NoReturn:
+    """For the refuse-at-MINT cases, where the guard fires before any leg runs. Asserting the
+    refusal alone would leave "refuses to SPEND" an implication; this makes it a claim the test
+    can fail on, and keeps a scavenging runner from implying legs that never execute."""
+    raise AssertionError(
+        f"the guard refused at the mint, so no `claude -p` should have been spawned — got {argv}"
+    )
+
+
 def _ancestor_scavenging_runner(value: str, *, plant: bool):
     """The SILENT shape, which is the one that matters. The establish leg genuinely engages
     native memory (the real index+topic layout), so ``engaged`` is True and honest; the goal
@@ -1926,7 +1936,6 @@ def test_a_contaminated_ancestor_chain_refuses_to_spend(
     (tmp_path / "CLAUDE.md").write_text("remember: toolreq-w-t0-CURRENT", encoding="utf-8")
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     task = _task()
-    (current_opaque,) = task.current_opaque_values
 
     with pytest.raises(SandboxContaminationError) as exc:
         run_builtin_arm(
@@ -1935,7 +1944,7 @@ def test_a_contaminated_ancestor_chain_refuses_to_spend(
             model="",
             dry_run=False,
             channel=MemoryChannel.RECALLED,
-            runner=_ancestor_scavenging_runner(current_opaque, plant=False),
+            runner=_never_spent_runner,
             recorder=CellRecorder(),
         )
     assert str(tmp_path / "CLAUDE.md") in str(exc.value)  # names the offending path
@@ -1956,10 +1965,14 @@ def test_an_establish_leg_that_plants_an_ancestor_claude_md_cannot_reach_the_goa
     task = _task()
     (current_opaque,) = task.current_opaque_values
 
+    # repeats=1 is load-bearing, not incidental: with a second repeat, repeat 1's plant is
+    # still sitting above the sandbox when repeat 2 MINTS, so the construction-time guard
+    # catches it and this test passes even with the post-wipe call deleted — locking the
+    # wrong guard. One repeat leaves the post-wipe call as the only thing that can raise.
     with pytest.raises(SandboxContaminationError):
         run_builtin_arm(
             task,
-            repeats=2,
+            repeats=1,
             model="",
             dry_run=False,
             channel=MemoryChannel.RECALLED,
@@ -2011,7 +2024,6 @@ def test_the_guard_walks_the_real_chain_of_a_symlinked_tmpdir(
     link.symlink_to(real, target_is_directory=True)
     monkeypatch.setattr(tempfile, "tempdir", str(link))
     task = _task()
-    (current_opaque,) = task.current_opaque_values
 
     with pytest.raises(SandboxContaminationError):
         run_builtin_arm(
@@ -2020,6 +2032,6 @@ def test_the_guard_walks_the_real_chain_of_a_symlinked_tmpdir(
             model="",
             dry_run=False,
             channel=MemoryChannel.RECALLED,
-            runner=_ancestor_scavenging_runner(current_opaque, plant=False),
+            runner=_never_spent_runner,
             recorder=CellRecorder(),
         )

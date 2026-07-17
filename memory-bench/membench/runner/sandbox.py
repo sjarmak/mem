@@ -12,10 +12,10 @@ clamp cannot close the channel, and neither can ``toolreq_builtin._wipe_cwd_cont
 which iterates ``cwd.iterdir()`` and by construction never ascends. The sandbox is rooted
 at the ambient ``TMPDIR`` (``tempfile`` resolves it), so the OPERATOR'S ENVIRONMENT decides
 the whole ancestor chain: point ``TMPDIR`` at a workspace for disk space — routine — and
-every "neutral" sandbox silently inherits whatever ``CLAUDE.md`` sits above it. The
-accounting cannot see it. In the builtin arm ``engaged`` is read off the establish leg and
-``leaked`` only fires on (pass AND NOT engaged), so a scavenged pass publishes as a clean
-SEPARATES: the mechanism under test reads as WORKING when it did not.
+every "neutral" sandbox silently inherits whatever ``CLAUDE.md`` sits above it. No arm's
+accounting can see that, because a scavenged pass is indistinguishable from an earned one:
+the mechanism under test reads as WORKING when it did not. (``toolreq_builtin`` states the
+builtin arm's form of that blind spot, where it publishes as a fabricated SEPARATES.)
 
 So the guard is FAIL-CLOSED and refuses to spend, rather than recording the chain and
 spending anyway. That choice is what keeps the sandbox's location OUT of the cache
@@ -88,7 +88,7 @@ def assert_neutral_ancestry(sandbox: Path) -> None:
                     f"by walking up from the cwd at launch — with no tool call to clamp, so "
                     f"this sandbox is not neutral and its result could not be told apart from "
                     f"a real one. Refusing to spend. Set TMPDIR to a directory with no "
-                    f"{'/'.join(AUTO_LOADED_CONTEXT_FILES)} in any parent."
+                    f"{', '.join(AUTO_LOADED_CONTEXT_FILES)} in any parent."
                 )
 
 
@@ -96,12 +96,9 @@ def assert_neutral_ancestry(sandbox: Path) -> None:
 def paid_sandbox(prefix: str) -> Iterator[Path]:
     """A neutral cwd for a paid ``claude -p`` cell, guaranteed clean or not handed out.
 
-    Honors ``TMPDIR`` deliberately (see the module docstring): the guard is on
-    CONTAMINATION, never on WHERE the sandbox lives, so pointing ``TMPDIR`` at a roomier
-    disk keeps working and a contaminated one fails loudly instead of quietly.
-
-    Yields the RESOLVED path — the same chain the guard checked and the kernel reports, so
-    nothing downstream can re-introduce the symlink gap the guard just closed."""
+    Yields the RESOLVED path: the same chain the guard checked and the kernel reports, so
+    nothing downstream re-opens the symlink gap. Why ``TMPDIR`` is still honored, and why
+    that costs the measurement nothing: see the module docstring."""
     with tempfile.TemporaryDirectory(prefix=prefix) as raw:
         sandbox = Path(raw).resolve()
         assert_neutral_ancestry(sandbox)

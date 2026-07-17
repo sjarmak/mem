@@ -96,8 +96,7 @@ SUMMARY_NAME = "summary-toolreq-realagent.json"
 # the ENTIRE dry-run measurement — free runs only, since `dry_run` is itself in the identity),
 # and `realagent_probe`'s sandbox construction — its ancestor guard (`sandbox.paid_sandbox`)
 # decides what agent context the "neutral" cwd auto-loads, which moves a result while every
-# fingerprint stays identical (mem-rx11w). Named explicitly because this enumeration reads as
-# exhaustive, and this grid had no sandbox firewall to name until it did.
+# fingerprint stays identical (mem-rx11w).
 # NOT here, because `invocation_fingerprint` now carries them: the prompts, --allowedTools, --model,
 # --strict-mcp-config, and which cells run at all; nor the claude binary's version, which
 # `cli_version` now carries (resolved off the instrument — a drift no one performs on purpose is not

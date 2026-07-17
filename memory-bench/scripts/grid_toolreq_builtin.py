@@ -219,7 +219,8 @@ _HALT_COUNSEL = {
         "a CLAUDE.md above it is auto-loaded into EVERY cell by Claude Code's upward walk at "
         "launch — with no tool call to clamp and nothing in the accounting that can see it (a "
         "scavenged pass scores as a clean SEPARATES). This is an operator fix, not a code one: "
-        "point TMPDIR at a directory with no CLAUDE.md in any parent, or leave it unset (mem-rx11w)."
+        "point TMPDIR at a directory with no CLAUDE.md in any parent, or leave it unset "
+        "(mem-rx11w)."
     ),
 }
 
