@@ -8,22 +8,24 @@
 
 import { execFileSync } from 'node:child_process';
 
-/** True when `err` is `execFileSync` failing because git exited non-zero (a
- * missing ref, an unknown revision, work_dir not a repo) — as opposed to the
- * `git` binary itself being missing or unreadable.
- * Mirrors src/ingest/provenance.ts's `isNonZeroExit`, kept as its own copy
- * here rather than imported from dist/: verify-rig-checkouts.mjs (a consumer
- * of this module) is a Step-0 preflight that must still run when the TS build
- * is broken or stale, so this shared module can't take a dist/ dependency even
- * though the other two consumers already have one. */
-function isNonZeroExit(err) {
-  return typeof err === 'object' && err !== null && typeof err.status === 'number';
-}
-
-/** Run `git -C <dir> <args>`, returning trimmed stdout or null on a non-zero
- * exit (missing ref, work_dir gone, unknown revision). A missing `git` binary
- * or any other non-exit failure propagates — every caller here only expects a
- * git question with a legitimate negative answer, never a misconfiguration.
+/** Run `git -C <dir> <args>`, returning trimmed stdout, or null if the command
+ * failed for ANY reason — a non-zero exit (missing ref, unknown revision,
+ * work_dir gone) but equally a missing `git` binary, a signal kill, or a
+ * `maxBuffer` overrun.
+ *
+ * The catch is deliberately total, and narrowing it to non-zero exits is a
+ * regression (mem-j1r2w reject #2), not a hardening. Every consumer sweeps all
+ * of RIG_REPOS with an unguarded loop body, and each is built around null
+ * meaning "this rig has no answer": verify-rig-checkouts.mjs degrades to
+ * `exists: false` and fails closed in its per-rig verdict table; measure-false-
+ * close.mjs and measure-live-ref.mjs record a named entry in `skipped_rigs`.
+ * A throw escapes the loop, so one rig's transient fault (a signal kill, a
+ * maxBuffer overrun) takes every other rig's result down with it — a rethrow
+ * trades a reported skip for strictly worse telemetry, the opposite of
+ * surfacing the fault. A git binary missing outright still fails the sweep
+ * loudly: verify-rig-checkouts.mjs reads `git --version` unguarded for its
+ * report.
+ *
  * `maxBuffer` is sized for the largest caller, not the typical one: measure-
  * false-close.mjs's `for-each-ref --format=%(refname) refs/heads refs/remotes`
  * can list thousands of lines on a many-remote checkout (gascity alone carries
@@ -35,9 +37,8 @@ export function gitOut(dir, args) {
       maxBuffer: 64 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
-  } catch (err) {
-    if (isNonZeroExit(err)) return null;
-    throw err;
+  } catch {
+    return null;
   }
 }
 

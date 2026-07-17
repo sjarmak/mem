@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { gitOut, readRemotes } from '../scripts/verify/git.mjs';
+import { git, gitOut, readRemotes } from '../scripts/verify/git.mjs';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -32,6 +32,39 @@ describe('gitOut', () => {
   it('returns null on a non-zero git exit (unknown remote)', () => {
     const dir = repo();
     expect(gitOut(dir, ['remote', 'get-url', 'nope'])).toBeNull();
+  });
+
+  // The three multi-rig sweeps that share this helper each loop over RIG_REPOS
+  // with no try/catch around the body, and each is built to degrade one rig to a
+  // named skip on null. A failure that carries no exit status (a missing git
+  // binary, a signal kill, a maxBuffer overrun -- all `status: null`) must not
+  // escape as a throw, or one rig's transient fault takes every other rig's
+  // result down with it. PATH mutation is the one such failure a unit test can
+  // provoke without a shim.
+  it('returns null when git cannot be spawned at all (no exit status)', () => {
+    const dir = repo();
+    const realPath = process.env.PATH;
+    process.env.PATH = '/nonexistent';
+    try {
+      expect(gitOut(dir, ['rev-parse', '--git-dir'])).toBeNull();
+    } finally {
+      process.env.PATH = realPath;
+    }
+  });
+});
+
+describe('git', () => {
+  it('returns stdout for a successful command', () => {
+    const dir = repo();
+    addRemote(dir, 'origin', 'https://github.com/sjarmak/mem.git');
+    expect(git(dir, ['remote', 'get-url', 'origin']).trim()).toBe(
+      'https://github.com/sjarmak/mem.git'
+    );
+  });
+
+  it('throws on a non-zero git exit, unlike gitOut', () => {
+    const dir = repo();
+    expect(() => git(dir, ['remote', 'get-url', 'nope'])).toThrow();
   });
 });
 

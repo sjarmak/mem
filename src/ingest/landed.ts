@@ -135,7 +135,7 @@ function resolveWindow(run: GitRunner, input: LandedInput): Window {
     // READ from a producer-recorded `cut` (ingest/provenance-from-log) that
     // points at a commit not present locally. The window cannot be computed, so
     // the record is `unresolved` — never crash the batch. Mirrors the non-zero
-    // degradation in tipBefore above.
+    // degradation in provenance's {@link tipBefore}.
     if (isNonZeroExit(err)) return { state: 'unresolved' };
     throw err;
   }
