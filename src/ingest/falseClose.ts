@@ -187,9 +187,20 @@ export function joinBranches(opts: JoinOptions): JoinResult {
   // id as the store spells it, not as the branch happened to spell it.
   const canonical = new Map<string, string>();
   for (const id of closedIds) canonical.set(id.toLowerCase(), id);
-  /** A candidate branch and the raw refname it was found under. The refname is
-   * carried alongside JoinedBranch rather than on it: the displacement skip
-   * below is its only reader, and a field on JoinedBranch would surface
+  /** A candidate branch and the raw refname it was found under.
+   *
+   * The refname is CARRIED rather than reconstructed from the branch when the
+   * displacement skip needs it. It is derivable today — `refs/heads/<ref>` for a
+   * local head, `refs/remotes/<ref>` for a remote one — but `ref` is documented
+   * as the string to hand to git, so it is free to change shape for git's
+   * convenience, and a derivation would then keep type-checking while silently
+   * reporting a refname that no ref ever had. Recording a derived string in a
+   * field that promises the raw one is the exact defect this map's skip once
+   * had; ParsedRef already carries `refname` for the same reason, so carrying
+   * here follows the module's own idiom rather than inventing one.
+   *
+   * It rides alongside JoinedBranch instead of on it because the displacement
+   * skip is its only reader, and a field on JoinedBranch would surface
    * unconsumed in `joined` output. */
   interface HeldRef {
     branch: JoinedBranch;
