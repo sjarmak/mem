@@ -1416,6 +1416,40 @@ def test_sweep_agent_error_halts_diagnosed_with_resume_pointer(
     assert "re-run" in err  # and points at the resume path
 
 
+def test_sweep_contaminated_sandbox_halts_diagnosed_not_raw_traceback(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    # The ancestor guard fires at TWO moments, and only one of them was routed. The mint-time
+    # scan is covered by the preflight gate's conversion, but the post-wipe re-check raises
+    # MID-SWEEP — the establish leg is unclamped, so it can plant an ancestor CLAUDE.md that
+    # no construction-time scan could have seen. SandboxContaminationError is a sibling
+    # RuntimeError of PreflightHaltError and HeadlessAgentError, so neither existing arm
+    # catches it: without routing, the ONE contamination the post-wipe re-check exists to
+    # catch ends as a raw traceback, after real money is spent, with the CONTAMINATED_SANDBOX
+    # counsel unreachable on the only path that spends before it can fire.
+    _corpus_one(tmp_path)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")  # paid path must name a model (mem-bzv2p)
+
+    def _passes_once_then_contaminates(task, **kwargs):
+        if not calls:
+            calls.append("preflight")
+            return _engaging_arm(task, **kwargs)
+        raise SandboxContaminationError(
+            "/evil/CLAUDE.md sits above the sandbox ... Set TMPDIR to a directory with no ..."
+        )
+
+    calls: list[str] = []
+    monkeypatch.setattr(grid, "run_builtin_arm", _passes_once_then_contaminates)
+    code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
+    assert code == 3  # diagnosed halt, not an uncaught traceback's exit 1
+    err = capsys.readouterr().err
+    assert "SWEEP HALT" in err
+    assert "PREFLIGHT HALT" not in err  # the preflight passed; this is the mid-sweep boundary
+    assert "/evil/CLAUDE.md" in err  # carries the offending path
+    assert "TMPDIR" in err  # and routes to the operator fix, not a code one
+
+
 def test_preflight_proceeds_when_engaged(tmp_path: Path, monkeypatch) -> None:
     _corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")

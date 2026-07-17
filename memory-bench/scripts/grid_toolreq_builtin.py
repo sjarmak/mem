@@ -57,6 +57,7 @@ from membench.runner.headless_agent import (
     a_paid_run_needs_a_model,
     resolve_model,
 )
+from membench.runner.sandbox import SandboxContaminationError
 from membench.runner.toolreq_builtin_grid import (
     AGENT_ERROR,
     CONTAMINATED_SANDBOX,
@@ -325,6 +326,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"of spending into a broken link. Finished tasks are persisted under "
             f"{args.out} and are REUSED on re-run: re-run the same command to resume "
             "once the underlying failure (network, rate limit, CLI issue) is resolved.",
+            file=sys.stderr,
+        )
+        return 3
+    except SandboxContaminationError as exc:
+        # The ancestor guard's OTHER firing moment. The gate converts the mint-time refusal into
+        # a PreflightHaltError, but the post-wipe re-check raises from inside the sweep, where
+        # nothing converts it — and all three are sibling RuntimeErrors, so neither arm above
+        # catches it. Without this the one contamination that re-check exists to catch (an
+        # unclamped establish leg planting an ancestor CLAUDE.md) ends as a raw traceback, and
+        # the counsel below is unreachable from the only path that spends before it fires.
+        # Sweep counsel, not preflight's: cells that finished are persisted and still sound —
+        # each was refused-or-clean on its own chain — so a resume after the fix is cheap.
+        print(
+            f"SWEEP HALT: a sandbox stopped being neutral mid-sweep ({exc}).\n"
+            f"  {_HALT_COUNSEL[CONTAMINATED_SANDBOX]}\n"
+            f"  Finished tasks are persisted under {args.out} and are REUSED on re-run.",
             file=sys.stderr,
         )
         return 3
