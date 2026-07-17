@@ -70,10 +70,16 @@ export function git(dir, args) {
  * directly skips that resolution, so a checkout using an `insteadOf` shorthand
  * (e.g. `gh:owner/repo` aliased to `git@github.com:owner/repo`) reports the
  * unresolved alias — which may not even parse as a GitHub URL — instead of the
- * real remote `git` itself would use. `get-url` is the only surface that
- * reproduces git's own resolution, so the N+1 process cost (gascity alone
- * carries 17 remotes) is paid deliberately; see the bead notes for why this
- * was accepted as correctness over speed. */
+ * real remote `git` itself would use.
+ *
+ * It is NOT, however, the only surface that resolves `insteadOf`: `git remote
+ * -v` does too, in one call rather than N+1 (measured — see mem-2d5zo, which
+ * tracks whether to swap). The N+1 here buys explicitness, not correctness:
+ * `get-url` asks git one unambiguous question per remote, where `-v` returns
+ * porcelain that has to be parsed back into a map. Do not restate this cost as
+ * unavoidable — reject #1 ruled only that RAW CONFIG (`git config --get-regexp
+ * remote\..*\.url`) is wrong, because it skips the rewrite; it did not rule on
+ * `-v`. */
 export function readRemotes(dir) {
   const names = gitOut(dir, ['remote']);
   if (names === null) return {};
