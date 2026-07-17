@@ -38,6 +38,8 @@ import argparse
 import os
 
 from membench.runner.headless_agent import (
+    CHANNELS,
+    ENV_OAUTH,
     CellRecorder,
     MemoryChannel,
     a_paid_run_needs_a_model,
@@ -55,7 +57,6 @@ from membench.schemas.sequence import SequenceStep
 # mem-rk41.3 corpus driver); re-exported here so importers of this CLI keep working.
 __all__ = ["ArmOutcome", "main"]
 
-ENV_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN"
 # A paid probe left unpinned executes under the CLI's own default — a model this codebase never
 # records — so a resume across a model change could serve one model's numbers as another's
 # (mem-bzv2p). This probe keeps no cache, but it shares the spend gate the grids are held to.
@@ -65,7 +66,6 @@ _REFUSE_UNPINNED_MODEL = (
     "  Pass --model <id>, or set MEMBENCH_AGENT_MODEL, then re-run (or --dry-run for free)."
 )
 ARMS = ("none", "oracle")
-CHANNELS = (MemoryChannel.RECALLED, MemoryChannel.TRUSTED)
 
 
 def _arm_memory(arm: str) -> dict[str, str]:

@@ -51,6 +51,7 @@ from pathlib import Path
 from membench.runner.headless_agent import (
     CHANNELS,
     DEFAULT_TIMEOUT_S,
+    ENV_OAUTH,
     REFUSE_UNPINNED_MODEL,
     HeadlessAgentError,
     a_paid_run_needs_a_model,
@@ -68,12 +69,14 @@ from membench.runner.toolreq_builtin_grid import (
     run_corpus,
     uniform_calls_per_repeat,
 )
-from membench.runner.toolreq_realagent import ToolReqRealAgentTask, load_corpus_with_sequences
+from membench.runner.toolreq_realagent import (
+    DEFAULT_CORPUS,
+    ToolReqRealAgentTask,
+    load_corpus_with_sequences,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CORPUS = PROJECT_ROOT / "memory-bench/fixtures/worlds-tool"
 DEFAULT_OUT = PROJECT_ROOT / ".mem/toolreq-builtin"
-ENV_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN"
 
 
 # What a cache-derived count is conditional on, printed with the count and never without it. The

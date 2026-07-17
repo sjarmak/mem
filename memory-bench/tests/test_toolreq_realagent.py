@@ -18,10 +18,9 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import subprocess
 import sys
 from collections import OrderedDict, defaultdict
-from collections.abc import Callable, Mapping, MutableMapping, Sequence
+from collections.abc import Callable, Mapping, MutableMapping
 from pathlib import Path
 from typing import Annotated, Any, ForwardRef, NoReturn, get_args, get_origin
 
@@ -48,6 +47,15 @@ from membench.schemas.sequence import (
     SequenceStep,
 )
 from tests.paths import DIST_MAIN, MEM_BIN, require_mem_cli
+from tests.toolreq_helpers import (
+    CURRENT,
+    STALE,
+    STUB_CLI_VERSION,
+    corpus,
+    corpus_one,
+    noop_cli_runner,
+    toolreq_seq,
+)
 
 # The driver is a script; import it the way test_realagent_probe imports the probe CLI.
 _SCRIPTS = str(Path(__file__).resolve().parents[1] / "scripts")
@@ -58,13 +66,6 @@ import grid_toolreq_realagent as driver  # noqa: E402
 
 from membench.mem_cli import MemCliError  # noqa: E402
 from membench.runner.headless_agent import HeadlessAgentError  # noqa: E402
-
-CURRENT = "30 days"
-STALE = "90 days"
-
-# The claude binary a hermetic PAID-path test pretends to have measured on. Never resolved off
-# this machine: the suite must not key an identity on whichever CLI happens to be installed.
-STUB_CLI_VERSION = "2.1.210"
 
 
 # The default no-op seed_fn: every hermetic test that exercises run_corpus() but doesn't
@@ -113,64 +114,6 @@ def _run_corpus(
     )
 
 
-def _toolreq_seq(
-    seq_id: str = "w-t0", *, current: str = CURRENT, stale: str = STALE
-) -> BenchmarkSequence:
-    """A minimal tool-requiring sequence: a v1->v2 superseded retention chain plus a
-    goal whose ``apply_config`` action requires the current value and forbids the stale
-    one. Mirrors the frozen ``fixtures/worlds-tool`` shape without depending on the
-    (untracked) generated corpus.
-
-    ``current``/``stale`` are overridable so a test can build a REGENERATED corpus — same
-    sequence ids, different authored values, hence a disjoint opaque-token space."""
-    return BenchmarkSequence(
-        sequence_id=seq_id,
-        title=f"{seq_id} initiative: reconcile retention",
-        domain="data-infrastructure",
-        goal="Deliver the current initiative.",
-        steps=[
-            SequenceStep(
-                step_id=f"{seq_id}-s0",
-                user_request="Record the current value of the data retention window.",
-                expected_memory_writes={
-                    "m-v1": f"the data retention window is {stale} — by A. Ree in #chat"
-                },
-            ),
-            SequenceStep(
-                step_id=f"{seq_id}-s1",
-                user_request="Record the current value of the data retention window.",
-                expected_memory_writes={
-                    "m-v2": f"the data retention window is {current} — by B. Cee in #meeting"
-                },
-                superseded_memory_ids=["m-v1"],
-            ),
-            SequenceStep(
-                step_id=f"{seq_id}-goal",
-                user_request=(
-                    "Deliver the current initiative. Using the tool `apply_config`, apply "
-                    "the current value of: the data retention window."
-                ),
-                available_tools=["apply_config"],
-                expected_memory_reads=["m-v2"],
-                outcome_checks=[
-                    OutcomeCheck(
-                        check_id=f"{seq_id}-goal-check",
-                        description="goal requires apply_config carrying the current value",
-                        requires_memory=["m-v2"],
-                        requires_action=[
-                            ExpectedAction(
-                                tool="apply_config",
-                                arg_values=[current],
-                                forbidden_values=[stale],
-                            )
-                        ],
-                    )
-                ],
-            ),
-        ],
-    )
-
-
 def _text_only_seq(seq_id: str = "w-text") -> BenchmarkSequence:
     """A text-answer sequence (no tool-requiring action) — the adapter must refuse it."""
     return BenchmarkSequence(
@@ -201,7 +144,7 @@ def _text_only_seq(seq_id: str = "w-text") -> BenchmarkSequence:
 
 
 def test_adapt_bridges_goal_onto_write_with_opaque_values() -> None:
-    task = adapt_sequence(_toolreq_seq())
+    task = adapt_sequence(toolreq_seq())
     assert isinstance(task, ToolReqRealAgentTask)
     step = task.goal_step
     assert step.available_tools == ["Write"]
@@ -219,7 +162,7 @@ def test_adapt_bridges_goal_onto_write_with_opaque_values() -> None:
 
 
 def test_oracle_memory_surfaces_current_opaque_never_stale() -> None:
-    task = adapt_sequence(_toolreq_seq())
+    task = adapt_sequence(toolreq_seq())
     joined = " ".join(task.oracle_memory.values())
     (current_opaque,) = task.current_opaque_values
     assert states_value(joined, current_opaque)
@@ -231,7 +174,7 @@ def test_oracle_memory_surfaces_current_opaque_never_stale() -> None:
 
 
 def test_bridged_request_leaks_no_value_and_names_the_real_tool() -> None:
-    step = adapt_sequence(_toolreq_seq()).goal_step
+    step = adapt_sequence(toolreq_seq()).goal_step
     req = step.user_request
     # no authored value (realistic or opaque) may reach the agent-visible request
     for opaque in (
@@ -251,7 +194,7 @@ def test_adapt_rejects_a_sequence_id_with_a_trailing_newline() -> None:
     per-task path as the file "w-0\n.json". Confined to out_dir and not exploitable --
     pinned because the NEXT id-shaped guard copied from this one might not be."""
     with pytest.raises(ValueError, match="unsafe sequence_id"):
-        adapt_sequence(_toolreq_seq(seq_id="w-t0\n"))
+        adapt_sequence(toolreq_seq(seq_id="w-t0\n"))
 
 
 def test_adapt_rejects_text_only_sequence() -> None:
@@ -260,7 +203,7 @@ def test_adapt_rejects_text_only_sequence() -> None:
 
 
 def test_adapt_raises_on_required_id_with_no_backing_write() -> None:
-    seq = _toolreq_seq()
+    seq = toolreq_seq()
     # point requires_memory at an id no step ever writes
     seq.steps[-1].outcome_checks[0].requires_memory.append("m-ghost")
     with pytest.raises(ValueError, match="m-ghost"):
@@ -268,9 +211,9 @@ def test_adapt_raises_on_required_id_with_no_backing_write() -> None:
 
 
 def test_opacity_deterministic_and_sequence_unique() -> None:
-    a1 = adapt_sequence(_toolreq_seq("w-a"))
-    a2 = adapt_sequence(_toolreq_seq("w-a"))
-    b = adapt_sequence(_toolreq_seq("w-b"))
+    a1 = adapt_sequence(toolreq_seq("w-a"))
+    a2 = adapt_sequence(toolreq_seq("w-a"))
+    b = adapt_sequence(toolreq_seq("w-b"))
     assert a1.current_opaque_values == a2.current_opaque_values  # deterministic
     # same realistic value, different sequence id -> different opaque token (no collision)
     assert a1.current_opaque_values != b.current_opaque_values
@@ -376,7 +319,7 @@ def test_task_fingerprint_cannot_see_key_order_in_a_goal_step_dict_field() -> No
     but cannot for a dict nested inside ``goal_step.model_dump()``. Those fields never reach
     the argv either, so ``invocation_fingerprint`` is blind to them: this is the only place
     they could register, and it is the place that sorts them."""
-    task = adapt_sequence(_toolreq_seq())
+    task = adapt_sequence(toolreq_seq())
     forward = {"k-a": "A", "k-b": "B"}
     reversed_order = dict(reversed(list(forward.items())))
     assert list(forward) != list(reversed_order)  # same content, different order
@@ -413,7 +356,7 @@ def test_adapt_sequence_populates_no_goal_step_dict_field() -> None:
     step's retrieve (``conditions.py``, the §10 Confusion axis), and the real materialiser
     already authors them on the goal step (``enterprise_workflow``).
 
-    The source step is armed HERE rather than in ``_toolreq_seq`` because the guard must fail on
+    The source step is armed HERE rather than in ``toolreq_seq`` because the guard must fail on
     a pass-through (``distractor_memories=dict(goal.distractor_memories)``), not merely on a
     hardcoded populate — and a shared fixture carrying ``environment_state`` /
     ``expected_memory_writes`` the materialiser never authors would falsify its own
@@ -439,7 +382,7 @@ def test_adapt_sequence_populates_no_goal_step_dict_field() -> None:
     # today and diverge the moment the fixture grows a trailing step without outcome_checks,
     # arming a step the adapter never looks at and leaving this guard green under a
     # pass-through.
-    seq = _toolreq_seq()
+    seq = toolreq_seq()
     source_goal = _goal_step(seq)
     armed_goal = source_goal.model_copy(
         update={name: {f"{name}-k-a": "A", f"{name}-k-b": "B"} for name in roster}
@@ -465,7 +408,7 @@ def test_load_corpus_with_sequences_pairs_in_order(tmp_path: Path) -> None:
         seed_dir = tmp_path / str(seed)
         seed_dir.mkdir()
         (seed_dir / "sequences.json").write_text(
-            json.dumps([_toolreq_seq(sid).model_dump()]), encoding="utf-8"
+            json.dumps([toolreq_seq(sid).model_dump()]), encoding="utf-8"
         )
     sequences, tasks = load_corpus_with_sequences(tmp_path)
     assert [s.sequence_id for s in sequences] == [t.work_id for t in tasks] == ["w-0", "w-1"]
@@ -475,7 +418,7 @@ def test_load_corpus_with_sequences_pairs_in_order(tmp_path: Path) -> None:
 
 
 def test_sequence_lessons_opaque_states_current_opaque_value_leak_safely() -> None:
-    seq = _toolreq_seq()
+    seq = toolreq_seq()
     task = adapt_sequence(seq)
     lessons = sequence_lessons_opaque([seq], [task])
     assert len(lessons) == 1
@@ -492,14 +435,14 @@ def test_sequence_lessons_opaque_states_current_opaque_value_leak_safely() -> No
 
 
 def test_sequence_lessons_opaque_rejects_length_mismatch() -> None:
-    seq = _toolreq_seq()
+    seq = toolreq_seq()
     task = adapt_sequence(seq)
     with pytest.raises(ValueError, match="length mismatch"):
-        sequence_lessons_opaque([seq, _toolreq_seq("w-extra")], [task])
+        sequence_lessons_opaque([seq, toolreq_seq("w-extra")], [task])
 
 
 def test_sequence_lessons_opaque_rejects_order_mismatch() -> None:
-    seq_a, seq_b = _toolreq_seq("w-a"), _toolreq_seq("w-b")
+    seq_a, seq_b = toolreq_seq("w-a"), toolreq_seq("w-b")
     task_a, task_b = adapt_sequence(seq_a), adapt_sequence(seq_b)
     with pytest.raises(ValueError, match="order mismatch"):
         sequence_lessons_opaque([seq_a, seq_b], [task_b, task_a])
@@ -509,7 +452,7 @@ def test_sequence_lessons_opaque_rejects_order_mismatch() -> None:
 
 
 def test_dry_run_arms_separate_per_task() -> None:
-    task = adapt_sequence(_toolreq_seq())
+    task = adapt_sequence(toolreq_seq())
     outcomes = grid.evaluate_task(task, repeats=2, model="", dry_run=True, recorder=CellRecorder())
     by = {(o.arm, o.channel): o for o in outcomes}
     for channel in (c.value for c in grid.CHANNELS):
@@ -520,7 +463,7 @@ def test_dry_run_arms_separate_per_task() -> None:
 
 
 def test_ours_arm_dry_run_passes_when_payload_states_current_value() -> None:
-    task = adapt_sequence(_toolreq_seq())
+    task = adapt_sequence(toolreq_seq())
     (current_opaque,) = task.current_opaque_values
     ours_payload = {"w-prior": f"the retention window is {current_opaque}"}
     outcomes = grid.evaluate_task(
@@ -534,7 +477,7 @@ def test_ours_arm_dry_run_passes_when_payload_states_current_value() -> None:
 def test_ours_arm_dry_run_honest_non_pass_when_payload_lacks_current_value() -> None:
     # The expected, honest substrate finding: a payload that never states the queried
     # task's own sequence-unique opaque value cannot make the simulated agent pass.
-    task = adapt_sequence(_toolreq_seq())
+    task = adapt_sequence(toolreq_seq())
     ours_payload = {"w-prior": "an unrelated retrieved fact about something else entirely"}
     outcomes = grid.evaluate_task(
         task, repeats=2, model="", dry_run=True, recorder=CellRecorder(), ours_payload=ours_payload
@@ -553,7 +496,7 @@ def test_none_prompt_is_byte_identical_across_channels() -> None:
     ever emitted for empty memory, the dedup would publish one channel's `none` measurement as
     another's that was never sent — and this goes RED first. Compares ``.calls`` (the argv), NOT the
     whole ``CellCalls`` whose ``channel`` label legitimately differs."""
-    task = adapt_sequence(_toolreq_seq())
+    task = adapt_sequence(toolreq_seq())
     none_leg = Leg("goal", task.goal_step, {})  # empty surfaced memory IS the `none` control
     argv_by_channel = {
         channel: render_cell_calls(arm="none", channel=channel, legs=[none_leg], model="").calls
@@ -571,7 +514,7 @@ def test_none_is_planned_once_not_per_channel() -> None:
     once), while `oracle` and a non-empty `ours` are planned per channel. The plan is what
     ``invocation_fingerprint`` hashes, so one `none` cell here is one paid `claude -p` for `none`.
     """
-    task = adapt_sequence(_toolreq_seq())
+    task = adapt_sequence(toolreq_seq())
     payload = {"w-prior": "the retention window is TOKEN-abc"}  # non-empty -> `ours` planned too
     plan = grid.planned_cells(task, payload)
     none_cells = [c for c in plan if c.arm == "none"]
@@ -584,7 +527,7 @@ def test_none_is_planned_once_not_per_channel() -> None:
 def test_none_is_paid_once_per_task(monkeypatch) -> None:
     """The point of the dedup (mem-dg5fm): ``evaluate_task`` spawns `claude -p` for `none` ONCE per
     task, not once per channel. `oracle` still runs per channel. Spied, so no real spend."""
-    task = adapt_sequence(_toolreq_seq())
+    task = adapt_sequence(toolreq_seq())
     seen: list[str] = []
     monkeypatch.setattr(grid, "run_arm", _spy_run_arm(seen, oracle_passes=True))
     grid.evaluate_task(task, repeats=2, model="", dry_run=True, recorder=CellRecorder())
@@ -596,7 +539,7 @@ def test_none_row_is_relabeled_into_every_channel() -> None:
     """`none` is measured once but must still contribute a ROW to every channel (the grid stays
     complete), and those rows carry the SAME passes/runs — the channel is not a real variable for an
     empty-memory prompt, so measuring it twice was pure waste (mem-dg5fm)."""
-    task = adapt_sequence(_toolreq_seq())
+    task = adapt_sequence(toolreq_seq())
     outcomes = grid.evaluate_task(task, repeats=2, model="", dry_run=True, recorder=CellRecorder())
     by = {(o.arm, o.channel): o for o in outcomes}
     assert {(o.arm, o.channel) for o in outcomes} == grid.expected_cells()  # complete grid
@@ -610,11 +553,11 @@ def test_worst_case_paid_call_count_reflects_the_none_dedup() -> None:
     — never a hardcoded ``len(ARMS)*len(CHANNELS)``. Worst case = `ours` retrieves for every task
     (empty-retrieval tasks relabel `ours` from `none` and spend less; the pre-seed disclosure cannot
     know which, so it bills the ceiling)."""
-    task = adapt_sequence(_toolreq_seq())
+    task = adapt_sequence(toolreq_seq())
     expected_per_task = 1 + (len(grid.ARMS) - 1) * len(grid.CHANNELS)  # none once + oracle,ours x2
     assert grid.worst_case_calls_per_task(task) == expected_per_task
     assert expected_per_task < len(grid.ARMS) * len(grid.CHANNELS)  # strictly below the naive grid
-    tasks = [task, adapt_sequence(_toolreq_seq("w-b"))]
+    tasks = [task, adapt_sequence(toolreq_seq("w-b"))]
     assert grid.worst_case_paid_call_count(tasks, repeats=3) == 3 * expected_per_task * len(tasks)
 
 
@@ -622,7 +565,7 @@ def test_run_corpus_persists_and_is_resumable(tmp_path: Path) -> None:
     seed_dir = tmp_path / "corpus" / "0"
     seed_dir.mkdir(parents=True)
     (seed_dir / "sequences.json").write_text(
-        json.dumps([_toolreq_seq("w-0").model_dump()]), encoding="utf-8"
+        json.dumps([toolreq_seq("w-0").model_dump()]), encoding="utf-8"
     )
     sequences, tasks = load_corpus_with_sequences(tmp_path / "corpus")
     out = tmp_path / "out"
@@ -656,30 +599,6 @@ def test_run_corpus_persists_and_is_resumable(tmp_path: Path) -> None:
     assert seed_calls["n"] == 2
 
 
-def _corpus(
-    tmp_path: Path, *work_ids: str
-) -> tuple[list[BenchmarkSequence], list[ToolReqRealAgentTask]]:
-    """Seed a frozen corpus of ``work_ids`` under ``tmp_path/corpus`` and load it."""
-    corpus = tmp_path / "corpus"
-    (corpus / "0").mkdir(parents=True)
-    (corpus / "0" / "sequences.json").write_text(
-        json.dumps([_toolreq_seq(work_id).model_dump() for work_id in work_ids]), encoding="utf-8"
-    )
-    return load_corpus_with_sequences(corpus)
-
-
-def _corpus_one(
-    tmp_path: Path, work_id: str = "w-0"
-) -> tuple[list[BenchmarkSequence], list[ToolReqRealAgentTask]]:
-    """Seed a one-task frozen corpus under ``tmp_path/corpus`` and load it — the same scaffold
-    every driver test needs (mirrors ``test_toolreq_builtin._corpus_one``)."""
-    return _corpus(tmp_path, work_id)
-
-
-def _noop_cli_runner(argv: Sequence[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-    return subprocess.CompletedProcess(list(argv), returncode=0, stdout="", stderr="")
-
-
 def _spy_run_arm(seen: list[str], *, oracle_passes: bool) -> Callable[..., Any]:
     """A ``run_arm`` double that records which arms were RUN instead of spawning ``claude -p``.
 
@@ -711,7 +630,7 @@ def _spy_run_arm(seen: list[str], *, oracle_passes: bool) -> Callable[..., Any]:
         planned = render_cell_calls(
             arm=arm, channel=channel, legs=[Leg("goal", step, memory)], model=model
         )
-        runner = recorder.cell(_noop_cli_runner, arm=arm, channel=channel, repeats=repeats)
+        runner = recorder.cell(noop_cli_runner, arm=arm, channel=channel, repeats=repeats)
         for _ in range(repeats):
             for argv in planned.calls:
                 runner(argv)
@@ -723,7 +642,7 @@ def _spy_run_arm(seen: list[str], *, oracle_passes: bool) -> Callable[..., Any]:
 def test_dry_run_cache_never_satisfies_a_paid_run(tmp_path: Path, monkeypatch) -> None:
     # The highest-severity confound: a FREE dry-run's simulated result must NOT be reused by
     # a PAID run over the same --out. Prove the paid run re-executes (spied, so no real spend).
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     store_path = tmp_path / "store.db"
     _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
@@ -750,7 +669,7 @@ def test_a_dry_run_never_asks_which_binary_is_installed(tmp_path: Path) -> None:
     """A free run spawns no claude, so it must not need one to exist. If `run_corpus` resolved the
     version unconditionally, `--dry-run` would halt on a machine with no CLI installed — the whole
     point of the free path is that it runs anywhere."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
 
     def _refuse() -> str:
         raise AssertionError("a dry run must not resolve the claude binary — it spawns none")
@@ -771,7 +690,7 @@ def test_upgrading_the_cli_between_runs_is_a_miss_not_a_relabel(
 ) -> None:
     """THE defect at the grid altitude: measure a paid sweep, upgrade the claude CLI, resume over
     the same --out. The cells must MISS and re-measure. Both runs are spied, so neither spends."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     store_path = tmp_path / "store.db"
     real_eval = grid.evaluate_task
@@ -824,7 +743,7 @@ def test_upgrading_the_cli_between_runs_is_a_miss_not_a_relabel(
 
 
 def test_corrupt_cache_file_is_re_executed_not_crashed(tmp_path: Path) -> None:
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     out.mkdir()
     (out / f"{tasks[0].work_id}.json").write_text("{ half-written not json", encoding="utf-8")
@@ -845,7 +764,7 @@ def test_non_object_cache_is_a_miss_not_an_attributeerror(tmp_path: Path, cache_
     """A cache file holding VALID JSON of the wrong shape survives ``json.loads`` and then
     dies on ``.get`` — an AttributeError that aborts the whole sweep, contradicting the
     docstring's miss-never-crash guarantee. Every non-object payload must be a plain miss."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     out.mkdir()
     (out / f"{tasks[0].work_id}.json").write_text(cache_text, encoding="utf-8")
@@ -932,7 +851,7 @@ def test_a_mutated_cache_record_is_a_miss_and_is_re_measured(
     cannot silently stop being adversarial in the way it claims: the rows that keep both are
     exactly the ones no structural check can catch, and they prove the value checks are the
     guard actually doing the work."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     first = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
     assert "SEPARATES" in first["per_task"][0]["verdict"]
@@ -972,7 +891,7 @@ def test_a_record_forged_at_a_different_repeat_count_is_a_miss(tmp_path: Path) -
     the ``cell.runs != identity.repeats`` conjunct in
     ``_rows_are_a_complete_grid_measured_at_this_identity`` and this record is ACCEPTED: a grid
     nobody measured at this run's repeats, served as reused at executed=0."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     first = _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
     assert "SEPARATES" in first["per_task"][0]["verdict"]
@@ -1013,7 +932,7 @@ def test_regenerated_corpus_never_reuses_the_previous_worlds_results(tmp_path: P
     corpus_a = tmp_path / "a"
     (corpus_a / "0").mkdir(parents=True)
     (corpus_a / "0" / "sequences.json").write_text(
-        json.dumps([_toolreq_seq("w-0", current="11 days", stale="12 days").model_dump()]),
+        json.dumps([toolreq_seq("w-0", current="11 days", stale="12 days").model_dump()]),
         encoding="utf-8",
     )
     seqs_a, tasks_a = load_corpus_with_sequences(corpus_a)
@@ -1024,7 +943,7 @@ def test_regenerated_corpus_never_reuses_the_previous_worlds_results(tmp_path: P
     corpus_b = tmp_path / "b"
     (corpus_b / "0").mkdir(parents=True)
     (corpus_b / "0" / "sequences.json").write_text(
-        json.dumps([_toolreq_seq("w-0", current="99 days", stale="98 days").model_dump()]),
+        json.dumps([toolreq_seq("w-0", current="99 days", stale="98 days").model_dump()]),
         encoding="utf-8",
     )
     seqs_b, tasks_b = load_corpus_with_sequences(corpus_b)
@@ -1044,7 +963,7 @@ def test_fingerprint_tracks_the_executed_prompt_not_just_the_authored_values(
     ExpectedAction) that leaves the authored values untouched must still invalidate the cache
     — otherwise a resumed --out serves pre-change answers as if they measured the new prompt.
     This needs no corrupted file, only ordinary iteration on adapt_sequence."""
-    task = adapt_sequence(_toolreq_seq("w-0"))
+    task = adapt_sequence(toolreq_seq("w-0"))
     drifted = dataclasses.replace(
         task,
         goal_step=task.goal_step.model_copy(
@@ -1065,7 +984,7 @@ def test_switching_the_resolved_model_invalidates_the_cache(tmp_path: Path, monk
     sweep under one model, repoint the env var, resume, and every cached task is served as
     ``reused`` with the FIRST model's numbers relabelled as the second's. The identity must
     carry the RESOLVED model."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     store_path = tmp_path / "store.db"
 
@@ -1093,7 +1012,7 @@ def test_a_changed_ours_payload_invalidates_the_cache(tmp_path: Path) -> None:
     bin/mem's retrieval changes — none of which touch the queried task's own fields, so
     task_fingerprint cannot see any of them. Hashing the resolved payload covers all three at
     once: a different injected context is a different measurement and must not be reused."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     store_path = tmp_path / "store.db"
     work_id = tasks[0].work_id
@@ -1128,7 +1047,7 @@ def test_reordered_ours_payload_invalidates_the_cache(tmp_path: Path) -> None:
     lessons in. Retrieval can return the same SET in a different ORDER (a reseed moving an FTS
     tiebreak, a ranking change in bin/mem) — a different prompt, so a different measurement. A
     sorted fingerprint would call the two runs identical and serve the stale one."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     store_path = tmp_path / "store.db"
     work_id = tasks[0].work_id
@@ -1165,7 +1084,7 @@ def test_reordered_oracle_memory_invalidates_the_cache(tmp_path: Path) -> None:
     renders in insertion order — so reordering oracle_memory without changing its content (an
     ordinary edit to how adapt_sequence builds the dict) changes the oracle prompt. Sorting it
     inside task_fingerprint made that change invisible and served the pre-change ceiling."""
-    _, tasks = _corpus_one(tmp_path)
+    _, tasks = corpus_one(tmp_path)
     task = tasks[0]
     forward = dict(task.oracle_memory)
     if len(forward) < 2:  # the fixture must actually be able to express an order
@@ -1228,7 +1147,7 @@ def test_empty_flag_contradicting_the_ours_rows_is_a_miss(tmp_path: Path) -> Non
     that makes a flat (ours 0/N) attributable, the rows are the measurement, and here they
     disagree. Ordinary runs cannot produce it (both derive from the same payload object), so this
     is a corrupted/hand-edited file — the exact input class every other check here rejects."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     store_path = tmp_path / "store.db"
     _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
@@ -1270,7 +1189,7 @@ def test_a_cached_identity_carrying_an_unknown_field_is_a_miss(tmp_path: Path) -
 
     ``extra="forbid"`` + whole-object ``==`` turns that into a miss, which is the fail-safe
     direction: a miss re-measures (costing a run), an acceptance publishes someone else's."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     store_path = tmp_path / "store.db"
     first = _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
@@ -1296,7 +1215,7 @@ def test_a_cached_record_in_the_old_spread_identity_shape_is_a_miss(tmp_path: Pa
     ``==`` rather than a field-by-field walk, so the old shape must MISS and be re-measured — and
     it must do so as a cache miss, not as an unhandled ValidationError escaping mid-resume and
     killing a paid sweep."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     store_path = tmp_path / "store.db"
     _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
@@ -1323,7 +1242,7 @@ def test_a_forged_verdict_is_a_miss(tmp_path: Path) -> None:
     can refuse it. The summary is the second lock: it counts KINDS re-derived from the rows
     (`CachedResult.kinds`), never substrings of the stored verdict, so a forgery that got past the
     validator still could not reach the headline."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     store_path = tmp_path / "store.db"
     _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
@@ -1350,7 +1269,7 @@ def test_a_cache_hit_does_not_rewrite_the_result_file(tmp_path: Path) -> None:
     could only reproduce it. That keeps a fully cache-served resume at ZERO writes, which is what
     lets the result files' mtimes say which tasks a run actually measured — and it is only sound
     because the verdict is now checked rather than silently recomputed on the way back out."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     store_path = tmp_path / "store.db"
     _run_corpus(tasks, sequences, out, dry_run=True, store_path=store_path)
@@ -1419,8 +1338,8 @@ def test_duplicate_work_ids_are_refused(tmp_path: Path) -> None:
     DIFFERENT tasks onto one cache file: the second overwrites the first and, on resume, that one
     record is served for both -- the second task's verdict reported as the first task's. Corpus
     work ids are sequence-derived, so a regenerated or hand-assembled corpus can repeat one."""
-    seq_a = _toolreq_seq("dup", current="AAA-CUR", stale="AAA-STALE")
-    seq_b = _toolreq_seq("dup", current="BBB-CUR", stale="BBB-STALE")
+    seq_a = toolreq_seq("dup", current="AAA-CUR", stale="AAA-STALE")
+    seq_b = toolreq_seq("dup", current="BBB-CUR", stale="BBB-STALE")
     tasks = [adapt_sequence(seq_a), adapt_sequence(seq_b)]
     assert tasks[0] != tasks[1] and tasks[0].work_id == tasks[1].work_id  # distinct, same id
 
@@ -1444,7 +1363,7 @@ def test_invocation_fingerprint_catches_what_a_field_model_misses(tmp_path: Path
 
     Asserted here on the two axes that already shipped as bugs (memory order on both the ours and
     the oracle arm) plus the trust channel's framing, all of which reach the prompt text."""
-    _, tasks = _corpus_one(tmp_path)
+    _, tasks = corpus_one(tmp_path)
     task = tasks[0]
 
     # ours payload rank order -- shipped as a bug
@@ -1477,7 +1396,7 @@ def test_the_fingerprint_is_the_invocations_the_arms_actually_send(tmp_path: Pat
 
     Run with a NON-EMPTY ours payload on purpose: that is when all three arms are planned and all
     three spend, so the cell the empty-retrieval convention would otherwise skip is covered here."""
-    _, tasks = _corpus_one(tmp_path)
+    _, tasks = corpus_one(tmp_path)
     task = tasks[0]
     payload = {"w-prior": "the retention window is TOKEN-abc"}
     recorder = CellRecorder()
@@ -1494,7 +1413,7 @@ def test_the_never_run_ours_cell_contributes_a_row_but_no_invocation(tmp_path: P
     invocation (it sent none). The fingerprint is over the plan, which omits it — and the identity
     still separates the two worlds, because `ours_retrieval_empty` and `ours_payload_fingerprint`
     are themselves identity fields."""
-    _, tasks = _corpus_one(tmp_path)
+    _, tasks = corpus_one(tmp_path)
     task = tasks[0]
     recorder = CellRecorder()
     outcomes = grid.evaluate_task(
@@ -1514,7 +1433,7 @@ def test_a_plan_that_drifts_from_its_arms_refuses_to_publish(tmp_path: Path, mon
     moved the argv without moving ``planned_calls`` produces — and the measurement must be REFUSED
     at the write boundary, not filed: a refused measurement that still wrote its file would be
     served by the very next resume."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     stale_plan = [
         CellCalls(arm="none", channel=channel.value, calls=(("claude", "-p", "a-stale-plan"),))
@@ -1536,7 +1455,7 @@ def test_forged_not_empty_flag_with_a_fabricated_ours_cell_is_a_miss(tmp_path: P
     result: a task whose retrieval returned NOTHING is served a fully-passing (ours 2/2), with
     zero spend, no crash, and a green suite. The flag now rides IN the identity, so a file whose
     flag disagrees with the live-resolved payload is a miss in both directions."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     store_path = tmp_path / "store.db"
     # the real run: retrieval is empty (lifecycle-earliest task, LOO admits no priors)
@@ -1579,7 +1498,7 @@ def test_unsafe_work_ids_are_refused(tmp_path: Path, bad_id: str) -> None:
     forever and every resume re-pays for it. A separator/traversal writes outside --out entirely.
     Neither fabricates a number, but both are the file's root shape: untrusted input consumed
     without a check at the boundary it crosses."""
-    seq = _toolreq_seq("w-safe")
+    seq = toolreq_seq("w-safe")
     task = dataclasses.replace(adapt_sequence(seq), work_id=bad_id)
     with pytest.raises(ValueError, match="unsafe work_id"):
         _run_corpus([task], [seq], tmp_path / "out", dry_run=True, store_path=tmp_path / "s.db")
@@ -1607,7 +1526,7 @@ def test_value_drifted_cache_row_is_a_miss_not_a_crash(
     (``passes > 0`` -> TypeError) — an unhandled exception escaping mid-resume and killing a
     paid sweep. A ``passes`` above ``runs`` is the quieter version: no crash, just a
     fabricated ceiling."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     _run_corpus(tasks, sequences, out, dry_run=True, store_path=tmp_path / "store.db")
 
@@ -1633,7 +1552,7 @@ def test_hostile_json_never_escapes_the_parse_boundary(tmp_path: Path, cache_tex
     RecursionError, and an integer literal over CPython's 4300-digit limit raises a bare
     ValueError. Neither was caught, so one corrupted cache file killed a resumed PAID sweep —
     the same "unhandled exception ends the sweep" failure this ladder exists to prevent."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     out.mkdir()
     (out / f"{tasks[0].work_id}.json").write_text(cache_text, encoding="utf-8")
@@ -1649,7 +1568,7 @@ def test_empty_ours_payload_is_none_equivalent_and_never_spends(
     makes ``(ours 0/N)`` unattributable — retrieval miss, or memory did not help? Follow the
     ``run_grid_3arm`` convention: reuse the ``none`` cell (delta exactly 0), flag
     ``ours_retrieval_empty``, and spend nothing."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     seen: list[str] = []
 
     monkeypatch.setattr(grid, "run_arm", _spy_run_arm(seen, oracle_passes=True))
@@ -1679,7 +1598,7 @@ def test_empty_ours_payload_is_none_equivalent_and_never_spends(
 def test_non_empty_ours_payload_still_spends(tmp_path: Path, monkeypatch) -> None:
     """The guard above must be narrow: a task WITH a resolved payload still runs its own
     `ours` cell (otherwise the arm could never score above `none`)."""
-    sequences, tasks = _corpus_one(tmp_path)
+    sequences, tasks = corpus_one(tmp_path)
     seen: list[str] = []
 
     def _payload(*_args: object) -> dict[str, dict[str, str]]:
@@ -1706,7 +1625,7 @@ def test_driver_refuses_to_spend_without_token(tmp_path: Path, monkeypatch) -> N
     # The corpus-wide spend guard (financial-safety branch): no token + no --dry-run -> exit 2
     # and never spawn claude, same contract the probe's gate is tested for. The spend gate
     # fires in main() BEFORE run_corpus/seed_fn ever runs, so this needs no built bin/mem.
-    _corpus_one(tmp_path)
+    corpus_one(tmp_path)
     monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
     from membench.runner import realagent_probe as _rp
 
@@ -1723,7 +1642,7 @@ def test_driver_refuses_to_spend_without_a_named_model(tmp_path: Path, monkeypat
     # and never spawn claude. Same financial-safety contract as the token gate; an unpinned paid run
     # keys its cache identity on "" and would serve one model's numbers as another's on resume. The
     # gate fires in main() before run_corpus/seed_fn, so it needs no built bin/mem.
-    _corpus_one(tmp_path)
+    corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
     monkeypatch.delenv("MEMBENCH_AGENT_MODEL", raising=False)
     from membench.runner import realagent_probe as _rp
@@ -1744,7 +1663,7 @@ def test_driver_discloses_the_plan_derived_paid_call_count(
     ``scripts/`` is untyped (why the count lives in the typed grid), so this pins the wiring: a
     regression back to the hardcoded formula would over-disclose the `none`-deduped fire by
     ``n_tasks*repeats`` calls. mem-dg5fm."""
-    _corpus_one(tmp_path)  # writes a 1-task corpus under tmp_path/corpus
+    corpus_one(tmp_path)  # writes a 1-task corpus under tmp_path/corpus
     _, tasks = load_corpus_with_sequences(tmp_path / "corpus")
     monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
     # A model is pinned because the unpinned gate now fires FIRST (mem-u9nu2): it is true regardless
@@ -1766,7 +1685,7 @@ def test_corpus_walk_orders_seeds_numerically(tmp_path: Path) -> None:
         seed_dir = tmp_path / str(seed)
         seed_dir.mkdir()
         (seed_dir / "sequences.json").write_text(
-            json.dumps([_toolreq_seq(f"w-{seed}").model_dump()]), encoding="utf-8"
+            json.dumps([toolreq_seq(f"w-{seed}").model_dump()]), encoding="utf-8"
         )
     _, tasks = load_corpus_with_sequences(tmp_path)
     order = [t.work_id for t in tasks]
@@ -1897,7 +1816,7 @@ def test_ours_seeding_retrieves_cross_task_never_leaks_own_id_or_realistic_value
     (non-opaque) value — only sequence_lessons_opaque's opaque content ever rides in."""
     require_mem_cli(DIST_MAIN)
 
-    seqs = [_toolreq_seq("w-0"), _toolreq_seq("w-1")]
+    seqs = [toolreq_seq("w-0"), toolreq_seq("w-1")]
     tasks = [adapt_sequence(seq) for seq in seqs]
     payloads = seed_ours_store_and_resolve_payloads(
         seqs, tasks, tmp_path / "store.db", str(MEM_BIN)
@@ -1924,12 +1843,12 @@ def test_reseeding_a_store_never_surfaces_the_previous_corpus(tmp_path: Path) ->
     store_path = tmp_path / "store.db"
 
     old = [
-        _toolreq_seq("w-0", current="11 days", stale="12 days"),
-        _toolreq_seq("w-1", current="13 days", stale="14 days"),
+        toolreq_seq("w-0", current="11 days", stale="12 days"),
+        toolreq_seq("w-1", current="13 days", stale="14 days"),
     ]
     new = [
-        _toolreq_seq("w-0", current="21 days", stale="22 days"),
-        _toolreq_seq("w-1", current="23 days", stale="24 days"),
+        toolreq_seq("w-0", current="21 days", stale="22 days"),
+        toolreq_seq("w-1", current="23 days", stale="24 days"),
     ]
     old_tasks = [adapt_sequence(seq) for seq in old]
     new_tasks = [adapt_sequence(seq) for seq in new]
@@ -1959,7 +1878,7 @@ def test_driver_halts_diagnosed_on_a_mid_sweep_agent_failure(
     operator is told so. Pre-existing (run_arm has always been able to raise here); the version
     resolve that `run_corpus` now does up front simply added one more source of the same type.
     """
-    _corpus_one(tmp_path)
+    corpus_one(tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
     monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")  # paid path must name a model (mem-bzv2p)
 
@@ -1998,7 +1917,7 @@ def test_the_go_command_prices_the_work_that_remains_not_the_whole_corpus(
     Two of three tasks are pre-measured under the SAME paid identity the driver will price, so the
     disclosure must name the ONE that remains. Still a per-task CEILING (`ours` with an empty
     retrieval relabels from `none` and spends nothing — mem-fjfaf), now over the right tasks."""
-    sequences, tasks = _corpus(tmp_path, "w-0", "w-1", "w-2")
+    sequences, tasks = corpus(tmp_path, "w-0", "w-1", "w-2")
     out = tmp_path / "out"
     store_path = out / "store.db"
     monkeypatch.setattr(grid, "run_arm", _spy_run_arm([], oracle_passes=True))
@@ -2044,7 +1963,7 @@ def test_the_go_command_falls_back_to_the_cold_ceiling_when_the_store_cannot_be_
     Reported by MEANING, not by interpolating the exception: MemCliError carries a node subprocess
     dump that would bury the rest of the disclosure, and nothing is lost — a precondition of pricing
     the fire is a precondition of the fire, so it resurfaces in full at the next step."""
-    _corpus(tmp_path, "w-0")
+    corpus(tmp_path, "w-0")
     monkeypatch.setattr(grid, "resolve_cli_version", lambda: STUB_CLI_VERSION)
 
     def _unbuilt(*_a: object, **_k: object) -> NoReturn:
@@ -2090,7 +2009,7 @@ def test_pricing_a_fire_never_touches_the_runs_own_store(
     So `remaining_tasks` seeds a THROWAWAY and never takes the run's store_path at all. The seed
     double here calls the REAL `_reset_store` on whatever path it is handed: a double that merely
     returned {} would pass this test while the defect was fully present."""
-    _corpus(tmp_path, "w-0")
+    corpus(tmp_path, "w-0")
     monkeypatch.setattr(grid, "resolve_cli_version", lambda: STUB_CLI_VERSION)
 
     reset_paths: list[Path] = []
@@ -2138,7 +2057,7 @@ def test_pricing_a_fire_seeds_a_throwaway_store_and_gets_the_real_ones_payload(
     disclosure would under-report by the WHOLE corpus in the direction that costs money."""
     require_mem_cli(DIST_MAIN)
 
-    seqs = [_toolreq_seq("w-0"), _toolreq_seq("w-1")]
+    seqs = [toolreq_seq("w-0"), toolreq_seq("w-1")]
     tasks = [adapt_sequence(seq) for seq in seqs]
 
     here = seed_ours_store_and_resolve_payloads(

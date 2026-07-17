@@ -78,6 +78,23 @@ from membench.schemas.sequence import (
 # reader tell a substituted value from an authored one at a glance.
 _OPAQUE_PREFIX = "toolreq"
 
+# The frozen tool-requiring corpus both paid grids sweep by default — here beside
+# ``load_corpus_with_sequences``, the reader that gives the directory its meaning and which both
+# grids already import. A per-grid copy makes their agreeing on a corpus a coincidence, and
+# ours-vs-builtin is a comparison ACROSS the two grids: default them to different worlds and the
+# comparison means nothing. Resolved off this file (``parents[2]`` is memory-bench/, as in
+# ``generators.ftp_shapes.CORPUS_DIR``) so it names one directory whichever caller asks.
+#
+# Its LIMIT, stated rather than discovered: this anchors to the PACKAGE's source location, so it
+# names the checkout only under a source/editable run — which is the documented workflow (`uv run`
+# from memory-bench/) and the only mode CI has. Run a checkout script against a NON-editably
+# installed membench and this resolves under site-packages, where there is no corpus: `fixtures/`
+# is not packaged (pyproject `include = ["membench*"]`). The per-script default it replaced was
+# anchored to the script, so it found the checkout in that hybrid. Accepted, not overlooked: the
+# failure is a loud `no tool-requiring tasks under <path>` + exit 1 from the driver, never a wrong
+# measurement, and a non-editable install has no corpus to point AT — only `--corpus-dir` does.
+DEFAULT_CORPUS = Path(__file__).resolve().parents[2] / "fixtures" / "worlds-tool"
+
 
 @dataclass(frozen=True)
 class ToolReqRealAgentTask:

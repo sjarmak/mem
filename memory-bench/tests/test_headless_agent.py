@@ -9,6 +9,7 @@ import errno
 import json
 import subprocess
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any
 
 import pytest
@@ -23,10 +24,16 @@ from membench.runner.headless_agent import (
     MemoryChannel,
     RecordingRunner,
     _render_only_runner,
+    _stream_result_text,
+    _stream_usage_tokens,
+    _tool_calls_from_stream,
     a_paid_run_needs_a_model,
+    assistant_event,
     build_agent_prompt,
     one_cycle,
     resolve_cli_version,
+    result_event,
+    serialize_stream,
 )
 from membench.runner.trajectory_run import (
     run_arm_trajectories,
@@ -34,6 +41,7 @@ from membench.runner.trajectory_run import (
     run_step_trajectory,
 )
 from membench.schemas.sequence import BenchmarkSequence, SequenceStep
+from membench.schemas.trace import ToolCall
 from membench.spawn import Runner
 
 
@@ -55,16 +63,11 @@ def _stream_json(
     usage: tuple[int, int] | None = (10, 5),
 ) -> str:
     """A minimal Claude Code stream-json transcript: one assistant event whose content
-    holds the given tool_use blocks, then a terminal result event."""
-    content = [{"type": "tool_use", "name": name, "input": inp} for name, inp in tool_uses]
-    message: dict[str, Any] = {"role": "assistant", "content": content}
-    if usage is not None:
-        message["usage"] = {"input_tokens": usage[0], "output_tokens": usage[1]}
-    lines = [
-        json.dumps({"type": "assistant", "message": message}),
-        json.dumps({"type": "result", "result": result}),
-    ]
-    return "\n".join(lines) + "\n"
+    holds the given tool_use blocks, then a terminal result event.
+
+    Shorthand over ``serialize_stream`` (this file's own default usage, varargs tool_uses), not a
+    second opinion on the format."""
+    return serialize_stream([assistant_event(tool_uses, usage=usage), result_event(result)])
 
 
 def _fake_runner(stdout: str, *, returncode: int = 0, stderr: str = ""):
@@ -77,6 +80,69 @@ def _fake_runner(stdout: str, *, returncode: int = 0, stderr: str = ""):
 
     runner.captured = captured  # type: ignore[attr-defined]
     return runner
+
+
+# --------------------------------------------------------------------------- #
+# the stream-json serializer — the parsers' inverse
+# --------------------------------------------------------------------------- #
+def test_serialized_stream_round_trips_through_every_parser() -> None:
+    """The property that earns the serializer its home beside the parsers: what it writes,
+    they read back. A serializer that drifted from the format would fail HERE rather than
+    in whichever simulator happened to notice."""
+    stream = serialize_stream(
+        [
+            assistant_event(
+                [("Write", {"file_path": "config.json", "content": "v2"})], usage=(7, 3)
+            ),
+            result_event("wrote it"),
+        ]
+    )
+    assert _tool_calls_from_stream(stream) == [
+        ToolCall(name="Write", arguments={"file_path": "config.json", "content": "v2"})
+    ]
+    assert _stream_usage_tokens(stream) == (7, 3)
+    assert _stream_result_text(stream) == "wrote it"
+
+
+def test_assistant_event_keeps_tool_uses_in_order() -> None:
+    """Stream ORDER is what `_tool_calls_from_stream` and `bbon.extract` both key on."""
+    stream = serialize_stream(
+        [assistant_event([("Read", {"path": "a.py"}), ("Grep", {"q": "import"})]), result_event()]
+    )
+    assert [call.name for call in _tool_calls_from_stream(stream)] == ["Read", "Grep"]
+
+
+def test_assistant_event_without_usage_omits_the_key() -> None:
+    """`usage=None` must yield an event carrying NO usage key — that absence is what
+    `_stream_usage_tokens`' honest-unmeasured (0, 0) branch is tested against."""
+    event = assistant_event([("Read", {})], usage=None)
+    message = event["message"]
+    assert isinstance(message, dict)
+    assert "usage" not in message
+    assert _stream_usage_tokens(serialize_stream([event])) == (0, 0)
+
+
+def test_serialize_stream_emits_one_json_object_per_line() -> None:
+    """The JSONL shape `claude -p --output-format stream-json` prints — the parsers walk it
+    line by line, so an event spanning lines would silently parse as nothing."""
+    stream = serialize_stream([assistant_event([("Read", {})]), result_event()])
+    lines = stream.splitlines()
+    assert len(lines) == 2
+    assert [json.loads(line)["type"] for line in lines] == ["assistant", "result"]
+
+
+def test_serialize_stream_of_no_events_is_empty_not_whitespace() -> None:
+    """A cell that emitted nothing serializes to "" — the parsers' empty-stream branch."""
+    assert serialize_stream([]) == ""
+
+
+def test_serialize_stream_takes_the_mapping_its_signature_promises() -> None:
+    """The signature says ``Mapping``, so a non-dict Mapping must serialize rather than raise.
+    ``json.dumps`` only fast-paths a real dict — and a frozen MappingProxyType is not hypothetical
+    here: ``toolreq_builtin.BUILTIN_SETTINGS`` is one, and it reaches json.dumps through its own
+    unwrap. An annotation the body cannot honour is the defect this pins."""
+    frozen = MappingProxyType(dict(result_event("done")))
+    assert json.loads(serialize_stream([frozen]).strip()) == {"type": "result", "result": "done"}
 
 
 # --------------------------------------------------------------------------- #

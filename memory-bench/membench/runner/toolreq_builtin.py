@@ -63,8 +63,11 @@ from membench.runner.headless_agent import (
     CellRecorder,
     Leg,
     MemoryChannel,
+    assistant_event,
     cell_agent,
     render_cell_calls,
+    result_event,
+    serialize_stream,
 )
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome, score_goal_action
 from membench.runner.resume_cache import digest
@@ -253,7 +256,7 @@ def simulated_builtin_runner(current_values: Collection[str]) -> Runner:
         env = kwargs.get("env")
         cwd = kwargs.get("cwd")
         config_dir = env.get("CLAUDE_CONFIG_DIR") if isinstance(env, Mapping) else None
-        events: list[dict[str, object]] = []
+        events: list[Mapping[str, object]] = []
         if config_dir and isinstance(cwd, str):
             index_path = Path(native_memory_path(config_dir=str(config_dir), workdir=cwd))
             # The fact goes in a TOPIC file beside the index — the real layout. The index
@@ -272,25 +275,12 @@ def simulated_builtin_runner(current_values: Collection[str]) -> Runner:
                 if all(value in persisted for value in values):
                     # goal call: re-surface iff the establish call actually persisted it
                     events.append(
-                        {
-                            "type": "assistant",
-                            "message": {
-                                "content": [
-                                    {
-                                        "type": "tool_use",
-                                        "name": REAL_TOOL,
-                                        "input": {
-                                            "file_path": CONFIG_FILE,
-                                            "content": " ".join(values),
-                                        },
-                                    }
-                                ],
-                                "usage": {"input_tokens": 0, "output_tokens": 0},
-                            },
-                        }
+                        assistant_event(
+                            [(REAL_TOOL, {"file_path": CONFIG_FILE, "content": " ".join(values)})]
+                        )
                     )
-        events.append({"type": "result", "result": "done"})
-        stdout = "\n".join(json.dumps(event) for event in events)
+        events.append(result_event())
+        stdout = serialize_stream(events)
         return subprocess.CompletedProcess(argv_list, returncode=0, stdout=stdout, stderr="")
 
     return run

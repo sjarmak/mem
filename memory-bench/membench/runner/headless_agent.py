@@ -31,6 +31,7 @@ behavior IS the model's; no semantic judgment lives here.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -51,6 +52,13 @@ from membench.spawn import Runner, run_checked, sanitised_child_output
 DEFAULT_TIMEOUT_S = 600.0
 
 ENV_MODEL = "MEMBENCH_AGENT_MODEL"
+
+# The credential a real `claude -p` authenticates with. Here beside ENV_MODEL rather than in each
+# driver because a driver both READS it off `os.environ` (to refuse an unauthorized spend) and
+# PRINTS it (the `env {ENV_OAUTH}=...` go-command a human copies). A per-driver copy makes those
+# two strings agree only by coincidence, so a rename leaves a driver printing a command that does
+# not arm the gate it tells you to arm.
+ENV_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN"
 
 # `claude --version` prints and exits — a bound this high means a wedged CLI, not a slow one.
 # Its own constant, not DEFAULT_TIMEOUT_S: that bound sizes a multi-turn agent step (minutes of
@@ -357,12 +365,57 @@ class CellRecorder:
         ]
 
 
+def assistant_event(
+    tool_uses: Sequence[tuple[str, Mapping[str, object]]] = (),
+    *,
+    usage: tuple[int, int] | None = (0, 0),
+) -> dict[str, object]:
+    """One Claude Code ``assistant`` event whose content carries ``tool_uses`` as ``tool_use``
+    blocks, in order. ``usage=None`` omits the key entirely — the shape that exercises the
+    parsers' honest-unmeasured (0, 0) branch, which a hardcoded zero would silently skip."""
+    content = [
+        {"type": "tool_use", "name": name, "input": dict(arguments)}
+        for name, arguments in tool_uses
+    ]
+    message: dict[str, object] = {"role": "assistant", "content": content}
+    if usage is not None:
+        message["usage"] = {"input_tokens": usage[0], "output_tokens": usage[1]}
+    return {"type": "assistant", "message": message}
+
+
+def result_event(result: str = "done") -> dict[str, object]:
+    """The terminal ``type=result`` event Claude Code prints — the one `_stream_result_text` reads
+    the final answer off."""
+    return {"type": "result", "result": result}
+
+
+def serialize_stream(events: Sequence[Mapping[str, object]]) -> str:
+    """Serialize ``events`` as the JSONL `claude -p --output-format stream-json` prints: one JSON
+    object per line.
+
+    The INVERSE of this module's three parsers (``_stream_usage_tokens`` / ``_stream_result_text``
+    / ``_tool_calls_from_stream``), and it lives beside them for that reason: every dry-run
+    simulator and test double that fakes a `claude -p` writes this format, and one fitted to its
+    own idea of it proves nothing about the real one (that is how a MEMORY.md-only glob survived a
+    green dry-run — ``toolreq_builtin.simulated_builtin_runner``). One serializer against one
+    parser means a format change moves both, and the round-trip test guards the pair.
+
+    Not a model of the CLI's output — a writer of the subset the parsers read. The real stream
+    carries fields nothing here consumes; inventing them would be modelling.
+
+    Each event is unwrapped to a plain ``dict`` because ``json.dumps`` only fast-paths
+    ``isinstance(obj, dict)`` and raises on any other ``Mapping`` — a frozen ``MappingProxyType``
+    is the one this codebase actually holds (``toolreq_builtin.BUILTIN_SETTINGS``, whose
+    ``_seed_config_dir`` unwraps for exactly this reason). Without it the annotation would promise
+    a ``Mapping`` the body cannot serialize. Top level only: a NESTED mapping is the caller's own
+    payload, and json.dumps judges that as it would anywhere."""
+    return "".join(json.dumps(dict(event)) + "\n" for event in events)
+
+
 def _stream_usage_tokens(stream_text: str) -> tuple[int, int]:
     """Sum (input, output) token usage across the stream's events. Claude Code stamps
     ``usage`` on assistant message events; an event without one contributes 0. Absent
     usage everywhere yields (0, 0) — an honest unmeasured, not an imputed estimate."""
-    import json
-
     input_tokens = 0
     output_tokens = 0
     for line in stream_text.splitlines():
@@ -385,8 +438,6 @@ def _stream_result_text(stream_text: str) -> str:
     """The agent's final answer: the ``result`` field of the terminal ``type=result``
     event Claude Code emits. Empty when none is present (e.g. a stream truncated before
     completion) — the trajectory's tool calls still stand on their own."""
-    import json
-
     final = ""
     for line in stream_text.splitlines():
         line = line.strip()

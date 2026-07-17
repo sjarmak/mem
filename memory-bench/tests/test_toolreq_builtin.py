@@ -25,7 +25,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import pytest
@@ -41,8 +41,11 @@ from membench.runner.headless_agent import (
     Leg,
     MemoryChannel,
     _render_only_runner,
+    assistant_event,
     cell_agent,
     render_cell_calls,
+    result_event,
+    serialize_stream,
 )
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome
 from membench.runner.resume_cache import invocation_digest
@@ -64,20 +67,13 @@ from membench.runner.toolreq_realagent import (
     load_corpus_with_sequences,
     task_fingerprint,
 )
-from membench.schemas.sequence import (
-    BenchmarkSequence,
-    ExpectedAction,
-    OutcomeCheck,
-    SequenceStep,
+from tests.toolreq_helpers import (
+    CURRENT,
+    STUB_CLI_VERSION,
+    corpus,
+    noop_cli_runner,
+    toolreq_seq,
 )
-
-CURRENT = "30 days"
-STALE = "90 days"
-
-# The instrument a paid test files its identity under. Stubbed rather than resolved: the real
-# probe spawns `claude --version`, and the suite must pass on a machine with no claude installed
-# (CI is a bare ubuntu-latest).
-STUB_CLI_VERSION = "2.1.210"
 
 
 @pytest.fixture(autouse=True)
@@ -89,69 +85,18 @@ def _pinned_cli_version(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(grid, "resolve_cli_version", lambda: STUB_CLI_VERSION)
 
 
-def _toolreq_seq(
-    seq_id: str = "w-t0", *, current: str = CURRENT, stale: str = STALE
-) -> BenchmarkSequence:
-    """One tool-requiring sequence. ``current``/``stale`` are parameters, not constants, so a test
-    can build a DIFFERENT world under the SAME (positional) work_id — which is the shape the
-    regenerated-corpus cache defect takes."""
-    return BenchmarkSequence(
-        sequence_id=seq_id,
-        title=f"{seq_id} initiative",
-        steps=[
-            SequenceStep(
-                step_id=f"{seq_id}-s0",
-                user_request="Record.",
-                expected_memory_writes={"m-v1": f"the retention window is {stale}"},
-            ),
-            SequenceStep(
-                step_id=f"{seq_id}-s1",
-                user_request="Record.",
-                expected_memory_writes={"m-v2": f"the retention window is {current}"},
-                superseded_memory_ids=["m-v1"],
-            ),
-            SequenceStep(
-                step_id=f"{seq_id}-goal",
-                user_request=(
-                    "Deliver the current initiative. Using the tool `apply_config`, apply "
-                    "the current value of: the retention window."
-                ),
-                available_tools=["apply_config"],
-                expected_memory_reads=["m-v2"],
-                outcome_checks=[
-                    OutcomeCheck(
-                        check_id=f"{seq_id}-goal-check",
-                        requires_memory=["m-v2"],
-                        requires_action=[
-                            ExpectedAction(
-                                tool="apply_config", arg_values=[current], forbidden_values=[stale]
-                            )
-                        ],
-                    )
-                ],
-            ),
-        ],
-    )
-
-
 def _task(seq_id: str = "w-t0"):
-    return adapt_sequence(_toolreq_seq(seq_id))
+    return adapt_sequence(toolreq_seq(seq_id))
 
 
 def _corpus(tmp_path: Path, *work_ids: str) -> list[ToolReqRealAgentTask]:
-    """Seed a frozen corpus of ``work_ids`` under ``tmp_path/corpus`` and load it."""
-    corpus = tmp_path / "corpus"
-    (corpus / "0").mkdir(parents=True)
-    (corpus / "0" / "sequences.json").write_text(
-        json.dumps([_toolreq_seq(work_id).model_dump() for work_id in work_ids]), encoding="utf-8"
-    )
-    _, tasks = load_corpus_with_sequences(corpus)
+    """This file's grid never uses the source sequences (only the ``ours`` seeder does), so it
+    keeps the tasks and drops them here rather than at every call site."""
+    _sequences, tasks = corpus(tmp_path, *work_ids)
     return tasks
 
 
 def _corpus_one(tmp_path: Path, work_id: str = "w-0") -> list[ToolReqRealAgentTask]:
-    """Seed a one-task frozen corpus under ``tmp_path/corpus`` and load it — the same
-    scaffold every driver test needs (mirrors ``test_toolreq_realagent._corpus_one``)."""
     return _corpus(tmp_path, work_id)
 
 
@@ -190,26 +135,14 @@ def _stream_json_runner(
 
     def run(argv, **kwargs):
         argv_list = list(argv)
-        events: list[dict[str, object]] = []
+        events: list[Mapping[str, object]] = []
         if tool_use_when(argv_list):
-            events.append(
-                {
-                    "type": "assistant",
-                    "message": {
-                        "content": [{"type": "tool_use", "name": tool_name, "input": tool_input}],
-                        "usage": {"input_tokens": 0, "output_tokens": 0},
-                    },
-                }
-            )
-        events.append({"type": "result", "result": "done"})
-        stdout = "\n".join(json.dumps(e) for e in events)
+            events.append(assistant_event([(tool_name, tool_input)]))
+        events.append(result_event())
+        stdout = serialize_stream(events)
         return subprocess.CompletedProcess(argv_list, returncode=0, stdout=stdout, stderr="")
 
     return run
-
-
-def _noop_cli_runner(argv: Sequence[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-    return subprocess.CompletedProcess(list(argv), returncode=0, stdout="", stderr="")
 
 
 def _record_plan(
@@ -218,7 +151,7 @@ def _record_plan(
     """Record the plan's invocations THROUGH the recorder — the real arm records off the CLI seam,
     so a double must too, or ``run_cached_corpus`` (which hashes what the recorder SAW, not a value
     the double returned — mem-9gvej) refuses the cell as a plan/execution mismatch."""
-    runner = recorder.cell(_noop_cli_runner, arm=ARM, channel=channel, repeats=repeats)
+    runner = recorder.cell(noop_cli_runner, arm=ARM, channel=channel, repeats=repeats)
     for _ in range(repeats):
         for argv in cell_calls(task, channel, model=model).calls:
             runner(argv)
@@ -558,27 +491,15 @@ def _cwd_scavenging_runner(value: str):
         cwd = kwargs.get("cwd")
         assert isinstance(cwd, str)
         scavengeable = Path(cwd) / "CLAUDE.md"
-        events: list[dict[str, object]] = []
+        events: list[Mapping[str, object]] = []
         if "--allowedTools" not in argv_list:  # establish leg
             scavengeable.write_text(f"remember: {value}", encoding="utf-8")
         elif scavengeable.is_file() and value in scavengeable.read_text(encoding="utf-8"):
             events.append(  # goal leg: passes off the leftover file, never touching memory
-                {
-                    "type": "assistant",
-                    "message": {
-                        "content": [
-                            {
-                                "type": "tool_use",
-                                "name": REAL_TOOL,
-                                "input": {"file_path": CONFIG_FILE, "content": value},
-                            }
-                        ],
-                        "usage": {"input_tokens": 0, "output_tokens": 0},
-                    },
-                }
+                assistant_event([(REAL_TOOL, {"file_path": CONFIG_FILE, "content": value})])
             )
-        events.append({"type": "result", "result": "done"})
-        stdout = "\n".join(json.dumps(e) for e in events)
+        events.append(result_event())
+        stdout = serialize_stream(events)
         return subprocess.CompletedProcess(argv_list, returncode=0, stdout=stdout, stderr="")
 
     return run
@@ -1001,12 +922,12 @@ def test_a_regenerated_corpus_never_reuses_the_previous_worlds_results(tmp_path:
     first = grid.run_corpus(tasks, out_dir=out, repeats=2, model="", dry_run=True)
     assert first["executed"] == 1
 
-    corpus = tmp_path / "corpus"
-    (corpus / "0" / "sequences.json").write_text(
-        json.dumps([_toolreq_seq("w-0", current=CURRENT, stale="91 days").model_dump()]),
+    corpus_dir = tmp_path / "corpus"
+    (corpus_dir / "0" / "sequences.json").write_text(
+        json.dumps([toolreq_seq("w-0", current=CURRENT, stale="91 days").model_dump()]),
         encoding="utf-8",
     )
-    _, regenerated = load_corpus_with_sequences(corpus)
+    _, regenerated = load_corpus_with_sequences(corpus_dir)
     assert regenerated[0].work_id == tasks[0].work_id  # the id collides, as in the real corpus
     assert invocation_digest(grid.planned_calls(regenerated[0], model="")) == invocation_digest(
         grid.planned_calls(tasks[0], model="")

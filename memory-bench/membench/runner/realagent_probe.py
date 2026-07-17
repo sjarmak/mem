@@ -29,17 +29,19 @@ provide (that IS the adapter cost this probe gates).
 
 from __future__ import annotations
 
-import json
 import subprocess
 import tempfile
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 
 from membench.metrics.scorers import outcome_check_passes
 from membench.runner.headless_agent import (
     CellRecorder,
     MemoryChannel,
+    assistant_event,
     cell_agent,
+    result_event,
+    serialize_stream,
 )
 from membench.runtime import StepContext
 from membench.schemas.sequence import ExpectedAction, OutcomeCheck, SequenceStep
@@ -164,25 +166,15 @@ def simulated_runner(current_values: Collection[str]) -> Runner:
         # so a future reordering fails loudly instead of silently never firing.
         assert argv_list[:2] == ["claude", "-p"], f"unexpected argv layout: {argv_list[:3]}"
         prompt = argv_list[2] if len(argv_list) > 2 else ""
-        events: list[dict[str, object]] = []
+        events: list[Mapping[str, object]] = []
         if values and all(value in prompt for value in values):
             events.append(
-                {
-                    "type": "assistant",
-                    "message": {
-                        "content": [
-                            {
-                                "type": "tool_use",
-                                "name": REAL_TOOL,
-                                "input": {"file_path": CONFIG_FILE, "content": " ".join(values)},
-                            }
-                        ],
-                        "usage": {"input_tokens": 0, "output_tokens": 0},
-                    },
-                }
+                assistant_event(
+                    [(REAL_TOOL, {"file_path": CONFIG_FILE, "content": " ".join(values)})]
+                )
             )
-        events.append({"type": "result", "result": "done"})
-        stdout = "\n".join(json.dumps(event) for event in events)
+        events.append(result_event())
+        stdout = serialize_stream(events)
         return subprocess.CompletedProcess(argv_list, returncode=0, stdout=stdout, stderr="")
 
     return run

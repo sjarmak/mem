@@ -62,6 +62,7 @@ from pathlib import Path
 from membench.mem_cli import MemCliError
 from membench.runner.headless_agent import (
     DEFAULT_TIMEOUT_S,
+    ENV_OAUTH,
     REFUSE_UNPINNED_MODEL,
     HeadlessAgentError,
     a_paid_run_needs_a_model,
@@ -74,6 +75,7 @@ from membench.runner.toolreq_grid import (
     worst_case_paid_call_count,
 )
 from membench.runner.toolreq_realagent import (
+    DEFAULT_CORPUS,
     ToolReqRealAgentTask,
     load_corpus_with_sequences,
     seed_ours_store_and_resolve_payloads,
@@ -81,10 +83,8 @@ from membench.runner.toolreq_realagent import (
 from membench.schemas.sequence import BenchmarkSequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CORPUS = PROJECT_ROOT / "memory-bench/fixtures/worlds-tool"
 DEFAULT_OUT = PROJECT_ROOT / ".mem/toolreq-realagent"
 DEFAULT_MEM_BIN = str(PROJECT_ROOT / "bin/mem")
-ENV_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN"
 
 # The channel-non-uniform plan shape the disclosed paid-call count is FOR (see toolreq_grid): one
 # string so the two spend disclosures below cannot describe the same fire two different ways.
