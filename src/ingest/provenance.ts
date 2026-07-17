@@ -234,13 +234,23 @@ export function isNonZeroExit(err: unknown): boolean {
   return exitStatus(err) !== undefined;
 }
 
+/** libuv spawn-failure codes that all mean git never ran: the binary is missing
+ * (ENOENT), present but not executable (EACCES), or not a runnable executable
+ * format — wrong arch / bad interpreter (ENOEXEC). All three throw with `status`
+ * and `signal` both null, so none of {@link isGitFault}'s other arms match them;
+ * they need this explicit code check. They are one class — git-could-not-run —
+ * and degrade the sweep to null together (EACCES/ENOEXEC added in mem-egxu2; the
+ * first cut handled only ENOENT and rethrew its siblings, aborting the sweep). */
+const SPAWN_FAULT_CODES: ReadonlySet<string> = new Set(['ENOENT', 'EACCES', 'ENOEXEC']);
+
 /** True when a git invocation failed in a way that means git could not ANSWER,
  * as opposed to a programming error in our own call. This is exactly the fault
  * set {@link isAncestorOrNull} degrades to null: a non-zero exit (e.g. 128 on an
- * unreadable object), a missing binary (`code === 'ENOENT'`), or an external
- * signal kill (`signal` is the signal name). A programming error (e.g. a
- * TypeError from a mis-wired {@link GitRunner}) carries no git verdict and
- * propagates instead of becoming a null.
+ * unreadable object), a spawn failure that means git never ran (see
+ * {@link SPAWN_FAULT_CODES}), or an external signal kill (`signal` is the signal
+ * name). A programming error (e.g. a TypeError from a mis-wired
+ * {@link GitRunner}) carries no git verdict and propagates instead of becoming a
+ * null.
  *
  * The one non-obvious case: a maxBuffer overrun, which `execFileSync` throws not
  * as a RangeError but as `Error{status: null, code: 'ENOBUFS', signal:
@@ -252,7 +262,8 @@ export function isGitFault(err: unknown): boolean {
   if (isNonZeroExit(err)) return true;
   if (typeof err !== 'object' || err === null) return false;
   const e = err as { code?: unknown; signal?: unknown };
-  return e.code === 'ENOENT' || (typeof e.signal === 'string' && e.code !== 'ENOBUFS');
+  if (typeof e.code === 'string' && SPAWN_FAULT_CODES.has(e.code)) return true;
+  return typeof e.signal === 'string' && e.code !== 'ENOBUFS';
 }
 
 /** Run a git command whose answer is a single sha, returning null when git
