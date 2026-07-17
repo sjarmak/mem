@@ -35,7 +35,7 @@ import {
   buildVerdict,
   groupByObjectStore,
 } from './verify/lib.mjs';
-import { gitOut, readRemotes } from './verify/git.mjs';
+import { git, gitOut, readRemotes } from './verify/git.mjs';
 
 // Rig → {dir, slug, multi}. Inlined (mirrors src/ingest/rig-repo-map.ts) rather
 // than imported from dist/ ON PURPOSE: this Step-0 verification is the preflight
@@ -85,16 +85,6 @@ const DATE = arg('--date') || hostDate();
 
 function hostDate() {
   return execFileSync('date', ['+%Y-%m-%d']).toString().trim();
-}
-
-// ---- git shell (execFile — no shell, no interpolation) ----------------------
-
-function git(dir, args) {
-  return execFileSync('git', ['-C', dir, ...args], {
-    encoding: 'utf8',
-    maxBuffer: 16 * 1024 * 1024,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
 }
 
 // ---- fail-closed abort ------------------------------------------------------

@@ -5,4 +5,6 @@
 
 export function gitOut(dir: string, args: string[]): string | null;
 
+export function git(dir: string, args: string[]): string;
+
 export function readRemotes(dir: string): Record<string, string>;

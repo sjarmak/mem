@@ -23,7 +23,11 @@ function isNonZeroExit(err) {
 /** Run `git -C <dir> <args>`, returning trimmed stdout or null on a non-zero
  * exit (missing ref, work_dir gone, unknown revision). A missing `git` binary
  * or any other non-exit failure propagates — every caller here only expects a
- * git question with a legitimate negative answer, never a misconfiguration. */
+ * git question with a legitimate negative answer, never a misconfiguration.
+ * `maxBuffer` is sized for the largest caller, not the typical one: measure-
+ * false-close.mjs's `for-each-ref --format=%(refname) refs/heads refs/remotes`
+ * can list thousands of lines on a many-remote checkout (gascity alone carries
+ * 17), not just the single sha/url most callers here read. */
 export function gitOut(dir, args) {
   try {
     return execFileSync('git', ['-C', dir, ...args], {
@@ -35,6 +39,19 @@ export function gitOut(dir, args) {
     if (isNonZeroExit(err)) return null;
     throw err;
   }
+}
+
+/** Run `git -C <dir> <args>`, throwing (with stderr captured) on a non-zero
+ * exit — for callers that already know the command should succeed and want a
+ * real fault surfaced with diagnostics, not `gitOut`'s soft null. Used by
+ * verify-rig-checkouts.mjs's `gitDir`/`commonDir` reads, which only run after
+ * `gitOut`'s own `rev-parse --git-dir` check has confirmed a real repo. */
+export function git(dir, args) {
+  return execFileSync('git', ['-C', dir, ...args], {
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 }
 
 /** The full `name -> url` remote map of a checkout: `git remote` lists the
