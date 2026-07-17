@@ -256,6 +256,71 @@ export function shaOrNull(run: GitRunner, work_dir: string, args: string[]): str
   return sha === '' ? null : sha;
 }
 
+/** True when `commit` is an ancestor of `of`. `merge-base --is-ancestor` has no
+ * stdout — it answers ONLY through its exit code, and this guards on the exact
+ * status because git's codes mean different things: 1 is the documented "not an
+ * ancestor", while 128 is a pruned or corrupt object and a non-exit failure is a
+ * missing binary or a signal. Only 1 is an answer; everything else propagates.
+ *
+ * The distinction is not pedantry — commit 0985d82 (mem-z14cd) fixed a guard
+ * here that read "exited non-zero" as "not an ancestor", so a 128 manufactured a
+ * false close out of a broken object in the measurement built to count false
+ * closes. Callers that cannot afford the throw take {@link isAncestorOrNull}
+ * instead; they must not re-derive the guard, which is how that bug reached a
+ * third copy (mem-y2x7n).
+ *
+ * `--end-of-options` because not every caller passes resolved shas.
+ * classifyLandedContent's call is sha-vs-sha (both args come from
+ * `resolveCommit`), so the flag is a no-op there — but scripts/measure-live-ref.mjs
+ * passes its `of` as a REF NAME (`<remote>/<branch>`, built from the rig map), and
+ * a ref reaching git's option parser would be read as a flag rather than a
+ * revision. The guard costs nothing on the call that does not need it.
+ *
+ * Lives here, beside {@link shaOrNull} and {@link exitStatus}, rather than in
+ * ingest/landedContent.ts where the surviving copy sat: this is the same
+ * run→classify-the-exit-status seam family that file's own consumers already
+ * import from, and landedContent's version encoded no invariant of its own —
+ * unlike `resolveCommit`, which is exported from there precisely because it
+ * carries that module's rev-parse shape (mem-j1r2w). */
+export function isAncestor(run: GitRunner, work_dir: string, commit: string, of: string): boolean {
+  try {
+    run(work_dir, ['merge-base', '--is-ancestor', '--end-of-options', commit, of]);
+    return true;
+  } catch (err) {
+    if (exitStatus(err) === 1) return false;
+    throw err;
+  }
+}
+
+/** {@link isAncestor}, but git failing to ANSWER degrades to null instead of
+ * throwing: true = yes, false = git said no (exit 1), null = git could not be
+ * asked (a 128 on an unreadable object, a missing binary, a signal).
+ *
+ * null is not false, and that is the whole point. `false` is a claim — "git
+ * answered no" — and a caller feeding it to a gate records a substantive verdict.
+ * A fault has no verdict in it, so it must reach the caller as an absence and be
+ * reported as its own outcome, never folded into the negative one (the principle
+ * ingest/landedContent.ts states for `undecidable` vs `absent`).
+ *
+ * For sweep callers whose per-item loop has no try/catch, where {@link isAncestor}'s
+ * throw would take every OTHER item's result down with the one that faulted —
+ * scripts/measure-live-ref.mjs is the caller this exists for (mem-y2x7n). It is
+ * deliberately NOT the shape for a caller that can handle the throw:
+ * classifyLandedContent wants the fault to propagate, and widening its guard to a
+ * null would dissolve 0985d82's fix. */
+export function isAncestorOrNull(
+  run: GitRunner,
+  work_dir: string,
+  commit: string,
+  of: string
+): boolean | null {
+  try {
+    return isAncestor(run, work_dir, commit, of);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The newest commit on `branch` at or before `when`, or null when the branch
  * has no commit before the cutoff (zero exit, empty stdout) or does not

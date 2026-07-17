@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -9,7 +9,11 @@ import {
   type GitRunner,
   attachProvenance,
   defaultGitPipeRunner,
+  defaultGitRunner,
   deriveProvenance,
+  exitStatus,
+  isAncestor,
+  isAncestorOrNull,
   isNonZeroExit,
   makeGitPipeRunner,
   provenanceInput,
@@ -421,5 +425,100 @@ describe('defaultGitPipeRunner', () => {
     );
     const caught = throwsWith(() => quiet(repo, ['log', '-p', 'no-such-rev-000..HEAD']));
     expect(isNonZeroExit(caught)).toBe(true);
+  });
+});
+
+describe('isAncestor / isAncestorOrNull', () => {
+  // `merge-base --is-ancestor` answers ONLY through its exit code, and the
+  // whole point of this seam is telling git's documented codes apart: 0 = yes,
+  // 1 = no, 128 = could not read the objects. A fake runner cannot pin that —
+  // it would only assert that the status this test invents maps to the branch
+  // this test chose. Real git is the seam no fake can stand in for, so the
+  // codes here come from git itself (mem-y2x7n).
+  let repo: string;
+  let first: string;
+  let second: string;
+  let orphan: string;
+
+  beforeAll(() => {
+    repo = mkdtempSync(join(tmpdir(), 'mem-ancestor-'));
+    const git = (...args: string[]): string =>
+      execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' }).trim();
+    /** Write, stage, commit — returns the new sha. */
+    const commit = (file: string, body: string, message: string): string => {
+      writeFileSync(join(repo, file), body);
+      git('add', file);
+      git('commit', '-qm', message);
+      return git('rev-parse', 'HEAD');
+    };
+    git('init', '-q', '-b', 'main');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'test');
+
+    first = commit('f.txt', 'one\n', 'first');
+    second = commit('f.txt', 'two\n', 'second');
+
+    // An unrelated history: shares no ancestor with main, so is-ancestor is a
+    // genuine NO (exit 1) rather than a fault.
+    git('checkout', '-q', '--orphan', 'other');
+    orphan = commit('g.txt', 'other\n', 'orphan');
+    git('checkout', '-q', 'main');
+  });
+
+  afterAll(() => rmSync(repo, { recursive: true, force: true }));
+
+  /** A syntactically valid 40-hex sha that names no object in this repo — the
+   * pruned/corrupt-object case, which git reports as exit 128, NOT exit 1. */
+  const MISSING = 'dead' + 'beef'.repeat(8) + 'dead';
+
+  it('answers true when the commit is an ancestor (git exit 0)', () => {
+    expect(isAncestor(defaultGitRunner, repo, first, second)).toBe(true);
+  });
+
+  it('answers false for a real non-ancestor (git exit 1)', () => {
+    expect(isAncestor(defaultGitRunner, repo, second, first)).toBe(false);
+    expect(isAncestor(defaultGitRunner, repo, orphan, second)).toBe(false);
+  });
+
+  it('THROWS on an unreadable object rather than reading it as not-an-ancestor', () => {
+    // The 0985d82 guard: only the exact status 1 may be read as an answer.
+    const caught = throwsWith(() => isAncestor(defaultGitRunner, repo, MISSING, second));
+    expect(exitStatus(caught)).toBe(128);
+  });
+
+  it('degrades an unreadable object to null — and null is NOT false (mem-y2x7n)', () => {
+    // The bead's VERIFY line, executable: a garbage/pruned sha must not
+    // silently classify as not-an-ancestor. `false` is a CLAIM ("git answered
+    // no"); null is the absence of an answer. Asserting `not.toBe(false)`
+    // explicitly is the point — a bare `toBeNull()` would still pass against an
+    // implementation that returned false for its own reasons.
+    const out = isAncestorOrNull(defaultGitRunner, repo, MISSING, second);
+    expect(out).toBeNull();
+    expect(out).not.toBe(false);
+  });
+
+  it('still reports a REAL no as false, so the fault branch has not eaten the answer', () => {
+    // The other half of the above: degrading faults to null must not degrade
+    // genuine negatives with them, or the R3 gate would stop detecting the
+    // off-authoritative bases it exists to catch.
+    expect(isAncestorOrNull(defaultGitRunner, repo, second, first)).toBe(false);
+    expect(isAncestorOrNull(defaultGitRunner, repo, first, second)).toBe(true);
+  });
+
+  it('degrades a missing git binary to null rather than killing an unguarded sweep', () => {
+    const noGit: GitRunner = () => {
+      throw Object.assign(new Error('spawn git ENOENT'), { code: 'ENOENT' });
+    };
+    expect(isAncestorOrNull(noGit, repo, first, second)).toBeNull();
+  });
+
+  it('passes --end-of-options, so a ref that looks like a flag cannot be read as one', () => {
+    const seen: string[][] = [];
+    const spy: GitRunner = (dir, args) => {
+      seen.push(args);
+      return '';
+    };
+    isAncestor(spy, repo, first, second);
+    expect(seen[0]).toEqual(['merge-base', '--is-ancestor', '--end-of-options', first, second]);
   });
 });

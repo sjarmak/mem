@@ -29,6 +29,7 @@ import {
   summarize,
 } from '../dist/ingest/liveRef.js';
 import { resolveCommit } from '../dist/ingest/landedContent.js';
+import { isAncestorOrNull } from '../dist/ingest/provenance.js';
 import { RIG_REPOS, DEFAULT_BRANCH } from '../dist/ingest/rig-repo-map.js';
 import { pickRemoteForSlug } from './verify/lib.mjs';
 import { gitOut, readRemotes } from './verify/git.mjs';
@@ -62,18 +63,6 @@ const commitOrNull = (dir, ref) => {
     return null;
   }
 };
-
-// `git merge-base --is-ancestor` is exit-code only: 0 ancestor, 1 not, other = error.
-function isAncestor(dir, ancestor, descendant) {
-  try {
-    execFileSync('git', ['-C', dir, 'merge-base', '--is-ancestor', ancestor, descendant], {
-      stdio: 'ignore',
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 const db = new Database(STORE, { readonly: true });
 
@@ -144,7 +133,18 @@ for (const rig of RIGS) {
     // Day-0 bundle is the documented fallback. The --is-ancestor call is the
     // literal R3 write-gate (PRD §5.2) — kept verbatim, not optimized away.
     const base_sha = gitOut(entry.dir, ['merge-base', r.sha, authRef]);
-    const is_ancestor = base_sha !== null && isAncestor(entry.dir, base_sha, authRef);
+    // Tri-state, NOT a boolean: `isAncestorOrNull` returns null when git could
+    // not answer (an unreadable object, a signal), and classifyMergeBase routes
+    // that to `undecided` rather than to the R3 drop count. The bare-catch
+    // `false` this replaced made a git fault indistinguishable from a real "this
+    // base is off the authoritative branch" — a fabricated verdict in the very
+    // gate that exists to catch fabrications (mem-y2x7n).
+    //
+    // `null` when there is no merge-base: the ancestry question is not asked, so
+    // there is no answer to invent. classifyMergeBase reads base_sha first and
+    // drops it as decay.
+    const is_ancestor =
+      base_sha === null ? null : isAncestorOrNull(gitRunner, entry.dir, base_sha, authRef);
     return classifyMergeBase({
       work_id: r.work_id,
       refname: r.refname,
@@ -164,7 +164,18 @@ for (const rig of RIGS) {
   console.log(
     `  dropped (R3 gate)          : ${report.dropped}  ${JSON.stringify(report.drops_by_reason)}`
   );
-  console.log(`  REAL live-ref base %       : ${report.pct.toFixed(2)}%  (was claimed 27%)\n`);
+  // Its OWN line, never inside the R3 gate's: an undecided ref is one git could
+  // not decide, not one the gate rejected. Printing it under "(R3 gate)" would
+  // relabel a fault as the gate's verdict — the reporting half of mem-y2x7n.
+  console.log(
+    `  undecided (git no answer)  : ${report.undecided}  ${JSON.stringify(report.undecided_by_cause)}`
+  );
+  // Flagged as a lower bound only when something is actually undecided, so the
+  // qualifier means something on the runs that carry it.
+  const bound = report.undecided > 0 ? ' (LOWER BOUND — see undecided)' : '';
+  console.log(
+    `  REAL live-ref base %       : ${report.pct.toFixed(2)}%  (was claimed 27%)${bound}\n`
+  );
 }
 
 const outDir = 'verify';

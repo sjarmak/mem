@@ -105,6 +105,13 @@ export const DROP_BASE_NOT_ANCESTOR = 'base_not_on_authoritative_integration_bra
  * confounded with decay. */
 export const DROP_NO_MERGE_BASE = 'no_merge_base_in_authoritative_checkout';
 
+/** Undecided cause: git could not ANSWER the ancestry question — an unreadable
+ * object (exit 128), a missing binary, a signal. Not a drop: the gate reached no
+ * verdict, so the ref is neither kept nor counted against the R3 alarm. Reported
+ * per-cause, mirroring ingest/landedContent.ts's `UndecidableCause`, so the
+ * headline's shortfall is auditable rather than an opaque bucket (mem-y2x7n). */
+export const UNDECIDED_ANCESTRY_UNANSWERABLE = 'ancestry_unanswerable_in_checkout';
+
 /** The result of the IO layer's merge-base computation for one resolved ref. */
 export interface MergeBaseInput {
   work_id: string;
@@ -113,8 +120,20 @@ export interface MergeBaseInput {
   /** `git merge-base <branch_sha> <authoritative>/main`, or null if none / the
    * objects are absent. */
   base_sha: string | null;
-  /** `git merge-base --is-ancestor <base_sha> <authoritative>/main` succeeded. */
-  is_ancestor: boolean;
+  /** The ancestry of `base_sha` against the authoritative branch, in THREE
+   * states — `merge-base --is-ancestor` answers only by exit code, and its codes
+   * do not collapse into a boolean:
+   *  - `true`  — git answered YES (exit 0).
+   *  - `false` — git answered NO (exit 1). A real, substantive negative.
+   *  - `null`  — git could NOT be asked (a 128 on an unreadable object, a
+   *    missing binary, a signal). **null is not a no.**
+   *
+   * The two-state framing this replaced ("`--is-ancestor` succeeded") is what
+   * admitted the bug: the runner's bare catch mapped every failure to `false`,
+   * so a fault entered the gate as a verdict and tripped the R3 alarm below
+   * (mem-y2x7n). Producers should use ingest/provenance.ts's `isAncestorOrNull`,
+   * which returns exactly these three states. */
+  is_ancestor: boolean | null;
 }
 
 /** A kept live-ref base: a replayable {base, branch tip} anchored on the
@@ -133,24 +152,61 @@ export interface LiveRefDrop {
   reason: string;
 }
 
-/** Exactly one of `kept` / `drop` is set. */
+/** A resolution the gate could not decide, with the cause git could not answer.
+ * Distinct from {@link LiveRefDrop} on purpose: a drop is a VERDICT (the gate
+ * asked and the answer was no), an undecided is the ABSENCE of one. Folding the
+ * two would put a git fault into the R3 alarm's count. */
+export interface LiveRefUndecided {
+  work_id: string;
+  refname: string;
+  cause: string;
+}
+
+/** Exactly one of `kept` / `drop` / `undecided` is set. */
 export interface LiveRefResult {
   kept?: LiveRefBase;
   drop?: LiveRefDrop;
+  undecided?: LiveRefUndecided;
 }
 
 /**
  * Apply the fail-closed write-gate (R3) to a merge-base result. The base is kept
- * only when it resolved AND is an ancestor of the authoritative integration
- * branch. A result with no merge-base drops as {@link DROP_NO_MERGE_BASE} (the
- * decay signal); a resolved-but-non-ancestor base drops as
- * {@link DROP_BASE_NOT_ANCESTOR} (the R3 corruption signal) — the two are kept
- * distinct so a zero R3 count cannot be confounded with decay. Nothing is written
- * silently either way.
+ * only when it resolved AND git answered that it is an ancestor of the
+ * authoritative integration branch. The three failing outcomes are reported
+ * apart, because each is a different fact and collapsing any two makes the
+ * others unreadable:
+ *  - no merge-base → drop {@link DROP_NO_MERGE_BASE}, the decay signal.
+ *  - a resolved base git says is NOT an ancestor → drop
+ *    {@link DROP_BASE_NOT_ANCESTOR}, the R3 corruption signal. A non-zero count
+ *    here is the alarm, which is exactly why nothing else may land in it.
+ *  - git could not ANSWER → undecided {@link UNDECIDED_ANCESTRY_UNANSWERABLE}.
+ *    Not a drop: no verdict was reached, so the ref is neither kept nor counted
+ *    against the alarm (mem-y2x7n).
+ *
+ * So a zero R3 count cannot be confounded with decay, and neither can be
+ * confounded with a broken checkout. Nothing is written silently on any path.
  */
 export function classifyMergeBase(input: MergeBaseInput): LiveRefResult {
+  // Order is load-bearing, in both directions.
+  //
+  // no-merge-base FIRST: with no base there is nothing to ask about, so
+  // `is_ancestor` carries no meaning here and must not be read — the ref is
+  // decay, not an unanswerable ancestry.
   if (input.base_sha === null) {
     return { drop: { work_id: input.work_id, refname: input.refname, reason: DROP_NO_MERGE_BASE } };
+  }
+  // null BEFORE the falsy check: `!input.is_ancestor` is true for null as well
+  // as false, so testing it first would swallow the undecided arm into the
+  // DROP_BASE_NOT_ANCESTOR count — reporting a git fault as the R3 corruption
+  // alarm, which is the bug (mem-y2x7n) with a fresh coat of paint.
+  if (input.is_ancestor === null) {
+    return {
+      undecided: {
+        work_id: input.work_id,
+        refname: input.refname,
+        cause: UNDECIDED_ANCESTRY_UNANSWERABLE,
+      },
+    };
   }
   if (!input.is_ancestor) {
     return {
@@ -176,24 +232,39 @@ export interface LiveRefReport {
   resolved: number;
   /** Resolved refs that passed the merge-base gate (the replayable base count). */
   kept: number;
-  /** Resolved refs dropped by the gate. */
+  /** Resolved refs dropped by the gate — a verdict was reached and it was no. */
   dropped: number;
   drops_by_reason: Record<string, number>;
-  /** The REAL live-ref percentage: `100 * kept / denominator`. */
+  /** Resolved refs the gate could not decide, because git could not answer.
+   * Sibling to {@link dropped}, never part of it: a fault is not a verdict, so
+   * it must not read as one in the R3 count (mem-y2x7n). */
+  undecided: number;
+  undecided_by_cause: Record<string, number>;
+  /** The REAL live-ref percentage: `100 * kept / denominator`.
+   *
+   * A LOWER BOUND whenever {@link undecided} > 0 — each undecided ref is one git
+   * could not decide, and some of them would have been kept. Report the two
+   * together; a bare pct with undecided refs behind it understates the headline
+   * by exactly the amount nobody can see. */
   pct: number;
 }
 
 /** Aggregate per-ref results into the reportable headline. Pure arithmetic. */
 export function summarize(denominator: number, results: readonly LiveRefResult[]): LiveRefReport {
   const drops_by_reason: Record<string, number> = {};
+  const undecided_by_cause: Record<string, number> = {};
   let kept = 0;
   let dropped = 0;
+  let undecided = 0;
   for (const r of results) {
     if (r.kept !== undefined) {
       kept += 1;
     } else if (r.drop !== undefined) {
       dropped += 1;
       drops_by_reason[r.drop.reason] = (drops_by_reason[r.drop.reason] ?? 0) + 1;
+    } else if (r.undecided !== undefined) {
+      undecided += 1;
+      undecided_by_cause[r.undecided.cause] = (undecided_by_cause[r.undecided.cause] ?? 0) + 1;
     }
   }
   return {
@@ -202,6 +273,8 @@ export function summarize(denominator: number, results: readonly LiveRefResult[]
     kept,
     dropped,
     drops_by_reason,
+    undecided,
+    undecided_by_cause,
     pct: denominator === 0 ? 0 : (100 * kept) / denominator,
   };
 }
