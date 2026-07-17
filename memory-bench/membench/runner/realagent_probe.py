@@ -30,7 +30,6 @@ provide (that IS the adapter cost this probe gates).
 from __future__ import annotations
 
 import subprocess
-import tempfile
 from collections.abc import Collection
 from dataclasses import dataclass
 
@@ -43,6 +42,7 @@ from membench.runner.headless_agent import (
     result_event,
     serialize_stream,
 )
+from membench.runner.sandbox import paid_sandbox
 from membench.runtime import StepContext
 from membench.schemas.sequence import ExpectedAction, OutcomeCheck, SequenceStep
 from membench.schemas.trace import ToolCall
@@ -199,7 +199,11 @@ def run_arm(
     current value(s) for ``oracle``); the arm difference lives entirely in that dict, never
     in the scorer. ``dry_run`` swaps the real ``claude -p`` for ``simulated_runner`` (no
     token). A fresh neutral sandbox per repeat keeps ``config.json`` from bleeding across
-    trials and keeps the agent out of any mem worktree.
+    trials and keeps the agent out of any mem worktree. Neutral is ENFORCED, not assumed:
+    ``paid_sandbox`` refuses to spend if any ancestor of the sandbox carries a ``CLAUDE.md``,
+    which Claude Code would auto-load by walking up from the cwd at launch — the sandbox is
+    rooted at the ambient ``TMPDIR``, so without the guard the operator's environment decides
+    what the "neutral" agent reads (mem-rx11w).
 
     The invocations are RECORDED off the CLI seam, not reported by the agent, and NOT returned by
     this function: it opens its per-cell ``RecordingRunner`` through the caller's ``recorder`` and
@@ -214,8 +218,8 @@ def run_arm(
     )
     passes = 0
     for i in range(repeats):
-        with tempfile.TemporaryDirectory(prefix=f"toolreq-{arm}-") as sandbox:
-            agent = cell_agent(model=model, channel=channel, runner=cell_runner, cwd=sandbox)
+        with paid_sandbox(f"toolreq-{arm}-") as sandbox:
+            agent = cell_agent(model=model, channel=channel, runner=cell_runner, cwd=str(sandbox))
             ctx = StepContext(
                 trial_id=f"{arm}-{channel.value}-{i}",
                 session_id=f"{arm}-{channel.value}",

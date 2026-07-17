@@ -7,6 +7,10 @@ across two sequential ``claude -p`` calls with no external memory system at all?
 Two calls per repeat, sharing ONE sandbox cwd + ONE ``CLAUDE_CONFIG_DIR`` (so Claude
 Code's own native memory is the sole continuity channel):
 
+0. **mint** — the shared cwd comes from ``sandbox.paid_sandbox``, which refuses to spend if
+   any ANCESTOR of the sandbox carries a ``CLAUDE.md``. The wipe below empties the cwd but
+   cannot ascend, and Claude Code walks UP from the cwd at launch — so without this the
+   ambient ``TMPDIR`` decides what every "neutral" sandbox auto-loads (mem-rx11w).
 1. **establish** — the id-exact facts (``task.oracle_memory``, opaque-valued like the
    oracle arm) are surfaced via ``available_memory`` under the TRUSTED/RECALLED channel,
    with an explicit instruction to retain them for later. That instruction makes this the
@@ -24,7 +28,9 @@ Code's own native memory is the sole continuity channel):
    nothing to scavenge. This is a firewall, not a detector: the accounting cannot see
    this channel, since ``engaged`` is measured off the establish leg's write and
    ``leaked`` only fires on (pass AND NOT engaged) — a scavenged pass would otherwise
-   score as a clean SEPARATES.
+   score as a clean SEPARATES. The ancestor guard re-runs HERE too, not just at the mint:
+   the establish leg is unclamped by design, so the same window the wipe covers for the cwd
+   is open one directory up, where the wipe cannot reach.
 3. **goal** — ``task.goal_step`` run BARE (``memory={}``): with the cwd emptied, the only
    way the current opaque value can reach the ``Write`` call is if call 1 actually
    persisted it and Claude Code's native-memory system re-surfaced it unprompted.
@@ -71,6 +77,7 @@ from membench.runner.headless_agent import (
 )
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome, score_goal_action
 from membench.runner.resume_cache import digest
+from membench.runner.sandbox import assert_neutral_ancestry, paid_sandbox
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask
 from membench.runtime import StepContext
 from membench.schemas.sequence import SequenceStep
@@ -324,7 +331,7 @@ def run_builtin_arm(
 
     for i in range(repeats):
         with (
-            tempfile.TemporaryDirectory(prefix=f"toolreq-{ARM}-sandbox-") as sandbox,
+            paid_sandbox(f"toolreq-{ARM}-sandbox-") as sandbox,
             tempfile.TemporaryDirectory(prefix=f"toolreq-{ARM}-config-") as config_dir_str,
         ):
             config_dir = Path(config_dir_str)
@@ -333,7 +340,7 @@ def run_builtin_arm(
                 model=model,
                 channel=channel,
                 runner=cell_runner,
-                cwd=sandbox,
+                cwd=str(sandbox),
                 env={"CLAUDE_CONFIG_DIR": str(config_dir)},
             )
 
@@ -359,7 +366,15 @@ def run_builtin_arm(
             # does not. Engagement is read above, off the config dir, so the wipe cannot
             # affect it. This is why the legs are a PAIR and not a loop, and why their order
             # is a measured input (`cell_legs`).
-            _wipe_cwd_contents(Path(sandbox))
+            _wipe_cwd_contents(sandbox)
+
+            # The same window, one directory UP, where the wipe cannot reach: the establish
+            # leg is unclamped by design, so it is free to write an ancestor CLAUDE.md that
+            # the goal leg then auto-loads. Re-scanned rather than trusted from
+            # construction, so the guard is symmetric with the firewall it joins. Refusing
+            # HERE costs the establish call — already spent, never written — which is the
+            # cheap end next to publishing a fabricated SEPARATES.
+            assert_neutral_ancestry(sandbox)
 
             result = agent.run_step(goal_leg.step, dict(goal_leg.memory), _ctx(goal_leg))
 

@@ -59,6 +59,7 @@ from membench.runner.headless_agent import (
 )
 from membench.runner.toolreq_builtin_grid import (
     AGENT_ERROR,
+    CONTAMINATED_SANDBOX,
     LEAK,
     NOT_ENGAGED,
     SUMMARY_NAME,
@@ -212,6 +213,13 @@ _HALT_COUNSEL = {
         "every cell this sweep would measure is uninterpretable for the same reason. Fix the "
         "firewall before spending; a NOT-ENGAGED verdict from this corpus cannot be trusted "
         "while a leg can pass without the mechanism."
+    ),
+    CONTAMINATED_SANDBOX: (
+        "The ISOLATION again, but upstream of the run: the sandbox is minted under TMPDIR, and "
+        "a CLAUDE.md above it is auto-loaded into EVERY cell by Claude Code's upward walk at "
+        "launch — with no tool call to clamp and nothing in the accounting that can see it (a "
+        "scavenged pass scores as a clean SEPARATES). This is an operator fix, not a code one: "
+        "point TMPDIR at a directory with no CLAUDE.md in any parent, or leave it unset (mem-rx11w)."
     ),
 }
 

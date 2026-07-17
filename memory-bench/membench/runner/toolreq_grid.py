@@ -92,14 +92,18 @@ SUMMARY_NAME = "summary-toolreq-realagent.json"
 
 # The executing/scoring CODE this grid's cached cells were measured under
 # (BaseRunIdentity.protocol) — what MOVES A RESULT while every fingerprint stays identical: the
-# stream-json parser, `score_goal_action`, DEFAULT_TIMEOUT_S, and `simulated_runner` (which decides
-# the ENTIRE dry-run measurement — free runs only, since `dry_run` is itself in the identity).
+# stream-json parser, `score_goal_action`, DEFAULT_TIMEOUT_S, `simulated_runner` (which decides
+# the ENTIRE dry-run measurement — free runs only, since `dry_run` is itself in the identity),
+# and `realagent_probe`'s sandbox construction — its ancestor guard (`sandbox.paid_sandbox`)
+# decides what agent context the "neutral" cwd auto-loads, which moves a result while every
+# fingerprint stays identical (mem-rx11w). Named explicitly because this enumeration reads as
+# exhaustive, and this grid had no sandbox firewall to name until it did.
 # NOT here, because `invocation_fingerprint` now carries them: the prompts, --allowedTools, --model,
 # --strict-mcp-config, and which cells run at all; nor the claude binary's version, which
 # `cli_version` now carries (resolved off the instrument — a drift no one performs on purpose is not
 # a thing to bump a constant for).
 # BUMP on any change to the former that could move a result.
-EXECUTION_PROTOCOL = 2
+EXECUTION_PROTOCOL = 3
 
 # Seeds the `ours` store + resolves its payload: (sequences, tasks, store_path, mem_bin)
 # -> work_id -> (source work_id -> rendered payload). Injected by the caller, never defaulted:

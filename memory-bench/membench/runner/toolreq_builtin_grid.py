@@ -51,6 +51,7 @@ from membench.runner.resume_cache import (
     render_verdict,
     run_cached_corpus,
 )
+from membench.runner.sandbox import SandboxContaminationError
 from membench.runner.toolreq_builtin import (
     ARM,
     BuiltinDiagnostics,
@@ -103,7 +104,8 @@ SUMMARY_NAME = "summary-toolreq-builtin.json"
 
 # The executing/scoring CODE this grid's cached cells were measured under
 # (BaseRunIdentity.protocol) — what MOVES A RESULT while every fingerprint stays identical:
-# `run_builtin_arm`'s cwd firewall (`_wipe_cwd_contents`),
+# `run_builtin_arm`'s cwd firewall (`_wipe_cwd_contents`) and its ancestor guard
+# (`sandbox.assert_neutral_ancestry`, run at mint AND after the wipe),
 # `_memory_engaged` + NATIVE_MEMORY_GLOB, the stream-json parser, `score_goal_action`,
 # DEFAULT_TIMEOUT_S, and `simulated_builtin_runner` (which decides the ENTIRE dry-run measurement —
 # free runs only, since `dry_run` is itself in the identity).
@@ -117,7 +119,7 @@ SUMMARY_NAME = "summary-toolreq-builtin.json"
 # + CLAUDE_CONFIG_DIR and leaves nothing the sweep reads), so no cached cell moves when they change
 # and a bump would only re-spend the whole paid grid for zero information.
 # BUMP on any change to the former that could move a result.
-EXECUTION_PROTOCOL = 2
+EXECUTION_PROTOCOL = 3
 
 
 def calls_per_repeat(task: ToolReqRealAgentTask) -> int:
@@ -296,6 +298,11 @@ def task_verdict(cells: Sequence[BuiltinCell]) -> str:
 # both-channel claim) and WEAK (a partial-repeat claim) have nothing to say about it.
 ENGAGED = "ENGAGED"
 AGENT_ERROR = "AGENT-ERROR"
+# The sandbox's ancestor chain carried agent context, so the arm refused to mint a cwd it could not
+# call neutral (`sandbox.assert_neutral_ancestry`). Its own kind, not folded into AGENT_ERROR: this
+# fires BEFORE any `claude -p` runs, so "the real establish/goal call failed" would name a call that
+# was never made, and the fix is the operator's TMPDIR rather than anything about the agent.
+CONTAMINATED_SANDBOX = "CONTAMINATED-SANDBOX"
 
 
 class PreflightHaltError(RuntimeError):
@@ -373,6 +380,13 @@ def preflight_gate(
         announce("PREFLIGHT: one real establish+check cycle before the full sweep...")
         try:
             diagnostics = preflight(task, model=model)
+        except SandboxContaminationError as exc:
+            # Converted for the same reason as the agent error below, and the module's own rule
+            # decides it: PreflightHaltError is "a distinct type from HeadlessAgentError because the
+            # two want opposite counsel: a preflight halt has measured nothing". A refused sandbox
+            # has measured nothing and spent nothing, so it wants the halt counsel, not the
+            # mid-sweep one that points at a resume with no finished tasks to skip.
+            raise PreflightHaltError(CONTAMINATED_SANDBOX, str(exc)) from exc
         except HeadlessAgentError as exc:
             # Converted, not propagated: raw, this would leave the hook as a HeadlessAgentError and
             # the driver would report a preflight failure — nothing measured, nothing to resume —

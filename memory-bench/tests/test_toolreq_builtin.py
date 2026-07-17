@@ -25,7 +25,8 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from collections.abc import Callable
+import tempfile
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import pytest
@@ -49,6 +50,7 @@ from membench.runner.headless_agent import (
 )
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome
 from membench.runner.resume_cache import invocation_digest
+from membench.runner.sandbox import SandboxContaminationError
 from membench.runner.toolreq_builtin import (
     ARM,
     BUILTIN_SETTINGS,
@@ -56,6 +58,7 @@ from membench.runner.toolreq_builtin import (
     BuiltinDiagnostics,
     _establish_step,
     _memory_engaged,
+    _wipe_cwd_contents,
     cell_calls,
     cell_legs,
     run_builtin_arm,
@@ -1352,6 +1355,35 @@ def test_preflight_agent_error_halts_diagnosed_not_raw_traceback(
     assert "simulated rate-limit" in err  # the halt carries the underlying failure
 
 
+def test_preflight_contaminated_sandbox_halts_diagnosed_not_raw_traceback(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    # A contaminated ancestor chain refuses at the sandbox MINT, which is inside the preflight —
+    # so it must arrive as the diagnosed PREFLIGHT HALT, not a raw traceback. It gets its own kind
+    # rather than riding AGENT_ERROR: nothing was called, so "the real establish/goal call failed"
+    # would name a call that never happened, and the operator's fix is TMPDIR. It must also not
+    # borrow the mid-sweep SWEEP HALT counsel, which points at a resume that has nothing to skip.
+    _corpus_one(tmp_path)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")  # paid path must name a model (mem-bzv2p)
+
+    def _raises(task, **_kwargs):
+        raise SandboxContaminationError("/evil/CLAUDE.md sits above the sandbox ... set TMPDIR")
+
+    monkeypatch.setattr(grid, "run_builtin_arm", _raises)
+    code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
+    assert code == 3
+    err = capsys.readouterr().err
+    assert "PREFLIGHT HALT" in err
+    assert "SWEEP HALT" not in err  # nothing was measured, so nothing is resumable
+    assert "/evil/CLAUDE.md" in err  # carries the offending path through to the operator
+    # Routed to its OWN counsel, not the agent-error one: the kind is an internal key, so the
+    # counsel it selects is what proves the routing. This halt's fix is TMPDIR, and it must not
+    # tell the operator to "retry once the underlying failure is resolved" — nothing failed.
+    assert "TMPDIR" in err
+    assert "retry once the underlying failure" not in err
+
+
 def test_sweep_agent_error_halts_diagnosed_with_resume_pointer(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
@@ -1802,3 +1834,192 @@ def test_an_unpinned_paid_run_is_refused_before_a_go_command_it_could_not_price(
     printed = capsys.readouterr().out
     assert "REFUSING to spend: no model named" in printed
     assert "scix-batch" not in printed, "priced nothing, so it must not print a go-command"
+# --- ancestor firewall: the sandbox's PARENT CHAIN is not a third continuity channel ----
+
+
+def _ancestor_scavenging_runner(value: str, *, plant: bool):
+    """The SILENT shape, which is the one that matters. The establish leg genuinely engages
+    native memory (the real index+topic layout), so ``engaged`` is True and honest; the goal
+    leg then passes off an ancestor ``CLAUDE.md`` WITHOUT native memory re-surfacing
+    anything. Claude Code walks UP from cwd at launch, so an ancestor file is auto-loaded
+    exactly like an in-cwd one, with no tool call to clamp.
+
+    The arm's own honest verdict for this runner is a builtin NULL — memory was written and
+    did not carry — but pass+engaged scores as SEPARATES, a fabricated builtin win, because
+    ``leaked`` only fires on (pass AND NOT engaged). An establish leg that merely scavenged
+    without engaging would show up as leaked, loud and correct; this is the shape the
+    accounting is blind to, and the reason the guard is fail-closed rather than recorded.
+
+    ``plant`` makes the unclamped establish leg write that ancestor file itself (the
+    between-legs window ``_wipe_cwd_contents`` covers for the cwd but structurally cannot
+    cover for a parent); otherwise the ancestor is the operator's, via ``TMPDIR``."""
+
+    def run(argv, **kwargs):
+        argv_list = list(argv)
+        cwd = kwargs.get("cwd")
+        env = kwargs.get("env")
+        assert isinstance(cwd, str)
+        scavengeable = Path(cwd).parent / "CLAUDE.md"
+        events: list[dict[str, object]] = []
+        if "--allowedTools" not in argv_list:  # establish leg
+            config_dir = env.get("CLAUDE_CONFIG_DIR") if isinstance(env, dict) else None
+            assert isinstance(config_dir, str)
+            # Engage native memory for real, in the real layout: this is what makes the
+            # scavenged pass below score as a clean win instead of a leak.
+            index_path = Path(native_memory_path(config_dir=config_dir, workdir=cwd))
+            index_path.parent.mkdir(parents=True, exist_ok=True)
+            index_path.write_text(f"- [Established]({SIMULATED_TOPIC_FILE})\n", encoding="utf-8")
+            (index_path.parent / SIMULATED_TOPIC_FILE).write_text(value, encoding="utf-8")
+            if plant:
+                scavengeable.write_text(f"remember: {value}", encoding="utf-8")
+        elif scavengeable.is_file() and value in scavengeable.read_text(encoding="utf-8"):
+            events.append(  # goal leg: passes off the ancestor file, never touching memory
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "name": REAL_TOOL,
+                                "input": {"file_path": CONFIG_FILE, "content": value},
+                            }
+                        ],
+                        "usage": {"input_tokens": 0, "output_tokens": 0},
+                    },
+                }
+            )
+        events.append({"type": "result", "result": "done"})
+        stdout = "\n".join(json.dumps(e) for e in events)
+        return subprocess.CompletedProcess(argv_list, returncode=0, stdout=stdout, stderr="")
+
+    return run
+
+
+def test_wipe_cannot_reach_an_ancestor_claude_md(tmp_path: Path) -> None:
+    # Locks the STRUCTURAL claim that makes the ancestor guard a separate defense rather
+    # than a wider wipe: `_wipe_cwd_contents` iterates cwd.iterdir(), which by construction
+    # never ascends. Emptying the cwd is still right (the slug, hence the memory path, must
+    # survive) — it just cannot be where the parent chain is handled.
+    ancestor = tmp_path / "CLAUDE.md"
+    ancestor.write_text("scavenge me", encoding="utf-8")
+    sandbox = tmp_path / "sandbox"
+    sandbox.mkdir()
+    (sandbox / "CLAUDE.md").write_text("in the cwd", encoding="utf-8")
+
+    _wipe_cwd_contents(sandbox)
+
+    assert list(sandbox.iterdir()) == []  # the cwd channel: closed
+    assert ancestor.is_file()  # the ancestor channel: untouched, and unreachable from here
+
+
+def test_a_contaminated_ancestor_chain_refuses_to_spend(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The bead's own case: TMPDIR points somewhere with a CLAUDE.md above it (pointing
+    # TMPDIR at a workspace for disk space is routine, and this box has a CLAUDE.md at both
+    # /home/ds/projects/mem and /home/ds/projects). Claude Code auto-loads it into EVERY
+    # "neutral" sandbox at launch, so the arm's whole premise — that native memory is the
+    # SOLE continuity channel — is silently false, and the accounting cannot see it:
+    # `engaged` is read off the establish leg and `leaked` only fires on (pass AND NOT
+    # engaged), so a scavenged pass publishes as a clean builtin SEPARATES. Refuse to
+    # spend rather than measure something the harness cannot describe.
+    (tmp_path / "CLAUDE.md").write_text("remember: toolreq-w-t0-CURRENT", encoding="utf-8")
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    task = _task()
+    (current_opaque,) = task.current_opaque_values
+
+    with pytest.raises(SandboxContaminationError) as exc:
+        run_builtin_arm(
+            task,
+            repeats=2,
+            model="",
+            dry_run=False,
+            channel=MemoryChannel.RECALLED,
+            runner=_ancestor_scavenging_runner(current_opaque, plant=False),
+            recorder=CellRecorder(),
+        )
+    assert str(tmp_path / "CLAUDE.md") in str(exc.value)  # names the offending path
+    assert "TMPDIR" in str(exc.value)  # and the knob that fixes it
+
+
+def test_an_establish_leg_that_plants_an_ancestor_claude_md_cannot_reach_the_goal_leg(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The construction-time scan is not enough on its own. The establish leg is
+    # deliberately unclamped (available_tools=[], so no --allowedTools), which is why
+    # `_wipe_cwd_contents` runs BETWEEN the legs rather than at construction — and the same
+    # window is open one directory up, where the wipe cannot reach. A leg that writes an
+    # ancestor CLAUDE.md *and* engages native memory would otherwise publish as SEPARATES
+    # (engaged=True, pass), the exact silent inflation this arm exists to avoid. So the
+    # guard runs again after the wipe: refuse to PUBLISH, the calls already being spent.
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    task = _task()
+    (current_opaque,) = task.current_opaque_values
+
+    with pytest.raises(SandboxContaminationError):
+        run_builtin_arm(
+            task,
+            repeats=2,
+            model="",
+            dry_run=False,
+            channel=MemoryChannel.RECALLED,
+            runner=_ancestor_scavenging_runner(current_opaque, plant=True),
+            recorder=CellRecorder(),
+        )
+
+
+def test_a_clean_ancestor_chain_under_a_relocated_tmpdir_still_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The guard is on CONTAMINATION, never on WHERE the sandbox lives: pointing TMPDIR at a
+    # roomier disk is a legitimate thing the bead itself names, and it moves nothing that is
+    # measured (argv carries no cwd, and the scored artifact is a cwd-relative path). Pinning
+    # a harness-owned root instead would break this case to defend an input that, once the
+    # chain is guaranteed clean, cannot vary the measurement at all.
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    task = _task()
+    (current_opaque,) = task.current_opaque_values
+
+    outcome, diag = run_builtin_arm(
+        task,
+        repeats=2,
+        model="",
+        dry_run=False,
+        channel=MemoryChannel.RECALLED,
+        runner=_ancestor_scavenging_runner(current_opaque, plant=False),
+        recorder=CellRecorder(),
+    )
+    # The arm's honest verdict for this runner, now that there is nothing to scavenge: the
+    # builtin engaged and did not carry. A null, not a fabricated win.
+    assert outcome.passes == 0
+    assert diag.engaged == 2
+    assert diag.leaked == 0
+
+
+def test_the_guard_walks_the_real_chain_of_a_symlinked_tmpdir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # TMPDIR resolving THROUGH a symlink is the case a naive walk misses: `tempfile` hands
+    # back a path under the link, whose lexical parents are clean, while the kernel's cwd is
+    # the real inode — so Claude Code walks the REAL chain and loads the CLAUDE.md the guard
+    # just declared absent. The scan must resolve() first, or it is green precisely when it
+    # is wrong.
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / "CLAUDE.md").write_text("remember: toolreq-w-t0-CURRENT", encoding="utf-8")
+    link = tmp_path / "link"
+    link.symlink_to(real, target_is_directory=True)
+    monkeypatch.setattr(tempfile, "tempdir", str(link))
+    task = _task()
+    (current_opaque,) = task.current_opaque_values
+
+    with pytest.raises(SandboxContaminationError):
+        run_builtin_arm(
+            task,
+            repeats=2,
+            model="",
+            dry_run=False,
+            channel=MemoryChannel.RECALLED,
+            runner=_ancestor_scavenging_runner(current_opaque, plant=False),
+            recorder=CellRecorder(),
+        )
