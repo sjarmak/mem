@@ -28,6 +28,7 @@ alone loaded.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from collections import Counter
@@ -521,7 +522,15 @@ def run_cached_corpus(
     ``plan_of`` HERE, not authored inside ``identity_of``, so a grid can no longer carry a
     fingerprint computed by any route other than its plan — and that check fires on a cache HIT too,
     not only on the miss the write boundary sees."""
-    out_dir.mkdir(parents=True, exist_ok=True)
+    # `mode=0o700` because this dir holds PAID results and the publish below treats it as a
+    # trust boundary. A bare `mkdir` takes 0o777 & ~umask -- 0o755 under the usual umask, and
+    # 0o775 (GROUP-WRITABLE) under the 0o002 that this rig's own sessions run with, which is
+    # exactly the "someone else can plant a file at the predictable temp name" precondition.
+    # `mode` is applied only on CREATE, and umask still subtracts from it, so this narrows the
+    # common case rather than guaranteeing a mode: an out_dir the operator already created
+    # keeps whatever it had. The publish is what actually refuses; this stops handing it the
+    # problem for free.
+    out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     assert_usable_work_ids(tasks, summary_name)
 
     results: list[ResultT] = []
@@ -589,26 +598,52 @@ def run_cached_corpus(
 def _publish_atomically(result_path: Path, payload: str) -> None:
     """Write ``payload`` to ``<result_path>.tmp`` and rename it over ``result_path``.
 
-    ``O_NOFOLLOW`` is the whole reason this is not ``Path.write_text``: the temp path has a
-    PREDICTABLE name, so anyone who can write to out_dir can plant a symlink there ahead of
-    the run and have the publish write through it -- after which the rename leaves the
-    result itself a symlink. out_dir is 0o700, which makes that marginal, but the write is
-    a trust boundary and this module refuses at boundaries rather than resting on the one
-    mode bit above it.
+    Not ``Path.write_text``: the temp path has a PREDICTABLE name, so anyone who can write
+    to out_dir can plant something there ahead of the run and have the publish write
+    through it -- after which the rename leaves the result itself pointing wherever they
+    chose. The write is a trust boundary and this module refuses at boundaries.
 
-    ``O_TRUNC`` and NOT ``O_EXCL``: a leftover regular ``.json.tmp`` is designed-for residue
-    (the agent is OOM-killed by design, so a kill can land between the write and the
-    rename) and must still be replaced. ``O_EXCL`` would raise on it -- on a cache MISS,
-    i.e. AFTER the re-spend -- wedging the resume path permanently.
+    UNLINK THEN ``O_EXCL``, and the pair is the point. ``O_EXCL`` alone cannot be used: a
+    leftover regular ``.json.tmp`` is designed-for residue (the agent is OOM-killed by
+    design, so a kill can land between the write and the rename) and must still be
+    replaced; ``O_EXCL`` would raise on it -- on a cache MISS, i.e. AFTER the re-spend --
+    wedging the resume path permanently. The unlink is what makes ``O_EXCL`` affordable:
+    it clears the residue first, so the create that follows is always a FRESH inode.
+
+    Why not ``O_TRUNC|O_NOFOLLOW``, which also preserves the residue contract: it opens
+    whatever object already sits at the name, and ``O_NOFOLLOW`` only refuses a SYMLINK.
+    A hard link to a victim file is opened and truncated exactly like a regular file
+    (reproduced: the victim's contents are replaced with benchmark JSON), and a planted
+    FIFO blocks the publish forever on ``O_WRONLY`` -- after the paid calls are already
+    made. Creating a new inode refuses all three shapes by construction rather than
+    enumerating them. ``os.unlink`` removes the directory ENTRY, so it drops a planted
+    symlink or hard link without touching whatever it pointed at.
+
+    A ``FileExistsError`` here therefore means something raced the unlink, which no
+    legitimate path does -- refusing is correct, and it is not the wedge ``O_EXCL`` alone
+    would have been.
+
+    KNOWN LIMIT, deliberately not closed here: ``replace`` renames by PATH, not by the fd
+    just written, so an attacker who wins the sub-millisecond window between close and
+    rename can still swap the temp entry and have the rename publish THEIR symlink as the
+    result. The payload is never written through it (the fd is already an unlinked inode
+    by then), and closing it needs a different publish shape than rename-by-name. Recorded
+    rather than papered over.
     """
     tmp_path = result_path.with_suffix(".json.tmp")
     try:
-        fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+        # Nothing there is the NORMAL case, and it is the only unlink failure that is not an
+        # anomaly. Every other one (a directory at the name, a read-only dir) falls to the
+        # wrapper below rather than through to the create.
+        with contextlib.suppress(FileNotFoundError):
+            tmp_path.unlink()
+        fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except OSError as exc:
         raise OSError(
             f"refusing to publish {result_path.name} through {tmp_path}: {exc.strerror}. "
-            "A symlink at the temp path is not residue this publish could have left, so it is "
-            "treated as an anomaly rather than overwritten."
+            "The temp path is cleared immediately before this create, so anything still at it "
+            "raced that unlink -- which no legitimate path does. Treated as an anomaly rather "
+            "than written through."
         ) from exc
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
         handle.write(payload)

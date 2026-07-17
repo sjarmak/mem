@@ -14,6 +14,9 @@ mention arms, so neither does its test. The two real consumers' end-to-end cases
 from __future__ import annotations
 
 import json
+import os
+import signal
+import stat
 import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -696,31 +699,97 @@ def test_a_leftover_temp_file_is_never_read_as_a_result(tmp_path: Path) -> None:
     assert not (out / "w-0.json.tmp").exists()  # the publish replaced it
 
 
-def test_a_planted_symlink_at_the_temp_path_is_refused_not_followed(tmp_path: Path) -> None:
-    """The atomic publish must not write THROUGH a pre-planted `<work_id>.json.tmp` symlink.
+def _alarm(*_: object) -> None:
+    """SIGALRM -> exception, so a blocked publish FAILS the test instead of hanging it."""
+    raise TimeoutError("the publish blocked")
 
-    It REFUSES rather than quietly unlinking: a symlink here is not residue the publish
-    could have left (it writes a regular file), so it is an anomaly, and the write is a
-    boundary -- this module fails closed at boundaries rather than trusting out_dir's
-    0o700 mode to be the only thing standing between a paid run and someone else's file.
 
-    The refusal is O_NOFOLLOW and NOT O_EXCL. O_EXCL would also refuse the leftover
-    REGULAR tmp of an OOM-killed run (see `test_a_leftover_temp_file_is_never_read_as_a_result`)
-    -- which is designed-for, is a cache MISS, and would therefore re-spend and then die at
-    the write on every retry: a permanent wedge on the exact path whose halt counsel
-    promises "re-run the same command to resume".
+@pytest.mark.parametrize("shape", ["symlink", "hardlink"])
+def test_a_planted_link_at_the_temp_path_never_reaches_the_victim(
+    tmp_path: Path, shape: str
+) -> None:
+    """The atomic publish must not write THROUGH a planted `<work_id>.json.tmp`.
+
+    BOTH link shapes, because the obvious guard only stops one of them. `O_NOFOLLOW`
+    refuses a symlink and opens a HARD link exactly like a regular file -- same victim,
+    same clobber, no refusal. The publish creates a fresh inode instead (unlink, then
+    `O_EXCL`), which refuses every planted shape by construction rather than by
+    enumerating the ones someone thought of.
+
+    The unlink drops the directory ENTRY, so the victim itself is never touched by either
+    arm -- which is what these assert.
     """
     out = tmp_path / "out"
     out.mkdir()
     victim = tmp_path / "victim.txt"
     victim.write_text("untouched", encoding="utf-8")
-    (out / "w-0.json.tmp").symlink_to(victim)
+    if shape == "symlink":
+        (out / "w-0.json.tmp").symlink_to(victim)
+    else:
+        os.link(victim, out / "w-0.json.tmp")
+
+    _run([_Task("w-0")], out)
+
+    assert victim.read_text(encoding="utf-8") == "untouched"  # never written through
+    assert json.loads((out / "w-0.json").read_text(encoding="utf-8"))["work_id"] == "w-0"
+
+
+def test_a_planted_fifo_at_the_temp_path_does_not_hang_the_publish(tmp_path: Path) -> None:
+    """A FIFO at the temp path must not block the publish.
+
+    `O_WRONLY` on a FIFO with no reader blocks FOREVER, and it would block HERE -- after the
+    paid `claude -p` calls are already made and before anything is written. The sweep would
+    neither publish nor halt; it would just stop, holding the spend. Creating a fresh inode
+    sidesteps the open-what-is-there problem entirely.
+    """
+    out = tmp_path / "out"
+    out.mkdir()
+    os.mkfifo(out / "w-0.json.tmp")
+
+    signal.signal(signal.SIGALRM, _alarm)
+    signal.alarm(5)
+    try:
+        _run([_Task("w-0")], out)
+    finally:
+        signal.alarm(0)
+
+    assert json.loads((out / "w-0.json").read_text(encoding="utf-8"))["work_id"] == "w-0"
+
+
+def test_an_unclearable_temp_path_is_diagnosed_not_tracebacked(tmp_path: Path) -> None:
+    """A shape the unlink cannot clear must still fail CLOSED with the publish's own message.
+
+    A directory at `<work_id>.json.tmp` raises `IsADirectoryError` from the unlink, not from
+    the create -- so it escapes any handler wrapped around the create alone, which is where a
+    raw traceback would come from on a paid sweep.
+    """
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "w-0.json.tmp").mkdir()
 
     with pytest.raises(OSError, match="refusing to publish"):
         _run([_Task("w-0")], out)
 
-    assert victim.read_text(encoding="utf-8") == "untouched"  # never written through
-    assert not (out / "w-0.json").exists()  # and nothing published on the refused path
+    assert not (out / "w-0.json").exists()  # nothing published on the refused path
+
+
+def test_the_out_dir_is_not_created_group_or_world_writable(tmp_path: Path) -> None:
+    """out_dir holds PAID results, and a bare `mkdir` takes 0o777 & ~umask.
+
+    Under this rig's own 0o002 umask that is 0o775 -- group-writable, i.e. the precondition
+    for planting anything at the predictable temp name above. Pinned under a deliberately
+    permissive umask, since the default one would hide the bug.
+    """
+    out = tmp_path / "made-by-the-run"
+    old = os.umask(0o002)
+    try:
+        _run([_Task("w-0")], out)
+    finally:
+        os.umask(old)
+
+    mode = stat.S_IMODE(out.stat().st_mode)
+    assert not mode & stat.S_IWGRP, f"out_dir is group-writable: {oct(mode)}"
+    assert not mode & stat.S_IWOTH, f"out_dir is world-writable: {oct(mode)}"
 
 
 # --- a paid warm-up fires with the SPEND, not with the invocation ----------------------
