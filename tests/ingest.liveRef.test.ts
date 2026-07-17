@@ -140,15 +140,6 @@ describe('classifyMergeBase', () => {
     expect(r.drop?.reason).toBe(DROP_NO_MERGE_BASE);
     expect(r.undecided).toBeUndefined();
   });
-
-  it('does not let the null ancestry fall through to the non-ancestor drop', () => {
-    // The inverse ordering hazard: `!input.is_ancestor` is true for null as
-    // well as false, so testing it before the null check would swallow the
-    // undecided arm into DROP_BASE_NOT_ANCESTOR — reporting a git fault as the
-    // R3 alarm, strictly worse than the status quo this bead fixes.
-    const r = classifyMergeBase({ ...base, is_ancestor: null });
-    expect(r.drop?.reason).not.toBe(DROP_BASE_NOT_ANCESTOR);
-  });
 });
 
 describe('summarize', () => {

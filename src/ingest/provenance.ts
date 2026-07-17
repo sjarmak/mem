@@ -262,26 +262,17 @@ export function shaOrNull(run: GitRunner, work_dir: string, args: string[]): str
  * ancestor", while 128 is a pruned or corrupt object and a non-exit failure is a
  * missing binary or a signal. Only 1 is an answer; everything else propagates.
  *
- * The distinction is not pedantry — commit 0985d82 (mem-z14cd) fixed a guard
- * here that read "exited non-zero" as "not an ancestor", so a 128 manufactured a
- * false close out of a broken object in the measurement built to count false
- * closes. Callers that cannot afford the throw take {@link isAncestorOrNull}
- * instead; they must not re-derive the guard, which is how that bug reached a
- * third copy (mem-y2x7n).
+ * Reading "exited non-zero" as "not an ancestor" is a real defect, not a
+ * pedantic one: 0985d82 (mem-z14cd) fixed exactly that, where a 128 manufactured
+ * a false close out of a broken object in the measurement built to count false
+ * closes. This is the only implementation on purpose — the guard had been
+ * re-derived into three copies before mem-y2x7n collapsed them here. Callers
+ * that cannot afford the throw take {@link isAncestorOrNull} rather than
+ * hand-rolling a fourth.
  *
- * `--end-of-options` because not every caller passes resolved shas.
- * classifyLandedContent's call is sha-vs-sha (both args come from
- * `resolveCommit`), so the flag is a no-op there — but scripts/measure-live-ref.mjs
- * passes its `of` as a REF NAME (`<remote>/<branch>`, built from the rig map), and
- * a ref reaching git's option parser would be read as a flag rather than a
- * revision. The guard costs nothing on the call that does not need it.
- *
- * Lives here, beside {@link shaOrNull} and {@link exitStatus}, rather than in
- * ingest/landedContent.ts where the surviving copy sat: this is the same
- * run→classify-the-exit-status seam family that file's own consumers already
- * import from, and landedContent's version encoded no invariant of its own —
- * unlike `resolveCommit`, which is exported from there precisely because it
- * carries that module's rev-parse shape (mem-j1r2w). */
+ * `--end-of-options` because not every caller passes a resolved sha:
+ * scripts/measure-live-ref.mjs passes `of` as a ref name, which git's option
+ * parser would otherwise read as a flag. It is a no-op for sha-vs-sha callers. */
 export function isAncestor(run: GitRunner, work_dir: string, commit: string, of: string): boolean {
   try {
     run(work_dir, ['merge-base', '--is-ancestor', '--end-of-options', commit, of]);
@@ -302,12 +293,10 @@ export function isAncestor(run: GitRunner, work_dir: string, commit: string, of:
  * reported as its own outcome, never folded into the negative one (the principle
  * ingest/landedContent.ts states for `undecidable` vs `absent`).
  *
- * For sweep callers whose per-item loop has no try/catch, where {@link isAncestor}'s
- * throw would take every OTHER item's result down with the one that faulted —
- * scripts/measure-live-ref.mjs is the caller this exists for (mem-y2x7n). It is
- * deliberately NOT the shape for a caller that can handle the throw:
- * classifyLandedContent wants the fault to propagate, and widening its guard to a
- * null would dissolve 0985d82's fix. */
+ * Use only where a throw would abort a sweep — {@link isAncestor}'s throw would
+ * take every other item down with the one that faulted. A caller that can handle
+ * the throw should: classifyLandedContent wants the fault to propagate, and
+ * widening its guard to a null would dissolve 0985d82's fix. */
 export function isAncestorOrNull(
   run: GitRunner,
   work_dir: string,

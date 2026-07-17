@@ -128,11 +128,8 @@ export interface MergeBaseInput {
    *  - `null`  — git could NOT be asked (a 128 on an unreadable object, a
    *    missing binary, a signal). **null is not a no.**
    *
-   * The two-state framing this replaced ("`--is-ancestor` succeeded") is what
-   * admitted the bug: the runner's bare catch mapped every failure to `false`,
-   * so a fault entered the gate as a verdict and tripped the R3 alarm below
-   * (mem-y2x7n). Producers should use ingest/provenance.ts's `isAncestorOrNull`,
-   * which returns exactly these three states. */
+   * Producers should use ingest/provenance.ts's `isAncestorOrNull`, which returns
+   * exactly these three states. */
   is_ancestor: boolean | null;
 }
 
@@ -184,21 +181,22 @@ export interface LiveRefResult {
  *    against the alarm (mem-y2x7n).
  *
  * So a zero R3 count cannot be confounded with decay, and neither can be
- * confounded with a broken checkout. Nothing is written silently on any path.
+ * confounded with an ancestry git could not read. Nothing is written silently on
+ * any path.
+ *
+ * This covers the ANCESTRY half only. `base_sha` arrives already collapsed:
+ * producers derive it from a plain `merge-base`, and a fault there is
+ * indistinguishable from a genuine no-merge-base by the time it reaches this
+ * function, so it still drops as decay (mem-1n56l).
  */
 export function classifyMergeBase(input: MergeBaseInput): LiveRefResult {
-  // Order is load-bearing, in both directions.
-  //
-  // no-merge-base FIRST: with no base there is nothing to ask about, so
-  // `is_ancestor` carries no meaning here and must not be read — the ref is
-  // decay, not an unanswerable ancestry.
+  // Order is load-bearing in both directions. No-merge-base first: with no base
+  // there is nothing to ask about, so `is_ancestor` carries no meaning here.
   if (input.base_sha === null) {
     return { drop: { work_id: input.work_id, refname: input.refname, reason: DROP_NO_MERGE_BASE } };
   }
-  // null BEFORE the falsy check: `!input.is_ancestor` is true for null as well
-  // as false, so testing it first would swallow the undecided arm into the
-  // DROP_BASE_NOT_ANCESTOR count — reporting a git fault as the R3 corruption
-  // alarm, which is the bug (mem-y2x7n) with a fresh coat of paint.
+  // null before the falsy check: `!null` is true too, so testing `!is_ancestor`
+  // first would swallow the undecided arm into the R3 alarm's count.
   if (input.is_ancestor === null) {
     return {
       undecided: {
@@ -235,17 +233,14 @@ export interface LiveRefReport {
   /** Resolved refs dropped by the gate — a verdict was reached and it was no. */
   dropped: number;
   drops_by_reason: Record<string, number>;
-  /** Resolved refs the gate could not decide, because git could not answer.
-   * Sibling to {@link dropped}, never part of it: a fault is not a verdict, so
-   * it must not read as one in the R3 count (mem-y2x7n). */
+  /** Resolved refs the gate could not decide. Sibling to {@link dropped}, never
+   * part of it — see {@link LiveRefUndecided}. */
   undecided: number;
   undecided_by_cause: Record<string, number>;
-  /** The REAL live-ref percentage: `100 * kept / denominator`.
-   *
-   * A LOWER BOUND whenever {@link undecided} > 0 — each undecided ref is one git
-   * could not decide, and some of them would have been kept. Report the two
-   * together; a bare pct with undecided refs behind it understates the headline
-   * by exactly the amount nobody can see. */
+  /** The REAL live-ref percentage: `100 * kept / denominator`. A LOWER BOUND
+   * whenever {@link undecided} > 0, since some undecided refs would have been
+   * kept — report the two together or the headline understates by an unseen
+   * amount. */
   pct: number;
 }
 

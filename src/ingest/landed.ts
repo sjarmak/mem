@@ -1,4 +1,4 @@
-import { exitStatus, isNonZeroExit, tipBefore } from './provenance.js';
+import { isAncestor, isNonZeroExit, tipBefore } from './provenance.js';
 import type { GitRunner } from './provenance.js';
 import { defaultGitRunner } from './provenance.js';
 import { LandedSchema, type Landed, type WorkRecord } from '../schemas/workrecord.js';
@@ -75,20 +75,6 @@ function rangeCommits(run: GitRunner, work_dir: string, base: string, end: strin
     .filter(line => line !== '');
 }
 
-/** True when `commit` is still an ancestor of `branch`'s current tip (the work
- * survives), false when it is not (history was rewritten — the work was dropped).
- * `merge-base --is-ancestor` exits 1 for "not an ancestor"; any other non-zero
- * exit (bad object, etc.) propagates as a real error. */
-function survives(run: GitRunner, work_dir: string, commit: string, branch: string): boolean {
-  try {
-    run(work_dir, ['merge-base', '--is-ancestor', '--end-of-options', commit, branch]);
-    return true;
-  } catch (err) {
-    if (exitStatus(err) === 1) return false;
-    throw err;
-  }
-}
-
 /** Reverted SHAs referenced by `This reverts commit <sha>` trailers on commits
  * that landed on `branch` AFTER `end`. Returns the set of full SHAs git named as
  * reverted; the caller intersects it with the window's commits. Empty when `end`
@@ -163,7 +149,11 @@ export function deriveLanded(input: LandedInput, run: GitRunner): Landed {
   const { end, commits } = window;
   const common = { base_commit, landed_commit: end, n_commits: commits.length };
 
-  if (!survives(run, input.work_dir, end, input.base_branch)) {
+  // Off the branch tip means the history that carried it was rewritten — the
+  // work was dropped, not landed. `isAncestor` throws rather than answering on
+  // an unreadable object, which is what keeps a broken checkout from reporting
+  // itself as an abandoned branch (mem-z14cd, mem-y2x7n).
+  if (!isAncestor(run, input.work_dir, end, input.base_branch)) {
     return LandedSchema.parse({ ...common, landed_state: 'abandoned' });
   }
 
