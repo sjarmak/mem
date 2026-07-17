@@ -239,10 +239,11 @@ export function isNonZeroExit(err: unknown): boolean {
  * legitimate negative answer (no such commit, unknown ref), not a fault. Any
  * other failure (a missing binary) propagates. Empty output is null too: git
  * answered with no sha. Shared by every caller that resolves a ref, a
- * before-date commit, or a merge-base to a sha-or-nothing (resolveSessionCommit
- * here; resolveTipBefore in ingest/landed.ts; resolveCommit and mergeBase in
- * ingest/landedContent.ts) — the first three had drifted into separate copies
- * of the same run→trim→null-on-non-zero-exit body (mem-j1r2w). */
+ * before-date commit, or a merge-base to a sha-or-nothing ({@link tipBefore}
+ * here, called by both this file's resolveSessionCommit and ingest/landed.ts's
+ * resolveWindow; resolveCommit and mergeBase in ingest/landedContent.ts) — these
+ * had drifted into separate copies of the same run→trim→null-on-non-zero-exit
+ * body (mem-j1r2w). */
 export function shaOrNull(run: GitRunner, work_dir: string, args: string[]): string | null {
   let stdout: string;
   try {

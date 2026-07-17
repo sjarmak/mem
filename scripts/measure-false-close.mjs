@@ -79,7 +79,6 @@ const gitRunner = (dir, args) =>
  * stderr suppressed to match `gitRunner` above. */
 const gitPipeRunner = makeGitPipeRunner({ silenceStderr: true });
 
-
 const pct = n => (n * 100).toFixed(1).padStart(5) + '%';
 
 // ---- run --------------------------------------------------------------------
