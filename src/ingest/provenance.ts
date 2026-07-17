@@ -250,11 +250,9 @@ export function isGitFault(err: unknown): boolean {
   if (isNonZeroExit(err)) return true;
   if (typeof err !== 'object' || err === null) return false;
   const e = err as { status?: unknown; code?: unknown; signal?: unknown };
-  // Spawn-never-ran: uv_spawn failed before git executed, so there is neither
-  // an exit code nor a signal — execFileSync reports EVERY such failure with
-  // status and signal both null and code the errno string, whether git is
-  // missing (ENOENT), not executable (EACCES/ENOEXEC), or the spawn hit a
-  // transient resource limit (EAGAIN/EMFILE/ENOMEM/ENFILE). git could not be
+  // Spawn-never-ran: uv_spawn failed before git executed, so execFileSync
+  // reports status and signal both null with code the errno string (the whole
+  // spawn-fault set, enumerated in the doc comment above). git could not be
   // asked, so this is a fault, not a bug in our code.
   if (e.status === null && e.signal === null && typeof e.code === 'string') return true;
   // ENOBUFS+SIGTERM is Node aborting the child over OUR maxBuffer (our config

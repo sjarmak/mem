@@ -576,16 +576,18 @@ describe('isGitFault', () => {
     expect(isGitFault(Object.assign(new Error('git exited 128'), { status: 128 }))).toBe(true);
   });
 
-  it.each(['ENOENT', 'EACCES', 'ENOEXEC', 'EAGAIN', 'EMFILE', 'ENFILE', 'ENOMEM'])(
-    'classifies a spawn-never-ran fault (%s) by shape, not an errno allowlist',
-    code => {
-      expect(
-        isGitFault(
-          Object.assign(new Error(`spawn git ${code}`), { status: null, code, signal: null })
-        )
-      ).toBe(true);
-    }
-  );
+  it('classifies a spawn-never-ran fault by shape, not the errno value', () => {
+    // isGitFault never inspects the errno except the ENOBUFS carve-out, so one
+    // representative code proves the shape arm; the full transient-errno set
+    // (EAGAIN/EMFILE/ENFILE/ENOMEM) is pinned end-to-end in the isAncestorOrNull
+    // block above, which is the regression guard against reintroducing an
+    // allowlist.
+    expect(
+      isGitFault(
+        Object.assign(new Error('spawn git EMFILE'), { status: null, code: 'EMFILE', signal: null })
+      )
+    ).toBe(true);
+  });
 
   it('classifies an external signal kill as a fault', () => {
     expect(
