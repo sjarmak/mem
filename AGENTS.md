@@ -67,6 +67,15 @@ other; run the gates green before claiming done:
 <!-- Append-only log of "don't do X here, it breaks Y" lessons from real incidents.
      One line each: the prevention, then the consequence it avoids. -->
 
+- **Never read a non-zero git exit as an answer.** Only `merge-base
+  --is-ancestor` exit 1 means "not an ancestor"; 128/ENOENT/signal are faults,
+  not verdicts. Use `provenance.ts`'s `isAncestor` / `isAncestorOrNull`, never a
+  fresh `try/catch` around the git call — a swallowed 128 fabricates a verdict
+  in the very gate built to catch fabrications. (Cost is realized: the
+  swallow-128 defect was fixed twice — 0985d82 in `landedContent`, then 77bacd0
+  under mem-y2x7n — after the guard had been re-derived into three hand-rolled
+  copies that mem-y2x7n finally collapsed into `provenance.ts`.)
+
 ## Where to look (references)
 
 - **Why work records, pipeline, data model, store-building:** `README.md`
