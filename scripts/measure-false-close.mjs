@@ -156,8 +156,24 @@ for (const rig of rigs) {
 
   /** A ref's tip, or null when it does not resolve. Same rev-parse shape
    * landedContent holds as an invariant (every ref read strictly as a
-   * revision) — resolveCommit is the shared implementation (mem-j1r2w). */
-  const tipOf = ref => resolveCommit(gitRunner, entry.dir, ref);
+   * revision) — resolveCommit is the shared implementation (mem-j1r2w).
+   *
+   * The catch restores this probe's pre-dedup contract: it used to run through
+   * this script's own bare-catch gitOut, so ANY failure meant "no tip". Bare
+   * `resolveCommit` only maps a non-zero EXIT to null and rethrows a fault
+   * (signal kill, maxBuffer overrun) — correct for its other consumer,
+   * classifyLandedContent, which must not record a misconfiguration as a
+   * coverage gap, but wrong here: this is a per-rig probe inside a for-loop
+   * with no try/catch, so a throw loses every other rig's tally (nothing is
+   * written until the sweep ends). Same reasoning as verify/git.mjs's gitOut —
+   * see its docstring. */
+  const tipOf = ref => {
+    try {
+      return resolveCommit(gitRunner, entry.dir, ref);
+    } catch {
+      return null;
+    }
+  };
 
   // The integration refs a branch could legitimately have landed on, each pinned
   // to the tip it is decided against — the verdicts are only reproducible against

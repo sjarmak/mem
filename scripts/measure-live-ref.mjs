@@ -53,6 +53,16 @@ const gitRunner = (dir, args) =>
     stdio: ['ignore', 'pipe', 'ignore'],
   });
 
+/** resolveCommit's shared rev-parse, but a git FAULT degrades this rig to a
+ * named skip instead of crashing the sweep — see the call site for why. */
+const commitOrNull = (dir, ref) => {
+  try {
+    return resolveCommit(gitRunner, dir, ref);
+  } catch {
+    return null;
+  }
+};
+
 // `git merge-base --is-ancestor` is exit-code only: 0 ancestor, 1 not, other = error.
 function isAncestor(dir, ancestor, descendant) {
   try {
@@ -107,7 +117,15 @@ for (const rig of RIGS) {
   // Sanity-gate the authoritative ref itself: if it does not resolve, EVERY branch
   // would drop as no-merge-base and masquerade as 100% decay. Skip-with-reason
   // instead, so a broken checkout/ref can't be misread as a real measurement.
-  if (resolveCommit(gitRunner, entry.dir, authRef) === null) {
+  //
+  // The catch restores this gate's pre-dedup contract: it used to run through
+  // this script's own bare-catch gitOut, so ANY failure meant "does not
+  // resolve". Bare `resolveCommit` maps only a non-zero EXIT to null and
+  // rethrows a fault (signal kill, maxBuffer overrun) — correct for its other
+  // consumer, classifyLandedContent, but wrong for a per-rig gate in a loop
+  // with no try/catch: a throw would lose every other rig. The skip-with-reason
+  // this comment promises only holds if nothing escapes.
+  if (commitOrNull(entry.dir, authRef) === null) {
     console.log(`${rig}: authoritative ref ${authRef} does not resolve — skipped\n`);
     continue;
   }
