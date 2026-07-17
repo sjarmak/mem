@@ -222,7 +222,7 @@ export function attachLanded(records: WorkRecord[], opts: AttachLandedOptions = 
     inputs.set(record.work_id, input);
     if (s !== null && e !== null) {
       windows.set(record.work_id, { s, e: Math.max(e, s) });
-      const key = `${input.work_dir} ${input.base_branch}`;
+      const key = `${input.work_dir}\x00${input.base_branch}`;
       (groups.get(key) ?? groups.set(key, []).get(key)!).push(record.work_id);
     }
   }
