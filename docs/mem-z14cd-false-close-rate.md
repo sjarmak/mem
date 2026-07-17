@@ -83,8 +83,11 @@ Three choices carry the result:
   makes the rate a **lower bound** — a ref-selection error can only understate the
   problem, never inflate it.
 - **`undecidable` is reported per cause, never folded into `absent`.** An
-  unanswerable case is not a negative one. Only 3 of 250 were undecidable (all
-  `range-too-large`, on CodeScaleBench).
+  unanswerable case is not a negative one. Only 3 of 250 were undecidable in this
+  run (all `range-too-large`, on CodeScaleBench). That cause has since been
+  removed rather than reduced — see [the CodeScaleBench addendum](#addendum-codescalebench-decided-2026-07-15t2233z-mem-jz93m),
+  which decides all 3. `range-too-large` no longer exists as an
+  `UndecidableCause`, so a reader grepping the code for it will not find it.
 
 ## Per-rig results
 
@@ -98,8 +101,13 @@ Three choices carry the result:
 | gascity_dashboard | 1280      | 4       | 4       | 2          | —         | —                  | 0.3%     |
 | scix_experiments  | 418       | 4       | 4       | 1          | —         | —                  | 1.0%     |
 | website           | 47        | 1       | 1       | 0          | —         | —                  | 2.1%     |
-| CodeScaleBench    | 128       | 3       | 0       | 0          | —         | —                  | 2.3%     |
+| CodeScaleBench ‡  | 128       | 3       | 0       | 0          | —         | —                  | 2.3%     |
 | **POOLED**        | **11192** | **250** | **247** | **152**    | **61.5%** | **[55.3%, 67.4%]** | **2.2%** |
+
+‡ `decided=0` is this run's result, not a standing property of the rig: its 3
+branches were undecidable only because the checker buffered patch text through
+Node. A [later re-run](#addendum-codescalebench-decided-2026-07-15t2233z-mem-jz93m)
+decides all 3. The row is left as-measured because this table is one pinned run.
 
 Rigs below 20 decided branches are shown but **must not be read as rates** — the
 Wilson interval at that n spans ±20 points or worse. Rigs with zero joined
@@ -218,9 +226,13 @@ Recommended next step, if the rate is judged material: **(b) + ingest
   authoritative, while `upstream/main` is 14 ahead). Measured sensitivity:
   consulting it rescues **2 of 43**, moving gpk 81.1% → 77.4%. Ref selection is
   not what drives the result.
-- **CodeScaleBench is unmeasured** — 3 branches, all `range-too-large` (its local
-  `main` trails upstream by 1196 commits, so the range diff exceeds even V8's
-  string cap). Recorded as a coverage hole, not counted.
+- **CodeScaleBench was unmeasured in this run** — 3 branches, all
+  `range-too-large` (its local `main` trails upstream by 1196 commits, so the
+  range diff exceeds even V8's string cap). Recorded as a coverage hole, not
+  counted. **This limit is now resolved** (mem-jz93m): the cause was the
+  checker's own memory ceiling rather than anything about the rig, and the
+  [addendum below](#addendum-codescalebench-decided-2026-07-15t2233z-mem-jz93m)
+  decides all 3.
 - **The decomposition is mem-only** (n=60). `bd` resolves only the local rig's
   beads, so per-rig close-reason analysis would need per-rig dolt access. The
   _mechanical_ rate is cross-rig; the _interpretation_ is measured on one rig and
@@ -228,8 +240,8 @@ Recommended next step, if the rate is judged material: **(b) + ingest
 
 ## Provenance
 
-- Checker: `src/ingest/landedContent.ts` (pure, 23 tests)
-- Join + aggregation: `src/ingest/falseClose.ts` (pure, 57 tests)
+- Checker: `src/ingest/landedContent.ts` (pure, 22 tests)
+- Join + aggregation: `src/ingest/falseClose.ts` (pure, 58 tests)
 - Runner (IO only): `scripts/measure-false-close.mjs`
 
 Two join defects were found by the tests and fixed before this run; both had
@@ -239,3 +251,58 @@ joined 4 of gascity's 112 branches, because branch names embed the id with no
 delimiter. Case-sensitive lookup joined **0 of EnterpriseBench's 1509** closed
 beads. After the fix EnterpriseBench joins 13 — independently matching the 13
 predicted by hand during recon.
+
+## Addendum: CodeScaleBench decided (2026-07-15T22:33Z, mem-jz93m)
+
+The run above left one coverage hole: CodeScaleBench's 3 branches were
+`range-too-large`. That cause has since been **removed rather than reduced**, so
+this addendum closes the hole.
+
+**It was never a fact about the rig.** The checker read a range's full patch text
+into a JS string and piped it straight back into `git patch-id` unread — 574.5 MB
+buffered per mem run to produce 2.0 MB of ids. CodeScaleBench's range ran past
+V8's ~512 MB string cap, so the checker could not answer. The fix (mem-jz93m)
+keeps the patch text in the kernel: `git log -p … | git patch-id --stable`, with
+only ~82 bytes/commit crossing back into Node. Measured during the re-run below:
+node RSS held **flat at 85.7 MB** while the `git log` stage alone reached
+**854.7 MB** — the old failure, reproduced on the producer side, where it no
+longer matters. `range-too-large` is gone from `UndecidableCause`, along with the
+`isOutputTooLarge` / `ENOBUFS` / `ERR_STRING_TOO_LONG` handling that served it.
+
+|                |                                                              |
+| -------------- | ------------------------------------------------------------ |
+| Store snapshot | `/home/ds/projects/mem/.mem/store.db` (unchanged)            |
+| Run            | `2026-07-15T22:33:57Z`                                       |
+| Reproduce      | `node scripts/measure-false-close.mjs --rigs CodeScaleBench` |
+| Pinned tips    | `main` `90c5c11b` · `origin/main` `0d5c8804`                 |
+| Wall clock     | 1m27s                                                        |
+
+| rig            | closed | joined | decided       | not landed | rate          | coverage |
+| -------------- | ------ | ------ | ------------- | ---------- | ------------- | -------- |
+| CodeScaleBench | 128    | 3      | **3** (was 0) | 3          | — (3 decided) | 2.3%     |
+
+All 3 are `absent`, each a 1-commit branch decided against local `main`:
+`co-7ac-postrun-epilogue`, `co-7ow-harness-retry-policy`,
+`feature/co-tuu-token-rollups`. Zero undecidable, no causes remaining.
+
+**Read this as coverage, not as a rate.** 3 decided is far below the 20-branch
+power floor, so the 100% is not a rate and its Wilson interval [43.8%, 100.0%]
+spans most of the range. What the addendum establishes is that the rig is
+_measurable_, not what its rate is.
+
+**The pooled row above is deliberately NOT restated.** Splicing these 3 verdicts
+into it would mix two runs decided against different integration tips at
+different times, and §Snapshot's whole point is that a rate is reproducible only
+against pinned anchors — the spliced table would answer to no single command. For
+the record, the arithmetic is small and the direction is _away_ from
+overstatement: 152/247 → 155/250 moves 61.5% to 62.0%, inside the published CI
+of [55.3%, 67.4%]. It does not touch the finding.
+
+Two things this addendum does **not** claim:
+
+- **Not a speedup.** The re-run still took 1m27s; git-side generation time is
+  unchanged. The ceiling removed is memory, not time.
+- **Not immune to the pruning bias.** CodeScaleBench's frame happened to be
+  identical across the two runs (128 closed, 3 joined, 2.3% coverage), so nothing
+  was pruned here between them. That is a fact about these two runs, not a
+  refutation of the bias documented in §Limits.

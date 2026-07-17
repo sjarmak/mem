@@ -6,7 +6,7 @@ import {
   type LandedContentInput,
   type LandedContentVerdict,
 } from '../src/ingest/landedContent.js';
-import type { GitRunner } from '../src/ingest/provenance.js';
+import type { GitPipeRunner, GitRunner } from '../src/ingest/provenance.js';
 
 const TIP = 'a'.repeat(40);
 const HEAD = 'b'.repeat(40);
@@ -31,6 +31,9 @@ const exits = (status: number) => (): never => {
   throw Object.assign(new Error(`git exited ${status}`), { status });
 };
 
+/** The combined diff's patch-id — the one a squash-merge would carry. */
+const COMBINED = p(12);
+
 interface Handlers {
   /** ref → sha, or a thrower. Defaults: the branch → TIP, `main` → HEAD. */
   revParse?: (ref: string) => string;
@@ -38,60 +41,60 @@ interface Handlers {
   isAncestor?: () => string;
   /** Default: BASE. */
   mergeBase?: () => string;
-  /** `log -p <base>..<rev>` → a diff stream. The fake keys on the range's tip. */
+  /** `log -p <base>..<rev> | patch-id` → patch-id output. Keys on the range's tip. */
   log?: (range: string) => string;
-  /** `diff <base> <tip>` → the combined diff stream. */
+  /** `diff <base> <tip> | patch-id` → the combined diff's patch-id output. */
   diff?: () => string;
-  /** patch-id output for a given stdin diff stream. */
-  patchId?: (stdin: string) => string;
 }
 
-/** A git runner backed by per-subcommand handlers, mirroring the handler-table
- * fake in tests/ingest.landed.test.ts. Diff streams are opaque marker strings —
- * the fake `patch-id` maps a marker to ids — since the module never parses a
- * diff itself, it only pipes one from `log`/`diff` into `patch-id`. */
-const git = (h: Handlers): GitRunner => {
-  const defaultRevParse = (ref: string): string =>
-    ref.startsWith('main') ? `${HEAD}\n` : `${TIP}\n`;
-  return (_workDir, args, stdin) => {
+/** The two seams {@link classifyLandedContent} runs git through. */
+interface Fake {
+  run: GitRunner;
+  runPipe: GitPipeRunner;
+}
+
+/** A git fake backed by per-subcommand handlers, mirroring the handler-table
+ * fake in tests/ingest.landed.test.ts. The pipe seam's handlers return `patch-id`
+ * OUTPUT directly: the patch text never leaves the kernel, so there is no diff
+ * stream for a fake to model — only what patch-id hands back. */
+const git = (h: Handlers): Fake => ({
+  run: (_workDir, args) => {
     if (args[0] === 'rev-parse') {
       // args: rev-parse --verify --end-of-options <ref>^{commit}
       const ref = args[3].replace(/\^\{commit\}$/, '');
+      const defaultRevParse = (r: string): string =>
+        r.startsWith('main') ? `${HEAD}\n` : `${TIP}\n`;
       return (h.revParse ?? defaultRevParse)(ref);
     }
     if (args[0] === 'merge-base' && args[1] === '--is-ancestor') {
       return (h.isAncestor ?? exits(1))();
     }
     if (args[0] === 'merge-base') return (h.mergeBase ?? (() => `${BASE}\n`))();
-    if (args[0] === 'log') {
-      const range = args[args.length - 1];
-      return (h.log ?? (() => 'diff:branch'))(range);
-    }
-    if (args[0] === 'diff') return (h.diff ?? (() => 'diff:combined'))();
-    if (args[0] === 'patch-id') return (h.patchId ?? (() => ''))(stdin ?? '');
     throw new Error(`unexpected git ${args.join(' ')}`);
-  };
-};
+  },
+  runPipe: (_workDir, argsA) => {
+    if (argsA[0] === 'log') {
+      return (h.log ?? (() => idLine(p(1), c(1))))(argsA[argsA.length - 1]);
+    }
+    if (argsA[0] === 'diff') return (h.diff ?? (() => idLine(COMBINED, c(8))))();
+    throw new Error(`unexpected git ${argsA.join(' ')} | patch-id`);
+  },
+});
 
 /** The common shape: the branch carries commits 1 and 2; integration carries
  * whichever of them `landedIds` names, plus its own unrelated commit 9. */
 const twoCommitBranch = (landedIds: readonly string[], combinedLands = false): Handlers => ({
-  log: range => (range.endsWith(TIP) ? 'diff:branch' : 'diff:head'),
-  patchId: stdin => {
-    if (stdin === 'diff:branch') return idLine(p(1), c(1)) + idLine(p(2), c(2));
-    if (stdin === 'diff:head') {
-      const own = idLine(p(9), c(9));
-      const landed = landedIds.map((id, i) => idLine(id, c(i + 5))).join('');
-      return own + landed + (combinedLands ? idLine(p(12), c(8)) : '');
-    }
-    if (stdin === 'diff:combined') return idLine(p(12), '0'.repeat(40));
-    throw new Error(`unexpected patch-id stdin ${JSON.stringify(stdin)}`);
-  },
+  log: range =>
+    range.endsWith(TIP)
+      ? idLine(p(1), c(1)) + idLine(p(2), c(2))
+      : idLine(p(9), c(9)) +
+        landedIds.map((id, i) => idLine(id, c(i + 5))).join('') +
+        (combinedLands ? idLine(COMBINED, c(8)) : ''),
 });
 
 describe('classifyLandedContent — landed ladder', () => {
   it('reports landed-direct when the branch tip is an ancestor of integration', () => {
-    const out = classifyLandedContent(input, { run: git({ isAncestor: () => '' }) });
+    const out = classifyLandedContent(input, git({ isAncestor: () => '' }));
     expect(out).toEqual({
       verdict: 'landed-direct',
       branch_commit: TIP,
@@ -105,13 +108,13 @@ describe('classifyLandedContent — landed ladder', () => {
     // real fault: swallowing it would send the branch down the patch-id ladder
     // and could land it on `absent`, manufacturing a false close out of a broken
     // object. Only the exact status 1 may be read as an answer.
-    expect(() => classifyLandedContent(input, { run: git({ isAncestor: exits(128) }) })).toThrow(
+    expect(() => classifyLandedContent(input, git({ isAncestor: exits(128) }))).toThrow(
       /git exited 128/
     );
   });
 
   it('reports landed-equivalent when every branch commit has a patch-id twin', () => {
-    const out = classifyLandedContent(input, { run: git(twoCommitBranch([p(1), p(2)])) });
+    const out = classifyLandedContent(input, git(twoCommitBranch([p(1), p(2)])));
     expect(out).toEqual({
       verdict: 'landed-equivalent',
       branch_commit: TIP,
@@ -123,7 +126,7 @@ describe('classifyLandedContent — landed ladder', () => {
   });
 
   it('reports landed-squashed when only the combined diff has a twin', () => {
-    const out = classifyLandedContent(input, { run: git(twoCommitBranch([], true)) });
+    const out = classifyLandedContent(input, git(twoCommitBranch([], true)));
     expect(out).toMatchObject({ verdict: 'landed-squashed', n_commits: 2, n_matched: 0 });
   });
 
@@ -131,45 +134,39 @@ describe('classifyLandedContent — landed ladder', () => {
     // A squash-merge leaves no individual patch-id intact, so a lone matching
     // commit is incidental (a trivial hunk that also landed on its own). Reading
     // that as a partial landing would understate a branch that fully landed.
-    const out = classifyLandedContent(input, { run: git(twoCommitBranch([p(1)], true)) });
+    const out = classifyLandedContent(input, git(twoCommitBranch([p(1)], true)));
     expect(out).toMatchObject({ verdict: 'landed-squashed', n_commits: 2, n_matched: 1 });
   });
 
   it('reports partial when some but not all commits landed', () => {
-    const out = classifyLandedContent(input, { run: git(twoCommitBranch([p(1)])) });
+    const out = classifyLandedContent(input, git(twoCommitBranch([p(1)])));
     expect(out).toMatchObject({ verdict: 'partial', n_commits: 2, n_matched: 1 });
   });
 
   it('reports absent when no commit and no combined diff has a twin', () => {
-    const out = classifyLandedContent(input, { run: git(twoCommitBranch([])) });
+    const out = classifyLandedContent(input, git(twoCommitBranch([])));
     expect(out).toMatchObject({ verdict: 'absent', n_commits: 2, n_matched: 0 });
   });
 
   it('reports absent, not landed-squashed, when the combined diff is empty', () => {
     // A branch whose commits cancel out has no combined patch to match.
-    const out = classifyLandedContent(input, {
-      run: git({ ...twoCommitBranch([]), diff: () => '' }),
-    });
+    const out = classifyLandedContent(input, git({ ...twoCommitBranch([]), diff: () => '' }));
     expect(out).toMatchObject({ verdict: 'absent' });
   });
 });
 
 describe('classifyLandedContent — undecidable causes', () => {
   it('reports branch-unresolvable when the branch ref is gone (exit 128)', () => {
-    const run = git({
-      revParse: ref => (ref.startsWith('main') ? `${HEAD}\n` : exits(128)()),
-    });
-    expect(classifyLandedContent(input, { run })).toEqual({
+    const run = git({ revParse: ref => (ref.startsWith('main') ? `${HEAD}\n` : exits(128)()) });
+    expect(classifyLandedContent(input, run)).toEqual({
       verdict: 'undecidable',
       cause: 'branch-unresolvable',
     });
   });
 
   it('reports integration-unresolvable when the integration branch is gone', () => {
-    const run = git({
-      revParse: ref => (ref.startsWith('main') ? exits(128)() : `${TIP}\n`),
-    });
-    expect(classifyLandedContent(input, { run })).toEqual({
+    const run = git({ revParse: ref => (ref.startsWith('main') ? exits(128)() : `${TIP}\n`) });
+    expect(classifyLandedContent(input, run)).toEqual({
       verdict: 'undecidable',
       cause: 'integration-unresolvable',
       branch_commit: TIP,
@@ -177,7 +174,7 @@ describe('classifyLandedContent — undecidable causes', () => {
   });
 
   it('reports no-merge-base for unrelated histories (merge-base exits 1)', () => {
-    const out = classifyLandedContent(input, { run: git({ mergeBase: exits(1) }) });
+    const out = classifyLandedContent(input, git({ mergeBase: exits(1) }));
     expect(out).toEqual({
       verdict: 'undecidable',
       cause: 'no-merge-base',
@@ -187,7 +184,7 @@ describe('classifyLandedContent — undecidable causes', () => {
   });
 
   it('reports range-unreadable when a pruned object breaks the diff listing', () => {
-    const out = classifyLandedContent(input, { run: git({ log: exits(128) }) });
+    const out = classifyLandedContent(input, git({ log: exits(128) }));
     expect(out).toEqual({
       verdict: 'undecidable',
       cause: 'range-unreadable',
@@ -200,7 +197,7 @@ describe('classifyLandedContent — undecidable causes', () => {
   it('reports no-branch-content when the branch adds no content-bearing commit', () => {
     // Empty commits produce no patch-id line: there is nothing that could land,
     // so their absence from integration is not evidence of a false close.
-    const out = classifyLandedContent(input, { run: git({ log: () => '', patchId: () => '' }) });
+    const out = classifyLandedContent(input, git({ log: () => '' }));
     expect(out).toMatchObject({
       verdict: 'undecidable',
       cause: 'no-branch-content',
@@ -208,44 +205,9 @@ describe('classifyLandedContent — undecidable causes', () => {
     });
   });
 
-  it('reports range-too-large when the diff outruns the runner buffer', () => {
-    // Node kills the child and reports ENOBUFS with no exit status. git was
-    // asked a valid question whose answer was too big to read back — a
-    // coverage hole, not a crash. Real case: CodeScaleBench's local main
-    // trails upstream by 1196 commits, so the range diff runs past 64MB.
-    const enobufs = (): never => {
-      throw Object.assign(new Error('spawnSync git ENOBUFS'), { code: 'ENOBUFS', status: null });
-    };
-    expect(classifyLandedContent(input, { run: git({ log: enobufs }) })).toEqual({
-      verdict: 'undecidable',
-      cause: 'range-too-large',
-      branch_commit: TIP,
-      integration_commit: HEAD,
-      merge_base: BASE,
-    });
-  });
-
-  it('reports range-too-large when the diff outruns V8 max string length', () => {
-    // Raising maxBuffer past the diff size only converts ENOBUFS into this:
-    // decoding the output overruns V8's ~512MB string cap. Same coverage hole,
-    // so it must not be allowed to kill the sweep either.
-    const tooLong = (): never => {
-      throw Object.assign(new Error('Cannot create a string longer than 0x1fffffe8 characters'), {
-        code: 'ERR_STRING_TOO_LONG',
-      });
-    };
-    expect(classifyLandedContent(input, { run: git({ log: tooLong }) })).toMatchObject({
-      verdict: 'undecidable',
-      cause: 'range-too-large',
-    });
-  });
-
   it('reports range-unreadable when the INTEGRATION side listing fails', () => {
-    const run = git({
-      log: range => (range.endsWith(TIP) ? 'diff:branch' : exits(128)()),
-      patchId: () => idLine(p(1), c(1)),
-    });
-    expect(classifyLandedContent(input, { run })).toMatchObject({
+    const run = git({ log: range => (range.endsWith(TIP) ? idLine(p(1), c(1)) : exits(128)()) });
+    expect(classifyLandedContent(input, run)).toMatchObject({
       verdict: 'undecidable',
       cause: 'range-unreadable',
     });
@@ -260,28 +222,27 @@ describe('classifyLandedContent — non-exit failures propagate', () => {
   };
 
   it('rethrows when rev-parse cannot run', () => {
-    expect(() => classifyLandedContent(input, { run: git({ revParse: noGit }) })).toThrow(/ENOENT/);
+    expect(() => classifyLandedContent(input, git({ revParse: noGit }))).toThrow(/ENOENT/);
   });
 
   it('rethrows when merge-base --is-ancestor cannot run', () => {
-    expect(() => classifyLandedContent(input, { run: git({ isAncestor: noGit }) })).toThrow(
-      /ENOENT/
-    );
+    expect(() => classifyLandedContent(input, git({ isAncestor: noGit }))).toThrow(/ENOENT/);
   });
 
   it('rethrows when the diff listing cannot run', () => {
-    expect(() => classifyLandedContent(input, { run: git({ log: noGit }) })).toThrow(/ENOENT/);
+    expect(() => classifyLandedContent(input, git({ log: noGit }))).toThrow(/ENOENT/);
   });
 });
 
 describe('classifyLandedContent — git invocation contract', () => {
   it('pins DB-sourced refs behind --end-of-options and peels to a commit', () => {
+    const fake = git(twoCommitBranch([p(1), p(2)]));
     const seen: string[][] = [];
-    const run: GitRunner = (workDir, args, stdin) => {
+    const run: GitRunner = (workDir, args) => {
       seen.push(args);
-      return git(twoCommitBranch([p(1), p(2)]))(workDir, args, stdin);
+      return fake.run(workDir, args);
     };
-    classifyLandedContent({ ...input, branch: '--output=/tmp/pwn' }, { run });
+    classifyLandedContent({ ...input, branch: '--output=/tmp/pwn' }, { ...fake, run });
     expect(seen[0]).toEqual([
       'rev-parse',
       '--verify',
@@ -293,26 +254,33 @@ describe('classifyLandedContent — git invocation contract', () => {
   it('scopes both patch-id ranges to the merge base, not to full history', () => {
     // An unscoped integration-side search would match the branch's own pre-fork
     // ancestry and report every branch as landed.
+    const fake = git(twoCommitBranch([p(1)]));
     const ranges: string[] = [];
-    const run: GitRunner = (workDir, args, stdin) => {
-      if (args[0] === 'log') ranges.push(args[args.length - 1]);
-      return git(twoCommitBranch([p(1)]))(workDir, args, stdin);
+    const runPipe: GitPipeRunner = (workDir, argsA, argsB) => {
+      if (argsA[0] === 'log') ranges.push(argsA[argsA.length - 1]);
+      return fake.runPipe(workDir, argsA, argsB);
     };
-    classifyLandedContent(input, { run });
+    classifyLandedContent(input, { ...fake, runPipe });
     expect(ranges).toEqual([`${BASE}..${TIP}`, `${BASE}..${HEAD}`]);
   });
 
-  it('excludes merges and colour from the diff stream and stabilises patch-id', () => {
-    const args: string[][] = [];
-    const run: GitRunner = (workDir, a, stdin) => {
-      args.push(a);
-      return git(twoCommitBranch([p(1), p(2)]))(workDir, a, stdin);
+  it('pipes every diff listing into patch-id --stable, excluding merges and colour', () => {
+    // The second stage is what keeps the patch text in the kernel, and --stable
+    // is what makes ids computed on different hosts comparable. Both sides of
+    // every pipe are pinned here because neither is visible in a verdict.
+    // A `partial` fixture, so the combined-diff pipe runs too: `landed-equivalent`
+    // returns before it and would leave that third pipe unpinned.
+    const fake = git(twoCommitBranch([p(1)]));
+    const piped: { a: string[]; b: string[] }[] = [];
+    const runPipe: GitPipeRunner = (workDir, argsA, argsB) => {
+      piped.push({ a: argsA, b: argsB });
+      return fake.runPipe(workDir, argsA, argsB);
     };
-    classifyLandedContent(input, { run });
-    const log = args.find(a => a[0] === 'log')!;
-    expect(log).toContain('--no-merges');
-    expect(log).toContain('--no-color');
-    expect(args.find(a => a[0] === 'patch-id')).toEqual(['patch-id', '--stable']);
+    classifyLandedContent(input, { ...fake, runPipe });
+    expect(piped.map(x => x.a[0])).toEqual(['log', 'log', 'diff']);
+    expect(piped.every(x => x.a.includes('--no-color'))).toBe(true);
+    expect(piped.find(x => x.a[0] === 'log')!.a).toContain('--no-merges');
+    for (const x of piped) expect(x.b).toEqual(['patch-id', '--stable']);
   });
 });
 

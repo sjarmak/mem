@@ -1,9 +1,10 @@
 import {
+  type GitPipeRunner,
   type GitRunner,
+  defaultGitPipeRunner,
   defaultGitRunner,
   exitStatus,
   isNonZeroExit,
-  isOutputTooLarge,
 } from './provenance.js';
 
 /**
@@ -65,11 +66,6 @@ export type UndecidableCause =
   | 'no-merge-base'
   /** A diff listing exited non-zero — typically an object pruned by gc. */
   | 'range-unreadable'
-  /** A diff listing's output exceeded the runner's buffer. Kept distinct from
-   * `range-unreadable` because the two are different coverage holes with
-   * different fixes: a pruned object is gone for good, whereas this range is
-   * merely too large to read back and a bigger buffer would decide it. */
-  | 'range-too-large'
   /** The branch carries no content-bearing commit past the merge base: nothing
    * to look for, so its absence from integration proves nothing. */
   | 'no-branch-content';
@@ -168,32 +164,47 @@ function parsePatchIds(stdout: string): Map<string, string> {
   return ids;
 }
 
-/** Thrown when a diff listing cannot be read. `cause` carries which kind of
- * coverage hole it is. It is caught at the top of {@link classifyLandedContent}
- * and mapped to an `undecidable` verdict, so one unreadable range degrades that
- * branch instead of failing the whole cross-rig sweep. */
-class RangeUnreadable extends Error {
-  constructor(
-    readonly cause_: 'range-unreadable' | 'range-too-large',
-    message: string
-  ) {
-    super(message);
-  }
-}
+/** Thrown when a diff listing cannot be read. It is caught at the top of
+ * {@link classifyLandedContent} and mapped to an `undecidable` verdict, so one
+ * unreadable range degrades that branch instead of failing the whole cross-rig
+ * sweep. */
+class RangeUnreadable extends Error {}
 
-/** Run `run`, converting the two failures that mean "this range cannot be read"
- * into {@link RangeUnreadable}: a non-zero exit (a pruned object) and a buffer
- * overflow (a range too large to read back). Any OTHER non-exit failure — a
- * missing `git` binary — is NOT converted: that is a misconfiguration which
- * would silently mark every branch undecidable, an empty measurement dressed up
- * as a coverage gap, so it propagates and fails the sweep loudly. */
-function readOrFail(run: GitRunner, work_dir: string, args: string[], stdin?: string): string {
+/** The `patch-id` stage every diff listing is piped into. `--stable` pins the
+ * hash to git's version-independent algorithm so ids computed on different hosts
+ * compare. */
+const PATCH_ID_STAGE = ['patch-id', '--stable'];
+
+/** Pipe a diff listing into `git patch-id` and parse the ids back, converting a
+ * non-zero exit — a pruned object, an unknown revision — into
+ * {@link RangeUnreadable}. Any OTHER failure (a missing `git` or `bash` binary)
+ * is NOT converted: that is a misconfiguration which would silently mark every
+ * branch undecidable, an empty measurement dressed up as a coverage gap, so it
+ * propagates and fails the sweep loudly.
+ *
+ * The pipe is what keeps the patch text out of this process: only patch-id's
+ * output crosses back. That is also why no "is the diff empty?" guard precedes
+ * it — there is no diff here to inspect, and none is needed, since `patch-id`
+ * emits nothing for an empty patch and an empty map is already the answer.
+ *
+ * It is also why there is no "output too large" cause any more. What crosses
+ * back is ~82 bytes per commit, so the runner's buffer now bounds a range's
+ * COMMIT COUNT (~200k against 16MB), not its diff size — four orders of
+ * magnitude off the 1196-commit range that used to overflow. If one ever did
+ * exceed it, Node kills the child, leaving `status` null rather than a number:
+ * `isNonZeroExit` is false, so it propagates and fails the sweep loudly instead
+ * of degrading that branch to a quiet `range-unreadable`. That is the right end
+ * of the trade — a buffer that large being hit is a bug to see, not a coverage
+ * hole to record. */
+function patchIdsOrFail(
+  runPipe: GitPipeRunner,
+  work_dir: string,
+  args: string[]
+): Map<string, string> {
   try {
-    return run(work_dir, args, stdin);
+    return parsePatchIds(runPipe(work_dir, args, PATCH_ID_STAGE));
   } catch (err) {
-    if (isNonZeroExit(err)) throw new RangeUnreadable('range-unreadable', `git ${args.join(' ')}`);
-    if (isOutputTooLarge(err))
-      throw new RangeUnreadable('range-too-large', `git ${args.join(' ')}`);
+    if (isNonZeroExit(err)) throw new RangeUnreadable(`git ${args.join(' ')}`);
     throw err;
   }
 }
@@ -202,46 +213,46 @@ function readOrFail(run: GitRunner, work_dir: string, args: string[], stdin?: st
  * they came from. `log -p` emits a `commit <sha>` header per patch, which is what
  * lets `patch-id` attribute each id — the pipeline the git docs name for exactly
  * this. Merges are excluded: a merge's diff is a combination of its parents' and
- * has no patch-id of its own to match. `--stable` pins the hash to git's
- * version-independent algorithm so ids computed on different hosts compare. */
+ * has no patch-id of its own to match. */
 function rangePatchIds(
-  run: GitRunner,
+  runPipe: GitPipeRunner,
   work_dir: string,
   base: string,
   tip: string
 ): Map<string, string> {
-  const diffs = readOrFail(run, work_dir, [
+  return patchIdsOrFail(runPipe, work_dir, [
     'log',
     '-p',
     '--no-merges',
     '--no-color',
     `${base}..${tip}`,
   ]);
-  if (diffs.trim() === '') return new Map();
-  return parsePatchIds(readOrFail(run, work_dir, ['patch-id', '--stable'], diffs));
 }
 
 /** The patch-id of the branch's COMBINED diff (`base` → `tip` as one patch) — the
  * fingerprint a squash-merge commit carries on integration. Null when the
- * combined diff is empty (the branch's commits cancel out). */
+ * combined diff is empty (the branch's commits cancel out): `patch-id` emits no
+ * line, so there is no first key. */
 function combinedPatchId(
-  run: GitRunner,
+  runPipe: GitPipeRunner,
   work_dir: string,
   base: string,
   tip: string
 ): string | null {
-  const diff = readOrFail(run, work_dir, ['diff', '--no-color', base, tip]);
-  if (diff.trim() === '') return null;
-  const ids = parsePatchIds(readOrFail(run, work_dir, ['patch-id', '--stable'], diff));
+  const ids = patchIdsOrFail(runPipe, work_dir, ['diff', '--no-color', base, tip]);
   const [first] = ids.keys();
   return first ?? null;
 }
 
 /** Options for {@link classifyLandedContent}. */
 export interface LandedContentOptions {
-  /** work_dir + args + stdin → stdout runner. Defaults to provenance's
-   * {@link defaultGitRunner}; `patch-id` is the one primitive needing stdin. */
+  /** work_dir + args → stdout runner, for the single-command rungs of the ladder
+   * (`rev-parse`, `merge-base`). Defaults to {@link defaultGitRunner}. */
   run?: GitRunner;
+  /** The `<diff listing> | patch-id` runner. Defaults to
+   * {@link defaultGitPipeRunner}. Separate from `run` because a pipeline is a
+   * different shape, and keeping the patch text in the kernel is the point. */
+  runPipe?: GitPipeRunner;
 }
 
 /**
@@ -263,6 +274,7 @@ export function classifyLandedContent(
   opts: LandedContentOptions = {}
 ): LandedContentResult {
   const run = opts.run ?? defaultGitRunner;
+  const runPipe = opts.runPipe ?? defaultGitPipeRunner;
   const { work_dir } = input;
 
   const tip = resolveCommit(run, work_dir, input.branch);
@@ -283,12 +295,12 @@ export function classifyLandedContent(
   const located = { ...anchors, merge_base: base };
 
   try {
-    const branchIds = rangePatchIds(run, work_dir, base, tip);
+    const branchIds = rangePatchIds(runPipe, work_dir, base, tip);
     if (branchIds.size === 0) {
       return { verdict: 'undecidable', cause: 'no-branch-content', ...located, n_commits: 0 };
     }
 
-    const headIds = rangePatchIds(run, work_dir, base, head);
+    const headIds = rangePatchIds(runPipe, work_dir, base, head);
     const matched = [...branchIds.keys()].filter(id => headIds.has(id));
     const counts = { n_commits: branchIds.size, n_matched: matched.length };
 
@@ -296,7 +308,7 @@ export function classifyLandedContent(
       return { verdict: 'landed-equivalent', ...located, ...counts };
     }
 
-    const combined = combinedPatchId(run, work_dir, base, tip);
+    const combined = combinedPatchId(runPipe, work_dir, base, tip);
     if (combined !== null && headIds.has(combined)) {
       return { verdict: 'landed-squashed', ...located, ...counts };
     }
@@ -304,7 +316,7 @@ export function classifyLandedContent(
     return { verdict: matched.length > 0 ? 'partial' : 'absent', ...located, ...counts };
   } catch (err) {
     if (err instanceof RangeUnreadable) {
-      return { verdict: 'undecidable', cause: err.cause_, ...located };
+      return { verdict: 'undecidable', cause: 'range-unreadable', ...located };
     }
     throw err;
   }

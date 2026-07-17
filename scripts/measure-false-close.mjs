@@ -32,6 +32,13 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 
 import { classifyLandedContent } from '../dist/ingest/landedContent.js';
+// The `<diff listing> | patch-id` seam, reused rather than re-derived here: its
+// `set -o pipefail` is what keeps an unreadable range from returning an empty
+// patch-id map with a zero exit, and that belongs in exactly one place.
+// `silenceStderr` matches this script's own `gitRunner` (stderr → ignore): a
+// degraded range is a coverage hole to record, not a `fatal:` to spray across a
+// corpus-wide sweep.
+import { makeGitPipeRunner } from '../dist/ingest/provenance.js';
 import {
   combineRefVerdicts,
   joinBranches,
@@ -60,13 +67,16 @@ const ONLY_RIGS = (arg('--rigs', '') || '')
  * so isNonZeroExit recognizes it; a missing git binary throws WITHOUT a status
  * and propagates, which is what keeps a misconfiguration from being reported as
  * a corpus-wide coverage gap. */
-const gitRunner = (dir, args, stdin) =>
+const gitRunner = (dir, args) =>
   execFileSync('git', ['-C', dir, ...args], {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
     stdio: ['pipe', 'pipe', 'ignore'],
-    ...(stdin === undefined ? {} : { input: stdin }),
   });
+
+/** The pipe seam the pure modules take for `<diff listing> | patch-id`, with git's
+ * stderr suppressed to match `gitRunner` above. */
+const gitPipeRunner = makeGitPipeRunner({ silenceStderr: true });
 
 /** stdout, or null on a non-zero exit (a missing ref / pruned object). Only for
  * this runner's own probing; the pure modules take `gitRunner`, which must keep
@@ -221,7 +231,7 @@ for (const rig of rigs) {
       // resolves a 40-hex sha to itself, so the ladder is unchanged.
       result: classifyLandedContent(
         { work_dir: entry.dir, branch: j.ref, integration: pinned[ref] },
-        { run: gitRunner }
+        { run: gitRunner, runPipe: gitPipeRunner }
       ),
     }));
     const winner = combineRefVerdicts(per_ref);

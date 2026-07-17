@@ -150,63 +150,101 @@ export function toGitUtc(started_at: string): string {
 }
 
 /** Runs `git -C <workDir> <args...>` and returns stdout. Injected so the
- * mapping is testable without a checked-out repo. `stdin` feeds the command's
- * standard input — needed only by `git patch-id`, the one primitive in the
- * content-landing ladder (ingest/landedContent) that reads its diff from stdin
- * rather than from arguments. It is optional, so a runner written before it
- * existed — including every two-argument test fake — still satisfies the type. */
-export type GitRunner = (workDir: string, args: string[], stdin?: string) => string;
+ * mapping is testable without a checked-out repo. */
+export type GitRunner = (workDir: string, args: string[]) => string;
 
 /** Default runner: invokes the real `git` CLI. */
-export const defaultGitRunner: GitRunner = (workDir, args, stdin) =>
+export const defaultGitRunner: GitRunner = (workDir, args) =>
   execFileSync('git', ['-C', workDir, ...args], {
     encoding: 'utf8',
     maxBuffer: 16 * 1024 * 1024,
-    ...(stdin === undefined ? {} : { input: stdin }),
   });
 
-/** Read one property off a thrown value. The `as` cast is compile-time only, so
- * a bare `err.code` would throw a TypeError of its own when `err` is `null` or
- * `undefined` — turning a diagnostic helper into a second failure that masks the
- * first. `unknown` in, so the guard belongs here rather than at each call site. */
-function errProp(err: unknown, key: 'status' | 'code'): unknown {
-  return typeof err === 'object' && err !== null
-    ? (err as Record<string, unknown>)[key]
-    : undefined;
+/** Runs `git -C <workDir> <argsA...> | git -C <workDir> <argsB...>` and returns
+ * the SECOND stage's stdout. A second seam beside {@link GitRunner} because the
+ * one-command shape cannot express a pipeline, and the content-landing ladder
+ * (ingest/landedContent) needs one: it feeds `git log -p` / `git diff` into `git
+ * patch-id`, whose input is a patch stream on stdin.
+ *
+ * The point is that the patch text never enters this process. Piping it through
+ * Node would buffer a range's entire diff as a JS string only to hand it
+ * straight back to git unread — measured at 574MB across one mem run to produce
+ * 2MB of patch-ids, and past V8's ~512MB string cap on a single large range,
+ * which made such ranges undecidable. In the kernel, only patch-id's ~82
+ * bytes/commit reach Node, so range size stops being a memory question. */
+export type GitPipeRunner = (workDir: string, argsA: string[], argsB: string[]) => string;
+
+/** The pipeline, as a bash script over POSITIONAL parameters — `$1` is the work
+ * dir, `$2` the length of argsA, then argsA followed by argsB. Nothing is
+ * interpolated into the script text, so no argument can be read as shell syntax.
+ *
+ * `set -o pipefail` is load-bearing, not hygiene: a pipeline's status is its LAST
+ * command's, and `git patch-id` exits 0 on the empty input a failed `git log`
+ * leaves it. Without pipefail an unreadable range would return an empty patch-id
+ * map with a zero exit — read downstream as `no-branch-content`, a false
+ * undecidable silently replacing a real `range-unreadable`. It is bash (not
+ * `sh`), because pipefail is not POSIX and dash lacks it.
+ *
+ * `$2` (bound to `n`) is the ONE parameter that is not merely expanded but
+ * EVALUATED: both `${@:1:n}` and `shift "$n"` read it in bash arithmetic
+ * context, which recurses — a value like `1[$(cmd)]` would run `cmd`. It is
+ * safe only because its sole producer is `String(argsA.length)` below, always a
+ * non-negative integer. Never route anything else — least of all a DB-sourced
+ * value — into this position. */
+const GIT_PIPE_SCRIPT = [
+  'set -o pipefail',
+  'dir=$1; shift',
+  'n=$1; shift',
+  'a=("${@:1:n}")',
+  'shift "$n"',
+  'git -C "$dir" "${a[@]}" | git -C "$dir" "$@"',
+].join('\n');
+
+/** Build a pipe runner over {@link GIT_PIPE_SCRIPT}. `silenceStderr` routes
+ * git's own diagnostics to `/dev/null`, which a batch sweep wants: a range it
+ * degrades to a coverage hole should be recorded, not sprayed to the console as
+ * a `fatal:` line. The library default leaves stderr inherited, matching
+ * {@link defaultGitRunner}, so a one-off caller still sees git's own message.
+ *
+ * `n` is `String(argsA.length)` — see the script's note on why that position
+ * must never carry anything but an array length. */
+export const makeGitPipeRunner =
+  ({ silenceStderr = false }: { silenceStderr?: boolean } = {}): GitPipeRunner =>
+  (workDir, argsA, argsB) =>
+    execFileSync(
+      'bash',
+      ['-c', GIT_PIPE_SCRIPT, 'git-pipe', workDir, String(argsA.length), ...argsA, ...argsB],
+      {
+        encoding: 'utf8',
+        maxBuffer: 16 * 1024 * 1024,
+        ...(silenceStderr ? { stdio: ['pipe', 'pipe', 'ignore'] as const } : {}),
+      }
+    );
+
+/** Default pipe runner: invokes the real `git` CLI on both sides of a real pipe,
+ * with git's stderr inherited (matching {@link defaultGitRunner}). */
+export const defaultGitPipeRunner: GitPipeRunner = makeGitPipeRunner();
+
+/** The exit code of a git failure, or undefined when the failure was not a
+ * non-zero exit (e.g. a missing binary). Lets a caller distinguish git's
+ * documented status codes — `merge-base --is-ancestor` returns 1 for "not an
+ * ancestor" vs 128 for a bad object — from a real misconfiguration.
+ *
+ * `unknown` in, so the object guard belongs here rather than at each call site:
+ * the `as` cast is compile-time only, so a bare `err.status` would throw a
+ * TypeError of its own when `err` is `null` or `undefined` — turning a
+ * diagnostic helper into a second failure that masks the first. */
+export function exitStatus(err: unknown): number | undefined {
+  const status =
+    typeof err === 'object' && err !== null ? (err as Record<string, unknown>).status : undefined;
+  return typeof status === 'number' ? status : undefined;
 }
 
 /** True when `execFileSync` failed because git exited non-zero (as opposed to
  * the binary being missing). A non-zero exit — work_dir gone, unknown branch —
  * is an expected "unresolved" outcome; a missing `git` binary is not. */
 export function isNonZeroExit(err: unknown): boolean {
-  return typeof errProp(err, 'status') === 'number';
-}
-
-/** True when a git call failed because its output was too large to read back.
- * Node reports this two ways, and both mean the same thing, so both are matched:
- * `ENOBUFS` when the output passes the runner's `maxBuffer` (the child is
- * killed), and `ERR_STRING_TOO_LONG` when it passes V8's maximum string length
- * (~512MB) while being decoded. Raising `maxBuffer` only converts the first into
- * the second, so a caller cannot escape this by buying a bigger buffer.
- *
- * It is NOT a misconfiguration and NOT a non-zero exit: git was asked a valid
- * question whose answer is too big to materialize. Callers that walk history hit
- * it on repos whose local branch trails its remote by thousands of commits
- * (CodeScaleBench: 1196, whose range diff exceeds 512MB). Distinguishing it lets
- * such a range degrade to a recorded, per-cause coverage hole instead of killing
- * a cross-rig sweep — while a missing binary still propagates. */
-export function isOutputTooLarge(err: unknown): boolean {
-  const code = errProp(err, 'code');
-  return code === 'ENOBUFS' || code === 'ERR_STRING_TOO_LONG';
-}
-
-/** The exit code of a git failure, or undefined when the failure was not a
- * non-zero exit (e.g. a missing binary). Lets a caller distinguish git's
- * documented status codes — `merge-base --is-ancestor` returns 1 for "not an
- * ancestor" vs 128 for a bad object — from a real misconfiguration. */
-export function exitStatus(err: unknown): number | undefined {
-  const status = errProp(err, 'status');
-  return typeof status === 'number' ? status : undefined;
+  return exitStatus(err) !== undefined;
 }
 
 /**
