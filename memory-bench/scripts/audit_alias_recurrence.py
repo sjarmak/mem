@@ -50,17 +50,20 @@ OUT = "/home/ds/projects/mem/.mem/alias-recurrence-audit.json"
 MIN_SESSIONS = 2
 
 
-class RawSessionEntry(TypedDict, total=False):
-    """One entry of the merged-join artifact, as it arrives on disk. Every key is
-    optional: the artifact omits rather than nulls, so all reads go through
-    `.get()`. This shape is `population`'s INPUT and is NOT index-safe."""
+class RawSessionEntry(TypedDict):
+    """The subset of a merged-join artifact entry this audit reads, as written by
+    `SessionEntry.to_json` (membench/merge_join.py). Every key is always present —
+    `to_json` emits them unconditionally — but all but `suspect` carry `None` when
+    unresolved, so this shape is `population`'s INPUT and is NOT value-safe: reads
+    must handle `None`. (`to_json` also writes sequence/sources/strength/n_events,
+    which this audit does not consume and so does not model.)"""
 
-    transcript_path: str
+    transcript_path: str | None
     suspect: bool
-    session_key: str
-    t_first: str
-    t_last: str
-    gc_session_id: str
+    session_key: str | None
+    t_first: str | None
+    t_last: str | None
+    gc_session_id: str | None
 
 
 class PopulationRow(TypedDict):
@@ -94,15 +97,15 @@ def population(
             if e.get("suspect") or not path:
                 continue
             sk = e.get("session_key")
-            uuid = session_uuid(str(path))
-            dedup_key = (sk or uuid or str(path)) if key_by_uuid else str(path)
+            uuid = session_uuid(path)
+            dedup_key = (sk or uuid or path) if key_by_uuid else path
             rows.setdefault(
                 dedup_key,
                 {
                     "transcript_path": path,
                     "start": e.get("t_first"),
                     "end": e.get("t_last"),
-                    "session_id": e.get("gc_session_id") or sk or str(path),
+                    "session_id": e.get("gc_session_id") or sk or path,
                 },
             )
         if len(rows) >= MIN_SESSIONS:
