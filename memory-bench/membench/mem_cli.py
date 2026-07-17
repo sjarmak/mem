@@ -25,7 +25,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
 
-from membench.spawn import run_checked
+from membench.spawn import redact_credentials, run_checked
 
 # Generous bound: `mem query` over the full ~6.6k-record store completes in
 # seconds; anything beyond this is a hung server or a wedged subprocess, not a
@@ -69,8 +69,13 @@ def run_mem_json(
     try:
         envelope: dict[str, Any] = json.loads(completed.stdout)
     except json.JSONDecodeError as exc:
+        # Redact before the 200-char slice, not after: the slice is a cut like any other, and
+        # cutting a token first would leave a live prefix of it on the surviving side. The
+        # bound here is this call's own (200, tighter than `sanitised_child_output`'s), so only
+        # the redaction half is borrowed. The child exited 0 — `run_checked` never saw this text.
         raise MemCliError(
-            f"{cmd} exited 0 but stdout is not a JSON envelope: {completed.stdout[:200]!r}"
+            f"{cmd} exited 0 but stdout is not a JSON envelope: "
+            f"{redact_credentials(completed.stdout)[:200]!r}"
         ) from exc
     if not envelope.get("ok", False):
         raise MemCliError(f"{cmd} error: {envelope.get('errors')}")

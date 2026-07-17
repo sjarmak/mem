@@ -233,6 +233,23 @@ def test_an_api_key_shape_is_redacted_too() -> None:
     assert "401 from" in str(caught.value)
 
 
+def test_a_non_anthropic_vendor_key_is_redacted_too() -> None:
+    """`sk-ant-` was too narrow for the callers that actually exist.
+
+    `openwiki_system._openwiki_env` reads OPENAI_COMPATIBLE_API_KEY off the operator's
+    environment and hands it to a `run_checked` child; an OpenAI key is `sk-proj-...`, which
+    `sk-ant-` does not match. Reproduced by review against the shipped code, so this is a
+    real caller's real shape and not a speculative pattern."""
+    with pytest.raises(RuntimeError) as caught:
+        _run(
+            _ok_runner(
+                stderr="401 Unauthorized: invalid api key sk-proj-REALCANARY7788", returncode=1
+            )
+        )
+    assert "sk-proj-REALCANARY7788" not in str(caught.value)
+    assert "401 Unauthorized" in str(caught.value)  # the diagnosis survives
+
+
 def test_a_token_on_stdout_is_redacted_when_stdout_is_the_diagnosis() -> None:
     # `claude -p --output-format stream-json` puts the WHOLE event stream on stdout, so
     # a non-zero exit with an empty stderr routes stdout into the printed exception.

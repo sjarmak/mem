@@ -44,7 +44,7 @@ from membench.runner.agent import AgentStepResult
 from membench.runtime import StepContext
 from membench.schemas.sequence import SequenceStep
 from membench.schemas.trace import ToolCall, TraceMessage
-from membench.spawn import Runner, run_checked
+from membench.spawn import Runner, run_checked, sanitised_child_output
 
 # A real agent step (multi-turn tool use) can take minutes; a bound this high means a
 # wedged CLI, not slow inference — surfaced as an error, never an indefinite hang.
@@ -220,8 +220,14 @@ def resolve_cli_version(runner: Runner = subprocess.run) -> str:
     lines = [line for line in (completed.stdout or "").splitlines() if line.strip()]
     token = lines[0].split(maxsplit=1)[0] if len(lines) == 1 else ""
     if not _VERSION_TOKEN.fullmatch(token):
+        # Sanitised even though the child SUCCEEDED: `run_checked` only guards its own
+        # non-zero arm, and this branch embeds the whole raw stdout of an exit-0 child into
+        # an exception that `run_corpus` resolves up front — so it prints on the drivers'
+        # SWEEP HALT arm like any other halt. Unbounded and unredacted, it was the widest
+        # of the echo sites while looking like the safest.
         raise HeadlessAgentError(
-            f"claude --version printed no recognisable version: {(completed.stdout or '')!r} "
+            f"claude --version printed no recognisable version: "
+            f"{sanitised_child_output(completed.stdout or '')!r} "
             "— the binary a paid run would measure on cannot be identified"
         )
     return token

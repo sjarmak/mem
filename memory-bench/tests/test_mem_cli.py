@@ -103,3 +103,32 @@ def test_write_ndjson_writes_an_empty_file_for_no_rows(tmp_path):
     write_ndjson(path, [])
 
     assert path.read_text(encoding="utf-8") == ""
+
+
+def test_a_credential_on_a_non_envelope_stdout_is_redacted(tmp_path):
+    """The other echo site `run_checked` cannot see: this child EXITS 0 too.
+
+    `run_mem_json` builds its own message from raw stdout when the envelope will not parse,
+    so the choke point's redaction never ran on it. The 200-char bound was already here and
+    stays -- it is tighter than the shared one; only the redaction half was missing.
+    """
+    binary = _fake_mem(tmp_path, "echo 'AuthError: token sk-ant-oat01-MEMCLICANARY42 rejected'")
+    with pytest.raises(MemCliError) as caught:
+        run_mem_json([binary, "query"])
+    assert "sk-ant-oat01-MEMCLICANARY42" not in str(caught.value)
+    assert "sk-ant" not in str(caught.value)
+    assert "not a JSON envelope" in str(caught.value)  # the diagnosis survives
+
+
+def test_the_non_envelope_diagnosis_redacts_before_it_slices(tmp_path):
+    """Redaction must run BEFORE the 200-char cut, or the cut leaves a live prefix.
+
+    A token that straddles character 200 would otherwise survive as a fragment -- the same
+    ordering rule the shared sanitiser follows, restated here because this call does its own
+    cutting.
+    """
+    padding = "y" * 190
+    binary = _fake_mem(tmp_path, f"echo '{padding}sk-ant-oat01-STRADDLECANARY0123456789'")
+    with pytest.raises(MemCliError) as caught:
+        run_mem_json([binary, "query"])
+    assert "sk-ant" not in str(caught.value)  # no live prefix survived the slice

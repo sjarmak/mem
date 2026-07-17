@@ -382,6 +382,21 @@ def test_resolve_cli_version_reads_the_version_off_the_binary() -> None:
     assert list(runner.captured["argv"]) == ["claude", "--version"]
 
 
+def test_an_unrecognised_version_banner_is_redacted_and_bounded() -> None:
+    """The echo site that `run_checked`'s guard cannot see: the child EXITS 0 here.
+
+    `run_checked` sanitises only its own non-zero arm, so this branch embedded the whole raw
+    stdout of a successful child into the exception verbatim -- unbounded and unredacted.
+    `run_corpus` resolves the version up front, so it prints on the drivers' SWEEP HALT arm
+    like any other halt: the widest of the echo sites, wearing the safest-looking path."""
+    leaky = "warning: refreshing sk-ant-oat01-VERSIONCANARY999\n" + ("x" * 50_000)
+    with pytest.raises(HeadlessAgentError) as caught:
+        resolve_cli_version(_fake_runner(leaky))
+    assert "sk-ant-oat01-VERSIONCANARY999" not in str(caught.value)
+    assert "sk-ant" not in str(caught.value)
+    assert len(str(caught.value)) < 10_000  # and bounded, not the whole 50k banner
+
+
 @pytest.mark.parametrize(
     "stdout",
     [

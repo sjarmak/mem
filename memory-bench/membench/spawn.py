@@ -27,12 +27,24 @@ from pathlib import Path
 # process. The canonical definition -- import it from here rather than restating it.
 Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 
-# Both credential shapes that can reach this choke point: `sk-ant-oat01-...` (the OAuth
-# token the paid grid hands every child) and `sk-ant-api03-...` (an API key). One pattern
-# covers both, and nothing speculative is added -- these are the only credentials any of
-# the callers pass. mem never puts a token on the child's output channels itself; this
-# fires when a CLI echoes its OWN auth back on failure.
-_CREDENTIAL = re.compile(r"sk-ant-[A-Za-z0-9_-]+")
+# `sk-` and not `sk-ant-`: the callers carry more than the Anthropic shapes. The paid grid
+# hands every child `sk-ant-oat01-...` (OAuth) or `sk-ant-api03-...` (API key), but
+# `openwiki_system._openwiki_env` reads OPENAI_COMPATIBLE_API_KEY straight off the operator's
+# environment and hands it to a `run_checked` child too -- and an OpenAI key is `sk-proj-...`,
+# which `sk-ant-` does not match. Verified end-to-end by review: a stub CLI failing with that
+# key on stderr surfaced it in full.
+#
+# Widening is the SAFE direction here. Over-redaction costs a token of diagnosis; under-
+# redaction puts a live credential in a CI log. `sk-[A-Za-z0-9_-]+` is still anchored on a
+# real, shared vendor prefix rather than a guess at what a secret looks like -- no entropy
+# scoring, no KEY=VALUE sniffing.
+#
+# It is NOT a general secret scanner, and the env is inherited wholesale (`{**os.environ,
+# **self.env}`), so a non-`sk-` vendor token an operator has exported can still be echoed
+# by a child that chooses to. Bounding THAT is the env-surface question (mem-jwp3c), not a
+# regex's job. mem never writes a token to these channels itself; this fires when a CLI
+# echoes its OWN auth back.
+_CREDENTIAL = re.compile(r"sk-[A-Za-z0-9_-]+")
 _REDACTED = "<redacted-credential>"
 
 # The window the child's own output gets in the diagnosis. HEAD AND TAIL, not head alone:
@@ -102,20 +114,36 @@ def run_checked(
         # blank a real stderr into whitespace and silently move the fallback above --
         # the selection is the pinned rung, so nothing may run ahead of it.
         detail = (completed.stderr or "").strip() or (completed.stdout or "").strip()
-        raise error(f"{what} failed (exit {completed.returncode}): {_sanitised(detail)}")
+        raise error(
+            f"{what} failed (exit {completed.returncode}): {sanitised_child_output(detail)}"
+        )
     return completed
 
 
-def _sanitised(detail: str) -> str:
+def redact_credentials(detail: str) -> str:
+    """Replace every credential-shaped run in ``detail``.
+
+    PUBLIC because a caller that imposes its own bound still needs the redaction half
+    (``mem_cli.run_mem_json`` slices to 200 chars of its own). Redact BEFORE any slice:
+    cutting first leaves a live prefix of the token on the surviving side."""
+    return _CREDENTIAL.sub(_REDACTED, detail)
+
+
+def sanitised_child_output(detail: str) -> str:
     """The child's own output, made fit for the log this diagnosis ends up in.
 
-    The message built from this is PRINTED -- the paid grid drivers echo it on their
-    SWEEP HALT arm -- so the child's output is untrusted text bound for a CI log, and it
-    gets both properties here rather than at each of the callers: it is redacted, and it
-    is bounded. Order is fixed: redact before truncating, so a token straddling the cut
-    cannot survive as a fragment on either side of it.
-    """
-    detail = _CREDENTIAL.sub(_REDACTED, detail)
+    PUBLIC, and every site that builds a message out of raw child output must route
+    through it. ``run_checked``'s own non-zero arm was never the only such site: callers
+    build their own text from a SUCCEEDING child too (``resolve_cli_version`` on an
+    unrecognised banner, ``run_mem_json`` on a non-envelope stdout), and those messages
+    reach the same printed SWEEP HALT. A choke point that only covers the raise-path is
+    not a choke point -- it is the majority case with a name.
+
+    Both properties live here rather than at the callers, because each of them would
+    otherwise have to re-derive both: the output is redacted, and it is bounded. Order is
+    fixed -- redact before truncating, so a token straddling the cut cannot survive as a
+    fragment on either side of it."""
+    detail = redact_credentials(detail)
     if len(detail) <= _HEAD_CHARS + _TAIL_CHARS:
         return detail
     dropped = len(detail) - _HEAD_CHARS - _TAIL_CHARS
