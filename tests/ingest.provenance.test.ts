@@ -7,13 +7,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   type GitRunner,
+  ancestryOrFault,
   attachProvenance,
   defaultGitPipeRunner,
   defaultGitRunner,
   deriveProvenance,
   exitStatus,
   isAncestor,
-  isAncestorOrNull,
   isGitFault,
   isNonZeroExit,
   makeGitPipeRunner,
@@ -429,7 +429,7 @@ describe('defaultGitPipeRunner', () => {
   });
 });
 
-describe('isAncestor / isAncestorOrNull', () => {
+describe('isAncestor / ancestryOrFault', () => {
   // `merge-base --is-ancestor` answers ONLY through its exit code, and the
   // whole point of this seam is telling git's documented codes apart: 0 = yes,
   // 1 = no, 128 = could not read the objects. A fake runner cannot pin that —
@@ -487,31 +487,33 @@ describe('isAncestor / isAncestorOrNull', () => {
     expect(exitStatus(caught)).toBe(128);
   });
 
-  it('degrades an unreadable object to null — and null is NOT false (mem-y2x7n)', () => {
+  it('attributes an unreadable object to object-unreadable — and that is NOT false (mem-y2x7n/mem-zwmuq)', () => {
     // The bead's VERIFY line, executable: a garbage/pruned sha must not
     // silently classify as not-an-ancestor. `false` is a CLAIM ("git answered
-    // no"); null is the absence of an answer. Asserting `not.toBe(false)`
-    // explicitly is the point — a bare `toBeNull()` would still pass against an
-    // implementation that returned false for its own reasons.
-    const out = isAncestorOrNull(defaultGitRunner, repo, MISSING, second);
-    expect(out).toBeNull();
+    // no"); the fault string is the absence of an answer, attributed to the
+    // checkout-local cause (git ran, exit 128) so a caller can route to the
+    // Day-0 bundle. Asserting `not.toBe(false)` explicitly is the point — the
+    // fault must never be folded into a genuine negative.
+    const out = ancestryOrFault(defaultGitRunner, repo, MISSING, second);
+    expect(out).toBe('object-unreadable');
     expect(out).not.toBe(false);
   });
 
   it('still reports a REAL no as false, so the fault branch has not eaten the answer', () => {
-    // The other half of the above: degrading faults to null must not degrade
-    // genuine negatives with them, or the R3 gate would stop detecting the
-    // off-authoritative bases it exists to catch.
-    expect(isAncestorOrNull(defaultGitRunner, repo, second, first)).toBe(false);
-    expect(isAncestorOrNull(defaultGitRunner, repo, first, second)).toBe(true);
+    // The other half of the above: degrading faults to a cause string must not
+    // degrade genuine negatives with them, or the R3 gate would stop detecting
+    // the off-authoritative bases it exists to catch.
+    expect(ancestryOrFault(defaultGitRunner, repo, second, first)).toBe(false);
+    expect(ancestryOrFault(defaultGitRunner, repo, first, second)).toBe(true);
   });
 
-  // Every spawn-never-ran fault (status+signal both null, code the errno)
-  // means git-could-not-run, not a bug in our code, so all degrade to null
-  // rather than abort the unguarded sweep. isGitFault classifies these by that
-  // SHAPE, not an errno allowlist — the transient errnos below (EAGAIN/EMFILE/
-  // ENOMEM/ENFILE) are the ones a {ENOENT,EACCES,ENOEXEC} allowlist omitted and
-  // rethrew into the sweep, killing every rig on the first EMFILE (mem-egxu2).
+  // Every spawn-never-ran fault (status+signal both null, code the errno) means
+  // git-could-not-run — an environment-wide fault, not a per-object one — so all
+  // attribute to git-unavailable rather than abort the unguarded sweep.
+  // isGitFault classifies these by that SHAPE, not an errno allowlist — the
+  // transient errnos below (EAGAIN/EMFILE/ENOMEM/ENFILE) are the ones a
+  // {ENOENT,EACCES,ENOEXEC} allowlist omitted and rethrew into the sweep,
+  // killing every rig on the first EMFILE (mem-egxu2).
   it.each([
     ['a missing git binary (ENOENT)', 'ENOENT'],
     ['a non-executable git (EACCES)', 'EACCES'],
@@ -520,33 +522,34 @@ describe('isAncestor / isAncestorOrNull', () => {
     ['an fd-table-exhausted spawn (EMFILE)', 'EMFILE'],
     ['a system-wide fd exhaustion (ENFILE)', 'ENFILE'],
     ['an out-of-memory spawn (ENOMEM)', 'ENOMEM'],
-  ])('degrades %s to null rather than killing an unguarded sweep', (_label, code) => {
+  ])('attributes %s to git-unavailable rather than killing an unguarded sweep', (_label, code) => {
     const spawnFault: GitRunner = () => {
       throw Object.assign(new Error(`spawn git ${code}`), { status: null, code, signal: null });
     };
-    expect(isAncestorOrNull(spawnFault, repo, first, second)).toBeNull();
+    expect(ancestryOrFault(spawnFault, repo, first, second)).toBe('git-unavailable');
   });
 
-  it('degrades a signal-killed git to null (git was asked but could not answer)', () => {
+  it('attributes a signal-killed git to git-unavailable (git was asked but could not answer)', () => {
     const killed: GitRunner = () => {
       // Real Node signal-kills set status null explicitly (not just absent), so
       // mirror that shape rather than leaving status undefined.
       throw Object.assign(new Error('git terminated'), { status: null, signal: 'SIGKILL' });
     };
-    expect(isAncestorOrNull(killed, repo, first, second)).toBeNull();
+    expect(ancestryOrFault(killed, repo, first, second)).toBe('git-unavailable');
   });
 
-  it('RETHROWS a mis-wired runner rather than reporting null for every ref (mem-egxu2)', () => {
-    // A programming error (no git verdict) must not be laundered into null.
+  it('RETHROWS a mis-wired runner rather than attributing a fault for every ref (mem-egxu2)', () => {
+    // A programming error (no git verdict) must not be laundered into a cause.
     const misWired: GitRunner = () => {
       throw new TypeError("Cannot read properties of undefined (reading 'trim')");
     };
-    expect(() => isAncestorOrNull(misWired, repo, first, second)).toThrow(TypeError);
+    expect(() => ancestryOrFault(misWired, repo, first, second)).toThrow(TypeError);
   });
 
-  it('RETHROWS a maxBuffer overrun rather than degrading it to null (mem-egxu2)', () => {
+  it('RETHROWS a maxBuffer overrun rather than attributing it to a fault (mem-egxu2)', () => {
     // ENOBUFS+SIGTERM is our maxBuffer, not an external kill — its string
-    // `signal` must not fool the signal-kill arm into null. See isGitFault.
+    // `signal` must not fool the signal-kill arm into git-unavailable. See
+    // isGitFault.
     const overrun: GitRunner = () => {
       throw Object.assign(new Error('stdout maxBuffer length exceeded'), {
         status: null,
@@ -554,7 +557,7 @@ describe('isAncestor / isAncestorOrNull', () => {
         signal: 'SIGTERM',
       });
     };
-    expect(() => isAncestorOrNull(overrun, repo, first, second)).toThrow(/maxBuffer/);
+    expect(() => ancestryOrFault(overrun, repo, first, second)).toThrow(/maxBuffer/);
   });
 
   it('passes --end-of-options, so a ref that looks like a flag cannot be read as one', () => {
@@ -569,7 +572,7 @@ describe('isAncestor / isAncestorOrNull', () => {
 });
 
 // Direct coverage of the exported classification contract, decoupled from
-// isAncestorOrNull's catch/rethrow wiring: a future refactor that stops routing
+// ancestryOrFault's catch/rethrow wiring: a future refactor that stops routing
 // through isGitFault must not silently drop coverage of its four arms.
 describe('isGitFault', () => {
   it('classifies a non-zero exit as a fault', () => {
@@ -579,7 +582,7 @@ describe('isGitFault', () => {
   it('classifies a spawn-never-ran fault by shape, not the errno value', () => {
     // isGitFault never inspects the errno except the ENOBUFS carve-out, so one
     // representative code proves the shape arm; the full transient-errno set
-    // (EAGAIN/EMFILE/ENFILE/ENOMEM) is pinned end-to-end in the isAncestorOrNull
+    // (EAGAIN/EMFILE/ENFILE/ENOMEM) is pinned end-to-end in the ancestryOrFault
     // block above, which is the regression guard against reintroducing an
     // allowlist.
     expect(

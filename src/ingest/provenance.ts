@@ -234,10 +234,10 @@ export function isNonZeroExit(err: unknown): boolean {
   return exitStatus(err) !== undefined;
 }
 
-/** True when git could not ANSWER — the fault set {@link isAncestorOrNull}
- * degrades to null: a non-zero exit, a spawn-never-ran fault, or an external
- * signal kill. A programming error (e.g. a TypeError from a mis-wired
- * {@link GitRunner}) carries no git verdict and propagates instead.
+/** True when git could not ANSWER — the fault set {@link ancestryOrFault}
+ * attributes instead of throwing: a non-zero exit, a spawn-never-ran fault, or
+ * an external signal kill. A programming error (e.g. a TypeError from a
+ * mis-wired {@link GitRunner}) carries no git verdict and propagates instead.
  *
  * Classification is STRUCTURAL — by the shape of the failure at the subprocess
  * boundary, not an errno allowlist. An allowlist ({ENOENT,EACCES,ENOEXEC}) was
@@ -301,7 +301,7 @@ export function shaOrNull(run: GitRunner, work_dir: string, args: string[]): str
  * a false close out of a broken object in the measurement built to count false
  * closes. This is the only implementation on purpose — the guard had been
  * re-derived into three copies before mem-y2x7n collapsed them here. Callers
- * that cannot afford the throw take {@link isAncestorOrNull} rather than
+ * that cannot afford the throw take {@link ancestryOrFault} rather than
  * hand-rolling a fourth.
  *
  * `--end-of-options` because not every caller passes a resolved sha:
@@ -317,31 +317,59 @@ export function isAncestor(run: GitRunner, work_dir: string, commit: string, of:
   }
 }
 
-/** {@link isAncestor}, but git failing to ANSWER degrades to null instead of
- * throwing: true = yes, false = git said no (exit 1), null = git could not be
- * asked (a 128 on an unreadable object, a missing binary, a signal).
+/** Why {@link ancestryOrFault} could not answer. The two faults are different
+ * facts with different remedies, so they are kept apart rather than collapsed to
+ * one absence:
+ *  - `object-unreadable` — git ran but could not read the objects/refs in THIS
+ *    checkout (canonically exit 128 on a pruned/GC'd object). Checkout-local:
+ *    fall back to the Day-0 frozen bundle.
+ *  - `git-unavailable` — git could not run at all (a missing binary, a spawn
+ *    fault, an external signal kill): a non-exit failure with no status.
+ *    Environment-wide: rerun once the toolchain is healthy.
  *
- * null is not false, and that is the whole point. `false` is a claim — "git
- * answered no" — and a caller feeding it to a gate records a substantive verdict.
- * A fault has no verdict in it, so it must reach the caller as an absence and be
- * reported as its own outcome, never folded into the negative one (the principle
- * ingest/landedContent.ts states for `undecidable` vs `absent`).
+ * A non-git-fault — our own maxBuffer overrun (ENOBUFS) or a programming error
+ * from a mis-wired {@link GitRunner} — is NEITHER of these. It carries no git
+ * verdict, so {@link ancestryOrFault} propagates it via {@link isGitFault}
+ * rather than laundering our bug into a checkout- or environment-fault string. */
+export type AncestryFault = 'object-unreadable' | 'git-unavailable';
+
+/** {@link isAncestor}, but git failing to ANSWER degrades to an {@link
+ * AncestryFault} instead of throwing: true = yes, false = git said no (exit 1),
+ * else the fault that stopped it — attributed, not a single opaque absence.
+ *
+ * A fault is not a `false`, and that is the whole point. `false` is a claim —
+ * "git answered no" — and a caller feeding it to a gate records a substantive
+ * verdict. A fault has no verdict in it, so it reaches the caller as its own
+ * outcome, never folded into the negative one (the principle
+ * ingest/landedContent.ts states for `undecidable` vs `absent`). Attributing the
+ * fault goes one further: a per-object unreadable (fall back to the Day-0 bundle)
+ * and an environment-wide git failure (rerun) are distinct remedies, so a caller
+ * can report which one it hit rather than a checkout-blaming catch-all.
+ *
+ * Two-stage classification, so attribution never widens the fault set past the
+ * git-could-not-answer set: {@link isGitFault} gates first — a non-git-fault
+ * (our ENOBUFS maxBuffer self-kill, a mis-wired-runner TypeError) is rethrown,
+ * never dressed up as a checkout or environment fault. Only a genuine git fault
+ * is then split by {@link isNonZeroExit}: git exiting non-zero (128 on an
+ * unreadable object) is
+ * `object-unreadable`, local to this checkout; a fault with no exit status (a
+ * spawn errno, an external signal) is `git-unavailable`, environment-wide.
  *
  * Use only where a throw would abort a sweep — {@link isAncestor}'s throw would
  * take every other item down with the one that faulted. A caller that can handle
  * the throw should: classifyLandedContent wants the fault to propagate, and
- * widening its guard to a null would dissolve 0985d82's fix. */
-export function isAncestorOrNull(
+ * widening its guard would dissolve 0985d82's fix. */
+export function ancestryOrFault(
   run: GitRunner,
   work_dir: string,
   commit: string,
   of: string
-): boolean | null {
+): boolean | AncestryFault {
   try {
     return isAncestor(run, work_dir, commit, of);
   } catch (err) {
-    if (isGitFault(err)) return null;
-    throw err;
+    if (!isGitFault(err)) throw err;
+    return isNonZeroExit(err) ? 'object-unreadable' : 'git-unavailable';
   }
 }
 

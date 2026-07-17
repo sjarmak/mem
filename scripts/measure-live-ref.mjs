@@ -31,7 +31,7 @@ import {
   summarize,
 } from '../dist/ingest/liveRef.js';
 import { resolveCommit } from '../dist/ingest/landedContent.js';
-import { isAncestorOrNull } from '../dist/ingest/provenance.js';
+import { ancestryOrFault } from '../dist/ingest/provenance.js';
 import { RIG_REPOS, DEFAULT_BRANCH } from '../dist/ingest/rig-repo-map.js';
 import { pickRemoteForSlug } from './verify/lib.mjs';
 import { gitOut, readRemotes } from './verify/git.mjs';
@@ -138,10 +138,12 @@ for (const rig of RIGS) {
     // answer means git faulted, and classifyMergeBase fails it safe to undecided
     // (mem-zzzl4), never kept, never a measurable corruption rate.
     const base_sha = gitOut(entry.dir, ['merge-base', r.sha, authRef]);
-    // Tri-state, NOT a boolean: true → keep; null (git could not answer) →
-    // undecided. Null with no merge-base too — the ancestry question is never asked.
+    // NOT a boolean: true → keep; an AncestryFault (git could not answer,
+    // attributed to object-unreadable vs git-unavailable) → undecided, routed to
+    // its own cause bucket by classifyMergeBase. Null with no merge-base — the
+    // ancestry question is never asked.
     const is_ancestor =
-      base_sha === null ? null : isAncestorOrNull(gitRunner, entry.dir, base_sha, authRef);
+      base_sha === null ? null : ancestryOrFault(gitRunner, entry.dir, base_sha, authRef);
     return classifyMergeBase({
       work_id: r.work_id,
       refname: r.refname,

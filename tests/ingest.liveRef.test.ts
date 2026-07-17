@@ -7,7 +7,8 @@ import {
   parseForEachRef,
   resolveLiveRefs,
   summarize,
-  UNDECIDED_ANCESTRY_UNANSWERABLE,
+  UNDECIDED_GIT_UNAVAILABLE,
+  UNDECIDED_OBJECT_UNREADABLE,
   type MergeBaseInput,
 } from '../src/ingest/liveRef.js';
 
@@ -103,18 +104,19 @@ describe('classifyMergeBase', () => {
 
   it('fails an impossible non-ancestor base SAFE to undecided — never kept, never a drop', () => {
     // base_sha is derived as merge-base(branch, authRef), so it is BY DEFINITION
-    // an ancestor of authRef: is_ancestor can only be true or null (git faulted).
-    // A `false` is a mathematical impossibility at this call site (mem-zzzl4), so
-    // there is no measurable "off-authoritative base" rate to tally. If one ever
-    // surfaces we fail safe: route it to undecided, so an impossible answer is
-    // never silently kept.
+    // an ancestor of authRef: is_ancestor can only be true or a fault. A `false`
+    // is a mathematical impossibility at this call site (mem-zzzl4), so there is
+    // no measurable "off-authoritative base" rate to tally. If one ever surfaces
+    // we fail safe: route it to undecided under git-unavailable (an answer we
+    // cannot attribute → needs-investigation), so it is never silently kept and
+    // is never blamed on this rig's checkout (mem-zwmuq).
     const r = classifyMergeBase({ ...base, is_ancestor: false });
     expect(r.kept).toBeUndefined();
     expect(r.drop).toBeUndefined();
     expect(r.undecided).toEqual({
       work_id: 'gc-0a6',
       refname: 'refs/heads/bd-gc-0a6',
-      cause: UNDECIDED_ANCESTRY_UNANSWERABLE,
+      cause: UNDECIDED_GIT_UNAVAILABLE,
     });
   });
 
@@ -123,27 +125,40 @@ describe('classifyMergeBase', () => {
     expect(r.drop?.reason).toBe(DROP_NO_MERGE_BASE);
   });
 
-  it('UNDECIDES an unanswerable ancestry — it is not a drop', () => {
-    // A git fault (128 on an unreadable object, a missing binary, a signal)
-    // reaches the gate as `null`: the ancestry question was asked but not
-    // answered. That is neither a keep nor a decay drop — it is undecided, so the
-    // headline reports it as a lower-bound shortfall rather than inventing a
-    // verdict (mem-y2x7n).
-    const r = classifyMergeBase({ ...base, is_ancestor: null });
+  it('attributes an object-unreadable fault to the CHECKOUT-LOCAL cause, not a drop', () => {
+    // Git ran but could not read this base's objects in this checkout (exit 128
+    // on a pruned/GC'd object). That is checkout-local and recoverable — the
+    // Day-0 frozen bundle backstops it — so it reports under
+    // object_unreadable_in_checkout, distinct from an environment-wide fault
+    // (mem-zwmuq).
+    const r = classifyMergeBase({ ...base, is_ancestor: 'object-unreadable' });
     expect(r.undecided).toEqual({
       work_id: 'gc-0a6',
       refname: 'refs/heads/bd-gc-0a6',
-      cause: UNDECIDED_ANCESTRY_UNANSWERABLE,
+      cause: UNDECIDED_OBJECT_UNREADABLE,
     });
+    expect(r.drop).toBeUndefined();
+    expect(r.kept).toBeUndefined();
+  });
+
+  it('attributes a git-unavailable fault to the ENVIRONMENT-WIDE cause, not the checkout', () => {
+    // Git could not run at all (missing binary, signal, maxBuffer overrun): a
+    // non-exit failure with no status. The remedy is to rerun once the toolchain
+    // is healthy, NOT to reach for the Day-0 bundle — so it must not carry the
+    // _in_checkout suffix that would misattribute it to this rig (mem-zwmuq).
+    const r = classifyMergeBase({ ...base, is_ancestor: 'git-unavailable' });
+    expect(r.undecided?.cause).toBe(UNDECIDED_GIT_UNAVAILABLE);
+    expect(r.undecided?.cause).not.toContain('_in_checkout');
     expect(r.drop).toBeUndefined();
     expect(r.kept).toBeUndefined();
   });
 
   it('checks no-merge-base BEFORE ancestry, since the question was never asked', () => {
     // Ordering is load-bearing. With no merge-base there is no base to ask
-    // about, so `is_ancestor` is meaningless and must not be read — the result
-    // is DECAY, not an unanswerable ancestry.
-    const r = classifyMergeBase({ ...base, base_sha: null, is_ancestor: null });
+    // about, so `is_ancestor` is meaningless and must not be read — even the
+    // keep-worthy `true` from `base` still drops as DECAY, not an unanswerable
+    // ancestry.
+    const r = classifyMergeBase({ ...base, base_sha: null });
     expect(r.drop?.reason).toBe(DROP_NO_MERGE_BASE);
     expect(r.undecided).toBeUndefined();
   });
@@ -196,7 +211,7 @@ describe('summarize', () => {
         refname: 'refs/heads/bd-b',
         branch_sha: SHA('b'),
         base_sha: SHA('2'),
-        is_ancestor: null,
+        is_ancestor: 'object-unreadable',
       }),
     ];
     const report = summarize(100, results);
@@ -205,7 +220,36 @@ describe('summarize', () => {
     expect(report.dropped).toBe(0);
     expect(report.drops_by_reason).toEqual({});
     expect(report.undecided).toBe(1);
-    expect(report.undecided_by_cause).toEqual({ [UNDECIDED_ANCESTRY_UNANSWERABLE]: 1 });
+    expect(report.undecided_by_cause).toEqual({ [UNDECIDED_OBJECT_UNREADABLE]: 1 });
+  });
+
+  it('tallies distinct faults into SEPARATE cause buckets — not one opaque key (mem-zwmuq)', () => {
+    // The bead's core assertion: undecided_by_cause must be able to hold more
+    // than one key. A checkout-local unreadable object and an environment-wide
+    // git failure are different facts with different remedies, so an operator
+    // reading the headline can tell "fall back to the Day-0 bundle" from "rerun".
+    const results = [
+      classifyMergeBase({
+        work_id: 'a',
+        refname: 'refs/heads/bd-a',
+        branch_sha: SHA('a'),
+        base_sha: SHA('1'),
+        is_ancestor: 'object-unreadable',
+      }),
+      classifyMergeBase({
+        work_id: 'b',
+        refname: 'refs/heads/bd-b',
+        branch_sha: SHA('b'),
+        base_sha: SHA('2'),
+        is_ancestor: 'git-unavailable',
+      }),
+    ];
+    const report = summarize(100, results);
+    expect(report.undecided).toBe(2);
+    expect(report.undecided_by_cause).toEqual({
+      [UNDECIDED_OBJECT_UNREADABLE]: 1,
+      [UNDECIDED_GIT_UNAVAILABLE]: 1,
+    });
   });
 
   it('keeps undecided refs out of every drop count, so no fault reads as decay', () => {
@@ -219,7 +263,7 @@ describe('summarize', () => {
           refname: `refs/heads/bd-u${i}`,
           branch_sha: SHA('a'),
           base_sha: SHA('b'),
-          is_ancestor: null,
+          is_ancestor: 'git-unavailable',
         })
       )
     );
