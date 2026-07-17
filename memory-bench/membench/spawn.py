@@ -41,6 +41,12 @@ Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 # `task-types.json` a real artifact path, so that was live, not hypothetical. A word boundary
 # plus a real shared vendor prefix -- still no entropy scoring, no KEY=VALUE sniffing.
 #
+# The boundary cuts BOTH ways, and that is a known gap, not an oversight: `\b` is a \w-to-non-\w
+# transition, so a token glued straight onto a word char (`xsk-ant-...`, `key_sk-ant-...`) is not
+# redacted either -- for the same reason `task-types` is not. The prefix alone cannot separate
+# them; only the vendor shape can, which is a different pattern with a different failure mode.
+# mem-wsxpx owns that call. Every delimited form (`=`, space, quote, `-`, `:`) redacts today.
+#
 # It is NOT a general secret scanner. The env is inherited wholesale (`{**os.environ,
 # **self.env}`), so a differently-shaped vendor token an operator has exported can still be
 # echoed by a child that chooses to -- `sgp_` (Sourcegraph) is a live example, and

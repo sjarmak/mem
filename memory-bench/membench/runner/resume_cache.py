@@ -631,20 +631,37 @@ def _publish_atomically(result_path: Path, payload: str) -> None:
     rather than papered over.
     """
     tmp_path = result_path.with_suffix(".json.tmp")
+    # The clear and the create are diagnosed SEPARATELY because they have different remedies.
+    # Nothing there is the normal case (suppressed); a directory at the name or a read-only
+    # out_dir fails the unlink itself, and calling that a race would send the operator hunting
+    # an attacker for a stale directory.
     try:
-        # Every other unlink failure (a directory at the name, a read-only dir) falls to the
-        # wrapper below rather than through to the create.
         with contextlib.suppress(FileNotFoundError):
             tmp_path.unlink()
+    except OSError as exc:
+        raise OSError(
+            f"refusing to publish {result_path.name} through {tmp_path}: {exc.strerror}. "
+            "The temp path could not be cleared, so this publish never reached the create. "
+            "Treated as an anomaly rather than written through."
+        ) from exc
+    try:
         fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except OSError as exc:
         raise OSError(
             f"refusing to publish {result_path.name} through {tmp_path}: {exc.strerror}. "
-            "The temp path is cleared immediately before this create, so anything still at it "
-            "raced that unlink -- which no legitimate path does. Treated as an anomaly rather "
-            "than written through."
+            "The temp path was cleared immediately before this create, so anything already at "
+            "it raced that unlink -- which no legitimate path does. Treated as an anomaly "
+            "rather than written through."
         ) from exc
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+    # `os.fdopen` ADOPTS the fd -- on success the `with` owns it. But if the wrapper
+    # construction itself raises, nothing owns the raw fd yet and it is orphaned. This runs
+    # once per task inside a paid sweep, so a systematic trigger exhausts the table mid-sweep.
+    try:
+        handle = os.fdopen(fd, "w", encoding="utf-8")
+    except BaseException:
+        os.close(fd)
+        raise
+    with handle:
         handle.write(payload)
     tmp_path.replace(result_path)
 

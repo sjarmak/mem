@@ -21,6 +21,7 @@ import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 from pydantic import ValidationError
@@ -771,6 +772,51 @@ def test_an_unclearable_temp_path_is_diagnosed_not_tracebacked(tmp_path: Path) -
         _run([_Task("w-0")], out)
 
     assert not (out / "w-0.json").exists()  # nothing published on the refused path
+
+
+def test_an_unclearable_temp_path_is_not_diagnosed_as_a_race(tmp_path: Path) -> None:
+    """The two failure shapes get their own diagnosis, because they have different remedies.
+
+    A directory at the tmp name fails the UNLINK -- nothing raced anything, and telling the
+    operator it did sends them hunting an attacker for what is a stale directory. Only a
+    failure of the O_EXCL CREATE means something appeared in the window after the unlink.
+    """
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "w-0.json.tmp").mkdir()
+
+    with pytest.raises(OSError) as caught:
+        _run([_Task("w-0")], out)
+
+    assert "could not be cleared" in str(caught.value)
+    assert "raced" not in str(caught.value)
+
+
+def test_the_fd_is_not_leaked_when_the_wrapper_around_it_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`os.open` hands back a RAW fd that nothing owns until `os.fdopen` adopts it.
+
+    If the adoption itself raises, the `with` block never runs and the fd is orphaned. This
+    publishes once per task inside a long paid sweep, so a systematic trigger (memory
+    pressure) would exhaust the table mid-sweep rather than once.
+    """
+    out = tmp_path / "out"
+    out.mkdir()
+    captured: dict[str, int] = {}
+
+    def refuse_to_wrap(fd: int, *args: object, **kwargs: object) -> NoReturn:
+        captured["fd"] = fd
+        raise MemoryError("no memory for the TextIOWrapper")
+
+    monkeypatch.setattr(os, "fdopen", refuse_to_wrap)
+
+    with pytest.raises(MemoryError):
+        _run([_Task("w-0")], out)
+
+    monkeypatch.undo()
+    with pytest.raises(OSError):  # EBADF -- the fd was closed on the way out
+        os.fstat(captured["fd"])
 
 
 def test_the_out_dir_is_not_created_group_or_world_writable(tmp_path: Path) -> None:
