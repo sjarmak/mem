@@ -239,8 +239,7 @@ export function isNonZeroExit(err: unknown): boolean {
  * format — wrong arch / bad interpreter (ENOEXEC). All three throw with `status`
  * and `signal` both null, so none of {@link isGitFault}'s other arms match them;
  * they need this explicit code check. They are one class — git-could-not-run —
- * and degrade the sweep to null together (EACCES/ENOEXEC added in mem-egxu2; the
- * first cut handled only ENOENT and rethrew its siblings, aborting the sweep). */
+ * and degrade the sweep to null together. */
 const SPAWN_FAULT_CODES: ReadonlySet<string> = new Set(['ENOENT', 'EACCES', 'ENOEXEC']);
 
 /** True when a git invocation failed in a way that means git could not ANSWER,

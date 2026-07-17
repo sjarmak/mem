@@ -505,11 +505,20 @@ describe('isAncestor / isAncestorOrNull', () => {
     expect(isAncestorOrNull(defaultGitRunner, repo, first, second)).toBe(true);
   });
 
-  it('degrades a missing git binary to null rather than killing an unguarded sweep', () => {
-    const noGit: GitRunner = () => {
-      throw Object.assign(new Error('spawn git ENOENT'), { code: 'ENOENT' });
+  // Every libuv spawn fault in SPAWN_FAULT_CODES — binary missing (ENOENT),
+  // present but not executable (EACCES), or wrong arch / bad interpreter
+  // (ENOEXEC) — is one class, git-could-not-run (status/signal both null), NOT a
+  // bug in our code, so all must degrade to null rather than abort the unguarded
+  // measure-live-ref sweep. See isGitFault.
+  it.each([
+    ['a missing git binary (ENOENT)', 'ENOENT'],
+    ['a non-executable git (EACCES)', 'EACCES'],
+    ['a wrong-arch git (ENOEXEC)', 'ENOEXEC'],
+  ])('degrades %s to null rather than killing an unguarded sweep', (_label, code) => {
+    const spawnFault: GitRunner = () => {
+      throw Object.assign(new Error(`spawn git ${code}`), { status: null, code, signal: null });
     };
-    expect(isAncestorOrNull(noGit, repo, first, second)).toBeNull();
+    expect(isAncestorOrNull(spawnFault, repo, first, second)).toBeNull();
   });
 
   it('degrades a signal-killed git to null (git was asked but could not answer)', () => {
@@ -530,10 +539,9 @@ describe('isAncestor / isAncestorOrNull', () => {
   });
 
   it('RETHROWS a maxBuffer overrun rather than degrading it to null (mem-egxu2)', () => {
-    // A maxBuffer overrun surfaces as Error{code:'ENOBUFS', signal:'SIGTERM'} —
-    // its string `signal` must not fool the signal-kill arm into null (the exact
-    // defect this bead kills), unlike the external SIGKILL above (`code`
-    // undefined). See isGitFault.
+    // ENOBUFS+SIGTERM is Node aborting the child (our config), not an external
+    // kill like SIGKILL above (`code` undefined) — its string `signal` must not
+    // fool the signal-kill arm into null. See isGitFault.
     const overrun: GitRunner = () => {
       throw Object.assign(new Error('stdout maxBuffer length exceeded'), {
         status: null,
@@ -542,37 +550,6 @@ describe('isAncestor / isAncestorOrNull', () => {
       });
     };
     expect(() => isAncestorOrNull(overrun, repo, first, second)).toThrow(/maxBuffer/);
-  });
-
-  it('degrades a non-executable git (EACCES) to null, like the missing binary (mem-egxu2)', () => {
-    // EACCES = git present but not executable (permission denied). Like ENOENT
-    // it is a libuv spawn failure with status and signal both null — git-could-
-    // not-run, the same class as the missing binary, NOT a bug in our code. It
-    // must degrade to null, not abort the unguarded measure-live-ref sweep. See
-    // isGitFault's SPAWN_FAULT_CODES.
-    const notExecutable: GitRunner = () => {
-      throw Object.assign(new Error('spawn git EACCES'), {
-        status: null,
-        code: 'EACCES',
-        signal: null,
-      });
-    };
-    expect(isAncestorOrNull(notExecutable, repo, first, second)).toBeNull();
-  });
-
-  it('degrades a wrong-arch git (ENOEXEC) to null, like the missing binary (mem-egxu2)', () => {
-    // ENOEXEC = git binary present but not a runnable executable format (wrong
-    // arch / bad interpreter). Same spawn-failure shape as ENOENT/EACCES
-    // (status:null, signal:null) and the same git-could-not-run class. See
-    // isGitFault's SPAWN_FAULT_CODES.
-    const wrongArch: GitRunner = () => {
-      throw Object.assign(new Error('spawn git ENOEXEC'), {
-        status: null,
-        code: 'ENOEXEC',
-        signal: null,
-      });
-    };
-    expect(isAncestorOrNull(wrongArch, repo, first, second)).toBeNull();
   });
 
   it('passes --end-of-options, so a ref that looks like a flag cannot be read as one', () => {
