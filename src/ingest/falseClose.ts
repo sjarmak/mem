@@ -130,6 +130,9 @@ export type JoinSkipReason =
 
 /** One skipped ref and the reason. */
 export interface JoinSkip {
+  /** The raw full refname, as `git for-each-ref` gave it — never the short or
+   * remote-prefixed form, so a reason's refnames mean the same thing whichever
+   * ref discovery order produced them. */
   refname: string;
   reason: JoinSkipReason;
 }
@@ -186,7 +189,11 @@ export function joinBranches(opts: JoinOptions): JoinResult {
   for (const id of closedIds) canonical.set(id.toLowerCase(), id);
   // work_id → the best ref seen so far. A local head, once seen, is never
   // displaced; the earlier remote candidate it displaces is recorded as a skip.
-  const best = new Map<string, JoinedBranch>();
+  // The refname is carried alongside rather than on JoinedBranch: a displaced
+  // candidate must be skipped under the same raw refname every other skip uses,
+  // and that is the only reader — putting it on the branch would leak an
+  // unconsumed field into `joined`.
+  const best = new Map<string, { branch: JoinedBranch; refname: string }>();
 
   for (const refname of opts.refnames) {
     const parsed = parseRef(refname);
@@ -224,17 +231,19 @@ export function joinBranches(opts: JoinOptions): JoinResult {
     const candidate: JoinedBranch = { work_id, ref, scope: parsed.scope };
     const held = best.get(work_id);
     if (held === undefined) {
-      best.set(work_id, candidate);
-    } else if (held.scope === 'remote' && parsed.scope === 'local') {
-      best.set(work_id, candidate);
-      skipped.push({ refname: held.ref, reason: 'duplicate-of-local' });
+      best.set(work_id, { branch: candidate, refname });
+    } else if (held.branch.scope === 'remote' && parsed.scope === 'local') {
+      best.set(work_id, { branch: candidate, refname });
+      skipped.push({ refname: held.refname, reason: 'duplicate-of-local' });
     } else {
       skipped.push({ refname, reason: 'duplicate-of-local' });
     }
   }
 
   return {
-    joined: [...best.values()].sort((a, b) => a.work_id.localeCompare(b.work_id)),
+    joined: [...best.values()]
+      .map(h => h.branch)
+      .sort((a, b) => a.work_id.localeCompare(b.work_id)),
     skipped,
   };
 }

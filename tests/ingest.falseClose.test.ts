@@ -133,8 +133,11 @@ describe('joinBranches', () => {
   it('prefers the local head when a bead has both, counting the bead once', () => {
     const out = join(['refs/remotes/origin/work/mem-cv06b', 'refs/heads/work/mem-cv06b']);
     expect(out.joined).toEqual([{ work_id: 'mem-cv06b', ref: 'work/mem-cv06b', scope: 'local' }]);
+    // The displaced remote is skipped under its raw refname, identical to the
+    // opposite-ordering case below: a skip's refname must not change shape with
+    // ref discovery order.
     expect(out.skipped).toEqual([
-      { refname: 'origin/work/mem-cv06b', reason: 'duplicate-of-local' },
+      { refname: 'refs/remotes/origin/work/mem-cv06b', reason: 'duplicate-of-local' },
     ]);
   });
 
