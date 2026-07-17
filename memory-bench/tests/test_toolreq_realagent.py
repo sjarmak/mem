@@ -242,6 +242,15 @@ def test_bridged_request_leaks_no_value_and_names_the_real_tool() -> None:
     assert "Write" in req and "config.json" in req
 
 
+def test_adapt_rejects_a_sequence_id_with_a_trailing_newline() -> None:
+    """`$` matches before a trailing newline, so a `re` anchor pair is not the same guard
+    as "the whole string": "w-0\n" satisfied `^...$` and would have reached the driver's
+    per-task path as the file "w-0\n.json". Confined to out_dir and not exploitable --
+    pinned because the NEXT id-shaped guard copied from this one might not be."""
+    with pytest.raises(ValueError, match="unsafe sequence_id"):
+        adapt_sequence(_toolreq_seq(seq_id="w-t0\n"))
+
+
 def test_adapt_rejects_text_only_sequence() -> None:
     with pytest.raises(ValueError, match="tool-requiring"):
         adapt_sequence(_text_only_seq())

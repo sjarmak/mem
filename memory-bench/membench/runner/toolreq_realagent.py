@@ -171,7 +171,12 @@ def _bridge_request(original: str, *, sequence_id: str) -> str:
 # work_id flows into a filesystem path (the driver's per-task result file), so the
 # charset is locked down here — bead-id shaped (the TaskBundle rule), never a path
 # separator or a leading dot, so a malformed sequence id cannot escape the out dir.
-_WORK_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+#
+# Unanchored + `.fullmatch`, not `^...$` + `.match`: `$` also matches BEFORE a trailing
+# newline, so the anchored pair accepted "w-0\n" and wrote it through as "w-0\n.json".
+# `fullmatch` means the whole string with no second reading, and it keeps the anchors out
+# of the error text the guard prints.
+_WORK_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 
 
 def _value_map(sequence_id: str, action: ExpectedAction) -> dict[str, str]:
@@ -220,7 +225,7 @@ def adapt_sequence(seq: BenchmarkSequence) -> ToolReqRealAgentTask:
     Raises ``ValueError`` if the sequence is not tool-requiring (no ``apply_config`` action),
     if a required-memory id has no backing write, if the reward is self-contradictory, or if
     a value would leak into the agent-visible request."""
-    if not _WORK_ID_RE.match(seq.sequence_id):
+    if not _WORK_ID_RE.fullmatch(seq.sequence_id):
         raise ValueError(
             f"unsafe sequence_id {seq.sequence_id!r}: must match {_WORK_ID_RE.pattern}"
         )
