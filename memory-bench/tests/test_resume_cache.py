@@ -34,12 +34,14 @@ from membench.runner.resume_cache import (
     BaseCachedResult,
     BaseCellOutcome,
     BaseRunIdentity,
+    CachePlan,
     CorpusRun,
     assert_usable_work_ids,
     corpus_summary,
     digest,
     invocation_digest,
     load_cached,
+    pending_tasks,
     run_cached_corpus,
 )
 
@@ -125,6 +127,27 @@ def _evaluate(_task: _Task, recorder: CellRecorder) -> list[_Cell]:
     return _cells()
 
 
+def _plan(
+    out: Path,
+    identity: _Identity | None = None,
+    resume: bool = True,
+    identity_of=None,
+    plan_of=lambda _task: _calls(),
+) -> CachePlan[_Task, _Identity, _Cell]:
+    ident = identity if identity is not None else _identity()
+    return CachePlan(
+        out_dir=out,
+        result_cls=_Result,
+        plan_of=plan_of,
+        # The fingerprint CachePlan.lookup derives from `plan_of` is handed in as `_fp`; the
+        # default identity carries exactly it (`_calls()` hashed both here and in `_identity`), so
+        # the seam guarantee holds and these cases exercise everything downstream of it.
+        identity_of=identity_of if identity_of is not None else (lambda _task, _fp: ident),
+        summary_name=SUMMARY_NAME,
+        resume=resume,
+    )
+
+
 def _run(
     tasks: Sequence[_Task],
     out: Path,
@@ -135,19 +158,10 @@ def _run(
     identity_of=None,
     plan_of=lambda _task: _calls(),
 ):
-    ident = identity if identity is not None else _identity()
     return run_cached_corpus(
+        _plan(out, identity, resume, identity_of, plan_of),
         tasks,
-        out_dir=out,
-        result_cls=_Result,
-        plan_of=plan_of,
-        # The fingerprint run_cached_corpus derives from `plan_of` is handed in as `_fp`; the
-        # default identity carries exactly it (`_calls()` hashed both here and in `_identity`), so
-        # the seam guarantee holds and these cases exercise everything downstream of it.
-        identity_of=identity_of if identity_of is not None else (lambda _task, _fp: ident),
         evaluate=evaluate,
-        summary_name=SUMMARY_NAME,
-        resume=resume,
         before_first_spend=before_first_spend,
     )
 
@@ -285,10 +299,10 @@ def test_an_identity_whose_fingerprint_is_not_the_plans_is_refused_before_any_sp
     """The residue mem-swp43 left one construction site up: the identity's
     ``invocation_fingerprint`` used to be built by the grid, on a route of its own, and only the
     write boundary — which fires on a MISS — ever checked it against what the arms sent. A third
-    grid, or one refactor, that
-    computed the field by any other route published fine and then served stale numbers on resume.
+    grid, or one refactor, that computed the field by any other route published fine and then served
+    stale numbers on resume.
 
-    ``run_cached_corpus`` now derives the fingerprint from ``plan_of`` and hands it to
+    ``CachePlan.lookup`` now derives the fingerprint from ``plan_of`` and hands it to
     ``identity_of``; an identity that carries any OTHER value is refused at construction, before the
     cache is even consulted, so the field can no longer be authored by a divergent route. A driver
     (``_measuring_evaluate``) that would spend is installed to prove the refusal lands FIRST: it
@@ -993,3 +1007,172 @@ def test_corpus_summary_owns_separates_all_channels_and_leaked() -> None:
         empty["separates_all_channels"] == 0
     )  # all() over nothing is vacuously true; a count is not
     assert empty["leaked"] == []
+
+
+# --- what the fire will COST: pending_tasks (mem-u9nu2) --------------------------------
+
+
+def _evaluate_goal(goal: str):
+    """An ``evaluate`` whose arm sends ``goal`` — so a case can move the INVOCATION and keep the
+    recording honest (the write boundary hashes what the seam saw)."""
+
+    def _evaluate_it(_task: _Task, recorder: CellRecorder) -> list[_Cell]:
+        _record(recorder, goal)
+        return _cells()
+
+    return _evaluate_it
+
+
+def _evaluate_runs(runs: int):
+    """An ``evaluate`` that measures ``runs`` repeats — so the `repeats` case below can move that
+    knob and still PUBLISH: a row's `runs` must equal the identity's `repeats`, which is the schema
+    refusing a cell measured at a different repeat count than the identity filing it claims."""
+
+    def _evaluate_it(_task: _Task, recorder: CellRecorder) -> list[_Cell]:
+        _record(recorder)
+        return _cells(passes=runs, runs=runs)
+
+    return _evaluate_it
+
+
+def _measured(tasks: Sequence[_Task], out: Path, evaluate, **plan_kw) -> set[str]:
+    """The work_ids ``run_cached_corpus`` ACTUALLY measured — recorded off ``evaluate`` itself, the
+    one place a task's spend is unfakeable. Not `executed`, which is a count: the differential below
+    needs to know WHICH tasks, or a probe that named the wrong ones by the right number would pass.
+    """
+    seen: list[str] = []
+
+    def _evaluate_recording(task: _Task, recorder: CellRecorder) -> list[_Cell]:
+        seen.append(task.work_id)
+        return evaluate(task, recorder)
+
+    _run(tasks, out, evaluate=_evaluate_recording, **plan_kw)
+    return set(seen)
+
+
+_PAID = {"dry_run": False, "model": "model-one", "cli_version": "2.1.210"}
+
+# Each case is (BASELINE plan kwargs, PERTURBED plan kwargs, evaluate). The baseline run persists
+# `w-0`; the perturbed plan then asks about `[w-0, w-1]`. `unperturbed` is the resume the disclosure
+# exists for — `w-0` hits, `w-1` remains. Every other case moves ONE knob off its own baseline,
+# which must miss `w-0` and re-measure it.
+#
+# The baseline is per-case and not one shared dry run, so a knob is genuinely ISOLATED:
+# `cli_version` only exists on a PAID identity (a dry run is refused one), so perturbing it from a
+# dry baseline would move `dry_run` and `cli_version` together and isolate neither — a case that
+# passes while naming a field it never varied.
+_PERTURBATIONS = [
+    pytest.param({}, {}, _evaluate, id="unperturbed"),
+    pytest.param({}, {"identity": _identity(repeats=3)}, _evaluate_runs(3), id="repeats"),
+    pytest.param({}, {"identity": _identity(protocol=2)}, _evaluate, id="protocol"),
+    pytest.param({}, {"identity": _identity(task_fingerprint="fp-other")}, _evaluate, id="task"),
+    pytest.param({}, {"identity": _identity(model="model-two")}, _evaluate, id="model"),
+    pytest.param({}, {"resume": False}, _evaluate, id="resume-off"),
+    # dry -> paid: a paid run must not be served a free run's simulated numbers.
+    pytest.param({}, {"identity": _identity(**_PAID)}, _evaluate, id="dry_run"),
+    # paid -> paid on an UPGRADED binary, off a paid baseline so only `cli_version` moves.
+    pytest.param(
+        {"identity": _identity(**_PAID)},
+        {"identity": _identity(**(_PAID | {"cli_version": "2.1.999"}))},
+        _evaluate,
+        id="cli_version",
+    ),
+    pytest.param(
+        {},
+        {
+            "identity": _identity(invocation_fingerprint=invocation_digest(_calls("other-goal"))),
+            "plan_of": lambda _task: _calls("other-goal"),
+        },
+        _evaluate_goal("other-goal"),
+        id="invocation",
+    ),
+]
+
+
+@pytest.mark.parametrize(("baseline_kw", "plan_kw", "evaluate"), _PERTURBATIONS)
+def test_pending_names_exactly_the_tasks_the_run_measures_under_every_identity_knob(
+    tmp_path: Path, baseline_kw: dict, plan_kw: dict, evaluate
+) -> None:
+    """THE probe defect, end to end, and the ONLY shape that catches it. `pending_tasks` exists so a
+    driver's refuse-to-spend disclosure can price the work that REMAINS instead of the whole corpus
+    (mem-u9nu2) — a human authorizes real money against that number. It is a SECOND answer to the
+    question `run_cached_corpus` answers by running, and two answers that agree today is exactly
+    this module's defect family (see its docstring), so 'call both on a happy path and compare'
+    proves nothing.
+
+    A PERTURBATION differential instead: for every knob of the identity, the two answers must move
+    TOGETHER. A probe that modelled the decision — an `is_file` check, a hand-rolled identity, a
+    forgotten `resume` — passes the unperturbed case and fails here, in the UNDER-report direction
+    that costs money: it calls a task cached, the fire measures it anyway, and the spend exceeds
+    what was authorized.
+
+    `pending_tasks` is asked BEFORE the run, since the run publishes and would answer its own
+    question."""
+    out = tmp_path / "out"
+    tasks = [_Task("w-0"), _Task("w-1")]
+    # The baseline is the run being RESUMED, so it measures the default way; `evaluate` belongs to
+    # the perturbed run, which is the one whose arm may send a different cycle or repeat count.
+    first = _run([_Task("w-0")], out, **baseline_kw)  # only w-0 is measured and persisted
+    assert (first.executed, first.reused) == (1, 0)
+
+    predicted = {task.work_id for task in pending_tasks(_plan(out, **plan_kw), tasks)}
+    measured = _measured(tasks, out, evaluate, **plan_kw)
+
+    assert predicted == measured, "the probe priced a different fire than the run made"
+
+
+def test_pending_is_a_read_and_publishes_nothing(tmp_path: Path) -> None:
+    """It runs on the REFUSE path, which spends nothing and writes nothing, and its answer must not
+    become true by being asked: a probe that created `--out`, rewrote a result, or touched an mtime
+    would corrupt the record of which tasks a run actually measured (`run_cached_corpus` leaves
+    mtimes as exactly that record)."""
+    out = tmp_path / "out"
+    _run([_Task("w-0")], out)
+    before = {path: path.stat().st_mtime_ns for path in sorted(out.iterdir())}
+
+    assert [t.work_id for t in pending_tasks(_plan(out), [_Task("w-0"), _Task("w-1")])] == ["w-1"]
+
+    assert {path: path.stat().st_mtime_ns for path in sorted(out.iterdir())} == before
+    # And it does not conjure an --out that a run has not created yet.
+    fresh = tmp_path / "never"
+    assert len(pending_tasks(_plan(fresh), [_Task("w-0")])) == 1
+    assert not fresh.exists()
+
+
+def test_pending_over_a_fully_served_corpus_is_empty(tmp_path: Path) -> None:
+    """The bead's headline scenario at its limit: every task cached, so the fire spends NOTHING.
+    The drivers print their own branch for this rather than a `0 calls` line, because zero is also
+    what a preflight costs here (`before_first_spend` never fires) and that is worth saying."""
+    out = tmp_path / "out"
+    tasks = [_Task("w-0"), _Task("w-1")]
+    _run(tasks, out)
+    assert pending_tasks(_plan(out), tasks) == []
+
+
+def test_pending_refuses_a_corpus_the_run_would_refuse(tmp_path: Path) -> None:
+    """A duplicate work_id aliases two tasks onto one result file, so the probe would answer for the
+    wrong one — and the run refuses such a corpus outright (`assert_usable_work_ids`), so a
+    disclosure that priced it would be pricing a fire that cannot start."""
+    with pytest.raises(ValueError, match="duplicate work_id"):
+        pending_tasks(_plan(tmp_path / "out"), [_Task("w-0"), _Task("w-0")])
+
+
+def test_pending_never_softens_a_fingerprint_the_plan_does_not_own_into_a_cost(
+    tmp_path: Path,
+) -> None:
+    """The loudest structural defect this cache has — an identity carrying a fingerprint its plan
+    did not compute — must surface as itself from the probe too, never be swallowed into a number.
+    A driver catches the ONE diagnosis that means 'no honest answer exists' (an unidentifiable
+    claude binary) and prints a labeled ceiling; a grid whose plan and identity disagree is not that
+    diagnosis, and a disclosure that printed a cost for it would be pricing a run that cannot
+    execute."""
+    with pytest.raises(ValueError, match="authored the field by a route the plan does not own"):
+        pending_tasks(
+            # `_fp` — the digest of this plan's own `plan_of` — is handed in and DROPPED, which is
+            # the whole defect: the identity names an invocation the plan never described.
+            _plan(
+                tmp_path / "out",
+                identity_of=lambda _task, _fp: _identity(invocation_fingerprint="authored-here"),
+            ),
+            [_Task("w-0")],
+        )

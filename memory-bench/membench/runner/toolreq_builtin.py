@@ -100,7 +100,7 @@ def cell_legs(task: ToolReqRealAgentTask) -> tuple[Leg, Leg]:
     """The two calls one ``(builtin, channel)`` cell makes, in order.
 
     THE definition, and the only one. ``run_builtin_arm`` EXECUTES these legs and
-    ``toolreq_builtin_grid.planned_calls`` RENDERS them into the plan ``run_cached_corpus`` hashes,
+    ``toolreq_builtin_grid.planned_calls`` RENDERS them into the plan ``CachePlan.lookup`` hashes,
     so neither can describe a call the other does not make: change what a leg surfaces and both the
     sent command line and the cache identity move together, by construction.
 
@@ -319,7 +319,7 @@ def run_builtin_arm(
     reads ``recorded()`` itself, so a cell's argv can never be a value this function handed back.
 
     The two legs come from ``cell_legs`` and the agent from ``cell_agent``, so what this
-    executes and what ``toolreq_builtin_grid.planned_calls`` renders (for ``run_cached_corpus`` to
+    executes and what ``toolreq_builtin_grid.planned_calls`` renders (for ``CachePlan.lookup`` to
     hash into the identity) are ONE definition. A leg added here and forgotten in the plan is still
     seen, because the recorder sees the call whether or not anyone declared it."""
     if runner is None:

@@ -44,7 +44,9 @@ from membench.runner.resume_cache import (
     BaseCachedResult,
     BaseCellOutcome,
     BaseRunIdentity,
+    CachePlan,
     corpus_summary,
+    pending_tasks,
     render_verdict,
     run_cached_corpus,
 )
@@ -57,6 +59,41 @@ from membench.runner.toolreq_builtin import (
     run_builtin_arm,
 )
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask, task_fingerprint
+
+# This module's public surface, declared for the reason `toolreq_grid.__all__` is: the driver
+# imports `LEAK` from here, but `LEAK` is `resume_cache`'s — it arrives by an implicit re-export
+# that `--strict`'s `no_implicit_reexport` refuses. CI runs `mypy --strict membench` and never
+# reaches `scripts/`, so the error is latent rather than absent: `mypy --strict
+# scripts/grid_toolreq_builtin.py` reports it today, and the day `scripts/` joins the checked
+# surface — the direction this module's own docstring argues for, since every resume-cache defect
+# this codebase shipped lived in an untyped script — that import breaks.
+__all__ = [
+    "AGENT_ERROR",
+    "ARM",
+    "CHANNELS",
+    "ENGAGED",
+    "EXECUTION_PROTOCOL",
+    "LEAK",
+    "NOT_ENGAGED",
+    "SEPARATES",
+    "SUMMARY_NAME",
+    "WEAK",
+    "BuiltinCachedResult",
+    "BuiltinCell",
+    "BuiltinRunIdentity",
+    "PreflightHaltError",
+    "calls_per_repeat",
+    "cell_kind",
+    "evaluate_task",
+    "paid_call_count",
+    "planned_calls",
+    "preflight",
+    "preflight_gate",
+    "preflight_kind",
+    "remaining_tasks",
+    "run_corpus",
+    "uniform_calls_per_repeat",
+]
 
 # The run summary, written into the SAME directory as the per-task `<work_id>.json` results —
 # hence a name the tasks are not allowed to claim (resume_cache.assert_usable_work_ids).
@@ -351,8 +388,8 @@ def preflight_gate(
 
 
 def planned_calls(task: ToolReqRealAgentTask, *, model: str) -> list[CellCalls]:
-    """The ``claude -p`` cycles every cell WILL spawn — the plan ``run_cached_corpus`` hashes into
-    ``invocation_fingerprint`` and checks the recorded invocations against.
+    """The ``claude -p`` cycles every cell WILL spawn — the plan ``CachePlan.lookup`` hashes into
+    ``invocation_fingerprint``, and ``run_cached_corpus`` checks the recorded invocations against.
 
     Rendered from ``toolreq_builtin.cell_legs`` through ``cell_calls``: the same legs
     ``run_builtin_arm`` executes, through the same rendering. So the plan cannot describe an
@@ -407,7 +444,7 @@ def _identity(
 ) -> BuiltinRunIdentity:
     """The cache identity for one task (see ``BuiltinRunIdentity`` / ``BaseRunIdentity``).
 
-    ``invocation_fingerprint`` is not computed here — ``resume_cache.run_cached_corpus`` derives it
+    ``invocation_fingerprint`` is not computed here — ``resume_cache.CachePlan.lookup`` derives it
     from ``planned_calls`` and hands it in, refusing an identity that carries any other value, so
     the grid cannot author the field by a route of its own."""
     return BuiltinRunIdentity(
@@ -419,6 +456,89 @@ def _identity(
         task_fingerprint=task_fingerprint(task),
         invocation_fingerprint=invocation_fingerprint,
         mechanism_fingerprint=mechanism_fingerprint(),
+    )
+
+
+def cache_plan(
+    *,
+    out_dir: Path,
+    repeats: int,
+    model: str,
+    dry_run: bool,
+    version_fn: Callable[[], str] | None = None,
+    resume: bool = True,
+) -> CachePlan[ToolReqRealAgentTask, BuiltinRunIdentity, BuiltinCell]:
+    """This grid's ``resume_cache.CachePlan`` — what decides whether a persisted cell may be
+    reused, read by both ``run_corpus`` and ``remaining_tasks``. Built here rather than assembled at
+    each call site, so a knob cannot reach one and miss the other — see ``CachePlan``.
+
+    ``model`` is RESOLVED here, never taken raw — through ``headless_agent.resolve_model``, the same
+    rule the agent itself runs under, CALLED and never copied. ``run_corpus`` calls it too, for the
+    model it hands ``evaluate``; that is the one rule applied twice to one input, not a second copy
+    of it, and the two cannot disagree without moving the argv the plan hashes — which the write
+    boundary refuses. ``BuiltinRunIdentity`` refuses an unresolved model outright
+    (``BaseRunIdentity``), so the schema is the backstop rather than a rule restated here.
+
+    The claude BINARY is resolved on the same terms (``toolreq_grid.cache_plan``), and matters to
+    this grid for an EXTRA reason — ours-vs-builtin is a comparison BETWEEN grids
+    (``headless_agent.cell_agent``), so a binary drift that missed one grid while the other reused
+    would corrupt exactly that comparison. It SPAWNS a subprocess (``claude --version``), which is
+    why this is not free of preconditions even for a caller that only wants to price a fire:
+    token-free is not spawn-free, and a paid identity that cannot name its instrument cannot be
+    constructed at all."""
+    resolved_model = resolve_model(model)
+    cli_version = "" if dry_run else (version_fn or resolve_cli_version)()
+    return CachePlan(
+        out_dir=out_dir,
+        result_cls=BuiltinCachedResult,
+        plan_of=lambda task: planned_calls(task, model=resolved_model),
+        identity_of=lambda task, invocation_fingerprint: _identity(
+            task,
+            repeats=repeats,
+            resolved_model=resolved_model,
+            cli_version=cli_version,
+            dry_run=dry_run,
+            invocation_fingerprint=invocation_fingerprint,
+        ),
+        summary_name=SUMMARY_NAME,
+        resume=resume,
+    )
+
+
+def remaining_tasks(
+    tasks: Sequence[ToolReqRealAgentTask],
+    *,
+    out_dir: Path,
+    repeats: int,
+    model: str,
+    version_fn: Callable[[], str] | None = None,
+    resume: bool = True,
+) -> list[ToolReqRealAgentTask]:
+    """The tasks a PAID fire over ``out_dir`` would actually measure — the work that REMAINS, which
+    the refuse-to-spend disclosure prices instead of the whole corpus (mem-u9nu2). Price it with
+    ``paid_call_count``, the same function the whole-corpus cost is summed by.
+
+    ``dry_run=False`` is not a parameter: this answers what a PAID fire costs, and a free run's
+    identity is a different one (``BaseRunIdentity.dry_run``) that no disclosure authorizes money
+    against.
+
+    RAISES ``HeadlessAgentError`` when the claude binary cannot be identified, because then the paid
+    identity cannot be constructed and there IS no honest answer — a paid cell is a measurement made
+    by a named instrument (``BaseRunIdentity.cli_version``). What a driver should SAY about that is
+    the shell's (the same split as ``preflight_gate``'s ``announce`` and ``_HALT_COUNSEL``); that
+    there is no answer is this module's. Every other failure propagates untouched — in particular
+    the ``ValueError`` from ``CachePlan.lookup`` when an identity's fingerprint is not the plan's,
+    the loudest structural defect this cache has, which must never be softened into a cost."""
+    return pending_tasks(
+        cache_plan(
+            out_dir=out_dir,
+            repeats=repeats,
+            model=model,
+            dry_run=False,
+            version_fn=version_fn,
+            resume=resume,
+        ),
+        tasks,
     )
 
 
@@ -435,38 +555,25 @@ def run_corpus(
 ) -> dict[str, Any]:
     """Evaluate every task through the shared resume cache and shape this grid's summary.
 
-    ``model`` is RESOLVED once here, never taken raw — through ``headless_agent.resolve_model``, the
-    same rule the agent itself runs under. ``BuiltinRunIdentity`` refuses an unresolved one outright
-    (``BaseRunIdentity``), so this is the ONE place the rule is applied and the schema is the
-    backstop, not a second copy of it.
-
-    The claude BINARY is resolved on the same terms (``toolreq_grid.run_corpus``), and matters to
-    this grid for an EXTRA reason — ours-vs-builtin is a comparison BETWEEN grids
-    (``headless_agent.cell_agent``), so a binary drift that missed one grid while the other reused
-    would corrupt exactly that comparison.
+    The cache identity — the resolved model, the binary, and the rest — is ``cache_plan``'s, so this
+    run and the disclosure that priced it read one answer.
 
     ``before_first_spend`` is forwarded, not interpreted — ``preflight_gate`` is what the driver
     passes, and the hook's contract is ``resume_cache.run_cached_corpus``'s."""
     resolved_model = resolve_model(model)
-    cli_version = "" if dry_run else (version_fn or resolve_cli_version)()
     run = run_cached_corpus(
-        tasks,
-        out_dir=out_dir,
-        result_cls=BuiltinCachedResult,
-        plan_of=lambda task: planned_calls(task, model=resolved_model),
-        identity_of=lambda task, invocation_fingerprint: _identity(
-            task,
+        cache_plan(
+            out_dir=out_dir,
             repeats=repeats,
-            resolved_model=resolved_model,
-            cli_version=cli_version,
+            model=model,
             dry_run=dry_run,
-            invocation_fingerprint=invocation_fingerprint,
+            version_fn=version_fn,
+            resume=resume,
         ),
+        tasks,
         evaluate=lambda task, recorder: evaluate_task(
             task, repeats=repeats, model=resolved_model, dry_run=dry_run, recorder=recorder
         ),
-        summary_name=SUMMARY_NAME,
-        resume=resume,
         before_first_spend=before_first_spend,
     )
     results = run.results

@@ -17,6 +17,7 @@ those arms send, and the verdict their rows imply. What this module adds to the 
 
 from __future__ import annotations
 
+import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
@@ -42,9 +43,11 @@ from membench.runner.resume_cache import (
     BaseCachedResult,
     BaseCellOutcome,
     BaseRunIdentity,
+    CachePlan,
     Cell,
     corpus_summary,
     digest,
+    pending_tasks,
     render_verdict,
     run_cached_corpus,
 )
@@ -73,6 +76,7 @@ __all__ = [
     "payload_fingerprint",
     "planned_calls",
     "planned_cells",
+    "remaining_tasks",
     "run_corpus",
     "task_verdict",
     "worst_case_calls_per_task",
@@ -332,14 +336,15 @@ def payload_fingerprint(ours_payload: Mapping[str, str]) -> str:
 def planned_calls(
     task: ToolReqRealAgentTask, ours_payload: Mapping[str, str], *, model: str
 ) -> list[CellCalls]:
-    """The ``claude -p`` cycles every planned cell WILL spawn — the plan ``run_cached_corpus``
-    hashes into ``invocation_fingerprint`` and checks the recorded invocations against.
+    """The ``claude -p`` cycles every planned cell WILL spawn — the plan ``CachePlan.lookup`` hashes
+    into ``invocation_fingerprint``, and ``run_cached_corpus`` checks the recorded invocations
+    against.
 
     Rendered from ``planned_cells`` through ``headless_agent.render_cell_calls`` — the same cells
     ``evaluate_task`` runs, through the same rendering ``run_arm`` records off the CLI seam. This
     grid hands the cache the PLAN and never authors the fingerprint field itself: the seam digests
     this and refuses an identity that carries any other value (see
-    ``resume_cache.run_cached_corpus`` and ``BaseRunIdentity.invocation_fingerprint``, which argues
+    ``resume_cache.CachePlan.lookup`` and ``BaseRunIdentity.invocation_fingerprint``, which argues
     why hashing the whole argv cannot be incomplete about the invocation). Building one is string
     assembly: FREE, no agent turn."""
     return [
@@ -363,10 +368,18 @@ def worst_case_calls_per_task(task: ToolReqRealAgentTask) -> int:
     the mem-swp43 / mem-663ga review precedent, on the sibling builtin grid's ``calls_per_repeat``.
 
     WORST case because ``ours`` with an empty retrieval is relabeled from ``none`` and spends
-    nothing; the pre-seed cost disclosure cannot yet know which tasks retrieve, so it prices every
-    task as if ``ours`` retrieved (the ceiling). Over-disclosing the ceiling is the safe direction —
-    and unlike the builtin grid's EXACT ``calls_per_repeat`` this is an upper bound, hence the name.
-    """
+    nothing, so this prices every task as if ``ours`` retrieved (the ceiling). Over-disclosing the
+    ceiling is the safe direction — and unlike the builtin grid's EXACT ``calls_per_repeat`` this is
+    an upper bound, hence the name.
+
+    The ceiling was once forced: "the pre-seed cost disclosure cannot yet know which tasks
+    retrieve". That premise is GONE — since mem-u9nu2 the disclosure must seed and resolve payloads
+    before it can price anything at all (the payload rides in ``RunIdentity``, so the miss set is
+    unknowable without it), and ``planned_cells(task, real_payload)`` is then the exact count. So
+    this is now a DEFERRAL, not an invariant: it costs a per-task over-report in the safe direction,
+    on an axis (ours-retrieval) independent of the one mem-u9nu2 fixed (the cache miss set). Filed
+    as mem-fjfaf rather than widened into that bead. Until then, an upper bound because it prices a
+    sentinel payload, not because it could not price the real one."""
     return len(planned_cells(task, _WORST_CASE_OURS_PAYLOAD))
 
 
@@ -461,7 +474,7 @@ def _identity(
 ) -> RunIdentity:
     """The cache identity for one task (see ``RunIdentity`` / ``BaseRunIdentity``).
 
-    ``invocation_fingerprint`` is not computed here — ``resume_cache.run_cached_corpus`` derives it
+    ``invocation_fingerprint`` is not computed here — ``resume_cache.CachePlan.lookup`` derives it
     from ``planned_calls`` and hands it in, and refuses an identity that carries any other value. So
     the grid cannot author the field by a route of its own; it passes through the one the seam owns.
 
@@ -488,6 +501,146 @@ def _identity(
     )
 
 
+def cache_plan(
+    tasks: Sequence[ToolReqRealAgentTask],
+    sequences: Sequence[BenchmarkSequence],
+    *,
+    out_dir: Path,
+    repeats: int,
+    model: str,
+    dry_run: bool,
+    store_path: Path,
+    mem_bin: str,
+    seed_fn: SeedFn,
+    version_fn: Callable[[], str] | None = None,
+    resume: bool = True,
+) -> tuple[
+    CachePlan[ToolReqRealAgentTask, RunIdentity, CellOutcome],
+    Mapping[str, Mapping[str, str]],
+]:
+    """This grid's ``resume_cache.CachePlan``, and the payloads it was built from — the one home
+    for the miss decision's inputs, read by both ``run_corpus`` and ``remaining_tasks``. See
+    ``CachePlan``.
+
+    ``seed_fn`` runs BEFORE the cache is consulted and over the WHOLE corpus, every invocation, even
+    when every task is cache-served: it is free, and the payload it resolves rides in the identity,
+    so it has to be recomputed to know whether a cached cell is still current. That last clause is
+    why the disclosure cannot skip it either — the miss set is not knowable without the payloads, so
+    pricing a resume means seeding first, on a path that spends no tokens and never did.
+
+    The payloads are RETURNED as well as closed over: ``run_corpus`` needs them again for
+    ``evaluate``, and handing back the ones this plan was built from is what keeps the arm measured
+    under the payload the identity names.
+
+    ``model`` is RESOLVED here, never taken raw — through ``headless_agent.resolve_model``, the
+    same rule the agent itself runs under, CALLED and never copied. ``run_corpus`` calls it too, for
+    the model it hands ``evaluate``; that is the one rule applied twice to one input, not a second
+    copy of it, and the two cannot disagree without moving the argv the plan hashes — which the
+    write boundary refuses. ``RunIdentity`` refuses an unresolved model outright
+    (``BaseRunIdentity``), so the schema is the backstop rather than a rule restated here.
+
+    The claude BINARY is resolved the same way and in the same place — ONCE per run, so every task
+    in one sweep is filed under one instrument rather than each racing an upgrade. Only for a PAID
+    run: a dry run spawns no binary, and short-circuiting here is what keeps a free run runnable
+    with no ``claude`` installed at all. It is resolved BEFORE seeding: a paid run that cannot name
+    its binary is over, and there is no reason to build a store for it.
+
+    ``version_fn`` overrides that resolver for a hermetic test; omitted, it is looked up on this
+    module at call time, so ``monkeypatch.setattr(grid, "resolve_cli_version", ...)`` reaches it
+    like every other double here. Why it defaults to the real thing where ``seed_fn`` does not is
+    argued at ``headless_agent.resolve_cli_version``."""
+    # Fail before seeding: a paid run that cannot name its binary is over.
+    resolved_model = resolve_model(model)
+    cli_version = "" if dry_run else (version_fn or resolve_cli_version)()
+    ours_payloads = seed_fn(sequences, tasks, store_path, mem_bin)
+    plan: CachePlan[ToolReqRealAgentTask, RunIdentity, CellOutcome] = CachePlan(
+        out_dir=out_dir,
+        result_cls=CachedResult,
+        plan_of=lambda task: planned_calls(
+            task, ours_payloads.get(task.work_id, {}), model=resolved_model
+        ),
+        identity_of=lambda task, invocation_fingerprint: _identity(
+            task,
+            ours_payloads.get(task.work_id, {}),
+            repeats=repeats,
+            resolved_model=resolved_model,
+            cli_version=cli_version,
+            dry_run=dry_run,
+            invocation_fingerprint=invocation_fingerprint,
+        ),
+        summary_name=SUMMARY_NAME,
+        resume=resume,
+    )
+    return plan, ours_payloads
+
+
+def remaining_tasks(
+    tasks: Sequence[ToolReqRealAgentTask],
+    sequences: Sequence[BenchmarkSequence],
+    *,
+    out_dir: Path,
+    repeats: int,
+    model: str,
+    mem_bin: str,
+    seed_fn: SeedFn,
+    version_fn: Callable[[], str] | None = None,
+    resume: bool = True,
+) -> list[ToolReqRealAgentTask]:
+    """The tasks a PAID fire over ``out_dir`` would actually measure — the work that REMAINS, which
+    the refuse-to-spend disclosure prices instead of the whole corpus (mem-u9nu2). Price it with
+    ``worst_case_paid_call_count``, the same function the whole-corpus cost is summed by.
+
+    NOT a cheap read, and the disclosure's shape follows from that: ``RunIdentity`` carries
+    ``ours_payload_fingerprint``, so knowing whether a cached cell is current means resolving the
+    payloads, which means seeding a store (``seed_ours_store_and_resolve_payloads``, which says so
+    itself). Free of tokens and agents, not free of preconditions: it needs a built ``mem`` CLI.
+
+    Takes NO ``store_path``, and seeds a THROWAWAY one instead — the reason is the whole
+    character of the path this runs on. Pricing a fire is a READ
+    (``resume_cache.pending_tasks``), and the refuse-to-spend gate is the surface an operator is
+    meant to hit casually, repeatedly, to decide whether to spend at all. Handed the run's real
+    ``--store``, this would ``_reset_store`` it — UNLINK ``store.db``/``-wal``/``-shm`` — before
+    printing a price, and before the ``MemCliError``
+    branch that reports it could not compute one. An operator who pointed ``--store`` at a store
+    they cared about would lose it to a question, having answered nothing. So the question is not
+    asked of their store.
+
+    A throwaway answers it EXACTLY, and not approximately: the store is a derived artifact of the
+    corpus and free to rebuild (``toolreq_realagent._reset_store``), the fire resets ``--store`` and
+    reseeds it from these same ``sequences``/``tasks`` anyway, and the payload
+    ``resolve_payloads`` renders is retrieval TEXT, carrying no trace of the path it was retrieved
+    through. So the fingerprint this computes is the one the fire will file under. Pinned by
+    ``test_pricing_a_fire_seeds_a_throwaway_store_and_gets_the_real_ones_payload``: were it ever
+    false, the probe would price a fire under a payload the fire does not use and under-report by
+    the whole corpus.
+
+    ``dry_run=False`` is not a parameter: this answers what a PAID fire costs, and a free run's
+    identity is a different one (``BaseRunIdentity.dry_run``) that no disclosure authorizes money
+    against.
+
+    RAISES ``HeadlessAgentError`` when the claude binary cannot be identified — then the paid
+    identity cannot be constructed and there IS no honest answer (``BaseRunIdentity.cli_version``).
+    What a driver should SAY about that is the shell's; that there is no answer is this module's.
+    Every other failure propagates untouched — in particular the ``ValueError`` from
+    ``CachePlan.lookup`` when an identity's fingerprint is not the plan's, the loudest structural
+    defect this cache has, which must never be softened into a cost."""
+    with tempfile.TemporaryDirectory(prefix="toolreq-price-") as throwaway:
+        plan, _payloads = cache_plan(
+            tasks,
+            sequences,
+            out_dir=out_dir,
+            repeats=repeats,
+            model=model,
+            dry_run=False,
+            store_path=Path(throwaway) / "store.db",
+            mem_bin=mem_bin,
+            seed_fn=seed_fn,
+            version_fn=version_fn,
+            resume=resume,
+        )
+        return pending_tasks(plan, tasks)
+
+
 def run_corpus(
     tasks: Sequence[ToolReqRealAgentTask],
     sequences: Sequence[BenchmarkSequence],
@@ -504,45 +657,25 @@ def run_corpus(
 ) -> dict[str, Any]:
     """Evaluate every task through the shared resume cache and shape this grid's summary.
 
-    ``seed_fn`` runs BEFORE the cache is consulted and over the WHOLE corpus, every invocation, even
-    when every task is cache-served: it is free, and the payload it resolves rides in the identity,
-    so it has to be recomputed to know whether a cached cell is still current.
-
-    ``model`` is RESOLVED once here, never taken raw — through ``headless_agent.resolve_model``, the
-    same rule the agent itself runs under. ``RunIdentity`` refuses an unresolved one outright
-    (``BaseRunIdentity``), so this is the ONE place the rule is applied and the schema is the
-    backstop, not a second copy of it.
-
-    The claude BINARY is resolved the same way and in the same place — ONCE per run, so every task
-    in one sweep is filed under one instrument rather than each racing an upgrade. Only for a PAID
-    run: a dry run spawns no binary, and short-circuiting here is what keeps a free run runnable
-    with no ``claude`` installed at all.
-
-    ``version_fn`` overrides that resolver for a hermetic test; omitted, it is looked up on this
-    module at call time, so ``monkeypatch.setattr(grid, "resolve_cli_version", ...)`` reaches it
-    like every other double here. Why it defaults to the real thing where ``seed_fn`` does not is
-    argued at ``headless_agent.resolve_cli_version``."""
-    # Fail before seeding: a paid run that cannot name its binary is over.
+    The cache identity — the resolved model, the binary, the seeded payloads — is ``cache_plan``'s,
+    so this run and the disclosure that priced it read one answer."""
     resolved_model = resolve_model(model)
-    cli_version = "" if dry_run else (version_fn or resolve_cli_version)()
-    ours_payloads = seed_fn(sequences, tasks, store_path, mem_bin)
-
-    run = run_cached_corpus(
+    plan, ours_payloads = cache_plan(
         tasks,
+        sequences,
         out_dir=out_dir,
-        result_cls=CachedResult,
-        plan_of=lambda task: planned_calls(
-            task, ours_payloads.get(task.work_id, {}), model=resolved_model
-        ),
-        identity_of=lambda task, invocation_fingerprint: _identity(
-            task,
-            ours_payloads.get(task.work_id, {}),
-            repeats=repeats,
-            resolved_model=resolved_model,
-            cli_version=cli_version,
-            dry_run=dry_run,
-            invocation_fingerprint=invocation_fingerprint,
-        ),
+        repeats=repeats,
+        model=model,
+        dry_run=dry_run,
+        store_path=store_path,
+        mem_bin=mem_bin,
+        seed_fn=seed_fn,
+        version_fn=version_fn,
+        resume=resume,
+    )
+    run = run_cached_corpus(
+        plan,
+        tasks,
         evaluate=lambda task, recorder: evaluate_task(
             task,
             repeats=repeats,
@@ -551,8 +684,6 @@ def run_corpus(
             recorder=recorder,
             ours_payload=ours_payloads.get(task.work_id, {}),
         ),
-        summary_name=SUMMARY_NAME,
-        resume=resume,
     )
     results = run.results
     return {

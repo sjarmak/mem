@@ -23,7 +23,7 @@ import sys
 from collections import OrderedDict, defaultdict
 from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from pathlib import Path
-from typing import Annotated, Any, ForwardRef, get_args, get_origin
+from typing import Annotated, Any, ForwardRef, NoReturn, get_args, get_origin
 
 import pytest
 from pydantic import BaseModel, Field, ValidationError
@@ -56,6 +56,7 @@ if _SCRIPTS not in sys.path:
 
 import grid_toolreq_realagent as driver  # noqa: E402
 
+from membench.mem_cli import MemCliError  # noqa: E402
 from membench.runner.headless_agent import HeadlessAgentError  # noqa: E402
 
 CURRENT = "30 days"
@@ -655,15 +656,24 @@ def test_run_corpus_persists_and_is_resumable(tmp_path: Path) -> None:
     assert seed_calls["n"] == 2
 
 
-def _corpus_one(
-    tmp_path: Path, work_id: str = "w-0"
+def _corpus(
+    tmp_path: Path, *work_ids: str
 ) -> tuple[list[BenchmarkSequence], list[ToolReqRealAgentTask]]:
+    """Seed a frozen corpus of ``work_ids`` under ``tmp_path/corpus`` and load it."""
     corpus = tmp_path / "corpus"
     (corpus / "0").mkdir(parents=True)
     (corpus / "0" / "sequences.json").write_text(
-        json.dumps([_toolreq_seq(work_id).model_dump()]), encoding="utf-8"
+        json.dumps([_toolreq_seq(work_id).model_dump() for work_id in work_ids]), encoding="utf-8"
     )
     return load_corpus_with_sequences(corpus)
+
+
+def _corpus_one(
+    tmp_path: Path, work_id: str = "w-0"
+) -> tuple[list[BenchmarkSequence], list[ToolReqRealAgentTask]]:
+    """Seed a one-task frozen corpus under ``tmp_path/corpus`` and load it — the same scaffold
+    every driver test needs (mirrors ``test_toolreq_builtin._corpus_one``)."""
+    return _corpus(tmp_path, work_id)
 
 
 def _noop_cli_runner(argv: Sequence[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -1737,7 +1747,11 @@ def test_driver_discloses_the_plan_derived_paid_call_count(
     _corpus_one(tmp_path)  # writes a 1-task corpus under tmp_path/corpus
     _, tasks = load_corpus_with_sequences(tmp_path / "corpus")
     monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
-    code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
+    # A model is pinned because the unpinned gate now fires FIRST (mem-u9nu2): it is true regardless
+    # of the token, and the disclosure cannot price a fire whose identity names no model.
+    code = driver.main(
+        ["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out"), "--model", "s"]
+    )
     assert code == 2  # refused to spend (no token) — the gate that prints the disclosure
     out = capsys.readouterr().out
     disclosed = grid.worst_case_paid_call_count(tasks, repeats=3)  # driver default --repeats 3
@@ -1959,3 +1973,184 @@ def test_driver_halts_diagnosed_on_a_mid_sweep_agent_failure(
     assert "SWEEP HALT" in err
     assert "simulated mid-sweep rate-limit" in err  # carries the underlying failure
     assert "re-run" in err  # and points at the resume path
+
+
+# --- the go-command prices THIS fire, not the whole corpus (mem-u9nu2) -------------------
+
+
+@pytest.fixture
+def _hermetic_probe(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The disclosure now consults the resume cache, so it resolves the SAME two identity inputs a
+    paid run does: the claude binary and the seeded ours payload. Both are real IO — `claude
+    --version` and the `mem` CLI — so a driver test that left them live would key on whatever the
+    machine has and would need a built bin/mem to run at all. Stub both, the way `_run_corpus` does
+    for the same reasons."""
+    monkeypatch.setattr(grid, "resolve_cli_version", lambda: STUB_CLI_VERSION)
+    monkeypatch.setattr(driver, "seed_ours_store_and_resolve_payloads", _no_ours_payload)
+
+
+def test_the_go_command_prices_the_work_that_remains_not_the_whole_corpus(
+    tmp_path: Path, monkeypatch, capsys, _hermetic_probe: None
+) -> None:
+    """THE bead, on this grid — the same disclosure defect as the builtin sibling's, which is why it
+    was fixed in the same change rather than left as one idea with two copies.
+
+    Two of three tasks are pre-measured under the SAME paid identity the driver will price, so the
+    disclosure must name the ONE that remains. Still a per-task CEILING (`ours` with an empty
+    retrieval relabels from `none` and spends nothing — mem-fjfaf), now over the right tasks."""
+    sequences, tasks = _corpus(tmp_path, "w-0", "w-1", "w-2")
+    out = tmp_path / "out"
+    store_path = out / "store.db"
+    monkeypatch.setattr(grid, "run_arm", _spy_run_arm([], oracle_passes=True))
+    seeded = _run_corpus(
+        tasks[:2], sequences[:2], out, dry_run=False, store_path=store_path, model="sonnet"
+    )
+    assert seeded["executed"] == 2
+
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    code = driver.main(
+        [
+            "--corpus-dir",
+            str(tmp_path / "corpus"),
+            "--out",
+            str(out),
+            "--repeats",
+            "2",
+            "--model",
+            "sonnet",
+        ]
+    )
+    assert code == 2  # refused to spend — the gate that prints the disclosure
+    printed = capsys.readouterr().out
+
+    remaining = grid.worst_case_paid_call_count(tasks[2:], repeats=2)
+    cold = grid.worst_case_paid_call_count(tasks, repeats=2)
+    assert remaining < cold, "the fixture must have work left to skip, or this proves nothing"
+    assert f"COST OF THIS FIRE: at most {remaining} real" in printed
+    assert "2 task(s) are already cached" in printed
+    assert f"A COLD --out is at most {cold} real" in printed
+    assert "--model sonnet" in printed  # the command that spends pins what the count was priced on
+    assert "WHAT THAT COUNT ASSUMES" in printed
+
+
+def test_the_go_command_falls_back_to_the_cold_ceiling_when_the_store_cannot_be_seeded(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """This grid's probe is NOT the cheap read the builtin sibling's is: `ours_payload_fingerprint`
+    is an identity field, so the miss set is unknowable without seeding the store — which needs a
+    built `mem`. The refuse path never needed one before, so the diagnosis must be actionable and
+    must not cost the operator the go-command they came for.
+
+    Reported by MEANING, not by interpolating the exception: MemCliError carries a node subprocess
+    dump that would bury the rest of the disclosure, and nothing is lost — a precondition of pricing
+    the fire is a precondition of the fire, so it resurfaces in full at the next step."""
+    _corpus(tmp_path, "w-0")
+    monkeypatch.setattr(grid, "resolve_cli_version", lambda: STUB_CLI_VERSION)
+
+    def _unbuilt(*_a: object, **_k: object) -> NoReturn:
+        raise MemCliError("bin/mem import-records failed (exit 1): Cannot find module dist/main.js")
+
+    monkeypatch.setattr(driver, "seed_ours_store_and_resolve_payloads", _unbuilt)
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    code = driver.main(
+        [
+            "--corpus-dir",
+            str(tmp_path / "corpus"),
+            "--out",
+            str(tmp_path / "out"),
+            "--repeats",
+            "2",
+            "--model",
+            "sonnet",
+        ]
+    )
+    assert code == 2
+    printed = capsys.readouterr().out
+    assert "COST OF THIS FIRE: UNKNOWN" in printed
+    assert "could not seed the ours store — build it" in printed
+    assert "Cannot find module" not in printed, "the subprocess dump must not bury the disclosure"
+    assert "UPPER BOUND" in printed
+    assert "A COLD --out is at most" in printed
+    assert "scix-batch -- env CLAUDE_CODE_OAUTH_TOKEN=..." in printed  # the go-command survives
+    # ...and the count's caveat does NOT ride along: this branch printed no count to caveat.
+    assert "WHAT THAT COUNT ASSUMES" not in printed
+
+
+def test_pricing_a_fire_never_touches_the_runs_own_store(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """A REGRESSION of the refuse path's whole reason to exist. Pricing needs the ours payload, the
+    payload needs a seeded store, and `seed_ours_store_and_resolve_payloads` opens with
+    `_reset_store` — which UNLINKS store.db/-wal/-shm. Handed the run's real `--store`, the gate
+    that prints "REFUSING to spend" would DELETE the operator's store to answer a question about
+    cost, before printing the answer, and before the MemCliError branch that reports it could not
+    compute one. The `--store` default is under `--out`, but an operator may point it anywhere, and
+    this repo's own store holds three append-only, non-regenerable tables (CLAUDE.md).
+
+    So `remaining_tasks` seeds a THROWAWAY and never takes the run's store_path at all. The seed
+    double here calls the REAL `_reset_store` on whatever path it is handed: a double that merely
+    returned {} would pass this test while the defect was fully present."""
+    _corpus(tmp_path, "w-0")
+    monkeypatch.setattr(grid, "resolve_cli_version", lambda: STUB_CLI_VERSION)
+
+    reset_paths: list[Path] = []
+
+    def _seed_resetting_whatever_it_is_given(
+        _sequences: object, _tasks: object, store_path: Path, _mem_bin: object
+    ) -> dict[str, dict[str, str]]:
+        reset_paths.append(store_path)
+        _reset_store(store_path)  # the real thing — the unlink this test exists to catch
+        return {}
+
+    monkeypatch.setattr(
+        driver, "seed_ours_store_and_resolve_payloads", _seed_resetting_whatever_it_is_given
+    )
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+
+    out = tmp_path / "out"
+    out.mkdir()
+    precious = out / "store.db"  # the driver's DEFAULT --store, i.e. the un-careful operator's
+    precious.write_text("a store the operator would rather keep", encoding="utf-8")
+
+    code = driver.main(
+        ["--corpus-dir", str(tmp_path / "corpus"), "--out", str(out), "--model", "sonnet"]
+    )
+
+    assert code == 2  # refused to spend, as before
+    assert precious.read_text(encoding="utf-8") == "a store the operator would rather keep"
+    assert reset_paths, "the seed never ran, so this asserts nothing about what it would reset"
+    # It reset a throwaway, and the throwaway is gone: nothing is left behind either.
+    assert precious not in reset_paths
+    assert not any(path.exists() or path.parent.exists() for path in reset_paths)
+
+
+def test_pricing_a_fire_seeds_a_throwaway_store_and_gets_the_real_ones_payload(
+    tmp_path: Path,
+) -> None:
+    """What LICENSES the throwaway above, against a real built store rather than an argument.
+
+    The probe prices the fire under the payload it resolves from a temporary store; the fire runs
+    under the payload it resolves from `--store`. That is only sound because the store is a derived
+    artifact of the corpus (`_reset_store`), the fire resets and reseeds `--store` from these same
+    sequences anyway, and the rendered payload carries no trace of the path it came through. If any
+    of that were false — a path in the retrieved text, a store-location-dependent ranking — the
+    probe would price a fire under a payload the fire does not use, every cell would miss, and the
+    disclosure would under-report by the WHOLE corpus in the direction that costs money."""
+    require_mem_cli(DIST_MAIN)
+
+    seqs = [_toolreq_seq("w-0"), _toolreq_seq("w-1")]
+    tasks = [adapt_sequence(seq) for seq in seqs]
+
+    here = seed_ours_store_and_resolve_payloads(
+        seqs, tasks, tmp_path / "a" / "store.db", str(MEM_BIN)
+    )
+    there = seed_ours_store_and_resolve_payloads(
+        seqs, tasks, tmp_path / "b" / "store.db", str(MEM_BIN)
+    )
+
+    assert here == there, "the resolved payload depends on where the store lives"
+    # The identity field itself, not just the dict it is derived from.
+    assert {w: grid.payload_fingerprint(p) for w, p in here.items()} == {
+        w: grid.payload_fingerprint(p) for w, p in there.items()
+    }
+    assert any(here.values()), "retrieval never fired, so this compares two empty payloads"

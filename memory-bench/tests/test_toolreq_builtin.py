@@ -1336,7 +1336,7 @@ def test_go_command_refuses_a_factorization_that_misdescribes_its_own_total(
     monkeypatch.setattr(grid, "cell_legs", _legs_by_task({"w-0": 2, "w-1": 3}))
 
     with pytest.raises(ValueError, match="non-uniform calls/repeat"):
-        driver._print_go_command(tasks, 1, tmp_path / "out", tmp_path / "corpus")
+        driver._print_go_command(tasks, 1, tmp_path / "out", tmp_path / "corpus", "sonnet")
     assert "real `claude -p` call(s)" not in capsys.readouterr().out  # refused, not printed
 
 
@@ -1344,7 +1344,7 @@ def test_go_command_on_an_empty_corpus_says_so(tmp_path: Path) -> None:
     # main() refuses an empty corpus before it ever discloses a cost, so this is a caller-contract
     # violation. It still must not read as "non-uniform calls/repeat []", which describes nothing.
     with pytest.raises(ValueError, match="no tasks"):
-        driver._print_go_command([], 1, tmp_path / "out", tmp_path / "corpus")
+        driver._print_go_command([], 1, tmp_path / "out", tmp_path / "corpus", "sonnet")
 
 
 def test_the_pre_sweep_banner_refuses_a_factorization_that_misdescribes_its_own_total(
@@ -1732,3 +1732,152 @@ def test_the_seeded_settings_carry_no_permissions_key() -> None:
     BUILTIN_SETTINGS into the establish leg's CLAUDE_CONFIG_DIR, so a permissions block added
     there would widen the unconstrained leg without any command line moving."""
     assert set(BUILTIN_SETTINGS) == {"autoMemoryEnabled"}
+
+
+# --- the go-command prices THIS fire, not the whole corpus (mem-u9nu2) -------------------
+
+
+def test_the_go_command_prices_the_work_that_remains_not_the_whole_corpus(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """THE bead, end to end. The refuse-to-spend gate fires BEFORE the sweep, so it used to name the
+    only cost it could see — the whole corpus — while a resume re-measures only what is not cached.
+    On a mostly-served `--out` that number describes work that will not be done, and it is the
+    number a human authorizes real money against.
+
+    Two of three tasks are pre-measured under the SAME paid identity the driver will price, so the
+    disclosure must name the ONE that remains and keep the cold cost visible as what it is."""
+    tasks = _corpus(tmp_path, "w-0", "w-1", "w-2")
+    out = tmp_path / "out"
+    monkeypatch.setattr(grid, "run_builtin_arm", _engaging_arm)
+    seeded = grid.run_corpus(tasks[:2], out_dir=out, repeats=1, model="sonnet", dry_run=False)
+    assert seeded["executed"] == 2
+
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    code = driver.main(
+        [
+            "--corpus-dir",
+            str(tmp_path / "corpus"),
+            "--out",
+            str(out),
+            "--repeats",
+            "1",
+            "--model",
+            "sonnet",
+        ]
+    )
+    assert code == 2  # refused to spend — the gate that prints the disclosure
+    printed = capsys.readouterr().out
+
+    remaining = grid.paid_call_count(tasks[2:], repeats=1)
+    cold = grid.paid_call_count(tasks, repeats=1)
+    assert (
+        remaining < cold
+    ), "the fixture must actually have work left to skip, or this proves nothing"
+    assert (
+        f"COST OF THIS FIRE: {remaining} real `claude -p` call(s) over the 1 of 3 task(s)"
+        in printed
+    )
+    assert "2 task(s) are already cached" in printed
+    # The cold number stays, labeled as the whole corpus — it is what a fresh --out costs, and
+    # dropping it would hide the ceiling the remaining count is conditional on.
+    assert f"A COLD --out is {cold} real" in printed
+    # ...and the command that spends pins the model the count was priced under (else the disclosure
+    # prices one identity and the fire runs another: `model` is an identity field).
+    assert "--model sonnet" in printed
+    assert "WHAT THAT COUNT ASSUMES" in printed
+
+
+def test_the_go_command_says_a_fully_cached_resume_spends_nothing(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """The bead's scenario at its limit. Its own branch rather than a `0 calls` line, because zero
+    is also what the PREFLIGHT costs here — `before_first_spend` fires before the first task
+    actually measured, and there is none (mem-dblue) — and a human deciding whether to re-fire
+    needs that said, not inferred."""
+    tasks = _corpus(tmp_path, "w-0", "w-1")
+    out = tmp_path / "out"
+    monkeypatch.setattr(grid, "run_builtin_arm", _engaging_arm)
+    grid.run_corpus(tasks, out_dir=out, repeats=1, model="sonnet", dry_run=False)
+
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    driver.main(
+        [
+            "--corpus-dir",
+            str(tmp_path / "corpus"),
+            "--out",
+            str(out),
+            "--repeats",
+            "1",
+            "--model",
+            "sonnet",
+        ]
+    )
+    printed = capsys.readouterr().out
+    assert "THIS FIRE SPENDS NOTHING: all 2 task(s) are already cached" in printed
+    assert "The PREFLIGHT does not fire either" in printed
+    # "spends nothing" is a COUNT, and the largest under-report available here if the identity
+    # moves: every cell called cached is re-measured, so the fire spends the whole corpus.
+    assert "WHAT THAT COUNT ASSUMES" in printed
+
+
+def test_the_go_command_falls_back_to_the_cold_ceiling_when_the_binary_cannot_be_named(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """A paid cell's identity NAMES the binary it was measured on, so without one there is no
+    identity to ask the cache what a resume would reuse — and no honest remaining count.
+
+    The fallback is the cold cost, labeled UNKNOWN and explained: strictly SAFE (it over-discloses,
+    the direction this disclosure had for every resume before mem-u9nu2) and never silent. What it
+    must NOT do is drop the go-command: the operator came here for it, and the probe is an
+    improvement to the disclosure, not a precondition of it."""
+    _corpus(tmp_path, "w-0")
+
+    def _unidentifiable() -> str:
+        raise HeadlessAgentError("claude --version printed no recognisable version")
+
+    monkeypatch.setattr(grid, "resolve_cli_version", _unidentifiable)  # beats the autouse stub
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    code = driver.main(
+        [
+            "--corpus-dir",
+            str(tmp_path / "corpus"),
+            "--out",
+            str(tmp_path / "out"),
+            "--repeats",
+            "1",
+            "--model",
+            "sonnet",
+        ]
+    )
+    assert code == 2
+    printed = capsys.readouterr().out
+    assert "COST OF THIS FIRE: UNKNOWN" in printed
+    assert "UPPER BOUND" in printed
+    assert "A COLD --out is" in printed
+    assert "scix-batch -- env CLAUDE_CODE_OAUTH_TOKEN=..." in printed  # the go-command survives
+    # ...and the count's caveat does NOT ride along: it caveats a count, and this branch printed
+    # none. A paragraph explaining what "the count above" assumes, under a branch with no count
+    # above, asserts something its own output does not hold.
+    assert "WHAT THAT COUNT ASSUMES" not in printed
+
+
+def test_an_unpinned_paid_run_is_refused_before_a_go_command_it_could_not_price(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """The model gate fires BEFORE the token gate (mem-u9nu2), and both halves of that matter.
+
+    It is true regardless of the token, so the old order printed a go-command telling the human to
+    fire a command that would immediately refuse for a DIFFERENT reason. And `model` is an identity
+    field: with none resolved there is no paid identity, so the disclosure could not have priced the
+    fire even if it wanted to — refusing here is what lets the go-command below always pin one."""
+    _corpus(tmp_path, "w-0")
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    monkeypatch.delenv(ENV_MODEL, raising=False)
+
+    code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
+
+    assert code == 2
+    printed = capsys.readouterr().out
+    assert "REFUSING to spend: no model named" in printed
+    assert "scix-batch" not in printed, "priced nothing, so it must not print a go-command"

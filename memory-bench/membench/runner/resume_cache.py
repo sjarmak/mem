@@ -13,10 +13,21 @@ the exact ``claude -p`` command lines the task's cells spawn, and ``run_cached_c
 publish a measurement whose RECORDED invocations do not hash to it. The two halves are what make it
 structural rather than a convention — hash the artifact, and check the artifact against the hash.
 
-And the fingerprint is not a value a grid supplies at all: ``run_cached_corpus`` computes it ITSELF
+And the fingerprint is not a value a grid supplies at all: ``CachePlan.lookup`` computes it ITSELF
 from the grid's ``plan_of`` (``invocation_digest``) and refuses any ``identity_of`` that returns a
 different one — before the cache is consulted, so a fully cache-served resume, which never reaches
 the write boundary, is checked too. A grid can no longer author the field by a route of its own.
+
+The same invariant one level out, because a COST is authorized the way a measurement is read. Two
+callers need the hit/miss decision: ``run_cached_corpus``, which answers "what will this run
+measure" by measuring it, and ``pending_tasks``, which answers it for a driver's refuse-to-spend
+disclosure BEFORE anything runs (mem-u9nu2). They read one ``CachePlan``, through one
+``CachePlan.lookup``. A probe that modelled the decision instead — the crudest being "does
+``<work_id>.json`` exist" — is this module's defect family displaced from the measurement to the
+price: a FREE dry-run's file exists and cannot satisfy a PAID identity, so the probe reports cached,
+the fire spends anyway, and the human authorized a fraction of what moved. That direction is the one
+a probe ADDS, since the sweep's own over-report was fail-safe; it is why the decision is shared
+rather than re-derived, and why ``CachePlan`` is a value rather than a convention.
 
 Every defense below is STRUCTURAL — a property of the schema, not of the caller — and each is
 stated at its own definition. A consumer subclasses ``BaseRunIdentity`` / ``BaseCellOutcome`` /
@@ -175,7 +186,7 @@ class BaseRunIdentity(BaseModel):
     ``invocation_fingerprint`` hashes the COMMAND LINES THEMSELVES — every ``claude -p`` argv every
     cell will spawn, prompt included — rather than a model of what goes into them, and so it cannot
     be incomplete *about the invocation*, because it IS the invocation. It is not authored here
-    either: ``run_cached_corpus`` derives it from the grid's ``plan_of`` and refuses any identity
+    either: ``CachePlan.lookup`` derives it from the grid's ``plan_of`` and refuses any identity
     that carries a different value, before the cache is consulted. Its other half is the write
     boundary: ``run_cached_corpus`` refuses to publish a measurement whose RECORDED invocations do
     not hash to it (``invocation_digest``), so the two cannot be things that merely agree today —
@@ -451,6 +462,108 @@ def assert_usable_work_ids(tasks: Sequence[CacheableTask], summary_name: str) ->
 
 
 @dataclass(frozen=True)
+class CacheLookup(Generic[IdentityT, CellT]):
+    """What consulting the cache for ONE task answered: where its result lives, the identity this
+    run would measure it under, and the persisted record if one may be REUSED (else ``None`` — a
+    MISS, meaning this task will be measured and will spend).
+
+    Returned whole rather than as a bare bool because ``run_cached_corpus`` needs the ``identity``
+    again to publish under (``result_cls.of``) and the ``result_path`` to publish to, while
+    ``pending_tasks`` needs only ``cached``. One decision, two readers, no second derivation."""
+
+    result_path: Path
+    identity: IdentityT
+    cached: BaseCachedResult[IdentityT, CellT] | None
+
+
+# `eq=False`: `plan_of` / `identity_of` are functions, so the structural `__eq__` `frozen=True`
+# would synthesize compares two identical plans UNEQUAL — a check that fails open on the exact
+# question this class exists to settle. No meaningful structural equality exists here, so none is
+# offered.
+@dataclass(frozen=True, eq=False)
+class CachePlan(Generic[TaskT, IdentityT, CellT]):
+    """Everything that decides WHETHER a persisted result may be reused — the miss decision's
+    inputs, as one value: a thing PASSED WHOLE, not a thing compared (see `eq=False` above).
+
+    Passed whole rather than as loose keyword arguments so the probe and the run cannot be asked
+    about DIFFERENT runs — the module docstring argues why.
+
+    ``resume`` is a field for the same reason and not a convenience default: it is the knob a driver
+    is most likely to model rather than share (``--no-resume`` re-measures everything, so a probe
+    that assumed ``True`` would disclose a cached-and-cheap resume for a fire that re-spends the
+    whole corpus — the UNDER-report direction). Neither driver exposes the flag today, which makes
+    the drift unobservable rather than absent, and unobservable-but-absent is the condition under
+    which every defect this module documents shipped.
+
+    ``IdentityT`` is a parameter of this class and not a convenience: it BINDS ``identity_of`` to
+    ``result_cls``, so a grid cannot pair one grid's identity with another's result type. Typed as
+    the base ``BaseRunIdentity``, that pairing was a matter of each ``cache_plan`` factory being
+    careful by hand, and a crossed pair type-checked clean and failed as a pydantic
+    ``ValidationError`` raised INSIDE the write boundary below — i.e. after ``evaluate`` had already
+    made that task's real ``claude -p`` calls. Paid, then crashed, then published nothing: the
+    expensive end of this module's failure modes, reachable by a copy-paste between two sibling
+    grids. Now it is an ``arg-type`` error at the ``CachePlan(...)`` call."""
+
+    out_dir: Path
+    result_cls: type[BaseCachedResult[IdentityT, CellT]]
+    plan_of: Callable[[TaskT], Sequence[CellCalls]]
+    identity_of: Callable[[TaskT, str], IdentityT]
+    summary_name: str
+    resume: bool = True
+
+    def lookup(self, task: TaskT) -> CacheLookup[IdentityT, CellT]:
+        """Consult the cache for ONE task: the hit/miss decision, in ONE place, for every reader.
+
+        A method and not two copies, so the model that could drift never exists — the module
+        docstring argues why.
+
+        The fingerprint is derived HERE from ``plan_of`` and the identity is checked to carry
+        exactly it — before the cache is consulted, so a probe and a fully cache-served resume are
+        both checked, and a grid cannot author the field by a route its plan does not own."""
+        result_path = self.out_dir / f"{task.work_id}.json"
+        plan_fingerprint = invocation_digest(self.plan_of(task))
+        identity = self.identity_of(task, plan_fingerprint)
+        if identity.invocation_fingerprint != plan_fingerprint:
+            raise ValueError(
+                f"{task.work_id}: the identity carries invocation_fingerprint "
+                f"{identity.invocation_fingerprint}, but this run's plan hashes to "
+                f"{plan_fingerprint} — the fingerprint is computed by the CachePlan from "
+                "plan_of and handed to identity_of, so an identity carrying any other value "
+                "authored the field by a route the plan does not own. Pass through the fingerprint "
+                "you were given; do not recompute it."
+            )
+        # No is_file() probe first: load_cached is TOTAL over its path — a missing file raises
+        # OSError inside it and is a miss like every other rejection.
+        cached = load_cached(result_path, identity, self.result_cls) if self.resume else None
+        return CacheLookup(result_path=result_path, identity=identity, cached=cached)
+
+
+def pending_tasks(plan: CachePlan[TaskT, IdentityT, CellT], tasks: Sequence[TaskT]) -> list[TaskT]:
+    """The tasks ``run_cached_corpus`` WOULD measure under this same ``plan`` — the work that
+    REMAINS, in corpus order. A pure READ: it publishes nothing, rewrites nothing, and spawns no
+    agent.
+
+    What it is for: a paid driver's refuse-to-spend disclosure fires INSTEAD of the sweep, so the
+    whole corpus is the only cost it can name — and on a mostly-cached resume that describes work
+    which will not be done (mem-u9nu2). Price this subset with the grid's own cost function instead.
+
+    Deliberately NOT free of preconditions, and callers must not read it as advisory: the answer is
+    only true for a fire that runs under the identity this ``plan`` names. ``model``,
+    ``cli_version`` and each grid's own measured inputs are identity fields, so a fire under a
+    repointed ``MEMBENCH_AGENT_MODEL``, an upgraded ``claude``, or a moved payload misses every cell
+    this probe called cached — and spends the WHOLE corpus against a number that disclosed a
+    fraction of it. That direction is the one this probe adds and the sweep never had, so a driver
+    that prints the number must pin what it can into the command it prints, and name what it
+    cannot.
+
+    ``assert_usable_work_ids`` first, exactly as the run does: a duplicate work_id aliases two tasks
+    onto one file, and the probe would answer for the wrong one. The run refuses such a corpus
+    outright, so a disclosure that priced it would be pricing a fire that cannot start."""
+    assert_usable_work_ids(tasks, plan.summary_name)
+    return [task for task in tasks if plan.lookup(task).cached is None]
+
+
+@dataclass(frozen=True)
 class CorpusRun(Generic[ResultT]):
     """What one sweep over the corpus produced, and what it COST to produce it.
 
@@ -465,40 +578,41 @@ class CorpusRun(Generic[ResultT]):
 
 
 def run_cached_corpus(
+    plan: CachePlan[TaskT, IdentityT, CellT],
     tasks: Sequence[TaskT],
     *,
-    out_dir: Path,
-    result_cls: type[ResultT],
-    plan_of: Callable[[TaskT], Sequence[CellCalls]],
-    identity_of: Callable[[TaskT, str], BaseRunIdentity],
-    evaluate: Callable[[TaskT, CellRecorder], Sequence[BaseCellOutcome]],
-    summary_name: str,
-    resume: bool = True,
+    evaluate: Callable[[TaskT, CellRecorder], Sequence[CellT]],
     before_first_spend: Callable[[], None] | None = None,
-) -> CorpusRun[ResultT]:
+) -> CorpusRun[BaseCachedResult[IdentityT, CellT]]:
     """Evaluate every task, persisting one ``<work_id>.json`` each, and reuse a persisted result
     only when its identity matches this run's — so a FREE dry-run's simulated result can never
     satisfy a PAID run over the same ``--out``, and a corrupt or partial file is a miss rather than
     a crash.
 
-    ``plan_of``, ``identity_of`` and ``evaluate`` are injected rather than named: they are the only
-    things that differ between the grids that share this cache, and injecting them is what keeps the
-    arms, the invocations and the verdict rule of one experiment out of the other's.
+    ``plan`` carries the miss decision's inputs and ``evaluate`` is injected beside it: they are the
+    only things that differ between the grids that share this cache, and injecting them is what
+    keeps the arms, the invocations and the verdict rule of one experiment out of the other's.
 
-    ``plan_of`` returns the ``claude -p`` cycles a task's cells WILL spawn, and THIS function — not
-    the grid — hashes them into ``invocation_fingerprint`` (``invocation_digest``) and hands the
+    ``plan.plan_of`` returns the ``claude -p`` cycles a task's cells WILL spawn, and the PLAN — not
+    the grid — hashes them into ``invocation_fingerprint`` (``CachePlan.lookup``) and hands the
     value to ``identity_of``. So ``invocation_fingerprint`` is no longer a field any grid can author
     by a route of its own: whatever ``identity_of`` returns must carry exactly the digest computed
-    here (checked below, for EVERY task, before any spend), and the write boundary then checks the
+    there (checked for EVERY task, before any spend), and the write boundary below then checks the
     RECORDED invocations against that SAME value. The grid supplies one plan; the fingerprint the
-    identity is compared under and the fingerprint the arms are held to are one thing, owned by this
+    identity is compared under and the fingerprint the arms are held to are one thing, owned by that
     seam rather than two call sites that happen to agree today.
 
     ``before_first_spend`` is a driver's paid warm-up — a preflight cycle, a mechanism check — and
     is injected for the same reason: it must fire once if this run will measure anything and NOT AT
-    ALL if it will not, and only this loop knows which. A driver that computed the miss set itself
-    would keep a MODEL of that decision (the invariant above, one input over) and drift from it the
-    moment the two disagreed about a knob such as ``resume``.
+    ALL if it will not, and only this loop knows which. A driver that MODELLED the miss set — an
+    ``is_file`` probe, a hand-rolled identity — would drift from this loop the moment the two
+    disagreed about a knob such as ``resume``, and a warm-up is a paid call: it must not fire for a
+    corpus this loop will serve entirely from cache.
+
+    A driver that must know the miss set WITHOUT running asks ``pending_tasks``, which reads this
+    same ``plan``: the decision has one home, not one asker. The hook stays the right shape for its
+    own case, which is not "what remains" but "fire once, if anything remains, at the moment it
+    does".
 
     It fires immediately before the first task that reaches ``evaluate``, so
     ``assert_usable_work_ids`` and every cache hit speak FIRST and a fully-served corpus costs zero
@@ -519,9 +633,9 @@ def run_cached_corpus(
     already made and are NOT written — and that is the cheap end of this failure.
 
     What this seam closed on the PLAN side is the third route: the fingerprint is derived from
-    ``plan_of`` HERE, not authored inside ``identity_of``, so a grid can no longer carry a
-    fingerprint computed by any route other than its plan — and that check fires on a cache HIT too,
-    not only on the miss the write boundary sees."""
+    ``plan_of`` in ``CachePlan.lookup``, not authored inside ``identity_of``, so a grid can no
+    longer carry a fingerprint computed by any route other than its plan — and that check fires on a
+    cache HIT too, not only on the miss the write boundary sees."""
     # `mode=0o700` because this dir holds PAID results and the publish below treats it as a
     # trust boundary. A bare `mkdir` takes 0o777 & ~umask -- 0o755 under the usual umask, and
     # 0o775 (GROUP-WRITABLE) under the 0o002 that this rig's own sessions run with, which is
@@ -530,41 +644,21 @@ def run_cached_corpus(
     # common case rather than guaranteeing a mode: an out_dir the operator already created
     # keeps whatever it had. The publish is what actually refuses; this stops handing it the
     # problem for free.
-    out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-    assert_usable_work_ids(tasks, summary_name)
+    plan.out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    assert_usable_work_ids(tasks, plan.summary_name)
 
-    results: list[ResultT] = []
+    results: list[BaseCachedResult[IdentityT, CellT]] = []
     executed = 0
     reused = 0
     warmed_up = False
     for task in tasks:
-        result_path = out_dir / f"{task.work_id}.json"
-        # The fingerprint is computed HERE, from the plan, and the identity is checked to carry
-        # exactly it — for every task, before any spend and whether it hits or misses. A grid that
-        # returned any other value in `invocation_fingerprint` (a fingerprint built by a route the
-        # plan does not own) is refused at construction, so the write boundary below is no longer
-        # the ONLY place the invocation is bound to the plan: a fully cache-served resume, which
-        # never reaches `evaluate`, is checked here too.
-        plan_fingerprint = invocation_digest(plan_of(task))
-        identity = identity_of(task, plan_fingerprint)
-        if identity.invocation_fingerprint != plan_fingerprint:
-            raise ValueError(
-                f"{task.work_id}: the identity carries invocation_fingerprint "
-                f"{identity.invocation_fingerprint}, but this run's plan hashes to "
-                f"{plan_fingerprint} — the fingerprint is computed by run_cached_corpus from "
-                "plan_of and handed to identity_of, so an identity carrying any other value "
-                "authored the field by a route the plan does not own. Pass through the fingerprint "
-                "you were given; do not recompute it."
-            )
-        # No is_file() probe first: load_cached is TOTAL over its path — a missing file raises
-        # OSError inside it and is a miss like every other rejection.
-        cached = load_cached(result_path, identity, result_cls) if resume else None
-        if cached is not None:
+        found = plan.lookup(task)
+        if found.cached is not None:
             # Reused whole. Nothing is recomputed and the file is NOT rewritten: it already passed
             # every validator, so a rewrite could only reproduce it — and a fully cache-served
             # resume then does zero writes, leaving the results' mtimes an honest record of which
             # tasks this run actually measured.
-            results.append(cached)
+            results.append(found.cached)
             reused += 1
             continue
         if before_first_spend is not None and not warmed_up:
@@ -576,21 +670,21 @@ def run_cached_corpus(
         recorder = CellRecorder()
         outcomes = evaluate(task, recorder)
         sent = invocation_digest(recorder.recorded())
-        if sent != plan_fingerprint:
+        if sent != found.identity.invocation_fingerprint:
             raise ValueError(
                 f"{task.work_id}: the `claude -p` invocations this task actually made hash to "
                 f"{sent}, but the identity it was measured under fingerprints "
-                f"{plan_fingerprint} — the grid's plan is no longer what its arms "
-                "execute. This measurement is NOT written: publishing it would file a real result "
-                "under a fingerprint describing a command line it never sent, and every cell a "
-                "later resume serves on that fingerprint would answer for a different run. Fix the "
-                "plan (or the arm) so the two are one thing again, then re-measure."
+                f"{found.identity.invocation_fingerprint} — the grid's plan is no longer what its "
+                "arms execute. This measurement is NOT written: publishing it would file a real "
+                "result under a fingerprint describing a command line it never sent, and every "
+                "cell a later resume serves on that fingerprint would answer for a different run. "
+                "Fix the plan (or the arm) so the two are one thing again, then re-measure."
             )
         executed += 1
-        result = result_cls.of(task.work_id, identity, outcomes)
+        result = plan.result_cls.of(task.work_id, found.identity, outcomes)
         # Atomic publish: write a sibling temp file then rename, so a kill mid-write leaves either
         # the old result or the new one, never a half-written JSON the next resume trips on.
-        _publish_atomically(result_path, result.model_dump_json(indent=2) + "\n")
+        _publish_atomically(found.result_path, result.model_dump_json(indent=2) + "\n")
         results.append(result)
     return CorpusRun(results=results, executed=executed, reused=reused)
 

@@ -54,6 +54,7 @@ from membench.runner.headless_agent import (
     REFUSE_UNPINNED_MODEL,
     HeadlessAgentError,
     a_paid_run_needs_a_model,
+    resolve_model,
 )
 from membench.runner.toolreq_builtin_grid import (
     AGENT_ERROR,
@@ -63,6 +64,7 @@ from membench.runner.toolreq_builtin_grid import (
     PreflightHaltError,
     paid_call_count,
     preflight_gate,
+    remaining_tasks,
     run_corpus,
     uniform_calls_per_repeat,
 )
@@ -74,8 +76,75 @@ DEFAULT_OUT = PROJECT_ROOT / ".mem/toolreq-builtin"
 ENV_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN"
 
 
+# What a cache-derived count is conditional on, printed with the count and never without it. The
+# fire is priced under an IDENTITY (resume_cache.BaseRunIdentity), and the go-command below pins the
+# half of it this script can pin — the model. The rest is named rather than pinned, because an
+# `npm -g` upgrade of the claude binary is a drift nobody performs on purpose (the argument is
+# BaseRunIdentity.cli_version's) and a --out on another host is not this script's to reach.
+_ASSUMES = (
+    "  WHAT THAT COUNT ASSUMES: that the fire runs under the identity priced here. The command "
+    "below pins --model for that reason. An upgraded `claude` (the binary is an identity field "
+    "too) or a different --out re-measures cells counted as cached above, and spends up to the "
+    "cold cost."
+)
+
+
+def _this_fire_costs(
+    tasks: Sequence[ToolReqRealAgentTask], repeats: int, out_dir: Path, model: str
+) -> str:
+    """The disclosure's headline: what the fire being authorized ACTUALLY spends.
+
+    The corpus cost is what a COLD ``--out`` spends. A resume measures only what is not already
+    cached, so on a mostly-served ``--out`` the corpus number describes work that will not be done,
+    and the human authorizes real money against it (mem-u9nu2). ``remaining_tasks`` answers what
+    this fire measures, and ``paid_call_count`` — the same function the corpus total is summed by —
+    prices it.
+
+    The grid decides what remains; this decides what to SAY about it, including when it says there
+    is no answer. ``HeadlessAgentError`` is caught NARROWLY and on purpose: it means the claude
+    binary could not be identified, so no paid identity exists to ask the cache about, and the cold
+    ceiling is the only honest thing left to print — a strictly SAFE over-report, labeled as one.
+    Anything else propagates, in particular ``CachePlan.lookup``'s ``ValueError`` when an identity's
+    fingerprint is not the plan's: that is a structural defect in the grid and must surface as
+    itself, never as a cost estimate.
+
+    ``_ASSUMES`` rides only with the branches that print a count; the UNKNOWN branch has none to
+    caveat. ``resume_cache.pending_tasks`` argues the under-report direction that makes it
+    load-bearing on the fully-cached branch too."""
+    try:
+        remaining = remaining_tasks(tasks, out_dir=out_dir, repeats=repeats, model=model)
+    except HeadlessAgentError as exc:
+        return (
+            f"  COST OF THIS FIRE: UNKNOWN — the claude binary could not be identified ({exc}), so "
+            "this cannot ask the cache what a paid run would reuse (the binary is part of a paid "
+            "cell's identity). The cold cost below is therefore an UPPER BOUND: any task already "
+            f"cached in {out_dir} is reused and spends nothing."
+        )
+    if not remaining:
+        return (
+            f"  THIS FIRE SPENDS NOTHING: all {len(tasks)} task(s) are already cached in {out_dir} "
+            "under this run's identity and would be REUSED. The PREFLIGHT does not fire either — "
+            "it runs only before the first task actually measured, and there is none (mem-dblue). "
+            f"Re-read the existing results instead of re-firing.\n{_ASSUMES}"
+        )
+    calls = paid_call_count(remaining, repeats=repeats)
+    hours = calls * DEFAULT_TIMEOUT_S / 3600.0
+    cached = len(tasks) - len(remaining)
+    return (
+        f"  COST OF THIS FIRE: {calls} real `claude -p` call(s) over the {len(remaining)} of "
+        f"{len(tasks)} task(s) that REMAIN; worst-case wall-clock ~{hours:.1f}h at the "
+        f"{DEFAULT_TIMEOUT_S:.0f}s timeout.\n"
+        f"    {cached} task(s) are already cached in {out_dir} and would be reused, spending "
+        f"nothing.\n{_ASSUMES}"
+    )
+
+
 def _print_go_command(
-    tasks: Sequence[ToolReqRealAgentTask], repeats: int, out_dir: Path, corpus_dir: Path
+    tasks: Sequence[ToolReqRealAgentTask],
+    repeats: int,
+    out_dir: Path,
+    corpus_dir: Path,
+    model: str,
 ) -> None:
     # Before `calls`, so an empty corpus reads as itself rather than as the uniformity failure
     # below (whose `sorted(set())` would print a nonsense `[]`, describing nothing).
@@ -85,19 +154,23 @@ def _print_go_command(
         )
     n_tasks = len(tasks)
     calls = paid_call_count(tasks, repeats=repeats)
-    worst_hours = calls * DEFAULT_TIMEOUT_S / 3600.0
     # The `n_tasks x channel x repeat x per_repeat` factorization the human reads to sanity-check
     # `calls` is only exact when every task has the same leg count (`paid_call_count` itself sums
     # per task). `uniform_calls_per_repeat` returns that single factor or refuses a non-uniform
-    # corpus before the disclosure prints.
+    # corpus before the disclosure prints. It explains the COLD number and is printed only beside
+    # it: the remaining cost is a SUBSET's sum and no single factorization multiplies out to it.
     per_repeat = uniform_calls_per_repeat(tasks)
+    # THE one rule, called — never a second copy of `model or MEMBENCH_AGENT_MODEL`
+    # (headless_agent.resolve_model).
+    # main() refuses an unpinned paid run BEFORE this prints, so this always names a model.
+    resolved_model = resolve_model(model)
     print(
         f"REFUSING to spend: {ENV_OAUTH} is unset.\n"
-        f"  This paid sweep is {calls} real `claude -p` call(s) "
+        f"{_this_fire_costs(tasks, repeats, out_dir, model)}\n"
+        f"  A COLD --out is {calls} real `claude -p` call(s) "
         f"({n_tasks} task x {len(CHANNELS)} channel x {repeats} repeat x "
         f"{per_repeat} calls/repeat [establish+goal] — {per_repeat}x the none/oracle "
-        f"1-call/repeat cost); worst-case wall-clock ~{worst_hours:.1f}h at the "
-        f"{DEFAULT_TIMEOUT_S:.0f}s timeout.\n"
+        f"1-call/repeat cost). That is the whole corpus, not this fire.\n"
         f"  Plus one PREFLIGHT establish+check cycle ({per_repeat} calls) before the first "
         "task actually measured — and none at all if every task is already cached.\n"
         f"  Per-task results persist to {out_dir} and are reused on re-run (resumable).\n"
@@ -108,7 +181,8 @@ def _print_go_command(
         "  To fire (Stephanie's per-action go), source the token from an account home and "
         "wrap in scix-batch:\n\n"
         f"    scix-batch -- env {ENV_OAUTH}=... \\\n"
-        f"        uv run python scripts/grid_toolreq_builtin.py --corpus-dir {corpus_dir}\n\n"
+        f"        uv run python scripts/grid_toolreq_builtin.py --corpus-dir {corpus_dir} \\\n"
+        f"            --out {out_dir} --repeats {repeats} --model {resolved_model}\n\n"
         "  Or prove the wiring for free first:\n"
         f"    uv run python scripts/grid_toolreq_builtin.py --corpus-dir {corpus_dir} --dry-run"
     )
@@ -177,12 +251,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"no tool-requiring tasks under {corpus_dir}", file=sys.stderr)
         return 1
 
-    if not args.dry_run and not os.environ.get(ENV_OAUTH):
-        _print_go_command(tasks, args.repeats, args.out, corpus_dir)
-        return 2
-
+    # The model gate comes FIRST, and not for tidiness: it fires regardless of the token, so the
+    # other order printed a go-command telling the human to run a command that would immediately
+    # refuse for a DIFFERENT reason. It is also what lets the disclosure exist at all — the model is
+    # part of a paid cell's identity, so without one there is no identity to ask the cache what a
+    # resume would reuse, and no honest way to price the fire (mem-u9nu2).
     if a_paid_run_needs_a_model(args.model, dry_run=args.dry_run):
         print(REFUSE_UNPINNED_MODEL)
+        return 2
+
+    if not args.dry_run and not os.environ.get(ENV_OAUTH):
+        _print_go_command(tasks, args.repeats, args.out, corpus_dir, args.model)
         return 2
 
     # Why a hook rather than a step run here: `preflight_gate`. `--dry-run` spends nothing by

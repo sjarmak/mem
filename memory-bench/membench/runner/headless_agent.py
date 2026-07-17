@@ -107,7 +107,7 @@ class CellCalls:
     """The ONE cycle of ``claude -p`` invocations a single ``(arm, channel)`` cell makes.
 
     The unit BOTH halves of a paid grid's cache identity are built from: the grid renders the cycle
-    its plan WILL send (a grid's ``planned_calls``, which ``resume_cache.run_cached_corpus`` hashes
+    its plan WILL send (a grid's ``planned_calls``, which ``resume_cache.CachePlan.lookup`` hashes
     into ``invocation_fingerprint``), the arm returns the cycle it DID send (recorded off the CLI
     seam by ``RecordingRunner``, never modelled), and ``resume_cache.run_cached_corpus`` refuses to
     publish a measurement whose sent cycles do not hash to the identity it was measured under. That
