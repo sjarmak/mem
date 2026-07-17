@@ -326,12 +326,21 @@ describe('attachProvenance', () => {
   });
 });
 
+/** Run `fn`, returning what it throws (or `undefined` if it doesn't). */
+const throwsWith = (fn: () => unknown): unknown => {
+  try {
+    fn();
+    return undefined;
+  } catch (err) {
+    return err;
+  }
+};
+
 describe('defaultGitPipeRunner', () => {
   // The one seam no fake can stand in for: whether a REAL `a | b` pipeline
   // reports a first-stage failure, and whether args reach git as args rather
   // than as shell syntax. Both are properties of the bash script itself.
   let repo: string;
-  const patchId = ['patch-id', '--stable'];
 
   beforeAll(() => {
     repo = mkdtempSync(join(tmpdir(), 'mem-pipe-'));
@@ -349,7 +358,7 @@ describe('defaultGitPipeRunner', () => {
   afterAll(() => rmSync(repo, { recursive: true, force: true }));
 
   it('returns the second stage stdout, keeping the patch text out of the process', () => {
-    const out = defaultGitPipeRunner(repo, ['log', '-p', '--no-color', 'HEAD'], patchId);
+    const out = defaultGitPipeRunner(repo, ['log', '-p', '--no-color', 'HEAD']);
     // `<patch-id> <commit-id>`, both 40-hex — and NOT the patch text that
     // produced it, which is the whole point of piping in the kernel.
     expect(out.trim()).toMatch(/^[0-9a-f]{40} [0-9a-f]{40}$/);
@@ -364,12 +373,9 @@ describe('defaultGitPipeRunner', () => {
     // a real `range-unreadable`. Verified: the same pipeline without pipefail
     // exits 0 here. So this asserts the exit is visible AND is the shape
     // isNonZeroExit recognizes, since that is what routes it to the right cause.
-    let caught: unknown;
-    try {
-      defaultGitPipeRunner(repo, ['log', '-p', 'no-such-rev-000..HEAD'], patchId);
-    } catch (err) {
-      caught = err;
-    }
+    const caught = throwsWith(() =>
+      defaultGitPipeRunner(repo, ['log', '-p', 'no-such-rev-000..HEAD'])
+    );
     expect(isNonZeroExit(caught)).toBe(true);
   });
 
@@ -383,12 +389,9 @@ describe('defaultGitPipeRunner', () => {
     // bare `touch pwned` would land somewhere this assertion never looks and
     // would pass against a vulnerable implementation.
     const pwned = join(repo, 'pwned');
-    let caught: unknown;
-    try {
-      defaultGitPipeRunner(repo, ['log', '-p', '--end-of-options', `; touch ${pwned}`], patchId);
-    } catch (err) {
-      caught = err;
-    }
+    const caught = throwsWith(() =>
+      defaultGitPipeRunner(repo, ['log', '-p', '--end-of-options', `; touch ${pwned}`])
+    );
     // A non-zero exit, not merely "something threw": git rejecting the payload
     // as an unknown revision is the pass. An interpolating implementation would
     // instead run `log -p --end-of-options` (lists HEAD, exit 0) piped from a
@@ -402,7 +405,7 @@ describe('defaultGitPipeRunner', () => {
     // patch-id on an empty patch emits no line, so `no-branch-content` (empty
     // map) and a null combined id fall out without Node inspecting a diff. The
     // fakes elsewhere assert this; only real git can check it.
-    expect(defaultGitPipeRunner(repo, ['log', '-p', '--no-color', 'HEAD..HEAD'], patchId)).toBe('');
+    expect(defaultGitPipeRunner(repo, ['log', '-p', '--no-color', 'HEAD..HEAD'])).toBe('');
   });
 
   it('silenceStderr preserves the functional contract — stdout intact, failures still surface', () => {
@@ -413,15 +416,10 @@ describe('defaultGitPipeRunner', () => {
     // fault. Pin both against the default runner rather than the stderr bytes
     // themselves, which execFileSync writes to fd 2 (uncapturable in-process).
     const quiet = makeGitPipeRunner({ silenceStderr: true });
-    expect(quiet(repo, ['log', '-p', '--no-color', 'HEAD'], patchId)).toBe(
-      defaultGitPipeRunner(repo, ['log', '-p', '--no-color', 'HEAD'], patchId)
+    expect(quiet(repo, ['log', '-p', '--no-color', 'HEAD'])).toBe(
+      defaultGitPipeRunner(repo, ['log', '-p', '--no-color', 'HEAD'])
     );
-    let caught: unknown;
-    try {
-      quiet(repo, ['log', '-p', 'no-such-rev-000..HEAD'], patchId);
-    } catch (err) {
-      caught = err;
-    }
+    const caught = throwsWith(() => quiet(repo, ['log', '-p', 'no-such-rev-000..HEAD']));
     expect(isNonZeroExit(caught)).toBe(true);
   });
 });

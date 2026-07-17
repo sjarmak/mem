@@ -160,11 +160,15 @@ export const defaultGitRunner: GitRunner = (workDir, args) =>
     maxBuffer: 16 * 1024 * 1024,
   });
 
-/** Runs `git -C <workDir> <argsA...> | git -C <workDir> <argsB...>` and returns
- * the SECOND stage's stdout. A second seam beside {@link GitRunner} because the
- * one-command shape cannot express a pipeline, and the content-landing ladder
- * (ingest/landedContent) needs one: it feeds `git log -p` / `git diff` into `git
- * patch-id`, whose input is a patch stream on stdin.
+/** Runs `git -C <workDir> <args...> | git -C <workDir> patch-id --stable` and
+ * returns the second stage's stdout. A second seam beside {@link GitRunner}
+ * because the one-command shape cannot express a pipeline, and the
+ * content-landing ladder (ingest/landedContent) needs one: it feeds `git log
+ * -p` / `git diff` into `git patch-id`, whose input is a patch stream on
+ * stdin. Fixed to `patch-id --stable` rather than a generic second stage
+ * because that is every caller this codebase has; `--stable` pins the hash to
+ * git's version-independent algorithm so ids computed on different hosts
+ * compare.
  *
  * The point is that the patch text never enters this process. Piping it through
  * Node would buffer a range's entire diff as a JS string only to hand it
@@ -172,54 +176,37 @@ export const defaultGitRunner: GitRunner = (workDir, args) =>
  * 2MB of patch-ids, and past V8's ~512MB string cap on a single large range,
  * which made such ranges undecidable. In the kernel, only patch-id's ~82
  * bytes/commit reach Node, so range size stops being a memory question. */
-export type GitPipeRunner = (workDir: string, argsA: string[], argsB: string[]) => string;
+export type GitPipeRunner = (workDir: string, args: string[]) => string;
 
 /** The pipeline, as a bash script over POSITIONAL parameters — `$1` is the work
- * dir, `$2` the length of argsA, then argsA followed by argsB. Nothing is
- * interpolated into the script text, so no argument can be read as shell syntax.
+ * dir, the rest are the first stage's args. Nothing is interpolated into the
+ * script text, so no argument can be read as shell syntax.
  *
  * `set -o pipefail` is load-bearing, not hygiene: a pipeline's status is its LAST
  * command's, and `git patch-id` exits 0 on the empty input a failed `git log`
  * leaves it. Without pipefail an unreadable range would return an empty patch-id
  * map with a zero exit — read downstream as `no-branch-content`, a false
  * undecidable silently replacing a real `range-unreadable`. It is bash (not
- * `sh`), because pipefail is not POSIX and dash lacks it.
- *
- * `$2` (bound to `n`) is the ONE parameter that is not merely expanded but
- * EVALUATED: both `${@:1:n}` and `shift "$n"` read it in bash arithmetic
- * context, which recurses — a value like `1[$(cmd)]` would run `cmd`. It is
- * safe only because its sole producer is `String(argsA.length)` below, always a
- * non-negative integer. Never route anything else — least of all a DB-sourced
- * value — into this position. */
+ * `sh`), because pipefail is not POSIX and dash lacks it. */
 const GIT_PIPE_SCRIPT = [
   'set -o pipefail',
   'dir=$1; shift',
-  'n=$1; shift',
-  'a=("${@:1:n}")',
-  'shift "$n"',
-  'git -C "$dir" "${a[@]}" | git -C "$dir" "$@"',
+  'git -C "$dir" "$@" | git -C "$dir" patch-id --stable',
 ].join('\n');
 
 /** Build a pipe runner over {@link GIT_PIPE_SCRIPT}. `silenceStderr` routes
  * git's own diagnostics to `/dev/null`, which a batch sweep wants: a range it
  * degrades to a coverage hole should be recorded, not sprayed to the console as
  * a `fatal:` line. The library default leaves stderr inherited, matching
- * {@link defaultGitRunner}, so a one-off caller still sees git's own message.
- *
- * `n` is `String(argsA.length)` — see the script's note on why that position
- * must never carry anything but an array length. */
+ * {@link defaultGitRunner}, so a one-off caller still sees git's own message. */
 export const makeGitPipeRunner =
   ({ silenceStderr = false }: { silenceStderr?: boolean } = {}): GitPipeRunner =>
-  (workDir, argsA, argsB) =>
-    execFileSync(
-      'bash',
-      ['-c', GIT_PIPE_SCRIPT, 'git-pipe', workDir, String(argsA.length), ...argsA, ...argsB],
-      {
-        encoding: 'utf8',
-        maxBuffer: 16 * 1024 * 1024,
-        ...(silenceStderr ? { stdio: ['pipe', 'pipe', 'ignore'] as const } : {}),
-      }
-    );
+  (workDir, args) =>
+    execFileSync('bash', ['-c', GIT_PIPE_SCRIPT, 'git-pipe', workDir, ...args], {
+      encoding: 'utf8',
+      maxBuffer: 16 * 1024 * 1024,
+      ...(silenceStderr ? { stdio: ['pipe', 'pipe', 'ignore'] as const } : {}),
+    });
 
 /** Default pipe runner: invokes the real `git` CLI on both sides of a real pipe,
  * with git's stderr inherited (matching {@link defaultGitRunner}). */

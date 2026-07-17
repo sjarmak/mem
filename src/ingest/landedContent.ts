@@ -164,23 +164,14 @@ function parsePatchIds(stdout: string): Map<string, string> {
   return ids;
 }
 
-/** Thrown when a diff listing cannot be read. It is caught at the top of
- * {@link classifyLandedContent} and mapped to an `undecidable` verdict, so one
- * unreadable range degrades that branch instead of failing the whole cross-rig
- * sweep. */
-class RangeUnreadable extends Error {}
-
-/** The `patch-id` stage every diff listing is piped into. `--stable` pins the
- * hash to git's version-independent algorithm so ids computed on different hosts
- * compare. */
-const PATCH_ID_STAGE = ['patch-id', '--stable'];
-
-/** Pipe a diff listing into `git patch-id` and parse the ids back, converting a
- * non-zero exit — a pruned object, an unknown revision — into
- * {@link RangeUnreadable}. Any OTHER failure (a missing `git` or `bash` binary)
- * is NOT converted: that is a misconfiguration which would silently mark every
- * branch undecidable, an empty measurement dressed up as a coverage gap, so it
- * propagates and fails the sweep loudly.
+/** Pipe a diff listing into `git patch-id` and parse the ids back. A non-zero
+ * exit — a pruned object, an unknown revision — propagates unchanged;
+ * {@link classifyLandedContent}'s catch tests `isNonZeroExit` directly and maps
+ * it to `range-unreadable`, so one unreadable range degrades that branch
+ * instead of failing the whole cross-rig sweep. Any OTHER failure (a missing
+ * `git` or `bash` binary) is a misconfiguration, which is why nothing here
+ * intercepts it either: a swallowed misconfiguration would silently mark every
+ * branch undecidable, an empty measurement dressed up as a coverage gap.
  *
  * The pipe is what keeps the patch text out of this process: only patch-id's
  * output crosses back. That is also why no "is the diff empty?" guard precedes
@@ -196,17 +187,12 @@ const PATCH_ID_STAGE = ['patch-id', '--stable'];
  * of degrading that branch to a quiet `range-unreadable`. That is the right end
  * of the trade — a buffer that large being hit is a bug to see, not a coverage
  * hole to record. */
-function patchIdsOrFail(
+function pipedPatchIds(
   runPipe: GitPipeRunner,
   work_dir: string,
   args: string[]
 ): Map<string, string> {
-  try {
-    return parsePatchIds(runPipe(work_dir, args, PATCH_ID_STAGE));
-  } catch (err) {
-    if (isNonZeroExit(err)) throw new RangeUnreadable(`git ${args.join(' ')}`);
-    throw err;
-  }
+  return parsePatchIds(runPipe(work_dir, args));
 }
 
 /** Patch-ids of every content-bearing commit in `base..tip`, keyed to the commit
@@ -220,7 +206,7 @@ function rangePatchIds(
   base: string,
   tip: string
 ): Map<string, string> {
-  return patchIdsOrFail(runPipe, work_dir, [
+  return pipedPatchIds(runPipe, work_dir, [
     'log',
     '-p',
     '--no-merges',
@@ -239,7 +225,7 @@ function combinedPatchId(
   base: string,
   tip: string
 ): string | null {
-  const ids = patchIdsOrFail(runPipe, work_dir, ['diff', '--no-color', base, tip]);
+  const ids = pipedPatchIds(runPipe, work_dir, ['diff', '--no-color', base, tip]);
   const [first] = ids.keys();
   return first ?? null;
 }
@@ -315,7 +301,7 @@ export function classifyLandedContent(
 
     return { verdict: matched.length > 0 ? 'partial' : 'absent', ...located, ...counts };
   } catch (err) {
-    if (err instanceof RangeUnreadable) {
+    if (isNonZeroExit(err)) {
       return { verdict: 'undecidable', cause: 'range-unreadable', ...located };
     }
     throw err;

@@ -31,6 +31,9 @@ const exits = (status: number) => (): never => {
   throw Object.assign(new Error(`git exited ${status}`), { status });
 };
 
+/** {@link Handlers.revParse} default: the branch → TIP, `main` → HEAD. */
+const defaultRevParse = (r: string): string => (r.startsWith('main') ? `${HEAD}\n` : `${TIP}\n`);
+
 /** The combined diff's patch-id — the one a squash-merge would carry. */
 const COMBINED = p(12);
 
@@ -62,8 +65,6 @@ const git = (h: Handlers): Fake => ({
     if (args[0] === 'rev-parse') {
       // args: rev-parse --verify --end-of-options <ref>^{commit}
       const ref = args[3].replace(/\^\{commit\}$/, '');
-      const defaultRevParse = (r: string): string =>
-        r.startsWith('main') ? `${HEAD}\n` : `${TIP}\n`;
       return (h.revParse ?? defaultRevParse)(ref);
     }
     if (args[0] === 'merge-base' && args[1] === '--is-ancestor') {
@@ -72,12 +73,12 @@ const git = (h: Handlers): Fake => ({
     if (args[0] === 'merge-base') return (h.mergeBase ?? (() => `${BASE}\n`))();
     throw new Error(`unexpected git ${args.join(' ')}`);
   },
-  runPipe: (_workDir, argsA) => {
-    if (argsA[0] === 'log') {
-      return (h.log ?? (() => idLine(p(1), c(1))))(argsA[argsA.length - 1]);
+  runPipe: (_workDir, args) => {
+    if (args[0] === 'log') {
+      return (h.log ?? (() => idLine(p(1), c(1))))(args[args.length - 1]);
     }
-    if (argsA[0] === 'diff') return (h.diff ?? (() => idLine(COMBINED, c(8))))();
-    throw new Error(`unexpected git ${argsA.join(' ')} | patch-id`);
+    if (args[0] === 'diff') return (h.diff ?? (() => idLine(COMBINED, c(8))))();
+    throw new Error(`unexpected git ${args.join(' ')} | patch-id`);
   },
 });
 
@@ -256,31 +257,31 @@ describe('classifyLandedContent — git invocation contract', () => {
     // ancestry and report every branch as landed.
     const fake = git(twoCommitBranch([p(1)]));
     const ranges: string[] = [];
-    const runPipe: GitPipeRunner = (workDir, argsA, argsB) => {
-      if (argsA[0] === 'log') ranges.push(argsA[argsA.length - 1]);
-      return fake.runPipe(workDir, argsA, argsB);
+    const runPipe: GitPipeRunner = (workDir, args) => {
+      if (args[0] === 'log') ranges.push(args[args.length - 1]);
+      return fake.runPipe(workDir, args);
     };
     classifyLandedContent(input, { ...fake, runPipe });
     expect(ranges).toEqual([`${BASE}..${TIP}`, `${BASE}..${HEAD}`]);
   });
 
-  it('pipes every diff listing into patch-id --stable, excluding merges and colour', () => {
-    // The second stage is what keeps the patch text in the kernel, and --stable
-    // is what makes ids computed on different hosts comparable. Both sides of
-    // every pipe are pinned here because neither is visible in a verdict.
-    // A `partial` fixture, so the combined-diff pipe runs too: `landed-equivalent`
-    // returns before it and would leave that third pipe unpinned.
+  it('pipes every diff listing through the pipe seam, excluding merges and colour', () => {
+    // Every pipe is pinned here because none is visible in a verdict. A
+    // `partial` fixture, so the combined-diff pipe runs too: `landed-equivalent`
+    // returns before it and would leave that third pipe unpinned. The
+    // `patch-id --stable` second stage is baked into provenance.ts's pipe
+    // script rather than passed by this caller, and is covered by its own
+    // tests (tests/ingest.provenance.test.ts).
     const fake = git(twoCommitBranch([p(1)]));
-    const piped: { a: string[]; b: string[] }[] = [];
-    const runPipe: GitPipeRunner = (workDir, argsA, argsB) => {
-      piped.push({ a: argsA, b: argsB });
-      return fake.runPipe(workDir, argsA, argsB);
+    const piped: string[][] = [];
+    const runPipe: GitPipeRunner = (workDir, args) => {
+      piped.push(args);
+      return fake.runPipe(workDir, args);
     };
     classifyLandedContent(input, { ...fake, runPipe });
-    expect(piped.map(x => x.a[0])).toEqual(['log', 'log', 'diff']);
-    expect(piped.every(x => x.a.includes('--no-color'))).toBe(true);
-    expect(piped.find(x => x.a[0] === 'log')!.a).toContain('--no-merges');
-    for (const x of piped) expect(x.b).toEqual(['patch-id', '--stable']);
+    expect(piped.map(a => a[0])).toEqual(['log', 'log', 'diff']);
+    expect(piped.every(a => a.includes('--no-color'))).toBe(true);
+    expect(piped.find(a => a[0] === 'log')).toContain('--no-merges');
   });
 });
 
