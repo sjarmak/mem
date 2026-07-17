@@ -234,6 +234,21 @@ export function isNonZeroExit(err: unknown): boolean {
   return exitStatus(err) !== undefined;
 }
 
+/** True when a git invocation failed in a way that means git could not ANSWER,
+ * as opposed to a programming error in our own call. This is exactly the fault
+ * set {@link isAncestorOrNull} degrades to null: a non-zero exit (e.g. 128 on an
+ * unreadable object), a missing binary (`code === 'ENOENT'`), or a signal kill
+ * (`signal` is the signal name). A TypeError from a mis-wired {@link GitRunner}
+ * or a RangeError from a maxBuffer overrun matches none of these — it is our bug,
+ * carries no git verdict, and must propagate rather than be reported as an
+ * absence of answer. */
+export function isGitFault(err: unknown): boolean {
+  if (isNonZeroExit(err)) return true;
+  if (typeof err !== 'object' || err === null) return false;
+  const e = err as { code?: unknown; signal?: unknown };
+  return e.code === 'ENOENT' || typeof e.signal === 'string';
+}
+
 /** Run a git command whose answer is a single sha, returning null when git
  * exits non-zero — for these callers that exit means the question's
  * legitimate negative answer (no such commit, unknown ref), not a fault. Any
@@ -305,8 +320,9 @@ export function isAncestorOrNull(
 ): boolean | null {
   try {
     return isAncestor(run, work_dir, commit, of);
-  } catch {
-    return null;
+  } catch (err) {
+    if (isGitFault(err)) return null;
+    throw err;
   }
 }
 

@@ -512,6 +512,34 @@ describe('isAncestor / isAncestorOrNull', () => {
     expect(isAncestorOrNull(noGit, repo, first, second)).toBeNull();
   });
 
+  it('degrades a signal-killed git to null (git was asked but could not answer)', () => {
+    const killed: GitRunner = () => {
+      throw Object.assign(new Error('git terminated'), { signal: 'SIGKILL' });
+    };
+    expect(isAncestorOrNull(killed, repo, first, second)).toBeNull();
+  });
+
+  it('RETHROWS a mis-wired runner rather than reporting null for every ref (mem-egxu2)', () => {
+    // The whole defect: a programming error carries no git verdict, so it must
+    // NOT be laundered into null. A mis-wired GitRunner that throws a TypeError
+    // (e.g. an undefined work_dir) has no `status`, no ENOENT, no signal — it is
+    // our bug, not git declining to answer. Swallowing it makes the
+    // measure-live-ref sweep exit 0 claiming git could not answer for EVERY ref.
+    const misWired: GitRunner = () => {
+      throw new TypeError("Cannot read properties of undefined (reading 'trim')");
+    };
+    expect(() => isAncestorOrNull(misWired, repo, first, second)).toThrow(TypeError);
+  });
+
+  it('RETHROWS a maxBuffer overrun rather than degrading it to null (mem-egxu2)', () => {
+    // A RangeError from an execFileSync maxBuffer overrun is likewise our fault,
+    // not a git answer — it must surface, not become a null measurement.
+    const overrun: GitRunner = () => {
+      throw new RangeError('stdout maxBuffer length exceeded');
+    };
+    expect(() => isAncestorOrNull(overrun, repo, first, second)).toThrow(RangeError);
+  });
+
   it('passes --end-of-options, so a ref that looks like a flag cannot be read as one', () => {
     const seen: string[][] = [];
     const spy: GitRunner = (dir, args) => {
