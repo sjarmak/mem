@@ -389,7 +389,7 @@ def result_event(result: str = "done") -> dict[str, object]:
     return {"type": "result", "result": result}
 
 
-def serialize_stream(events: Sequence[Mapping[str, object]]) -> str:
+def serialize_stream(events: Sequence[dict[str, object]]) -> str:
     """Serialize ``events`` as the JSONL `claude -p --output-format stream-json` prints: one JSON
     object per line.
 
@@ -397,19 +397,14 @@ def serialize_stream(events: Sequence[Mapping[str, object]]) -> str:
     / ``_tool_calls_from_stream``), and it lives beside them for that reason: every dry-run
     simulator and test double that fakes a `claude -p` writes this format, and one fitted to its
     own idea of it proves nothing about the real one (that is how a MEMORY.md-only glob survived a
-    green dry-run — ``toolreq_builtin.simulated_builtin_runner``). One serializer against one
-    parser means a format change moves both, and the round-trip test guards the pair.
+    green dry-run — ``toolreq_builtin.simulated_builtin_runner``). One writer against this module's
+    three parsers means a format change moves both, and the round-trip test guards the pair. Other
+    parsers of the same format live outside this module (``armcompare`` / ``bbon.extract``) and are
+    NOT guarded by that test — mem-4tvkc tracks the rest.
 
     Not a model of the CLI's output — a writer of the subset the parsers read. The real stream
-    carries fields nothing here consumes; inventing them would be modelling.
-
-    Each event is unwrapped to a plain ``dict`` because ``json.dumps`` only fast-paths
-    ``isinstance(obj, dict)`` and raises on any other ``Mapping`` — a frozen ``MappingProxyType``
-    is the one this codebase actually holds (``toolreq_builtin.BUILTIN_SETTINGS``, whose
-    ``_seed_config_dir`` unwraps for exactly this reason). Without it the annotation would promise
-    a ``Mapping`` the body cannot serialize. Top level only: a NESTED mapping is the caller's own
-    payload, and json.dumps judges that as it would anywhere."""
-    return "".join(json.dumps(dict(event)) + "\n" for event in events)
+    carries fields nothing here consumes; inventing them would be modelling."""
+    return "".join(json.dumps(event) + "\n" for event in events)
 
 
 def _stream_usage_tokens(stream_text: str) -> tuple[int, int]:

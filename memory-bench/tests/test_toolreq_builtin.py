@@ -25,7 +25,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -135,7 +135,7 @@ def _stream_json_runner(
 
     def run(argv, **kwargs):
         argv_list = list(argv)
-        events: list[Mapping[str, object]] = []
+        events: list[dict[str, object]] = []
         if tool_use_when(argv_list):
             events.append(assistant_event([(tool_name, tool_input)]))
         events.append(result_event())
@@ -330,8 +330,8 @@ def test_simulated_runner_goal_call_passes_iff_marker_present(tmp_path: Path) ->
     runner(["claude", "-p", "tok-a", "--output-format", "stream-json"], env=env, cwd="/sandbox")
     completed2 = runner(bare_argv, env=env, cwd="/sandbox")
     events2 = [json.loads(line) for line in completed2.stdout.splitlines()]
-    (assistant_event,) = [e for e in events2 if e["type"] == "assistant"]
-    (block,) = assistant_event["message"]["content"]
+    (event,) = [e for e in events2 if e["type"] == "assistant"]
+    (block,) = event["message"]["content"]
     assert block["name"] == REAL_TOOL
     assert block["input"]["content"] == "tok-a"
 
@@ -491,7 +491,7 @@ def _cwd_scavenging_runner(value: str):
         cwd = kwargs.get("cwd")
         assert isinstance(cwd, str)
         scavengeable = Path(cwd) / "CLAUDE.md"
-        events: list[Mapping[str, object]] = []
+        events: list[dict[str, object]] = []
         if "--allowedTools" not in argv_list:  # establish leg
             scavengeable.write_text(f"remember: {value}", encoding="utf-8")
         elif scavengeable.is_file() and value in scavengeable.read_text(encoding="utf-8"):

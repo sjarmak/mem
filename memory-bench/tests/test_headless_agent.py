@@ -9,7 +9,6 @@ import errno
 import json
 import subprocess
 from dataclasses import dataclass, field
-from types import MappingProxyType
 from typing import Any
 
 import pytest
@@ -134,15 +133,6 @@ def test_serialize_stream_emits_one_json_object_per_line() -> None:
 def test_serialize_stream_of_no_events_is_empty_not_whitespace() -> None:
     """A cell that emitted nothing serializes to "" — the parsers' empty-stream branch."""
     assert serialize_stream([]) == ""
-
-
-def test_serialize_stream_takes_the_mapping_its_signature_promises() -> None:
-    """The signature says ``Mapping``, so a non-dict Mapping must serialize rather than raise.
-    ``json.dumps`` only fast-paths a real dict — and a frozen MappingProxyType is not hypothetical
-    here: ``toolreq_builtin.BUILTIN_SETTINGS`` is one, and it reaches json.dumps through its own
-    unwrap. An annotation the body cannot honour is the defect this pins."""
-    frozen = MappingProxyType(dict(result_event("done")))
-    assert json.loads(serialize_stream([frozen]).strip()) == {"type": "result", "result": "done"}
 
 
 # --------------------------------------------------------------------------- #

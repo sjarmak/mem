@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import subprocess
 import tempfile
-from collections.abc import Collection, Mapping
+from collections.abc import Collection
 from dataclasses import dataclass
 
 from membench.metrics.scorers import outcome_check_passes
@@ -166,7 +166,7 @@ def simulated_runner(current_values: Collection[str]) -> Runner:
         # so a future reordering fails loudly instead of silently never firing.
         assert argv_list[:2] == ["claude", "-p"], f"unexpected argv layout: {argv_list[:3]}"
         prompt = argv_list[2] if len(argv_list) > 2 else ""
-        events: list[Mapping[str, object]] = []
+        events: list[dict[str, object]] = []
         if values and all(value in prompt for value in values):
             events.append(
                 assistant_event(

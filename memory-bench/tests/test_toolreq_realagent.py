@@ -562,12 +562,7 @@ def test_worst_case_paid_call_count_reflects_the_none_dedup() -> None:
 
 
 def test_run_corpus_persists_and_is_resumable(tmp_path: Path) -> None:
-    seed_dir = tmp_path / "corpus" / "0"
-    seed_dir.mkdir(parents=True)
-    (seed_dir / "sequences.json").write_text(
-        json.dumps([toolreq_seq("w-0").model_dump()]), encoding="utf-8"
-    )
-    sequences, tasks = load_corpus_with_sequences(tmp_path / "corpus")
+    sequences, tasks = corpus_one(tmp_path)
     out = tmp_path / "out"
     store_path = tmp_path / "store.db"
 

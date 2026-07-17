@@ -256,7 +256,7 @@ def simulated_builtin_runner(current_values: Collection[str]) -> Runner:
         env = kwargs.get("env")
         cwd = kwargs.get("cwd")
         config_dir = env.get("CLAUDE_CONFIG_DIR") if isinstance(env, Mapping) else None
-        events: list[Mapping[str, object]] = []
+        events: list[dict[str, object]] = []
         if config_dir and isinstance(cwd, str):
             index_path = Path(native_memory_path(config_dir=str(config_dir), workdir=cwd))
             # The fact goes in a TOPIC file beside the index — the real layout. The index
