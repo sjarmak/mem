@@ -21,6 +21,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          # Repo-root-relative: `defaults.run.working-directory` scopes to `run`
+          # steps, never to `uses` inputs. Pinned, not left to the action's
+          # `**/pyproject.toml` backup glob (tests/test_ci_pip_cache.py).
+          cache-dependency-path: memory-bench/pyproject.toml
       - run: pip install -e ".[dev]"
       # Whole-tree by default (mem-sspvk) — a new directory is covered without
       # anyone remembering to add it here. mypy's target set and its reasoned
