@@ -167,24 +167,55 @@ function pipedPatchIds(
   return parsePatchIds(runPipe(work_dir, args));
 }
 
+/** A caller-owned memo of {@link rangePatchIds} results, keyed by the full
+ * argument tuple `${work_dir}\x00${base}\x00${tip}`. Caller-owned, never a module
+ * global: the tests inject a fresh fake runner per case, so a shared cache would
+ * serve one case's fake output to the next; a real sweep wants one cache per rig
+ * so each rig's maps free at the loop boundary. The value is a `ReadonlyMap` so a
+ * cached walk cannot be mutated in place by a later caller — the type enforces
+ * what a docstring could only ask for. */
+export type LandedContentCache = Map<string, ReadonlyMap<string, string>>;
+
 /** Patch-ids of every content-bearing commit in `base..tip`, keyed to the commit
  * they came from. `log -p` emits a `commit <sha>` header per patch, which is what
  * lets `patch-id` attribute each id — the pipeline the git docs name for exactly
  * this. Merges are excluded: a merge's diff is a combination of its parents' and
- * has no patch-id of its own to match. */
+ * has no patch-id of its own to match.
+ *
+ * The walk is a pure function of `(work_dir, base, tip)` over an immutable,
+ * content-addressed DAG, so `cache` (when present) memoizes it verbatim. Both
+ * `base` and `tip` are the full 40-hex shas already resolved by the caller, so
+ * the key is injective without escaping; the `\x00` separator is belt-and-braces
+ * (no POSIX path holds a NUL) and is written as an escape, not a raw byte, so the
+ * file stays greppable (a raw NUL reads as binary — see mem-y2x7n). `base` is in
+ * the key deliberately: widening the range to a shared superset would dissolve
+ * the fork-point scoping that {@link classifyLandedContent} documents, which is
+ * the rejected alternative from this bead's history — do not collapse it to `tip`.
+ *
+ * An empty result is a legitimate cached value: `set -o pipefail` in the pipe
+ * script (provenance.ts) means an empty map is "git walked, no content-bearing
+ * commit", never a swallowed failure — so caching it cannot promote a one-off
+ * fault into a sweep-wide false `no-branch-content`. A failed walk throws before
+ * `set`, so it is never cached. */
 function rangePatchIds(
   runPipe: GitPipeRunner,
   work_dir: string,
   base: string,
-  tip: string
-): Map<string, string> {
-  return pipedPatchIds(runPipe, work_dir, [
+  tip: string,
+  cache?: LandedContentCache
+): ReadonlyMap<string, string> {
+  const key = `${work_dir}\x00${base}\x00${tip}`;
+  const hit = cache?.get(key);
+  if (hit !== undefined) return hit;
+  const ids = pipedPatchIds(runPipe, work_dir, [
     'log',
     '-p',
     '--no-merges',
     '--no-color',
     `${base}..${tip}`,
   ]);
+  cache?.set(key, ids);
+  return ids;
 }
 
 /** The patch-id of the branch's COMBINED diff (`base` → `tip` as one patch) — the
@@ -211,6 +242,12 @@ export interface LandedContentOptions {
    * {@link defaultGitPipeRunner}. Separate from `run` because a pipeline is a
    * different shape, and keeping the patch text in the kernel is the point. */
   runPipe?: GitPipeRunner;
+  /** A caller-owned {@link LandedContentCache} memoizing the patch-id range
+   * walks. Optional: absent means every call re-walks (the prior behavior). Pass
+   * one across a sweep so branches sharing a merge base — a convoy cut from one
+   * integration tip, or a branch decided against two refs with a common fork
+   * point — reuse a single walk instead of re-listing the same history. */
+  cache?: LandedContentCache;
 }
 
 /**
@@ -233,6 +270,7 @@ export function classifyLandedContent(
 ): LandedContentResult {
   const run = opts.run ?? defaultGitRunner;
   const runPipe = opts.runPipe ?? defaultGitPipeRunner;
+  const { cache } = opts;
   const { work_dir } = input;
 
   const tip = resolveCommit(run, work_dir, input.branch);
@@ -253,12 +291,12 @@ export function classifyLandedContent(
   const located = { ...anchors, merge_base: base };
 
   try {
-    const branchIds = rangePatchIds(runPipe, work_dir, base, tip);
+    const branchIds = rangePatchIds(runPipe, work_dir, base, tip, cache);
     if (branchIds.size === 0) {
       return { verdict: 'undecidable', cause: 'no-branch-content', ...located, n_commits: 0 };
     }
 
-    const headIds = rangePatchIds(runPipe, work_dir, base, head);
+    const headIds = rangePatchIds(runPipe, work_dir, base, head, cache);
     const matched = [...branchIds.keys()].filter(id => headIds.has(id));
     const counts = { n_commits: branchIds.size, n_matched: matched.length };
 

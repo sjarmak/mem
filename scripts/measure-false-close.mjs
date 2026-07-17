@@ -204,6 +204,13 @@ for (const rig of rigs) {
     continue;
   }
 
+  // One patch-id range cache per rig, not per module: every branch here shares
+  // entry.dir, and branches sharing a merge base (a convoy cut from one tip, or
+  // a branch decided against both refs with a common fork point) re-list the
+  // same base..head history otherwise. Allocated inside the rig loop so each
+  // rig's maps free at the loop boundary rather than accumulating across 18 rigs.
+  const cache = new Map();
+
   const decided = joined.map(j => {
     const per_ref = integrationRefs.map(ref => ({
       ref,
@@ -214,7 +221,7 @@ for (const rig of rigs) {
       // resolves a 40-hex sha to itself, so the ladder is unchanged.
       result: classifyLandedContent(
         { work_dir: entry.dir, branch: j.ref, integration: pinned[ref] },
-        { run: gitRunner, runPipe: gitPipeRunner }
+        { run: gitRunner, runPipe: gitPipeRunner, cache }
       ),
     }));
     const winner = combineRefVerdicts(per_ref);

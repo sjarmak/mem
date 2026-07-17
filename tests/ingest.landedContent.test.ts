@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyLandedContent,
   isLanded,
+  type LandedContentCache,
   type LandedContentInput,
   type LandedContentVerdict,
 } from '../src/ingest/landedContent.js';
@@ -282,6 +283,99 @@ describe('classifyLandedContent — git invocation contract', () => {
     expect(piped.map(a => a[0])).toEqual(['log', 'log', 'diff']);
     expect(piped.every(a => a.includes('--no-color'))).toBe(true);
     expect(piped.find(a => a[0] === 'log')).toContain('--no-merges');
+  });
+});
+
+describe('classifyLandedContent — range cache', () => {
+  /** Records every pipe arg vector while delegating to the real fake, so a test
+   * can assert which `log`/`diff` listings actually ran. */
+  const counting = (fake: Fake): { runPipe: GitPipeRunner; calls: string[][] } => {
+    const calls: string[][] = [];
+    return {
+      calls,
+      runPipe: (workDir, args) => {
+        calls.push(args);
+        return fake.runPipe(workDir, args);
+      },
+    };
+  };
+
+  it('reuses both range walks across calls, leaving only the uncached combined diff', () => {
+    // A `partial` fixture, so the combined-diff pipe runs and its absence from
+    // the cache is observable. The first call's ['log','log','diff'] is also the
+    // proof that base..tip and base..head do NOT collide: same base, different
+    // tips, and BOTH walked — a shared key would have shown ['log','diff'].
+    const fake = git(twoCommitBranch([p(1)]));
+    const { runPipe, calls } = counting(fake);
+    const cache: LandedContentCache = new Map();
+
+    const first = classifyLandedContent(input, { ...fake, runPipe, cache });
+    expect(calls.map(a => a[0])).toEqual(['log', 'log', 'diff']);
+
+    calls.length = 0;
+    const second = classifyLandedContent(input, { ...fake, runPipe, cache });
+    expect(calls.map(a => a[0])).toEqual(['diff']);
+    expect(second).toEqual(first);
+  });
+
+  it('re-walks every range when no cache is passed', () => {
+    const fake = git(twoCommitBranch([p(1)]));
+    const { runPipe, calls } = counting(fake);
+
+    classifyLandedContent(input, { ...fake, runPipe });
+    calls.length = 0;
+    classifyLandedContent(input, { ...fake, runPipe });
+    expect(calls.map(a => a[0])).toEqual(['log', 'log', 'diff']);
+  });
+
+  it('does not cache a failed walk — range-unreadable stays per-call', () => {
+    // The failed range must leave nothing behind: a cached negative would make a
+    // transient object fault sticky for the rest of the sweep.
+    const cache: LandedContentCache = new Map();
+    const out = classifyLandedContent(input, { ...git({ log: exits(128) }), cache });
+    expect(out).toMatchObject({ verdict: 'undecidable', cause: 'range-unreadable' });
+    expect(cache.size).toBe(0);
+  });
+
+  it('caches an empty range — an empty map is a hit, not a re-walk', () => {
+    // no-branch-content returns off the branch side before the integration side
+    // runs, so exactly one `log` fires on the first call and none on the second.
+    const fake = git({ log: () => '' });
+    const { runPipe, calls } = counting(fake);
+    const cache: LandedContentCache = new Map();
+
+    const a = classifyLandedContent(input, { ...fake, runPipe, cache });
+    const b = classifyLandedContent(input, { ...fake, runPipe, cache });
+    expect(calls.filter(x => x[0] === 'log')).toHaveLength(1);
+    expect(a).toMatchObject({ verdict: 'undecidable', cause: 'no-branch-content' });
+    expect(b).toEqual(a);
+  });
+
+  it('keys the cache on work_dir — a different checkout does not collide', () => {
+    // Same resolved base/tip, different work_dir: a key that dropped work_dir
+    // would reuse /repo-a's walk for /repo-b. Assert both checkouts walk.
+    const fake = git(twoCommitBranch([p(1)]));
+    const { runPipe, calls } = counting(fake);
+    const cache: LandedContentCache = new Map();
+
+    classifyLandedContent({ ...input, work_dir: '/repo-a' }, { ...fake, runPipe, cache });
+    classifyLandedContent({ ...input, work_dir: '/repo-b' }, { ...fake, runPipe, cache });
+    expect(calls.filter(x => x[0] === 'log')).toHaveLength(4);
+  });
+
+  it('returns identical verdicts across the ladder with and without a cache', () => {
+    const cases: Handlers[] = [
+      twoCommitBranch([p(1), p(2)]), // landed-equivalent
+      twoCommitBranch([], true), // landed-squashed
+      twoCommitBranch([p(1)]), // partial
+      twoCommitBranch([]), // absent
+    ];
+    for (const h of cases) {
+      const uncached = classifyLandedContent(input, git(h));
+      const cache: LandedContentCache = new Map();
+      const cached = classifyLandedContent(input, { ...git(h), cache });
+      expect(cached).toEqual(uncached);
+    }
   });
 });
 
