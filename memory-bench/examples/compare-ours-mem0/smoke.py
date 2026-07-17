@@ -14,13 +14,17 @@ Run:  uv run python examples/compare-ours-mem0/smoke.py
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 
 from membench.compare import compare_arms
 from membench.compare.io import load_corpus, load_queries, load_relevance
 from membench.memory_systems.lexical_system import LexicalTopKMemory
-from membench.memory_systems.ours_system import OursMemory, OursQuery
+from membench.memory_systems.ours_system import (
+    OursMemory,
+    OursQuery,
+    RetrieveEnvelope,
+    RetrieveRunner,
+)
 
 _HERE = Path(__file__).parent
 
@@ -32,8 +36,8 @@ _OURS_STUB_HITS: dict[str, list[str]] = {
 }
 
 
-def _ours_stub(hits: list[str]) -> Callable[[OursQuery], dict[str, object]]:
-    def run(query: OursQuery) -> dict[str, object]:
+def _ours_stub(hits: list[str]) -> RetrieveRunner:
+    def run(query: OursQuery) -> RetrieveEnvelope:
         return {
             "items": [{"work_id": w, "citation": {"work_id": w}, "lessons": []} for w in hits],
             "total_matched": len(hits),

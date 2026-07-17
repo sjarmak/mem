@@ -20,7 +20,12 @@ dependencies = [
 # harbor.TaskConfig only when the package is present (see tests/test_harbor_adapter.py).
 [project.optional-dependencies]
 harbor = ["harbor>=0.3"]
-dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.11", "black>=24.0", "types-toml>=0.10"]
+# pyyaml: test_python_gates_are_opt_out.py reads the gate commands out of
+# .github/workflows/ci.yml so it probes what CI actually runs. It is present
+# transitively today (harbor, pre-commit), but a guard that silently SKIPS when
+# an undeclared dep is absent is the precise failure this repo's gates exist to
+# prevent — so it is declared.
+dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.11", "black>=24.0", "types-toml>=0.10", "pyyaml>=6.0"]
 
 [project.scripts]
 membench = "membench.cli:main"
@@ -55,6 +60,40 @@ strict = true
 # express this: per-module disallow_untyped_calls governs calls made FROM the
 # matched modules, not calls into them.
 untyped_calls_exclude = ["opentelemetry"]
+
+# Coverage is opt-OUT, not opt-in (mem-sspvk): crawl everything, then name what
+# is excluded and why. The prior gate hand-listed its targets on the CI command
+# line, so a newly added directory was uncovered by default and silently — which
+# is exactly how conftest.py and examples/ went unchecked. Each exclusion below
+# must carry a reason; an unreasoned one is a bug, not a config entry.
+# `exclude` filters the recursive crawl only, not explicitly-named targets —
+# sound here precisely because `files = ["."]` IS a crawl.
+#
+# The regexes are anchored relative to the INVOCATION cwd, not to this file, so
+# they hold only because both gate sites run from memory-bench/ (ci.yml's
+# `working-directory:`, and pre-commit's `cd memory-bench`).
+#
+# Crawl constraint: `examples/` subdirectories are not Python packages (their
+# names are hyphenated, so they cannot be), which makes each example script a
+# TOP-LEVEL module named after its file. Two examples sharing a basename
+# therefore collide ("Duplicate module named 'smoke'") and mypy ABORTS the whole
+# run rather than checking anything. Adding a second example named like the
+# first is the trigger; the failure is loud and mypy names the fixes. Tracked in
+# mem-1ql4w — the durable fix is package-legal example directories.
+files = ["."]
+exclude = [
+    # Vendored.
+    "^\\.venv/",
+    # Never been typed: thousands of errors under --strict. Typing it is its own
+    # body of work, not a side effect of this gate change. (No count here on
+    # purpose — it moves with every test added, so it would be born stale.)
+    "^tests/",
+    # In-flight deliverable of mem-cv06b (branch work/mem-cv06b, unmerged): the
+    # scripts/ mypy-annotation sweep, 15 errors outstanding. Excluding it is not
+    # a regression — the gate this replaces (`mypy --strict membench`) did not
+    # cover scripts/ either. mem-cv06b deletes this entry when its sweep lands.
+    "^scripts/",
+]
 
 [[tool.mypy.overrides]]
 module = ["opentelemetry.*"]

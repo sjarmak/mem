@@ -7,7 +7,7 @@ repos:
     hooks:
       - id: py-black
         name: black --check (memory-bench)
-        entry: bash -c 'cd memory-bench && black --check membench tests'
+        entry: bash -c 'cd memory-bench && black --check .'
         language: system
         types: [python]
         files: ^memory-bench/
@@ -15,18 +15,18 @@ repos:
 
       - id: py-ruff
         name: ruff check (memory-bench)
-        entry: bash -c 'cd memory-bench && ruff check membench tests'
+        entry: bash -c 'cd memory-bench && ruff check .'
         language: system
         types: [python]
         files: ^memory-bench/
         pass_filenames: false
 
       - id: py-mypy
-        name: mypy --strict (membench)
-        entry: bash -c 'cd memory-bench && mypy --strict membench'
+        name: mypy --strict (memory-bench)
+        entry: bash -c 'cd memory-bench && mypy'
         language: system
         types: [python]
-        files: ^memory-bench/membench/
+        files: ^memory-bench/
         pass_filenames: false
 
       - id: ts-check

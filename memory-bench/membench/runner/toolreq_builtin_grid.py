@@ -8,10 +8,11 @@ then a bare goal call) sharing one sandbox cwd + one ``CLAUDE_CONFIG_DIR``, so C
 native memory is the sole continuity channel (``membench.runner.toolreq_builtin``).
 
 It lives HERE, not in ``scripts/``, for the reason the 3-arm core does: ``scripts/`` is not
-type-checked (CI runs ``mypy --strict membench``), and every resume-cache defect this codebase has
-shipped lived in an untyped script. The driver keeps argparse, the refuse-to-spend gate, the paid
-preflight and its printing; everything that decides what is EXECUTED, what is SCORED, and what may
-be REUSED is in this module, inside the type checker and on top of the shared cache.
+type-checked (the CI mypy gate checks the tree but names ``^scripts/`` in ``[tool.mypy].exclude``),
+and every resume-cache defect this codebase has shipped lived in an untyped script. The driver
+keeps argparse, the refuse-to-spend gate, the paid preflight and its printing; everything that
+decides what is EXECUTED, what is SCORED, and what may be REUSED is in this module, inside the
+type checker and on top of the shared cache.
 
 What this grid adds beyond the shared core: a cell that carries its DIAGNOSTICS, not just its score
 (``BuiltinCell``). ``engaged`` and ``leaked`` are what make a builtin ``passes`` interpretable at
@@ -62,11 +63,11 @@ from membench.runner.toolreq_realagent import ToolReqRealAgentTask, task_fingerp
 
 # This module's public surface, declared for the reason `toolreq_grid.__all__` is: the driver
 # imports `LEAK` from here, but `LEAK` is `resume_cache`'s — it arrives by an implicit re-export
-# that `--strict`'s `no_implicit_reexport` refuses. CI runs `mypy --strict membench` and never
-# reaches `scripts/`, so the error is latent rather than absent: `mypy --strict
-# scripts/grid_toolreq_builtin.py` reports it today, and the day `scripts/` joins the checked
-# surface — the direction this module's own docstring argues for, since every resume-cache defect
-# this codebase shipped lived in an untyped script — that import breaks.
+# that `--strict`'s `no_implicit_reexport` refuses. CI's mypy gate excludes `scripts/`, so the
+# error is latent rather than absent: `mypy --strict scripts/grid_toolreq_builtin.py` reports it
+# today, and the day `scripts/` joins the checked surface — one deleted line in
+# `[tool.mypy].exclude`, the direction this module's own docstring argues for, since every
+# resume-cache defect this codebase shipped lived in an untyped script — that import breaks.
 __all__ = [
     "AGENT_ERROR",
     "ARM",

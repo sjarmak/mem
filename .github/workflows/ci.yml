@@ -22,9 +22,12 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
-      - run: ruff check membench tests
-      - run: black --check membench tests
-      - run: mypy --strict membench
+      # Whole-tree by default (mem-sspvk) — a new directory is covered without
+      # anyone remembering to add it here. mypy's target set and its reasoned
+      # exclusions live in pyproject's [tool.mypy] (which sets strict = true).
+      - run: ruff check .
+      - run: black --check .
+      - run: mypy
       - run: pytest -q
 
   typescript:
