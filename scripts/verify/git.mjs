@@ -12,8 +12,10 @@ import { execFileSync } from 'node:child_process';
  * missing ref, an unknown revision, work_dir not a repo, no matching config
  * key) — as opposed to the `git` binary itself being missing or unreadable.
  * Mirrors src/ingest/provenance.ts's `isNonZeroExit`, kept as its own copy
- * here since this file is plain ESM outside the TS build with no reason to
- * import across that boundary for one predicate. */
+ * here rather than imported from dist/: verify-rig-checkouts.mjs (a consumer
+ * of this module) is a Step-0 preflight that must still run when the TS build
+ * is broken or stale, so this shared module can't take a dist/ dependency even
+ * though the other two consumers already have one. */
 function isNonZeroExit(err) {
   return typeof err === 'object' && err !== null && typeof err.status === 'number';
 }

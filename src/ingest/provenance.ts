@@ -256,30 +256,43 @@ export function shaOrNull(run: GitRunner, work_dir: string, args: string[]): str
 }
 
 /**
+ * The newest commit on `branch` at or before `when`, or null when the branch
+ * has no commit before the cutoff (zero exit, empty stdout) or does not
+ * resolve (non-zero exit). `branch` is DB-sourced, so `--end-of-options`
+ * precedes it: git then treats the value strictly as a revision, never as an
+ * option. Without it a value like `--output=<path>` or `--all` would be parsed
+ * as a git flag (argument injection — git would create files or return a
+ * wrong commit); with it, such a value is an unknown revision that exits
+ * non-zero → null. Shared by resolveSessionCommit here and ingest/landed.ts's
+ * window-end resolution — both built this same rev-list argument list before
+ * calling shaOrNull (mem-j1r2w).
+ */
+export function tipBefore(
+  run: GitRunner,
+  work_dir: string,
+  branch: string,
+  when: string
+): string | null {
+  return shaOrNull(run, work_dir, [
+    'rev-list',
+    '-1',
+    `--before=${toGitUtc(when)}`,
+    '--end-of-options',
+    branch,
+  ]);
+}
+
+/**
  * Resolve the session-start commit by date: the newest commit on `base_branch`
- * at or before `started_at`. Returns null when the branch exists but has no
- * commit before the cutoff (zero exit, empty stdout), or when git exits non-zero
- * (work_dir is not a reachable repo, or the branch is unknown). A missing `git`
- * binary (or any non-exit failure) propagates — that is a misconfiguration, not
- * an unresolved session, and must not be silently swallowed.
- *
- * `base_branch` is DB-sourced, so `--end-of-options` precedes it: git then
- * treats the value strictly as a revision, never as an option. Without it a
- * value like `--output=<path>` or `--all` would be parsed as a git flag
- * (argument injection — git would create files or return a wrong commit); with
- * it, such a value is an unknown revision that exits non-zero → `unresolved`.
+ * at or before `started_at`. A missing `git` binary (or any non-exit failure)
+ * propagates — that is a misconfiguration, not an unresolved session, and must
+ * not be silently swallowed.
  */
 export function resolveSessionCommit(
   input: ProvenanceInput & { base_branch: string },
   run: GitRunner
 ): string | null {
-  return shaOrNull(run, input.work_dir, [
-    'rev-list',
-    '-1',
-    `--before=${toGitUtc(input.started_at)}`,
-    '--end-of-options',
-    input.base_branch,
-  ]);
+  return tipBefore(run, input.work_dir, input.base_branch, input.started_at);
 }
 
 /**

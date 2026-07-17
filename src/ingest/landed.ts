@@ -1,4 +1,4 @@
-import { exitStatus, isNonZeroExit, shaOrNull, toGitUtc } from './provenance.js';
+import { exitStatus, isNonZeroExit, tipBefore } from './provenance.js';
 import type { GitRunner } from './provenance.js';
 import { defaultGitRunner } from './provenance.js';
 import { LandedSchema, type Landed, type WorkRecord } from '../schemas/workrecord.js';
@@ -65,25 +65,6 @@ export function landedInput(record: WorkRecord): LandedInput | null {
   };
 }
 
-/** The newest commit on `branch` at or before `when`, or null when the branch has
- * none before the cutoff (empty stdout) or git exits non-zero (checkout gone /
- * unknown branch). Mirrors provenance's resolveSessionCommit; `--end-of-options`
- * pins the branch as a revision so a hostile value cannot inject a git flag. */
-function resolveTipBefore(
-  run: GitRunner,
-  work_dir: string,
-  branch: string,
-  when: string
-): string | null {
-  return shaOrNull(run, work_dir, [
-    'rev-list',
-    '-1',
-    `--before=${toGitUtc(when)}`,
-    '--end-of-options',
-    branch,
-  ]);
-}
-
 /** The full 40-hex SHAs in `base..end` (commits reachable from `end` but not
  * `base`) — the session's landed commits, newest first. */
 function rangeCommits(run: GitRunner, work_dir: string, base: string, end: string): string[] {
@@ -141,7 +122,7 @@ type Window =
   | { state: 'commits'; end: string; commits: string[] };
 
 function resolveWindow(run: GitRunner, input: LandedInput): Window {
-  const end = resolveTipBefore(run, input.work_dir, input.base_branch, input.ended_at);
+  const end = tipBefore(run, input.work_dir, input.base_branch, input.ended_at);
   if (end === null) return { state: 'unresolved' };
   // `end` at base means the branch tip never moved over the window — nothing
   // landed, even before listing commits.
@@ -154,7 +135,7 @@ function resolveWindow(run: GitRunner, input: LandedInput): Window {
     // READ from a producer-recorded `cut` (ingest/provenance-from-log) that
     // points at a commit not present locally. The window cannot be computed, so
     // the record is `unresolved` — never crash the batch. Mirrors the non-zero
-    // degradation in resolveTipBefore above.
+    // degradation in tipBefore above.
     if (isNonZeroExit(err)) return { state: 'unresolved' };
     throw err;
   }

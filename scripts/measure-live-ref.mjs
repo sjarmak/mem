@@ -28,6 +28,7 @@ import {
   resolveLiveRefs,
   summarize,
 } from '../dist/ingest/liveRef.js';
+import { resolveCommit } from '../dist/ingest/landedContent.js';
 import { RIG_REPOS, DEFAULT_BRANCH } from '../dist/ingest/rig-repo-map.js';
 import { pickRemoteForSlug } from './verify/lib.mjs';
 import { gitOut, readRemotes } from './verify/git.mjs';
@@ -44,6 +45,13 @@ const RIGS = (arg('--rigs', 'gascity') || '')
   .filter(Boolean);
 
 // ---- git shell (execFile — no shell, no interpolation) ----------------------
+
+// The throwing GitRunner shape resolveCommit takes (mirrors measure-false-close.mjs).
+const gitRunner = (dir, args) =>
+  execFileSync('git', ['-C', dir, ...args], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
 
 // `git merge-base --is-ancestor` is exit-code only: 0 ancestor, 1 not, other = error.
 function isAncestor(dir, ancestor, descendant) {
@@ -99,7 +107,7 @@ for (const rig of RIGS) {
   // Sanity-gate the authoritative ref itself: if it does not resolve, EVERY branch
   // would drop as no-merge-base and masquerade as 100% decay. Skip-with-reason
   // instead, so a broken checkout/ref can't be misread as a real measurement.
-  if (gitOut(entry.dir, ['rev-parse', '--verify', '--quiet', `${authRef}^{commit}`]) === null) {
+  if (resolveCommit(gitRunner, entry.dir, authRef) === null) {
     console.log(`${rig}: authoritative ref ${authRef} does not resolve — skipped\n`);
     continue;
   }
