@@ -71,6 +71,8 @@ def test_scorer_fails_when_write_carries_both_current_and_stale() -> None:
 import sys  # noqa: E402
 from pathlib import Path  # noqa: E402
 
+import pytest  # noqa: E402
+
 _SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
@@ -130,6 +132,37 @@ def test_dry_run_arm_wiring_discriminates_end_to_end() -> None:
     )
     assert none_o.passes == 0
     assert oracle_o.passes == oracle_o.runs == 2
+
+
+def test_a_contaminated_ancestor_chain_refuses_this_arms_sandbox(tmp_path, monkeypatch) -> None:
+    # mem-rx11w's guard has to hold on BOTH paid cwd mints, not just the builtin grid's — they
+    # are separate call sites, and the guard being reachable from `run_builtin_arm` says
+    # nothing about this one. An ancestor CLAUDE.md, which Claude Code auto-loads by walking
+    # up from the cwd at launch, must refuse here rather than measure a sandbox that is not
+    # neutral.
+    #
+    # dry_run=True on purpose: `paid_sandbox` takes no dry_run and is called identically on
+    # both paths, so this exercises the SAME guard while spawning nothing and needing no
+    # token. It also pins the fail-closed choice — a free run is refused too, because the
+    # refusal is about the sandbox, not about who is paying.
+    import tempfile as _tempfile
+
+    from membench.runner.sandbox import SandboxContaminationError
+
+    (tmp_path / "CLAUDE.md").write_text("remember: probe-w-t0-CURRENT", encoding="utf-8")
+    monkeypatch.setattr(_tempfile, "tempdir", str(tmp_path))
+
+    with pytest.raises(SandboxContaminationError) as exc:
+        _run_arm(
+            step=build_probe_step(),
+            arm="none",
+            channel=MemoryChannel.RECALLED,
+            repeats=1,
+            model="",
+            dry_run=True,
+        )
+    assert str(tmp_path / "CLAUDE.md") in str(exc.value)  # names the offending path
+    assert "TMPDIR" in str(exc.value)  # and the knob that fixes it
 
 
 def _outcomes(none_pass: int, oracle_pass: int, runs: int = 3) -> list[ArmOutcome]:

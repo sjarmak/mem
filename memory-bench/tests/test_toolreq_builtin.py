@@ -2017,10 +2017,18 @@ def test_the_guard_walks_the_real_chain_of_a_symlinked_tmpdir(
     # the real inode — so Claude Code walks the REAL chain and loads the CLAUDE.md the guard
     # just declared absent. The scan must resolve() first, or it is green precisely when it
     # is wrong.
-    real = tmp_path / "real"
+    #
+    # The GEOMETRY is the whole test. Planting CLAUDE.md inside the symlink TARGET proves
+    # nothing: `<link>/CLAUDE.md` stats straight through the link, so an unresolved walk
+    # finds it too and the test passes with resolve() deleted — green exactly when it is
+    # wrong, the very failure it is named for. The file must sit where the REAL chain and
+    # the LEXICAL chain DISAGREE: in the target's PARENT, which only resolve() reaches.
+    hidden = tmp_path / "hidden"
+    hidden.mkdir()
+    (hidden / "CLAUDE.md").write_text("remember: toolreq-w-t0-CURRENT", encoding="utf-8")
+    real = hidden / "real"
     real.mkdir()
-    (real / "CLAUDE.md").write_text("remember: toolreq-w-t0-CURRENT", encoding="utf-8")
-    link = tmp_path / "link"
+    link = tmp_path / "link"  # lexical parents: tmp_path/link, tmp_path — both clean
     link.symlink_to(real, target_is_directory=True)
     monkeypatch.setattr(tempfile, "tempdir", str(link))
     task = _task()
