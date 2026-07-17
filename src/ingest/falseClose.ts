@@ -187,13 +187,21 @@ export function joinBranches(opts: JoinOptions): JoinResult {
   // id as the store spells it, not as the branch happened to spell it.
   const canonical = new Map<string, string>();
   for (const id of closedIds) canonical.set(id.toLowerCase(), id);
+  /** A candidate branch and the raw refname it was found under. The refname is
+   * carried alongside JoinedBranch rather than on it: the displacement skip
+   * below is its only reader, and a field on JoinedBranch would surface
+   * unconsumed in `joined` output. */
+  interface HeldRef {
+    branch: JoinedBranch;
+    refname: string;
+  }
   // work_id → the best ref seen so far. A local head, once seen, is never
   // displaced; the earlier remote candidate it displaces is recorded as a skip.
-  // The refname is carried alongside rather than on JoinedBranch: a displaced
-  // candidate must be skipped under the same raw refname every other skip uses,
-  // and that is the only reader — putting it on the branch would leak an
-  // unconsumed field into `joined`.
-  const best = new Map<string, { branch: JoinedBranch; refname: string }>();
+  // Every skip below pushes a raw refname — the loop variable, or a held one
+  // captured when that entry was inserted — and never `parsed.name` or
+  // `candidate.ref`. That is what keeps JoinSkip.refname one shape; a new skip
+  // reason must follow it.
+  const best = new Map<string, HeldRef>();
 
   for (const refname of opts.refnames) {
     const parsed = parseRef(refname);

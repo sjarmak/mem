@@ -149,6 +149,16 @@ describe('joinBranches', () => {
     ]);
   });
 
+  it('reports a duplicate-of-local skip identically whichever ref came first', () => {
+    // The two tests above pin the shape with a literal each; this states the
+    // invariant they exist for. Both orderings displace a remote candidate, but
+    // by different code paths — one skips the ref in hand, the other the ref it
+    // held — and those paths once disagreed on whether refname meant
+    // `origin/work/x` or `refs/remotes/origin/work/x`.
+    const refs = ['refs/remotes/origin/work/mem-cv06b', 'refs/heads/work/mem-cv06b'];
+    expect(join(refs).skipped).toEqual(join([...refs].reverse()).skipped);
+  });
+
   it('falls back to the authoritative remote when no local head survives', () => {
     const out = join(['refs/remotes/origin/work/mem-cv06b']);
     expect(out.joined[0].scope).toBe('remote');
