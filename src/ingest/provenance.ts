@@ -249,7 +249,10 @@ export function isGitFault(err: unknown): boolean {
   const e = err as { code?: unknown; signal?: unknown };
   if (typeof e.code === 'string' && SPAWN_FAULT_CODES.has(e.code)) return true;
   // ENOBUFS+SIGTERM is Node aborting the child over OUR maxBuffer (our config
-  // bug), not an external kill — exclude it from the signal-kill arm.
+  // bug), not an external kill — exclude it from the signal-kill arm. This
+  // carve-out covers Node's only self-kill because both runners set maxBuffer
+  // and no timeout; adding a runner `timeout` would surface a second Node kill
+  // (a non-ENOBUFS string signal) that this arm would misread as external.
   return typeof e.signal === 'string' && e.code !== 'ENOBUFS';
 }
 
