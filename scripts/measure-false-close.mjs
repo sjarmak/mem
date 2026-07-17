@@ -31,7 +31,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 
-import { classifyLandedContent } from '../dist/ingest/landedContent.js';
+import { classifyLandedContent, resolveCommit } from '../dist/ingest/landedContent.js';
 // The `<diff listing> | patch-id` seam, reused rather than re-derived here: its
 // `set -o pipefail` is what keeps an unreadable range from returning an empty
 // patch-id map with a zero exit, and that belongs in exactly one place.
@@ -49,6 +49,7 @@ import {
 } from '../dist/ingest/falseClose.js';
 import { RIG_REPOS, DEFAULT_BRANCH } from '../dist/ingest/rig-repo-map.js';
 import { pickRemoteForSlug } from './verify/lib.mjs';
+import { gitOut, readRemotes } from './verify/git.mjs';
 
 function arg(flag, fallback = undefined) {
   const i = process.argv.indexOf(flag);
@@ -78,27 +79,6 @@ const gitRunner = (dir, args) =>
  * stderr suppressed to match `gitRunner` above. */
 const gitPipeRunner = makeGitPipeRunner({ silenceStderr: true });
 
-/** stdout, or null on a non-zero exit (a missing ref / pruned object). Only for
- * this runner's own probing; the pure modules take `gitRunner`, which must keep
- * throwing so they can tell a negative answer from a fault. */
-function gitOut(dir, args) {
-  try {
-    return gitRunner(dir, args);
-  } catch {
-    return null;
-  }
-}
-
-function readRemotes(dir) {
-  const names = gitOut(dir, ['remote']);
-  if (names === null) return {};
-  const remotes = {};
-  for (const name of names.split('\n').filter(n => n.trim() !== '')) {
-    const url = gitOut(dir, ['remote', 'get-url', name]);
-    if (url !== null) remotes[name] = url.trim();
-  }
-  return remotes;
-}
 
 const pct = n => (n * 100).toFixed(1).padStart(5) + '%';
 
@@ -175,22 +155,10 @@ for (const rig of rigs) {
     authoritativeRemote: authRemote,
   });
 
-  /** A ref's tip, or null when it does not resolve. */
-  const tipOf = ref => {
-    // --end-of-options for consistency with the invariant landedContent holds:
-    // every ref reaching git is read strictly as a revision. These particular
-    // refs come from the static RIG_REPOS map and locally-configured remote
-    // names, so nothing here is attacker-influenced today — but the rule is
-    // cheaper to keep everywhere than to re-audit each call site.
-    const sha = gitOut(entry.dir, [
-      'rev-parse',
-      '--verify',
-      '--quiet',
-      '--end-of-options',
-      `${ref}^{commit}`,
-    ]);
-    return sha === null ? null : sha.trim();
-  };
+  /** A ref's tip, or null when it does not resolve. Same rev-parse shape
+   * landedContent holds as an invariant (every ref read strictly as a
+   * revision) — resolveCommit is the shared implementation (mem-j1r2w). */
+  const tipOf = ref => resolveCommit(gitRunner, entry.dir, ref);
 
   // The integration refs a branch could legitimately have landed on, each pinned
   // to the tip it is decided against — the verdicts are only reproducible against

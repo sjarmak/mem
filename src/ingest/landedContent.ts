@@ -5,6 +5,7 @@ import {
   defaultGitRunner,
   exitStatus,
   isNonZeroExit,
+  shaOrNull,
 } from './provenance.js';
 
 /**
@@ -100,29 +101,17 @@ export interface LandedContentResult {
   n_matched?: number;
 }
 
-/** Run a git command whose answer is a sha, returning null when git exits
- * non-zero — for these callers that exit means "no such commit", the question's
- * legitimate negative answer, not a fault. Any other failure (a missing binary)
- * propagates. Empty output is null too: git answered with no sha. */
-function shaOrNull(run: GitRunner, work_dir: string, args: string[]): string | null {
-  let stdout: string;
-  try {
-    stdout = run(work_dir, args);
-  } catch (err) {
-    if (isNonZeroExit(err)) return null;
-    throw err;
-  }
-  const sha = stdout.trim();
-  return sha === '' ? null : sha;
-}
-
 /** Resolve a ref to a full commit sha, or null when it does not resolve. The ref
  * is DB/branch-listing-sourced, so `--end-of-options` precedes it: git then reads
  * it strictly as a revision and a value like `--output=<path>` is an unknown rev
  * (non-zero exit → null) rather than a flag git acts on. `^{commit}` peels an
  * annotated tag and rejects a ref that names a tree or blob. Every later command
- * takes the resolved 40-hex sha, so this is the only injection surface. */
-function resolveCommit(run: GitRunner, work_dir: string, ref: string): string | null {
+ * takes the resolved 40-hex sha, so this is the only injection surface.
+ *
+ * Exported: scripts/measure-false-close.mjs resolves integration-ref tips with
+ * this same rev-parse shape (mem-j1r2w) — no reason for the runner to keep its
+ * own copy. */
+export function resolveCommit(run: GitRunner, work_dir: string, ref: string): string | null {
   return shaOrNull(run, work_dir, ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`]);
 }
 

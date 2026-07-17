@@ -234,6 +234,27 @@ export function isNonZeroExit(err: unknown): boolean {
   return exitStatus(err) !== undefined;
 }
 
+/** Run a git command whose answer is a single sha, returning null when git
+ * exits non-zero — for these callers that exit means the question's
+ * legitimate negative answer (no such commit, unknown ref), not a fault. Any
+ * other failure (a missing binary) propagates. Empty output is null too: git
+ * answered with no sha. Shared by every caller that resolves a ref, a
+ * before-date commit, or a merge-base to a sha-or-nothing (resolveSessionCommit
+ * here; resolveTipBefore in ingest/landed.ts; resolveCommit and mergeBase in
+ * ingest/landedContent.ts) — the first three had drifted into separate copies
+ * of the same run→trim→null-on-non-zero-exit body (mem-j1r2w). */
+export function shaOrNull(run: GitRunner, work_dir: string, args: string[]): string | null {
+  let stdout: string;
+  try {
+    stdout = run(work_dir, args);
+  } catch (err) {
+    if (isNonZeroExit(err)) return null;
+    throw err;
+  }
+  const sha = stdout.trim();
+  return sha === '' ? null : sha;
+}
+
 /**
  * Resolve the session-start commit by date: the newest commit on `base_branch`
  * at or before `started_at`. Returns null when the branch exists but has no
@@ -252,21 +273,13 @@ export function resolveSessionCommit(
   input: ProvenanceInput & { base_branch: string },
   run: GitRunner
 ): string | null {
-  let stdout: string;
-  try {
-    stdout = run(input.work_dir, [
-      'rev-list',
-      '-1',
-      `--before=${toGitUtc(input.started_at)}`,
-      '--end-of-options',
-      input.base_branch,
-    ]);
-  } catch (err) {
-    if (isNonZeroExit(err)) return null;
-    throw err;
-  }
-  const sha = stdout.trim();
-  return sha === '' ? null : sha;
+  return shaOrNull(run, input.work_dir, [
+    'rev-list',
+    '-1',
+    `--before=${toGitUtc(input.started_at)}`,
+    '--end-of-options',
+    input.base_branch,
+  ]);
 }
 
 /**

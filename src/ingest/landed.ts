@@ -1,4 +1,4 @@
-import { exitStatus, isNonZeroExit, toGitUtc } from './provenance.js';
+import { exitStatus, isNonZeroExit, shaOrNull, toGitUtc } from './provenance.js';
 import type { GitRunner } from './provenance.js';
 import { defaultGitRunner } from './provenance.js';
 import { LandedSchema, type Landed, type WorkRecord } from '../schemas/workrecord.js';
@@ -75,21 +75,13 @@ function resolveTipBefore(
   branch: string,
   when: string
 ): string | null {
-  let stdout: string;
-  try {
-    stdout = run(work_dir, [
-      'rev-list',
-      '-1',
-      `--before=${toGitUtc(when)}`,
-      '--end-of-options',
-      branch,
-    ]);
-  } catch (err) {
-    if (isNonZeroExit(err)) return null;
-    throw err;
-  }
-  const sha = stdout.trim();
-  return sha === '' ? null : sha;
+  return shaOrNull(run, work_dir, [
+    'rev-list',
+    '-1',
+    `--before=${toGitUtc(when)}`,
+    '--end-of-options',
+    branch,
+  ]);
 }
 
 /** The full 40-hex SHAs in `base..end` (commits reachable from `end` but not

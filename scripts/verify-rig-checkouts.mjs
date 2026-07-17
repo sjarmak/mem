@@ -35,6 +35,7 @@ import {
   buildVerdict,
   groupByObjectStore,
 } from './verify/lib.mjs';
+import { gitOut, readRemotes } from './verify/git.mjs';
 
 // Rig → {dir, slug, multi}. Inlined (mirrors src/ingest/rig-repo-map.ts) rather
 // than imported from dist/ ON PURPOSE: this Step-0 verification is the preflight
@@ -96,14 +97,6 @@ function git(dir, args) {
   });
 }
 
-function gitTry(dir, args) {
-  try {
-    return git(dir, args).trim();
-  } catch {
-    return null;
-  }
-}
-
 // ---- fail-closed abort ------------------------------------------------------
 
 function abort(msg) {
@@ -113,26 +106,12 @@ function abort(msg) {
 
 // ---- per-rig fact gathering -------------------------------------------------
 
-// Read the full `name → url` remote map of a checkout. Gathering ALL remotes
-// (not just origin) lets the pure layer accept a canonical upstream present under
-// a non-standard remote name, while still failing closed when none match.
-function readRemotes(dir) {
-  const names = gitTry(dir, ['remote']);
-  if (names === null || names === '') return {};
-  const remotes = {};
-  for (const name of names.split('\n').filter(n => n.trim() !== '')) {
-    const url = gitTry(dir, ['remote', 'get-url', name]);
-    if (url !== null) remotes[name] = url;
-  }
-  return remotes;
-}
-
 // Resolve the on-disk facts for one rig WITHOUT making any pass/fail judgment —
 // that is buildVerdict's job (kept pure). A multi rig with no dir is recorded as
 // non-existent-but-not-a-failure by buildVerdict via its multi flag.
 function gatherRig(rig, entry) {
   const dir = entry.dir ?? null;
-  if (dir === null || !existsSync(dir) || gitTry(dir, ['rev-parse', '--git-dir']) === null) {
+  if (dir === null || !existsSync(dir) || gitOut(dir, ['rev-parse', '--git-dir']) === null) {
     return {
       rig,
       dir: dir ?? '(none)',

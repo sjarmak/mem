@@ -30,6 +30,7 @@ import {
 } from '../dist/ingest/liveRef.js';
 import { RIG_REPOS, DEFAULT_BRANCH } from '../dist/ingest/rig-repo-map.js';
 import { pickRemoteForSlug } from './verify/lib.mjs';
+import { gitOut, readRemotes } from './verify/git.mjs';
 
 function arg(flag, fallback = undefined) {
   const i = process.argv.indexOf(flag);
@@ -43,17 +44,6 @@ const RIGS = (arg('--rigs', 'gascity') || '')
   .filter(Boolean);
 
 // ---- git shell (execFile — no shell, no interpolation) ----------------------
-function gitOut(dir, args) {
-  try {
-    return execFileSync('git', ['-C', dir, ...args], {
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
-      .toString()
-      .trim();
-  } catch {
-    return null; // non-zero exit / missing objects — treated as "no result"
-  }
-}
 
 // `git merge-base --is-ancestor` is exit-code only: 0 ancestor, 1 not, other = error.
 function isAncestor(dir, ancestor, descendant) {
@@ -65,17 +55,6 @@ function isAncestor(dir, ancestor, descendant) {
   } catch {
     return false;
   }
-}
-
-function readRemotes(dir) {
-  const names = gitOut(dir, ['remote']);
-  if (names === null) return {};
-  const remotes = {};
-  for (const name of names.split('\n').filter(n => n.trim() !== '')) {
-    const url = gitOut(dir, ['remote', 'get-url', name]);
-    if (url !== null) remotes[name] = url;
-  }
-  return remotes;
 }
 
 const db = new Database(STORE, { readonly: true });
