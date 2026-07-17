@@ -613,6 +613,21 @@ describe('isGitFault', () => {
     ).toBe(false);
   });
 
+  it('does NOT classify ENOBUFS as a fault even when no kill signal is recorded', () => {
+    // maxBuffer is OUR config bug and must propagate regardless of how Node
+    // records the abort: the ENOBUFS carve-out is checked before the spawn-
+    // never-ran arm so a signal:null overrun cannot be swallowed into null.
+    expect(
+      isGitFault(
+        Object.assign(new Error('stdout maxBuffer length exceeded'), {
+          status: null,
+          code: 'ENOBUFS',
+          signal: null,
+        })
+      )
+    ).toBe(false);
+  });
+
   it('does NOT classify a non-object throw as a fault', () => {
     expect(isGitFault('boom')).toBe(false);
     expect(isGitFault(null)).toBe(false);

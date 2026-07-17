@@ -250,17 +250,22 @@ export function isGitFault(err: unknown): boolean {
   if (isNonZeroExit(err)) return true;
   if (typeof err !== 'object' || err === null) return false;
   const e = err as { status?: unknown; code?: unknown; signal?: unknown };
+  // ENOBUFS is Node aborting the child over OUR maxBuffer (our config bug), not
+  // a git-could-not-answer fault, so it always propagates. Checked before the
+  // shape arms so the carve-out does NOT depend on how Node records the abort:
+  // today it is a SIGTERM kill (a string signal), but were a runtime to report
+  // it with signal null the spawn-never-ran arm below would otherwise swallow
+  // our own config bug into a null verdict — the exact laundering this guards.
+  if (e.code === 'ENOBUFS') return false;
   // Spawn-never-ran: uv_spawn failed before git executed, so execFileSync
   // reports status and signal both null with code the errno string (the whole
   // spawn-fault set, enumerated in the doc comment above). git could not be
   // asked, so this is a fault, not a bug in our code.
   if (e.status === null && e.signal === null && typeof e.code === 'string') return true;
-  // ENOBUFS+SIGTERM is Node aborting the child over OUR maxBuffer (our config
-  // bug), not an external kill — exclude it from the signal-kill arm. This
-  // carve-out covers Node's only self-kill because both runners set maxBuffer
-  // and no timeout; adding a runner `timeout` would surface a second Node kill
-  // (a non-ENOBUFS string signal) that this arm would misread as external.
-  return typeof e.signal === 'string' && e.code !== 'ENOBUFS';
+  // An external signal killed git after it launched — git was asked but could
+  // not answer. Node's own maxBuffer self-kill (ENOBUFS) was already excluded
+  // above, so any remaining string signal is a genuine external kill.
+  return typeof e.signal === 'string';
 }
 
 /** Run a git command whose answer is a single sha, returning null when git
