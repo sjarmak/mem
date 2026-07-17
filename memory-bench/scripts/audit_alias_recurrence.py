@@ -28,6 +28,7 @@ import json
 import sys
 from itertools import pairwise
 from pathlib import Path
+from typing import Any, TypedDict
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -49,7 +50,32 @@ OUT = "/home/ds/projects/mem/.mem/alias-recurrence-audit.json"
 MIN_SESSIONS = 2
 
 
-def population(beads: dict, *, key_by_uuid: bool) -> dict[str, list[dict]]:
+class RawSessionEntry(TypedDict, total=False):
+    """One entry of the merged-join artifact, as it arrives on disk. Every key is
+    optional: the artifact omits rather than nulls, so all reads go through
+    `.get()`. This shape is `population`'s INPUT and is NOT index-safe."""
+
+    transcript_path: str
+    suspect: bool
+    session_key: str
+    t_first: str
+    t_last: str
+    gc_session_id: str
+
+
+class PopulationRow(TypedDict):
+    """One row of `population`'s OUTPUT. Every key is always present — `view_for`
+    and `build` index them directly rather than `.get()`ing."""
+
+    transcript_path: str
+    start: str | None
+    end: str | None
+    session_id: str
+
+
+def population(
+    beads: dict[str, list[RawSessionEntry]], *, key_by_uuid: bool
+) -> dict[str, list[PopulationRow]]:
     """Per bead, its non-suspect resolved entries. The dedup key and the row's
     `session_id` are kept BYTE-FOR-BYTE identical to the two production paths so
     the audit faithfully reproduces both computations (not an approximation):
@@ -60,9 +86,9 @@ def population(beads: dict, *, key_by_uuid: bool) -> dict[str, list[dict]]:
 
     `session_id` mirrors production's `gc_session_id or session_key or path` in
     BOTH so the time-sort tiebreaker and the alias-pair lookup match production."""
-    out: dict[str, list[dict]] = {}
+    out: dict[str, list[PopulationRow]] = {}
     for wid, entries in beads.items():
-        rows: dict[str, dict] = {}
+        rows: dict[str, PopulationRow] = {}
         for e in entries:
             path = e.get("transcript_path")
             if e.get("suspect") or not path:
@@ -85,7 +111,7 @@ def population(beads: dict, *, key_by_uuid: bool) -> dict[str, list[dict]]:
 
 
 def unguarded_bead(
-    work_id: str, views: list[SessionView], *, exclude=frozenset()
+    work_id: str, views: list[SessionView], *, exclude: frozenset[str] = frozenset()
 ) -> BeadCrossSession:
     """bead_cross_session WITHOUT the alias guard — the pre-fix pairing."""
     ordered = tuple(sorted(views, key=lambda v: (v.start is None, v.start or "", v.session_id)))
@@ -101,7 +127,7 @@ def unguarded_bead(
     )
 
 
-def recurrence_block(beads: list[BeadCrossSession]) -> dict:
+def recurrence_block(beads: list[BeadCrossSession]) -> dict[str, Any]:
     # `beads` arrive already alias-resolved (BEFORE: path-keyed pop, no aliases
     # within a bead by construction of the pre-fix code; AFTER: guarded). The
     # `unguarded_bead` rebuild here only re-applies the baseline exclusion to the
@@ -131,7 +157,7 @@ def main() -> int:
     extractor = make_cli_extractor(MEM_BIN)
     cache: dict[str, SessionView] = {}
 
-    def view_for(row: dict) -> SessionView | None:
+    def view_for(row: PopulationRow) -> SessionView | None:
         path = row["transcript_path"]
         if path not in cache:
             try:
@@ -152,8 +178,8 @@ def main() -> int:
     before_pop = population(beads_art, key_by_uuid=False)
     after_pop = population(beads_art, key_by_uuid=True)
 
-    def build(pop, *, guarded: bool) -> list[BeadCrossSession]:
-        out = []
+    def build(pop: dict[str, list[PopulationRow]], *, guarded: bool) -> list[BeadCrossSession]:
+        out: list[BeadCrossSession] = []
         for wid, rows in sorted(pop.items()):
             views = [v for v in (view_for(r) for r in rows) if v is not None]
             if len(views) < MIN_SESSIONS:
