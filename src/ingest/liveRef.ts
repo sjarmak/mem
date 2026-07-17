@@ -28,7 +28,7 @@
  * judgment; git reports the merge-base and ancestry, we classify the result.
  */
 
-import type { AncestryFault } from './provenance.js';
+import type { AncestryFault, MergeBaseFault } from './provenance.js';
 
 /** One ref from a frozen `git for-each-ref --format='%(objectname) %(refname)
  * %(committerdate:iso)'` dump (the Day-0 snapshot, mem-wanz.1). */
@@ -98,10 +98,14 @@ export function resolveLiveRefs(
   return out;
 }
 
-/** Drop reason: no merge-base could be computed at all (the branch objects are
- * absent from the checkout, or share no history with the authoritative branch).
- * This is the live-ref DECAY signal — the case the Day-0 bundle exists to backstop
- * — and the ONLY measurable drop this gate reports. */
+/** Drop reason: git ANSWERED that the branch and the authoritative branch share no
+ * common ancestor (`merge-base` exit 1) — the branch's history is disjoint from the
+ * integration branch. This is the live-ref DECAY signal — the case the Day-0 bundle
+ * exists to backstop — and the ONLY measurable drop this gate reports. A merge-base
+ * git could not COMPUTE (a pruned/unreadable object, a signal, a fault) is NOT this:
+ * it routes to {@link UNDECIDED_MERGE_BASE_OBJECT_UNREADABLE} /
+ * {@link UNDECIDED_MERGE_BASE_GIT_UNAVAILABLE}, so a fault is never counted as decay
+ * (mem-f0n07). */
 export const DROP_NO_MERGE_BASE = 'no_merge_base_in_authoritative_checkout';
 
 /** Undecided cause: git could not read the objects for this base in THIS checkout
@@ -123,14 +127,51 @@ export const UNDECIDED_OBJECT_UNREADABLE = 'ancestry_object_unreadable_in_checko
  * bucket (mem-y2x7n, mem-zwmuq). */
 export const UNDECIDED_GIT_UNAVAILABLE = 'ancestry_git_unavailable';
 
+/** Undecided cause: git could not read the objects to COMPUTE the merge-base in
+ * THIS checkout (canonically exit 128 on a pruned/GC'd object). The merge-base
+ * twin of {@link UNDECIDED_OBJECT_UNREADABLE}: checkout-local and recoverable via
+ * the Day-0 frozen bundle, which the `_in_checkout` suffix asserts. Distinct from
+ * {@link DROP_NO_MERGE_BASE} — a git exit-1 no-merge-base is the decay signal, but
+ * a fault computing the base has no verdict in it, and folding the two would
+ * fabricate a decay data point out of a measurement fault (mem-f0n07 — the
+ * merge-base twin of mem-y2x7n/mem-zwmuq's ancestry fix). Maps from a {@link
+ * MergeBaseFault} whose `fault` is `object-unreadable`. */
+export const UNDECIDED_MERGE_BASE_OBJECT_UNREADABLE = 'merge_base_object_unreadable_in_checkout';
+
+/** Undecided cause: git could not run the merge-base computation at all — a
+ * missing binary, a signal kill, a maxBuffer overrun. The merge-base twin of
+ * {@link UNDECIDED_GIT_UNAVAILABLE}: environment-wide, NOT a property of this rig's
+ * checkout (so no `_in_checkout` suffix), remedied by a rerun once the toolchain is
+ * healthy, not the Day-0 bundle. Reported per-cause beside the object-unreadable
+ * bucket for the same reason the ancestry causes are split — `undecided_by_cause`
+ * stays auditable per-remedy. Maps from a {@link MergeBaseFault} whose `fault` is
+ * `git-unavailable`. */
+export const UNDECIDED_MERGE_BASE_GIT_UNAVAILABLE = 'merge_base_git_unavailable';
+
 /** The result of the IO layer's merge-base computation for one resolved ref. */
 export interface MergeBaseInput {
   work_id: string;
   refname: string;
   branch_sha: string;
-  /** `git merge-base <branch_sha> <authoritative>/main`, or null if none / the
-   * objects are absent. */
-  base_sha: string | null;
+  /** `git merge-base <branch_sha> <authoritative>/main`, as a tri-state that keeps
+   * a git fault apart from a genuine no-merge-base — the merge-base twin of {@link
+   * is_ancestor}'s tri-state:
+   *  - a sha                    → the fork point on the authoritative branch; keep candidate.
+   *  - null                     → git ANSWERED there is none (exit 1): the branch
+   *    shares no history with the authoritative branch — the decay signal.
+   *  - a {@link MergeBaseFault} → git could NOT compute it, ATTRIBUTED to its cause
+   *    (`object-unreadable` = exit 128 on a pruned/GC'd object, checkout-local;
+   *    `git-unavailable` = a missing binary/signal/maxBuffer overrun,
+   *    environment-wide). **A fault is not null.** It routes to undecided, never to
+   *    decay (mem-f0n07). The cause reuses the ancestry fault vocabulary because
+   *    {@link AncestryFault} names HOW git failed, not what was asked; it is WRAPPED
+   *    in an object because a fork-point sha is a string and the fault literals are
+   *    too, so a bare union would let the compiler confuse them ({@link MergeBaseFault}).
+   *
+   * {@link classifyMergeBase} discriminates the fault by `typeof === 'object'`, the
+   * sha and null falling out as the non-object states. Producers should use
+   * ingest/provenance.ts's `mergeBaseOrFault`, which returns exactly these states. */
+  base_sha: string | null | MergeBaseFault;
   /** The ancestry of `base_sha` against the authoritative branch, from
    * `merge-base --is-ancestor` by exit code. `base_sha` is itself a merge-base of
    * authRef, so this is an INVARIANT PROBE, not a corruption measurement — its
@@ -205,12 +246,37 @@ function undecidedCause(is_ancestor: false | AncestryFault): string {
   }
 }
 
+/** Route a merge-base git could not COMPUTE to its undecided cause — the merge-base
+ * twin of {@link undecidedCause}, and an exhaustive switch for the same reason: a
+ * new {@link AncestryFault} variant fails to COMPILE here (the declared `string`
+ * return has no case to satisfy it) rather than silently mis-bucketing, keeping
+ * `undecided_by_cause` auditable per-remedy. `object-unreadable` is checkout-local
+ * (use the Day-0 bundle); `git-unavailable` is environment-wide (rerun) — see the
+ * {@link UNDECIDED_MERGE_BASE_OBJECT_UNREADABLE} / {@link
+ * UNDECIDED_MERGE_BASE_GIT_UNAVAILABLE} constant docs. There is no `false` case to
+ * fold in as there is for the ancestry probe: a merge-base has no exit-1 fault
+ * state, only the exit-1 no-common-ancestor ANSWER, which is `null` decay and
+ * settled before this is ever reached. */
+function mergeBaseUndecidedCause(fault: AncestryFault): string {
+  switch (fault) {
+    case 'object-unreadable':
+      return UNDECIDED_MERGE_BASE_OBJECT_UNREADABLE;
+    case 'git-unavailable':
+      return UNDECIDED_MERGE_BASE_GIT_UNAVAILABLE;
+  }
+}
+
 /**
  * Classify a merge-base result into keep / decay-drop / undecided. The base is
- * kept only when it resolved AND git confirmed the ancestry invariant. The two
+ * kept only when it resolved AND git confirmed the ancestry invariant. The
  * non-keep outcomes are reported apart, because each is a different fact:
  *  - no merge-base → drop {@link DROP_NO_MERGE_BASE}, the decay signal, and the
  *    only measurable drop here.
+ *  - a merge-base git could not COMPUTE (a `base_sha` {@link MergeBaseFault}) →
+ *    undecided, ATTRIBUTED to its cause by {@link mergeBaseUndecidedCause}
+ *    (`object-unreadable` → the Day-0 bundle, `git-unavailable` → rerun). Checked
+ *    BEFORE the `null` decay arm so a fault is never miscounted as decay
+ *    (mem-f0n07) — the merge-base half.
  *  - a resolved base whose ancestry is unconfirmed → undecided, with the cause
  *    ATTRIBUTED from `is_ancestor` by {@link undecidedCause} (the impossible
  *    `false` folds fail-safe into git-unavailable). `base_sha` is a merge-base of
@@ -220,18 +286,27 @@ function undecidedCause(is_ancestor: false | AncestryFault): string {
  *    which is why a stray false folds into undecided fail-safe rather than a
  *    corruption count.
  *
- * So decay cannot be confounded with an ancestry git could not confirm, an
- * environment-wide git fault cannot be misattributed to this rig's checkout, and
- * nothing is written silently on any path (mem-y2x7n, mem-zwmuq).
- *
- * This covers the ANCESTRY half only. `base_sha` arrives already collapsed:
- * producers derive it from a plain `merge-base`, and a fault there is
- * indistinguishable from a genuine no-merge-base by the time it reaches this
- * function, so it still drops as decay (mem-1n56l).
+ * So decay cannot be confounded with a merge-base git could not compute, nor with
+ * an ancestry git could not confirm, an environment-wide git fault cannot be
+ * misattributed to this rig's checkout, and nothing is written silently on any
+ * path (mem-y2x7n, mem-zwmuq, mem-f0n07).
  */
 export function classifyMergeBase(input: MergeBaseInput): LiveRefResult {
-  // No-merge-base first: with no base there is nothing to ask about, so
-  // `is_ancestor` carries no meaning here.
+  // Merge-base fault first: git could not COMPUTE the fork point (a wrapped fault,
+  // NOT a sha and NOT null). A fault has no verdict in it, so it is undecided —
+  // never decay — attributed to its cause. The wrapper makes the fault the only
+  // object state (a sha is a string, no-merge-base is null), so `typeof` discriminates.
+  if (typeof input.base_sha === 'object' && input.base_sha !== null) {
+    return {
+      undecided: {
+        work_id: input.work_id,
+        refname: input.refname,
+        cause: mergeBaseUndecidedCause(input.base_sha.fault),
+      },
+    };
+  }
+  // No-merge-base next: git ANSWERED there is none (null). With no base there is
+  // nothing to ask about, so `is_ancestor` carries no meaning here.
   if (input.base_sha === null) {
     return { drop: { work_id: input.work_id, refname: input.refname, reason: DROP_NO_MERGE_BASE } };
   }

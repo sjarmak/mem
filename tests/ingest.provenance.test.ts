@@ -17,6 +17,8 @@ import {
   isGitFault,
   isNonZeroExit,
   makeGitPipeRunner,
+  mergeBase,
+  mergeBaseOrFault,
   provenanceInput,
   toGitUtc,
 } from '../src/ingest/provenance.js';
@@ -568,6 +570,131 @@ describe('isAncestor / ancestryOrFault', () => {
     };
     isAncestor(spy, repo, first, second);
     expect(seen[0]).toEqual(['merge-base', '--is-ancestor', '--end-of-options', first, second]);
+  });
+});
+
+describe('mergeBase / mergeBaseOrFault', () => {
+  // The merge-base twin of the is-ancestor seam (mem-f0n07): `merge-base` exits 1
+  // for unrelated histories (a real "no common ancestor" — the decay signal) but
+  // 128 for a pruned/unreadable object. Telling those apart is the whole point,
+  // and only real git emits the codes — a fake would echo the status it was
+  // handed — so the repo is real, mirroring the ancestryOrFault block above.
+  let repo: string;
+  let first: string;
+  let second: string;
+  let orphan: string;
+
+  beforeAll(() => {
+    repo = mkdtempSync(join(tmpdir(), 'mem-mergebase-'));
+    const git = (...args: string[]): string =>
+      execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' }).trim();
+    const commit = (file: string, body: string, message: string): string => {
+      writeFileSync(join(repo, file), body);
+      git('add', file);
+      git('commit', '-qm', message);
+      return git('rev-parse', 'HEAD');
+    };
+    git('init', '-q', '-b', 'main');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'test');
+
+    first = commit('f.txt', 'one\n', 'first');
+    second = commit('f.txt', 'two\n', 'second');
+
+    // An orphan branch shares no history with main, so merge-base is a genuine NO
+    // (exit 1), not a fault.
+    git('checkout', '-q', '--orphan', 'other');
+    orphan = commit('g.txt', 'other\n', 'orphan');
+    git('checkout', '-q', 'main');
+  });
+
+  afterAll(() => rmSync(repo, { recursive: true, force: true }));
+
+  /** A syntactically valid 40-hex sha that names no object here — the
+   * pruned/corrupt-object case, which git reports as exit 128, NOT exit 1. */
+  const MISSING = 'dead' + 'beef'.repeat(8) + 'dead';
+
+  it('returns the fork point of two related commits (git exit 0)', () => {
+    // first is an ancestor of second, so their merge-base is first itself.
+    expect(mergeBase(defaultGitRunner, repo, first, second)).toBe(first);
+  });
+
+  it('returns null for unrelated histories — git ANSWERED no common ancestor (exit 1)', () => {
+    expect(mergeBase(defaultGitRunner, repo, orphan, second)).toBeNull();
+  });
+
+  it('THROWS on an unreadable object rather than reading it as no-merge-base', () => {
+    // exit 128 (bad object) is NOT exit 1 (no common ancestor). Only 1 is an
+    // answer; a fault must surface, never collapse into the decay-signalling null.
+    const caught = throwsWith(() => mergeBase(defaultGitRunner, repo, MISSING, second));
+    expect(exitStatus(caught)).toBe(128);
+  });
+
+  it('attributes an unreadable object to a wrapped object-unreadable fault — and that is NOT null (mem-f0n07)', () => {
+    // The bead's core claim, executable: a garbage/pruned object must not
+    // classify as a null no-merge-base (the DECAY signal). The fault is WRAPPED so
+    // the compiler keeps it distinct from a fork-point sha, and asserting `not
+    // null` is the point — a fault folded into null fabricates a decay data point
+    // in the measurement built to catch fabrications.
+    const out = mergeBaseOrFault(defaultGitRunner, repo, MISSING, second);
+    expect(out).toEqual({ fault: 'object-unreadable' });
+    expect(out).not.toBeNull();
+  });
+
+  it('still reports a REAL no-merge-base as null, so the fault branch has not eaten the answer', () => {
+    // The other half of the above: degrading faults to a wrapped cause must not
+    // degrade the genuine exit-1 negative with them, or the decay signal the gate
+    // exists to measure would vanish.
+    expect(mergeBaseOrFault(defaultGitRunner, repo, orphan, second)).toBeNull();
+    expect(mergeBaseOrFault(defaultGitRunner, repo, first, second)).toBe(first);
+  });
+
+  it('attributes a spawn-never-ran fault to a wrapped git-unavailable rather than aborting the sweep', () => {
+    // Same shape-based classification as ancestryOrFault: a uv_spawn failure
+    // (status+signal null, code the errno) is environment-wide, so it degrades
+    // rather than throwing and taking every other ref in the sweep down with it.
+    const spawnFault: GitRunner = () => {
+      throw Object.assign(new Error('spawn git EMFILE'), {
+        status: null,
+        code: 'EMFILE',
+        signal: null,
+      });
+    };
+    expect(mergeBaseOrFault(spawnFault, repo, first, second)).toEqual({ fault: 'git-unavailable' });
+  });
+
+  it('RETHROWS a mis-wired runner rather than attributing a fault for every ref (mem-egxu2)', () => {
+    // A programming error carries no git verdict; laundering it into a cause is
+    // the exact defect the shared two-stage isGitFault gate prevents.
+    const misWired: GitRunner = () => {
+      throw new TypeError("Cannot read properties of undefined (reading 'trim')");
+    };
+    expect(() => mergeBaseOrFault(misWired, repo, first, second)).toThrow(TypeError);
+  });
+
+  it('RETHROWS a maxBuffer overrun rather than attributing it to a fault (mem-egxu2)', () => {
+    // ENOBUFS is OUR maxBuffer config bug, not a git-could-not-answer fault, so it
+    // must propagate even though its SIGTERM string signal looks like a kill.
+    const overrun: GitRunner = () => {
+      throw Object.assign(new Error('stdout maxBuffer length exceeded'), {
+        status: null,
+        code: 'ENOBUFS',
+        signal: 'SIGTERM',
+      });
+    };
+    expect(() => mergeBaseOrFault(overrun, repo, first, second)).toThrow(/maxBuffer/);
+  });
+
+  it('passes --end-of-options, so a ref that looks like a flag cannot be read as one', () => {
+    // scripts/measure-live-ref.mjs passes `b` as a ref NAME; without the guard a
+    // ref beginning with `-` would be parsed as an option (mem-1n56l).
+    const seen: string[][] = [];
+    const spy: GitRunner = (_dir, args) => {
+      seen.push(args);
+      return '';
+    };
+    mergeBase(spy, repo, first, second);
+    expect(seen[0]).toEqual(['merge-base', '--end-of-options', first, second]);
   });
 });
 

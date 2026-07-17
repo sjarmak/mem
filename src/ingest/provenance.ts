@@ -272,12 +272,13 @@ export function isGitFault(err: unknown): boolean {
  * exits non-zero — for these callers that exit means the question's
  * legitimate negative answer (no such commit, unknown ref), not a fault. Any
  * other failure (a missing binary) propagates. Empty output is null too: git
- * answered with no sha. Shared by every caller that resolves a ref, a
- * before-date commit, or a merge-base to a sha-or-nothing ({@link tipBefore}
- * here, called by both this file's resolveSessionCommit and ingest/landed.ts's
- * resolveWindow; resolveCommit and mergeBase in ingest/landedContent.ts) — these
- * had drifted into separate copies of the same run→trim→null-on-non-zero-exit
- * body (mem-j1r2w). */
+ * answered with no sha. Shared by every caller that resolves a ref or a
+ * before-date commit to a sha-or-nothing ({@link tipBefore} here, called by both
+ * this file's resolveSessionCommit and ingest/landed.ts's resolveWindow;
+ * resolveCommit in ingest/landedContent.ts) — these had drifted into separate
+ * copies of the same run→trim→null-on-non-zero-exit body (mem-j1r2w). Merge-base
+ * resolution does NOT use this: {@link mergeBase} must read exit 1 (no common
+ * ancestor) apart from a 128 fault, which this helper folds together. */
 export function shaOrNull(run: GitRunner, work_dir: string, args: string[]): string | null {
   let stdout: string;
   try {
@@ -370,6 +371,85 @@ export function ancestryOrFault(
   } catch (err) {
     if (!isGitFault(err)) throw err;
     return isNonZeroExit(err) ? 'object-unreadable' : 'git-unavailable';
+  }
+}
+
+/** The fork point of `a` and `b`, or null when git ANSWERED there is none —
+ * `merge-base` exits 1 for unrelated histories, a documented negative. Throws on
+ * any OTHER failure (a 128 on a pruned/unreadable object, a signal, a missing
+ * binary): git could not be ASKED, which is not the same fact as "no common
+ * ancestor" and must not be collapsed into it — the same distinction {@link
+ * isAncestor} draws for the ancestry probe, applied to the merge-base itself. A
+ * caller that reads a fault as a null no-merge-base fabricates a decay verdict out
+ * of a measurement fault (mem-f0n07). Empty stdout is null too: git answered with
+ * no base. The merge-base half of the ancestry seam above; {@link isAncestor} is
+ * to {@link ancestryOrFault} as this is to {@link mergeBaseOrFault}.
+ *
+ * `--end-of-options` fixes both operands as revisions, so a ref or sha beginning
+ * with `-` (scripts/measure-live-ref.mjs passes `b` as a ref name) is never read
+ * as a flag (mem-1n56l). It is a no-op for sha-vs-sha callers. */
+export function mergeBase(run: GitRunner, work_dir: string, a: string, b: string): string | null {
+  let stdout: string;
+  try {
+    stdout = run(work_dir, ['merge-base', '--end-of-options', a, b]);
+  } catch (err) {
+    if (exitStatus(err) === 1) return null;
+    throw err;
+  }
+  const sha = stdout.trim();
+  return sha === '' ? null : sha;
+}
+
+/** A merge-base that git could not COMPUTE, wrapped so the fault is a distinct
+ * type from the sha. {@link ancestryOrFault} returns a bare `boolean |
+ * AncestryFault` because an {@link AncestryFault} literal is not a `boolean`, so
+ * the compiler already tells the two apart. A merge-base answer is a sha
+ * (`string`), and the fault literals ARE strings, so a bare `string |
+ * AncestryFault` would collapse to `string` — the compiler could no longer tell a
+ * fork-point sha from a fault, and a caller could feed either to the other. The
+ * object wrapper restores that discrimination: a fault is `typeof === 'object'`, a
+ * sha is not. The asymmetry in shape buys the SAME compile-time guarantee the
+ * ancestry seam gets for free. */
+export interface MergeBaseFault {
+  fault: AncestryFault;
+}
+
+/** {@link mergeBase}, but git failing to ANSWER degrades to a {@link
+ * MergeBaseFault} instead of throwing: a sha = the fork point, null = git said
+ * there is none (exit 1), else the fault that stopped it — attributed, the tri-
+ * state twin of the `boolean | AncestryFault` {@link ancestryOrFault} gives the
+ * ancestry probe. `null` is not a fault, and that is the whole point: `null` is a
+ * claim ("git answered no common ancestor" — the live-ref DECAY signal), a fault
+ * has no verdict in it, so folding the two would fabricate a decay data point out
+ * of a measurement fault (mem-f0n07 — the merge-base twin of mem-y2x7n/mem-zwmuq's
+ * ancestry fix).
+ *
+ * The fault set is shared with {@link ancestryOrFault} on purpose — {@link
+ * AncestryFault} names HOW git failed, not what was asked, so the two seams route
+ * a `object-unreadable` (checkout-local → Day-0 bundle) and a `git-unavailable`
+ * (environment-wide → rerun) to the same two remedies. It is only WRAPPED here
+ * (see {@link MergeBaseFault}) because a sha is a string and the fault literals
+ * are too. Classification is the same two stages: {@link isGitFault} gates first —
+ * a non-git-fault (our ENOBUFS maxBuffer self-kill, a mis-wired-runner TypeError)
+ * is rethrown, never dressed up as a fault — then {@link isNonZeroExit} splits a
+ * genuine fault (a 128 exit is `object-unreadable`; a spawn errno or signal, with
+ * no exit status, is `git-unavailable`).
+ *
+ * Use only where a throw would abort a sweep — {@link mergeBase}'s throw would
+ * take every other item in an unguarded loop down with the one that faulted. A
+ * caller that can handle the throw (or wants the fault to propagate) uses {@link
+ * mergeBase}. */
+export function mergeBaseOrFault(
+  run: GitRunner,
+  work_dir: string,
+  a: string,
+  b: string
+): string | null | MergeBaseFault {
+  try {
+    return mergeBase(run, work_dir, a, b);
+  } catch (err) {
+    if (!isGitFault(err)) throw err;
+    return { fault: isNonZeroExit(err) ? 'object-unreadable' : 'git-unavailable' };
   }
 }
 

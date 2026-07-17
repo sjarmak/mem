@@ -31,10 +31,10 @@ import {
   summarize,
 } from '../dist/ingest/liveRef.js';
 import { resolveCommit } from '../dist/ingest/landedContent.js';
-import { ancestryOrFault } from '../dist/ingest/provenance.js';
+import { ancestryOrFault, mergeBaseOrFault } from '../dist/ingest/provenance.js';
 import { RIG_REPOS, DEFAULT_BRANCH } from '../dist/ingest/rig-repo-map.js';
 import { pickRemoteForSlug } from './verify/lib.mjs';
-import { gitOut, readRemotes } from './verify/git.mjs';
+import { readRemotes } from './verify/git.mjs';
 
 function arg(flag, fallback = undefined) {
   const i = process.argv.indexOf(flag);
@@ -130,20 +130,26 @@ for (const rig of RIGS) {
 
   const results = resolved.map(r => {
     // Day-0 FROZEN ref SHA (decay-proof) resolved against the live shared object
-    // store. Objects are present today, so this equals the bundle answer; if they
-    // are GC'd, merge-base returns null → DROP_NO_MERGE_BASE (decay), and the
-    // Day-0 bundle is the documented fallback. The --is-ancestor call is a live
-    // INVARIANT PROBE, not a corruption gate: base_sha is a merge-base of authRef,
-    // so it is an ancestor by construction. Kept as an assertion — a non-true
-    // answer means git faulted, and classifyMergeBase fails it safe to undecided
-    // (mem-zzzl4), never kept, never a measurable corruption rate.
-    const base_sha = gitOut(entry.dir, ['merge-base', r.sha, authRef]);
-    // NOT a boolean: true → keep; an AncestryFault (git could not answer,
-    // attributed to object-unreadable vs git-unavailable) → undecided, routed to
-    // its own cause bucket by classifyMergeBase. Null with no merge-base — the
-    // ancestry question is never asked.
+    // store, as a tri-state that keeps a git fault apart from a genuine
+    // no-merge-base (mem-f0n07). Objects are present today, so this equals the
+    // bundle answer; if the histories are disjoint, merge-base exits 1 → null →
+    // DROP_NO_MERGE_BASE (decay), with the Day-0 bundle the documented fallback; if
+    // a frozen object was GC'd, merge-base faults → an AncestryFault → undecided,
+    // never miscounted as decay. mergeBaseOrFault degrades only genuine git faults
+    // (isGitFault) — our own maxBuffer overrun or a mis-wired runner rethrows.
+    const base_sha = mergeBaseOrFault(gitRunner, entry.dir, r.sha, authRef);
+    // The --is-ancestor call is a live INVARIANT PROBE, not a corruption gate:
+    // base_sha is a merge-base of authRef, so it is an ancestor by construction.
+    // Probed ONLY when a real base sha resolved — a null (no base) or a wrapped
+    // fault (an object) has nothing to ask about, and classifyMergeBase settles both
+    // from base_sha before it ever reads is_ancestor, so the placeholder null here is
+    // never inspected. `typeof === 'string'` selects the sha alone (mem-f0n07's wrap
+    // makes a fault an object). NOT a boolean: true → keep; an AncestryFault →
+    // undecided, routed to its own ancestry cause bucket by classifyMergeBase.
     const is_ancestor =
-      base_sha === null ? null : ancestryOrFault(gitRunner, entry.dir, base_sha, authRef);
+      typeof base_sha === 'string'
+        ? ancestryOrFault(gitRunner, entry.dir, base_sha, authRef)
+        : null;
     return classifyMergeBase({
       work_id: r.work_id,
       refname: r.refname,

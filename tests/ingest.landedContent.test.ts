@@ -128,6 +128,19 @@ describe('classifyLandedContent — landed ladder', () => {
     );
   });
 
+  it('propagates a bad object from merge-base rather than reading it as no-merge-base', () => {
+    // The merge-base twin of the is-ancestor case above (mem-f0n07). `merge-base`
+    // exits 1 for unrelated histories but 128 for a pruned/corrupt object; both
+    // operands are already-resolved shas, so a 128 is a real fault. The shared
+    // `mergeBase` reads only the exact status 1 as "no common ancestor" and
+    // rethrows anything else, so a fault surfaces here rather than collapsing into
+    // an `undecidable/no-merge-base` verdict that would understate a broken object
+    // as a clean disjoint history — the same fabrication the sibling probe guards.
+    expect(() => classifyLandedContent(input, git({ mergeBase: exits(128) }))).toThrow(
+      /git exited 128/
+    );
+  });
+
   it('reports landed-equivalent when every branch commit has a patch-id twin', () => {
     const out = classifyLandedContent(input, git(twoCommitBranch([p(1), p(2)])));
     expect(out).toEqual({

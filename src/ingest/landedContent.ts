@@ -5,6 +5,7 @@ import {
   defaultGitRunner,
   isAncestor,
   isNonZeroExit,
+  mergeBase,
   shaOrNull,
 } from './provenance.js';
 
@@ -113,12 +114,6 @@ export interface LandedContentResult {
  * own copy. */
 export function resolveCommit(run: GitRunner, work_dir: string, ref: string): string | null {
   return shaOrNull(run, work_dir, ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`]);
-}
-
-/** The fork point of two resolved commits, or null when they share no ancestor
- * (`merge-base` exits 1 on unrelated histories). */
-function mergeBase(run: GitRunner, work_dir: string, a: string, b: string): string | null {
-  return shaOrNull(run, work_dir, ['merge-base', a, b]);
 }
 
 /** A `git patch-id` line: `<patch-id> <commit-id>`, both 40-hex. */

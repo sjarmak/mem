@@ -8,6 +8,8 @@ import {
   resolveLiveRefs,
   summarize,
   UNDECIDED_GIT_UNAVAILABLE,
+  UNDECIDED_MERGE_BASE_GIT_UNAVAILABLE,
+  UNDECIDED_MERGE_BASE_OBJECT_UNREADABLE,
   UNDECIDED_OBJECT_UNREADABLE,
   type MergeBaseInput,
 } from '../src/ingest/liveRef.js';
@@ -161,6 +163,54 @@ describe('classifyMergeBase', () => {
     const r = classifyMergeBase({ ...base, base_sha: null });
     expect(r.drop?.reason).toBe(DROP_NO_MERGE_BASE);
     expect(r.undecided).toBeUndefined();
+  });
+
+  it('attributes a merge-base object-unreadable fault to its OWN cause, never DROP_NO_MERGE_BASE (mem-f0n07)', () => {
+    // The bead's core fix: git faulting while COMPUTING the merge-base (exit 128
+    // on a pruned object, wrapped as a MergeBaseFault) is undecided, not the null
+    // decay signal. Folding it into DROP_NO_MERGE_BASE would fabricate a decay
+    // data point out of a measurement fault — the merge-base twin of the ancestry
+    // fix. The cause is the checkout-local one (use the Day-0 bundle).
+    const r = classifyMergeBase({ ...base, base_sha: { fault: 'object-unreadable' } });
+    expect(r.undecided).toEqual({
+      work_id: 'gc-0a6',
+      refname: 'refs/heads/bd-gc-0a6',
+      cause: UNDECIDED_MERGE_BASE_OBJECT_UNREADABLE,
+    });
+    expect(r.drop).toBeUndefined();
+    expect(r.kept).toBeUndefined();
+  });
+
+  it('attributes a merge-base git-unavailable fault to the environment-wide cause', () => {
+    // The merge-base twin of the ancestry git-unavailable arm: git could not run
+    // the computation at all, so the remedy is a rerun, not the Day-0 bundle — no
+    // _in_checkout suffix.
+    const r = classifyMergeBase({ ...base, base_sha: { fault: 'git-unavailable' } });
+    expect(r.undecided?.cause).toBe(UNDECIDED_MERGE_BASE_GIT_UNAVAILABLE);
+    expect(r.undecided?.cause).not.toContain('_in_checkout');
+    expect(r.drop).toBeUndefined();
+    expect(r.kept).toBeUndefined();
+  });
+
+  it('settles a merge-base fault from base_sha ALONE — is_ancestor is never consulted', () => {
+    // The fault arm precedes both the null and the ancestry arms, so a fault is
+    // decided from base_sha before is_ancestor is read. A keep-worthy `true`
+    // cannot rescue a base git could not even compute.
+    const r = classifyMergeBase({
+      ...base,
+      base_sha: { fault: 'object-unreadable' },
+      is_ancestor: true,
+    });
+    expect(r.undecided?.cause).toBe(UNDECIDED_MERGE_BASE_OBJECT_UNREADABLE);
+    expect(r.kept).toBeUndefined();
+  });
+
+  it('keeps the merge-base fault causes DISTINCT from the ancestry fault causes (auditable per-remedy)', () => {
+    // undecided_by_cause must not collapse a merge-base-computation fault into an
+    // ancestry-probe fault: they are different git calls with the same remedy
+    // vocabulary but distinct buckets, so an operator can tell which probe faulted.
+    expect(UNDECIDED_MERGE_BASE_OBJECT_UNREADABLE).not.toBe(UNDECIDED_OBJECT_UNREADABLE);
+    expect(UNDECIDED_MERGE_BASE_GIT_UNAVAILABLE).not.toBe(UNDECIDED_GIT_UNAVAILABLE);
   });
 });
 
