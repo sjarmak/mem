@@ -197,11 +197,9 @@ export function classifyMergeBase(input: MergeBaseInput): LiveRefResult {
   if (input.base_sha === null) {
     return { drop: { work_id: input.work_id, refname: input.refname, reason: DROP_NO_MERGE_BASE } };
   }
-  // Non-true fails SAFE to undecided, both arms of it. A resolved base is a
-  // merge-base of authRef, so is_ancestor can only be true (invariant holds) or
-  // null (git faulted); a false is a mathematical impossibility here (mem-zzzl4).
-  // Route true → keep, everything else → undecided: an impossible answer is never
-  // silently kept, and there is no measurable off-authoritative rate to tally.
+  // Non-true (a null git-fault, or the impossible false) fails safe to undecided
+  // — the docstring above carries the why. `!== true`, NOT `=== null`, so a stray
+  // false is caught here rather than falling through to keep.
   if (input.is_ancestor !== true) {
     return {
       undecided: {

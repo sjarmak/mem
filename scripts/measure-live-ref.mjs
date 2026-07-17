@@ -138,10 +138,8 @@ for (const rig of RIGS) {
     // answer means git faulted, and classifyMergeBase fails it safe to undecided
     // (mem-zzzl4), never kept, never a measurable corruption rate.
     const base_sha = gitOut(entry.dir, ['merge-base', r.sha, authRef]);
-    // Tri-state, NOT a boolean: true confirms the invariant → keep; null means git
-    // could not answer → undecided; a false is mathematically impossible for a
-    // merge-base of authRef and also fails safe to undecided (mem-zzzl4). Null with
-    // no merge-base too — the ancestry question is never asked.
+    // Tri-state, NOT a boolean: true → keep; null (git could not answer) →
+    // undecided. Null with no merge-base too — the ancestry question is never asked.
     const is_ancestor =
       base_sha === null ? null : isAncestorOrNull(gitRunner, entry.dir, base_sha, authRef);
     return classifyMergeBase({
