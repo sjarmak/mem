@@ -9,8 +9,8 @@
 import { execFileSync } from 'node:child_process';
 
 /** True when `err` is `execFileSync` failing because git exited non-zero (a
- * missing ref, an unknown revision, work_dir not a repo, no matching config
- * key) — as opposed to the `git` binary itself being missing or unreadable.
+ * missing ref, an unknown revision, work_dir not a repo) — as opposed to the
+ * `git` binary itself being missing or unreadable.
  * Mirrors src/ingest/provenance.ts's `isNonZeroExit`, kept as its own copy
  * here rather than imported from dist/: verify-rig-checkouts.mjs (a consumer
  * of this module) is a Step-0 preflight that must still run when the TS build
@@ -37,40 +37,27 @@ export function gitOut(dir, args) {
   }
 }
 
-/** The full `name -> url` remote map of a checkout, read via
- * `git config -z --get-regexp '^remote\..*\.url$'` rather than `git remote`
- * plus one `git remote get-url` per remote — the N+1 shelling every prior
- * copy paid (gascity alone carries 17 remotes, so 18 processes shrink to 1).
+/** The full `name -> url` remote map of a checkout: `git remote` lists the
+ * names, then `git remote get-url <name>` resolves each one.
  *
- * NOT `git remote -v` parsed line-by-line: a remote's url is free-form config
- * text and can itself contain an embedded newline (`git config` accepts and
- * stores one verbatim), which `remote -v` then prints raw — splitting that
- * one remote's fetch/push lines into extra lines that a per-line regex can
- * misattribute to a different, forged remote name. Verified: a single
- * crafted remote value can make line-based `remote -v` parsing drop the real
- * remote entirely and fabricate a bogus one in its place. `-z` NUL-delimits
- * each `key\nvalue` record instead, and a config value can never itself
- * contain a NUL, so there is no equivalent injection point. */
+ * Deliberately NOT a single `git config --get-regexp remote\..*\.url` read
+ * (tried and reverted — mem-j1r2w reject #1): a remote's raw config value is
+ * whatever the user typed, which `git remote get-url` resolves through
+ * `url.<base>.insteadOf` rewriting before handing it back. Reading config
+ * directly skips that resolution, so a checkout using an `insteadOf` shorthand
+ * (e.g. `gh:owner/repo` aliased to `git@github.com:owner/repo`) reports the
+ * unresolved alias — which may not even parse as a GitHub URL — instead of the
+ * real remote `git` itself would use. `get-url` is the only surface that
+ * reproduces git's own resolution, so the N+1 process cost (gascity alone
+ * carries 17 remotes) is paid deliberately; see the bead notes for why this
+ * was accepted as correctness over speed. */
 export function readRemotes(dir) {
-  let out;
-  try {
-    out = execFileSync(
-      'git',
-      ['-C', dir, 'config', '-z', '--get-regexp', String.raw`^remote\..*\.url$`],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
-    );
-  } catch (err) {
-    if (isNonZeroExit(err)) return {};
-    throw err;
-  }
+  const names = gitOut(dir, ['remote']);
+  if (names === null) return {};
   const remotes = {};
-  for (const entry of out.split('\0')) {
-    if (entry === '') continue;
-    const nl = entry.indexOf('\n');
-    const key = nl === -1 ? entry : entry.slice(0, nl);
-    const value = nl === -1 ? '' : entry.slice(nl + 1);
-    const m = /^remote\.(.*)\.url$/.exec(key);
-    if (m !== null) remotes[m[1]] = value;
+  for (const name of names.split('\n').filter(n => n.trim() !== '')) {
+    const url = gitOut(dir, ['remote', 'get-url', name]);
+    if (url !== null) remotes[name] = url;
   }
   return remotes;
 }
