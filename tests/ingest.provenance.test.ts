@@ -14,6 +14,7 @@ import {
   exitStatus,
   isAncestor,
   isAncestorOrNull,
+  isGitFault,
   isNonZeroExit,
   makeGitPipeRunner,
   provenanceInput,
@@ -528,7 +529,9 @@ describe('isAncestor / isAncestorOrNull', () => {
 
   it('degrades a signal-killed git to null (git was asked but could not answer)', () => {
     const killed: GitRunner = () => {
-      throw Object.assign(new Error('git terminated'), { signal: 'SIGKILL' });
+      // Real Node signal-kills set status null explicitly (not just absent), so
+      // mirror that shape rather than leaving status undefined.
+      throw Object.assign(new Error('git terminated'), { status: null, signal: 'SIGKILL' });
     };
     expect(isAncestorOrNull(killed, repo, first, second)).toBeNull();
   });
@@ -562,5 +565,54 @@ describe('isAncestor / isAncestorOrNull', () => {
     };
     isAncestor(spy, repo, first, second);
     expect(seen[0]).toEqual(['merge-base', '--is-ancestor', '--end-of-options', first, second]);
+  });
+});
+
+// Direct coverage of the exported classification contract, decoupled from
+// isAncestorOrNull's catch/rethrow wiring: a future refactor that stops routing
+// through isGitFault must not silently drop coverage of its four arms.
+describe('isGitFault', () => {
+  it('classifies a non-zero exit as a fault', () => {
+    expect(isGitFault(Object.assign(new Error('git exited 128'), { status: 128 }))).toBe(true);
+  });
+
+  it.each(['ENOENT', 'EACCES', 'ENOEXEC', 'EAGAIN', 'EMFILE', 'ENFILE', 'ENOMEM'])(
+    'classifies a spawn-never-ran fault (%s) by shape, not an errno allowlist',
+    code => {
+      expect(
+        isGitFault(
+          Object.assign(new Error(`spawn git ${code}`), { status: null, code, signal: null })
+        )
+      ).toBe(true);
+    }
+  );
+
+  it('classifies an external signal kill as a fault', () => {
+    expect(
+      isGitFault(Object.assign(new Error('git killed'), { status: null, signal: 'SIGKILL' }))
+    ).toBe(true);
+  });
+
+  it('does NOT classify a bare programming error as a fault', () => {
+    expect(isGitFault(new TypeError("Cannot read properties of undefined (reading 'trim')"))).toBe(
+      false
+    );
+  });
+
+  it('does NOT classify an ENOBUFS+SIGTERM maxBuffer self-kill as a fault', () => {
+    expect(
+      isGitFault(
+        Object.assign(new Error('stdout maxBuffer length exceeded'), {
+          status: null,
+          code: 'ENOBUFS',
+          signal: 'SIGTERM',
+        })
+      )
+    ).toBe(false);
+  });
+
+  it('does NOT classify a non-object throw as a fault', () => {
+    expect(isGitFault('boom')).toBe(false);
+    expect(isGitFault(null)).toBe(false);
   });
 });
