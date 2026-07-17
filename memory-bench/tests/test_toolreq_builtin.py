@@ -1920,22 +1920,10 @@ def _ancestor_scavenging_runner(value: str, *, plant: bool):
                 scavengeable.write_text(f"remember: {value}", encoding="utf-8")
         elif scavengeable.is_file() and value in scavengeable.read_text(encoding="utf-8"):
             events.append(  # goal leg: passes off the ancestor file, never touching memory
-                {
-                    "type": "assistant",
-                    "message": {
-                        "content": [
-                            {
-                                "type": "tool_use",
-                                "name": REAL_TOOL,
-                                "input": {"file_path": CONFIG_FILE, "content": value},
-                            }
-                        ],
-                        "usage": {"input_tokens": 0, "output_tokens": 0},
-                    },
-                }
+                assistant_event([(REAL_TOOL, {"file_path": CONFIG_FILE, "content": value})])
             )
-        events.append({"type": "result", "result": "done"})
-        stdout = "\n".join(json.dumps(e) for e in events)
+        events.append(result_event())
+        stdout = serialize_stream(events)
         return subprocess.CompletedProcess(argv_list, returncode=0, stdout=stdout, stderr="")
 
     return run

@@ -216,12 +216,10 @@ _HALT_COUNSEL = {
         "while a leg can pass without the mechanism."
     ),
     CONTAMINATED_SANDBOX: (
-        "The ISOLATION again, but upstream of the run: the sandbox is minted under TMPDIR, and "
-        "a CLAUDE.md above it is auto-loaded into EVERY cell by Claude Code's upward walk at "
-        "launch — with no tool call to clamp and nothing in the accounting that can see it (a "
-        "scavenged pass scores as a clean SEPARATES). This is an operator fix, not a code one: "
-        "point TMPDIR at a directory with no CLAUDE.md in any parent, or leave it unset "
-        "(mem-rx11w)."
+        "The ISOLATION again, but upstream of the run — and it would have hit EVERY cell, with "
+        "nothing in the accounting able to see it (a scavenged pass scores as a clean "
+        "SEPARATES). This is an operator fix, not a code one: point TMPDIR somewhere clean, or "
+        "leave it unset (mem-rx11w)."
     ),
 }
 

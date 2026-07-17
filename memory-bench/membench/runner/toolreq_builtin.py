@@ -7,10 +7,9 @@ across two sequential ``claude -p`` calls with no external memory system at all?
 Two calls per repeat, sharing ONE sandbox cwd + ONE ``CLAUDE_CONFIG_DIR`` (so Claude
 Code's own native memory is the sole continuity channel):
 
-0. **mint** — the shared cwd comes from ``sandbox.paid_sandbox``, which refuses to spend if
-   any ANCESTOR of the sandbox carries a ``CLAUDE.md``. The wipe below empties the cwd but
-   cannot ascend, and Claude Code walks UP from the cwd at launch — so without this the
-   ambient ``TMPDIR`` decides what every "neutral" sandbox auto-loads (mem-rx11w).
+0. **mint** — the shared cwd comes from ``sandbox.paid_sandbox``, which fail-closes before
+   any call if the ancestor chain is not neutral. The wipe below is the cwd's firewall and
+   structurally cannot substitute for it; see ``sandbox`` for why (mem-rx11w).
 1. **establish** — the id-exact facts (``task.oracle_memory``, opaque-valued like the
    oracle arm) are surfaced via ``available_memory`` under the TRUSTED/RECALLED channel,
    with an explicit instruction to retain them for later. That instruction makes this the
@@ -368,12 +367,9 @@ def run_builtin_arm(
             # is a measured input (`cell_legs`).
             _wipe_cwd_contents(sandbox)
 
-            # The same window, one directory UP, where the wipe cannot reach: the establish
-            # leg is unclamped by design, so it is free to write an ancestor CLAUDE.md that
-            # the goal leg then auto-loads. Re-scanned rather than trusted from
-            # construction, so the guard is symmetric with the firewall it joins. Refusing
-            # HERE costs the establish call — already spent, never written — which is the
-            # cheap end next to publishing a fabricated SEPARATES.
+            # The wipe's blind spot, one directory up (docstring step 2). Re-scanned rather
+            # than trusted from the mint: refusing here costs the establish call, already
+            # spent and never written, which beats publishing a fabricated SEPARATES.
             assert_neutral_ancestry(sandbox)
 
             result = agent.run_step(goal_leg.step, dict(goal_leg.memory), _ctx(goal_leg))

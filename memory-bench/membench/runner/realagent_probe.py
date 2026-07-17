@@ -200,10 +200,9 @@ def run_arm(
     in the scorer. ``dry_run`` swaps the real ``claude -p`` for ``simulated_runner`` (no
     token). A fresh neutral sandbox per repeat keeps ``config.json`` from bleeding across
     trials and keeps the agent out of any mem worktree. Neutral is ENFORCED, not assumed:
-    ``paid_sandbox`` refuses to spend if any ancestor of the sandbox carries a ``CLAUDE.md``,
-    which Claude Code would auto-load by walking up from the cwd at launch — the sandbox is
-    rooted at the ambient ``TMPDIR``, so without the guard the operator's environment decides
-    what the "neutral" agent reads (mem-rx11w).
+    ``paid_sandbox`` fail-closes before spending if the sandbox's ancestor chain is not
+    neutral — see ``sandbox`` for what that means and why the check cannot live in the cwd
+    (mem-rx11w).
 
     The invocations are RECORDED off the CLI seam, not reported by the agent, and NOT returned by
     this function: it opens its per-cell ``RecordingRunner`` through the caller's ``recorder`` and
