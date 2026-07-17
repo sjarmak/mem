@@ -22,9 +22,14 @@ import { execFileSync } from 'node:child_process';
  * A throw escapes the loop, so one rig's transient fault (a signal kill, a
  * maxBuffer overrun) takes every other rig's result down with it — a rethrow
  * trades a reported skip for strictly worse telemetry, the opposite of
- * surfacing the fault. A git binary missing outright still fails the sweep
- * loudly: verify-rig-checkouts.mjs reads `git --version` unguarded for its
- * report.
+ * surfacing the fault.
+ *
+ * The cost of the total catch, stated plainly: it cannot tell "this rig has no
+ * answer" from "git is broken everywhere", so a missing binary degrades every
+ * rig alike rather than being named. That is the pre-dedup behaviour this
+ * restores, not a new hazard, and it is tracked separately (mem-hycs9) — the
+ * fix belongs in a preflight that checks git ONCE, not in per-call error
+ * shapes, which is what the narrowing attempted and got wrong twice.
  *
  * `maxBuffer` is sized for the largest caller, not the typical one: measure-
  * false-close.mjs's `for-each-ref --format=%(refname) refs/heads refs/remotes`

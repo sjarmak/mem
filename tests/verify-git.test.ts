@@ -34,13 +34,9 @@ describe('gitOut', () => {
     expect(gitOut(dir, ['remote', 'get-url', 'nope'])).toBeNull();
   });
 
-  // The three multi-rig sweeps that share this helper each loop over RIG_REPOS
-  // with no try/catch around the body, and each is built to degrade one rig to a
-  // named skip on null. A failure that carries no exit status (a missing git
-  // binary, a signal kill, a maxBuffer overrun -- all `status: null`) must not
-  // escape as a throw, or one rig's transient fault takes every other rig's
-  // result down with it. PATH mutation is the one such failure a unit test can
-  // provoke without a shim.
+  // Covers gitOut's no-exit-status branch (see its docstring for why that must
+  // return null rather than throw) -- PATH mutation is the only such failure a
+  // unit test can provoke without a shim.
   it('returns null when git cannot be spawned at all (no exit status)', () => {
     const dir = repo();
     const realPath = process.env.PATH;
