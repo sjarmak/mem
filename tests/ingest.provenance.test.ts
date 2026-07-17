@@ -532,12 +532,20 @@ describe('isAncestor / isAncestorOrNull', () => {
   });
 
   it('RETHROWS a maxBuffer overrun rather than degrading it to null (mem-egxu2)', () => {
-    // A RangeError from an execFileSync maxBuffer overrun is likewise our fault,
-    // not a git answer — it must surface, not become a null measurement.
+    // execFileSync does NOT throw a RangeError for a maxBuffer overrun; it throws
+    // Error{status: null, code: 'ENOBUFS', signal: 'SIGTERM'} — Node aborting the
+    // child because OUR maxBuffer was too small. That `signal` is a string, so a
+    // naive signal-kill guard would launder it into null (the exact defect this
+    // bead kills). ENOBUFS is our config bug and must surface, unlike the external
+    // SIGKILL above whose `code` is undefined.
     const overrun: GitRunner = () => {
-      throw new RangeError('stdout maxBuffer length exceeded');
+      throw Object.assign(new Error('stdout maxBuffer length exceeded'), {
+        status: null,
+        code: 'ENOBUFS',
+        signal: 'SIGTERM',
+      });
     };
-    expect(() => isAncestorOrNull(overrun, repo, first, second)).toThrow(RangeError);
+    expect(() => isAncestorOrNull(overrun, repo, first, second)).toThrow(/maxBuffer/);
   });
 
   it('passes --end-of-options, so a ref that looks like a flag cannot be read as one', () => {
