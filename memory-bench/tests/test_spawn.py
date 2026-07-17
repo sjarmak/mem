@@ -207,9 +207,9 @@ def test_root_cause_is_chained_for_diagnosis() -> None:
 #
 # The message this rung builds is printed to the console/CI log by the paid grid
 # drivers (`grid_toolreq_builtin.py`'s SWEEP HALT arm), so the child's own output
-# reaches a log verbatim. Two properties are asserted here rather than at the six
-# call sites, for the reason the module exists: the child is untrusted output, and
-# every hand-rolled copy would have to re-derive both.
+# reaches a log verbatim. Two properties are asserted here rather than at each call
+# site, for the reason the module exists: the child is untrusted output, and every
+# hand-rolled copy would have to re-derive both.
 #
 # Redaction runs AFTER the stderr/stdout selection above, never before: the rung-4
 # whitespace test pins that a blank stderr falls through to stdout, and redacting

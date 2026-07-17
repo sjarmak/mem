@@ -38,12 +38,8 @@ Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 # diagnostics are full of -- taSK-types, diSK-, riSK-, briSK- -- and without the boundary the
 # redaction eats them: `no task-types.json found` came out as `no ta<redacted-credential>.json`,
 # swallowing the exact filename the operator needed. `--task-types` is a real flag here and
-# `task-types.json` a real artifact path, so that was live, not hypothetical.
-#
-# Which is the correction to "widen, over-redaction is the safe direction": it is the safe
-# direction only where it costs nothing to READ. A redaction that eats real diagnostics
-# trains people to ignore it. Anchored on a word boundary + a real shared vendor prefix --
-# still no entropy scoring, no KEY=VALUE sniffing.
+# `task-types.json` a real artifact path, so that was live, not hypothetical. A word boundary
+# plus a real shared vendor prefix -- still no entropy scoring, no KEY=VALUE sniffing.
 #
 # It is NOT a general secret scanner. The env is inherited wholesale (`{**os.environ,
 # **self.env}`), so a differently-shaped vendor token an operator has exported can still be
@@ -139,12 +135,16 @@ def redact_credentials(detail: str) -> str:
 def sanitised_child_output(detail: str) -> str:
     """The child's own output, made fit for the log this diagnosis ends up in.
 
-    PUBLIC, and every site that builds a message out of raw child output must route
-    through it. ``run_checked``'s own non-zero arm was never the only such site: callers
-    build their own text from a SUCCEEDING child too (``resolve_cli_version`` on an
-    unrecognised banner, ``run_mem_json`` on a non-envelope stdout), and those messages
-    reach the same printed SWEEP HALT. A choke point that only covers the raise-path is
-    not a choke point -- it is the majority case with a name.
+    PUBLIC, because ``run_checked``'s own non-zero arm was never the only site that builds
+    a message out of child output: callers build their own text from a SUCCEEDING child too
+    (``resolve_cli_version`` on an unrecognised banner, ``run_mem_json`` on a non-envelope
+    stdout), and those messages reach the same printed SWEEP HALT. A choke point that only
+    covers the raise-path is not a choke point -- it is the majority case with a name.
+
+    It is NOT yet the choke point for that whole class, so this stops short of saying every
+    such site "must" route through it -- that would describe a rule the repo does not follow.
+    Five judge sites still slice an exit-0 reply into an exception raw, on a path whose env
+    preserves CLAUDE_CODE_OAUTH_TOKEN verbatim (mem-rcm73 names them). Outside this change.
 
     Both properties live here rather than at the callers, because each of them would
     otherwise have to re-derive both: the output is redacted, and it is bounded. Order is

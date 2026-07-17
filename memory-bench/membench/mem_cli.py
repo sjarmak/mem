@@ -69,10 +69,9 @@ def run_mem_json(
     try:
         envelope: dict[str, Any] = json.loads(completed.stdout)
     except json.JSONDecodeError as exc:
-        # Redact before the 200-char slice, not after: the slice is a cut like any other, and
-        # cutting a token first would leave a live prefix of it on the surviving side. The
-        # bound here is this call's own (200, tighter than `sanitised_child_output`'s), so only
-        # the redaction half is borrowed. The child exited 0 — `run_checked` never saw this text.
+        # An exit-0 echo site: `run_checked` never saw this text. Borrows the redaction half
+        # only, because the bound here is this call's own (200, tighter than
+        # `sanitised_child_output`'s) -- see that docstring for why redaction precedes the cut.
         raise MemCliError(
             f"{cmd} exited 0 but stdout is not a JSON envelope: "
             f"{redact_credentials(completed.stdout)[:200]!r}"

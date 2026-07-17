@@ -177,10 +177,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     except HeadlessAgentError as exc:
         # A rate-limited/flaky/timed-out `claude -p` mid-sweep gets a diagnosed halt, never a raw
         # traceback: finished tasks are already persisted, so resuming is cheap — but only if the
-        # operator is told so. The sibling driver (`grid_toolreq_builtin.py`) gives exactly this
-        # treatment on the same boundary, and the two must not disagree about what a paid-path halt
-        # looks like. `run_corpus` also resolves the CLI version up front, so this arm covers the
-        # halts that happen BEFORE any spend as well as the ones partway through.
+        # operator is told so. `run_corpus` also resolves the CLI version up front, so this arm
+        # covers the halts that happen BEFORE any spend as well as the ones partway through.
+        #
+        # This message is byte-identical to the sibling driver's (`grid_toolreq_builtin.py`) by
+        # hand, and nothing executable holds it that way: each driver's test pins the string on its
+        # own, so an edit to one side stays green on the other. The precedent for fixing that is six
+        # lines up in the import — `REFUSE_UNPINNED_MODEL` is the sibling paid-boundary string, and
+        # it lives in `headless_agent` beside the error precisely so the drivers defer to one copy
+        # rather than hand-copy it (mem-bzv2p). Doing the same to this one means editing a driver
+        # this change never touched, and `mem-tx8pp` already reworks what these two grids share;
+        # filed as mem-blagt rather than done drive-by. Until then this is a copy, not an invariant.
         print(
             f"SWEEP HALT: a real agent call failed mid-sweep ({exc}) — stopping instead "
             f"of spending into a broken link. Finished tasks are persisted under "

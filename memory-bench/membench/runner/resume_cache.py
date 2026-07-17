@@ -632,8 +632,7 @@ def _publish_atomically(result_path: Path, payload: str) -> None:
     """
     tmp_path = result_path.with_suffix(".json.tmp")
     try:
-        # Nothing there is the NORMAL case, and it is the only unlink failure that is not an
-        # anomaly. Every other one (a directory at the name, a read-only dir) falls to the
+        # Every other unlink failure (a directory at the name, a read-only dir) falls to the
         # wrapper below rather than through to the create.
         with contextlib.suppress(FileNotFoundError):
             tmp_path.unlink()
