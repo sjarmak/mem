@@ -505,11 +505,8 @@ describe('isAncestor / isAncestorOrNull', () => {
     expect(isAncestorOrNull(defaultGitRunner, repo, first, second)).toBe(true);
   });
 
-  // Every libuv spawn fault in SPAWN_FAULT_CODES — binary missing (ENOENT),
-  // present but not executable (EACCES), or wrong arch / bad interpreter
-  // (ENOEXEC) — is one class, git-could-not-run (status/signal both null), NOT a
-  // bug in our code, so all must degrade to null rather than abort the unguarded
-  // measure-live-ref sweep. See isGitFault.
+  // Every SPAWN_FAULT_CODES fault means git-could-not-run, not a bug in our
+  // code, so all degrade to null rather than abort the unguarded sweep.
   it.each([
     ['a missing git binary (ENOENT)', 'ENOENT'],
     ['a non-executable git (EACCES)', 'EACCES'],
@@ -529,9 +526,7 @@ describe('isAncestor / isAncestorOrNull', () => {
   });
 
   it('RETHROWS a mis-wired runner rather than reporting null for every ref (mem-egxu2)', () => {
-    // The whole defect: a programming error (a TypeError, no git verdict) must
-    // NOT be laundered into null. Swallowing it makes the measure-live-ref sweep
-    // exit 0 claiming git could not answer for EVERY ref. See isGitFault.
+    // A programming error (no git verdict) must not be laundered into null.
     const misWired: GitRunner = () => {
       throw new TypeError("Cannot read properties of undefined (reading 'trim')");
     };
@@ -539,9 +534,8 @@ describe('isAncestor / isAncestorOrNull', () => {
   });
 
   it('RETHROWS a maxBuffer overrun rather than degrading it to null (mem-egxu2)', () => {
-    // ENOBUFS+SIGTERM is Node aborting the child (our config), not an external
-    // kill like SIGKILL above (`code` undefined) — its string `signal` must not
-    // fool the signal-kill arm into null. See isGitFault.
+    // ENOBUFS+SIGTERM is our maxBuffer, not an external kill — its string
+    // `signal` must not fool the signal-kill arm into null. See isGitFault.
     const overrun: GitRunner = () => {
       throw Object.assign(new Error('stdout maxBuffer length exceeded'), {
         status: null,

@@ -234,34 +234,22 @@ export function isNonZeroExit(err: unknown): boolean {
   return exitStatus(err) !== undefined;
 }
 
-/** libuv spawn-failure codes that all mean git never ran: the binary is missing
- * (ENOENT), present but not executable (EACCES), or not a runnable executable
- * format — wrong arch / bad interpreter (ENOEXEC). All three throw with `status`
- * and `signal` both null, so none of {@link isGitFault}'s other arms match them;
- * they need this explicit code check. They are one class — git-could-not-run —
- * and degrade the sweep to null together. */
+/** libuv spawn failures — git never ran (status+signal both null): binary
+ * missing (ENOENT), not executable (EACCES), or wrong arch / bad interpreter
+ * (ENOEXEC). */
 const SPAWN_FAULT_CODES: ReadonlySet<string> = new Set(['ENOENT', 'EACCES', 'ENOEXEC']);
 
-/** True when a git invocation failed in a way that means git could not ANSWER,
- * as opposed to a programming error in our own call. This is exactly the fault
- * set {@link isAncestorOrNull} degrades to null: a non-zero exit (e.g. 128 on an
- * unreadable object), a spawn failure that means git never ran (see
- * {@link SPAWN_FAULT_CODES}), or an external signal kill (`signal` is the signal
- * name). A programming error (e.g. a TypeError from a mis-wired
- * {@link GitRunner}) carries no git verdict and propagates instead of becoming a
- * null.
- *
- * The one non-obvious case: a maxBuffer overrun, which `execFileSync` throws not
- * as a RangeError but as `Error{status: null, code: 'ENOBUFS', signal:
- * 'SIGTERM'}` — Node aborting the child because OUR maxBuffer was too small — is
- * our config bug, so ENOBUFS is excluded from the signal-kill arm even though
- * `signal` is a string. A genuine external SIGKILL (`code` undefined) still
- * degrades to null for sweep safety. */
+/** True when git could not ANSWER — the fault set {@link isAncestorOrNull}
+ * degrades to null: a non-zero exit, a spawn fault ({@link SPAWN_FAULT_CODES}),
+ * or an external signal kill. A programming error (e.g. a TypeError from a
+ * mis-wired {@link GitRunner}) carries no git verdict and propagates instead. */
 export function isGitFault(err: unknown): boolean {
   if (isNonZeroExit(err)) return true;
   if (typeof err !== 'object' || err === null) return false;
   const e = err as { code?: unknown; signal?: unknown };
   if (typeof e.code === 'string' && SPAWN_FAULT_CODES.has(e.code)) return true;
+  // ENOBUFS+SIGTERM is Node aborting the child over OUR maxBuffer (our config
+  // bug), not an external kill — exclude it from the signal-kill arm.
   return typeof e.signal === 'string' && e.code !== 'ENOBUFS';
 }
 
