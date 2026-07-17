@@ -505,12 +505,20 @@ describe('isAncestor / isAncestorOrNull', () => {
     expect(isAncestorOrNull(defaultGitRunner, repo, first, second)).toBe(true);
   });
 
-  // Every SPAWN_FAULT_CODES fault means git-could-not-run, not a bug in our
-  // code, so all degrade to null rather than abort the unguarded sweep.
+  // Every spawn-never-ran fault (status+signal both null, code the errno)
+  // means git-could-not-run, not a bug in our code, so all degrade to null
+  // rather than abort the unguarded sweep. isGitFault classifies these by that
+  // SHAPE, not an errno allowlist — the transient errnos below (EAGAIN/EMFILE/
+  // ENOMEM/ENFILE) are the ones a {ENOENT,EACCES,ENOEXEC} allowlist omitted and
+  // rethrew into the sweep, killing every rig on the first EMFILE (mem-egxu2).
   it.each([
     ['a missing git binary (ENOENT)', 'ENOENT'],
     ['a non-executable git (EACCES)', 'EACCES'],
     ['a wrong-arch git (ENOEXEC)', 'ENOEXEC'],
+    ['a transient fork limit (EAGAIN)', 'EAGAIN'],
+    ['an fd-table-exhausted spawn (EMFILE)', 'EMFILE'],
+    ['a system-wide fd exhaustion (ENFILE)', 'ENFILE'],
+    ['an out-of-memory spawn (ENOMEM)', 'ENOMEM'],
   ])('degrades %s to null rather than killing an unguarded sweep', (_label, code) => {
     const spawnFault: GitRunner = () => {
       throw Object.assign(new Error(`spawn git ${code}`), { status: null, code, signal: null });

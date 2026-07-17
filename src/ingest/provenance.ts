@@ -234,20 +234,29 @@ export function isNonZeroExit(err: unknown): boolean {
   return exitStatus(err) !== undefined;
 }
 
-/** libuv spawn failures — git never ran (status+signal both null): binary
- * missing (ENOENT), not executable (EACCES), or wrong arch / bad interpreter
- * (ENOEXEC). */
-const SPAWN_FAULT_CODES: ReadonlySet<string> = new Set(['ENOENT', 'EACCES', 'ENOEXEC']);
-
 /** True when git could not ANSWER — the fault set {@link isAncestorOrNull}
- * degrades to null: a non-zero exit, a spawn fault ({@link SPAWN_FAULT_CODES}),
- * or an external signal kill. A programming error (e.g. a TypeError from a
- * mis-wired {@link GitRunner}) carries no git verdict and propagates instead. */
+ * degrades to null: a non-zero exit, a spawn-never-ran fault, or an external
+ * signal kill. A programming error (e.g. a TypeError from a mis-wired
+ * {@link GitRunner}) carries no git verdict and propagates instead.
+ *
+ * Classification is STRUCTURAL — by the shape of the failure at the subprocess
+ * boundary, not an errno allowlist. An allowlist ({ENOENT,EACCES,ENOEXEC}) was
+ * the mem-egxu2 regression: it omitted the transient spawn errnos
+ * (EAGAIN/EMFILE/ENOMEM/ENFILE), so isGitFault RETHREW them into the unguarded
+ * live-ref sweep (scripts/measure-live-ref.mjs) and the first EMFILE/ENOMEM —
+ * which tend to persist across the batch — killed every rig. Every uv_spawn
+ * failure carries the SAME shape, so the shape is the sound discriminant. */
 export function isGitFault(err: unknown): boolean {
   if (isNonZeroExit(err)) return true;
   if (typeof err !== 'object' || err === null) return false;
-  const e = err as { code?: unknown; signal?: unknown };
-  if (typeof e.code === 'string' && SPAWN_FAULT_CODES.has(e.code)) return true;
+  const e = err as { status?: unknown; code?: unknown; signal?: unknown };
+  // Spawn-never-ran: uv_spawn failed before git executed, so there is neither
+  // an exit code nor a signal — execFileSync reports EVERY such failure with
+  // status and signal both null and code the errno string, whether git is
+  // missing (ENOENT), not executable (EACCES/ENOEXEC), or the spawn hit a
+  // transient resource limit (EAGAIN/EMFILE/ENOMEM/ENFILE). git could not be
+  // asked, so this is a fault, not a bug in our code.
+  if (e.status === null && e.signal === null && typeof e.code === 'string') return true;
   // ENOBUFS+SIGTERM is Node aborting the child over OUR maxBuffer (our config
   // bug), not an external kill — exclude it from the signal-kill arm. This
   // carve-out covers Node's only self-kill because both runners set maxBuffer
