@@ -6,8 +6,10 @@
 // runner measures the REAL percentage: it resolves that join against the Day-0
 // FROZEN refs dump (mem-wanz.1 — decoupled from live-ref decay), computes each
 // branch's merge-base against the AUTHORITATIVE remote's integration branch, and
-// applies the fail-closed write-gate (R3): a base that is not an ancestor of
-// <authoritative>/main is DROPPED with reason, never counted.
+// applies the fail-closed write-gate: a base with no merge-base on
+// <authoritative>/main is DROPPED as decay, never counted. R3 silent-corruption
+// protection is UPSTREAM of the classifier — the slug-based remote pick + the
+// authRef-resolvability gate below (mem-zzzl4).
 //
 // Pure resolver + classifier + summary live in src/ingest/liveRef.ts (unit-tested);
 // this runner is IO only: read the store + frozen refs, shell git for merge-base /
@@ -130,13 +132,16 @@ for (const rig of RIGS) {
     // Day-0 FROZEN ref SHA (decay-proof) resolved against the live shared object
     // store. Objects are present today, so this equals the bundle answer; if they
     // are GC'd, merge-base returns null → DROP_NO_MERGE_BASE (decay), and the
-    // Day-0 bundle is the documented fallback. The --is-ancestor call is the
-    // literal R3 write-gate (PRD §5.2) — kept verbatim, not optimized away.
+    // Day-0 bundle is the documented fallback. The --is-ancestor call is a live
+    // INVARIANT PROBE, not a corruption gate: base_sha is a merge-base of authRef,
+    // so it is an ancestor by construction. Kept as an assertion — a non-true
+    // answer means git faulted, and classifyMergeBase fails it safe to undecided
+    // (mem-zzzl4), never kept, never a measurable corruption rate.
     const base_sha = gitOut(entry.dir, ['merge-base', r.sha, authRef]);
-    // Tri-state, NOT a boolean: null means git could not answer, which
-    // classifyMergeBase routes to `undecided` instead of the R3 drop count
-    // (mem-y2x7n). Null with no merge-base too — the ancestry question is never
-    // asked, so there is no answer to invent.
+    // Tri-state, NOT a boolean: true confirms the invariant → keep; null means git
+    // could not answer → undecided; a false is mathematically impossible for a
+    // merge-base of authRef and also fails safe to undecided (mem-zzzl4). Null with
+    // no merge-base too — the ancestry question is never asked.
     const is_ancestor =
       base_sha === null ? null : isAncestorOrNull(gitRunner, entry.dir, base_sha, authRef);
     return classifyMergeBase({
@@ -156,10 +161,10 @@ for (const rig of RIGS) {
   console.log(`  resolved to live bd- branch: ${report.resolved}`);
   console.log(`  kept (merge-base on auth)  : ${report.kept}`);
   console.log(
-    `  dropped (R3 gate)          : ${report.dropped}  ${JSON.stringify(report.drops_by_reason)}`
+    `  dropped (decay/no-base)    : ${report.dropped}  ${JSON.stringify(report.drops_by_reason)}`
   );
-  // Its own line, never under "(R3 gate)": that would relabel a fault as the
-  // gate's verdict — the reporting half of mem-y2x7n.
+  // Its own line, never folded into decay: that would relabel a git fault as a
+  // resolved-but-decayed base — the reporting half of mem-y2x7n / mem-zzzl4.
   console.log(
     `  undecided (git no answer)  : ${report.undecided}  ${JSON.stringify(report.undecided_by_cause)}`
   );

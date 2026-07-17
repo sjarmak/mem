@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   branchSlug,
   classifyMergeBase,
-  DROP_BASE_NOT_ANCESTOR,
   DROP_NO_MERGE_BASE,
   parseForEachRef,
   resolveLiveRefs,
@@ -102,26 +101,34 @@ describe('classifyMergeBase', () => {
     expect(r.drop).toBeUndefined();
   });
 
-  it('DROPS a resolved-but-non-ancestor base as the R3 corruption signal', () => {
+  it('fails an impossible non-ancestor base SAFE to undecided — never kept, never a drop', () => {
+    // base_sha is derived as merge-base(branch, authRef), so it is BY DEFINITION
+    // an ancestor of authRef: is_ancestor can only be true or null (git faulted).
+    // A `false` is a mathematical impossibility at this call site (mem-zzzl4), so
+    // there is no measurable "off-authoritative base" rate to tally. If one ever
+    // surfaces we fail safe: route it to undecided, so an impossible answer is
+    // never silently kept.
     const r = classifyMergeBase({ ...base, is_ancestor: false });
     expect(r.kept).toBeUndefined();
-    expect(r.drop).toEqual({
+    expect(r.drop).toBeUndefined();
+    expect(r.undecided).toEqual({
       work_id: 'gc-0a6',
       refname: 'refs/heads/bd-gc-0a6',
-      reason: DROP_BASE_NOT_ANCESTOR,
+      cause: UNDECIDED_ANCESTRY_UNANSWERABLE,
     });
   });
 
-  it('DROPS a missing merge-base as the DECAY signal, distinct from R3', () => {
+  it('DROPS a missing merge-base as the DECAY signal — the only measurable drop', () => {
     const r = classifyMergeBase({ ...base, base_sha: null, is_ancestor: false });
     expect(r.drop?.reason).toBe(DROP_NO_MERGE_BASE);
   });
 
-  it('UNDECIDES an unanswerable ancestry — it is not a drop, and not the R3 alarm', () => {
-    // The bug this arm exists for (mem-y2x7n): a git fault reaching the gate as
-    // `false` was indistinguishable from a genuine "this base is off the
-    // authoritative branch" — i.e. it tripped the R3 CORRUPTION ALARM with a
-    // fabricated data point. An unanswerable case is not a negative one.
+  it('UNDECIDES an unanswerable ancestry — it is not a drop', () => {
+    // A git fault (128 on an unreadable object, a missing binary, a signal)
+    // reaches the gate as `null`: the ancestry question was asked but not
+    // answered. That is neither a keep nor a decay drop — it is undecided, so the
+    // headline reports it as a lower-bound shortfall rather than inventing a
+    // verdict (mem-y2x7n).
     const r = classifyMergeBase({ ...base, is_ancestor: null });
     expect(r.undecided).toEqual({
       work_id: 'gc-0a6',
@@ -201,9 +208,9 @@ describe('summarize', () => {
     expect(report.undecided_by_cause).toEqual({ [UNDECIDED_ANCESTRY_UNANSWERABLE]: 1 });
   });
 
-  it('keeps an undecided ref out of the R3 drop count, so the alarm stays clean', () => {
-    // The R3 signal is read as "a non-zero count here is the alarm". A git
-    // fault must not be able to raise it.
+  it('keeps undecided refs out of every drop count, so no fault reads as decay', () => {
+    // A git fault degrades to `undecided`; it must not land in `dropped` at all.
+    // The only measurable drop is no-merge-base decay — a fault is not that.
     const report = summarize(
       10,
       [null, null].map((_, i) =>
@@ -216,7 +223,7 @@ describe('summarize', () => {
         })
       )
     );
-    expect(report.drops_by_reason[DROP_BASE_NOT_ANCESTOR]).toBeUndefined();
+    expect(report.drops_by_reason).toEqual({});
     expect(report.dropped).toBe(0);
     expect(report.undecided).toBe(2);
   });

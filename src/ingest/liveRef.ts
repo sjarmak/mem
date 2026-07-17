@@ -15,10 +15,14 @@
  *  - EXACT token match `bd-<work_id>` — a suffixed branch (`bd-<id>-rebase`,
  *    `-fixup`) is a different slug and is NOT the canonical landing, so it is
  *    excluded rather than collapsed onto the work id.
- *  - FAIL-CLOSED merge-base gate (R3): a base that is not an ancestor of the
- *    AUTHORITATIVE remote's integration branch is DROPPED with a reason, never
- *    written — the silent-corruption guard for the 14-remote, worktree-aliased
- *    gascity checkout.
+ *  - FAIL-CLOSED merge-base gate: a base with no merge-base on the AUTHORITATIVE
+ *    remote's integration branch is DROPPED as decay, never written. The R3
+ *    silent-corruption guard for the 14-remote, worktree-aliased gascity checkout
+ *    lives UPSTREAM of this classifier — in the runner's slug-based remote pick +
+ *    authRef-resolvability gate, and git-common-dir Step-0 (mem-wanz.2). Here the
+ *    ancestry check is only an invariant assertion: `base_sha` is a merge-base of
+ *    authRef, so it is an ancestor by construction, and a non-true answer is a git
+ *    fault (undecided), not a measurable corruption rate (mem-zzzl4).
  *
  * ZFC: mechanical parsing + set membership + ancestor arithmetic. No semantic
  * judgment; git reports the merge-base and ancestry, we classify the result.
@@ -92,24 +96,18 @@ export function resolveLiveRefs(
   return out;
 }
 
-/** Drop reason: a merge-base RESOLVED but is not an ancestor of the authoritative
- * integration branch — the R3 silent-corruption signal (wrong checkout/remote, or
- * a base genuinely off the authoritative branch). A non-zero count here is the
- * alarm; zero means no off-authoritative bases slipped through. */
-export const DROP_BASE_NOT_ANCESTOR = 'base_not_on_authoritative_integration_branch';
-
 /** Drop reason: no merge-base could be computed at all (the branch objects are
  * absent from the checkout, or share no history with the authoritative branch).
  * This is the live-ref DECAY signal — the case the Day-0 bundle exists to backstop
- * — kept SEPARATE from {@link DROP_BASE_NOT_ANCESTOR} so a zero R3 count is not
- * confounded with decay. */
+ * — and the ONLY measurable drop this gate reports. */
 export const DROP_NO_MERGE_BASE = 'no_merge_base_in_authoritative_checkout';
 
-/** Undecided cause: git could not ANSWER the ancestry question — an unreadable
- * object (exit 128), a missing binary, a signal. Not a drop: the gate reached no
- * verdict, so the ref is neither kept nor counted against the R3 alarm. Reported
- * per-cause, mirroring ingest/landedContent.ts's `UndecidableCause`, so the
- * headline's shortfall is auditable rather than an opaque bucket (mem-y2x7n). */
+/** Undecided cause: the ancestry probe did not confirm the invariant. Either git
+ * could not ANSWER (an unreadable object at exit 128, a missing binary, a signal)
+ * or it returned a `false` that is mathematically impossible for a merge-base of
+ * authRef (mem-zzzl4) — both fail safe here, so an unconfirmed base is never kept.
+ * Reported per-cause, mirroring ingest/landedContent.ts's `UndecidableCause`, so
+ * the headline's shortfall is auditable rather than an opaque bucket (mem-y2x7n). */
 export const UNDECIDED_ANCESTRY_UNANSWERABLE = 'ancestry_unanswerable_in_checkout';
 
 /** The result of the IO layer's merge-base computation for one resolved ref. */
@@ -120,13 +118,16 @@ export interface MergeBaseInput {
   /** `git merge-base <branch_sha> <authoritative>/main`, or null if none / the
    * objects are absent. */
   base_sha: string | null;
-  /** The ancestry of `base_sha` against the authoritative branch, in THREE
-   * states — `merge-base --is-ancestor` answers only by exit code, and its codes
-   * do not collapse into a boolean:
-   *  - `true`  — git answered YES (exit 0).
-   *  - `false` — git answered NO (exit 1). A real, substantive negative.
+  /** The ancestry of `base_sha` against the authoritative branch, from
+   * `merge-base --is-ancestor` by exit code. `base_sha` is itself a merge-base of
+   * authRef, so this is an INVARIANT PROBE, not a corruption measurement — its
+   * only substantive outcomes are:
+   *  - `true`  — git answered YES (exit 0). The invariant holds; keep.
    *  - `null`  — git could NOT be asked (a 128 on an unreadable object, a
-   *    missing binary, a signal). **null is not a no.**
+   *    missing binary, a signal). **null is not a no.** → undecided.
+   * A `false` (exit 1) is mathematically impossible for a merge-base of authRef
+   * (mem-zzzl4); {@link classifyMergeBase} folds it into undecided as a fail-safe
+   * so an impossible answer is never silently kept.
    *
    * Producers should use ingest/provenance.ts's `isAncestorOrNull`, which returns
    * exactly these three states. */
@@ -142,17 +143,19 @@ export interface LiveRefBase {
   base_sha: string;
 }
 
-/** A dropped resolution, with the reason it failed the write-gate. */
+/** A dropped resolution, with the reason it failed the write-gate. The only drop
+ * reason is {@link DROP_NO_MERGE_BASE} — decay, not corruption. */
 export interface LiveRefDrop {
   work_id: string;
   refname: string;
   reason: string;
 }
 
-/** A resolution the gate could not decide, with the cause git could not answer.
- * Distinct from {@link LiveRefDrop} on purpose: a drop is a VERDICT (the gate
- * asked and the answer was no), an undecided is the ABSENCE of one. Folding the
- * two would put a git fault into the R3 alarm's count. */
+/** A resolution the gate could not confirm, with the cause. Distinct from
+ * {@link LiveRefDrop} on purpose: a drop is a decayed base (no merge-base at all),
+ * an undecided is a base that resolved but whose ancestry invariant went
+ * unconfirmed (git faulted, or the impossible false). Folding the two would let a
+ * git fault masquerade as decay. */
 export interface LiveRefUndecided {
   work_id: string;
   refname: string;
@@ -167,22 +170,21 @@ export interface LiveRefResult {
 }
 
 /**
- * Apply the fail-closed write-gate (R3) to a merge-base result. The base is kept
- * only when it resolved AND git answered that it is an ancestor of the
- * authoritative integration branch. The three failing outcomes are reported
- * apart, because each is a different fact and collapsing any two makes the
- * others unreadable:
- *  - no merge-base → drop {@link DROP_NO_MERGE_BASE}, the decay signal.
- *  - a resolved base git says is NOT an ancestor → drop
- *    {@link DROP_BASE_NOT_ANCESTOR}, the R3 corruption signal. A non-zero count
- *    here is the alarm, which is exactly why nothing else may land in it.
- *  - git could not ANSWER → undecided {@link UNDECIDED_ANCESTRY_UNANSWERABLE}.
- *    Not a drop: no verdict was reached, so the ref is neither kept nor counted
- *    against the alarm (mem-y2x7n).
+ * Classify a merge-base result into keep / decay-drop / undecided. The base is
+ * kept only when it resolved AND git confirmed the ancestry invariant. The two
+ * non-keep outcomes are reported apart, because each is a different fact:
+ *  - no merge-base → drop {@link DROP_NO_MERGE_BASE}, the decay signal, and the
+ *    only measurable drop here.
+ *  - a resolved base whose ancestry is unconfirmed → undecided
+ *    {@link UNDECIDED_ANCESTRY_UNANSWERABLE}. `base_sha` is a merge-base of
+ *    authRef, so it is an ancestor BY CONSTRUCTION; the probe can only confirm
+ *    (true) or fail to answer (null). There is no reachable "not an ancestor"
+ *    verdict to tally, so this is an invariant assertion, not a corruption gate
+ *    (mem-zzzl4). A stray false — mathematically impossible — folds into
+ *    undecided too, fail-safe: an unconfirmed base is never silently kept.
  *
- * So a zero R3 count cannot be confounded with decay, and neither can be
- * confounded with an ancestry git could not read. Nothing is written silently on
- * any path.
+ * So decay cannot be confounded with an ancestry git could not confirm, and
+ * nothing is written silently on any path.
  *
  * This covers the ANCESTRY half only. `base_sha` arrives already collapsed:
  * producers derive it from a plain `merge-base`, and a fault there is
@@ -190,25 +192,23 @@ export interface LiveRefResult {
  * function, so it still drops as decay (mem-1n56l).
  */
 export function classifyMergeBase(input: MergeBaseInput): LiveRefResult {
-  // Order is load-bearing in both directions. No-merge-base first: with no base
-  // there is nothing to ask about, so `is_ancestor` carries no meaning here.
+  // No-merge-base first: with no base there is nothing to ask about, so
+  // `is_ancestor` carries no meaning here.
   if (input.base_sha === null) {
     return { drop: { work_id: input.work_id, refname: input.refname, reason: DROP_NO_MERGE_BASE } };
   }
-  // null before the falsy check: `!null` is true too, so testing `!is_ancestor`
-  // first would swallow the undecided arm into the R3 alarm's count.
-  if (input.is_ancestor === null) {
+  // Non-true fails SAFE to undecided, both arms of it. A resolved base is a
+  // merge-base of authRef, so is_ancestor can only be true (invariant holds) or
+  // null (git faulted); a false is a mathematical impossibility here (mem-zzzl4).
+  // Route true → keep, everything else → undecided: an impossible answer is never
+  // silently kept, and there is no measurable off-authoritative rate to tally.
+  if (input.is_ancestor !== true) {
     return {
       undecided: {
         work_id: input.work_id,
         refname: input.refname,
         cause: UNDECIDED_ANCESTRY_UNANSWERABLE,
       },
-    };
-  }
-  if (!input.is_ancestor) {
-    return {
-      drop: { work_id: input.work_id, refname: input.refname, reason: DROP_BASE_NOT_ANCESTOR },
     };
   }
   return {
@@ -230,7 +230,7 @@ export interface LiveRefReport {
   resolved: number;
   /** Resolved refs that passed the merge-base gate (the replayable base count). */
   kept: number;
-  /** Resolved refs dropped by the gate — a verdict was reached and it was no. */
+  /** Resolved refs dropped by the gate — no merge-base at all (decay). */
   dropped: number;
   drops_by_reason: Record<string, number>;
   /** Resolved refs the gate could not decide. Sibling to {@link dropped}, never
