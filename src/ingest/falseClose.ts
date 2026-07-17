@@ -102,6 +102,15 @@ export function parseRef(refname: string): ParsedRef | null {
   return { scope: 'remote', remote: remote[1], name: remote[2], refname };
 }
 
+/** The ref to hand to git for a parsed ref: the short name for a local head,
+ * `<remote>/<name>` for a remote-tracking one. Deliberately NOT the refname —
+ * this is the argument git wants, while {@link ParsedRef.refname} is the raw
+ * string git gave. Keeping the two apart is what stops a reported refname from
+ * silently becoming a git-convenient short form. */
+function gitRef(parsed: ParsedRef): string {
+  return parsed.scope === 'local' ? parsed.name : `${parsed.remote}/${parsed.name}`;
+}
+
 /** A closed bead joined to the one surviving branch that names it. */
 export interface JoinedBranch {
   work_id: string;
@@ -187,32 +196,14 @@ export function joinBranches(opts: JoinOptions): JoinResult {
   // id as the store spells it, not as the branch happened to spell it.
   const canonical = new Map<string, string>();
   for (const id of closedIds) canonical.set(id.toLowerCase(), id);
-  /** A candidate branch and the raw refname it was found under.
-   *
-   * The refname is CARRIED rather than reconstructed from the branch when the
-   * displacement skip needs it. It is derivable today — `refs/heads/<ref>` for a
-   * local head, `refs/remotes/<ref>` for a remote one — but `ref` is documented
-   * as the string to hand to git, so it is free to change shape for git's
-   * convenience, and a derivation would then keep type-checking while silently
-   * reporting a refname that no ref ever had. Recording a derived string in a
-   * field that promises the raw one is the exact defect this map's skip once
-   * had; ParsedRef already carries `refname` for the same reason, so carrying
-   * here follows the module's own idiom rather than inventing one.
-   *
-   * It rides alongside JoinedBranch instead of on it because the displacement
-   * skip is its only reader, and a field on JoinedBranch would surface
-   * unconsumed in `joined` output. */
-  interface HeldRef {
-    branch: JoinedBranch;
-    refname: string;
-  }
   // work_id → the best ref seen so far. A local head, once seen, is never
   // displaced; the earlier remote candidate it displaces is recorded as a skip.
-  // Every skip below pushes a raw refname — the loop variable, or a held one
-  // captured when that entry was inserted — and never `parsed.name` or
-  // `candidate.ref`. That is what keeps JoinSkip.refname one shape; a new skip
-  // reason must follow it.
-  const best = new Map<string, HeldRef>();
+  // The ref is held as the ParsedRef it arrived as, not as the JoinedBranch it
+  // becomes: ParsedRef keeps `refname` (the raw string git gave us) with the
+  // candidate, so a displaced one is skipped under the same shape as every skip
+  // that reports the ref in hand. JoinedBranch keeps only `ref` — the short form
+  // built for git — which is what let the two displacement paths disagree.
+  const best = new Map<string, ParsedRef>();
 
   for (const refname of opts.refnames) {
     const parsed = parseRef(refname);
@@ -246,13 +237,11 @@ export function joinBranches(opts: JoinOptions): JoinResult {
     }
 
     const work_id = [...ids][0];
-    const ref = parsed.scope === 'local' ? parsed.name : `${parsed.remote}/${parsed.name}`;
-    const candidate: JoinedBranch = { work_id, ref, scope: parsed.scope };
     const held = best.get(work_id);
     if (held === undefined) {
-      best.set(work_id, { branch: candidate, refname });
-    } else if (held.branch.scope === 'remote' && parsed.scope === 'local') {
-      best.set(work_id, { branch: candidate, refname });
+      best.set(work_id, parsed);
+    } else if (held.scope === 'remote' && parsed.scope === 'local') {
+      best.set(work_id, parsed);
       skipped.push({ refname: held.refname, reason: 'duplicate-of-local' });
     } else {
       skipped.push({ refname, reason: 'duplicate-of-local' });
@@ -260,8 +249,8 @@ export function joinBranches(opts: JoinOptions): JoinResult {
   }
 
   return {
-    joined: [...best.values()]
-      .map(h => h.branch)
+    joined: [...best.entries()]
+      .map(([work_id, p]) => ({ work_id, ref: gitRef(p), scope: p.scope }))
       .sort((a, b) => a.work_id.localeCompare(b.work_id)),
     skipped,
   };
