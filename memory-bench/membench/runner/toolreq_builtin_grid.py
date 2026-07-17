@@ -63,11 +63,12 @@ from membench.runner.toolreq_realagent import ToolReqRealAgentTask, task_fingerp
 
 # This module's public surface, declared for the reason `toolreq_grid.__all__` is: the driver
 # imports `LEAK` from here, but `LEAK` is `resume_cache`'s — it arrives by an implicit re-export
-# that `--strict`'s `no_implicit_reexport` refuses. CI's mypy gate excludes `scripts/`, so the
-# error is latent rather than absent: `mypy --strict scripts/grid_toolreq_builtin.py` reports it
-# today, and the day `scripts/` joins the checked surface — one deleted line in
-# `[tool.mypy].exclude`, the direction this module's own docstring argues for, since every
-# resume-cache defect this codebase shipped lived in an untyped script — that import breaks.
+# that `--strict`'s `no_implicit_reexport` refuses. The declaration below is what makes the import
+# legal, so `mypy --strict scripts/grid_toolreq_builtin.py` is clean today; delete `__all__` and it
+# reports the error, even though CI's mypy gate excludes `scripts/`. Keep it declared: the day
+# `scripts/` joins the checked surface — one deleted line in `[tool.mypy].exclude`, the direction
+# this module's own docstring argues for, since every resume-cache defect this codebase shipped
+# lived in an untyped script — an undeclared surface breaks that import.
 __all__ = [
     "AGENT_ERROR",
     "ARM",

@@ -19,6 +19,11 @@ pass no matter what CI ran, testing only that ruff works. Reading the real argv
 means reverting the workflow to enumerated targets makes the planted directory
 invisible to the gate, and these tests fail — which is what a guard is for.
 
+Scope of that pin: `ci.yml` only. `.pre-commit-config.yaml` restates the same
+argv and is NOT read here, so narrowing the local gate alone leaves these probes
+green. That gap is real and tracked in mem-8o4li; the durable fix is one gate
+site rather than a second probe.
+
 What they do NOT assert: which directories are excluded. `[tool.mypy].exclude` is
 expected to change (mem-cv06b deletes `^scripts/` when its sweep lands); pinning
 its membership here would make a legitimate coverage INCREASE fail a test. The
@@ -31,16 +36,18 @@ import os
 import shlex
 import shutil
 import subprocess
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 import yaml
 
-# The memory-bench root: holds `pyproject.toml` (so the gates read the real
-# config) and is the `working-directory:` of CI's python job.
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-_CI_WORKFLOW = _REPO_ROOT.parent / ".github" / "workflows" / "ci.yml"
+from tests.paths import REPO, REPO_ROOT
+
+# `REPO` is the memory-bench root: it holds `pyproject.toml` (so the gates read
+# the real config) and is the `working-directory:` of CI's python job. `REPO_ROOT`
+# is the outer git root, one level up, where the workflow lives.
+_CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 
 # Planted at the crawl root, where only an opt-out gate reaches it.
 #
@@ -49,11 +56,8 @@ _CI_WORKFLOW = _REPO_ROOT.parent / ".github" / "workflows" / "ci.yml"
 # after a build artefact (`dist`, `build`, `reports`, `tasks`) — would make the
 # gate skip it for THAT reason and the probe would then be testing nothing.
 #
-# Process-unique so concurrent runners (pytest-xdist, or two developers sharing
-# a checkout) can't rmtree/mkdir the same path from under each other. Cross-
-# visibility between concurrent probes is harmless by construction: each
-# violation below is visible to exactly one tool, so another probe's planted
-# file reads as clean to this one's gate.
+# Process-unique so two runs sharing a checkout can't rmtree/mkdir the same path
+# from under each other.
 _PROBE_DIR = f"gate_probe_pkg_{os.getpid()}"
 
 # One violation per gate, each chosen to be visible to that gate ALONE — so a
@@ -68,9 +72,6 @@ _VIOLATIONS = {
     # Declared `int`, returns `str`: rejected under `strict = true`.
     "mypy": ("bad_return.py", 'def answer() -> int:\n    return "not an int"\n'),
 }
-
-# Plants (filename, source) into the probe package and returns the written path.
-Plant = Callable[[str, str], Path]
 
 
 def _gate_commands() -> dict[str, list[str]]:
@@ -96,26 +97,20 @@ def _gate_commands() -> dict[str, list[str]]:
 
 
 @pytest.fixture
-def plant() -> Iterator[Plant]:
-    """Plant a package directory at the crawl root and remove it afterwards.
+def probe_root() -> Iterator[Path]:
+    """An empty package directory at the crawl root, removed afterwards.
 
-    It must live INSIDE `_REPO_ROOT` to be a faithful probe: every gate resolves
-    its targets relative to this directory (`files = ["."]`, and `ruff`/`black`
-    are handed `.`), so a probe under `tmp_path` would test nothing about the
-    real crawl. Cleanup runs on failure too — a leftover probe would fail every
-    later gate run, including the developer's next commit.
+    It must live INSIDE `REPO` to be a faithful probe: every gate resolves its
+    targets relative to that directory (`files = ["."]`, and `ruff`/`black` are
+    handed `.`), so a probe under `tmp_path` would test nothing about the real
+    crawl. Cleanup runs on failure too — a leftover probe would fail every later
+    gate run, including the developer's next commit.
     """
-    root = _REPO_ROOT / _PROBE_DIR
+    root = REPO / _PROBE_DIR
     shutil.rmtree(root, ignore_errors=True)
-
-    def _plant(filename: str, source: str) -> Path:
-        root.mkdir()
-        planted = root / filename
-        planted.write_text(source, encoding="utf-8")
-        return planted
-
+    root.mkdir()
     try:
-        yield _plant
+        yield root
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -127,16 +122,18 @@ def _run_gate(argv: list[str]) -> subprocess.CompletedProcess[str]:
         pytest.skip(f"{argv[0]} not installed")
     return subprocess.run(
         [executable, *argv[1:]],
-        cwd=_REPO_ROOT,
+        cwd=REPO,
         capture_output=True,
         text=True,
     )
 
 
 @pytest.mark.parametrize("tool", sorted(_VIOLATIONS))
-def test_gate_reaches_a_new_directory(tool: str, plant: Plant) -> None:
+def test_gate_reaches_a_new_directory(tool: str, probe_root: Path) -> None:
     argv = _gate_commands()[tool]
-    planted = plant(*_VIOLATIONS[tool])
+    filename, source = _VIOLATIONS[tool]
+    planted = probe_root / filename
+    planted.write_text(source, encoding="utf-8")
     result = _run_gate(argv)
     printed = result.stdout + result.stderr  # black reports to stderr.
     assert result.returncode != 0, (

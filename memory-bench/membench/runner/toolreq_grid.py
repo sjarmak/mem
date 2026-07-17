@@ -4,10 +4,10 @@ verdict rule, and the measured inputs only this experiment has.
 The pure half of ``scripts/grid_toolreq_realagent.py``, and it lives HERE rather than there for one
 reason: ``scripts/`` is not type-checked — the CI mypy gate checks the tree but names ``^scripts/``
 in ``[tool.mypy].exclude`` — and every resume-cache defect this code has shipped lived in an
-untyped script. The driver keeps its
-argparse/main, its repo-root path constants, and its printing; everything that decides what is
-EXECUTED, what is SCORED, and what may be REUSED is inside the type checker — the ``ours``-store
-seeder included (``toolreq_realagent.seed_ours_store_and_resolve_payloads``, mem-rsmq7).
+untyped script. The driver keeps its argparse/main, its repo-root path constants, and its printing;
+everything that decides what is EXECUTED, what is SCORED, and what may be REUSED is inside the type
+checker — the ``ours``-store seeder included
+(``toolreq_realagent.seed_ours_store_and_resolve_payloads``, mem-rsmq7).
 
 The RESUME CACHE is not here — it is ``membench.runner.resume_cache``, shared with the builtin grid
 (``toolreq_builtin_grid``). Read the cache invariant there; this module supplies only what is

@@ -66,8 +66,10 @@ untyped_calls_exclude = ["opentelemetry"]
 # line, so a newly added directory was uncovered by default and silently — which
 # is exactly how conftest.py and examples/ went unchecked. Each exclusion below
 # must carry a reason; an unreasoned one is a bug, not a config entry.
-# `exclude` filters the recursive crawl only, not explicitly-named targets —
-# sound here precisely because `files = ["."]` IS a crawl.
+# `exclude` filters the recursive crawl only, not explicitly-named FILES —
+# sound here precisely because `files = ["."]` IS a crawl. (A named directory is
+# still crawled, so `mypy scripts` reports "no .py[i] files"; a named file is
+# not, so `mypy scripts/x.py` checks it. Spot-check an excluded tree by file.)
 #
 # The regexes are anchored relative to the INVOCATION cwd, not to this file, so
 # they hold only because both gate sites run from memory-bench/ (ci.yml's
@@ -89,9 +91,10 @@ exclude = [
     # purpose — it moves with every test added, so it would be born stale.)
     "^tests/",
     # In-flight deliverable of mem-cv06b (branch work/mem-cv06b, unmerged): the
-    # scripts/ mypy-annotation sweep, 15 errors outstanding. Excluding it is not
-    # a regression — the gate this replaces (`mypy --strict membench`) did not
-    # cover scripts/ either. mem-cv06b deletes this entry when its sweep lands.
+    # scripts/ mypy-annotation sweep. (No count here, for the reason above — it
+    # moves as that sweep lands annotations.) Excluding it is not a regression —
+    # the gate this replaces (`mypy --strict membench`) did not cover scripts/
+    # either. mem-cv06b deletes this entry when its sweep lands.
     "^scripts/",
 ]
 
