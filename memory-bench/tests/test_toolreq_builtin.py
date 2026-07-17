@@ -1869,6 +1869,8 @@ def test_an_unpinned_paid_run_is_refused_before_a_go_command_it_could_not_price(
     printed = capsys.readouterr().out
     assert "REFUSING to spend: no model named" in printed
     assert "scix-batch" not in printed, "priced nothing, so it must not print a go-command"
+
+
 # --- ancestor firewall: the sandbox's PARENT CHAIN is not a third continuity channel ----
 
 
