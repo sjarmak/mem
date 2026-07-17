@@ -186,6 +186,25 @@ export interface LiveRefResult {
   undecided?: LiveRefUndecided;
 }
 
+/** Route an unconfirmed ancestry to its undecided cause. Written as an exhaustive
+ * switch, mirroring {@link isLanded} in ingest/landedContent.ts: a new {@link
+ * AncestryFault} variant then fails to COMPILE here (the declared `string` return
+ * has no case to satisfy it) rather than silently mis-bucketing into
+ * git-unavailable and defeating the per-cause auditability this split exists to
+ * add (mem-zwmuq). `object-unreadable` is checkout-local; `git-unavailable` and
+ * the impossible `false` share the environment-wide/unattributable fail-safe
+ * bucket — see the {@link UNDECIDED_OBJECT_UNREADABLE} / {@link
+ * UNDECIDED_GIT_UNAVAILABLE} constant docs for the per-cause remedy. */
+function undecidedCause(is_ancestor: false | AncestryFault): string {
+  switch (is_ancestor) {
+    case 'object-unreadable':
+      return UNDECIDED_OBJECT_UNREADABLE;
+    case 'git-unavailable':
+    case false:
+      return UNDECIDED_GIT_UNAVAILABLE;
+  }
+}
+
 /**
  * Classify a merge-base result into keep / decay-drop / undecided. The base is
  * kept only when it resolved AND git confirmed the ancestry invariant. The two
@@ -193,15 +212,13 @@ export interface LiveRefResult {
  *  - no merge-base → drop {@link DROP_NO_MERGE_BASE}, the decay signal, and the
  *    only measurable drop here.
  *  - a resolved base whose ancestry is unconfirmed → undecided, with the cause
- *    ATTRIBUTED from `is_ancestor`: `object-unreadable` →
- *    {@link UNDECIDED_OBJECT_UNREADABLE} (checkout-local, use the Day-0 bundle);
- *    `git-unavailable` or the impossible `false` →
- *    {@link UNDECIDED_GIT_UNAVAILABLE} (environment-wide or unattributable,
- *    rerun/investigate). `base_sha` is a merge-base of authRef, so it is an
- *    ancestor BY CONSTRUCTION; the probe can only confirm (true) or fail to
- *    answer. There is no reachable "not an ancestor" verdict to tally, so this is
- *    an invariant assertion, not a corruption gate (mem-zzzl4) — which is why a
- *    stray false folds into undecided fail-safe rather than a corruption count.
+ *    ATTRIBUTED from `is_ancestor` by {@link undecidedCause} (the impossible
+ *    `false` folds fail-safe into git-unavailable). `base_sha` is a merge-base of
+ *    authRef, so it is an ancestor BY CONSTRUCTION; the probe can only confirm
+ *    (true) or fail to answer. There is no reachable "not an ancestor" verdict to
+ *    tally, so this is an invariant assertion, not a corruption gate (mem-zzzl4) —
+ *    which is why a stray false folds into undecided fail-safe rather than a
+ *    corruption count.
  *
  * So decay cannot be confounded with an ancestry git could not confirm, an
  * environment-wide git fault cannot be misattributed to this rig's checkout, and
@@ -226,10 +243,7 @@ export function classifyMergeBase(input: MergeBaseInput): LiveRefResult {
       undecided: {
         work_id: input.work_id,
         refname: input.refname,
-        cause:
-          input.is_ancestor === 'object-unreadable'
-            ? UNDECIDED_OBJECT_UNREADABLE
-            : UNDECIDED_GIT_UNAVAILABLE,
+        cause: undecidedCause(input.is_ancestor),
       },
     };
   }
