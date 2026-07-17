@@ -238,16 +238,16 @@ export function isNonZeroExit(err: unknown): boolean {
  * as opposed to a programming error in our own call. This is exactly the fault
  * set {@link isAncestorOrNull} degrades to null: a non-zero exit (e.g. 128 on an
  * unreadable object), a missing binary (`code === 'ENOENT'`), or an external
- * signal kill (`signal` is the signal name).
+ * signal kill (`signal` is the signal name). A programming error (e.g. a
+ * TypeError from a mis-wired {@link GitRunner}) carries no git verdict and
+ * propagates instead of becoming a null.
  *
- * A programming error carries no git verdict and must propagate, not become a
- * null. Two shapes matter: a TypeError from a mis-wired {@link GitRunner} (no
- * `status`, no ENOENT, no `signal`) never matches. And a maxBuffer overrun,
- * which `execFileSync` throws not as a RangeError but as `Error{status: null,
- * code: 'ENOBUFS', signal: 'SIGTERM'}` — Node aborting the child because OUR
- * maxBuffer was too small — is our config bug, so ENOBUFS is excluded from the
- * signal-kill arm even though `signal` is a string. A genuine external SIGKILL
- * (`code` undefined) still degrades to null for sweep safety. */
+ * The one non-obvious case: a maxBuffer overrun, which `execFileSync` throws not
+ * as a RangeError but as `Error{status: null, code: 'ENOBUFS', signal:
+ * 'SIGTERM'}` — Node aborting the child because OUR maxBuffer was too small — is
+ * our config bug, so ENOBUFS is excluded from the signal-kill arm even though
+ * `signal` is a string. A genuine external SIGKILL (`code` undefined) still
+ * degrades to null for sweep safety. */
 export function isGitFault(err: unknown): boolean {
   if (isNonZeroExit(err)) return true;
   if (typeof err !== 'object' || err === null) return false;

@@ -520,11 +520,9 @@ describe('isAncestor / isAncestorOrNull', () => {
   });
 
   it('RETHROWS a mis-wired runner rather than reporting null for every ref (mem-egxu2)', () => {
-    // The whole defect: a programming error carries no git verdict, so it must
-    // NOT be laundered into null. A mis-wired GitRunner that throws a TypeError
-    // (e.g. an undefined work_dir) has no `status`, no ENOENT, no signal — it is
-    // our bug, not git declining to answer. Swallowing it makes the
-    // measure-live-ref sweep exit 0 claiming git could not answer for EVERY ref.
+    // The whole defect: a programming error (a TypeError, no git verdict) must
+    // NOT be laundered into null. Swallowing it makes the measure-live-ref sweep
+    // exit 0 claiming git could not answer for EVERY ref. See isGitFault.
     const misWired: GitRunner = () => {
       throw new TypeError("Cannot read properties of undefined (reading 'trim')");
     };
@@ -532,12 +530,10 @@ describe('isAncestor / isAncestorOrNull', () => {
   });
 
   it('RETHROWS a maxBuffer overrun rather than degrading it to null (mem-egxu2)', () => {
-    // execFileSync does NOT throw a RangeError for a maxBuffer overrun; it throws
-    // Error{status: null, code: 'ENOBUFS', signal: 'SIGTERM'} — Node aborting the
-    // child because OUR maxBuffer was too small. That `signal` is a string, so a
-    // naive signal-kill guard would launder it into null (the exact defect this
-    // bead kills). ENOBUFS is our config bug and must surface, unlike the external
-    // SIGKILL above whose `code` is undefined.
+    // A maxBuffer overrun surfaces as Error{code:'ENOBUFS', signal:'SIGTERM'} —
+    // its string `signal` must not fool the signal-kill arm into null (the exact
+    // defect this bead kills), unlike the external SIGKILL above (`code`
+    // undefined). See isGitFault.
     const overrun: GitRunner = () => {
       throw Object.assign(new Error('stdout maxBuffer length exceeded'), {
         status: null,
