@@ -696,6 +696,33 @@ def test_a_leftover_temp_file_is_never_read_as_a_result(tmp_path: Path) -> None:
     assert not (out / "w-0.json.tmp").exists()  # the publish replaced it
 
 
+def test_a_planted_symlink_at_the_temp_path_is_refused_not_followed(tmp_path: Path) -> None:
+    """The atomic publish must not write THROUGH a pre-planted `<work_id>.json.tmp` symlink.
+
+    It REFUSES rather than quietly unlinking: a symlink here is not residue the publish
+    could have left (it writes a regular file), so it is an anomaly, and the write is a
+    boundary -- this module fails closed at boundaries rather than trusting out_dir's
+    0o700 mode to be the only thing standing between a paid run and someone else's file.
+
+    The refusal is O_NOFOLLOW and NOT O_EXCL. O_EXCL would also refuse the leftover
+    REGULAR tmp of an OOM-killed run (see `test_a_leftover_temp_file_is_never_read_as_a_result`)
+    -- which is designed-for, is a cache MISS, and would therefore re-spend and then die at
+    the write on every retry: a permanent wedge on the exact path whose halt counsel
+    promises "re-run the same command to resume".
+    """
+    out = tmp_path / "out"
+    out.mkdir()
+    victim = tmp_path / "victim.txt"
+    victim.write_text("untouched", encoding="utf-8")
+    (out / "w-0.json.tmp").symlink_to(victim)
+
+    with pytest.raises(OSError, match="refusing to publish"):
+        _run([_Task("w-0")], out)
+
+    assert victim.read_text(encoding="utf-8") == "untouched"  # never written through
+    assert not (out / "w-0.json").exists()  # and nothing published on the refused path
+
+
 # --- a paid warm-up fires with the SPEND, not with the invocation ----------------------
 
 

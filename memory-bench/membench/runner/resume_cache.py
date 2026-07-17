@@ -29,6 +29,7 @@ alone loaded.
 from __future__ import annotations
 
 import json
+import os
 from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
@@ -580,11 +581,38 @@ def run_cached_corpus(
         result = result_cls.of(task.work_id, identity, outcomes)
         # Atomic publish: write a sibling temp file then rename, so a kill mid-write leaves either
         # the old result or the new one, never a half-written JSON the next resume trips on.
-        tmp_path = result_path.with_suffix(".json.tmp")
-        tmp_path.write_text(result.model_dump_json(indent=2) + "\n", encoding="utf-8")
-        tmp_path.replace(result_path)
+        _publish_atomically(result_path, result.model_dump_json(indent=2) + "\n")
         results.append(result)
     return CorpusRun(results=results, executed=executed, reused=reused)
+
+
+def _publish_atomically(result_path: Path, payload: str) -> None:
+    """Write ``payload`` to ``<result_path>.tmp`` and rename it over ``result_path``.
+
+    ``O_NOFOLLOW`` is the whole reason this is not ``Path.write_text``: the temp path has a
+    PREDICTABLE name, so anyone who can write to out_dir can plant a symlink there ahead of
+    the run and have the publish write through it -- after which the rename leaves the
+    result itself a symlink. out_dir is 0o700, which makes that marginal, but the write is
+    a trust boundary and this module refuses at boundaries rather than resting on the one
+    mode bit above it.
+
+    ``O_TRUNC`` and NOT ``O_EXCL``: a leftover regular ``.json.tmp`` is designed-for residue
+    (the agent is OOM-killed by design, so a kill can land between the write and the
+    rename) and must still be replaced. ``O_EXCL`` would raise on it -- on a cache MISS,
+    i.e. AFTER the re-spend -- wedging the resume path permanently.
+    """
+    tmp_path = result_path.with_suffix(".json.tmp")
+    try:
+        fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    except OSError as exc:
+        raise OSError(
+            f"refusing to publish {result_path.name} through {tmp_path}: {exc.strerror}. "
+            "A symlink at the temp path is not residue this publish could have left, so it is "
+            "treated as an anomaly rather than overwritten."
+        ) from exc
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(payload)
+    tmp_path.replace(result_path)
 
 
 def corpus_summary(
