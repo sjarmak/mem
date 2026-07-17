@@ -56,6 +56,8 @@ if _SCRIPTS not in sys.path:
 
 import grid_toolreq_realagent as driver  # noqa: E402
 
+from membench.runner.headless_agent import HeadlessAgentError  # noqa: E402
+
 CURRENT = "30 days"
 STALE = "90 days"
 
@@ -1929,3 +1931,31 @@ def test_reseeding_a_store_never_surfaces_the_previous_corpus(tmp_path: Path) ->
     assert dead and live and not (dead & live)  # the two corpora share no token
     assert not [tok for tok in dead if tok in surfaced], "stale corpus leaked into the payload"
     assert [tok for tok in live if tok in surfaced], "current corpus never surfaced"
+
+
+def test_driver_halts_diagnosed_on_a_mid_sweep_agent_failure(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """A `HeadlessAgentError` mid-sweep (a rate-limited/timed-out/failed `claude -p`) must get the
+    3-arm driver the same diagnosed halt its builtin sibling gives -- exit 3 pointing at the
+    persisted per-task results -- never a raw traceback.
+
+    The two drivers spend through the same paid path, so they must not disagree about what a
+    paid-path halt looks like: the halt is recoverable and the resume is cheap, but only if the
+    operator is told so. Pre-existing (run_arm has always been able to raise here); the version
+    resolve that `run_corpus` now does up front simply added one more source of the same type.
+    """
+    _corpus_one(tmp_path)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")  # paid path must name a model (mem-bzv2p)
+
+    def _raises(*_a: object, **_k: object) -> object:
+        raise HeadlessAgentError("claude -p failed: simulated mid-sweep rate-limit")
+
+    monkeypatch.setattr(driver, "run_corpus", _raises)
+    code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
+    assert code == 3
+    err = capsys.readouterr().err
+    assert "SWEEP HALT" in err
+    assert "simulated mid-sweep rate-limit" in err  # carries the underlying failure
+    assert "re-run" in err  # and points at the resume path

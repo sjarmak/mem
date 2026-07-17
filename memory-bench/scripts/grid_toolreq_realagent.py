@@ -62,6 +62,7 @@ from pathlib import Path
 from membench.runner.headless_agent import (
     DEFAULT_TIMEOUT_S,
     REFUSE_UNPINNED_MODEL,
+    HeadlessAgentError,
     a_paid_run_needs_a_model,
 )
 from membench.runner.toolreq_grid import SUMMARY_NAME, run_corpus, worst_case_paid_call_count
@@ -161,17 +162,33 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"({_PAID_SHAPE})"
     )
     store_path = args.store if args.store is not None else args.out / "store.db"
-    summary = run_corpus(
-        tasks,
-        sequences,
-        out_dir=args.out,
-        repeats=args.repeats,
-        model=args.model,
-        dry_run=args.dry_run,
-        store_path=store_path,
-        mem_bin=args.mem_bin,
-        seed_fn=seed_ours_store_and_resolve_payloads,
-    )
+    try:
+        summary = run_corpus(
+            tasks,
+            sequences,
+            out_dir=args.out,
+            repeats=args.repeats,
+            model=args.model,
+            dry_run=args.dry_run,
+            store_path=store_path,
+            mem_bin=args.mem_bin,
+            seed_fn=seed_ours_store_and_resolve_payloads,
+        )
+    except HeadlessAgentError as exc:
+        # A rate-limited/flaky/timed-out `claude -p` mid-sweep gets a diagnosed halt, never a raw
+        # traceback: finished tasks are already persisted, so resuming is cheap — but only if the
+        # operator is told so. The sibling driver (`grid_toolreq_builtin.py`) gives exactly this
+        # treatment on the same boundary, and the two must not disagree about what a paid-path halt
+        # looks like. `run_corpus` also resolves the CLI version up front, so this arm covers the
+        # halts that happen BEFORE any spend as well as the ones partway through.
+        print(
+            f"SWEEP HALT: a real agent call failed mid-sweep ({exc}) — stopping instead "
+            f"of spending into a broken link. Finished tasks are persisted under "
+            f"{args.out} and are REUSED on re-run: re-run the same command to resume "
+            "once the underlying failure (network, rate limit, CLI issue) is resolved.",
+            file=sys.stderr,
+        )
+        return 3
     for record in summary["per_task"]:
         print(f"  {record['work_id']:<24} {record['verdict']}")
     summary_path = args.out / SUMMARY_NAME
