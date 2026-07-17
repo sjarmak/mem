@@ -51,6 +51,7 @@ import json
 import shutil
 import subprocess
 import tempfile
+import types
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -135,7 +136,10 @@ def cell_calls(task: ToolReqRealAgentTask, channel: MemoryChannel, *, model: str
 # every other fingerprint is unmoved (same prompts, same task, no payload), so a resumed run would
 # serve mechanism-ON numbers as mechanism-OFF measurements. A value outside the identity is not
 # defended by the checks around it.
-BUILTIN_SETTINGS: dict[str, object] = {"autoMemoryEnabled": True}
+#
+# Frozen (`MappingProxyType`) so an in-place edit (`BUILTIN_SETTINGS["autoMemoryEnabled"] = False`)
+# raises TypeError instead of silently diverging the seeded settings.json from this fingerprint.
+BUILTIN_SETTINGS: Mapping[str, object] = types.MappingProxyType({"autoMemoryEnabled": True})
 
 
 def _seed_config_dir(config_dir: Path) -> None:
@@ -148,10 +152,13 @@ def _seed_config_dir(config_dir: Path) -> None:
     whatever the CLI's default for that key happens to be.
 
     It writes ``BUILTIN_SETTINGS`` rather than a literal, so the dict the cache fingerprints is the
-    same object this seeds — one definition, not two that agree today."""
+    same object this seeds — one definition, not two that agree today. ``json.dumps`` only
+    fast-paths ``isinstance(obj, dict)``, so the frozen mapping is unwrapped to a plain ``dict``
+    here, at the one call site that needs it — ``digest``'s ``canonicalize`` already branches on
+    ``Mapping``, so ``mechanism_fingerprint`` needs no such unwrap."""
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "settings.json").write_text(
-        json.dumps(BUILTIN_SETTINGS, indent=2) + "\n", "utf-8"
+        json.dumps(dict(BUILTIN_SETTINGS), indent=2) + "\n", "utf-8"
     )
 
 

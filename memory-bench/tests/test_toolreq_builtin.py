@@ -48,6 +48,7 @@ from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL, ArmOutcome
 from membench.runner.resume_cache import invocation_digest
 from membench.runner.toolreq_builtin import (
     ARM,
+    BUILTIN_SETTINGS,
     SIMULATED_TOPIC_FILE,
     BuiltinDiagnostics,
     _establish_step,
@@ -686,6 +687,15 @@ def test_fresh_config_dir_turns_native_memory_on() -> None:
     )
     assert seen, "the runner never saw a config dir"
     assert all(s.get("autoMemoryEnabled") is True for s in seen)
+
+
+def test_builtin_settings_is_frozen() -> None:
+    # BUILTIN_SETTINGS is read by reference from both `_seed_config_dir` and
+    # `mechanism_fingerprint` — an in-place edit would silently diverge the seeded
+    # settings.json from the fingerprint the cache identity carries. Frozen so that edit
+    # raises TypeError instead of drifting unnoticed.
+    with pytest.raises(TypeError):
+        BUILTIN_SETTINGS["autoMemoryEnabled"] = False  # type: ignore[index]
 
 
 # --- leak accounting (H2): a pass without engagement is NOT a builtin win --------------
