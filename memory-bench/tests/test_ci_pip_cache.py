@@ -78,12 +78,6 @@ def test_python_job_caches_pip() -> None:
 def test_cache_is_keyed_on_the_file_pip_resolves_deps_from() -> None:
     """Pin the explicit key path: existent, root-relative, and what pip reads."""
     declared = _setup_python_with().get("cache-dependency-path")
-    assert declared is not None, (
-        "the python job's setup-python step pins no `cache-dependency-path`, so "
-        "the key falls through to the `**/pyproject.toml` backup glob — which a "
-        "requirements.txt added anywhere later would silently capture, leaving "
-        "the cache stale across real dependency changes"
-    )
 
     # `pip install -e "."` runs under the job's working-directory, so the file pip
     # reads is <working-directory>/pyproject.toml — expressed from the repo root,
@@ -93,7 +87,9 @@ def test_cache_is_keyed_on_the_file_pip_resolves_deps_from() -> None:
         f"`cache-dependency-path: {declared}` is not the file this job's `pip "
         f"install` resolves deps from ({workdir}/pyproject.toml). Keying on "
         "anything else means real dependency changes reuse a stale cache. Note "
-        "uv.lock is NOT the answer: the job installs with pip, which never reads it"
+        "uv.lock is NOT the answer: the job installs with pip, which never reads "
+        "it; and `None` means nothing is pinned at all, leaving the key to the "
+        "`**/pyproject.toml` backup glob a stray requirements.txt would capture"
     )
     assert (REPO_ROOT / declared).is_file(), (
         f"`cache-dependency-path: {declared}` does not resolve to a file from the "
