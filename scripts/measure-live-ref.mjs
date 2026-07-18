@@ -30,7 +30,7 @@ import {
   resolveLiveRefs,
   summarize,
 } from '../dist/ingest/liveRef.js';
-import { resolveCommit } from '../dist/ingest/landedContent.js';
+import { resolveCommitOrNull } from '../dist/ingest/landedContent.js';
 import { ancestryOrFault, mergeBaseOrFault } from '../dist/ingest/provenance.js';
 import { RIG_REPOS, DEFAULT_BRANCH } from '../dist/ingest/rig-repo-map.js';
 import { pickRemoteForSlug } from './verify/lib.mjs';
@@ -49,22 +49,12 @@ const RIGS = (arg('--rigs', 'gascity') || '')
 
 // ---- git shell (execFile — no shell, no interpolation) ----------------------
 
-// The throwing GitRunner shape resolveCommit takes (mirrors measure-false-close.mjs).
+// The throwing GitRunner shape resolveCommitOrNull takes (mirrors measure-false-close.mjs).
 const gitRunner = (dir, args) =>
   execFileSync('git', ['-C', dir, ...args], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'ignore'],
   });
-
-/** resolveCommit's shared rev-parse, but a git FAULT degrades this rig to a
- * named skip instead of crashing the sweep — see the call site for why. */
-const commitOrNull = (dir, ref) => {
-  try {
-    return resolveCommit(gitRunner, dir, ref);
-  } catch {
-    return null;
-  }
-};
 
 const db = new Database(STORE, { readonly: true });
 
@@ -109,14 +99,15 @@ for (const rig of RIGS) {
   // would drop as no-merge-base and masquerade as 100% decay. Skip-with-reason
   // instead, so a broken checkout/ref can't be misread as a real measurement.
   //
-  // The catch restores this gate's pre-dedup contract: it used to run through
-  // this script's own bare-catch gitOut, so ANY failure meant "does not
-  // resolve". Bare `resolveCommit` maps only a non-zero EXIT to null and
-  // rethrows a fault (signal kill, maxBuffer overrun) — correct for its other
-  // consumer, classifyLandedContent, but wrong for a per-rig gate in a loop
-  // with no try/catch: a throw would lose every other rig. The skip-with-reason
-  // this comment promises only holds if nothing escapes.
-  if (commitOrNull(entry.dir, authRef) === null) {
+  // resolveCommitOrNull degrades only a genuine git fault (a signal kill, a spawn
+  // errno) to the null skip, alongside the non-zero exit resolveCommit already
+  // maps to null — so one broken rig skips instead of a throw losing every other
+  // rig in this unguarded loop. A non-git-fault (our maxBuffer overrun, a
+  // mis-wired-runner TypeError) still propagates via isGitFault, the same
+  // discriminant mergeBaseOrFault/ancestryOrFault use below, so a bug surfaces
+  // here rather than masquerading as "does not resolve" (mem-lmxdv; mem-egxu2
+  // retired this bare-catch in the sibling ancestry gate).
+  if (resolveCommitOrNull(gitRunner, entry.dir, authRef) === null) {
     console.log(`${rig}: authoritative ref ${authRef} does not resolve — skipped\n`);
     continue;
   }

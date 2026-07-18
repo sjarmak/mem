@@ -4,6 +4,7 @@ import {
   defaultGitPipeRunner,
   defaultGitRunner,
   isAncestor,
+  isGitFault,
   isNonZeroExit,
   mergeBase,
   shaOrNull,
@@ -114,6 +115,32 @@ export interface LandedContentResult {
  * own copy. */
 export function resolveCommit(run: GitRunner, work_dir: string, ref: string): string | null {
   return shaOrNull(run, work_dir, ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`]);
+}
+
+/** {@link resolveCommit}, but a genuine git FAULT degrades to null instead of
+ * throwing — for a per-item gate in an unguarded sweep where one throw aborts
+ * every sibling (scripts/measure-live-ref.mjs's per-rig auth-ref gate). A
+ * non-zero exit is already null from {@link resolveCommit} (an unknown ref); a
+ * spawn errno or an external signal kill — git could not be asked — is the added
+ * case collapsed to that same null.
+ *
+ * A non-git-fault is NOT null: our own maxBuffer overrun (ENOBUFS) or a
+ * mis-wired-{@link GitRunner} TypeError carries no git verdict, so {@link
+ * isGitFault} rethrows it rather than laundering a programming error into a false
+ * "ref does not resolve — skipped". Exit-null and fault-null collapse to one
+ * value here, unlike mergeBaseOrFault's attributed tri-state, because
+ * this gate needs only a binary resolve-or-skip and a skip fabricates no verdict
+ * (a merge-base null is the live-ref DECAY data point; this null is just "not
+ * measured") — but it shares {@link isGitFault}, the same fault-vs-bug
+ * discriminant mem-egxu2 gave the sibling ancestry/merge-base gates, so a bug
+ * still surfaces. */
+export function resolveCommitOrNull(run: GitRunner, work_dir: string, ref: string): string | null {
+  try {
+    return resolveCommit(run, work_dir, ref);
+  } catch (err) {
+    if (!isGitFault(err)) throw err;
+    return null;
+  }
 }
 
 /** A `git patch-id` line: `<patch-id> <commit-id>`, both 40-hex. */

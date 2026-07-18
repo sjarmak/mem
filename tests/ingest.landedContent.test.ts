@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyLandedContent,
   isLanded,
+  resolveCommitOrNull,
   type LandedContentCache,
   type LandedContentInput,
   type LandedContentVerdict,
@@ -401,5 +402,64 @@ describe('isLanded', () => {
   it('excludes partial — a half-landed change is the failure under measurement', () => {
     const notLanded: LandedContentVerdict[] = ['partial', 'absent', 'undecidable'];
     expect(notLanded.some(isLanded)).toBe(false);
+  });
+});
+
+describe('resolveCommitOrNull — a git fault skips, a bug surfaces', () => {
+  const SHA = 'a'.repeat(40);
+  const REF = 'gascity/main';
+
+  it('resolves a real ref to its sha', () => {
+    const run: GitRunner = () => `${SHA}\n`;
+    expect(resolveCommitOrNull(run, '/repo', REF)).toBe(SHA);
+  });
+
+  it('returns null on a non-zero exit — the ref does not resolve', () => {
+    // resolveCommit maps a non-zero exit (unknown ref) to null; the wrapper
+    // passes that through untouched — no throw ever reaches its catch.
+    expect(resolveCommitOrNull(exits(128), '/repo', REF)).toBeNull();
+  });
+
+  it('degrades a spawn-errno fault to null so one broken rig skips, not aborts', () => {
+    // uv_spawn failed before git ran: status + signal both null, code the errno.
+    // A transient EMFILE persists across a batch, so a throw here would take every
+    // other rig down with it — exactly the mem-egxu2 regression isGitFault avoids.
+    const run: GitRunner = () => {
+      throw Object.assign(new Error('spawn git EMFILE'), {
+        status: null,
+        signal: null,
+        code: 'EMFILE',
+      });
+    };
+    expect(resolveCommitOrNull(run, '/repo', REF)).toBeNull();
+  });
+
+  it('degrades an external signal kill to null — git was asked but could not answer', () => {
+    const run: GitRunner = () => {
+      throw Object.assign(new Error('git killed'), { status: null, signal: 'SIGKILL' });
+    };
+    expect(resolveCommitOrNull(run, '/repo', REF)).toBeNull();
+  });
+
+  it('rethrows a mis-wired-runner TypeError instead of masking it as unresolvable', () => {
+    // A programming error carries no git verdict; swallowing it to null would
+    // report a real bug as "authoritative ref does not resolve — skipped".
+    const run: GitRunner = () => {
+      throw new TypeError('run is not a function');
+    };
+    expect(() => resolveCommitOrNull(run, '/repo', REF)).toThrow(TypeError);
+  });
+
+  it('rethrows our own ENOBUFS maxBuffer overrun — a config bug, not a git fault', () => {
+    // Node aborting the child over OUR maxBuffer is a bug to see, not a
+    // git-could-not-answer fault; isGitFault carves ENOBUFS out so it propagates.
+    const run: GitRunner = () => {
+      throw Object.assign(new Error('stdout maxBuffer length exceeded'), {
+        code: 'ENOBUFS',
+        signal: 'SIGTERM',
+        status: null,
+      });
+    };
+    expect(() => resolveCommitOrNull(run, '/repo', REF)).toThrow(/maxBuffer/);
   });
 });
