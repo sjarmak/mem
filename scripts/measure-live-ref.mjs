@@ -71,26 +71,37 @@ if (existsSync(manifestPath)) {
 }
 
 const rigReports = [];
+// Every rig that never reaches a measurement is recorded here as a named
+// {rig, reason} entry and written into the report, the same auditable-from-JSON
+// contract measure-false-close.mjs owns. It is what makes gitOut's reject-#2
+// argument (verify/git.mjs) — that a null "degrades to a NAMED skipped_rigs
+// entry" rather than losing the rig silently — hold for THIS consumer too,
+// instead of the skip vanishing to stdout (mem-agfwo).
+const skippedRigs = [];
 for (const rig of RIGS) {
   const entry = RIG_REPOS[rig];
+  const skip = reason => {
+    skippedRigs.push({ rig, reason });
+    console.log(`${rig}: ${reason} — skipped\n`);
+  };
   if (!entry || !entry.dir) {
-    console.log(`${rig}: no checkout mapped — skipped\n`);
+    skip('no checkout mapped');
     continue;
   }
   const refsPath = join('freeze', DATE, `refs.${rigToStore[rig] ?? rig}.txt`);
   if (!existsSync(refsPath)) {
-    console.log(`${rig}: no frozen refs at ${refsPath} — skipped\n`);
+    skip(`no frozen refs at ${refsPath}`);
     continue;
   }
   if (!existsSync(entry.dir)) {
-    console.log(`${rig}: checkout ${entry.dir} absent — skipped\n`);
+    skip(`checkout ${entry.dir} absent`);
     continue;
   }
 
   // Pick the AUTHORITATIVE remote by slug (R3): never assume origin.
   const picked = pickRemoteForSlug(readRemotes(entry.dir), entry.slug);
   if (picked === null) {
-    console.log(`${rig}: no remote matches slug ${entry.slug} — cannot gate, skipped\n`);
+    skip(`no remote matches slug ${entry.slug} (cannot gate)`);
     continue;
   }
   const authRef = `${picked.remote}/${entry.branch || DEFAULT_BRANCH}`;
@@ -108,7 +119,7 @@ for (const rig of RIGS) {
   // here rather than masquerading as "does not resolve" (mem-lmxdv; mem-egxu2
   // retired this bare-catch in the sibling ancestry gate).
   if (resolveCommitOrNull(gitRunner, entry.dir, authRef) === null) {
-    console.log(`${rig}: authoritative ref ${authRef} does not resolve — skipped\n`);
+    skip(`authoritative ref ${authRef} does not resolve`);
     continue;
   }
 
@@ -174,5 +185,8 @@ for (const rig of RIGS) {
 const outDir = 'verify';
 mkdirSync(outDir, { recursive: true });
 const outPath = join(outDir, `live-ref.${DATE}.json`);
-writeFileSync(outPath, JSON.stringify({ date: DATE, store: STORE, rigs: rigReports }, null, 2));
+writeFileSync(
+  outPath,
+  JSON.stringify({ date: DATE, store: STORE, rigs: rigReports, skipped_rigs: skippedRigs }, null, 2)
+);
 console.log(`Wrote ${outPath}`);
