@@ -94,6 +94,28 @@ function abort(msg) {
   process.exit(1);
 }
 
+// ---- git-on-PATH preflight --------------------------------------------------
+
+// The whole sweep shells `git`, and gitOut() swallows a missing binary into the
+// same null it uses for a legitimately-absent checkout (verify/git.mjs, by
+// design). Without this, an unusable git renders a full table of false
+// `checkout-missing` verdicts and then crashes unguarded at the report's `git
+// --version` read. Check git ONCE at the sweep boundary and abort with the real
+// reason before any rig is gathered, so the reader gets one true sentence
+// instead of ~20 false diagnoses plus a stack trace (mem-hycs9). The returned
+// version string is the report's git_version, so this is the file's only `git
+// --version` spawn.
+function gitPreflight() {
+  try {
+    return execFileSync('git', ['--version'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch (err) {
+    return abort(`git not executable on PATH: ${err.code ?? err.message}`);
+  }
+}
+
 // ---- per-rig fact gathering -------------------------------------------------
 
 // Resolve the on-disk facts for one rig WITHOUT making any pass/fail judgment —
@@ -153,6 +175,10 @@ function renderTable(verdicts) {
 // ---- main -------------------------------------------------------------------
 
 function main() {
+  // Preflight: fail closed with the real reason if git itself is unusable,
+  // before gathering any rig (mem-hycs9). Doubles as the report's git_version.
+  const gitVersion = gitPreflight();
+
   const repoRoot = process.cwd();
 
   // Phase 1: gather raw facts for every rig (IO only).
@@ -191,7 +217,7 @@ function main() {
 
   const report = {
     date: DATE,
-    git_version: execFileSync('git', ['--version']).toString().trim(),
+    git_version: gitVersion,
     total: verdicts.length,
     pass: verdicts.filter(v => v.ok).length,
     fail: remoteFailures.length,
