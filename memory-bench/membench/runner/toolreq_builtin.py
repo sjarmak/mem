@@ -162,10 +162,9 @@ def _seed_config_dir(config_dir: Path) -> None:
 
     Delegates to the shared ``headless_agent.seed_config_dir`` (the config-surface owner both grids
     seed through), binding this arm's frozen ``BUILTIN_SETTINGS`` — so the dict the cache
-    fingerprints is the same object this seeds, one definition, not two that agree today. The shared
-    seeder unwraps the ``MappingProxyType`` to a plain ``dict`` before ``json.dumps`` (which only
-    fast-paths ``isinstance(obj, dict)``); ``digest``'s ``canonicalize`` already branches on
-    ``Mapping``, so ``mechanism_fingerprint`` needs no such unwrap."""
+    fingerprints is the same object this seeds, one definition, not two that agree today. Unlike
+    that seed path, ``mechanism_fingerprint`` needs no ``MappingProxyType`` unwrap — ``digest``'s
+    ``canonicalize`` already branches on ``Mapping``."""
     seed_config_dir(config_dir, BUILTIN_SETTINGS)
 
 
