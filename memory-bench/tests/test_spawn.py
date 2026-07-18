@@ -19,7 +19,7 @@ import subprocess
 
 import pytest
 
-from membench.spawn import run_checked
+from membench.spawn import _MIN_REDACTABLE_SECRET_LEN, redact_secret, run_checked
 
 
 class _BoomError(RuntimeError):
@@ -305,3 +305,66 @@ def test_a_short_diagnosis_is_passed_through_unmarked() -> None:
     with pytest.raises(RuntimeError) as caught:
         _run(_ok_runner(stderr="no such rig", returncode=3))
     assert "truncated" not in str(caught.value)
+
+
+# --------------------------------------------------------------------------- #
+# redact_secret -- value-based complement to redact_credentials (mem-zls5s).
+# Why value not shape, and the short-value guard, live on the function docstring;
+# the cases below exercise each claim.
+# --------------------------------------------------------------------------- #
+def test_redact_secret_replaces_the_exact_value() -> None:
+    token = "sgp_deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+    out = redact_secret(f"401 Unauthorized presenting {token} to the endpoint", token)
+    assert token not in out
+    assert "401 Unauthorized" in out  # the diagnosis survives
+
+
+def test_redact_secret_catches_a_shape_the_regex_misses() -> None:
+    # A legacy Sourcegraph token is a bare 40-hex string with NO `sgp_` prefix, so
+    # `redact_credentials` (sk-/vendor-shaped) would not touch it. The value does.
+    legacy = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0"
+    out = redact_secret(f"auth failed for token {legacy}", legacy)
+    assert legacy not in out
+
+
+def test_redact_secret_skips_empty_so_it_cannot_shred_the_diagnosis() -> None:
+    # str.replace("", X) injects X between every character; an unset env var must be a
+    # no-op, never a shredder.
+    text = "no such repository configured"
+    assert redact_secret(text, "") == text
+    assert redact_secret(text, "   ") == text
+
+
+def test_redact_secret_skips_a_too_short_value_to_avoid_over_redaction() -> None:
+    # A misconfigured short token (env is operator-controlled and only checked truthy)
+    # must not turn into a substring shredder: redacting "ab" would eat "grab". Below the
+    # floor we accept the theoretical miss of an implausibly-short secret to protect the
+    # diagnosis -- the same both-directions bar the `\b` word-boundary rule holds.
+    assert _MIN_REDACTABLE_SECRET_LEN >= 4
+    short = "a" * (_MIN_REDACTABLE_SECRET_LEN - 1)
+    text = f"grab {short}bra the file"
+    assert redact_secret(text, short) == text  # untouched -- no shredding
+
+
+def test_redact_secret_leaves_unrelated_text_untouched() -> None:
+    token = "sgp_" + "z" * 36
+    text = "a perfectly ordinary diagnostic line with no secret in it"
+    assert redact_secret(text, token) == text
+
+
+def test_redact_secret_matches_the_child_echo_when_the_env_value_is_padded() -> None:
+    # An env token sourced as `$(cat token)` or from a k8s/Vault secret file carries a
+    # trailing newline; the child trims it before echoing. Matching the RAW padded value
+    # would find nothing and leak the token in full -- the strip on both sides is what
+    # closes that gap.
+    token = "sgp_" + "d" * 36
+    child_echo = f"auth failed presenting {token} (401)"  # the BARE token, as the child prints it
+    out = redact_secret(child_echo, f"  {token}\n")  # env value carries whitespace
+    assert token not in out
+    assert "auth failed" in out  # the diagnosis survives
+
+
+def test_redact_secret_removes_every_occurrence() -> None:
+    token = "sgp_" + "e" * 36
+    out = redact_secret(f"{token} retried then {token} again", token)
+    assert token not in out

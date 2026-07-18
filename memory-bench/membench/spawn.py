@@ -51,12 +51,22 @@ Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 #
 # It is NOT a general secret scanner. The env is inherited wholesale (`{**os.environ,
 # **self.env}`), so a differently-shaped vendor token an operator has exported can still be
-# echoed by a child that chooses to -- `sgp_` (Sourcegraph) is a live example, and
-# `oracle/backends.py` echoes one raw today (mem-zls5s). Bounding THAT is the env-surface
-# question (mem-jwp3c), not a regex's job. mem never writes a token to these channels
-# itself; this fires when a CLI echoes its OWN auth back.
+# echoed by a child that chooses to. `sgp_` (Sourcegraph) is NOT in this regex, deliberately:
+# `oracle/backends.py` used to echo one raw (mem-zls5s) and now redacts it by VALUE
+# (`redact_secret` below, where the value-vs-shape rationale lives), which needs no shape
+# guess. Bounding the remaining env-surface (other os.environ tokens a child might echo,
+# which no caller holds by name) is the env-surface question (mem-jwp3c), still not a
+# regex's job. mem never writes a token to these channels itself; this fires when a CLI
+# echoes its OWN auth back.
 _CREDENTIAL = re.compile(r"\bsk-[A-Za-z0-9_-]+")
 _REDACTED = "<redacted-credential>"
+
+# The floor below which `redact_secret` refuses to redact a known value. A real access
+# token is far longer; the floor exists only so a misconfigured or test SRC_ACCESS_TOKEN
+# like "ab" cannot turn a literal str.replace into a substring shredder ("grab" -> "gr<...>").
+# Below it we accept the theoretical miss of an implausibly-short secret to protect the
+# diagnosis -- the same both-directions bar the `\b` word boundary holds for the shape pass.
+_MIN_REDACTABLE_SECRET_LEN = 8
 
 # The window the child's own output gets in the diagnosis. HEAD AND TAIL, not head alone:
 # `claude -p --output-format stream-json` puts a whole event stream on stdout and the
@@ -138,6 +148,33 @@ def redact_credentials(detail: str) -> str:
     (``mem_cli.run_mem_json`` slices to 200 chars of its own). Redact BEFORE any slice:
     cutting first leaves a live prefix of the token on the surviving side."""
     return _CREDENTIAL.sub(_REDACTED, detail)
+
+
+def redact_secret(detail: str, secret: str) -> str:
+    """Replace an EXACT known secret value in ``detail`` -- the value-based complement
+    to the shape-based ``redact_credentials``.
+
+    For a caller that HOLDS the credential it handed a child (``oracle/backends.py``'s
+    SourcegraphResolver passes ``SRC_ACCESS_TOKEN`` via ``env`` and is report-and-continue,
+    so it cannot lean on ``run_checked``'s ladder). Redacting the value needs no shape guess,
+    so it covers what the regex misses -- a Sourcegraph token has been ``sgp_...`` and a bare
+    40-hex string across versions, and only the value catches both.
+
+    ``secret`` is STRIPPED before matching: an env var sourced as ``$(cat token)`` or from
+    a k8s/Vault secret file routinely carries a trailing newline, and the child trims it
+    before echoing, so matching the raw padded value would find nothing and leak the token
+    in full. Stripping is safe both ways -- if the child DID echo the padded form, the bare
+    substring still matches. This is EXACT-LITERAL matching, though: a child that echoes a
+    transformed rendering (URL-encoded, or the token broken across a line) is not caught --
+    the value's honest limit, the mem-jwp3c env-surface question, not this helper's job.
+
+    A short or empty ``secret`` is left in place: ``str.replace('', x)`` injects ``x``
+    between every character, and redacting a 2-char value would shred ordinary words
+    (``grab`` -> ``gr<redacted>``). See ``_MIN_REDACTABLE_SECRET_LEN``."""
+    secret = secret.strip()
+    if len(secret) < _MIN_REDACTABLE_SECRET_LEN:
+        return detail
+    return detail.replace(secret, _REDACTED)
 
 
 def sanitised_child_output(detail: str) -> str:

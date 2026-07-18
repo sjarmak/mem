@@ -553,6 +553,47 @@ def test_sg_resolver_permission_error_degrades_not_raises(tmp_path):
     assert not res.available and "src search" in (res.error or "")
 
 
+def test_sg_resolver_nonzero_exit_redacts_the_token_from_the_error():
+    # THE mem-zls5s leak: the src child is handed SRC_ACCESS_TOKEN via env, and on a
+    # non-zero exit its stderr went RAW into BackendResult.error, which flows into the
+    # divergence_report / the public backend_results tuple. A `src` that echoes its own
+    # auth on failure would surface the token verbatim. The exact value is redacted
+    # regardless of shape; the real diagnosis survives.
+    token = "sgp_" + "d" * 40  # a realistic-length Sourcegraph token, not the "tok" stub
+    env = {ENV_SG_ENDPOINT: "https://sg", ENV_SG_TOKEN: token}
+    leaky = f"error: authentication failed presenting {token} to https://sg (401)"
+    r = SourcegraphResolver(
+        sg_repo="r", env=env, runner=lambda argv, **kw: _completed(returncode=1, stderr=leaky)
+    )
+    res = r.resolve("sym", defining_file="s.ts", repo_root=REPO)
+    assert not res.available
+    assert token not in (res.error or "")  # the credential is gone
+    assert "sgp_" not in (res.error or "")  # ... not merely partially masked
+    assert "exit 1" in (res.error or "")  # the diagnosis survives
+    assert "authentication failed" in (res.error or "")
+
+
+def test_sg_resolver_nonzero_exit_bounds_an_unbounded_stderr():
+    # The truncation half: a runaway stderr must not land unbounded in a serialized report.
+    env = {ENV_SG_ENDPOINT: "https://sg", ENV_SG_TOKEN: "sgp_" + "t" * 40}
+    r = SourcegraphResolver(
+        sg_repo="r",
+        env=env,
+        runner=lambda argv, **kw: _completed(returncode=1, stderr="x" * 100_000),
+    )
+    res = r.resolve("sym", defining_file="s.ts", repo_root=REPO)
+    assert not res.available and len(res.error or "") < 10_000
+
+
+def test_grep_resolver_error_stderr_is_bounded():
+    # Same file, same BackendResult.error field, same serialized sink: git grep's
+    # >=2-exit stderr must be bounded too. git grep cannot echo SRC_ACCESS_TOKEN (it is
+    # never handed the token), so this is the bound half only, no value redaction.
+    r = GrepResolver(runner=lambda argv, **kw: _completed(returncode=2, stderr="y" * 100_000))
+    res = r.resolve("sym", defining_file="s.ts", repo_root=REPO)
+    assert not res.available and len(res.error or "") < 10_000
+
+
 # --- build_oracle_context --------------------------------------------------------
 
 

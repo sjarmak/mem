@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from membench.oracle.consensus import BackendResult
-from membench.spawn import Runner
+from membench.spawn import Runner, redact_secret, sanitised_child_output
 
 logger = logging.getLogger(__name__)
 
@@ -89,10 +89,20 @@ class GrepResolver:
             )
         # git grep: 0 = matches, 1 = no matches (both fine), >=2 = real error.
         if completed.returncode >= 2:
+            # Bound the child's stderr: this error flows into the serialized
+            # divergence_report (consensus.py) via the public backend_results tuple, so a
+            # runaway stderr must not land there unbounded (mem-zls5s). No VALUE redaction
+            # here: git inherits the whole process env (SRC_ACCESS_TOKEN included, since the
+            # SG backend's default env IS os.environ), but `git grep` has no code path that
+            # echoes an unrelated env var -- so there is no specific token to redact by
+            # value the way the src child below has. Bounding unrelated inherited env a
+            # child MIGHT echo is the general env-surface question (mem-jwp3c), not this
+            # site's raise-vs-report contract.
+            detail = sanitised_child_output(completed.stderr.strip())
             return BackendResult(
                 backend=self.name,
                 available=False,
-                error=f"git grep failed (exit {completed.returncode}): {completed.stderr.strip()}",
+                error=f"git grep failed (exit {completed.returncode}): {detail}",
             )
         files = frozenset(line for line in completed.stdout.splitlines() if line.strip())
         return BackendResult(backend=self.name, files=files)
@@ -172,13 +182,18 @@ class SourcegraphResolver:
                 backend=self.name, available=False, error=f"src search spawn failed: {exc}"
             )
         if completed.returncode != 0:
+            # The src child is handed SRC_ACCESS_TOKEN via env, so a `src` that echoes its
+            # own auth on failure would put the token in this stderr, which flows into the
+            # serialized divergence_report (mem-zls5s). Redact by VALUE -- the exact token we
+            # passed (see redact_secret) -- BEFORE the bound, on the untruncated string, so a
+            # token straddling the truncation cut is already gone; then sanitise for the bound.
+            detail = sanitised_child_output(
+                redact_secret(completed.stderr.strip(), self.env[ENV_SG_TOKEN])
+            )
             return BackendResult(
                 backend=self.name,
                 available=False,
-                error=(
-                    f"src search failed (exit {completed.returncode}): "
-                    f"{completed.stderr.strip()}"
-                ),
+                error=f"src search failed (exit {completed.returncode}): {detail}",
             )
         try:
             files = _parse_sg_files(completed.stdout)
