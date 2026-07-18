@@ -1223,6 +1223,58 @@ def test_driver_refuses_to_spend_without_a_named_model(tmp_path: Path, monkeypat
     assert code == 2
 
 
+def test_driver_refuses_to_spend_with_the_metered_api_key_set(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    # mem-9bh93: the metered-API contamination gate. Both prior gates PASS (a token and a model are
+    # present), but ANTHROPIC_API_KEY is exported, and Claude Code prefers the API key, so the run
+    # would silently bill the metered API AND cease to be the OAuth config the run claims (env
+    # is invisible to the cache identity). Exit 2, never spawn claude, and say which var to unset.
+    _corpus_one(tmp_path)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")  # paid path must name a model (mem-bzv2p)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-should-be-refused")
+
+    def _boom(*_a: object, **_k: object) -> object:
+        raise AssertionError("must NOT spawn claude when the api-key gate fires")
+
+    import membench.runner.toolreq_builtin as tb
+
+    monkeypatch.setattr(tb.subprocess, "run", _boom)
+    code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
+    assert code == 2
+    # Names ANTHROPIC_API_KEY, so this is THIS gate — not the token or model refusal, neither of
+    # which mentions it. Absent the assertion, a gate placed after the token gate would still pass.
+    assert "ANTHROPIC_API_KEY" in capsys.readouterr().out
+
+
+def test_the_api_key_gate_fires_before_the_token_gate(tmp_path: Path, monkeypatch, capsys) -> None:
+    # The api-key gate must precede the OAuth-token gate: a set key is a misconfiguration regardless
+    # of the token, so refusing for it before the token go-command is printed keeps that disclosure
+    # from telling a human to run a command that then refuses for a different reason (the same
+    # ordering rationale the model gate is placed first under, mem-u9nu2). Token UNSET + key SET
+    # must therefore surface the API-KEY refusal, not the token go-command.
+    _corpus_one(tmp_path)
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-should-be-refused")
+
+    code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
+    assert code == 2
+    assert "ANTHROPIC_API_KEY" in capsys.readouterr().out
+
+
+def test_dry_run_is_unaffected_by_the_metered_api_key(tmp_path: Path, monkeypatch) -> None:
+    # The gate is a PAID-path guard (`not args.dry_run and ...`): --dry-run spawns no claude and
+    # bills nothing, so a stray ANTHROPIC_API_KEY (common in a CI shell) must not block a free run.
+    _corpus_one(tmp_path)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-present-but-harmless-on-dry-run")
+    code = driver.main(
+        ["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out"), "--dry-run"]
+    )
+    assert code == 0  # proceeds past the gate and completes the simulated sweep
+
+
 def test_an_unidentifiable_cli_version_refuses_before_the_preflight_spends(
     tmp_path: Path, monkeypatch
 ) -> None:

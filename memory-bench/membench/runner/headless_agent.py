@@ -61,6 +61,17 @@ ENV_MODEL = "MEMBENCH_AGENT_MODEL"
 # not arm the gate it tells you to arm.
 ENV_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN"
 
+# The metered-API credential a paid run must NOT carry. Claude Code prefers it over the OAuth token,
+# so an operator with it exported (a common dev-shell leftover) reroutes every `claude -p` child off
+# the subscription onto the billed API: `run_step` builds the child env as `{**os.environ, ...}`, so
+# the key flows straight through. That both spends real money and INVALIDATES the run: it is no
+# longer the OAuth configuration the experiment claims to measure, and the env is invisible to the
+# cache identity, so the mislabel is silent (harbor keeps this unset for the same reason, per
+# harbor_exec.py's D16 note). Held here beside ENV_OAUTH so the paid drivers refuse on one name,
+# never a per-driver copy. NOTE (mem-9bh93): this is the one var D16 names; ANTHROPIC_BASE_URL /
+# *_AUTH_TOKEN / USE_BEDROCK / USE_VERTEX reroute off OAuth too; broader gate tracked as mem-sfkib.
+ENV_API_KEY = "ANTHROPIC_API_KEY"
+
 # `claude --version` prints and exits — a bound this high means a wedged CLI, not a slow one.
 # Its own constant, not DEFAULT_TIMEOUT_S: that bound sizes a multi-turn agent step (minutes of
 # inference), and reusing it here would let a wedged probe stall a paid sweep for ten minutes
@@ -100,6 +111,20 @@ def a_paid_run_needs_a_model(model: str, *, dry_run: bool) -> bool:
     return not dry_run and not resolve_model(model)
 
 
+def a_paid_run_carries_the_metered_api_key(*, dry_run: bool) -> bool:
+    """Whether a spend must be REFUSED for a set ``ANTHROPIC_API_KEY``: the ONE place this rule
+    lives, so the three paid entrypoints defer to it rather than hand-copy
+    ``not dry_run and os.environ.get(ENV_API_KEY)`` (the same per-driver drift the sibling above is
+    built to avoid; unlike the OAuth-token gate, this refusal is byte-identical across all three, so
+    the whole gate centralizes, not just the message).
+
+    A set key reroutes every ``claude -p`` child off OAuth onto the metered API (``ENV_API_KEY``):
+    real money, and a measurement that is no longer the OAuth config it claims. An empty-string key
+    is treated as UNSET (bare truthiness), matching how the OAuth-token gate reads ``ENV_OAUTH`` and
+    how the CLI itself treats an empty key. A dry run spawns nothing, so it may carry any env."""
+    return not dry_run and bool(os.environ.get(ENV_API_KEY))
+
+
 # The refusal a paid grid prints when ``a_paid_run_needs_a_model`` fires — held here beside the rule
 # so the grid drivers defer to one string rather than hand-copy it (mem-bzv2p). The probe keeps its
 # own shorter variant: it names no cache identity to serve because it caches nothing.
@@ -108,6 +133,16 @@ REFUSE_UNPINNED_MODEL = (
     '  default, which this benchmark never records — its cache identity would key on "" and\n'
     "  serve one model's numbers as another's on a resume across a model change.\n"
     "  Pass --model <id>, or set MEMBENCH_AGENT_MODEL, then re-run (or --dry-run for free)."
+)
+
+# The refusal a paid path prints when ``ENV_API_KEY`` is set — held here beside ENV_API_KEY and the
+# model refusal so every paid entrypoint refuses on one string, never a per-driver copy (mem-9bh93).
+REFUSE_API_KEY_SET = (
+    "REFUSING to spend: ANTHROPIC_API_KEY is set. Claude Code would authenticate with the metered\n"
+    "  API instead of the OAuth subscription, so the run would bill real money AND stop being the\n"
+    "  OAuth configuration this benchmark measures, a swap that leaves no trace in the results.\n"
+    "  `unset ANTHROPIC_API_KEY` (or run under `env -u ANTHROPIC_API_KEY`), then re-run\n"
+    "  (or --dry-run for free)."
 )
 
 

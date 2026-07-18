@@ -52,8 +52,10 @@ from membench.runner.headless_agent import (
     CHANNELS,
     DEFAULT_TIMEOUT_S,
     ENV_OAUTH,
+    REFUSE_API_KEY_SET,
     REFUSE_UNPINNED_MODEL,
     HeadlessAgentError,
+    a_paid_run_carries_the_metered_api_key,
     a_paid_run_needs_a_model,
     resolve_model,
 )
@@ -269,6 +271,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     # resume would reuse, and no honest way to price the fire (mem-u9nu2).
     if a_paid_run_needs_a_model(args.model, dry_run=args.dry_run):
         print(REFUSE_UNPINNED_MODEL)
+        return 2
+
+    # Before the token gate, for the same reason the model gate precedes it: a set key is a
+    # misconfiguration regardless of the token, so refusing here keeps the token go-command below
+    # from disclosing a command a human would run in a still-contaminated env (mem-9bh93).
+    if a_paid_run_carries_the_metered_api_key(dry_run=args.dry_run):
+        print(REFUSE_API_KEY_SET)
         return 2
 
     if not args.dry_run and not os.environ.get(ENV_OAUTH):

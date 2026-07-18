@@ -40,8 +40,10 @@ import os
 from membench.runner.headless_agent import (
     CHANNELS,
     ENV_OAUTH,
+    REFUSE_API_KEY_SET,
     CellRecorder,
     MemoryChannel,
+    a_paid_run_carries_the_metered_api_key,
     a_paid_run_needs_a_model,
 )
 from membench.runner.realagent_probe import (
@@ -138,6 +140,15 @@ def main() -> int:
         "--dry-run", action="store_true", help="simulate the agent; no token, no claude"
     )
     args = ap.parse_args()
+
+    # This probe spawns real claude -p through the same run_arm as the grids, so an exported
+    # ANTHROPIC_API_KEY reroutes its child off OAuth onto the metered API just the same (mem-9bh93).
+    # Before the token gate (as in the grid drivers): a set key is a misconfiguration regardless of
+    # the token, so refusing here keeps the token message below from telling a human to re-run in a
+    # still-contaminated env.
+    if a_paid_run_carries_the_metered_api_key(dry_run=args.dry_run):
+        print(REFUSE_API_KEY_SET)
+        return 2
 
     if not args.dry_run and not os.environ.get(ENV_OAUTH):
         print(

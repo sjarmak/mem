@@ -120,6 +120,38 @@ def test_spend_gate_refuses_without_a_named_model(monkeypatch) -> None:
     assert main() == 2
 
 
+def test_spend_gate_refuses_with_the_metered_api_key_set(monkeypatch, capsys) -> None:
+    # mem-9bh93: this probe spawns real `claude -p` through the same run_arm as the grids, so it has
+    # the same leak: an exported ANTHROPIC_API_KEY reroutes the child off OAuth onto the paid API.
+    # Token and model present (both prior gates pass), key set -> exit 2 and never spawn claude.
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-should-be-refused")
+    monkeypatch.setattr(sys, "argv", ["probe", "--repeats", "1"])
+
+    def _boom(*_a: object, **_k: object) -> object:
+        raise AssertionError("subprocess.run must NOT be called when the api-key gate fires")
+
+    from membench.runner import realagent_probe as _rp
+
+    monkeypatch.setattr(_rp.subprocess, "run", _boom)
+    assert main() == 2
+    assert "ANTHROPIC_API_KEY" in capsys.readouterr().out
+
+
+def test_api_key_gate_fires_before_the_token_gate(monkeypatch, capsys) -> None:
+    # The api-key gate is placed before the OAuth-token gate (mem-9bh93), matching the grid drivers,
+    # so a set key is refused regardless of the token. Token UNSET + key SET must surface the
+    # API-KEY refusal, not the token "source it and re-run" message (which wastes a round trip).
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-should-be-refused")
+    monkeypatch.setattr(sys, "argv", ["probe", "--repeats", "1"])
+
+    assert main() == 2
+    assert "ANTHROPIC_API_KEY" in capsys.readouterr().out
+
+
 def test_dry_run_arm_wiring_discriminates_end_to_end() -> None:
     # The dry-run path (simulated memory-copying agent) must show the arms separate:
     # none never gets the value in its prompt (fails), oracle does (passes) — no claude.

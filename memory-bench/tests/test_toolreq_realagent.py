@@ -1767,6 +1767,44 @@ def test_driver_refuses_to_spend_without_a_named_model(tmp_path: Path, monkeypat
     assert code == 2
 
 
+def test_driver_refuses_to_spend_with_the_metered_api_key_set(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    # mem-9bh93: token AND model present (both prior gates pass), but ANTHROPIC_API_KEY is exported,
+    # and Claude Code prefers the metered API over OAuth, so the run would bill real money and stop
+    # being the OAuth config the run measures (env is invisible to the cache identity). Exit 2 and
+    # never spawn claude; the gate fires in main() before run_corpus/seed_fn, needing no bin/mem.
+    corpus_one(tmp_path)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "fake-token-for-test")
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")  # paid path must name a model (mem-bzv2p)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-should-be-refused")
+    from membench.runner import realagent_probe as _rp
+
+    def _boom(*_a: object, **_k: object) -> object:
+        raise AssertionError("must NOT spawn claude when the api-key gate fires")
+
+    monkeypatch.setattr(_rp.subprocess, "run", _boom)
+    code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
+    assert code == 2
+    # Names ANTHROPIC_API_KEY, so this is THIS gate — not the token or model refusal.
+    assert "ANTHROPIC_API_KEY" in capsys.readouterr().out
+
+
+def test_api_key_gate_fires_before_the_token_gate(tmp_path: Path, monkeypatch, capsys) -> None:
+    # The api-key gate precedes the OAuth-token gate (model -> api-key -> token), so a set key is
+    # refused regardless of the token, and the token go-command below never discloses a command a
+    # human would re-run in a still-contaminated env (mem-9bh93). Token UNSET + key SET must surface
+    # the API-KEY refusal, not the token go-command.
+    corpus_one(tmp_path)
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    monkeypatch.setenv("MEMBENCH_AGENT_MODEL", "sonnet")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-should-be-refused")
+
+    code = driver.main(["--corpus-dir", str(tmp_path / "corpus"), "--out", str(tmp_path / "out")])
+    assert code == 2
+    assert "ANTHROPIC_API_KEY" in capsys.readouterr().out
+
+
 def test_driver_discloses_the_plan_derived_paid_call_count(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:

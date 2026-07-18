@@ -16,6 +16,7 @@ import pytest
 from membench.metrics.action_impact_run import ArmStepTrajectory
 from membench.runner.agent import Agent
 from membench.runner.headless_agent import (
+    ENV_API_KEY,
     ENV_MODEL,
     VERSION_TIMEOUT_S,
     HeadlessAgentError,
@@ -26,6 +27,7 @@ from membench.runner.headless_agent import (
     _stream_result_text,
     _stream_usage_tokens,
     _tool_calls_from_stream,
+    a_paid_run_carries_the_metered_api_key,
     a_paid_run_needs_a_model,
     assistant_event,
     build_agent_prompt,
@@ -425,6 +427,22 @@ def test_a_paid_run_needs_a_model_only_when_paid_and_unpinned(
     assert a_paid_run_needs_a_model("sonnet", dry_run=False) is False  # explicit pin
     monkeypatch.setenv(ENV_MODEL, "claude-opus")
     assert a_paid_run_needs_a_model("", dry_run=False) is False  # MEMBENCH_AGENT_MODEL names it
+
+
+def test_a_paid_run_carries_the_metered_api_key_only_when_paid_and_key_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The ONE api-key spend-refusal rule the three paid entrypoints defer to (mem-9bh93): refuse a
+    PAID run that carries ANTHROPIC_API_KEY. A dry run spawns nothing, and an empty-string key is
+    UNSET by bare truthiness (matching the OAuth-token gate and the CLI's own treatment) — so a CI
+    shell that exports `ANTHROPIC_API_KEY=` must not start refusing legitimate paid runs."""
+    monkeypatch.setenv(ENV_API_KEY, "sk-ant-real-looking")
+    assert a_paid_run_carries_the_metered_api_key(dry_run=False) is True  # paid + key -> refuse
+    assert a_paid_run_carries_the_metered_api_key(dry_run=True) is False  # dry run carries any env
+    monkeypatch.setenv(ENV_API_KEY, "")  # exported-but-empty is not a credential
+    assert a_paid_run_carries_the_metered_api_key(dry_run=False) is False
+    monkeypatch.delenv(ENV_API_KEY, raising=False)
+    assert a_paid_run_carries_the_metered_api_key(dry_run=False) is False  # unset
 
 
 # --------------------------------------------------------------------------- #
