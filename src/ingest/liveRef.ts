@@ -310,9 +310,9 @@ export function classifyMergeBase(input: MergeBaseInput): LiveRefResult {
   if (input.base_sha === null) {
     return { drop: { work_id: input.work_id, refname: input.refname, reason: DROP_NO_MERGE_BASE } };
   }
-  // `!== true`, NOT `=== null`, so the impossible `false` is caught here as a
-  // fail-safe rather than falling through to keep. Cause attribution — the why
-  // behind each bucket — is in the header docstring.
+  // `!== true`, NOT a check for the specific fault strings, so the impossible
+  // `false` is still caught here as a fail-safe rather than falling through to
+  // keep. Cause attribution — the why behind each bucket — is in the header docstring.
   if (input.is_ancestor !== true) {
     return {
       undecided: {
