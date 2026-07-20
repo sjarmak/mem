@@ -63,7 +63,7 @@ from membench.harbor.bundle_grid import (
     resolve_payloads,
     signature_overlap_observations,
 )
-from membench.mem_cli import run_mem_json, write_ndjson
+from membench.mem_cli import import_lessons, import_records
 from membench.memory_systems.ours_system import _default_runner
 from membench.schemas.bundle import TaskBundle
 from membench.schemas.sequence import BenchmarkSequence
@@ -153,12 +153,12 @@ def run_offline_gate(
 
     records = sequence_records(sequences)
     bundles = sequence_bundles(sequences)
-    records_path = out_dir / "records.ndjson"
-    write_ndjson(records_path, records)
     manifest_path = _write_bundles(bundles_dir, bundles)
 
-    run_mem_json(
-        [mem_bin, "import-records", "--file", str(records_path), "--store", str(store_path)]
+    # file_path persists the imported NDJSON in out_dir as an inspectable run artifact
+    # next to the bundles (nothing downstream consumes it).
+    import_records(
+        records, store_path=store_path, mem_bin=mem_bin, file_path=out_dir / "records.ndjson"
     )
 
     runner = _default_runner(mem_bin)
@@ -168,10 +168,8 @@ def run_offline_gate(
     held_signatures = resolve_held_signatures(bundles, store_path=store_path, runner=runner)
 
     lessons = sequence_lessons(sequences, held_signatures)
-    lessons_path = out_dir / "lessons.ndjson"
-    write_ndjson(lessons_path, lessons)
-    run_mem_json(
-        [mem_bin, "import-lessons", "--file", str(lessons_path), "--store", str(store_path)]
+    import_lessons(
+        lessons, store_path=store_path, mem_bin=mem_bin, file_path=out_dir / "lessons.ndjson"
     )
 
     # Reload through disk so the grid's own loader validates the bundles, then run the

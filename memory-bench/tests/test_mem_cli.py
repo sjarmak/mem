@@ -5,15 +5,24 @@ must surface as a `MemCliError` carrying enough context to act on (the command,
 the exit/stdout detail, the build hint for a missing binary). Real subprocesses
 are exercised with tiny shell stand-ins — no TS build required.
 
-It also owns the CLI's INPUT format (`write_ndjson`), tested here for the same
-reason: every seeder that feeds `mem import-records/-lessons` spells it once.
+The seam also owns the NDJSON import wire format (`write_ndjson`) and the
+`import-records`/`import-lessons` argv contract (`import_records` /
+`import_lessons`); the contract is observed from the far side by a fake `mem`
+that snapshots its argv and the payload file at call time.
 """
 
 import json
+from pathlib import Path
 
 import pytest
 
-from membench.mem_cli import MemCliError, run_mem_json, write_ndjson
+from membench.mem_cli import (
+    MemCliError,
+    import_lessons,
+    import_records,
+    run_mem_json,
+    write_ndjson,
+)
 from tests.helpers import fake_mem as _fake_mem
 
 
@@ -134,3 +143,78 @@ def test_the_non_envelope_diagnosis_redacts_before_it_slices(tmp_path):
     with pytest.raises(MemCliError) as caught:
         run_mem_json([binary, "query"])
     assert "sk-ant" not in str(caught.value)  # no live prefix survived the slice
+
+
+# --- import_records / import_lessons: the argv contract to the TS importers ------------
+
+ROWS = [{"work_id": "w-0", "n": 1}, {"work_id": "w-1", "n": 2}]
+
+
+@pytest.fixture
+def capturing_mem(tmp_path):
+    """(binary, capture_dir): a fake `mem` that snapshots its argv and the `--file`
+    payload AT CALL TIME (the tempfile default deletes the file after the call), then
+    emits a success envelope. `cp "$3"` doubles as an ordering assert: if `--file
+    <path>` moves, the copy fails and the test breaks loudly."""
+    capture = tmp_path / "capture"
+    capture.mkdir()
+    envelope = {"apiVersion": "v1", "cmd": "import", "ok": True, "data": {"imported": 2}}
+    binary = _fake_mem(
+        tmp_path,
+        f'printf \'%s\\n\' "$@" > "{capture}/argv"\n'
+        f'cp "$3" "{capture}/payload.ndjson"\n'
+        f"echo '{json.dumps(envelope)}'",
+    )
+    return binary, capture
+
+
+def _read_ndjson(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def _captured(capture_dir: Path) -> tuple[list[str], list[dict]]:
+    argv = (capture_dir / "argv").read_text(encoding="utf-8").splitlines()
+    return argv, _read_ndjson(capture_dir / "payload.ndjson")
+
+
+def test_import_records_argv_contract_and_payload(tmp_path, capturing_mem):
+    binary, capture = capturing_mem
+    store = tmp_path / "store.db"
+    data = import_records(ROWS, store_path=store, mem_bin=binary)
+    argv, payload = _captured(capture)
+    assert argv[0] == "import-records"
+    assert argv[1] == "--file"
+    assert argv[3:] == ["--store", str(store), "--json"]
+    assert payload == ROWS
+    assert data == {"imported": 2}
+
+
+def test_import_lessons_uses_the_lessons_subcommand(tmp_path, capturing_mem):
+    binary, capture = capturing_mem
+    import_lessons(ROWS, store_path=tmp_path / "store.db", mem_bin=binary)
+    argv, payload = _captured(capture)
+    assert argv[0] == "import-lessons"
+    assert payload == ROWS
+
+
+def test_import_default_tempfile_is_gone_after_the_call(tmp_path, capturing_mem):
+    binary, capture = capturing_mem
+    import_records(ROWS, store_path=tmp_path / "store.db", mem_bin=binary)
+    argv, payload = _captured(capture)
+    assert not Path(argv[2]).exists()
+    assert payload == ROWS
+
+
+def test_import_file_path_persists_the_artifact(tmp_path, capturing_mem):
+    binary, capture = capturing_mem
+    dest = tmp_path / "records.ndjson"
+    import_records(ROWS, store_path=tmp_path / "store.db", mem_bin=binary, file_path=dest)
+    argv, _ = _captured(capture)
+    assert argv[2] == str(dest)
+    assert _read_ndjson(dest) == ROWS
+
+
+def test_import_failure_raises_mem_cli_error(tmp_path):
+    binary = _fake_mem(tmp_path, "echo 'schema mismatch' >&2; exit 2")
+    with pytest.raises(MemCliError, match=r"exit 2.*schema mismatch"):
+        import_records(ROWS, store_path=tmp_path / "store.db", mem_bin=binary)

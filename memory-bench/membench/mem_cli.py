@@ -15,12 +15,14 @@ the call sites should not each re-derive:
 Every failure raises `MemCliError` (a RuntimeError) — the pipeline break is
 always surfaced, never degraded to "no data".
 
-It also owns the CLI's INPUT format (`write_ndjson`), for the same
-one-definition reason: the seeders that feed `mem import-records/-lessons` are
-otherwise each free to spell the wire format slightly differently.
+This module also owns the NDJSON import wire format once: `write_ndjson` is
+the one writer, and `import_records`/`import_lessons` own the
+`--file`/`--store` argv contract to the TS importers.
 """
 
+import contextlib
 import json
+import tempfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
@@ -79,3 +81,54 @@ def run_mem_json(
     if not envelope.get("ok", False):
         raise MemCliError(f"{cmd} error: {envelope.get('errors')}")
     return cast(dict[str, Any], envelope["data"])
+
+
+def _import_ndjson(
+    subcommand: str,
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    store_path: Path,
+    mem_bin: str,
+    file_path: Path | None = None,
+) -> dict[str, Any]:
+    """Write `rows` as NDJSON and run `mem <subcommand> --file <rows> --store <store>`.
+
+    `file_path=None` stages the rows in a tempfile that is gone after the call;
+    passing a path persists the NDJSON there as a run artifact."""
+    with contextlib.ExitStack() as stack:
+        staged = file_path
+        if staged is None:
+            workspace = stack.enter_context(tempfile.TemporaryDirectory(prefix="mem-import-"))
+            staged = Path(workspace) / "rows.ndjson"
+        write_ndjson(staged, rows)
+        return run_mem_json(
+            [mem_bin, subcommand, "--file", str(staged), "--store", str(store_path)]
+        )
+
+
+def import_records(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    store_path: Path,
+    mem_bin: str,
+    file_path: Path | None = None,
+) -> dict[str, Any]:
+    """Import work records into `store_path`. Records must land before the lessons
+    that cite them — that ordering stays at the call sites (the offline gate resolves
+    held signatures between the two imports, so the seam cannot own it)."""
+    return _import_ndjson(
+        "import-records", rows, store_path=store_path, mem_bin=mem_bin, file_path=file_path
+    )
+
+
+def import_lessons(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    store_path: Path,
+    mem_bin: str,
+    file_path: Path | None = None,
+) -> dict[str, Any]:
+    """Import lessons into `store_path` (after `import_records` — see its docstring)."""
+    return _import_ndjson(
+        "import-lessons", rows, store_path=store_path, mem_bin=mem_bin, file_path=file_path
+    )

@@ -67,6 +67,7 @@ from membench.harbor.ftp_curate import (
 )
 from membench.harbor.probe_gate import _remove_worktree
 from membench.harbor.repro_live import TEST_TIMEOUT_SEC
+from membench.mem_cli import write_ndjson
 from membench.spawn import Runner
 
 RIG = "codeprobe"
@@ -384,8 +385,8 @@ def main(argv: list[str] | None = None) -> int:
         n_err = len(record["trace"]["errors"])  # type: ignore[index]
         print(f"{sha[:12]}: {n_err} fixed-failure(s) -> {record['work_id']}")
 
-    records_path.write_text("\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8")
-    lessons_path.write_text("\n".join(json.dumps(le) for le in lessons) + "\n", encoding="utf-8")
+    write_ndjson(records_path, records)
+    write_ndjson(lessons_path, lessons)
     print(
         f"\n{len(shas)} commit(s) -> {len(records)} substrate record(s) "
         f"({skipped} no-value, {errored} errored)"
