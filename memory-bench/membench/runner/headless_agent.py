@@ -206,15 +206,37 @@ class RecordingRunner:
     would otherwise reopen this hole one construction site over). The render-only path passes an
     explicit non-executing runner instead.
 
+    It keeps two records per spawn, aligned by index: the ``calls`` argv (what went OUT, checked
+    against the plan's ``invocation_fingerprint``) and the ``streams`` stdout (what came BACK). The
+    stream is the ARTIFACT the write boundary checks the pinned CLI version against — each ``claude
+    -p`` prints a ``type=system``/``subtype=init`` event carrying the version the binary that ran it
+    actually was (``stream_cli_version``), so a cell's OWN stream catches a CLI upgraded mid-sweep
+    that the once-per-sweep ``resolve_cli_version`` pre-flight claim cannot (mem-z32zu). Captured
+    here for the same reason the argv is: the runner is the wire, not a report of the wire.
+
     ``eq=False`` keeps the default identity ``__hash__``, so an instance stays usable as the
     ``runner`` field of the frozen ``HeadlessClaudeAgent``."""
 
     inner: Runner
     calls: list[list[str]] = field(default_factory=list)
+    streams: list[str] = field(default_factory=list)
 
     def __call__(self, argv: Sequence[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         self.calls.append([str(arg) for arg in argv])
-        return self.inner(argv, **kwargs)
+        stream = ""
+        try:
+            completed = self.inner(argv, **kwargs)
+            stream = completed.stdout or ""
+            return completed
+        finally:
+            # Append in a ``finally``, so ``len(streams) == len(calls)`` holds by CONSTRUCTION even
+            # when ``inner`` raises (a timeout, a missing CLI) — the same structural stance
+            # ``calls`` gets, not caller discipline. A raised spawn contributes an EMPTY stream
+            # (unverified, like any stream with no init event), so a leg that errored cannot leave a
+            # later leg's stream indexed under it, and no executed leg escapes the write boundary's
+            # version check by a shortened ``streams`` list (the shape a future per-leg-retry arm
+            # would create).
+            self.streams.append(stream)
 
 
 class HeadlessAgentError(RuntimeError):
@@ -275,6 +297,46 @@ def resolve_cli_version(runner: Runner = subprocess.run) -> str:
             "— the binary a paid run would measure on cannot be identified"
         )
     return token
+
+
+def stream_cli_version(stream: str) -> str | None:
+    """The version the binary that PRODUCED ``stream`` reported of itself — read off the
+    ``type=system``/``subtype=init`` event Claude Code prints first, which carries
+    ``claude_code_version``. The mirror of ``resolve_cli_version`` on the OTHER side of the run:
+    that reads a pre-flight ``claude --version`` claim about a DIFFERENT process; this reads the
+    version the process that actually ran a paid cell announced, so it catches a CLI upgraded
+    mid-sweep (the residue ``resolve_cli_version`` cannot — mem-z32zu). The same init event
+    ``harbor.probe_gate.assert_run_pins`` scans — but the two DIVERGE on the missing-init case:
+    ``assert_run_pins`` fails closed (raises when a stream carries no init event), this fails open
+    (returns ``None``, leaving the stream unverified — see below). The write boundary here wants
+    that asymmetry: an in-container probe gate can demand a well-formed stream, but a resume-cache
+    pass over local runs must not refuse a version-less-but-otherwise-fine measurement.
+
+    ``None`` when the stream names no instrument: no init event (a stream that carries none — an
+    empty run, or output that never reached the init line — is left UNVERIFIED at the write
+    boundary, not refused; a drifted REAL ``claude -p`` always prints the new version's init event,
+    so the mid-sweep-upgrade threat is covered without importing dead-run detection into the grids),
+    an init event without the version field, or a non-init ``system`` event that must not
+    false-read. Anchored to ``subtype=init`` rather than the first version-shaped token for the same
+    reason ``resolve_cli_version`` anchors to the first line: guessing which event names the
+    instrument is the modelling this module refuses."""
+    for line in stream.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if (
+            isinstance(event, dict)
+            and event.get("type") == "system"
+            and event.get("subtype") == "init"
+        ):
+            version = event.get("claude_code_version")
+            if isinstance(version, str) and version:
+                return version
+    return None
 
 
 class MemoryChannel(StrEnum):
@@ -398,6 +460,15 @@ class CellRecorder:
         return [
             one_cycle(runner.calls, repeats=repeats, arm=arm, channel=channel)
             for arm, channel, repeats, runner in self._cells
+        ]
+
+    def recorded_streams(self) -> list[str]:
+        """Every executed ``claude -p`` stream, flat across cells AND repeats — unlike ``recorded``,
+        which FOLDS each cell's argv back to its one repeated cycle. The fold is unsafe here: a CLI
+        upgrade can land between two repeats of a single cell, so the write boundary must be able to
+        check the stream of every run, not one representative per cell (mem-z32zu)."""
+        return [
+            stream for _arm, _channel, _repeats, runner in self._cells for stream in runner.streams
         ]
 
 

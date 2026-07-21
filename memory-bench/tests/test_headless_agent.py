@@ -19,6 +19,7 @@ from membench.runner.headless_agent import (
     ENV_API_KEY,
     ENV_MODEL,
     VERSION_TIMEOUT_S,
+    CellRecorder,
     HeadlessAgentError,
     HeadlessClaudeAgent,
     MemoryChannel,
@@ -35,6 +36,7 @@ from membench.runner.headless_agent import (
     resolve_cli_version,
     result_event,
     serialize_stream,
+    stream_cli_version,
 )
 from membench.runner.trajectory_run import (
     run_arm_trajectories,
@@ -69,6 +71,18 @@ def _stream_json(
     Shorthand over ``serialize_stream`` (this file's own default usage, varargs tool_uses), not a
     second opinion on the format."""
     return serialize_stream([assistant_event(tool_uses, usage=usage), result_event(result)])
+
+
+def _stream_with_init(version: str, *tool_uses: tuple[str, dict[str, Any]]) -> str:
+    """A stream-json transcript led by the ``type=system``/``subtype=init`` event Claude Code prints
+    first — the one carrying ``claude_code_version`` that a paid cell is checked against
+    (mem-z32zu)."""
+    events: list[dict[str, Any]] = [
+        {"type": "system", "subtype": "init", "claude_code_version": version},
+        assistant_event(tool_uses),
+        result_event(),
+    ]
+    return serialize_stream(events)
 
 
 def _fake_runner(stdout: str, *, returncode: int = 0, stderr: str = ""):
@@ -167,6 +181,84 @@ def test_the_recorder_sees_every_call_the_agent_spawns() -> None:
     assert len(recorder.calls) == 2
     assert all(argv[:2] == ["claude", "-p"] for argv in recorder.calls)
     assert "Read" in recorder.calls[0][-1] and "Write" in recorder.calls[1][-1]
+
+
+def test_the_recorder_keeps_each_calls_own_stream() -> None:
+    """The stream is the ARTIFACT the write boundary checks the pinned CLI version against
+    (mem-z32zu): a paid cell's OWN ``claude -p`` stream reports the version the binary that ran it
+    actually was, so it catches a mid-sweep upgrade the pre-flight ``resolve_cli_version`` claim
+    cannot. The runner is where that stream is captured for the same reason it is where the argv is:
+    it is the wire, not a report of the wire."""
+    stream = _stream_with_init("2.1.210", ("Read", {}))
+    recorder = RecordingRunner(_fake_runner(stream))
+    agent = HeadlessClaudeAgent(runner=recorder)
+    agent.run_step(_step(tools=["Read"]), {}, _ctx())
+    agent.run_step(_step(tools=["Write"]), {}, _ctx())
+
+    assert recorder.streams == [stream, stream]
+
+
+def test_the_recorder_keeps_streams_and_calls_aligned_when_the_spawn_raises() -> None:
+    """The ``finally`` append is what makes ``len(streams) == len(calls)`` hold by CONSTRUCTION even
+    when ``inner`` raises (mem-z32zu): a spawn that faulted contributes an EMPTY (unverified) stream
+    in its own slot, so a later leg's stream can never be indexed under the leg that errored. Pin
+    the invariant the write boundary's version check leans on, not just its prose."""
+
+    def boom(argv, **kwargs):
+        raise FileNotFoundError("claude")
+
+    recorder = RecordingRunner(boom)
+    with pytest.raises(HeadlessAgentError, match="not found"):
+        HeadlessClaudeAgent(runner=recorder).run_step(_step(), {}, _ctx())
+
+    assert len(recorder.streams) == len(recorder.calls) == 1
+    assert recorder.streams == [""]
+
+
+def test_stream_cli_version_reads_the_init_events_version() -> None:
+    """The version the RUNNING binary reported — the mirror of ``resolve_cli_version`` on the other
+    side of the run. Read off the ``type=system``/``subtype=init`` event, the same event
+    ``harbor.probe_gate.assert_run_pins`` scans, so a non-init system event cannot false-read."""
+    assert stream_cli_version(_stream_with_init("2.1.230")) == "2.1.230"
+
+
+@pytest.mark.parametrize(
+    "stream",
+    [
+        pytest.param(_stream_json(), id="no-init-event"),
+        pytest.param("", id="empty-stream"),
+        pytest.param(
+            serialize_stream([{"type": "system", "subtype": "thinking_tokens"}, result_event()]),
+            id="non-init-system-event",
+        ),
+        pytest.param(
+            serialize_stream([{"type": "system", "subtype": "init"}, result_event()]),
+            id="init-without-version-field",
+        ),
+    ],
+)
+def test_stream_cli_version_is_none_when_no_init_version_is_present(stream: str) -> None:
+    """None means "this stream names no instrument" — the write boundary leaves such a stream
+    unverified (a drifted REAL run always carries the new version's init event, so the threat is
+    covered without importing dead-run detection into the grids)."""
+    assert stream_cli_version(stream) is None
+
+
+def test_recorded_streams_returns_every_executed_stream_across_cells_and_repeats() -> None:
+    """Flat and unfolded, unlike ``recorded()`` which folds each cell's argv to its one cycle: a CLI
+    upgrade can land between two repeats of a single cell, so every stream must be checkable, not
+    just one per cell."""
+    recorder = CellRecorder()
+    for channel in (MemoryChannel.RECALLED, MemoryChannel.TRUSTED):
+        runner = recorder.cell(
+            _fake_runner(_stream_with_init("2.1.210")), arm="a", channel=channel, repeats=2
+        )
+        HeadlessClaudeAgent(runner=runner).run_step(_step(), {}, _ctx())
+        HeadlessClaudeAgent(runner=runner).run_step(_step(), {}, _ctx())
+
+    streams = recorder.recorded_streams()
+    assert len(streams) == 4  # 2 channels x 2 repeats
+    assert all(stream_cli_version(s) == "2.1.210" for s in streams)
 
 
 def test_one_cycle_folds_identical_repeats_and_keeps_leg_order() -> None:

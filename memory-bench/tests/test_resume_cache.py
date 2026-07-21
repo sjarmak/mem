@@ -18,7 +18,7 @@ import os
 import signal
 import stat
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
@@ -26,7 +26,14 @@ from typing import NoReturn
 import pytest
 from pydantic import ValidationError
 
-from membench.runner.headless_agent import ENV_MODEL, CellCalls, CellRecorder, MemoryChannel
+from membench.runner.headless_agent import (
+    ENV_MODEL,
+    CellCalls,
+    CellRecorder,
+    MemoryChannel,
+    result_event,
+    serialize_stream,
+)
 from membench.runner.resume_cache import (
     LEAK,
     SEPARATES,
@@ -416,6 +423,79 @@ def test_upgrading_the_cli_between_runs_is_a_miss_not_a_relabel(tmp_path: Path) 
         [_Task("w-0")], out, _identity(dry_run=False, cli_version="2.1.210", model="sonnet")
     )
     assert (second.executed, second.reused) == (1, 0), "served one binary's numbers as another's"
+
+
+def _evaluate_on_version(version: str) -> Callable[[_Task, CellRecorder], list[_Cell]]:
+    """An ``evaluate`` whose cells each spawn a ``claude -p`` that PRINTS an init event announcing
+    ``version`` — the mid-sweep-upgrade artifact the write boundary checks against the identity's
+    pinned ``cli_version`` (mem-z32zu). The argv sent is the stand-in plan's, so the fingerprint
+    check upstream passes and the stream check is what fires."""
+    stream = serialize_stream(
+        [{"type": "system", "subtype": "init", "claude_code_version": version}, result_event()]
+    )
+
+    def runner(argv: Sequence[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(list(argv), 0, stream, "")
+
+    def evaluate(_task: _Task, recorder: CellRecorder) -> list[_Cell]:
+        for channel in ("recalled", "trusted"):
+            rr = recorder.cell(runner, arm="a", channel=MemoryChannel(channel), repeats=1)
+            rr(("claude", "-p", f"[{channel}] goal-prompt"))
+        return _cells()
+
+    return evaluate
+
+
+def test_a_cell_whose_stream_names_a_different_cli_version_is_refused(tmp_path: Path) -> None:
+    """The WITHIN-sweep residue of the between-runs drift above (mem-z32zu): ``cli_version`` is
+    resolved once, at the top of a sweep, off a `claude --version` claim about a different process —
+    so a CLI upgraded mid-sweep tags a later cell with the pre-sweep version. The cell's OWN stream
+    reports the version the binary that ran it actually was; the write boundary refuses the
+    mislabel, and writes nothing."""
+    out = tmp_path / "out"
+    with pytest.raises(ValueError, match="upgraded mid-sweep"):
+        _run(
+            [_Task("w-0")],
+            out,
+            _identity(dry_run=False, cli_version="2.1.210", model="sonnet"),
+            evaluate=_evaluate_on_version("2.1.230"),
+        )
+    assert not (out / "w-0.json").exists(), "a mislabelled measurement must not be published"
+
+
+def test_a_cell_whose_stream_names_the_pinned_cli_version_publishes(tmp_path: Path) -> None:
+    """The other side of the gate: when a cell's own init event agrees with the identity's pinned
+    version, the artifact confirms the pre-flight claim and the measurement publishes."""
+    out = tmp_path / "out"
+    run = _run(
+        [_Task("w-0")],
+        out,
+        _identity(dry_run=False, cli_version="2.1.210", model="sonnet"),
+        evaluate=_evaluate_on_version("2.1.210"),
+    )
+    assert (run.executed, run.reused) == (1, 0)
+    assert (out / "w-0.json").exists()
+
+
+def test_a_dry_run_does_not_check_stream_versions(tmp_path: Path) -> None:
+    """A dry run names no binary (``cli_version == ""``), so the artifact check is skipped even when
+    the simulated stream reports one — there is no pinned instrument for it to contradict."""
+    out = tmp_path / "out"
+    run = _run([_Task("w-0")], out, _identity(), evaluate=_evaluate_on_version("2.1.230"))
+    assert run.executed == 1
+    assert (out / "w-0.json").exists()
+
+
+def test_a_stream_that_names_no_version_is_left_unchecked(tmp_path: Path) -> None:
+    """A stream carrying no init event names no instrument, so a paid run over it publishes: a
+    drifted REAL `claude -p` always prints the new version's init event, so the mid-sweep threat is
+    covered without refusing every version-less stream (which would import dead-run detection into
+    the grids). The default ``_evaluate`` records through ``_noop_runner``, whose stdout is empty.
+    """
+    out = tmp_path / "out"
+    run = _run([_Task("w-0")], out, _identity(dry_run=False, cli_version="2.1.210", model="sonnet"))
+    assert run.executed == 1
+    assert (out / "w-0.json").exists()
 
 
 def test_a_record_written_with_an_unresolved_model_is_unloadable(

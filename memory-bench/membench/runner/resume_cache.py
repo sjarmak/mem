@@ -51,7 +51,12 @@ from typing import Any, Generic, Protocol, Self, TypeVar
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from membench.bbon.models import deterministic_id
-from membench.runner.headless_agent import CellCalls, CellRecorder, resolve_model
+from membench.runner.headless_agent import (
+    CellCalls,
+    CellRecorder,
+    resolve_model,
+    stream_cli_version,
+)
 
 
 def digest(payload: object) -> str:
@@ -693,6 +698,31 @@ def run_cached_corpus(
                 "cell a later resume serves on that fingerprint would answer for a different run. "
                 "Fix the plan (or the arm) so the two are one thing again, then re-measure."
             )
+        # The ARTIFACT check, one input over from the fingerprint refusal above (mem-z32zu). That
+        # one holds the argv the cells SENT to the plan; this holds the version the cells' own
+        # streams REPORTED to the identity's pinned `cli_version`. `cli_version` is resolved ONCE at
+        # the top of a sweep off a pre-flight `claude --version` (a claim about a DIFFERENT
+        # process), so a CLI upgraded mid-sweep — an `npm -g`, an auto-update — tags every later
+        # cell with the pre-sweep version, filing a real measurement under the wrong instrument's
+        # name. Each cell's own `claude -p` stream carries a `type=system`/`subtype=init` event
+        # announcing the version the binary that ran it actually was; checking it here refuses that
+        # mislabel before it is published. Skipped for a dry run (`cli_version == ""` names no
+        # binary — the identity validator refuses a dry run that claims one). A stream that carries
+        # no init event names no instrument and is left unchecked: a drifted REAL run always prints
+        # the new version's init event, so the threat is covered without importing dead-run
+        # detection into the grids.
+        if found.identity.cli_version:
+            for stream in recorder.recorded_streams():
+                ran_on = stream_cli_version(stream)
+                if ran_on is not None and ran_on != found.identity.cli_version:
+                    raise ValueError(
+                        f"{task.work_id}: a `claude -p` cell ran on CLI version {ran_on} (its own "
+                        f"init event), but the identity it was measured under pins "
+                        f"{found.identity.cli_version} — the binary was upgraded mid-sweep. This "
+                        "measurement is NOT written: publishing it would file a real result under "
+                        "the pre-upgrade instrument's name, which a later resume would then match "
+                        "and serve. Re-run the sweep on one CLI version."
+                    )
         executed += 1
         result = plan.result_cls.of(task.work_id, found.identity, outcomes)
         # Atomic publish: write a sibling temp file then rename, so a kill mid-write leaves either
