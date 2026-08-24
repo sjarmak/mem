@@ -10,11 +10,37 @@ for a real `harbor run` (paid Claude path).
 """
 
 import argparse
+import hashlib
 import json
+import os
+import random
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
+from membench.beads_ordering.corpus import build_frozen_corpus
+from membench.beads_ordering.models import (
+    BM25FConfig,
+    ExperimentMode,
+    FrozenCorpus,
+    OrderingArm,
+    OrderingRunResult,
+)
+from membench.beads_ordering.report import write_report
+from membench.beads_ordering.runner import (
+    ARMS,
+    PAGE_SIZES,
+    corpus_digest,
+    file_sha256,
+    git_dirty,
+    git_sha,
+    run_agent_cell,
+    seed_beads_workspace,
+    validate_paid_run,
+    validate_rank_truth,
+    write_raw_results,
+)
 from membench.corpus import load_corpus, load_query_work
 from membench.dataset import load_sequence
 from membench.harbor.adapter import SequenceAdapter
@@ -39,6 +65,9 @@ from membench.telemetry.otel_spans import replay_to_spans, trace_to_spans
 
 # memory-bench/membench/cli.py -> memory-bench -> repo root -> bin/mem.
 _DEFAULT_MEM_BIN = Path(__file__).resolve().parents[2] / "bin" / "mem"
+_DEFAULT_ORDERING_FIXTURE = (
+    Path(__file__).resolve().parents[1] / "fixtures" / "beads_ordering" / "corpus.json"
+)
 
 
 def _default_experiment(dataset_id: str) -> ExperimentConfig:
@@ -185,6 +214,274 @@ def _cmd_curate_ftp(args: argparse.Namespace) -> int:
     return 0
 
 
+def _load_ordering_fixture(path: str) -> FrozenCorpus:
+    return FrozenCorpus.model_validate_json(Path(path).read_text(encoding="utf-8"))
+
+
+def _require_beads_bin(value: str | None) -> str:
+    if not value:
+        raise SystemExit("pass --beads-bin or set BEADS_BIN to the experimental bd binary")
+    path = Path(value).expanduser().resolve()
+    if not path.is_file() or not os.access(path, os.X_OK):
+        raise SystemExit(f"experimental bd binary is not executable: {path}")
+    return str(path)
+
+
+def _parse_page_sizes(raw: str) -> list[int | str]:
+    values: list[int | str] = []
+    for item in (part.strip() for part in raw.split(",")):
+        if item == "all":
+            values.append(item)
+        else:
+            try:
+                parsed = int(item)
+            except ValueError as exc:
+                raise SystemExit("page sizes must be positive integers or 'all'") from exc
+            if parsed < 1:
+                raise SystemExit("page sizes must be positive integers or 'all'")
+            values.append(parsed)
+    if not values:
+        raise SystemExit("at least one page size is required")
+    return values
+
+
+def _parse_ordering_arms(raw: str) -> list[OrderingArm]:
+    try:
+        arms = [OrderingArm(part.strip()) for part in raw.split(",") if part.strip()]
+    except ValueError as exc:
+        raise SystemExit("ordering arms must be key, navigation, or bm25f") from exc
+    if not arms:
+        raise SystemExit("at least one ordering arm is required")
+    return arms
+
+
+def _cmd_beads_ordering_freeze(args: argparse.Namespace) -> int:
+    out = Path(args.out)
+    if out.exists() and not args.overwrite:
+        raise SystemExit(f"{out} exists; pass --overwrite to replace it")
+    corpus = build_frozen_corpus(seed=args.seed)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(corpus.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    print(
+        f"wrote frozen corpus: {out} ({len(corpus.memories)} Memories, {len(corpus.tasks)} tasks)"
+    )
+    return 0
+
+
+def _validated_ordering_inputs(
+    args: argparse.Namespace,
+) -> tuple[FrozenCorpus, str, Path, BM25FConfig, dict[str, object]]:
+    corpus = _load_ordering_fixture(args.fixture)
+    beads_bin = _require_beads_bin(args.beads_bin)
+    workspace_root = Path(args.workspace_root).resolve()
+    bm25f = BM25FConfig(
+        key_weight=args.bm25f_key_weight,
+        alias_weight=args.bm25f_alias_weight,
+        title_weight=args.bm25f_title_weight,
+        body_weight=args.bm25f_body_weight,
+        k1=args.bm25f_k1,
+        b=args.bm25f_b,
+    )
+    truth: dict[str, object] = {}
+    selected_ids = set(args.task_ids.split(",")) if args.task_ids else None
+    for size in sorted({task.corpus_size for task in corpus.tasks}):
+        tasks = [
+            task
+            for task in corpus.tasks
+            if task.corpus_size == size and (selected_ids is None or task.task_id in selected_ids)
+        ]
+        if not tasks:
+            continue
+        workspace = workspace_root / f"corpus-{size}"
+        seed_beads_workspace(
+            corpus=corpus, corpus_size=size, beads_bin=beads_bin, workspace=workspace
+        )
+        for task in tasks:
+            ranks = validate_rank_truth(
+                task=task, workspace=workspace, beads_bin=beads_bin, bm25f=bm25f
+            )
+            truth[task.task_id] = {
+                "total_matched": ranks.total_matched,
+                "candidate_digest": ranks.candidate_digest,
+                "ranks": {
+                    arm.value: dict(memory_ranks) for arm, memory_ranks in ranks.ranks.items()
+                },
+            }
+    if selected_ids is not None and set(truth) != selected_ids:
+        missing = sorted(selected_ids - set(truth))
+        raise SystemExit(f"unknown task IDs: {', '.join(missing)}")
+    return corpus, beads_bin, workspace_root, bm25f, truth
+
+
+def _cmd_beads_ordering_validate(args: argparse.Namespace) -> int:
+    corpus, beads_bin, _, bm25f, truth = _validated_ordering_inputs(args)
+    payload = {
+        "schema_version": 1,
+        "fixture_digest": corpus_digest(corpus),
+        "beads_bin": beads_bin,
+        "bm25f": bm25f.model_dump(),
+        "tasks": truth,
+    }
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    print(f"validated {len(truth)} frozen tasks: {out}")
+    return 0
+
+
+def _cmd_beads_ordering_run(args: argparse.Namespace) -> int:
+    corpus, beads_bin, workspace_root, bm25f, truth_payload = _validated_ordering_inputs(args)
+    model, cli_version = validate_paid_run(args.model)
+    arms = _parse_ordering_arms(args.arms)
+    page_sizes = _parse_page_sizes(args.page_sizes)
+    mode = ExperimentMode(args.mode)
+    out = Path(args.out).resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    mem_repo = Path(__file__).resolve().parents[2]
+    beads_repo = Path(args.beads_repo).expanduser().resolve()
+    mem_sha = git_sha(mem_repo)
+    mem_dirty = git_dirty(mem_repo)
+    beads_sha = git_sha(beads_repo)
+    beads_dirty = git_dirty(beads_repo)
+    beads_binary_digest = file_sha256(Path(beads_bin))
+    selected_tasks = [task for task in corpus.tasks if task.task_id in truth_payload]
+    cells = [
+        (task, arm, page_size, repeat)
+        for task in selected_tasks
+        for arm in arms
+        for page_size in page_sizes
+        for repeat in range(args.repeats)
+    ]
+    random.Random(args.order_seed).shuffle(cells)
+    prompt_digest = hashlib.sha256(b"beads-ordering-agent-protocol-v1").hexdigest()
+    manifest = {
+        "schema_version": 1,
+        "started_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "mem_git_sha": mem_sha,
+        "mem_git_dirty": mem_dirty,
+        "beads_git_sha": beads_sha,
+        "beads_git_dirty": beads_dirty,
+        "beads_bin": beads_bin,
+        "beads_bin_sha256": beads_binary_digest,
+        "fixture": str(Path(args.fixture).resolve()),
+        "fixture_digest": corpus_digest(corpus),
+        "bm25f": bm25f.model_dump(),
+        "ordering_conventions": {
+            "key": "case-sensitive canonical Memory key ascending",
+            "navigation": "authored navigation_rank ascending, then canonical Memory ID",
+            "bm25f": "global BM25F score over the same literal-match set, then canonical Memory ID",
+        },
+        "page_sizes": [str(value) for value in page_sizes],
+        "arms": [arm.value for arm in arms],
+        "mode": mode.value,
+        "repeats": args.repeats,
+        "order_seed": args.order_seed,
+        "max_tool_calls": args.max_tool_calls,
+        "agent_model": model,
+        "agent_cli_version": cli_version,
+        "agent_settings": {"autoMemoryEnabled": False},
+        "prompt_protocol_digest": prompt_digest,
+        "tasks": truth_payload,
+    }
+    manifest_path = out / "manifest.json"
+    if manifest_path.exists():
+        previous = json.loads(manifest_path.read_text(encoding="utf-8"))
+        comparable = {key: value for key, value in manifest.items() if key != "started_at"}
+        previous_comparable = {key: value for key, value in previous.items() if key != "started_at"}
+        if comparable != previous_comparable:
+            raise SystemExit(f"{out} contains a run with a different manifest")
+    else:
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+    rows: list[OrderingRunResult] = []
+    for index, (task, arm, page_size, repeat) in enumerate(cells, start=1):
+        run_id = f"{task.task_id}:{mode.value}:{arm.value}:p{page_size}:r{repeat}"
+        result_path = out / "runs" / run_id.replace(":", "__") / "result.json"
+        if result_path.exists():
+            row = OrderingRunResult.model_validate_json(result_path.read_text(encoding="utf-8"))
+            if (
+                row.mem_git_sha != mem_sha
+                or row.mem_git_dirty != mem_dirty
+                or row.beads_git_sha != beads_sha
+                or row.beads_git_dirty != beads_dirty
+                or row.beads_bin_sha256 != beads_binary_digest
+                or row.agent_model != model
+                or row.agent_cli_version != cli_version
+            ):
+                raise SystemExit(f"cached run identity mismatch: {run_id}")
+        else:
+            raw_truth = truth_payload[task.task_id]
+            if not isinstance(raw_truth, dict):
+                raise SystemExit(f"invalid rank truth for {task.task_id}")
+            from membench.beads_ordering.runner import RankTruth
+
+            rank_truth = RankTruth(
+                total_matched=int(raw_truth["total_matched"]),
+                candidate_digest=str(raw_truth["candidate_digest"]),
+                ranks={
+                    OrderingArm(arm_name): {
+                        str(memory_id): int(rank) for memory_id, rank in memory_ranks.items()
+                    }
+                    for arm_name, memory_ranks in raw_truth["ranks"].items()
+                },
+            )
+            print(f"[{index}/{len(cells)}] {run_id}", flush=True)
+            row = run_agent_cell(
+                task=task,
+                arm=arm,
+                page_size=page_size,
+                mode=mode,
+                repeat=repeat,
+                workspace=workspace_root / f"corpus-{task.corpus_size}",
+                beads_bin=beads_bin,
+                bm25f=bm25f,
+                rank_truth=rank_truth,
+                model=model,
+                cli_version=cli_version,
+                mem_sha=mem_sha,
+                mem_dirty=mem_dirty,
+                beads_sha=beads_sha,
+                beads_dirty=beads_dirty,
+                beads_bin_sha256=beads_binary_digest,
+                artifacts_dir=out,
+                max_tool_calls=args.max_tool_calls,
+            )
+        rows.append(row)
+        write_raw_results(out / "raw-results.jsonl", rows)
+    write_report(rows, out)
+    print(f"wrote {len(rows)} runs and analysis to {out}")
+    return 0
+
+
+def _cmd_beads_ordering_analyze(args: argparse.Namespace) -> int:
+    rows = [
+        OrderingRunResult.model_validate_json(line)
+        for line in Path(args.raw).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    write_report(rows, Path(args.out))
+    print(f"analyzed {len(rows)} runs: {args.out}")
+    return 0
+
+
+def _add_bm25f_flags(parser: argparse.ArgumentParser) -> None:
+    defaults = BM25FConfig()
+    parser.add_argument("--bm25f-key-weight", type=float, default=defaults.key_weight)
+    parser.add_argument("--bm25f-alias-weight", type=float, default=defaults.alias_weight)
+    parser.add_argument("--bm25f-title-weight", type=float, default=defaults.title_weight)
+    parser.add_argument("--bm25f-body-weight", type=float, default=defaults.body_weight)
+    parser.add_argument("--bm25f-k1", type=float, default=defaults.k1)
+    parser.add_argument("--bm25f-b", type=float, default=defaults.b)
+
+
+def _add_ordering_input_flags(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--fixture", default=str(_DEFAULT_ORDERING_FIXTURE))
+    parser.add_argument("--beads-bin", default=os.environ.get("BEADS_BIN"))
+    parser.add_argument("--workspace-root", required=True)
+    parser.add_argument("--task-ids", default="", help="optional comma-separated task IDs")
+    _add_bm25f_flags(parser)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="membench")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -241,6 +538,45 @@ def main(argv: list[str] | None = None) -> int:
     p_ftp.add_argument("--mem-bin", default=None, dest="mem_bin", help="path to the mem CLI")
     p_ftp.add_argument("--out", default=None, help="write the oracle JSON here (else stdout)")
     p_ftp.set_defaults(func=_cmd_curate_ftp)
+
+    p_freeze = sub.add_parser(
+        "beads-ordering-freeze", help="write the frozen Beads ordering corpus and labels"
+    )
+    p_freeze.add_argument("--out", default=str(_DEFAULT_ORDERING_FIXTURE))
+    p_freeze.add_argument("--seed", type=int, default=5877)
+    p_freeze.add_argument("--overwrite", action="store_true")
+    p_freeze.set_defaults(func=_cmd_beads_ordering_freeze)
+
+    p_validate = sub.add_parser(
+        "beads-ordering-validate", help="seed Beads and verify fixed candidate-set parity"
+    )
+    _add_ordering_input_flags(p_validate)
+    p_validate.add_argument("--out", required=True)
+    p_validate.set_defaults(func=_cmd_beads_ordering_validate)
+
+    p_ordering_run = sub.add_parser(
+        "beads-ordering-run", help="run the ranked-pagination agent experiment"
+    )
+    _add_ordering_input_flags(p_ordering_run)
+    p_ordering_run.add_argument("--beads-repo", required=True)
+    p_ordering_run.add_argument("--model", required=True)
+    p_ordering_run.add_argument("--arms", default=",".join(arm.value for arm in ARMS))
+    p_ordering_run.add_argument("--page-sizes", default=",".join(str(size) for size in PAGE_SIZES))
+    p_ordering_run.add_argument(
+        "--mode", choices=[mode.value for mode in ExperimentMode], default="natural"
+    )
+    p_ordering_run.add_argument("--repeats", type=int, default=1)
+    p_ordering_run.add_argument("--order-seed", type=int, default=5877)
+    p_ordering_run.add_argument("--max-tool-calls", type=int, default=12)
+    p_ordering_run.add_argument("--out", required=True)
+    p_ordering_run.set_defaults(func=_cmd_beads_ordering_run)
+
+    p_ordering_analysis = sub.add_parser(
+        "beads-ordering-analyze", help="regenerate tables and plots from raw ordering runs"
+    )
+    p_ordering_analysis.add_argument("--raw", required=True)
+    p_ordering_analysis.add_argument("--out", required=True)
+    p_ordering_analysis.set_defaults(func=_cmd_beads_ordering_analyze)
 
     args = parser.parse_args(argv)
     return cast(int, args.func(args))
