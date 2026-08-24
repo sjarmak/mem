@@ -296,6 +296,7 @@ def test_agent_page_projection_hides_order_and_scorer_configuration() -> None:
     shown = visible_page(raw, page_size_label="5")
     assert shown == {
         "items": [{"id": "m1", "rank": 1}],
+        "query": "deploy",
         "total_matched": 12,
         "page_size": "5",
         "complete": False,

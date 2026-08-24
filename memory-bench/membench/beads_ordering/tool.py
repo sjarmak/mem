@@ -41,6 +41,7 @@ def visible_page(raw: dict[str, Any], *, page_size_label: str) -> dict[str, Any]
 
     return {
         "items": raw.get("items", []),
+        "query": raw.get("query", ""),
         "total_matched": raw.get("total_matched", 0),
         "page_size": page_size_label,
         "complete": raw.get("complete", False),
@@ -151,8 +152,6 @@ def execute(
     started_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     try:
         if operation in {"search", "continue"}:
-            if operation == "search" and argument and argument != config.query:
-                raise BeadsToolError("the search query is frozen for this task")
             if operation == "continue" and not argument:
                 raise BeadsToolError("continue requires the prior continuation token")
             raw = _bd(config, _discovery_arguments(config, argument))

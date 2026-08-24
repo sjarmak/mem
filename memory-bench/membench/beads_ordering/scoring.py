@@ -42,7 +42,9 @@ def score_agent_run(
     agent_cli_version: str = "",
 ) -> OrderingRunResult:
     relevant = acceptable_ids | {primary_id}
-    page_logs = [entry for entry in logs if entry.operation in {"search", "continue"}]
+    page_logs = [
+        entry for entry in logs if entry.operation in {"search", "continue"} and entry.error is None
+    ]
     recall_logs = [
         entry for entry in logs if entry.operation == "recall" and entry.memory_id is not None
     ]
@@ -68,7 +70,7 @@ def score_agent_run(
         pages_to_useful = sum(
             1
             for entry in logs[: logs.index(first_useful_log) + 1]
-            if entry.operation in {"search", "continue"}
+            if entry.operation in {"search", "continue"} and entry.error is None
         )
 
     recalled_ids = [entry.memory_id for entry in recall_logs if entry.memory_id]

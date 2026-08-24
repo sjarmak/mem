@@ -60,7 +60,11 @@ def _mean(rows: Sequence[OrderingRunResult], field: str) -> float:
 def render_markdown(rows: Sequence[OrderingRunResult], analysis: Mapping[str, Any]) -> str:
     baseline = [row for row in rows if row.arm is OrderingArm.KEY]
     bm25f = [row for row in rows if row.arm is OrderingArm.BM25F]
-    baseline_page_one = fmean(1.0 if row.page_one_acceptable_visible else 0.0 for row in baseline)
+    baseline_page_one = (
+        fmean(1.0 if row.page_one_acceptable_visible else 0.0 for row in baseline)
+        if baseline
+        else None
+    )
     match_counts = sorted({row.total_matched for row in rows})
     material = analysis.get("largest_page_size_with_material_ranking_gap")
     if baseline and bm25f:
@@ -76,6 +80,11 @@ def render_markdown(rows: Sequence[OrderingRunResult], analysis: Mapping[str, An
         if material is not None
         else "The pre-registered material-gap rule was not met at any measured page size."
     )
+    baseline_visibility = (
+        f"{baseline_page_one:.0%} of measured runs"
+        if baseline_page_one is not None
+        else "no recorded runs"
+    )
     return (
         "# Beads Memory pre-pagination ordering experiment\n\n"
         "This report isolates ordering after the existing literal matcher has produced one fixed "
@@ -85,7 +94,7 @@ def render_markdown(rows: Sequence[OrderingRunResult], analysis: Mapping[str, An
         f"1. Realistic frozen match sets in this corpus range from {match_counts[0]} to "
         f"{match_counts[-1]} candidates.\n"
         f"2. Under key ordering, a useful Memory was visible on page 1 in "
-        f"{baseline_page_one:.0%} of measured runs.\n"
+        f"{baseline_visibility}.\n"
         "3. Per-page cost is visible in the page-size table and burial correlations below; "
         "compact tokens and tool calls are model-facing costs, while Beads compute is separate.\n"
         f"4. Across the recorded grid, BM25F changed mean compact ingestion by "
