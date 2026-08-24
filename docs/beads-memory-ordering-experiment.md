@@ -54,7 +54,7 @@ python3 -m membench.cli beads-ordering-freeze \
   --out fixtures/beads_ordering/corpus.json --overwrite
 python3 -m membench.cli beads-ordering-validate \
   --fixture fixtures/beads_ordering/corpus.json \
-  --workspace-root ../.mem/beads-ordering-workspaces-v3 \
+  --workspace-root ../.mem/beads-ordering-workspaces-v4 \
   --out results/beads_ordering/validation-structural.json
 ```
 
@@ -71,7 +71,7 @@ never logged or hashed.
 ```bash
 python3 -m membench.cli beads-ordering-run \
   --fixture fixtures/beads_ordering/corpus.json \
-  --workspace-root ../.mem/beads-ordering-workspaces-v3 \
+  --workspace-root ../.mem/beads-ordering-workspaces-v4 \
   --beads-repo /home/ds/gastownhall/beads-worktrees/memory-ordering-5877 \
   --beads-bin "$BEADS_BIN" \
   --model claude-haiku-4-5-20251001 \
@@ -92,7 +92,7 @@ reused.
 ```bash
 python3 -m membench.cli beads-ordering-run \
   --fixture fixtures/beads_ordering/corpus.json \
-  --workspace-root ../.mem/beads-ordering-workspaces-v3 \
+  --workspace-root ../.mem/beads-ordering-workspaces-v4 \
   --beads-repo /home/ds/gastownhall/beads-worktrees/memory-ordering-5877 \
   --beads-bin "$BEADS_BIN" \
   --model claude-haiku-4-5-20251001 \

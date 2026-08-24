@@ -188,6 +188,13 @@ def execute(
         if operation in {"search", "continue"}:
             if operation == "continue" and not argument:
                 raise BeadsToolError("continue requires the prior continuation token")
+            if operation == "search" and any(
+                entry.operation == "search" and entry.error is None
+                for entry in _existing_logs(log_path)
+            ):
+                raise BeadsToolError(
+                    "search was already performed; use its continuation token or stop"
+                )
             continuation = argument if operation == "continue" else ""
             raw = _bd(config, _discovery_arguments(config, continuation))
             payload = visible_page(raw, page_size_label=str(config.page_size))

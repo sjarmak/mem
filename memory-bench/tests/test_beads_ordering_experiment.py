@@ -152,6 +152,9 @@ def test_frozen_corpus_is_nested_realistic_and_fully_labelled() -> None:
     assert len(first.tasks) >= 12
 
     by_id = {memory.id: memory for memory in first.memories}
+    for size in (50, 100, 500):
+        prefix_ids = {memory.id for memory in first.memories[:size]}
+        assert all(set(memory.references) <= prefix_ids for memory in first.memories[:size])
     for task in first.tasks:
         corpus = first.memories[: task.corpus_size]
         matches = {
@@ -374,6 +377,8 @@ def test_search_words_cannot_change_frozen_query_or_become_a_cursor(
     payload, _ = ordering_tool.execute(config, "search", "agent supplied different words")
     assert payload["query"] == "frozen query"
     assert "--continuation" not in seen[0]
+    with pytest.raises(ordering_tool.BeadsToolError, match="already performed"):
+        ordering_tool.execute(config, "search")
 
 
 def test_tool_enforces_search_only_and_reference_navigation(

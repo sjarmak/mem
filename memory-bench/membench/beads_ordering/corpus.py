@@ -154,9 +154,10 @@ _SCENARIOS = (
 )
 
 
-def _candidate_indices(scenario: _Scenario, reserved: set[int]) -> list[int]:
+def _candidate_indices(scenario: _Scenario, reserved: set[int], *, tier_start: int) -> list[int]:
     candidates = [scenario.primary_index, scenario.entry_index]
-    for index in range(scenario.corpus_size):
+    ordered_indices = (*range(tier_start, scenario.corpus_size), *range(tier_start))
+    for index in ordered_indices:
         if index in reserved or index in candidates:
             continue
         candidates.append(index)
@@ -185,7 +186,9 @@ def build_frozen_corpus(*, seed: int = 5877) -> FrozenCorpus:
     tasks: list[OrderingTask] = []
 
     for ordinal, scenario in enumerate(_SCENARIOS):
-        candidates = _candidate_indices(scenario, reserved)
+        tier_start = {50: 0, 100: 50, 500: 100}[scenario.corpus_size]
+        tier_width = scenario.corpus_size - tier_start
+        candidates = _candidate_indices(scenario, reserved, tier_start=tier_start)
         primary_id = f"mem-{scenario.primary_index + 1:04d}"
         entry_id = f"mem-{scenario.entry_index + 1:04d}"
         if ordinal % 3 == 0:
@@ -255,13 +258,13 @@ def build_frozen_corpus(*, seed: int = 5877) -> FrozenCorpus:
             structural_index = int(structural_distractor.split("-")[1]) - 1
             references[structural_index].extend(distractors[1:9])
             for offset in range(12):
-                supporter = (ordinal * 41 + offset * 17 + 7) % scenario.corpus_size
+                supporter = tier_start + ((ordinal * 41 + offset * 17 + 7) % tier_width)
                 if supporter not in entry_indices and supporter != scenario.primary_index:
                     references[supporter].append(structural_distractor)
 
         if ordinal % 4 == 1:
             for offset in range(18):
-                supporter = (ordinal * 29 + offset * 13 + 11) % scenario.corpus_size
+                supporter = tier_start + ((ordinal * 29 + offset * 13 + 11) % tier_width)
                 if supporter not in entry_indices and supporter != scenario.primary_index:
                     references[supporter].append(entry_id)
 
