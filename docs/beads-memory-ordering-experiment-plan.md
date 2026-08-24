@@ -30,6 +30,10 @@ scope until this experiment is complete.
   persistent navigation rank. No local branch or open PR implements ranking or
   pagination. PR #5964 only corrects empty-value presence and does not overlap
   this experiment.
+- The structural-order source is invoked at fixture-freeze time to materialize
+  six global query-independent graph orders. Its ranking implementation remains
+  outside `mem`; the fixture records only corpus-level rank positions and the
+  exact source commit.
 - The legacy schema has key and body only. For an R6-shaped experimental corpus,
   structured frontmatter inside the stored body will carry title, aliases,
   lifecycle, references, provenance, and an authored query-independent
@@ -46,8 +50,8 @@ Add experimental flags to `bd memories`, active only when a page size or orderin
 is requested:
 
 ```text
---experimental-order key|navigation|bm25f
---page-size 5|10|20|50|all
+--experimental-order key|navigation|indegree|outdegree|pagerank|reverse-pagerank|hits-authority|hits-hub|bm25f
+--page-size 3|5|10|20|50|all
 --continuation TOKEN
 --bm25f-key-weight FLOAT
 --bm25f-alias-weight FLOAT
@@ -76,19 +80,22 @@ Implementation constraints:
    ID. The rank is query-independent and identifies curated graph entry points;
    missing ranks sort after ranked records. It is neither learned nor persisted
    as Memory state outside the corpus body.
-5. `bm25f` scores only the `memoryops.List` candidate map. Tokenization,
+5. Each structural-prior arm orders by its frozen global corpus rank, then
+   canonical ID. Search terms never alter those ranks; missing or duplicate
+   materialized ranks fail explicitly.
+6. `bm25f` scores only the `memoryops.List` candidate map. Tokenization,
    normalization, field weights, length normalization, saturation, and any
    phrase/exact boosts are explicit in the JSON run manifest. Final ties use
    canonical Memory ID.
-6. A continuation contains the query, ordering/config digest, candidate-state
+7. A continuation contains the query, ordering/config digest, candidate-state
    digest, and next offset. On every page Beads reloads, rematches, reorders, and
    verifies both digests. Any relevant mutation or incompatible reuse fails
    explicitly.
-7. No schema migration, index, daemon, embedding, persisted score, or Memory
+8. No schema migration, index, daemon, embedding, persisted score, or Memory
    version is introduced.
 
 Page size is crossed with ordering rather than treated as a tuning constant.
-Every task runs at 5, 10, 20, 50, and `all`; `all` is a first-class experimental
+Every task runs at 3, 5, 10, 20, 50, and `all`; `all` is a first-class experimental
 value that returns the complete matched set in one response, not a disguised
 large integer. This separates the cost of hiding candidates behind continuation
 from the cost of presenting many candidates at once. The primary mechanical
@@ -180,10 +187,11 @@ The analysis also searches for the first match-set/burial stratum where smaller
 key-ordered pages are materially worse than BM25F pages, reporting absence of a
 supported crossover rather than manufacturing one from sparse cells.
 
-Experiment 2 reuses the same fixtures and runner. It compares only navigation and
-BM25F ordering, permits depth-first traversal of authored references after the
-first acceptable entry point, and measures whether graph navigation closes the
-initial-order cost/success gap.
+Experiment 2 reuses the same fixtures and runner. Search-only permits recall only
+of a Memory previously shown in discovery; navigation additionally permits a
+reference exposed by a successful recall. The wrapper enforces and logs this
+boundary while measuring whether graph traversal closes the initial-order
+cost/success gap for each structural prior versus BM25F.
 
 ## Deliverables and stop rule
 

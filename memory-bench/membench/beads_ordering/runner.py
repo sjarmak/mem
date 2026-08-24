@@ -39,8 +39,16 @@ from membench.runner.sandbox import paid_sandbox
 from membench.runtime import StepContext
 from membench.schemas.sequence import SequenceStep
 
-PAGE_SIZES: tuple[int | str, ...] = (5, 10, 20, 50, "all")
-ARMS: tuple[OrderingArm, ...] = tuple(OrderingArm)
+PAGE_SIZES: tuple[int | str, ...] = (3, 5, 10, 20, 50, "all")
+STRUCTURAL_ARMS: tuple[OrderingArm, ...] = (
+    OrderingArm.INDEGREE,
+    OrderingArm.OUTDEGREE,
+    OrderingArm.PAGERANK,
+    OrderingArm.REVERSE_PAGERANK,
+    OrderingArm.HITS_AUTHORITY,
+    OrderingArm.HITS_HUB,
+)
+ARMS: tuple[OrderingArm, ...] = (OrderingArm.KEY, *STRUCTURAL_ARMS, OrderingArm.BM25F)
 
 
 class OrderingExperimentError(RuntimeError):
@@ -138,7 +146,13 @@ def seed_beads_workspace(
                 f"seed command failed ({' '.join(command)}): {completed.stderr.strip()}"
             )
     jsonl = "\n".join(
-        json.dumps({"_type": "memory", "key": memory.key, "value": memory.stored_value()})
+        json.dumps(
+            {
+                "_type": "memory",
+                "key": memory.key,
+                "value": memory.stored_value(corpus_size),
+            }
+        )
         for memory in corpus.memories[:corpus_size]
     )
     completed = subprocess.run(
@@ -159,11 +173,17 @@ def seed_beads_workspace(
 
 
 def validate_rank_truth(
-    *, task: OrderingTask, workspace: Path, beads_bin: str, bm25f: BM25FConfig
+    *,
+    task: OrderingTask,
+    workspace: Path,
+    beads_bin: str,
+    bm25f: BM25FConfig,
+    arms: Sequence[OrderingArm] = ARMS,
 ) -> RankTruth:
     pages: dict[OrderingArm, dict[str, Any]] = {}
     ranks: dict[OrderingArm, dict[str, int]] = {}
-    for arm in ARMS:
+    selected_arms = tuple(dict.fromkeys((OrderingArm.KEY, *arms)))
+    for arm in selected_arms:
         discovery = BeadsExperimentClient(
             beads_bin=beads_bin,
             workspace=str(workspace),
@@ -189,11 +209,19 @@ def validate_rank_truth(
 
 
 def agent_request(task: OrderingTask, mode: ExperimentMode, *, max_tool_calls: int) -> str:
-    navigation = ""
-    if mode is ExperimentMode.DEPTH_FIRST:
+    if mode is ExperimentMode.SEARCH_ONLY:
+        navigation = (
+            " Reference traversal is disabled in this run; recall only Memories already shown "
+            "in discovery results."
+        )
+    elif mode is ExperimentMode.DEPTH_FIRST:
         navigation = (
             " When a recalled Memory lists references, follow those references depth-first "
             "before answering, within the same budget."
+        )
+    else:
+        navigation = (
+            " You may follow references from recalled Memories naturally when they look useful."
         )
     return (
         f"{task.instruction}\n\n"
@@ -255,6 +283,7 @@ def run_agent_cell(
     beads_sha: str,
     beads_dirty: bool,
     beads_bin_sha256: str,
+    structural_order_source_git_sha: str,
     artifacts_dir: Path,
     claude_credentials: Path | None = None,
     max_tool_calls: int = 12,
@@ -295,6 +324,7 @@ def run_agent_cell(
             log_path=str(tool_log),
             agent_started_monotonic_ns=start_ns,
             max_tool_calls=max_tool_calls,
+            mode=mode,
         )
         config_path = tool_dir / "config.json"
         config_path.write_text(tool_config.model_dump_json(indent=2), encoding="utf-8")
@@ -359,12 +389,14 @@ def run_agent_cell(
         primary_rank=arm_ranks[task.primary_relevant],
         acceptable_rank=_first_acceptable_rank(task, arm_ranks),
         page_size=max(1, effective_page_size),
+        total_matched=rank_truth.total_matched,
         failure=failure,
         mem_git_sha=mem_sha,
         mem_git_dirty=mem_dirty,
         beads_git_sha=beads_sha,
         beads_git_dirty=beads_dirty,
         beads_bin_sha256=beads_bin_sha256,
+        structural_order_source_git_sha=structural_order_source_git_sha,
         agent_model=resolved_model,
         agent_cli_version=cli_version,
     )

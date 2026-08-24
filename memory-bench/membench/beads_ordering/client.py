@@ -112,8 +112,8 @@ def _payload_items(payload: Mapping[str, Any]) -> Sequence[Mapping[str, Any]]:
 
 
 def candidate_parity(pages: Mapping[OrderingArm, Mapping[str, Any]]) -> CandidateParity:
-    if set(pages) != set(OrderingArm):
-        raise ValueError("candidate parity requires key, navigation, and bm25f arms")
+    if OrderingArm.KEY not in pages or len(pages) < 2:
+        raise ValueError("candidate parity requires key and at least one competing arm")
     projections: dict[OrderingArm, dict[str, dict[str, Any]]] = {}
     for arm, payload in pages.items():
         by_id: dict[str, dict[str, Any]] = {}
@@ -126,7 +126,9 @@ def candidate_parity(pages: Mapping[OrderingArm, Mapping[str, Any]]) -> Candidat
             by_id[memory_id] = item
         projections[arm] = by_id
     baseline = projections[OrderingArm.KEY]
-    for arm in (OrderingArm.NAVIGATION, OrderingArm.BM25F):
+    for arm in pages:
+        if arm is OrderingArm.KEY:
+            continue
         if set(projections[arm]) != set(baseline):
             raise ValueError(f"candidate-set parity failed for {arm.value}")
         for memory_id, projection in projections[arm].items():

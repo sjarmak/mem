@@ -188,28 +188,46 @@ def build_frozen_corpus(*, seed: int = 5877) -> FrozenCorpus:
         candidates = _candidate_indices(scenario, reserved)
         primary_id = f"mem-{scenario.primary_index + 1:04d}"
         entry_id = f"mem-{scenario.entry_index + 1:04d}"
-        titles[scenario.primary_index] = (
-            f"Corrected production rule for {scenario.slug.replace('-', ' ')}"
-        )
+        if ordinal % 3 == 0:
+            titles[scenario.primary_index] = "Corrected production safeguard"
+            query_repetitions = scenario.query
+        else:
+            titles[scenario.primary_index] = (
+                f"Corrected production rule for {scenario.slug.replace('-', ' ')}"
+            )
+            query_repetitions = (
+                scenario.query if ordinal % 3 == 1 else f"{scenario.query} {scenario.query}"
+            )
         bodies[scenario.primary_index] += (
-            f" {scenario.query} {scenario.query} {scenario.query}. The accepted correction is "
+            f" {query_repetitions}. The accepted correction is "
             f"{scenario.expected}. Do not use {scenario.forbidden}; that value came from the "
             "retired rollout."
         )
-        references[scenario.primary_index].append(f"task-{scenario.slug}-incident")
         navigation_ranks[scenario.primary_index] = 100 + ordinal
 
         titles[scenario.entry_index] = f"{scenario.query.title()} navigation map"
         aliases[scenario.entry_index].append(scenario.query)
         bodies[scenario.entry_index] += (
-            f" Start here for {scenario.query}. The current decision is recorded in {primary_id}; "
-            "follow that Memory before changing production configuration."
+            f" Start here for {scenario.query}. Follow the correction reference before changing "
+            "production configuration."
         )
-        references[scenario.entry_index].append(primary_id)
         navigation_ranks[scenario.entry_index] = ordinal + 1
 
+        candidate_remainder = list(candidates[2:])
+        entry_indices = [scenario.entry_index]
+        if ordinal % 2 == 1 and candidate_remainder:
+            second_entry_index = candidate_remainder.pop(0)
+            entry_indices.append(second_entry_index)
+            titles[second_entry_index] = f"{scenario.query.title()} incident index"
+            bodies[second_entry_index] += (
+                f" Use this {scenario.query} index as an alternate route to the accepted "
+                "correction."
+            )
+            references[second_entry_index].append(primary_id)
+            navigation_ranks[second_entry_index] = 50 + ordinal
+
         distractors: list[str] = []
-        for position, index in enumerate(candidates[2:]):
+        for position, index in enumerate(candidate_remainder):
             memory_id = f"mem-{index + 1:04d}"
             distractors.append(memory_id)
             if position % 3 == 0:
@@ -220,10 +238,36 @@ def build_frozen_corpus(*, seed: int = 5877) -> FrozenCorpus:
                 f" Historical {scenario.query} discussion used {scenario.forbidden}; "
                 "this note is contextual evidence, not the accepted production rule."
             )
+
+        # The graph intentionally contains both helpful authorities and misleading hubs.
+        # These edges never change lexical candidate membership.
+        entry_targets = [primary_id]
+        if ordinal % 4 == 2:
+            entry_targets = [*distractors[:5], primary_id]
+            bodies[scenario.entry_index] += (
+                " Several neighboring investigations are linked; inspect the correction after "
+                "ruling out the historical branches."
+            )
+        references[scenario.entry_index].extend(entry_targets)
+
+        if distractors:
+            structural_distractor = distractors[0]
+            structural_index = int(structural_distractor.split("-")[1]) - 1
+            references[structural_index].extend(distractors[1:9])
+            for offset in range(12):
+                supporter = (ordinal * 41 + offset * 17 + 7) % scenario.corpus_size
+                if supporter not in entry_indices and supporter != scenario.primary_index:
+                    references[supporter].append(structural_distractor)
+
+        if ordinal % 4 == 1:
+            for offset in range(18):
+                supporter = (ordinal * 29 + offset * 13 + 11) % scenario.corpus_size
+                if supporter not in entry_indices and supporter != scenario.primary_index:
+                    references[supporter].append(entry_id)
+
         if distractors:
             archived_index = int(distractors[0].split("-")[1]) - 1
             lifecycle[archived_index] = "archived"
-            references[archived_index].append(f"task-{scenario.slug}-archive")
 
         tasks.append(
             OrderingTask(
@@ -236,7 +280,7 @@ def build_frozen_corpus(*, seed: int = 5877) -> FrozenCorpus:
                     "configuration token."
                 ),
                 primary_relevant=primary_id,
-                acceptable_entry_points=(entry_id,),
+                acceptable_entry_points=tuple(f"mem-{index + 1:04d}" for index in entry_indices),
                 distractors=tuple(distractors),
                 expected_facts=(scenario.expected,),
                 forbidden_facts=(scenario.forbidden,),

@@ -27,6 +27,7 @@ from membench.beads_ordering.models import (
     OrderingArm,
     OrderingRunResult,
 )
+from membench.beads_ordering.ranked_searching import enrich_with_ranked_searching
 from membench.beads_ordering.report import write_report
 from membench.beads_ordering.runner import (
     ARMS,
@@ -249,7 +250,8 @@ def _parse_ordering_arms(raw: str) -> list[OrderingArm]:
     try:
         arms = [OrderingArm(part.strip()) for part in raw.split(",") if part.strip()]
     except ValueError as exc:
-        raise SystemExit("ordering arms must be key, navigation, or bm25f") from exc
+        choices = ", ".join(arm.value for arm in OrderingArm)
+        raise SystemExit(f"ordering arms must be one of: {choices}") from exc
     if not arms:
         raise SystemExit("at least one ordering arm is required")
     return arms
@@ -260,6 +262,10 @@ def _cmd_beads_ordering_freeze(args: argparse.Namespace) -> int:
     if out.exists() and not args.overwrite:
         raise SystemExit(f"{out} exists; pass --overwrite to replace it")
     corpus = build_frozen_corpus(seed=args.seed)
+    corpus = enrich_with_ranked_searching(
+        corpus,
+        artifact_repo=Path(args.structural_order_source).expanduser().resolve(),
+    )
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(corpus.model_dump_json(indent=2) + "\n", encoding="utf-8")
     print(
@@ -316,7 +322,7 @@ def _validated_ordering_inputs(
 def _cmd_beads_ordering_validate(args: argparse.Namespace) -> int:
     corpus, beads_bin, _, bm25f, truth = _validated_ordering_inputs(args)
     payload = {
-        "schema_version": 1,
+        "schema_version": corpus.schema_version,
         "fixture_digest": corpus_digest(corpus),
         "beads_bin": beads_bin,
         "bm25f": bm25f.model_dump(),
@@ -356,9 +362,9 @@ def _cmd_beads_ordering_run(args: argparse.Namespace) -> int:
         for repeat in range(args.repeats)
     ]
     random.Random(args.order_seed).shuffle(cells)
-    prompt_digest = hashlib.sha256(b"beads-ordering-agent-protocol-v2").hexdigest()
+    prompt_digest = hashlib.sha256(b"beads-ordering-agent-protocol-v3").hexdigest()
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "started_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "mem_git_sha": mem_sha,
         "mem_git_dirty": mem_dirty,
@@ -366,12 +372,24 @@ def _cmd_beads_ordering_run(args: argparse.Namespace) -> int:
         "beads_git_dirty": beads_dirty,
         "beads_bin": beads_bin,
         "beads_bin_sha256": beads_binary_digest,
+        "structural_order_source_git_sha": corpus.structural_order_source_git_sha,
         "fixture": str(Path(args.fixture).resolve()),
         "fixture_digest": corpus_digest(corpus),
         "bm25f": bm25f.model_dump(),
         "ordering_conventions": {
             "key": "case-sensitive canonical Memory key ascending",
             "navigation": "authored navigation_rank ascending, then canonical Memory ID",
+            "indegree": "global query-independent indegree descending, then canonical Memory ID",
+            "outdegree": "global query-independent outdegree descending, then canonical Memory ID",
+            "pagerank": "global query-independent PageRank descending, then canonical Memory ID",
+            "reverse-pagerank": (
+                "global query-independent PageRank on reversed edges descending, then "
+                "canonical Memory ID"
+            ),
+            "hits-authority": (
+                "global query-independent HITS authority descending, then canonical Memory ID"
+            ),
+            "hits-hub": "global query-independent HITS hub descending, then canonical Memory ID",
             "bm25f": "global BM25F score over the same literal-match set, then canonical Memory ID",
         },
         "page_sizes": [str(value) for value in page_sizes],
@@ -411,6 +429,7 @@ def _cmd_beads_ordering_run(args: argparse.Namespace) -> int:
                 or row.beads_git_sha != beads_sha
                 or row.beads_git_dirty != beads_dirty
                 or row.beads_bin_sha256 != beads_binary_digest
+                or row.structural_order_source_git_sha != corpus.structural_order_source_git_sha
                 or row.agent_model != model
                 or row.agent_cli_version != cli_version
             ):
@@ -449,6 +468,7 @@ def _cmd_beads_ordering_run(args: argparse.Namespace) -> int:
                 beads_sha=beads_sha,
                 beads_dirty=beads_dirty,
                 beads_bin_sha256=beads_binary_digest,
+                structural_order_source_git_sha=corpus.structural_order_source_git_sha,
                 artifacts_dir=out,
                 claude_credentials=claude_credentials,
                 max_tool_calls=args.max_tool_calls,
@@ -463,7 +483,8 @@ def _cmd_beads_ordering_run(args: argparse.Namespace) -> int:
 def _cmd_beads_ordering_analyze(args: argparse.Namespace) -> int:
     rows = [
         OrderingRunResult.model_validate_json(line)
-        for line in Path(args.raw).read_text(encoding="utf-8").splitlines()
+        for raw_path in args.raw
+        for line in Path(raw_path).read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
     write_report(rows, Path(args.out))
@@ -551,6 +572,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_freeze.add_argument("--out", default=str(_DEFAULT_ORDERING_FIXTURE))
     p_freeze.add_argument("--seed", type=int, default=5877)
+    p_freeze.add_argument(
+        "--structural-order-source",
+        required=True,
+        help="checkout containing 29-ranked-searching used to materialize structural priors",
+    )
     p_freeze.add_argument("--overwrite", action="store_true")
     p_freeze.set_defaults(func=_cmd_beads_ordering_freeze)
 
@@ -575,7 +601,7 @@ def main(argv: list[str] | None = None) -> int:
     p_ordering_run.add_argument("--arms", default=",".join(arm.value for arm in ARMS))
     p_ordering_run.add_argument("--page-sizes", default=",".join(str(size) for size in PAGE_SIZES))
     p_ordering_run.add_argument(
-        "--mode", choices=[mode.value for mode in ExperimentMode], default="natural"
+        "--mode", choices=[mode.value for mode in ExperimentMode], default="search-only"
     )
     p_ordering_run.add_argument("--repeats", type=int, default=1)
     p_ordering_run.add_argument("--order-seed", type=int, default=5877)
@@ -586,7 +612,7 @@ def main(argv: list[str] | None = None) -> int:
     p_ordering_analysis = sub.add_parser(
         "beads-ordering-analyze", help="regenerate tables and plots from raw ordering runs"
     )
-    p_ordering_analysis.add_argument("--raw", required=True)
+    p_ordering_analysis.add_argument("--raw", required=True, nargs="+")
     p_ordering_analysis.add_argument("--out", required=True)
     p_ordering_analysis.set_defaults(func=_cmd_beads_ordering_analyze)
 

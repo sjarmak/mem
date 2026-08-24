@@ -11,7 +11,12 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from membench.beads_ordering.models import BM25FConfig, OrderingArm, ToolLogEntry
+from membench.beads_ordering.models import (
+    BM25FConfig,
+    ExperimentMode,
+    OrderingArm,
+    ToolLogEntry,
+)
 
 TOOL_CONFIG_ENV = "MEMBENCH_BEADS_TOOL_CONFIG"
 
@@ -30,6 +35,7 @@ class ToolConfig(BaseModel):
     log_path: str
     agent_started_monotonic_ns: int = Field(ge=0)
     max_tool_calls: int = Field(default=12, ge=1)
+    mode: ExperimentMode = ExperimentMode.NAVIGATION
 
 
 class BeadsToolError(RuntimeError):
@@ -133,6 +139,33 @@ def _existing_log_count(path: Path) -> int:
     return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
 
 
+def _existing_logs(path: Path) -> tuple[ToolLogEntry, ...]:
+    if not path.exists():
+        return ()
+    return tuple(
+        ToolLogEntry.model_validate_json(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    )
+
+
+def _recall_access(config: ToolConfig, log_path: Path, memory_id: str) -> tuple[bool, bool]:
+    logs = tuple(entry for entry in _existing_logs(log_path) if entry.error is None)
+    visible = {
+        candidate_id
+        for entry in logs
+        if entry.operation in {"search", "continue"}
+        for candidate_id in entry.visible_ids
+    }
+    referenced = {
+        target_id for entry in logs if entry.operation == "recall" for target_id in entry.references
+    }
+    allowed = memory_id in visible
+    if config.mode is not ExperimentMode.SEARCH_ONLY:
+        allowed = allowed or memory_id in referenced
+    return allowed, memory_id in referenced
+
+
 def _append_log(path: Path, entry: ToolLogEntry) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
@@ -150,6 +183,7 @@ def execute(
 
     start_ns = time.monotonic_ns()
     started_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    followed_reference = False
     try:
         if operation in {"search", "continue"}:
             if operation == "continue" and not argument:
@@ -170,6 +204,16 @@ def execute(
         elif operation == "recall":
             if not argument:
                 raise BeadsToolError("recall requires a Memory ID")
+            allowed, followed_reference = _recall_access(config, log_path, argument)
+            if not allowed:
+                if config.mode is ExperimentMode.SEARCH_ONLY:
+                    raise BeadsToolError(
+                        "search-only mode permits recall only for a Memory shown by discovery"
+                    )
+                raise BeadsToolError(
+                    "recall permits only a Memory shown by discovery or referenced by a "
+                    "successfully recalled Memory"
+                )
             raw = _bd(config, ["recall", argument])
             value = raw.get("value", "")
             if not raw.get("found") or not isinstance(value, str):
@@ -221,6 +265,7 @@ def execute(
         total_matched=total_matched,
         memory_id=memory_id,
         references=references,
+        followed_reference=followed_reference,
         server_candidate_generation_ms=candidate_ms,
         server_ordering_ms=ordering_ms,
     )

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
@@ -12,9 +13,15 @@ from membench.beads_ordering.client import BeadsExperimentClient, candidate_pari
 from membench.beads_ordering.corpus import build_frozen_corpus
 from membench.beads_ordering.models import (
     BM25FConfig,
+    ExperimentMode,
+    MemoryFixture,
     OrderingArm,
     OrderingRunResult,
     ToolLogEntry,
+)
+from membench.beads_ordering.ranked_searching import (
+    RANKED_SEARCHING_PRIORS,
+    enrich_with_ranked_searching,
 )
 from membench.beads_ordering.report import render_markdown, render_page_size_svg
 from membench.beads_ordering.scoring import score_agent_run
@@ -118,8 +125,12 @@ def test_candidate_parity_allows_only_order_rank_and_continuation_to_differ() ->
         "excerpt": "same",
         "matched_fields": ["body"],
     }
-    pages = {}
-    for arm, rank in ((OrderingArm.KEY, 2), (OrderingArm.NAVIGATION, 1), (OrderingArm.BM25F, 3)):
+    pages: dict[OrderingArm, dict[str, Any]] = {}
+    for arm, rank in (
+        (OrderingArm.KEY, 2),
+        (OrderingArm.PAGERANK, 1),
+        (OrderingArm.BM25F, 3),
+    ):
         pages[arm] = {
             "items": [{**base_item, "rank": rank}],
             "total_matched": 1,
@@ -163,6 +174,27 @@ def test_frozen_corpus_is_nested_realistic_and_fully_labelled() -> None:
         assert any(by_id[mid].provenance == "human" for mid in matches)
 
 
+def test_ranked_searching_orders_are_materialized_per_nested_corpus() -> None:
+    corpus = build_frozen_corpus(seed=5877)
+
+    def fake_orders(
+        memories: tuple[MemoryFixture, ...], *, artifact_repo: Path
+    ) -> dict[str, tuple[str, ...]]:
+        assert artifact_repo == Path("/artifact")
+        ids = tuple(memory.id for memory in reversed(memories))
+        return dict.fromkeys(RANKED_SEARCHING_PRIORS, ids)
+
+    enriched = enrich_with_ranked_searching(
+        corpus, artifact_repo=Path("/artifact"), order_fn=fake_orders
+    )
+    first = enriched.memories[0]
+    assert first.structural_ranks_by_corpus["50"]["pagerank"] == 50
+    assert first.structural_ranks_by_corpus["500"]["hits-hub"] == 500
+    stored = first.stored_value(50)
+    assert "structural_rank_pagerank: 50" in stored
+    assert "structural_rank_hits_hub: 50" in stored
+
+
 def test_score_agent_run_accounts_to_first_useful_memory() -> None:
     logs = [
         ToolLogEntry(
@@ -172,7 +204,7 @@ def test_score_agent_run_accounts_to_first_useful_memory() -> None:
             elapsed_ms=10,
             response_bytes=300,
             response_tokens_estimate=75,
-            visible_ids=["d1", "entry"],
+            visible_ids=("d1", "entry"),
             total_matched=8,
         ),
         ToolLogEntry(
@@ -183,7 +215,7 @@ def test_score_agent_run_accounts_to_first_useful_memory() -> None:
             response_bytes=400,
             response_tokens_estimate=100,
             memory_id="entry",
-            references=["primary"],
+            references=("primary",),
         ),
         ToolLogEntry(
             sequence=3,
@@ -193,6 +225,7 @@ def test_score_agent_run_accounts_to_first_useful_memory() -> None:
             response_bytes=500,
             response_tokens_estimate=125,
             memory_id="primary",
+            followed_reference=True,
         ),
     ]
     result = score_agent_run(
@@ -216,6 +249,9 @@ def test_score_agent_run_accounts_to_first_useful_memory() -> None:
     assert result.pages_requested == 1
     assert result.compact_records_visible == 2
     assert result.compact_result_bytes == 300
+    assert result.compact_tokens_to_first_useful == 75
+    assert result.retrieval_tokens_to_first_useful == 75
+    assert result.tool_calls_to_first_useful == 1
     assert result.full_recalls == 2
     assert result.first_recalled_relevant is True
     assert result.graph_hops_after_first_useful == 1
@@ -233,7 +269,7 @@ def test_score_reaches_useful_memory_through_reference_recall() -> None:
             elapsed_ms=10,
             response_bytes=100,
             response_tokens_estimate=25,
-            visible_ids=["distractor"],
+            visible_ids=("distractor",),
             total_matched=20,
         ),
         ToolLogEntry(
@@ -276,6 +312,8 @@ def test_score_reaches_useful_memory_through_reference_recall() -> None:
     assert result.pages_to_first_useful == 1
     assert result.time_to_first_useful_ms == 15
     assert result.full_recalls == 1
+    assert result.compact_tokens_to_first_useful == 25
+    assert result.retrieval_tokens_to_first_useful == 75
     assert result.premature_stop is False
 
 
@@ -338,6 +376,57 @@ def test_search_words_cannot_change_frozen_query_or_become_a_cursor(
     assert "--continuation" not in seen[0]
 
 
+def test_tool_enforces_search_only_and_reference_navigation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_bd(_config: ToolConfig, arguments: list[str]) -> dict[str, object]:
+        if arguments[0] == "memories":
+            return {
+                "items": [{"id": "entry"}],
+                "query": "frozen query",
+                "total_matched": 2,
+                "complete": True,
+            }
+        memory_id = arguments[1]
+        references = "[primary]" if memory_id == "entry" else "[]"
+        return {
+            "key": memory_id,
+            "found": True,
+            "value": f"---\nreferences: {references}\n---\nbody",
+        }
+
+    monkeypatch.setattr(ordering_tool, "_bd", fake_bd)
+    search_only = ToolConfig(
+        beads_bin="/opt/bd",
+        workspace=str(tmp_path),
+        query="frozen query",
+        arm=OrderingArm.KEY,
+        page_size=5,
+        agent_started_monotonic_ns=0,
+        mode=ExperimentMode.SEARCH_ONLY,
+        log_path=str(tmp_path / "search-only.jsonl"),
+    )
+    ordering_tool.execute(search_only, "search")
+    ordering_tool.execute(search_only, "recall", "entry")
+    with pytest.raises(ordering_tool.BeadsToolError, match="search-only"):
+        ordering_tool.execute(search_only, "recall", "primary")
+
+    navigation = ToolConfig(
+        beads_bin="/opt/bd",
+        workspace=str(tmp_path),
+        query="frozen query",
+        arm=OrderingArm.KEY,
+        page_size=5,
+        agent_started_monotonic_ns=0,
+        mode=ExperimentMode.NAVIGATION,
+        log_path=str(tmp_path / "navigation.jsonl"),
+    )
+    ordering_tool.execute(navigation, "search")
+    ordering_tool.execute(navigation, "recall", "entry")
+    _, followed = ordering_tool.execute(navigation, "recall", "primary")
+    assert followed.followed_reference is True
+
+
 def test_analysis_reports_distributions_strata_and_burial_correlation(tmp_path: Path) -> None:
     rows = []
     for index, (arm, pages, tokens) in enumerate(
@@ -384,11 +473,11 @@ def test_analysis_reports_distributions_strata_and_burial_correlation(tmp_path: 
                 agent_output_tokens=100,
             )
         )
-    report = analyze_results(rows)
+    report = cast(dict[str, Any], analyze_results(rows))
     assert percentile([1, 2, 10], 0.5) == 2
     assert report["by_arm"]["key"]["pages_requested"]["p50"] == 2.5
     assert "baseline_burial_correlations" in report
-    assert report["largest_page_size_with_material_ranking_gap"] == 5
+    assert report["largest_page_size_with_material_ranking_gap"] == {"navigation": 5}
     assert report["mechanical_vs_bm25f"][0]["material_gap"] is True
     assert report["strata"]
     markdown = render_markdown(rows, report)

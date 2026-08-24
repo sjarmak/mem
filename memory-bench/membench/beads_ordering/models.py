@@ -8,11 +8,18 @@ from pydantic import BaseModel, ConfigDict, Field
 class OrderingArm(StrEnum):
     KEY = "key"
     NAVIGATION = "navigation"
+    INDEGREE = "indegree"
+    OUTDEGREE = "outdegree"
+    PAGERANK = "pagerank"
+    REVERSE_PAGERANK = "reverse-pagerank"
+    HITS_AUTHORITY = "hits-authority"
+    HITS_HUB = "hits-hub"
     BM25F = "bm25f"
 
 
 class ExperimentMode(StrEnum):
-    NATURAL = "natural"
+    SEARCH_ONLY = "search-only"
+    NAVIGATION = "navigation"
     DEPTH_FIRST = "depth-first"
 
 
@@ -75,18 +82,25 @@ class MemoryFixture(BaseModel):
     navigation_rank: int | None = None
     references: tuple[str, ...] = ()
     provenance: str = "human"
+    structural_ranks_by_corpus: dict[str, dict[str, int]] = Field(default_factory=dict)
     body: str
 
-    def stored_value(self) -> str:
+    def stored_value(self, corpus_size: int | None = None) -> str:
         aliases = ", ".join(self.aliases)
         references = ", ".join(self.references)
         rank = "" if self.navigation_rank is None else str(self.navigation_rank)
+        structural = self.structural_ranks_by_corpus.get(str(corpus_size), {})
+        rank_lines = "".join(
+            f"structural_rank_{name.replace('-', '_')}: {position}\n"
+            for name, position in sorted(structural.items())
+        )
         return (
             "---\n"
             f"title: {self.title}\n"
             f"aliases: [{aliases}]\n"
             f"lifecycle: {self.lifecycle}\n"
             f"navigation_rank: {rank}\n"
+            f"{rank_lines}"
             f"references: [{references}]\n"
             f"provenance: {self.provenance}\n"
             "---\n"
@@ -111,8 +125,9 @@ class OrderingTask(BaseModel):
 class FrozenCorpus(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    schema_version: int = 1
+    schema_version: int = 2
     seed: int
+    structural_order_source_git_sha: str = ""
     memories: tuple[MemoryFixture, ...]
     tasks: tuple[OrderingTask, ...]
 
@@ -131,6 +146,7 @@ class ToolLogEntry(BaseModel):
     total_matched: int | None = Field(default=None, ge=0)
     memory_id: str | None = None
     references: tuple[str, ...] = ()
+    followed_reference: bool = False
     server_candidate_generation_ms: float = Field(default=0, ge=0)
     server_ordering_ms: float = Field(default=0, ge=0)
     error: str | None = None
@@ -144,7 +160,7 @@ class OrderingRunResult(BaseModel):
     query: str = ""
     corpus_size: int
     arm: OrderingArm
-    mode: ExperimentMode = ExperimentMode.NATURAL
+    mode: ExperimentMode = ExperimentMode.NAVIGATION
     repeat: int
     page_size: str
     total_matched: int
@@ -158,11 +174,19 @@ class OrderingRunResult(BaseModel):
     compact_records_visible: int
     compact_result_bytes: int
     compact_result_tokens: int
+    compact_bytes_to_first_useful: int = 0
+    compact_tokens_to_first_useful: int = 0
+    retrieval_tokens_to_first_useful: int = 0
+    tool_calls_to_first_useful: int = 0
     retrieval_tool_calls: int
     time_to_first_useful_ms: float | None
     full_recalls: int
     first_recalled_relevant: bool | None
     graph_hops_after_first_useful: int
+    reference_edges_exposed: int = 0
+    branching_factor_mean: float = 0
+    branching_factor_max: int = 0
+    navigation_reached_primary: bool = False
     retrieval_related_tokens: int
     retrieval_latency_ms: float
     server_candidate_generation_ms: float
@@ -178,6 +202,7 @@ class OrderingRunResult(BaseModel):
     beads_git_sha: str = ""
     beads_git_dirty: bool = False
     beads_bin_sha256: str = ""
+    structural_order_source_git_sha: str = ""
     agent_model: str = ""
     agent_cli_version: str = ""
     final_answer: str = ""
