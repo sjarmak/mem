@@ -163,7 +163,8 @@ def _recall_access(config: ToolConfig, log_path: Path, memory_id: str) -> tuple[
     allowed = memory_id in visible
     if config.mode is not ExperimentMode.SEARCH_ONLY:
         allowed = allowed or memory_id in referenced
-    return allowed, memory_id in referenced
+    followed_reference = config.mode is not ExperimentMode.SEARCH_ONLY and memory_id in referenced
+    return allowed, followed_reference
 
 
 def _append_log(path: Path, entry: ToolLogEntry) -> None:

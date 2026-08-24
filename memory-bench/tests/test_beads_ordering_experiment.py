@@ -448,6 +448,8 @@ def test_tool_enforces_search_only_and_reference_navigation(
     ordering_tool.execute(search_only, "recall", "entry")
     with pytest.raises(ordering_tool.BeadsToolError, match="search-only"):
         ordering_tool.execute(search_only, "recall", "primary")
+    search_only_logs = ordering_tool._existing_logs(Path(search_only.log_path))
+    assert not any(entry.followed_reference for entry in search_only_logs)
 
     navigation = ToolConfig(
         beads_bin="/opt/bd",
