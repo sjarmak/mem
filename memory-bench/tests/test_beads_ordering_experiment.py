@@ -223,6 +223,61 @@ def test_score_agent_run_accounts_to_first_useful_memory() -> None:
     assert result.premature_stop is False
 
 
+def test_score_reaches_useful_memory_through_reference_recall() -> None:
+    logs = [
+        ToolLogEntry(
+            sequence=1,
+            operation="search",
+            started_at="2026-01-01T00:00:00Z",
+            elapsed_ms=10,
+            response_bytes=100,
+            response_tokens_estimate=25,
+            visible_ids=["distractor"],
+            total_matched=20,
+        ),
+        ToolLogEntry(
+            sequence=2,
+            operation="recall",
+            started_at="2026-01-01T00:00:01Z",
+            elapsed_ms=5,
+            response_bytes=200,
+            response_tokens_estimate=50,
+            memory_id="primary",
+        ),
+        ToolLogEntry(
+            sequence=3,
+            operation="recall",
+            started_at="2026-01-01T00:00:02Z",
+            elapsed_ms=4,
+            response_bytes=50,
+            response_tokens_estimate=13,
+            error="failed recall",
+        ),
+    ]
+    result = score_agent_run(
+        task_id="graph-entry",
+        corpus_size=100,
+        arm=OrderingArm.KEY,
+        repeat=0,
+        primary_id="primary",
+        acceptable_ids=set(),
+        expected_facts=["SAFE=1"],
+        forbidden_facts=[],
+        final_answer="SAFE=1",
+        logs=logs,
+        input_tokens=100,
+        output_tokens=10,
+        end_to_end_ms=100,
+        primary_rank=20,
+        acceptable_rank=None,
+        page_size=5,
+    )
+    assert result.pages_to_first_useful == 1
+    assert result.time_to_first_useful_ms == 15
+    assert result.full_recalls == 1
+    assert result.premature_stop is False
+
+
 def test_agent_page_projection_hides_order_and_scorer_configuration() -> None:
     raw = {
         "items": [{"id": "m1", "rank": 1}],

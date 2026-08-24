@@ -43,10 +43,18 @@ def score_agent_run(
 ) -> OrderingRunResult:
     relevant = acceptable_ids | {primary_id}
     page_logs = [entry for entry in logs if entry.operation in {"search", "continue"}]
-    recall_logs = [entry for entry in logs if entry.operation == "recall"]
+    recall_logs = [
+        entry for entry in logs if entry.operation == "recall" and entry.memory_id is not None
+    ]
     visible_ids = [memory_id for entry in page_logs for memory_id in entry.visible_ids]
     first_useful_log = next(
-        (entry for entry in page_logs if relevant.intersection(entry.visible_ids)), None
+        (
+            entry
+            for entry in logs
+            if relevant.intersection(entry.visible_ids)
+            or (entry.operation == "recall" and entry.memory_id in relevant)
+        ),
+        None,
     )
     if first_useful_log is None:
         time_to_useful = None
@@ -54,10 +62,14 @@ def score_agent_run(
     elif first_useful_log.since_agent_start_ms is not None:
         time_to_useful = first_useful_log.since_agent_start_ms + first_useful_log.elapsed_ms
     else:
-        cutoff = page_logs.index(first_useful_log) + 1
-        time_to_useful = sum(entry.elapsed_ms for entry in page_logs[:cutoff])
+        cutoff = logs.index(first_useful_log) + 1
+        time_to_useful = sum(entry.elapsed_ms for entry in logs[:cutoff])
     if first_useful_log is not None:
-        pages_to_useful = page_logs.index(first_useful_log) + 1
+        pages_to_useful = sum(
+            1
+            for entry in logs[: logs.index(first_useful_log) + 1]
+            if entry.operation in {"search", "continue"}
+        )
 
     recalled_ids = [entry.memory_id for entry in recall_logs if entry.memory_id]
     first_relevant = None if not recalled_ids else recalled_ids[0] in relevant
@@ -75,7 +87,9 @@ def score_agent_run(
     abstained = any(
         token in answer for token in ("abstain", "insufficient information", "cannot determine")
     )
-    useful_visible = any(memory_id in relevant for memory_id in visible_ids)
+    useful_reached = any(memory_id in relevant for memory_id in visible_ids) or any(
+        memory_id in relevant for memory_id in recalled_ids
+    )
     compact_bytes = sum(entry.response_bytes for entry in page_logs)
     compact_tokens = sum(entry.response_tokens_estimate for entry in page_logs)
     retrieval_tokens = sum(entry.response_tokens_estimate for entry in logs)
@@ -120,7 +134,7 @@ def score_agent_run(
         end_to_end_ms=end_to_end_ms,
         task_success=success,
         abstained=abstained,
-        premature_stop=not useful_visible and not abstained,
+        premature_stop=not useful_reached and not abstained,
         agent_input_tokens=input_tokens,
         agent_output_tokens=output_tokens,
         mem_git_sha=mem_git_sha,

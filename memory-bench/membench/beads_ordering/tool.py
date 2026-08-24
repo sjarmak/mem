@@ -151,8 +151,8 @@ def execute(
     started_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     try:
         if operation in {"search", "continue"}:
-            if operation == "search" and argument:
-                raise BeadsToolError("search accepts no argument; the task query is fixed")
+            if operation == "search" and argument and argument != config.query:
+                raise BeadsToolError("the search query is frozen for this task")
             if operation == "continue" and not argument:
                 raise BeadsToolError("continue requires the prior continuation token")
             raw = _bd(config, _discovery_arguments(config, argument))
