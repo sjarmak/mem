@@ -227,7 +227,7 @@ def agent_request(task: OrderingTask, mode: ExperimentMode, *, max_tool_calls: i
         f"{task.instruction}\n\n"
         "Memory discovery is available only through these commands:\n"
         "  ./memory-tool search\n"
-        "  ./memory-tool continue '<continuation>'\n"
+        "  ./memory-tool continue\n"
         "  ./memory-tool recall '<Memory ID>'\n"
         "Search exactly once, inspect the compact results, and naturally decide whether to "
         "recall a Memory, request the continuation, or stop. Do not paginate after you believe "

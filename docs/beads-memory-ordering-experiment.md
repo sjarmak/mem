@@ -38,7 +38,9 @@ Set `BEADS_BIN` explicitly; the harness never imports Beads code.
 
 `--page-size all` returns the complete matching set in one response. Integer
 page sizes use a state-bound continuation; Beads refuses continuation after a
-candidate/query/order/config change.
+candidate/query/order/config change. The agent sees only whether continuation is
+available; the neutral wrapper retains and supplies the exact opaque cursor so
+cursor transcription errors cannot masquerade as retrieval failures.
 
 ## Build and validate
 

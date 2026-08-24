@@ -103,6 +103,7 @@ def analyze_results(rows: Sequence[OrderingRunResult]) -> dict[str, object]:
         "end_to_end_ms",
         "full_recalls",
         "graph_hops_after_first_useful",
+        "graph_hops_total",
         "reference_edges_exposed",
     )
     by_arm: dict[str, dict[str, object]] = {}
@@ -170,7 +171,7 @@ def analyze_results(rows: Sequence[OrderingRunResult]) -> dict[str, object]:
                 else None
             ),
             "recalls": _distribution([row.full_recalls for row in group]),
-            "graph_hops": _distribution([row.graph_hops_after_first_useful for row in group]),
+            "graph_hops": _distribution([row.graph_hops_total for row in group]),
             "retrieval_tokens": _distribution(
                 [row.retrieval_tokens_to_first_useful for row in group]
             ),
@@ -366,9 +367,7 @@ def analyze_results(rows: Sequence[OrderingRunResult]) -> dict[str, object]:
                     "navigation_primary_reach_rate": _mean(
                         navigation_rows, "navigation_reached_primary"
                     ),
-                    "navigation_graph_hops_mean": _mean(
-                        navigation_rows, "graph_hops_after_first_useful"
-                    ),
+                    "navigation_graph_hops_mean": _mean(navigation_rows, "graph_hops_total"),
                 }
             )
     return {

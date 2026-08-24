@@ -144,6 +144,7 @@ class ToolLogEntry(BaseModel):
     response_tokens_estimate: int = Field(ge=0)
     visible_ids: tuple[str, ...] = ()
     total_matched: int | None = Field(default=None, ge=0)
+    continuation: str = ""
     memory_id: str | None = None
     references: tuple[str, ...] = ()
     followed_reference: bool = False
@@ -183,6 +184,7 @@ class OrderingRunResult(BaseModel):
     full_recalls: int
     first_recalled_relevant: bool | None
     graph_hops_after_first_useful: int
+    graph_hops_total: int = 0
     reference_edges_exposed: int = 0
     branching_factor_mean: float = 0
     branching_factor_max: int = 0

@@ -142,6 +142,10 @@ search -> inspect compact page -> recall or continue -> optionally follow refs
        -> answer/perform the task
 ```
 
+The neutral wrapper keeps the opaque Beads continuation and exposes only a
+`continue` action to the agent. This preserves the Beads mutation/config checks
+without measuring the model's ability to transcribe a long cursor.
+
 It is not told the arm. Page size, agent/model/config, corpus, query, and budget
 are paired and fixed. The harness does not force continuation after the agent
 chooses a result or abstains.

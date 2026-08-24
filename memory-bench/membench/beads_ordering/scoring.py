@@ -85,6 +85,7 @@ def score_agent_run(
         for entry in recall_logs
         if entry.followed_reference and entry.sequence >= first_useful_sequence
     )
+    total_hops = sum(1 for entry in recall_logs if entry.followed_reference)
     branch_counts = [len(entry.references) for entry in recall_logs]
     navigation_reached_primary = any(
         entry.memory_id == primary_id and entry.followed_reference for entry in recall_logs
@@ -162,6 +163,7 @@ def score_agent_run(
         full_recalls=len(recall_logs),
         first_recalled_relevant=first_relevant,
         graph_hops_after_first_useful=hops,
+        graph_hops_total=total_hops,
         reference_edges_exposed=sum(branch_counts),
         branching_factor_mean=(sum(branch_counts) / len(branch_counts) if branch_counts else 0),
         branching_factor_max=max(branch_counts, default=0),

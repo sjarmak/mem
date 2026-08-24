@@ -51,7 +51,7 @@ def visible_page(raw: dict[str, Any], *, page_size_label: str) -> dict[str, Any]
         "total_matched": raw.get("total_matched", 0),
         "page_size": page_size_label,
         "complete": raw.get("complete", False),
-        "continuation": raw.get("continuation", ""),
+        "continuation_available": bool(raw.get("continuation")),
     }
 
 
@@ -186,16 +186,28 @@ def execute(
     followed_reference = False
     try:
         if operation in {"search", "continue"}:
-            if operation == "continue" and not argument:
-                raise BeadsToolError("continue requires the prior continuation token")
+            prior_logs = _existing_logs(log_path)
             if operation == "search" and any(
-                entry.operation == "search" and entry.error is None
-                for entry in _existing_logs(log_path)
+                entry.operation == "search" and entry.error is None for entry in prior_logs
             ):
                 raise BeadsToolError(
                     "search was already performed; use its continuation token or stop"
                 )
-            continuation = argument if operation == "continue" else ""
+            if operation == "continue":
+                continuation = next(
+                    (
+                        entry.continuation
+                        for entry in reversed(prior_logs)
+                        if entry.operation in {"search", "continue"}
+                        and entry.error is None
+                        and entry.continuation
+                    ),
+                    "",
+                )
+                if not continuation:
+                    raise BeadsToolError("no continuation is available from the prior page")
+            else:
+                continuation = ""
             raw = _bd(config, _discovery_arguments(config, continuation))
             payload = visible_page(raw, page_size_label=str(config.page_size))
             visible_ids = tuple(
@@ -208,6 +220,7 @@ def execute(
             memory_id = None
             candidate_ms = float(raw.get("candidate_generation_ms", 0))
             ordering_ms = float(raw.get("ordering_ms", 0))
+            next_continuation = str(raw.get("continuation", ""))
         elif operation == "recall":
             if not argument:
                 raise BeadsToolError("recall requires a Memory ID")
@@ -237,6 +250,7 @@ def execute(
             memory_id = str(raw.get("key", argument))
             candidate_ms = 0.0
             ordering_ms = 0.0
+            next_continuation = ""
         else:
             raise BeadsToolError("operation must be search, continue, or recall")
     except Exception as exc:
@@ -270,6 +284,7 @@ def execute(
         response_tokens_estimate=token_estimate,
         visible_ids=visible_ids,
         total_matched=total_matched,
+        continuation=next_continuation,
         memory_id=memory_id,
         references=references,
         followed_reference=followed_reference,
@@ -293,15 +308,17 @@ def _load_config() -> ToolConfig:
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     if not arguments:
-        print("usage: memory-tool search | continue TOKEN | recall MEMORY_ID", file=sys.stderr)
+        print("usage: memory-tool search | continue | recall MEMORY_ID", file=sys.stderr)
         return 2
     operation = arguments[0]
     if operation == "search":
         argument = " ".join(arguments[1:])
+    elif operation == "continue" and len(arguments) in {1, 2}:
+        argument = arguments[1] if len(arguments) == 2 else ""
     elif len(arguments) == 2:
         argument = arguments[1]
     else:
-        print("usage: memory-tool search | continue TOKEN | recall MEMORY_ID", file=sys.stderr)
+        print("usage: memory-tool search | continue | recall MEMORY_ID", file=sys.stderr)
         return 2
     try:
         payload, _ = execute(_load_config(), operation, argument)

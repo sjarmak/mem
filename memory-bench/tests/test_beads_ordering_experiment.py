@@ -342,7 +342,7 @@ def test_agent_page_projection_hides_order_and_scorer_configuration() -> None:
         "total_matched": 12,
         "page_size": "5",
         "complete": False,
-        "continuation": "next",
+        "continuation_available": True,
     }
     assert memory_references("---\nreferences: [m2, task-1]\n---\nbody") == (
         "m2",
@@ -379,6 +379,39 @@ def test_search_words_cannot_change_frozen_query_or_become_a_cursor(
     assert "--continuation" not in seen[0]
     with pytest.raises(ordering_tool.BeadsToolError, match="already performed"):
         ordering_tool.execute(config, "search")
+
+
+def test_tool_retains_exact_continuation_without_model_round_trip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[list[str]] = []
+
+    def fake_bd(_config: ToolConfig, arguments: list[str]) -> dict[str, object]:
+        seen.append(arguments)
+        return {
+            "items": [],
+            "query": "frozen query",
+            "total_matched": 10,
+            "complete": len(seen) == 2,
+            "continuation": "cursor-exact" if len(seen) == 1 else "",
+        }
+
+    monkeypatch.setattr(ordering_tool, "_bd", fake_bd)
+    config = ToolConfig(
+        beads_bin="/opt/bd",
+        workspace=str(tmp_path),
+        query="frozen query",
+        arm=OrderingArm.KEY,
+        page_size=5,
+        log_path=str(tmp_path / "tool.jsonl"),
+        agent_started_monotonic_ns=0,
+    )
+    first, first_log = ordering_tool.execute(config, "search")
+    assert first["continuation_available"] is True
+    assert first_log.continuation == "cursor-exact"
+    second, _ = ordering_tool.execute(config, "continue")
+    assert second["complete"] is True
+    assert seen[1][-2:] == ["--continuation", "cursor-exact"]
 
 
 def test_tool_enforces_search_only_and_reference_navigation(
