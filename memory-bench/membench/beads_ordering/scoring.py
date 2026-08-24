@@ -79,10 +79,17 @@ def score_agent_run(
             hops += 1
 
     answer = final_answer.casefold()
+    decision_lines = [
+        line.partition(":")[2].strip().casefold()
+        for line in final_answer.splitlines()
+        if line.strip().casefold().startswith("decision:")
+    ]
+    decision = decision_lines[-1] if len(decision_lines) == 1 else ""
     success = (
         failure is None
-        and all(fact.casefold() in answer for fact in expected_facts)
-        and all(fact.casefold() not in answer for fact in forbidden_facts)
+        and bool(decision)
+        and all(fact.casefold() in decision for fact in expected_facts)
+        and all(fact.casefold() not in decision for fact in forbidden_facts)
     )
     abstained = any(
         token in answer for token in ("abstain", "insufficient information", "cannot determine")

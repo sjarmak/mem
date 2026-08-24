@@ -204,8 +204,9 @@ def agent_request(task: OrderingTask, mode: ExperimentMode, *, max_tool_calls: i
         "Search once, inspect the compact results, and naturally decide whether to recall a "
         "Memory, request the continuation, or stop. Do not paginate after you believe you have a "
         f"useful result. You have at most {max_tool_calls} retrieval-tool calls.{navigation} "
-        "Do not inspect the wrapper or its configuration. Give only the concise task answer at "
-        "the end."
+        "Do not inspect the wrapper or its configuration. You may explain the decision briefly, "
+        "but end with exactly one line in the form `DECISION: <exact configuration token>`. Put "
+        "only the selected current token on that line."
     )
 
 

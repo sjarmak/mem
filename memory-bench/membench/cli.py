@@ -356,7 +356,7 @@ def _cmd_beads_ordering_run(args: argparse.Namespace) -> int:
         for repeat in range(args.repeats)
     ]
     random.Random(args.order_seed).shuffle(cells)
-    prompt_digest = hashlib.sha256(b"beads-ordering-agent-protocol-v1").hexdigest()
+    prompt_digest = hashlib.sha256(b"beads-ordering-agent-protocol-v2").hexdigest()
     manifest = {
         "schema_version": 1,
         "started_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
