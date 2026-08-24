@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+import membench.beads_ordering.tool as ordering_tool
 from membench.beads_ordering.analysis import analyze_results, percentile
 from membench.beads_ordering.client import BeadsExperimentClient, candidate_parity
 from membench.beads_ordering.corpus import build_frozen_corpus
@@ -17,7 +18,7 @@ from membench.beads_ordering.models import (
 )
 from membench.beads_ordering.report import render_markdown, render_page_size_svg
 from membench.beads_ordering.scoring import score_agent_run
-from membench.beads_ordering.tool import memory_references, visible_page
+from membench.beads_ordering.tool import ToolConfig, memory_references, visible_page
 
 
 def _completed(payload: dict[str, object]) -> subprocess.CompletedProcess[str]:
@@ -306,6 +307,35 @@ def test_agent_page_projection_hides_order_and_scorer_configuration() -> None:
         "m2",
         "task-1",
     )
+
+
+def test_search_words_cannot_change_frozen_query_or_become_a_cursor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[list[str]] = []
+
+    def fake_bd(_config: ToolConfig, arguments: list[str]) -> dict[str, object]:
+        seen.append(arguments)
+        return {
+            "items": [],
+            "query": "frozen query",
+            "total_matched": 0,
+            "complete": True,
+        }
+
+    monkeypatch.setattr(ordering_tool, "_bd", fake_bd)
+    config = ToolConfig(
+        beads_bin="/opt/bd",
+        workspace=str(tmp_path),
+        query="frozen query",
+        arm=OrderingArm.KEY,
+        page_size=5,
+        log_path=str(tmp_path / "tool.jsonl"),
+        agent_started_monotonic_ns=0,
+    )
+    payload, _ = ordering_tool.execute(config, "search", "agent supplied different words")
+    assert payload["query"] == "frozen query"
+    assert "--continuation" not in seen[0]
 
 
 def test_analysis_reports_distributions_strata_and_burial_correlation(tmp_path: Path) -> None:

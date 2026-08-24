@@ -154,7 +154,8 @@ def execute(
         if operation in {"search", "continue"}:
             if operation == "continue" and not argument:
                 raise BeadsToolError("continue requires the prior continuation token")
-            raw = _bd(config, _discovery_arguments(config, argument))
+            continuation = argument if operation == "continue" else ""
+            raw = _bd(config, _discovery_arguments(config, continuation))
             payload = visible_page(raw, page_size_label=str(config.page_size))
             visible_ids = tuple(
                 str(item.get("id", ""))
@@ -239,11 +240,17 @@ def _load_config() -> ToolConfig:
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
-    if not arguments or len(arguments) > 2:
+    if not arguments:
         print("usage: memory-tool search | continue TOKEN | recall MEMORY_ID", file=sys.stderr)
         return 2
     operation = arguments[0]
-    argument = arguments[1] if len(arguments) == 2 else ""
+    if operation == "search":
+        argument = " ".join(arguments[1:])
+    elif len(arguments) == 2:
+        argument = arguments[1]
+    else:
+        print("usage: memory-tool search | continue TOKEN | recall MEMORY_ID", file=sys.stderr)
+        return 2
     try:
         payload, _ = execute(_load_config(), operation, argument)
     except BeadsToolError as exc:
