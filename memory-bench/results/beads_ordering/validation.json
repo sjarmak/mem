@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "fixture_digest": "c399c2ba55caa8e78906abc0d0fc73625735f10d6c82b96eef953ca8cc4cb8bd",
+  "fixture_digest": "3d48d7844c6db32b00e35e460a898daf7b74150dcbb816ad56848161c425ea21",
   "beads_bin": "/home/ds/.local/bin/bd-memory-ordering-5877",
   "bm25f": {
     "key_weight": 6.0,
@@ -13,7 +13,7 @@
   "tasks": {
     "ordering-50-lease-renewal": {
       "total_matched": 12,
-      "candidate_digest": "e9e74ad53ede0cb316a0d5bd43c710ebbe666a668a35b81ad25985d3a7408f6c",
+      "candidate_digest": "fcd12ae123fdcde3eb24dd07e4c1a6b262d492cb22033cff6a3a44f03a4a851a",
       "ranks": {
         "key": {
           "mem-0001": 1,
@@ -61,7 +61,7 @@
     },
     "ordering-50-schema-shadow": {
       "total_matched": 20,
-      "candidate_digest": "dc1228b3f664d798fcd702a202e5a7bf1c572c9d3212981437543a7374530c20",
+      "candidate_digest": "3139646ac6e9461aaf1e889b346eb6a4a1dbf8e340e0dc6797942c4a029fea34",
       "ranks": {
         "key": {
           "mem-0001": 1,
@@ -133,7 +133,7 @@
     },
     "ordering-50-snapshot-restore": {
       "total_matched": 30,
-      "candidate_digest": "3c413ec8c6b244b7e016b690ff3c2984bd052f27d69eceaa7fe6f1b60aa80021",
+      "candidate_digest": "7cd4467bbd7f3d45fb43fdf9bee36ad299445cf63812c67f050233511dc4ffd7",
       "ranks": {
         "key": {
           "mem-0001": 1,
@@ -235,7 +235,7 @@
     },
     "ordering-50-worker-drain": {
       "total_matched": 40,
-      "candidate_digest": "de9b44789e3ce7c168743b9660d67059f059a98902fec7481fa48f334844b64d",
+      "candidate_digest": "b8cb301a0af766cee18be19cee139907dd04f081284861204893cac7a5768b01",
       "ranks": {
         "key": {
           "mem-0001": 1,
@@ -367,7 +367,7 @@
     },
     "ordering-100-migration-freeze": {
       "total_matched": 20,
-      "candidate_digest": "75c22da03a962ee529429b8efe28d164da92bd2a27cac54779a797adde378f2e",
+      "candidate_digest": "3692c48b4d493913177f73ebcd1d4019b562f46b011acadba64954894b99105c",
       "ranks": {
         "key": {
           "mem-0001": 1,
@@ -439,7 +439,7 @@
     },
     "ordering-100-cache-stampede": {
       "total_matched": 35,
-      "candidate_digest": "5ec86bdbd13e4ddf4b76a6d0c41767d002d7a5b12f1271cda824de84b333fe13",
+      "candidate_digest": "f0fc3d8635e683b3b4623043f8e530cfe9566e09bc915a530ff4057ba4ce4165",
       "ranks": {
         "key": {
           "mem-0001": 1,
@@ -556,7 +556,7 @@
     },
     "ordering-100-outbox-replay": {
       "total_matched": 55,
-      "candidate_digest": "86a92ddc07f7082739a09ed16bbb54abfa56e6aa2340182e04711730311a5d49",
+      "candidate_digest": "5b8e635919bef104fe8d8af2a10fcc02a153a40e2ca67e7d9db54b20d68b376b",
       "ranks": {
         "key": {
           "mem-0001": 1,
@@ -733,7 +733,7 @@
     },
     "ordering-100-hook-isolation": {
       "total_matched": 70,
-      "candidate_digest": "4e79316e117cfef9e64b5c06a70e304ddd5f66d9d1ddc40f4bf9fd5f4556b935",
+      "candidate_digest": "bfb656572b00c3332f99e95b4086a56b2780ea72fd76714ad996c5a300ae885c",
       "ranks": {
         "key": {
           "mem-0001": 1,
@@ -955,7 +955,7 @@
     },
     "ordering-500-index-backfill": {
       "total_matched": 50,
-      "candidate_digest": "017616d5b1fc4ccbe5d7cffd78bca02ce52587cbb209cbd0b57e6118d35bff0e",
+      "candidate_digest": "e7b272b2b77e92eb7d2c981413063a832f5d5ca6e25e77c7fe49f05d59adeac8",
       "ranks": {
         "key": {
           "mem-0001": 1,
@@ -1117,7 +1117,7 @@
     },
     "ordering-500-replica-failover": {
       "total_matched": 100,
-      "candidate_digest": "e49145388e3e6ff71196ae2ee8a5ec263283d34c966818bb26e1e89d3a6eca6c",
+      "candidate_digest": "a7ee5ce43213ed9d1386c218ffd3201b02be167ba06509dabd274ed5ae415e59",
       "ranks": {
         "key": {
           "mem-0001": 1,
@@ -1429,7 +1429,7 @@
     },
     "ordering-500-artifact-quarantine": {
       "total_matched": 160,
-      "candidate_digest": "b1d49167ccbb760a85570d2c41c4ac66ed56e4bdc475a2d15941e7637a4a0141",
+      "candidate_digest": "8df98ab49ba33213675a546413d97d5de49eda7171acf1367827841d5fb09e70",
       "ranks": {
         "key": {
           "mem-0001": 1,
@@ -1921,7 +1921,7 @@
     },
     "ordering-500-session-provenance": {
       "total_matched": 220,
-      "candidate_digest": "046660f0bf001d8d27b01abd53f69e6d0095e2d173e6ec7c050a23c317669c74",
+      "candidate_digest": "1b34f37e9cf3d99f94da40b3284db4ca443d72199428442260db629b4a11400e",
       "ranks": {
         "key": {
           "mem-0001": 1,

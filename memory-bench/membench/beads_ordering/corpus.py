@@ -223,7 +223,7 @@ def build_frozen_corpus(*, seed: int = 5877) -> FrozenCorpus:
         if distractors:
             archived_index = int(distractors[0].split("-")[1]) - 1
             lifecycle[archived_index] = "archived"
-            references[archived_index].append(primary_id)
+            references[archived_index].append(f"task-{scenario.slug}-archive")
 
         tasks.append(
             OrderingTask(
