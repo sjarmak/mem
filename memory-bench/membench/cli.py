@@ -331,7 +331,10 @@ def _cmd_beads_ordering_validate(args: argparse.Namespace) -> int:
 
 def _cmd_beads_ordering_run(args: argparse.Namespace) -> int:
     corpus, beads_bin, workspace_root, bm25f, truth_payload = _validated_ordering_inputs(args)
-    model, cli_version = validate_paid_run(args.model)
+    claude_credentials = (
+        Path(args.claude_credentials).expanduser().resolve() if args.claude_credentials else None
+    )
+    model, cli_version = validate_paid_run(args.model, claude_credentials=claude_credentials)
     arms = _parse_ordering_arms(args.arms)
     page_sizes = _parse_page_sizes(args.page_sizes)
     mode = ExperimentMode(args.mode)
@@ -380,6 +383,9 @@ def _cmd_beads_ordering_run(args: argparse.Namespace) -> int:
         "agent_model": model,
         "agent_cli_version": cli_version,
         "agent_settings": {"autoMemoryEnabled": False},
+        "agent_auth": (
+            "oauth-environment" if claude_credentials is None else "copied-oauth-credentials"
+        ),
         "prompt_protocol_digest": prompt_digest,
         "tasks": truth_payload,
     }
@@ -444,6 +450,7 @@ def _cmd_beads_ordering_run(args: argparse.Namespace) -> int:
                 beads_dirty=beads_dirty,
                 beads_bin_sha256=beads_binary_digest,
                 artifacts_dir=out,
+                claude_credentials=claude_credentials,
                 max_tool_calls=args.max_tool_calls,
             )
         rows.append(row)
@@ -560,6 +567,11 @@ def main(argv: list[str] | None = None) -> int:
     _add_ordering_input_flags(p_ordering_run)
     p_ordering_run.add_argument("--beads-repo", required=True)
     p_ordering_run.add_argument("--model", required=True)
+    p_ordering_run.add_argument(
+        "--claude-credentials",
+        default="",
+        help="optional OAuth credentials file copied into each neutral agent config",
+    )
     p_ordering_run.add_argument("--arms", default=",".join(arm.value for arm in ARMS))
     p_ordering_run.add_argument("--page-sizes", default=",".join(str(size) for size in PAGE_SIZES))
     p_ordering_run.add_argument(

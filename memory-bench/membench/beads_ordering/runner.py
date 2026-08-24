@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -254,6 +255,7 @@ def run_agent_cell(
     beads_dirty: bool,
     beads_bin_sha256: str,
     artifacts_dir: Path,
+    claude_credentials: Path | None = None,
     max_tool_calls: int = 12,
 ) -> OrderingRunResult:
     resolved_model = resolve_model(model)
@@ -276,6 +278,10 @@ def run_agent_cell(
         _write_launcher(sandbox)
         config_dir = Path(config_raw)
         seed_config_dir(config_dir, PROBE_SETTINGS)
+        if claude_credentials is not None:
+            destination = config_dir / ".credentials.json"
+            shutil.copyfile(claude_credentials, destination)
+            destination.chmod(0o600)
         tool_dir = Path(tool_raw)
         tool_log = run_dir / "retrieval.jsonl"
         tool_config = ToolConfig(
@@ -365,12 +371,21 @@ def run_agent_cell(
     return scored
 
 
-def validate_paid_run(model: str) -> tuple[str, str]:
+def validate_paid_run(model: str, *, claude_credentials: Path | None = None) -> tuple[str, str]:
     if a_paid_run_needs_a_model(model, dry_run=False):
         raise OrderingExperimentError("refusing an unpinned paid run; pass --model")
     if a_paid_run_carries_the_metered_api_key(dry_run=False):
         raise OrderingExperimentError(
             "refusing a paid run while ANTHROPIC_API_KEY is set; use OAuth subscription auth"
+        )
+    if claude_credentials is not None and not claude_credentials.is_file():
+        raise OrderingExperimentError(
+            f"Claude credentials file does not exist: {claude_credentials}"
+        )
+    if not os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") and claude_credentials is None:
+        raise OrderingExperimentError(
+            "a real run needs CLAUDE_CODE_OAUTH_TOKEN or --claude-credentials; refusing before "
+            "creating unauthenticated run artifacts"
         )
     return resolve_model(model), resolve_cli_version()
 
