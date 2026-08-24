@@ -1,0 +1,1083 @@
+{
+  "runs": 3,
+  "by_arm": {
+    "key": {
+      "pages_requested": {
+        "n": 1,
+        "mean": 3.0,
+        "p50": 3.0,
+        "p90": 3.0,
+        "min": 3,
+        "max": 3
+      },
+      "compact_result_tokens": {
+        "n": 1,
+        "mean": 1481.0,
+        "p50": 1481.0,
+        "p90": 1481.0,
+        "min": 1481,
+        "max": 1481
+      },
+      "compact_tokens_to_first_useful": {
+        "n": 1,
+        "mean": 1481.0,
+        "p50": 1481.0,
+        "p90": 1481.0,
+        "min": 1481,
+        "max": 1481
+      },
+      "retrieval_tokens_to_first_useful": {
+        "n": 1,
+        "mean": 3082.0,
+        "p50": 3082.0,
+        "p90": 3082.0,
+        "min": 3082,
+        "max": 3082
+      },
+      "tool_calls_to_first_useful": {
+        "n": 1,
+        "mean": 10.0,
+        "p50": 10.0,
+        "p90": 10.0,
+        "min": 10,
+        "max": 10
+      },
+      "retrieval_tool_calls": {
+        "n": 1,
+        "mean": 11.0,
+        "p50": 11.0,
+        "p90": 11.0,
+        "min": 11,
+        "max": 11
+      },
+      "retrieval_latency_ms": {
+        "n": 1,
+        "mean": 11371.952156,
+        "p50": 11371.952156,
+        "p90": 11371.952156,
+        "min": 11371.952156,
+        "max": 11371.952156
+      },
+      "server_candidate_generation_ms": {
+        "n": 1,
+        "mean": 830.442294,
+        "p50": 830.442294,
+        "p90": 830.442294,
+        "min": 830.442294,
+        "max": 830.442294
+      },
+      "server_ordering_ms": {
+        "n": 1,
+        "mean": 0.424403,
+        "p50": 0.424403,
+        "p90": 0.424403,
+        "min": 0.424403,
+        "max": 0.424403
+      },
+      "end_to_end_ms": {
+        "n": 1,
+        "mean": 47237.076006,
+        "p50": 47237.076006,
+        "p90": 47237.076006,
+        "min": 47237.076006,
+        "max": 47237.076006
+      },
+      "full_recalls": {
+        "n": 1,
+        "mean": 7.0,
+        "p50": 7.0,
+        "p90": 7.0,
+        "min": 7,
+        "max": 7
+      },
+      "graph_hops_after_first_useful": {
+        "n": 1,
+        "mean": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "min": 0,
+        "max": 0
+      },
+      "graph_hops_total": {
+        "n": 1,
+        "mean": 5.0,
+        "p50": 5.0,
+        "p90": 5.0,
+        "min": 5,
+        "max": 5
+      },
+      "reference_edges_exposed": {
+        "n": 1,
+        "mean": 16.0,
+        "p50": 16.0,
+        "p90": 16.0,
+        "min": 16,
+        "max": 16
+      },
+      "task_success_rate": 1.0
+    },
+    "pagerank": {
+      "pages_requested": {
+        "n": 1,
+        "mean": 3.0,
+        "p50": 3.0,
+        "p90": 3.0,
+        "min": 3,
+        "max": 3
+      },
+      "compact_result_tokens": {
+        "n": 1,
+        "mean": 1481.0,
+        "p50": 1481.0,
+        "p90": 1481.0,
+        "min": 1481,
+        "max": 1481
+      },
+      "compact_tokens_to_first_useful": {
+        "n": 1,
+        "mean": 1481.0,
+        "p50": 1481.0,
+        "p90": 1481.0,
+        "min": 1481,
+        "max": 1481
+      },
+      "retrieval_tokens_to_first_useful": {
+        "n": 1,
+        "mean": 2190.0,
+        "p50": 2190.0,
+        "p90": 2190.0,
+        "min": 2190,
+        "max": 2190
+      },
+      "tool_calls_to_first_useful": {
+        "n": 1,
+        "mean": 7.0,
+        "p50": 7.0,
+        "p90": 7.0,
+        "min": 7,
+        "max": 7
+      },
+      "retrieval_tool_calls": {
+        "n": 1,
+        "mean": 8.0,
+        "p50": 8.0,
+        "p90": 8.0,
+        "min": 8,
+        "max": 8
+      },
+      "retrieval_latency_ms": {
+        "n": 1,
+        "mean": 1165.309063,
+        "p50": 1165.309063,
+        "p90": 1165.309063,
+        "min": 1165.309063,
+        "max": 1165.309063
+      },
+      "server_candidate_generation_ms": {
+        "n": 1,
+        "mean": 69.719208,
+        "p50": 69.719208,
+        "p90": 69.719208,
+        "min": 69.719208,
+        "max": 69.719208
+      },
+      "server_ordering_ms": {
+        "n": 1,
+        "mean": 0.363208,
+        "p50": 0.363208,
+        "p90": 0.363208,
+        "min": 0.363208,
+        "max": 0.363208
+      },
+      "end_to_end_ms": {
+        "n": 1,
+        "mean": 29877.74782,
+        "p50": 29877.74782,
+        "p90": 29877.74782,
+        "min": 29877.74782,
+        "max": 29877.74782
+      },
+      "full_recalls": {
+        "n": 1,
+        "mean": 4.0,
+        "p50": 4.0,
+        "p90": 4.0,
+        "min": 4,
+        "max": 4
+      },
+      "graph_hops_after_first_useful": {
+        "n": 1,
+        "mean": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "min": 0,
+        "max": 0
+      },
+      "graph_hops_total": {
+        "n": 1,
+        "mean": 2.0,
+        "p50": 2.0,
+        "p90": 2.0,
+        "min": 2,
+        "max": 2
+      },
+      "reference_edges_exposed": {
+        "n": 1,
+        "mean": 4.0,
+        "p50": 4.0,
+        "p90": 4.0,
+        "min": 4,
+        "max": 4
+      },
+      "task_success_rate": 1.0
+    },
+    "bm25f": {
+      "pages_requested": {
+        "n": 1,
+        "mean": 3.0,
+        "p50": 3.0,
+        "p90": 3.0,
+        "min": 3,
+        "max": 3
+      },
+      "compact_result_tokens": {
+        "n": 1,
+        "mean": 1481.0,
+        "p50": 1481.0,
+        "p90": 1481.0,
+        "min": 1481,
+        "max": 1481
+      },
+      "compact_tokens_to_first_useful": {
+        "n": 1,
+        "mean": 654.0,
+        "p50": 654.0,
+        "p90": 654.0,
+        "min": 654,
+        "max": 654
+      },
+      "retrieval_tokens_to_first_useful": {
+        "n": 1,
+        "mean": 654.0,
+        "p50": 654.0,
+        "p90": 654.0,
+        "min": 654,
+        "max": 654
+      },
+      "tool_calls_to_first_useful": {
+        "n": 1,
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0,
+        "min": 1,
+        "max": 1
+      },
+      "retrieval_tool_calls": {
+        "n": 1,
+        "mean": 12.0,
+        "p50": 12.0,
+        "p90": 12.0,
+        "min": 12,
+        "max": 12
+      },
+      "retrieval_latency_ms": {
+        "n": 1,
+        "mean": 1847.920224,
+        "p50": 1847.920224,
+        "p90": 1847.920224,
+        "min": 1847.920224,
+        "max": 1847.920224
+      },
+      "server_candidate_generation_ms": {
+        "n": 1,
+        "mean": 75.941835,
+        "p50": 75.941835,
+        "p90": 75.941835,
+        "min": 75.941835,
+        "max": 75.941835
+      },
+      "server_ordering_ms": {
+        "n": 1,
+        "mean": 0.507991,
+        "p50": 0.507991,
+        "p90": 0.507991,
+        "min": 0.507991,
+        "max": 0.507991
+      },
+      "end_to_end_ms": {
+        "n": 1,
+        "mean": 46313.386401,
+        "p50": 46313.386401,
+        "p90": 46313.386401,
+        "min": 46313.386401,
+        "max": 46313.386401
+      },
+      "full_recalls": {
+        "n": 1,
+        "mean": 6.0,
+        "p50": 6.0,
+        "p90": 6.0,
+        "min": 6,
+        "max": 6
+      },
+      "graph_hops_after_first_useful": {
+        "n": 1,
+        "mean": 3.0,
+        "p50": 3.0,
+        "p90": 3.0,
+        "min": 3,
+        "max": 3
+      },
+      "graph_hops_total": {
+        "n": 1,
+        "mean": 3.0,
+        "p50": 3.0,
+        "p90": 3.0,
+        "min": 3,
+        "max": 3
+      },
+      "reference_edges_exposed": {
+        "n": 1,
+        "mean": 17.0,
+        "p50": 17.0,
+        "p90": 17.0,
+        "min": 17,
+        "max": 17
+      },
+      "task_success_rate": 1.0
+    }
+  },
+  "by_mode_arm": {
+    "navigation/key": {
+      "pages_requested": {
+        "n": 1,
+        "mean": 3.0,
+        "p50": 3.0,
+        "p90": 3.0,
+        "min": 3,
+        "max": 3
+      },
+      "compact_result_tokens": {
+        "n": 1,
+        "mean": 1481.0,
+        "p50": 1481.0,
+        "p90": 1481.0,
+        "min": 1481,
+        "max": 1481
+      },
+      "compact_tokens_to_first_useful": {
+        "n": 1,
+        "mean": 1481.0,
+        "p50": 1481.0,
+        "p90": 1481.0,
+        "min": 1481,
+        "max": 1481
+      },
+      "retrieval_tokens_to_first_useful": {
+        "n": 1,
+        "mean": 3082.0,
+        "p50": 3082.0,
+        "p90": 3082.0,
+        "min": 3082,
+        "max": 3082
+      },
+      "tool_calls_to_first_useful": {
+        "n": 1,
+        "mean": 10.0,
+        "p50": 10.0,
+        "p90": 10.0,
+        "min": 10,
+        "max": 10
+      },
+      "retrieval_tool_calls": {
+        "n": 1,
+        "mean": 11.0,
+        "p50": 11.0,
+        "p90": 11.0,
+        "min": 11,
+        "max": 11
+      },
+      "retrieval_latency_ms": {
+        "n": 1,
+        "mean": 11371.952156,
+        "p50": 11371.952156,
+        "p90": 11371.952156,
+        "min": 11371.952156,
+        "max": 11371.952156
+      },
+      "server_candidate_generation_ms": {
+        "n": 1,
+        "mean": 830.442294,
+        "p50": 830.442294,
+        "p90": 830.442294,
+        "min": 830.442294,
+        "max": 830.442294
+      },
+      "server_ordering_ms": {
+        "n": 1,
+        "mean": 0.424403,
+        "p50": 0.424403,
+        "p90": 0.424403,
+        "min": 0.424403,
+        "max": 0.424403
+      },
+      "end_to_end_ms": {
+        "n": 1,
+        "mean": 47237.076006,
+        "p50": 47237.076006,
+        "p90": 47237.076006,
+        "min": 47237.076006,
+        "max": 47237.076006
+      },
+      "full_recalls": {
+        "n": 1,
+        "mean": 7.0,
+        "p50": 7.0,
+        "p90": 7.0,
+        "min": 7,
+        "max": 7
+      },
+      "graph_hops_after_first_useful": {
+        "n": 1,
+        "mean": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "min": 0,
+        "max": 0
+      },
+      "graph_hops_total": {
+        "n": 1,
+        "mean": 5.0,
+        "p50": 5.0,
+        "p90": 5.0,
+        "min": 5,
+        "max": 5
+      },
+      "reference_edges_exposed": {
+        "n": 1,
+        "mean": 16.0,
+        "p50": 16.0,
+        "p90": 16.0,
+        "min": 16,
+        "max": 16
+      },
+      "task_success_rate": 1.0
+    },
+    "navigation/pagerank": {
+      "pages_requested": {
+        "n": 1,
+        "mean": 3.0,
+        "p50": 3.0,
+        "p90": 3.0,
+        "min": 3,
+        "max": 3
+      },
+      "compact_result_tokens": {
+        "n": 1,
+        "mean": 1481.0,
+        "p50": 1481.0,
+        "p90": 1481.0,
+        "min": 1481,
+        "max": 1481
+      },
+      "compact_tokens_to_first_useful": {
+        "n": 1,
+        "mean": 1481.0,
+        "p50": 1481.0,
+        "p90": 1481.0,
+        "min": 1481,
+        "max": 1481
+      },
+      "retrieval_tokens_to_first_useful": {
+        "n": 1,
+        "mean": 2190.0,
+        "p50": 2190.0,
+        "p90": 2190.0,
+        "min": 2190,
+        "max": 2190
+      },
+      "tool_calls_to_first_useful": {
+        "n": 1,
+        "mean": 7.0,
+        "p50": 7.0,
+        "p90": 7.0,
+        "min": 7,
+        "max": 7
+      },
+      "retrieval_tool_calls": {
+        "n": 1,
+        "mean": 8.0,
+        "p50": 8.0,
+        "p90": 8.0,
+        "min": 8,
+        "max": 8
+      },
+      "retrieval_latency_ms": {
+        "n": 1,
+        "mean": 1165.309063,
+        "p50": 1165.309063,
+        "p90": 1165.309063,
+        "min": 1165.309063,
+        "max": 1165.309063
+      },
+      "server_candidate_generation_ms": {
+        "n": 1,
+        "mean": 69.719208,
+        "p50": 69.719208,
+        "p90": 69.719208,
+        "min": 69.719208,
+        "max": 69.719208
+      },
+      "server_ordering_ms": {
+        "n": 1,
+        "mean": 0.363208,
+        "p50": 0.363208,
+        "p90": 0.363208,
+        "min": 0.363208,
+        "max": 0.363208
+      },
+      "end_to_end_ms": {
+        "n": 1,
+        "mean": 29877.74782,
+        "p50": 29877.74782,
+        "p90": 29877.74782,
+        "min": 29877.74782,
+        "max": 29877.74782
+      },
+      "full_recalls": {
+        "n": 1,
+        "mean": 4.0,
+        "p50": 4.0,
+        "p90": 4.0,
+        "min": 4,
+        "max": 4
+      },
+      "graph_hops_after_first_useful": {
+        "n": 1,
+        "mean": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "min": 0,
+        "max": 0
+      },
+      "graph_hops_total": {
+        "n": 1,
+        "mean": 2.0,
+        "p50": 2.0,
+        "p90": 2.0,
+        "min": 2,
+        "max": 2
+      },
+      "reference_edges_exposed": {
+        "n": 1,
+        "mean": 4.0,
+        "p50": 4.0,
+        "p90": 4.0,
+        "min": 4,
+        "max": 4
+      },
+      "task_success_rate": 1.0
+    },
+    "navigation/bm25f": {
+      "pages_requested": {
+        "n": 1,
+        "mean": 3.0,
+        "p50": 3.0,
+        "p90": 3.0,
+        "min": 3,
+        "max": 3
+      },
+      "compact_result_tokens": {
+        "n": 1,
+        "mean": 1481.0,
+        "p50": 1481.0,
+        "p90": 1481.0,
+        "min": 1481,
+        "max": 1481
+      },
+      "compact_tokens_to_first_useful": {
+        "n": 1,
+        "mean": 654.0,
+        "p50": 654.0,
+        "p90": 654.0,
+        "min": 654,
+        "max": 654
+      },
+      "retrieval_tokens_to_first_useful": {
+        "n": 1,
+        "mean": 654.0,
+        "p50": 654.0,
+        "p90": 654.0,
+        "min": 654,
+        "max": 654
+      },
+      "tool_calls_to_first_useful": {
+        "n": 1,
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0,
+        "min": 1,
+        "max": 1
+      },
+      "retrieval_tool_calls": {
+        "n": 1,
+        "mean": 12.0,
+        "p50": 12.0,
+        "p90": 12.0,
+        "min": 12,
+        "max": 12
+      },
+      "retrieval_latency_ms": {
+        "n": 1,
+        "mean": 1847.920224,
+        "p50": 1847.920224,
+        "p90": 1847.920224,
+        "min": 1847.920224,
+        "max": 1847.920224
+      },
+      "server_candidate_generation_ms": {
+        "n": 1,
+        "mean": 75.941835,
+        "p50": 75.941835,
+        "p90": 75.941835,
+        "min": 75.941835,
+        "max": 75.941835
+      },
+      "server_ordering_ms": {
+        "n": 1,
+        "mean": 0.507991,
+        "p50": 0.507991,
+        "p90": 0.507991,
+        "min": 0.507991,
+        "max": 0.507991
+      },
+      "end_to_end_ms": {
+        "n": 1,
+        "mean": 46313.386401,
+        "p50": 46313.386401,
+        "p90": 46313.386401,
+        "min": 46313.386401,
+        "max": 46313.386401
+      },
+      "full_recalls": {
+        "n": 1,
+        "mean": 6.0,
+        "p50": 6.0,
+        "p90": 6.0,
+        "min": 6,
+        "max": 6
+      },
+      "graph_hops_after_first_useful": {
+        "n": 1,
+        "mean": 3.0,
+        "p50": 3.0,
+        "p90": 3.0,
+        "min": 3,
+        "max": 3
+      },
+      "graph_hops_total": {
+        "n": 1,
+        "mean": 3.0,
+        "p50": 3.0,
+        "p90": 3.0,
+        "min": 3,
+        "max": 3
+      },
+      "reference_edges_exposed": {
+        "n": 1,
+        "mean": 17.0,
+        "p50": 17.0,
+        "p90": 17.0,
+        "min": 17,
+        "max": 17
+      },
+      "task_success_rate": 1.0
+    }
+  },
+  "baseline_burial_correlations": {
+    "navigation": {
+      "pages_requested": null,
+      "compact_result_tokens": null,
+      "compact_tokens_to_first_useful": null,
+      "retrieval_tokens_to_first_useful": null,
+      "tool_calls_to_first_useful": null,
+      "retrieval_tool_calls": null,
+      "retrieval_latency_ms": null,
+      "server_candidate_generation_ms": null,
+      "server_ordering_ms": null,
+      "end_to_end_ms": null,
+      "full_recalls": null,
+      "graph_hops_after_first_useful": null,
+      "graph_hops_total": null,
+      "reference_edges_exposed": null
+    }
+  },
+  "page_size_curves": [
+    {
+      "mode": "navigation",
+      "arm": "bm25f",
+      "page_size": "5",
+      "n": 1,
+      "page_one_acceptable_probability": 1.0,
+      "pages_to_first_useful": {
+        "n": 1,
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0,
+        "min": 1,
+        "max": 1
+      },
+      "compact_result_tokens": {
+        "n": 1,
+        "mean": 654.0,
+        "p50": 654.0,
+        "p90": 654.0,
+        "min": 654,
+        "max": 654
+      },
+      "tool_calls": {
+        "n": 1,
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0,
+        "min": 1,
+        "max": 1
+      },
+      "time_to_first_useful_ms": {
+        "n": 1,
+        "mean": 4052.097075,
+        "p50": 4052.097075,
+        "p90": 4052.097075,
+        "min": 4052.097075,
+        "max": 4052.097075
+      },
+      "recalls": {
+        "n": 1,
+        "mean": 6.0,
+        "p50": 6.0,
+        "p90": 6.0,
+        "min": 6,
+        "max": 6
+      },
+      "graph_hops": {
+        "n": 1,
+        "mean": 3.0,
+        "p50": 3.0,
+        "p90": 3.0,
+        "min": 3,
+        "max": 3
+      },
+      "retrieval_tokens": {
+        "n": 1,
+        "mean": 654.0,
+        "p50": 654.0,
+        "p90": 654.0,
+        "min": 654,
+        "max": 654
+      },
+      "branching_factor": {
+        "n": 1,
+        "mean": 2.8333333333333335,
+        "p50": 2.8333333333333335,
+        "p90": 2.8333333333333335,
+        "min": 2.8333333333333335,
+        "max": 2.8333333333333335
+      },
+      "task_success_rate": 1.0,
+      "server_candidate_generation_ms": {
+        "n": 1,
+        "mean": 75.941835,
+        "p50": 75.941835,
+        "p90": 75.941835,
+        "min": 75.941835,
+        "max": 75.941835
+      },
+      "server_ordering_ms": {
+        "n": 1,
+        "mean": 0.507991,
+        "p50": 0.507991,
+        "p90": 0.507991,
+        "min": 0.507991,
+        "max": 0.507991
+      }
+    },
+    {
+      "mode": "navigation",
+      "arm": "key",
+      "page_size": "5",
+      "n": 1,
+      "page_one_acceptable_probability": 0.0,
+      "pages_to_first_useful": {
+        "n": 1,
+        "mean": 3.0,
+        "p50": 3.0,
+        "p90": 3.0,
+        "min": 3,
+        "max": 3
+      },
+      "compact_result_tokens": {
+        "n": 1,
+        "mean": 1481.0,
+        "p50": 1481.0,
+        "p90": 1481.0,
+        "min": 1481,
+        "max": 1481
+      },
+      "tool_calls": {
+        "n": 1,
+        "mean": 10.0,
+        "p50": 10.0,
+        "p90": 10.0,
+        "min": 10,
+        "max": 10
+      },
+      "time_to_first_useful_ms": {
+        "n": 1,
+        "mean": 41584.894648,
+        "p50": 41584.894648,
+        "p90": 41584.894648,
+        "min": 41584.894648,
+        "max": 41584.894648
+      },
+      "recalls": {
+        "n": 1,
+        "mean": 7.0,
+        "p50": 7.0,
+        "p90": 7.0,
+        "min": 7,
+        "max": 7
+      },
+      "graph_hops": {
+        "n": 1,
+        "mean": 5.0,
+        "p50": 5.0,
+        "p90": 5.0,
+        "min": 5,
+        "max": 5
+      },
+      "retrieval_tokens": {
+        "n": 1,
+        "mean": 3082.0,
+        "p50": 3082.0,
+        "p90": 3082.0,
+        "min": 3082,
+        "max": 3082
+      },
+      "branching_factor": {
+        "n": 1,
+        "mean": 2.2857142857142856,
+        "p50": 2.2857142857142856,
+        "p90": 2.2857142857142856,
+        "min": 2.2857142857142856,
+        "max": 2.2857142857142856
+      },
+      "task_success_rate": 1.0,
+      "server_candidate_generation_ms": {
+        "n": 1,
+        "mean": 830.442294,
+        "p50": 830.442294,
+        "p90": 830.442294,
+        "min": 830.442294,
+        "max": 830.442294
+      },
+      "server_ordering_ms": {
+        "n": 1,
+        "mean": 0.424403,
+        "p50": 0.424403,
+        "p90": 0.424403,
+        "min": 0.424403,
+        "max": 0.424403
+      }
+    },
+    {
+      "mode": "navigation",
+      "arm": "pagerank",
+      "page_size": "5",
+      "n": 1,
+      "page_one_acceptable_probability": 0.0,
+      "pages_to_first_useful": {
+        "n": 1,
+        "mean": 3.0,
+        "p50": 3.0,
+        "p90": 3.0,
+        "min": 3,
+        "max": 3
+      },
+      "compact_result_tokens": {
+        "n": 1,
+        "mean": 1481.0,
+        "p50": 1481.0,
+        "p90": 1481.0,
+        "min": 1481,
+        "max": 1481
+      },
+      "tool_calls": {
+        "n": 1,
+        "mean": 7.0,
+        "p50": 7.0,
+        "p90": 7.0,
+        "min": 7,
+        "max": 7
+      },
+      "time_to_first_useful_ms": {
+        "n": 1,
+        "mean": 22886.162754,
+        "p50": 22886.162754,
+        "p90": 22886.162754,
+        "min": 22886.162754,
+        "max": 22886.162754
+      },
+      "recalls": {
+        "n": 1,
+        "mean": 4.0,
+        "p50": 4.0,
+        "p90": 4.0,
+        "min": 4,
+        "max": 4
+      },
+      "graph_hops": {
+        "n": 1,
+        "mean": 2.0,
+        "p50": 2.0,
+        "p90": 2.0,
+        "min": 2,
+        "max": 2
+      },
+      "retrieval_tokens": {
+        "n": 1,
+        "mean": 2190.0,
+        "p50": 2190.0,
+        "p90": 2190.0,
+        "min": 2190,
+        "max": 2190
+      },
+      "branching_factor": {
+        "n": 1,
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "task_success_rate": 1.0,
+      "server_candidate_generation_ms": {
+        "n": 1,
+        "mean": 69.719208,
+        "p50": 69.719208,
+        "p90": 69.719208,
+        "min": 69.719208,
+        "max": 69.719208
+      },
+      "server_ordering_ms": {
+        "n": 1,
+        "mean": 0.363208,
+        "p50": 0.363208,
+        "p90": 0.363208,
+        "min": 0.363208,
+        "max": 0.363208
+      }
+    }
+  ],
+  "bounded_vs_unbounded": [],
+  "mechanical_vs_bm25f": [
+    {
+      "mode": "navigation",
+      "policy": "key",
+      "page_size": "5",
+      "policy_pages_p50_minus_bm25f": 0.0,
+      "bm25f_compact_token_reduction_fraction": 0.0,
+      "bm25f_success_rate_minus_policy": 0.0,
+      "material_gap": false
+    }
+  ],
+  "policy_vs_bm25f": [
+    {
+      "mode": "navigation",
+      "policy": "key",
+      "page_size": "5",
+      "policy_pages_p50_minus_bm25f": 0.0,
+      "bm25f_compact_token_reduction_fraction": 0.0,
+      "bm25f_success_rate_minus_policy": 0.0,
+      "material_gap": false
+    },
+    {
+      "mode": "navigation",
+      "policy": "pagerank",
+      "page_size": "5",
+      "policy_pages_p50_minus_bm25f": 0.0,
+      "bm25f_compact_token_reduction_fraction": 0.0,
+      "bm25f_success_rate_minus_policy": 0.0,
+      "material_gap": false
+    }
+  ],
+  "largest_page_size_with_material_ranking_gap": {},
+  "material_gap_definition": "mechanical p50 pages is >=1 above BM25F or BM25F reduces mean compact tokens by >=20%, without reducing success",
+  "strata": [
+    {
+      "mode": "navigation",
+      "corpus_size": 50,
+      "match_set": "1-20",
+      "baseline_burial": "pages-2-3",
+      "arm": "bm25f",
+      "n": 1,
+      "pages_p50": 3.0,
+      "tokens_p50": 3144.0,
+      "success_rate": 1.0
+    },
+    {
+      "mode": "navigation",
+      "corpus_size": 50,
+      "match_set": "1-20",
+      "baseline_burial": "pages-2-3",
+      "arm": "key",
+      "n": 1,
+      "pages_p50": 3.0,
+      "tokens_p50": 3245.0,
+      "success_rate": 1.0
+    },
+    {
+      "mode": "navigation",
+      "corpus_size": 50,
+      "match_set": "1-20",
+      "baseline_burial": "pages-2-3",
+      "arm": "pagerank",
+      "n": 1,
+      "pages_p50": 3.0,
+      "tokens_p50": 2353.0,
+      "success_rate": 1.0
+    }
+  ],
+  "page_cost_slopes": [
+    {
+      "mode": "navigation",
+      "arm": "bm25f",
+      "page_size": "5",
+      "n": 1,
+      "compact_tokens_per_additional_page": null,
+      "tool_calls_per_additional_page": null,
+      "retrieval_latency_ms_per_additional_page": null,
+      "end_to_end_ms_per_additional_page": null
+    },
+    {
+      "mode": "navigation",
+      "arm": "key",
+      "page_size": "5",
+      "n": 1,
+      "compact_tokens_per_additional_page": null,
+      "tool_calls_per_additional_page": null,
+      "retrieval_latency_ms_per_additional_page": null,
+      "end_to_end_ms_per_additional_page": null
+    },
+    {
+      "mode": "navigation",
+      "arm": "pagerank",
+      "page_size": "5",
+      "n": 1,
+      "compact_tokens_per_additional_page": null,
+      "tool_calls_per_additional_page": null,
+      "retrieval_latency_ms_per_additional_page": null,
+      "end_to_end_ms_per_additional_page": null
+    }
+  ],
+  "navigation_effects": []
+}

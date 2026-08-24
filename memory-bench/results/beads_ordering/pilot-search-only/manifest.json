@@ -1,0 +1,171 @@
+{
+  "schema_version": 2,
+  "started_at": "2026-08-24T03:17:33.742587Z",
+  "mem_git_sha": "f44307e2f9f07c3eda3dab9e223b1064b0c91f26",
+  "mem_git_dirty": true,
+  "beads_git_sha": "c89168fc0942f18dd08fd35296c6fdebdd3e1dd7",
+  "beads_git_dirty": false,
+  "beads_bin": "/home/ds/.local/bin/bd-memory-ordering-5877",
+  "beads_bin_sha256": "1b7c7f847c0868c7079cf94e17bb9c8e73866b6841fe3a802b25b6978e88dfb1",
+  "structural_order_source_git_sha": "b1c55df8c3bd799262bdf2eede2b3e3f705d8848",
+  "fixture": "/home/ds/projects/mem/memory-bench/fixtures/beads_ordering/corpus.json",
+  "fixture_digest": "2c17184632b35b41d82a6e89efd44d9f84530637732ed48694390ad19e3188af",
+  "bm25f": {
+    "key_weight": 6.0,
+    "alias_weight": 5.0,
+    "title_weight": 3.0,
+    "body_weight": 1.0,
+    "k1": 1.2,
+    "b": 0.75
+  },
+  "ordering_conventions": {
+    "key": "case-sensitive canonical Memory key ascending",
+    "navigation": "authored navigation_rank ascending, then canonical Memory ID",
+    "indegree": "global query-independent indegree descending, then canonical Memory ID",
+    "outdegree": "global query-independent outdegree descending, then canonical Memory ID",
+    "pagerank": "global query-independent PageRank descending, then canonical Memory ID",
+    "reverse-pagerank": "global query-independent PageRank on reversed edges descending, then canonical Memory ID",
+    "hits-authority": "global query-independent HITS authority descending, then canonical Memory ID",
+    "hits-hub": "global query-independent HITS hub descending, then canonical Memory ID",
+    "bm25f": "global BM25F score over the same literal-match set, then canonical Memory ID"
+  },
+  "page_sizes": [
+    "5"
+  ],
+  "arms": [
+    "key",
+    "pagerank",
+    "bm25f"
+  ],
+  "mode": "search-only",
+  "repeats": 1,
+  "order_seed": 5877,
+  "max_tool_calls": 12,
+  "agent_model": "claude-haiku-4-5-20251001",
+  "agent_cli_version": "2.1.241",
+  "agent_settings": {
+    "autoMemoryEnabled": false
+  },
+  "agent_auth": "copied-oauth-credentials",
+  "prompt_protocol_digest": "182308e107332d09ce9220aaf3b13b498d539611ef7098cf5a3f127d7061c16f",
+  "tasks": {
+    "ordering-50-lease-renewal": {
+      "total_matched": 12,
+      "candidate_digest": "db994e3d609630da2aa745f0972cc7c1d34f4194ce7c6f2aac156b045e071a19",
+      "ranks": {
+        "key": {
+          "mem-0001": 1,
+          "mem-0002": 2,
+          "mem-0003": 3,
+          "mem-0004": 4,
+          "mem-0005": 5,
+          "mem-0006": 6,
+          "mem-0007": 7,
+          "mem-0008": 8,
+          "mem-0009": 9,
+          "mem-0010": 10,
+          "mem-0032": 11,
+          "mem-0048": 12
+        },
+        "indegree": {
+          "mem-0001": 1,
+          "mem-0002": 2,
+          "mem-0003": 3,
+          "mem-0004": 4,
+          "mem-0005": 5,
+          "mem-0006": 6,
+          "mem-0007": 7,
+          "mem-0008": 8,
+          "mem-0009": 9,
+          "mem-0010": 10,
+          "mem-0048": 11,
+          "mem-0032": 12
+        },
+        "outdegree": {
+          "mem-0001": 1,
+          "mem-0002": 2,
+          "mem-0032": 3,
+          "mem-0008": 4,
+          "mem-0010": 5,
+          "mem-0004": 6,
+          "mem-0006": 7,
+          "mem-0007": 8,
+          "mem-0009": 9,
+          "mem-0048": 10,
+          "mem-0003": 11,
+          "mem-0005": 12
+        },
+        "pagerank": {
+          "mem-0001": 1,
+          "mem-0002": 2,
+          "mem-0003": 3,
+          "mem-0004": 4,
+          "mem-0005": 5,
+          "mem-0006": 6,
+          "mem-0007": 7,
+          "mem-0008": 8,
+          "mem-0009": 9,
+          "mem-0010": 10,
+          "mem-0048": 11,
+          "mem-0032": 12
+        },
+        "reverse-pagerank": {
+          "mem-0001": 1,
+          "mem-0002": 2,
+          "mem-0032": 3,
+          "mem-0008": 4,
+          "mem-0010": 5,
+          "mem-0048": 6,
+          "mem-0007": 7,
+          "mem-0009": 8,
+          "mem-0004": 9,
+          "mem-0006": 10,
+          "mem-0003": 11,
+          "mem-0005": 12
+        },
+        "hits-authority": {
+          "mem-0002": 1,
+          "mem-0001": 2,
+          "mem-0003": 3,
+          "mem-0004": 4,
+          "mem-0005": 5,
+          "mem-0006": 6,
+          "mem-0007": 7,
+          "mem-0008": 8,
+          "mem-0009": 9,
+          "mem-0048": 10,
+          "mem-0010": 11,
+          "mem-0032": 12
+        },
+        "hits-hub": {
+          "mem-0001": 1,
+          "mem-0032": 2,
+          "mem-0008": 3,
+          "mem-0010": 4,
+          "mem-0002": 5,
+          "mem-0004": 6,
+          "mem-0006": 7,
+          "mem-0048": 8,
+          "mem-0007": 9,
+          "mem-0009": 10,
+          "mem-0003": 11,
+          "mem-0005": 12
+        },
+        "bm25f": {
+          "mem-0032": 1,
+          "mem-0002": 2,
+          "mem-0005": 3,
+          "mem-0008": 4,
+          "mem-0004": 5,
+          "mem-0007": 6,
+          "mem-0010": 7,
+          "mem-0048": 8,
+          "mem-0001": 9,
+          "mem-0003": 10,
+          "mem-0006": 11,
+          "mem-0009": 12
+        }
+      }
+    }
+  }
+}
