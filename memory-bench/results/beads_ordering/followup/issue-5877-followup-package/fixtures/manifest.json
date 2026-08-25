@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "status": "frozen-before-followup-agent-outcomes",
+  "seed": 5878,
+  "family_count": 7,
+  "development_task_count": 7,
+  "heldout_task_count": 21,
+  "families": {
+    "incident-runbook-sparse-authority": {
+      "path": "incident-runbook-sparse-authority.json",
+      "sha256": "3f8296a0c80d2bb540bd8d0cda2eb34fce2e5e295415b567596b9313335d94fd",
+      "memory_count": 500,
+      "development_task_count": 1,
+      "heldout_task_count": 3,
+      "failure_case": "archived-or-stale-hub",
+      "structural_order_source_git_sha": "b1c55df8c3bd799262bdf2eede2b3e3f705d8848"
+    },
+    "platform-documentation-hub-spoke": {
+      "path": "platform-documentation-hub-spoke.json",
+      "sha256": "c9fdd00f370b14ec1d1e52ceb787b9cb857d9e49dec844d6ee0fc6620feda038",
+      "memory_count": 500,
+      "development_task_count": 1,
+      "heldout_task_count": 3,
+      "failure_case": "new-unlinked-relevant-memory",
+      "structural_order_source_git_sha": "b1c55df8c3bd799262bdf2eede2b3e3f705d8848"
+    },
+    "migration-correction-temporal-chain": {
+      "path": "migration-correction-temporal-chain.json",
+      "sha256": "ace63ae5e2f6488a112029485e92358de5c1e9fe8849609fba1d989fb2e7443d",
+      "memory_count": 500,
+      "development_task_count": 1,
+      "heldout_task_count": 3,
+      "failure_case": "superseding-chain",
+      "structural_order_source_git_sha": "b1c55df8c3bd799262bdf2eede2b3e3f705d8848"
+    },
+    "distributed-system-clustered-components": {
+      "path": "distributed-system-clustered-components.json",
+      "sha256": "3edf89fc2140c3a860a3984412c855c31b664570a4213ef394d24d6ca27f771c",
+      "memory_count": 500,
+      "development_task_count": 1,
+      "heldout_task_count": 3,
+      "failure_case": "disconnected-component",
+      "structural_order_source_git_sha": "b1c55df8c3bd799262bdf2eede2b3e3f705d8848"
+    },
+    "release-engineering-branching-playbooks": {
+      "path": "release-engineering-branching-playbooks.json",
+      "sha256": "9bb76d9b5416eb5eae41e381c8f8f296e0b07daf534f33fd26122fc494efa3bb",
+      "memory_count": 500,
+      "development_task_count": 1,
+      "heldout_task_count": 3,
+      "failure_case": "high-outdegree-distractor",
+      "structural_order_source_git_sha": "b1c55df8c3bd799262bdf2eede2b3e3f705d8848"
+    },
+    "data-schema-dependency-dag": {
+      "path": "data-schema-dependency-dag.json",
+      "sha256": "7e9c1352e8353f791a81109fed02fec30372c4f4a52440db86bddc135f152928",
+      "memory_count": 500,
+      "development_task_count": 1,
+      "heldout_task_count": 3,
+      "failure_case": "reference-cycle",
+      "structural_order_source_git_sha": "b1c55df8c3bd799262bdf2eede2b3e3f705d8848"
+    },
+    "security-policy-cross-team-network": {
+      "path": "security-policy-cross-team-network.json",
+      "sha256": "a7a83ed400dd25321d92f6bbfd57a8c40944127754a79acdd28d0684a1f485b2",
+      "memory_count": 500,
+      "development_task_count": 1,
+      "heldout_task_count": 3,
+      "failure_case": "link-inflation",
+      "structural_order_source_git_sha": "b1c55df8c3bd799262bdf2eede2b3e3f705d8848"
+    }
+  }
+}

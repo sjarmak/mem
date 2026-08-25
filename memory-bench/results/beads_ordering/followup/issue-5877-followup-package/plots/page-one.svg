@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="480" viewBox="0 0 900 480">
+<rect width="100%" height="100%" fill="white"/>
+<text x="70" y="28" font-family="sans-serif" font-size="18">Useful Memory visible on page 1</text>
+<line x1="70" y1="50" x2="70" y2="415" stroke="#777"/>
+<line x1="70" y1="415" x2="710" y2="415" stroke="#777"/>
+<text x="60" y="419.0" text-anchor="end" font-family="sans-serif" font-size="12">0%</text>
+<text x="60" y="327.8" text-anchor="end" font-family="sans-serif" font-size="12">25%</text>
+<text x="60" y="236.5" text-anchor="end" font-family="sans-serif" font-size="12">50%</text>
+<text x="60" y="145.2" text-anchor="end" font-family="sans-serif" font-size="12">75%</text>
+<text x="60" y="54.0" text-anchor="end" font-family="sans-serif" font-size="12">100%</text>
+<text x="70.0" y="448" text-anchor="middle" font-family="sans-serif" font-size="13">5</text>
+<text x="283.3" y="448" text-anchor="middle" font-family="sans-serif" font-size="13">10</text>
+<text x="496.7" y="448" text-anchor="middle" font-family="sans-serif" font-size="13">20</text>
+<text x="710.0" y="448" text-anchor="middle" font-family="sans-serif" font-size="13">all</text>
+<polyline points="70.0,171.7 283.3,171.7 496.7,171.7 710.0,50.0" fill="none" stroke="#555555" stroke-width="2.5"/>
+<circle cx="70.0" cy="171.7" r="3" fill="#555555"/>
+<circle cx="283.3" cy="171.7" r="3" fill="#555555"/>
+<circle cx="496.7" cy="171.7" r="3" fill="#555555"/>
+<circle cx="710.0" cy="50.0" r="3" fill="#555555"/>
+<line x1="728" y1="70" x2="755" y2="70" stroke="#555555" stroke-width="3"/>
+<text x="762" y="74" font-family="sans-serif" font-size="13">key</text>
+<polyline points="70.0,241.2 283.3,154.3 496.7,102.1 710.0,50.0" fill="none" stroke="#0072b2" stroke-width="2.5"/>
+<circle cx="70.0" cy="241.2" r="3" fill="#0072b2"/>
+<circle cx="283.3" cy="154.3" r="3" fill="#0072b2"/>
+<circle cx="496.7" cy="102.1" r="3" fill="#0072b2"/>
+<circle cx="710.0" cy="50.0" r="3" fill="#0072b2"/>
+<line x1="728" y1="96" x2="755" y2="96" stroke="#0072b2" stroke-width="3"/>
+<text x="762" y="100" font-family="sans-serif" font-size="13">indegree</text>
+<polyline points="70.0,206.4 283.3,154.3 496.7,136.9 710.0,50.0" fill="none" stroke="#56b4e9" stroke-width="2.5"/>
+<circle cx="70.0" cy="206.4" r="3" fill="#56b4e9"/>
+<circle cx="283.3" cy="154.3" r="3" fill="#56b4e9"/>
+<circle cx="496.7" cy="136.9" r="3" fill="#56b4e9"/>
+<circle cx="710.0" cy="50.0" r="3" fill="#56b4e9"/>
+<line x1="728" y1="122" x2="755" y2="122" stroke="#56b4e9" stroke-width="3"/>
+<text x="762" y="126" font-family="sans-serif" font-size="13">outdegree</text>
+<polyline points="70.0,119.5 283.3,84.8 496.7,67.4 710.0,50.0" fill="none" stroke="#009e73" stroke-width="2.5"/>
+<circle cx="70.0" cy="119.5" r="3" fill="#009e73"/>
+<circle cx="283.3" cy="84.8" r="3" fill="#009e73"/>
+<circle cx="496.7" cy="67.4" r="3" fill="#009e73"/>
+<circle cx="710.0" cy="50.0" r="3" fill="#009e73"/>
+<line x1="728" y1="148" x2="755" y2="148" stroke="#009e73" stroke-width="3"/>
+<text x="762" y="152" font-family="sans-serif" font-size="13">pagerank</text>
+<polyline points="70.0,136.9 283.3,119.5 496.7,119.5 710.0,50.0" fill="none" stroke="#cc79a7" stroke-width="2.5"/>
+<circle cx="70.0" cy="136.9" r="3" fill="#cc79a7"/>
+<circle cx="283.3" cy="119.5" r="3" fill="#cc79a7"/>
+<circle cx="496.7" cy="119.5" r="3" fill="#cc79a7"/>
+<circle cx="710.0" cy="50.0" r="3" fill="#cc79a7"/>
+<line x1="728" y1="174" x2="755" y2="174" stroke="#cc79a7" stroke-width="3"/>
+<text x="762" y="178" font-family="sans-serif" font-size="13">reverse-pagerank</text>
+<polyline points="70.0,50.0 283.3,50.0 496.7,50.0 710.0,50.0" fill="none" stroke="#d55e00" stroke-width="2.5"/>
+<circle cx="70.0" cy="50.0" r="3" fill="#d55e00"/>
+<circle cx="283.3" cy="50.0" r="3" fill="#d55e00"/>
+<circle cx="496.7" cy="50.0" r="3" fill="#d55e00"/>
+<circle cx="710.0" cy="50.0" r="3" fill="#d55e00"/>
+<line x1="728" y1="200" x2="755" y2="200" stroke="#d55e00" stroke-width="3"/>
+<text x="762" y="204" font-family="sans-serif" font-size="13">bm25f</text>
+<text x="390.0" y="472" text-anchor="middle" font-family="sans-serif" font-size="13">page size</text>
+</svg>

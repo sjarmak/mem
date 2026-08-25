@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -24,12 +25,23 @@ from membench.beads_ordering.ranked_searching import (
     enrich_with_ranked_searching,
 )
 from membench.beads_ordering.report import render_markdown, render_page_size_svg
+from membench.beads_ordering.runner import git_diff_sha256
 from membench.beads_ordering.scoring import score_agent_run
 from membench.beads_ordering.tool import ToolConfig, memory_references, visible_page
+from membench.cli import _repeat_indices, _select_ordering_tasks
 
 
 def _completed(payload: dict[str, object]) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(["bd"], 0, json.dumps(payload), "")
+
+
+def test_repeat_indices_support_targeted_repeat_offsets() -> None:
+    assert list(_repeat_indices(start=0, count=1)) == [0]
+    assert list(_repeat_indices(start=1, count=2)) == [1, 2]
+    with pytest.raises(ValueError, match="non-negative"):
+        _repeat_indices(start=-1, count=2)
+    with pytest.raises(ValueError, match="positive"):
+        _repeat_indices(start=1, count=0)
 
 
 def test_client_uses_explicit_binary_and_exhausts_continuation() -> None:
@@ -149,7 +161,25 @@ def test_frozen_corpus_is_nested_realistic_and_fully_labelled() -> None:
     assert first.model_dump_json() == second.model_dump_json()
     assert len(first.memories) == 500
     assert {task.corpus_size for task in first.tasks} == {50, 100, 500}
-    assert len(first.tasks) >= 12
+    assert len(first.tasks) == 36
+
+    development = [task for task in first.tasks if task.split == "development"]
+    heldout = [task for task in first.tasks if task.split == "heldout"]
+    assert len(development) == 12
+    assert len(heldout) == 24
+    assert all(task.source_kind == "authored" for task in development)
+    assert sum(task.source_kind == "sanitized-real-derived" for task in heldout) >= 12
+    assert all(task.source_shape for task in heldout)
+    assert all(
+        len(task.source_provenance_hash) == 16
+        for task in heldout
+        if task.source_kind == "sanitized-real-derived"
+    )
+    assert {size: sum(task.corpus_size == size for task in heldout) for size in (50, 100, 500)} == {
+        50: 8,
+        100: 8,
+        500: 8,
+    }
 
     by_id = {memory.id: memory for memory in first.memories}
     for size in (50, 100, 500):
@@ -175,6 +205,51 @@ def test_frozen_corpus_is_nested_realistic_and_fully_labelled() -> None:
         assert any(by_id[mid].lifecycle == "archived" for mid in task.distractors)
         assert any(by_id[mid].provenance == "agent" for mid in matches)
         assert any(by_id[mid].provenance == "human" for mid in matches)
+
+
+def test_structural_finalists_were_registered_without_heldout_outcomes() -> None:
+    path = (
+        Path(__file__).resolve().parents[1] / "results" / "beads_ordering" / "preregistration.json"
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+
+    assert payload["status"] == "locked-before-heldout-ranking"
+    assert payload["development_task_count"] == 12
+    assert len(payload["screened_priors"]) == 6
+    assert payload["selection_rules"]["heldout_outcomes_used"] is False
+    assert payload["selected_finalists"] == {
+        "entry_point_oriented": "reverse-pagerank",
+        "branch_heavy": "hits-hub",
+    }
+    assert payload["agent_matrix"]["arms"] == [
+        "key",
+        "reverse-pagerank",
+        "hits-hub",
+        "bm25f",
+    ]
+    assert payload["agent_matrix"]["page_sizes"] == ["5", "10", "20", "all"]
+
+
+def test_ordering_task_selection_can_hold_development_tasks_out_of_agent_runs() -> None:
+    corpus = build_frozen_corpus(seed=5877)
+
+    heldout = _select_ordering_tasks(corpus, task_ids_raw="", split_raw="heldout")
+    assert len(heldout) == 24
+    assert all(task.split == "heldout" for task in heldout)
+
+    selected = _select_ordering_tasks(
+        corpus,
+        task_ids_raw=f"{heldout[0].task_id},{heldout[-1].task_id}",
+        split_raw="heldout",
+    )
+    assert [task.task_id for task in selected] == [heldout[0].task_id, heldout[-1].task_id]
+
+    with pytest.raises(SystemExit, match="does not match task split"):
+        _select_ordering_tasks(
+            corpus,
+            task_ids_raw=corpus.tasks[0].task_id,
+            split_raw="heldout",
+        )
 
 
 def test_ranked_searching_orders_are_materialized_per_nested_corpus() -> None:
@@ -248,6 +323,8 @@ def test_score_agent_run_accounts_to_first_useful_memory() -> None:
         primary_rank=7,
         acceptable_rank=2,
         page_size=2,
+        mem_git_diff_sha256="mem-diff",
+        beads_git_diff_sha256="beads-diff",
     )
     assert result.pages_requested == 1
     assert result.compact_records_visible == 2
@@ -261,6 +338,27 @@ def test_score_agent_run_accounts_to_first_useful_memory() -> None:
     assert result.retrieval_related_tokens == 300
     assert result.task_success is True
     assert result.premature_stop is False
+    assert result.mem_git_diff_sha256 == "mem-diff"
+    assert result.beads_git_diff_sha256 == "beads-diff"
+
+
+def test_git_diff_digest_pins_tracked_changes(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "eval@example.invalid"], cwd=tmp_path, check=True
+    )
+    subprocess.run(["git", "config", "user.name", "Eval"], cwd=tmp_path, check=True)
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("before\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "base"], cwd=tmp_path, check=True)
+
+    empty = git_diff_sha256(tmp_path)
+    assert empty == hashlib.sha256(b"").hexdigest()
+    tracked.write_text("after\n", encoding="utf-8")
+    changed = git_diff_sha256(tmp_path)
+    assert changed != empty
+    assert git_diff_sha256(tmp_path) == changed
 
 
 def test_score_reaches_useful_memory_through_reference_recall() -> None:
@@ -519,10 +617,94 @@ def test_analysis_reports_distributions_strata_and_burial_correlation(tmp_path: 
     assert "baseline_burial_correlations" in report
     assert report["largest_page_size_with_material_ranking_gap"] == {"navigation": 5}
     assert report["mechanical_vs_bm25f"][0]["material_gap"] is True
+    paired = next(
+        row
+        for row in report["paired_policy_vs_bm25f"]
+        if row["policy"] == "key" and row["page_size"] == "5"
+    )
+    assert paired["n_tasks"] == 2
+    assert paired["n_pairs"] == 2
+    assert paired["pages_saved_by_bm25f"]["p50"] == 1
+    assert report["mechanism_recommendation"]["status"] == "insufficient-data"
     assert report["strata"]
     markdown = render_markdown(rows, report)
     assert "Server-side matching/scoring time" in markdown
     assert "Mechanical versus BM25F crossover" in markdown
+    assert "Paired task-clustered policy deltas" in markdown
+    assert "Pre-registered mechanism gate" in markdown
     svg = render_page_size_svg(report)
     assert svg.startswith("<svg")
     assert "page size" in svg
+
+
+def test_mechanism_recommendation_requires_navigation_advantage() -> None:
+    def grid(*, navigation_advantage: bool) -> list[OrderingRunResult]:
+        rows: list[OrderingRunResult] = []
+        policies = (
+            OrderingArm.KEY,
+            OrderingArm.REVERSE_PAGERANK,
+            OrderingArm.HITS_HUB,
+            OrderingArm.BM25F,
+        )
+        for task_index in range(24):
+            for mode in (ExperimentMode.SEARCH_ONLY, ExperimentMode.NAVIGATION):
+                for page_size in ("5", "10", "20", "all"):
+                    for arm in policies:
+                        bounded = page_size != "all"
+                        bm25f_advantage = (
+                            arm is OrderingArm.BM25F
+                            and bounded
+                            and (mode is ExperimentMode.SEARCH_ONLY or navigation_advantage)
+                        )
+                        pages = 1 if bm25f_advantage or not bounded else 2
+                        tokens = 100 if bm25f_advantage or not bounded else 200
+                        rows.append(
+                            OrderingRunResult(
+                                run_id=(f"t{task_index}:{mode.value}:{arm.value}:p{page_size}:r0"),
+                                task_id=f"t{task_index}",
+                                corpus_size=(50, 100, 500)[task_index % 3],
+                                arm=arm,
+                                mode=mode,
+                                repeat=0,
+                                page_size=page_size,
+                                total_matched=40,
+                                primary_rank=8,
+                                primary_page=2,
+                                acceptable_rank=2,
+                                acceptable_page=1,
+                                pages_requested=pages,
+                                pages_to_first_useful=pages,
+                                page_one_acceptable_visible=True,
+                                compact_records_visible=pages * 5,
+                                compact_result_bytes=tokens * 4,
+                                compact_result_tokens=tokens,
+                                compact_tokens_to_first_useful=tokens,
+                                retrieval_tokens_to_first_useful=tokens,
+                                tool_calls_to_first_useful=pages,
+                                retrieval_tool_calls=pages,
+                                time_to_first_useful_ms=pages * 100,
+                                full_recalls=1,
+                                first_recalled_relevant=True,
+                                graph_hops_after_first_useful=0,
+                                retrieval_related_tokens=tokens,
+                                retrieval_latency_ms=pages * 20,
+                                server_candidate_generation_ms=5,
+                                server_ordering_ms=2,
+                                end_to_end_ms=pages * 1000,
+                                task_success=True,
+                                abstained=False,
+                                premature_stop=False,
+                                agent_input_tokens=1000,
+                                agent_output_tokens=100,
+                            )
+                        )
+        return rows
+
+    earned = analyze_results(grid(navigation_advantage=True))["mechanism_recommendation"]
+    assert earned["initial_grid_complete"] is True
+    assert earned["status"] == "recommend-bm25f-ownership"
+
+    erased = analyze_results(grid(navigation_advantage=False))["mechanism_recommendation"]
+    assert erased["initial_grid_complete"] is True
+    assert erased["status"] == "prefer-query-independent-ordering-navigation"
+    assert erased["navigation_advantage_material"] is False

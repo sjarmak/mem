@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "status": "locked-before-heldout-ranking",
+  "registered_at": "2026-08-24T13:40:00Z",
+  "development_fixture_digest": "2c17184632b35b41d82a6e89efd44d9f84530637732ed48694390ad19e3188af",
+  "development_task_count": 12,
+  "development_task_ids": [
+    "ordering-50-lease-renewal",
+    "ordering-50-schema-shadow",
+    "ordering-50-snapshot-restore",
+    "ordering-50-worker-drain",
+    "ordering-100-migration-freeze",
+    "ordering-100-cache-stampede",
+    "ordering-100-outbox-replay",
+    "ordering-100-hook-isolation",
+    "ordering-500-index-backfill",
+    "ordering-500-replica-failover",
+    "ordering-500-artifact-quarantine",
+    "ordering-500-session-provenance"
+  ],
+  "mem_git_sha_at_registration": "0edb58ea8227adddf2f3476f328ebe8261e191dd",
+  "structural_order_source_git_sha": "b1c55df8c3bd799262bdf2eede2b3e3f705d8848",
+  "screen_page_size": 5,
+  "screened_priors": {
+    "indegree": {
+      "page_one_useful_probability": 0.5,
+      "useful_rank_p50": 7.0,
+      "useful_rank_p90": 11.0,
+      "acceptable_rank_p50": 7.5,
+      "acceptable_rank_p90": 48.0,
+      "primary_rank_p50": 11.0,
+      "primary_rank_p90": 18.2
+    },
+    "outdegree": {
+      "page_one_useful_probability": 0.9166666666666666,
+      "useful_rank_p50": 2.5,
+      "useful_rank_p90": 4.8,
+      "acceptable_rank_p50": 2.5,
+      "acceptable_rank_p90": 4.8,
+      "primary_rank_p50": 29.5,
+      "primary_rank_p90": 95.0
+    },
+    "pagerank": {
+      "page_one_useful_probability": 0.5,
+      "useful_rank_p50": 6.0,
+      "useful_rank_p90": 11.0,
+      "acceptable_rank_p50": 6.5,
+      "acceptable_rank_p90": 48.0,
+      "primary_rank_p50": 11.0,
+      "primary_rank_p90": 18.2
+    },
+    "reverse-pagerank": {
+      "page_one_useful_probability": 1.0,
+      "useful_rank_p50": 2.0,
+      "useful_rank_p90": 3.0,
+      "acceptable_rank_p50": 2.0,
+      "acceptable_rank_p90": 3.0,
+      "primary_rank_p50": 23.5,
+      "primary_rank_p90": 95.0
+    },
+    "hits-authority": {
+      "page_one_useful_probability": 0.5,
+      "useful_rank_p50": 6.0,
+      "useful_rank_p90": 11.0,
+      "acceptable_rank_p50": 7.0,
+      "acceptable_rank_p90": 48.0,
+      "primary_rank_p50": 10.5,
+      "primary_rank_p90": 11.0
+    },
+    "hits-hub": {
+      "page_one_useful_probability": 0.9166666666666666,
+      "useful_rank_p50": 1.0,
+      "useful_rank_p90": 3.0,
+      "acceptable_rank_p50": 1.0,
+      "acceptable_rank_p90": 3.0,
+      "primary_rank_p50": 21.0,
+      "primary_rank_p90": 95.0
+    }
+  },
+  "selection_rules": {
+    "entry_point_finalist": "Maximize development probability that a frozen acceptable entry point or primary Memory is in page 1 at page size 5; break ties by lower useful-rank p50, then p90, then canonical policy name.",
+    "branch_heavy_finalist": "Among the explicitly traversal-oriented outdegree and HITS-hub priors, select the prior with lower acceptable-entry rank p50, then p90; this finalist is retained to test navigation branching cost, not because development performance establishes superiority.",
+    "heldout_outcomes_used": false
+  },
+  "selected_finalists": {
+    "entry_point_oriented": "reverse-pagerank",
+    "branch_heavy": "hits-hub"
+  },
+  "agent_matrix": {
+    "arms": [
+      "key",
+      "reverse-pagerank",
+      "hits-hub",
+      "bm25f"
+    ],
+    "page_sizes": [
+      "5",
+      "10",
+      "20",
+      "all"
+    ],
+    "modes": [
+      "search-only",
+      "navigation"
+    ],
+    "initial_repeats": 1,
+    "targeted_repeat_rule": "Repeat cells only when policies disagree on task success, an agent run fails, or outcome variance must be resolved for a decision-threshold comparison."
+  },
+  "recommendation_threshold": {
+    "bm25f_median_page_saving": 1.0,
+    "bm25f_compact_token_relative_saving": 0.2,
+    "requires_no_task_success_regression": true,
+    "requires_material_navigation_advantage": true,
+    "fts5_in_scope": false
+  }
+}

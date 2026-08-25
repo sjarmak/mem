@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "analysis_basis": {
+    "agent_observations": 2400,
+    "equally_weighted_cells": 1008,
+    "independent_tasks": 21,
+    "graph_families": 7,
+    "confidence_level": 0.9
+  },
+  "decisions": {
+    "reverse_pagerank_default": {
+      "recommend": false,
+      "page_one_gain_over_key": 0.09523809523809523,
+      "required_page_one_gain": 0.15,
+      "navigation_p5_median_compact_token_reduction_over_key": 0.0,
+      "required_median_compact_token_reduction": 0.1,
+      "reason": "Neither material-cost threshold cleared, and family-specific success regressions crossed the guardrail."
+    },
+    "ordinary_pagerank_default": {
+      "recommend": false,
+      "status": "strongest structural candidate; experimental only",
+      "page_one_gain_over_key": 0.14285714285714285,
+      "reference_required_page_one_gain": 0.15,
+      "navigation_p5_median_compact_token_reduction_over_key": 0.081,
+      "reference_required_median_compact_token_reduction": 0.1,
+      "reason": "Promising but just below both registered materiality thresholds and heterogeneous across graph families."
+    },
+    "beads_owns_bm25f": {
+      "recommend": false,
+      "navigation_vs_pagerank": {
+        "page_size_5": {
+          "median_pages_saved": 0.0,
+          "median_compact_token_reduction": 0.048,
+          "task_success_delta": -0.016
+        },
+        "page_size_10": {
+          "median_pages_saved": 0.0,
+          "median_compact_token_reduction": 0.018,
+          "task_success_delta": -0.079
+        },
+        "page_size_20": {
+          "median_pages_saved": 0.0,
+          "median_compact_token_reduction": 0.0,
+          "task_success_delta": -0.079
+        }
+      },
+      "required_median_pages_saved": 1.0,
+      "required_median_compact_token_reduction": 0.2,
+      "reason": "The advantage over the best structural policy did not remain material under navigation."
+    },
+    "rank_freshness": {
+      "recommend": "exact recomputation on first read after graph-epoch invalidation, then cache",
+      "lazy_exact_top_10_overlap": 1.0,
+      "lazy_exact_extra_pages": 0,
+      "periodic_5_mean_top_10_overlap": 0.844,
+      "periodic_20_mean_top_10_overlap": 0.718,
+      "required_top_10_overlap": 0.9
+    },
+    "control_surface": {
+      "recommend": "semantic pin/boost/demote plus explicit strategy selection; no raw numeric Memory rank",
+      "semantic_page_one_useful": "21/21",
+      "raw_rank_page_one_useful": "21/21",
+      "scope": "oracle expressiveness only; does not estimate correct user intervention frequency"
+    },
+    "specialized_rank_plumbing": {
+      "recommend": false,
+      "batch_10000_p50_ms": 80,
+      "batch_10000_p90_ms": 104,
+      "reason": "No measured operational budget miss."
+    }
+  }
+}

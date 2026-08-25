@@ -15,12 +15,33 @@ class OrderingArm(StrEnum):
     HITS_AUTHORITY = "hits-authority"
     HITS_HUB = "hits-hub"
     BM25F = "bm25f"
+    CONTROL_AUTOMATIC = "control-automatic"
+    CONTROL_SEMANTIC = "control-semantic"
+    CONTROL_STRATEGY = "control-strategy"
+    CONTROL_RAW = "control-raw"
+
+
+class ControlPolicy(StrEnum):
+    AUTOMATIC = "automatic"
+    SEMANTIC = "pin-boost-demote"
+    STRATEGY_SELECTION = "strategy-selection"
+    RAW_NUMERIC = "raw-numeric-rank"
 
 
 class ExperimentMode(StrEnum):
     SEARCH_ONLY = "search-only"
     NAVIGATION = "navigation"
     DEPTH_FIRST = "depth-first"
+
+
+class TaskSplit(StrEnum):
+    DEVELOPMENT = "development"
+    HELDOUT = "heldout"
+
+
+class TaskSourceKind(StrEnum):
+    AUTHORED = "authored"
+    SANITIZED_REAL_DERIVED = "sanitized-real-derived"
 
 
 class BM25FConfig(BaseModel):
@@ -83,9 +104,12 @@ class MemoryFixture(BaseModel):
     references: tuple[str, ...] = ()
     provenance: str = "human"
     structural_ranks_by_corpus: dict[str, dict[str, int]] = Field(default_factory=dict)
+    control_ranks_by_task: dict[str, dict[str, int]] = Field(default_factory=dict)
     body: str
 
-    def stored_value(self, corpus_size: int | None = None) -> str:
+    def stored_value(
+        self, corpus_size: int | None = None, *, control_task_id: str | None = None
+    ) -> str:
         aliases = ", ".join(self.aliases)
         references = ", ".join(self.references)
         rank = "" if self.navigation_rank is None else str(self.navigation_rank)
@@ -94,6 +118,11 @@ class MemoryFixture(BaseModel):
             f"structural_rank_{name.replace('-', '_')}: {position}\n"
             for name, position in sorted(structural.items())
         )
+        controls = self.control_ranks_by_task.get(control_task_id or "", {})
+        control_lines = "".join(
+            f"structural_rank_{name.replace('-', '_')}: {position}\n"
+            for name, position in sorted(controls.items())
+        )
         return (
             "---\n"
             f"title: {self.title}\n"
@@ -101,11 +130,24 @@ class MemoryFixture(BaseModel):
             f"lifecycle: {self.lifecycle}\n"
             f"navigation_rank: {rank}\n"
             f"{rank_lines}"
+            f"{control_lines}"
             f"references: [{references}]\n"
             f"provenance: {self.provenance}\n"
             "---\n"
             f"{self.body}"
         )
+
+
+class ControlIntent(BaseModel):
+    """Frozen operator intent used to compare query-independent rank controls."""
+
+    model_config = ConfigDict(frozen=True)
+
+    pin: tuple[str, ...] = ()
+    boost: tuple[str, ...] = ()
+    demote: tuple[str, ...] = ()
+    selected_strategy: OrderingArm = OrderingArm.REVERSE_PAGERANK
+    raw_numeric_ranks: dict[str, int] = Field(default_factory=dict)
 
 
 class OrderingTask(BaseModel):
@@ -120,12 +162,19 @@ class OrderingTask(BaseModel):
     distractors: tuple[str, ...]
     expected_facts: tuple[str, ...]
     forbidden_facts: tuple[str, ...]
+    split: TaskSplit = TaskSplit.DEVELOPMENT
+    source_kind: TaskSourceKind = TaskSourceKind.AUTHORED
+    source_shape: str = "authored-operational-control"
+    source_provenance_hash: str = ""
+    graph_family: str = ""
+    failure_case: str = ""
+    control_intent: ControlIntent | None = None
 
 
 class FrozenCorpus(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    schema_version: int = 2
+    schema_version: int = 3
     seed: int
     structural_order_source_git_sha: str = ""
     memories: tuple[MemoryFixture, ...]
@@ -201,8 +250,10 @@ class OrderingRunResult(BaseModel):
     agent_output_tokens: int
     mem_git_sha: str = ""
     mem_git_dirty: bool = False
+    mem_git_diff_sha256: str = ""
     beads_git_sha: str = ""
     beads_git_dirty: bool = False
+    beads_git_diff_sha256: str = ""
     beads_bin_sha256: str = ""
     structural_order_source_git_sha: str = ""
     agent_model: str = ""

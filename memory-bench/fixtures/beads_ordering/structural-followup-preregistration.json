@@ -1,0 +1,250 @@
+{
+  "schema_version": 1,
+  "status": "locked-before-followup-outcomes",
+  "registered_at": "2026-08-24T22:47:00Z",
+  "new_outcomes_examined": false,
+  "question": "Does reverse PageRank remain the best query-independent Memory discovery order across independently varied graph shapes, mutations, rank staleness, and operator controls once bounded pagination and agent navigation are included?",
+  "independent_unit": "task-within-graph-family",
+  "minimal_change_plan": "docs/beads-memory-structural-ordering-followup.md",
+  "prior_experiment": {
+    "fixture_sha256": "aff439bc0aea511777c038212135d8fb6d04cd8dedd5c7352f1096c2e345e333",
+    "analysis_sha256": "be638a2ba114e601345397283da90a00dbfc35e988725683aad0ced7fdaeda27",
+    "preregistration_sha256": "5224e52033b08de9a6011f8b061abccd80bb35289eb4518e92f061278c4f1082",
+    "tracked_diff_sha256": "82623e6c7a13e89d9574dfc1dc9095dda7f76a9647401a84f64ef41aad22b14b"
+  },
+  "hypotheses": {
+    "h1_default_order": "Reverse PageRank improves cost to first useful Memory over key order without materially reducing task success, and remains the strongest query-independent prior across graph families.",
+    "h2_query_specific_increment": "BM25F improves direct first-hit rank, but does not earn Beads ownership unless its page or compact-token advantage remains material after reference navigation.",
+    "h3_staleness": "Periodic or lazy refresh can preserve task-level retrieval behavior closely enough that exact global recomputation need not occur on every Memory mutation.",
+    "h4_controls": "Semantic pin, boost, and demote controls repair known structural failures with less fragility than editable raw numeric ranks.",
+    "h5_plumbing": "Specialized rank-maintenance structures are unjustified unless the measured mutation workload makes the simplest exact or periodic implementation miss a predeclared operational budget."
+  },
+  "graph_design": {
+    "corpus_sizes": [
+      50,
+      100,
+      500
+    ],
+    "graph_families": [
+      "incident-runbook-sparse-authority",
+      "platform-documentation-hub-spoke",
+      "migration-correction-temporal-chain",
+      "distributed-system-clustered-components",
+      "release-engineering-branching-playbooks",
+      "data-schema-dependency-dag",
+      "security-policy-cross-team-network"
+    ],
+    "development_tasks_per_family": 1,
+    "heldout_tasks_per_family": 3,
+    "heldout_task_count": 21,
+    "source_policy": "Each family uses a separate realistic software-engineering surface. Held-out tasks and labels are frozen before any held-out rank or agent outcome is examined; sanitized real-derived shapes retain only non-identifying shape provenance.",
+    "labels_frozen_before_runs": [
+      "primary_relevant",
+      "acceptable_entry_points",
+      "distractors"
+    ]
+  },
+  "structural_failure_cases": [
+    "archived-or-stale-hub",
+    "new-unlinked-relevant-memory",
+    "reference-cycle",
+    "disconnected-component",
+    "high-outdegree-distractor",
+    "superseding-chain",
+    "link-inflation"
+  ],
+  "retrieval_matrix": {
+    "policies": [
+      "key",
+      "indegree",
+      "outdegree",
+      "pagerank",
+      "reverse-pagerank",
+      "bm25f"
+    ],
+    "page_sizes": [
+      "5",
+      "10",
+      "20",
+      "all"
+    ],
+    "modes": [
+      "search-only",
+      "navigation"
+    ],
+    "initial_repeats": 1,
+    "targeted_repeat_rule": "Add two repeats for cells involved in policy disagreement, task-success disagreement, infrastructure failure, or a decision-threshold confidence interval; never select repeats because their direction is favorable.",
+    "candidate_membership_must_match": true,
+    "compact_projection_must_match": true,
+    "model_prompt_and_budget_must_match": true,
+    "agent_is_blind_to_policy": true
+  },
+  "mutation_replay": {
+    "compute_corpus_sizes": [
+      50,
+      100,
+      500,
+      2000,
+      10000
+    ],
+    "events_per_family": 40,
+    "event_types": [
+      "create-memory",
+      "edit-content",
+      "add-reference",
+      "remove-reference",
+      "archive-memory",
+      "supersede-memory",
+      "restore-memory"
+    ],
+    "query_after_every_event": true,
+    "snapshot_candidate_parity_required": true,
+    "rank_refresh_policies": [
+      "exact-global",
+      "periodic-5",
+      "periodic-20",
+      "stale-until-read",
+      "incremental-if-feasible"
+    ],
+    "incremental_feasibility_rule": "Implement an incremental arm only if it can reuse the experimental structural scorer without adding a production dependency or persistent service; otherwise report it as not feasible and benchmark exact and periodic policies.",
+    "continuation_rule": "A rank epoch or candidate-state change must invalidate continuation explicitly; no run may silently mix pages from different orders."
+  },
+  "control_matrix": {
+    "policies": [
+      "automatic",
+      "pin-boost-demote",
+      "strategy-selection",
+      "raw-numeric-rank"
+    ],
+    "intervention_source": "Controls are authored from the scenario's frozen operator intent before held-out outcomes, never selected by the evaluated agent or tuned against held-out results.",
+    "agent_blind_to_control_policy": true,
+    "candidate_membership_must_match": true,
+    "comparison_scope": "Structural failure cases plus matched neutral tasks that should not require intervention."
+  },
+  "decision_thresholds": {
+    "default_structural_order": {
+      "task_success_noninferiority_margin": 0.05,
+      "minimum_page_one_useful_gain_over_key": 0.15,
+      "minimum_median_compact_token_reduction_over_key": 0.1,
+      "maximum_single_family_success_regression": 0.1,
+      "required_family_wins": 5,
+      "family_count": 7,
+      "rule": "Recommend reverse PageRank as the default only if its navigation task-success confidence interval is non-inferior to the best alternative, it clears either the page-one or compact-token gain versus key order, and no structural failure family crosses the regression guardrail."
+    },
+    "query_specific_ranking_ownership": {
+      "median_pages_saved": 1.0,
+      "median_compact_token_saving": 0.2,
+      "requires_no_task_success_regression": true,
+      "requires_navigation_persistence": true,
+      "rule": "Recommend Beads ownership of query-specific lexical ranking only if BM25F clears either material cost threshold versus the best structural policy and the advantage persists under navigation without a task-success regression."
+    },
+    "rank_freshness": {
+      "task_success_noninferiority_margin": 0.03,
+      "max_p90_extra_pages": 1.0,
+      "max_median_compact_token_increase": 0.1,
+      "minimum_top_10_overlap": 0.9,
+      "required_explicit_continuation_invalidation_rate": 1.0,
+      "rule": "Prefer the least eager refresh policy whose task and retrieval deltas remain inside every guardrail relative to exact global recomputation."
+    },
+    "control_surface": {
+      "minimum_failure_case_recovery_fraction": 0.25,
+      "maximum_neutral_task_success_regression": 0.03,
+      "semantic_control_equivalence_margin_to_raw_rank": 0.05,
+      "rule": "Expose a control only if frozen correct interventions repair at least one quarter of affected failures without harming neutral tasks; prefer semantic controls when they remain within the equivalence margin of raw numeric rank."
+    },
+    "specialized_plumbing": {
+      "minimum_p95_update_speedup": 2.0,
+      "requires_retrieval_parity": true,
+      "requires_measured_operational_budget_miss": true,
+      "rule": "Do not recommend specialized maintenance plumbing unless the simple implementation misses a measured workload budget and an alternative at least halves p95 update cost while preserving retrieval behavior."
+    }
+  },
+  "metrics_to_decisions": {
+    "page_one_useful_probability": [
+      "default_structural_order",
+      "query_specific_ranking_ownership"
+    ],
+    "pages_to_first_useful": [
+      "default_structural_order",
+      "query_specific_ranking_ownership",
+      "rank_freshness"
+    ],
+    "compact_tokens_to_first_useful": [
+      "default_structural_order",
+      "query_specific_ranking_ownership",
+      "rank_freshness"
+    ],
+    "task_success": [
+      "default_structural_order",
+      "query_specific_ranking_ownership",
+      "rank_freshness",
+      "control_surface"
+    ],
+    "top_k_rank_overlap": [
+      "rank_freshness"
+    ],
+    "rank_refresh_ms": [
+      "rank_freshness",
+      "specialized_plumbing"
+    ],
+    "mutation_latency_ms": [
+      "rank_freshness",
+      "specialized_plumbing"
+    ],
+    "continuation_invalidations": [
+      "rank_freshness"
+    ],
+    "manual_interventions": [
+      "control_surface"
+    ],
+    "implementation_complexity": [
+      "control_surface",
+      "specialized_plumbing"
+    ]
+  },
+  "analysis": {
+    "cluster_by": [
+      "graph_family",
+      "task_id"
+    ],
+    "confidence_level": 0.9,
+    "bootstrap_seed": 5878,
+    "bootstrap_resamples": 5000,
+    "report_confidence_intervals": true,
+    "report_p50_p90": true,
+    "stratify_by": [
+      "graph_family",
+      "failure_case",
+      "corpus_size",
+      "lexical_match_set_size",
+      "baseline_burial_depth",
+      "mutation_age",
+      "rank_refresh_policy",
+      "control_policy"
+    ],
+    "infrastructure_failures_excluded_only_by_predeclared_reason": true
+  },
+  "provenance_required": [
+    "mem_git_sha",
+    "mem_git_diff_sha256",
+    "beads_git_sha",
+    "beads_git_diff_sha256",
+    "beads_bin_sha256",
+    "fixture_sha256",
+    "preregistration_sha256",
+    "model",
+    "agent_cli_version",
+    "seed",
+    "rank_algorithm_parameters",
+    "rank_epoch"
+  ],
+  "out_of_scope": [
+    "production Memory schema redesign",
+    "persistent relevance scores as Memory state",
+    "embeddings or semantic candidate generation",
+    "FTS5 candidate generation",
+    "a ranking service or daemon",
+    "specialized rank-maintenance plumbing before the simple workload is measured",
+    "claiming that textbook familiarity establishes retrieval optimality"
+  ]
+}

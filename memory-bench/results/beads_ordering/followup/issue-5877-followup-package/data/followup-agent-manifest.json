@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "observation_count": 2400,
+  "cell_count": 1008,
+  "source_observations_sha256": "782de330f7b4f458780a72a017ac17e54704991bdadb2e3a0693d5fac9bf4467",
+  "sanitized_observations_sha256": "fd384113356a733bff1baf721ba8bdd3979f32323fc0ced63051b7d8f4d3fdbd",
+  "cell_estimates_sha256": "e7d804d0c6f5bb625d911e44d5d6310fee217e9b1a69df718103bd50e07de8d0",
+  "analysis_sha256": "5ac24dec5bec853c43711f457a05c8ce4403dcc75995c000515827a96a365ed8",
+  "privacy_projection": "per-run and derived metrics only; excludes queries, model text, failures, and credential paths",
+  "fixture_manifest_sha256": "fd6c88e687dcbbe8feaebb67ed512bf9063f4d9db39edb272f0b7ee6f0a20682",
+  "mem_git_shas": [
+    "0edb58ea8227adddf2f3476f328ebe8261e191dd"
+  ],
+  "mem_git_diff_sha256s": [
+    "0507e2c351d41490b254846be163e49b8ae439a1161cb2866b14f2d37ff95688",
+    "c3272bc46a4695ac70454107dcd27d1b5f90df28993c3faf2bec5b8a593d5230",
+    "d69b248446ab4c9f118cb9cd40c95670bf8f99a7ad34291121898c19caf04110"
+  ],
+  "beads_git_shas": [
+    "c89168fc0942f18dd08fd35296c6fdebdd3e1dd7"
+  ],
+  "beads_git_diff_sha256s": [
+    "afb24525b9be6d70bbca433d906aeec78188f24d8bea19928ba700e619aa2627"
+  ],
+  "beads_bin_sha256s": [
+    "47aadd114f3afe16918ff5eff27f2e7d85bafc4003101ee7a4939c04252853de"
+  ],
+  "structural_order_source_git_shas": [
+    "b1c55df8c3bd799262bdf2eede2b3e3f705d8848"
+  ],
+  "agent_models": [
+    "claude-haiku-4-5-20251001"
+  ],
+  "agent_cli_versions": [
+    "2.1.241"
+  ]
+}

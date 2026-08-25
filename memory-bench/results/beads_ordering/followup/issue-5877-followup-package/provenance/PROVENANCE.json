@@ -1,0 +1,43 @@
+{
+  "schema_version": 2,
+  "privacy_profile": "public-sanitized",
+  "issue_url": "https://github.com/gastownhall/beads/issues/5877",
+  "evidence": {
+    "prior_agent_observations": 1085,
+    "followup_agent_observations": 2400,
+    "followup_agent_cells": 1008,
+    "followup_agent_independent_tasks": 21,
+    "followup_oracle_cells": 840,
+    "followup_mutation_snapshots": 4200,
+    "followup_rank_scaling_measurements": 105
+  },
+  "provenance": {
+    "mem_git_sha_at_runs": "0edb58ea8227adddf2f3476f328ebe8261e191dd",
+    "mem_git_dirty_at_runs": true,
+    "mem_git_diff_sha256_at_initial_runs": "d69b248446ab4c9f118cb9cd40c95670bf8f99a7ad34291121898c19caf04110",
+    "beads_git_sha": "c89168fc0942f18dd08fd35296c6fdebdd3e1dd7",
+    "beads_git_dirty_at_runs": true,
+    "beads_git_diff_sha256": "afb24525b9be6d70bbca433d906aeec78188f24d8bea19928ba700e619aa2627",
+    "beads_bin": "<BEADS_BIN>",
+    "beads_bin_sha256": "47aadd114f3afe16918ff5eff27f2e7d85bafc4003101ee7a4939c04252853de",
+    "structural_order_source_git_sha": "b1c55df8c3bd799262bdf2eede2b3e3f705d8848",
+    "followup_fixture_manifest_sha256": "fd6c88e687dcbbe8feaebb67ed512bf9063f4d9db39edb272f0b7ee6f0a20682",
+    "original_agent_analysis_sha256": "be638a2ba114e601345397283da90a00dbfc35e988725683aad0ced7fdaeda27",
+    "followup_agent_analysis_sha256": "5ac24dec5bec853c43711f457a05c8ce4403dcc75995c000515827a96a365ed8",
+    "followup_agent_cells_sha256": "e7d804d0c6f5bb625d911e44d5d6310fee217e9b1a69df718103bd50e07de8d0",
+    "followup_agent_observations_sha256": "fd384113356a733bff1baf721ba8bdd3979f32323fc0ced63051b7d8f4d3fdbd",
+    "followup_agent_manifest_sha256": "7ef0b870ba46fff6838a9e76907179e449e9893ac18ddfeded39c3c3ef2ac0b3",
+    "oracle_raw_sha256": "abd9ef4b426d08180495752e98db54913af0cb9ac7242f5e0e98b725451eb62d",
+    "oracle_analysis_sha256": "4bd8afd28bc6a35084511c42a0638a20ca507ec71aaa0e85415ccb1a3eb16b4f",
+    "mutation_raw_sha256": "270c0d2fe558ce94eeae4f79191381451e2b0439e125d9a701522b000f00ef62",
+    "mutation_analysis_sha256": "9544e4672e3b1a964c5bf11b93b3428e64346f47ba4bab8a38e34cb61e5d9918",
+    "rank_scaling_raw_sha256": "015e585b3157627c5533421bc4b62c65127473e4a8e4682bec9c9ed9c24faf20",
+    "rank_scaling_analysis_sha256": "2ff908ad3d345b9d027f68476a0f0db04a1356ac0b71865195f2076f24017847"
+  },
+  "sanitization": [
+    "Local paths replaced by portable placeholders or omitted.",
+    "Author identity headers removed from patch files.",
+    "No conversation messages, prompts, model text, agent streams, credentials, or authentication diagnostics included.",
+    "Per-run agent evidence is a metric-only projection with queries and free-form text removed."
+  ]
+}

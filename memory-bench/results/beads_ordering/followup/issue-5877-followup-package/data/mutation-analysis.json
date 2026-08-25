@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "row_count": 4200,
+  "by_policy": {
+    "exact-global": {
+      "rows": 840,
+      "supported_rows": 840,
+      "rank_refresh_ms": {
+        "count": 840,
+        "p50": 9.954409,
+        "p90": 293.0687206,
+        "mean": 86.86557696071428,
+        "min": 0.571752,
+        "max": 443.728922
+      },
+      "oracle_compute_ms": {
+        "count": 840,
+        "p50": 9.954409,
+        "p90": 293.0687206,
+        "mean": 86.86557696071428,
+        "min": 0.571752,
+        "max": 443.728922
+      },
+      "mutation_latency_ms": {
+        "count": 840,
+        "p50": 0.018835499999999998,
+        "p90": 0.05093910000000001,
+        "mean": 0.02672972261904762,
+        "min": 0.006522,
+        "max": 0.107504
+      },
+      "top_10_overlap": {
+        "count": 840,
+        "p50": 1.0,
+        "p90": 1.0,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "extra_pages_to_first_useful": {
+        "count": 840,
+        "p50": 0.0,
+        "p90": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "continuation_invalidations": 840
+    },
+    "periodic-5": {
+      "rows": 840,
+      "supported_rows": 840,
+      "rank_refresh_ms": {
+        "count": 840,
+        "p50": 0.0,
+        "p90": 10.032273900000003,
+        "mean": 17.46766064404762,
+        "min": 0.0,
+        "max": 416.392209
+      },
+      "oracle_compute_ms": {
+        "count": 840,
+        "p50": 9.954409,
+        "p90": 293.0687206,
+        "mean": 86.86557696071428,
+        "min": 0.571752,
+        "max": 443.728922
+      },
+      "mutation_latency_ms": {
+        "count": 840,
+        "p50": 0.018835499999999998,
+        "p90": 0.05093910000000001,
+        "mean": 0.02672972261904762,
+        "min": 0.006522,
+        "max": 0.107504
+      },
+      "top_10_overlap": {
+        "count": 840,
+        "p50": 1.0,
+        "p90": 1.0,
+        "mean": 0.8436904761904762,
+        "min": 0.0,
+        "max": 1.0
+      },
+      "extra_pages_to_first_useful": {
+        "count": 840,
+        "p50": 0.0,
+        "p90": 0.0,
+        "mean": 0.017857142857142856,
+        "min": -3.0,
+        "max": 3.0
+      },
+      "continuation_invalidations": 840
+    },
+    "periodic-20": {
+      "rows": 840,
+      "supported_rows": 840,
+      "rank_refresh_ms": {
+        "count": 840,
+        "p50": 0.0,
+        "p90": 0.0,
+        "mean": 4.346075138095238,
+        "min": 0.0,
+        "max": 318.411013
+      },
+      "oracle_compute_ms": {
+        "count": 840,
+        "p50": 9.954409,
+        "p90": 293.0687206,
+        "mean": 86.86557696071428,
+        "min": 0.571752,
+        "max": 443.728922
+      },
+      "mutation_latency_ms": {
+        "count": 840,
+        "p50": 0.018835499999999998,
+        "p90": 0.05093910000000001,
+        "mean": 0.02672972261904762,
+        "min": 0.006522,
+        "max": 0.107504
+      },
+      "top_10_overlap": {
+        "count": 840,
+        "p50": 0.8,
+        "p90": 1.0,
+        "mean": 0.7175,
+        "min": 0.0,
+        "max": 1.0
+      },
+      "extra_pages_to_first_useful": {
+        "count": 840,
+        "p50": 0.0,
+        "p90": 0.0,
+        "mean": 0.02976190476190476,
+        "min": -2.0,
+        "max": 3.0
+      },
+      "continuation_invalidations": 840
+    },
+    "stale-until-read": {
+      "rows": 840,
+      "supported_rows": 840,
+      "rank_refresh_ms": {
+        "count": 840,
+        "p50": 9.954409,
+        "p90": 293.0687206,
+        "mean": 86.86557696071428,
+        "min": 0.571752,
+        "max": 443.728922
+      },
+      "oracle_compute_ms": {
+        "count": 840,
+        "p50": 9.954409,
+        "p90": 293.0687206,
+        "mean": 86.86557696071428,
+        "min": 0.571752,
+        "max": 443.728922
+      },
+      "mutation_latency_ms": {
+        "count": 840,
+        "p50": 0.018835499999999998,
+        "p90": 0.05093910000000001,
+        "mean": 0.02672972261904762,
+        "min": 0.006522,
+        "max": 0.107504
+      },
+      "top_10_overlap": {
+        "count": 840,
+        "p50": 1.0,
+        "p90": 1.0,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "extra_pages_to_first_useful": {
+        "count": 840,
+        "p50": 0.0,
+        "p90": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "continuation_invalidations": 840
+    },
+    "incremental-if-feasible": {
+      "rows": 840,
+      "supported_rows": 0,
+      "rank_refresh_ms": {
+        "count": 840,
+        "p50": 0.0,
+        "p90": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "oracle_compute_ms": {
+        "count": 840,
+        "p50": 9.954409,
+        "p90": 293.0687206,
+        "mean": 86.86557696071428,
+        "min": 0.571752,
+        "max": 443.728922
+      },
+      "mutation_latency_ms": {
+        "count": 840,
+        "p50": 0.018835499999999998,
+        "p90": 0.05093910000000001,
+        "mean": 0.02672972261904762,
+        "min": 0.006522,
+        "max": 0.107504
+      },
+      "top_10_overlap": {
+        "count": 840,
+        "p50": 0.7,
+        "p90": 0.9,
+        "mean": 0.5732142857142857,
+        "min": 0.0,
+        "max": 1.0
+      },
+      "extra_pages_to_first_useful": {
+        "count": 840,
+        "p50": 0.0,
+        "p90": 0.0,
+        "mean": 0.10476190476190476,
+        "min": 0.0,
+        "max": 3.0
+      },
+      "continuation_invalidations": 840
+    }
+  }
+}

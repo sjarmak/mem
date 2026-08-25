@@ -1,0 +1,1402 @@
+{
+  "schema_version": 1,
+  "selection_rule": "repeat-zero task-success disagreement or infrastructure failure; repeats 1 and 2 for every policy in the selected task/mode/page group",
+  "initial_rows": 1008,
+  "initial_canonical_sha256": "9d2573fc65ab12461ce03fc2c0b39fe0c0b132a1041c9d09cc3f220110baa153",
+  "selected_groups": 116,
+  "planned_repeat_cells": 1392,
+  "groups": [
+    {
+      "task_id": "ordering-followup-01-100-pager-drain",
+      "mode": "navigation",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-01-100-pager-drain",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-01-100-pager-drain",
+      "mode": "navigation",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-01-100-pager-drain",
+      "mode": "navigation",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-01-100-pager-drain",
+      "mode": "search-only",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-01-100-pager-drain",
+      "mode": "search-only",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-01-100-pager-drain",
+      "mode": "search-only",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-01-100-pager-drain",
+      "mode": "search-only",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-01-50-lease-fence",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-01-50-lease-fence",
+      "mode": "navigation",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-01-50-lease-fence",
+      "mode": "search-only",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-01-50-lease-fence",
+      "mode": "search-only",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-01-50-lease-fence",
+      "mode": "search-only",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-01-500-rollback-signal",
+      "mode": "navigation",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-01-500-rollback-signal",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-01-500-rollback-signal",
+      "mode": "navigation",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-01-500-rollback-signal",
+      "mode": "search-only",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-01-500-rollback-signal",
+      "mode": "search-only",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-01-500-rollback-signal",
+      "mode": "search-only",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-02-100-hook-path",
+      "mode": "navigation",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-02-100-hook-path",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-02-100-hook-path",
+      "mode": "search-only",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-02-100-hook-path",
+      "mode": "search-only",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-02-100-hook-path",
+      "mode": "search-only",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-02-50-token-scope",
+      "mode": "navigation",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-02-50-token-scope",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-02-50-token-scope",
+      "mode": "search-only",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-02-50-token-scope",
+      "mode": "search-only",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-02-50-token-scope",
+      "mode": "search-only",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-02-500-cache-owner",
+      "mode": "navigation",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-02-500-cache-owner",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-02-500-cache-owner",
+      "mode": "navigation",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-02-500-cache-owner",
+      "mode": "search-only",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-02-500-cache-owner",
+      "mode": "search-only",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-02-500-cache-owner",
+      "mode": "search-only",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-02-500-cache-owner",
+      "mode": "search-only",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-03-100-backfill-batch",
+      "mode": "navigation",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-03-100-backfill-batch",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-03-100-backfill-batch",
+      "mode": "search-only",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-03-50-shadow-suffix",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-03-50-shadow-suffix",
+      "mode": "navigation",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-03-50-shadow-suffix",
+      "mode": "navigation",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-03-50-shadow-suffix",
+      "mode": "search-only",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-03-50-shadow-suffix",
+      "mode": "search-only",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-03-50-shadow-suffix",
+      "mode": "search-only",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-03-50-shadow-suffix",
+      "mode": "search-only",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-03-500-cutover-check",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-03-500-cutover-check",
+      "mode": "navigation",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-03-500-cutover-check",
+      "mode": "navigation",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-03-500-cutover-check",
+      "mode": "search-only",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-03-500-cutover-check",
+      "mode": "search-only",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-03-500-cutover-check",
+      "mode": "search-only",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-03-500-cutover-check",
+      "mode": "search-only",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-04-100-quorum-loss",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-04-100-quorum-loss",
+      "mode": "search-only",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-04-100-quorum-loss",
+      "mode": "search-only",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-04-50-outbox-cursor",
+      "mode": "navigation",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-04-50-outbox-cursor",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-04-50-outbox-cursor",
+      "mode": "navigation",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-04-50-outbox-cursor",
+      "mode": "navigation",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-04-50-outbox-cursor",
+      "mode": "search-only",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-04-50-outbox-cursor",
+      "mode": "search-only",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-04-50-outbox-cursor",
+      "mode": "search-only",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-04-50-outbox-cursor",
+      "mode": "search-only",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-04-500-clock-skew",
+      "mode": "navigation",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-04-500-clock-skew",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-04-500-clock-skew",
+      "mode": "search-only",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-04-500-clock-skew",
+      "mode": "search-only",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-100-provenance-gate",
+      "mode": "navigation",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-100-provenance-gate",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-100-provenance-gate",
+      "mode": "navigation",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-100-provenance-gate",
+      "mode": "navigation",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-100-provenance-gate",
+      "mode": "search-only",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-100-provenance-gate",
+      "mode": "search-only",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-50-manifest-signing",
+      "mode": "navigation",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-50-manifest-signing",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-50-manifest-signing",
+      "mode": "navigation",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-50-manifest-signing",
+      "mode": "navigation",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-50-manifest-signing",
+      "mode": "search-only",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-50-manifest-signing",
+      "mode": "search-only",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-50-manifest-signing",
+      "mode": "search-only",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-50-manifest-signing",
+      "mode": "search-only",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-500-rollback-window",
+      "mode": "navigation",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-500-rollback-window",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-500-rollback-window",
+      "mode": "navigation",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-500-rollback-window",
+      "mode": "search-only",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-500-rollback-window",
+      "mode": "search-only",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-05-500-rollback-window",
+      "mode": "search-only",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-06-100-column-retire",
+      "mode": "navigation",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-06-100-column-retire",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-06-100-column-retire",
+      "mode": "navigation",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-06-100-column-retire",
+      "mode": "search-only",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-06-100-column-retire",
+      "mode": "search-only",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-06-100-column-retire",
+      "mode": "search-only",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-06-100-column-retire",
+      "mode": "search-only",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-06-50-index-build",
+      "mode": "navigation",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-06-50-index-build",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-06-50-index-build",
+      "mode": "search-only",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-06-500-type-widen",
+      "mode": "navigation",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-06-500-type-widen",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-06-500-type-widen",
+      "mode": "navigation",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-06-500-type-widen",
+      "mode": "navigation",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-06-500-type-widen",
+      "mode": "search-only",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-06-500-type-widen",
+      "mode": "search-only",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-06-500-type-widen",
+      "mode": "search-only",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-06-500-type-widen",
+      "mode": "search-only",
+      "page_size": "all",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-07-100-break-glass",
+      "mode": "navigation",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-07-100-break-glass",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-07-100-break-glass",
+      "mode": "search-only",
+      "page_size": "5",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-07-100-break-glass",
+      "mode": "search-only",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-07-100-break-glass",
+      "mode": "search-only",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-07-50-audit-retention",
+      "mode": "search-only",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-07-500-artifact-quarantine",
+      "mode": "navigation",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-07-500-artifact-quarantine",
+      "mode": "navigation",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-07-500-artifact-quarantine",
+      "mode": "search-only",
+      "page_size": "10",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "task_id": "ordering-followup-07-500-artifact-quarantine",
+      "mode": "search-only",
+      "page_size": "20",
+      "reasons": [
+        "task-success-disagreement"
+      ],
+      "repeat_indices": [
+        1,
+        2
+      ]
+    }
+  ]
+}

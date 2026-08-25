@@ -87,6 +87,257 @@ def _page_size_sort(label: str) -> int:
     return 1_000_000 if label == "all" else int(label)
 
 
+_DECISION_ARMS = (
+    OrderingArm.KEY,
+    OrderingArm.REVERSE_PAGERANK,
+    OrderingArm.HITS_HUB,
+    OrderingArm.BM25F,
+)
+_STRUCTURAL_FINALISTS = (OrderingArm.REVERSE_PAGERANK, OrderingArm.HITS_HUB)
+_DECISION_PAGE_SIZES = ("5", "10", "20", "all")
+_DECISION_MODES = ("search-only", "navigation")
+
+
+def _maybe_distribution(values: Sequence[float | int]) -> dict[str, float | int] | None:
+    return _distribution(values) if values else None
+
+
+def _paired_policy_summaries(rows: Sequence[OrderingRunResult]) -> list[dict[str, object]]:
+    by_cell = {
+        (row.task_id, row.repeat, row.mode.value, row.page_size, row.arm): row for row in rows
+    }
+    fields = {
+        "pages_saved_by_bm25f": "pages_requested",
+        "compact_tokens_saved_by_bm25f": "compact_tokens_to_first_useful",
+        "retrieval_tokens_saved_by_bm25f": "retrieval_tokens_to_first_useful",
+        "tool_calls_saved_by_bm25f": "tool_calls_to_first_useful",
+        "retrieval_latency_ms_saved_by_bm25f": "retrieval_latency_ms",
+        "end_to_end_ms_saved_by_bm25f": "end_to_end_ms",
+        "recalls_saved_by_bm25f": "full_recalls",
+        "graph_hops_saved_by_bm25f": "graph_hops_total",
+    }
+    summaries: list[dict[str, object]] = []
+    for mode in sorted({row.mode.value for row in rows}):
+        for page_size in sorted({row.page_size for row in rows}, key=_page_size_sort):
+            for policy in sorted(
+                {row.arm for row in rows if row.arm is not OrderingArm.BM25F},
+                key=lambda arm: arm.value,
+            ):
+                task_values: dict[str, dict[str, list[float]]] = defaultdict(
+                    lambda: defaultdict(list)
+                )
+                pair_count = 0
+                for row in rows:
+                    if (
+                        row.arm is not policy
+                        or row.mode.value != mode
+                        or row.page_size != page_size
+                    ):
+                        continue
+                    bm25f = by_cell.get(
+                        (row.task_id, row.repeat, mode, page_size, OrderingArm.BM25F)
+                    )
+                    if bm25f is None:
+                        continue
+                    pair_count += 1
+                    for output_name, field in fields.items():
+                        task_values[row.task_id][output_name].append(
+                            float(getattr(row, field)) - float(getattr(bm25f, field))
+                        )
+                    policy_tokens = float(row.compact_tokens_to_first_useful)
+                    token_fraction = (
+                        0.0
+                        if policy_tokens == 0
+                        else (policy_tokens - float(bm25f.compact_tokens_to_first_useful))
+                        / policy_tokens
+                    )
+                    task_values[row.task_id]["compact_token_reduction_fraction"].append(
+                        token_fraction
+                    )
+                    task_values[row.task_id]["success_delta_bm25f_minus_policy"].append(
+                        float(bm25f.task_success) - float(row.task_success)
+                    )
+                    if (
+                        row.time_to_first_useful_ms is not None
+                        and bm25f.time_to_first_useful_ms is not None
+                    ):
+                        task_values[row.task_id]["time_to_useful_ms_saved_by_bm25f"].append(
+                            row.time_to_first_useful_ms - bm25f.time_to_first_useful_ms
+                        )
+                if not pair_count:
+                    continue
+                metric_names = (
+                    *fields,
+                    "compact_token_reduction_fraction",
+                    "success_delta_bm25f_minus_policy",
+                    "time_to_useful_ms_saved_by_bm25f",
+                )
+                summary: dict[str, object] = {
+                    "mode": mode,
+                    "policy": policy.value,
+                    "page_size": page_size,
+                    "n_tasks": len(task_values),
+                    "n_pairs": pair_count,
+                }
+                for metric in metric_names:
+                    clustered = [
+                        fmean(values[metric])
+                        for values in task_values.values()
+                        if values.get(metric)
+                    ]
+                    summary[metric] = _maybe_distribution(clustered)
+                summaries.append(summary)
+    return summaries
+
+
+def _targeted_repeat_cells(rows: Sequence[OrderingRunResult]) -> list[dict[str, object]]:
+    decision_rows = [row for row in rows if row.arm in _DECISION_ARMS]
+    by_attempt: dict[tuple[str, str, str, int], list[OrderingRunResult]] = defaultdict(list)
+    for row in decision_rows:
+        by_attempt[(row.task_id, row.mode.value, row.page_size, row.repeat)].append(row)
+    targets: dict[tuple[str, str, str], set[str]] = defaultdict(set)
+    for (task_id, mode, page_size, _), group in by_attempt.items():
+        if len({row.arm for row in group}) != len(_DECISION_ARMS):
+            continue
+        if len({row.task_success for row in group}) > 1:
+            targets[(task_id, mode, page_size)].add("policy-success-disagreement")
+        if any(row.failure is not None for row in group):
+            targets[(task_id, mode, page_size)].add("agent-or-tool-failure")
+    by_policy_cell: dict[tuple[str, str, str, OrderingArm], list[OrderingRunResult]] = defaultdict(
+        list
+    )
+    for row in decision_rows:
+        by_policy_cell[(row.task_id, row.mode.value, row.page_size, row.arm)].append(row)
+    for (task_id, mode, page_size, _), group in by_policy_cell.items():
+        if len(group) > 1 and len({row.task_success for row in group}) > 1:
+            targets[(task_id, mode, page_size)].add("repeat-outcome-variance")
+    return [
+        {
+            "task_id": key[0],
+            "mode": key[1],
+            "page_size": key[2],
+            "reasons": sorted(reasons),
+        }
+        for key, reasons in sorted(
+            targets.items(), key=lambda item: (item[0][0], item[0][1], _page_size_sort(item[0][2]))
+        )
+    ]
+
+
+def _mechanism_recommendation(rows: Sequence[OrderingRunResult]) -> dict[str, object]:
+    task_ids = sorted({row.task_id for row in rows})
+    observed = {
+        (row.task_id, row.mode.value, row.page_size, row.arm)
+        for row in rows
+        if row.arm in _DECISION_ARMS
+    }
+    expected = {
+        (task_id, mode, page_size, arm)
+        for task_id in task_ids
+        for mode in _DECISION_MODES
+        for page_size in _DECISION_PAGE_SIZES
+        for arm in _DECISION_ARMS
+    }
+    complete = len(task_ids) >= 24 and expected <= observed
+    base: dict[str, object] = {
+        "initial_grid_complete": complete,
+        "task_count": len(task_ids),
+        "expected_initial_cells": len(expected),
+        "observed_initial_cells": len(expected & observed),
+        "thresholds": {
+            "median_pages_saved": 1.0,
+            "median_compact_token_reduction_fraction": 0.2,
+            "requires_no_task_success_regression": True,
+            "requires_navigation_advantage": True,
+        },
+    }
+    if not complete:
+        return {
+            **base,
+            "status": "insufficient-data",
+            "navigation_advantage_material": False,
+            "no_task_success_regression": False,
+            "comparisons": [],
+        }
+
+    by_cell = {
+        (row.task_id, row.repeat, row.mode.value, row.page_size, row.arm): row for row in rows
+    }
+    comparisons: list[dict[str, object]] = []
+    for policy in _STRUCTURAL_FINALISTS:
+        per_task: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+        for row in rows:
+            if row.arm is not policy:
+                continue
+            bm25f = by_cell.get(
+                (row.task_id, row.repeat, row.mode.value, row.page_size, OrderingArm.BM25F)
+            )
+            if bm25f is None:
+                continue
+            per_task[row.task_id]["all_mode_success_delta"].append(
+                float(bm25f.task_success) - float(row.task_success)
+            )
+            if row.mode.value != "navigation" or row.page_size == "all":
+                continue
+            per_task[row.task_id]["navigation_pages_saved"].append(
+                float(row.pages_requested - bm25f.pages_requested)
+            )
+            policy_tokens = float(row.compact_tokens_to_first_useful)
+            per_task[row.task_id]["navigation_token_reduction"].append(
+                0.0
+                if policy_tokens == 0
+                else (policy_tokens - float(bm25f.compact_tokens_to_first_useful)) / policy_tokens
+            )
+            per_task[row.task_id]["navigation_success_delta"].append(
+                float(bm25f.task_success) - float(row.task_success)
+            )
+        pages = [fmean(values["navigation_pages_saved"]) for values in per_task.values()]
+        token_reduction = [
+            fmean(values["navigation_token_reduction"]) for values in per_task.values()
+        ]
+        all_success = [fmean(values["all_mode_success_delta"]) for values in per_task.values()]
+        navigation_success = [
+            fmean(values["navigation_success_delta"]) for values in per_task.values()
+        ]
+        pages_distribution = _distribution(pages)
+        token_distribution = _distribution(token_reduction)
+        all_success_mean = fmean(all_success)
+        navigation_success_mean = fmean(navigation_success)
+        material = (
+            float(pages_distribution["p50"]) >= 1.0 or float(token_distribution["p50"]) >= 0.2
+        )
+        no_regression = all_success_mean >= 0 and navigation_success_mean >= 0
+        comparisons.append(
+            {
+                "policy": policy.value,
+                "n_tasks": len(per_task),
+                "navigation_pages_saved_by_bm25f": pages_distribution,
+                "navigation_compact_token_reduction_fraction": token_distribution,
+                "all_mode_success_delta_bm25f_minus_policy": all_success_mean,
+                "navigation_success_delta_bm25f_minus_policy": navigation_success_mean,
+                "navigation_advantage_material": material,
+                "no_task_success_regression": no_regression,
+            }
+        )
+    navigation_material = len(comparisons) == len(_STRUCTURAL_FINALISTS) and all(
+        bool(item["navigation_advantage_material"]) for item in comparisons
+    )
+    no_regression = len(comparisons) == len(_STRUCTURAL_FINALISTS) and all(
+        bool(item["no_task_success_regression"]) for item in comparisons
+    )
+    return {
+        **base,
+        "status": (
+            "recommend-bm25f-ownership"
+            if navigation_material and no_regression
+            else "prefer-query-independent-ordering-navigation"
+        ),
+        "navigation_advantage_material": navigation_material,
+        "no_task_success_regression": no_regression,
+        "comparisons": comparisons,
+    }
+
+
 def analyze_results(rows: Sequence[OrderingRunResult]) -> dict[str, object]:
     if not rows:
         raise ValueError("analysis needs at least one run")
@@ -370,6 +621,9 @@ def analyze_results(rows: Sequence[OrderingRunResult]) -> dict[str, object]:
                     "navigation_graph_hops_mean": _mean(navigation_rows, "graph_hops_total"),
                 }
             )
+    paired_policy_vs_bm25f = _paired_policy_summaries(rows)
+    targeted_repeat_cells = _targeted_repeat_cells(rows)
+    mechanism_recommendation = _mechanism_recommendation(rows)
     return {
         "runs": len(rows),
         "by_arm": by_arm,
@@ -392,4 +646,7 @@ def analyze_results(rows: Sequence[OrderingRunResult]) -> dict[str, object]:
         "strata": strata,
         "page_cost_slopes": page_cost,
         "navigation_effects": navigation_effects,
+        "paired_policy_vs_bm25f": paired_policy_vs_bm25f,
+        "targeted_repeat_cells": targeted_repeat_cells,
+        "mechanism_recommendation": mechanism_recommendation,
     }

@@ -20,24 +20,44 @@ from pathlib import Path
 from typing import cast
 
 from membench.beads_ordering.corpus import build_frozen_corpus
+from membench.beads_ordering.followup_corpus import (
+    load_followup_corpora,
+    write_followup_corpora,
+)
+from membench.beads_ordering.followup_evidence import (
+    collect_oracle_evidence,
+    write_agent_followup_evidence,
+    write_oracle_evidence,
+)
 from membench.beads_ordering.models import (
     BM25FConfig,
     ExperimentMode,
     FrozenCorpus,
     OrderingArm,
     OrderingRunResult,
+    OrderingTask,
+    TaskSplit,
+)
+from membench.beads_ordering.mutation import (
+    benchmark_rank_scaling,
+    run_mutation_experiment,
+    write_mutation_experiment,
+    write_rank_scaling,
 )
 from membench.beads_ordering.ranked_searching import enrich_with_ranked_searching
 from membench.beads_ordering.report import write_report
 from membench.beads_ordering.runner import (
     ARMS,
+    CONTROL_ARMS,
     PAGE_SIZES,
     corpus_digest,
     file_sha256,
+    git_diff_sha256,
     git_dirty,
     git_sha,
     run_agent_cell,
     seed_beads_workspace,
+    task_workspace,
     validate_paid_run,
     validate_rank_truth,
     write_raw_results,
@@ -68,6 +88,15 @@ from membench.telemetry.otel_spans import replay_to_spans, trace_to_spans
 _DEFAULT_MEM_BIN = Path(__file__).resolve().parents[2] / "bin" / "mem"
 _DEFAULT_ORDERING_FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "beads_ordering" / "corpus.json"
+)
+_DEFAULT_ORDERING_FOLLOWUP_DIR = (
+    Path(__file__).resolve().parents[1] / "fixtures" / "beads_ordering" / "followup"
+)
+_DEFAULT_ORDERING_FOLLOWUP_PREREGISTRATION = (
+    Path(__file__).resolve().parents[1]
+    / "fixtures"
+    / "beads_ordering"
+    / "structural-followup-preregistration.json"
 )
 
 
@@ -257,6 +286,39 @@ def _parse_ordering_arms(raw: str) -> list[OrderingArm]:
     return arms
 
 
+def _repeat_indices(*, start: int, count: int) -> range:
+    if start < 0:
+        raise ValueError("repeat start must be non-negative")
+    if count <= 0:
+        raise ValueError("repeat count must be positive")
+    return range(start, start + count)
+
+
+def _select_ordering_tasks(
+    corpus: FrozenCorpus, *, task_ids_raw: str, split_raw: str
+) -> list[OrderingTask]:
+    selected_ids = {part.strip() for part in task_ids_raw.split(",") if part.strip()}
+    known_ids = {task.task_id for task in corpus.tasks}
+    unknown = sorted(selected_ids - known_ids)
+    if unknown:
+        raise SystemExit(f"unknown task IDs: {', '.join(unknown)}")
+    split = None if split_raw == "all" else TaskSplit(split_raw)
+    selected = [
+        task
+        for task in corpus.tasks
+        if (not selected_ids or task.task_id in selected_ids)
+        and (split is None or task.split is split)
+    ]
+    if selected_ids and len(selected) != len(selected_ids):
+        mismatched = sorted(selected_ids - {task.task_id for task in selected})
+        raise SystemExit(
+            f"task ID selection does not match task split {split_raw}: {', '.join(mismatched)}"
+        )
+    if not selected:
+        raise SystemExit(f"no ordering tasks match task split {split_raw}")
+    return selected
+
+
 def _cmd_beads_ordering_freeze(args: argparse.Namespace) -> int:
     out = Path(args.out)
     if out.exists() and not args.overwrite:
@@ -274,8 +336,235 @@ def _cmd_beads_ordering_freeze(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_beads_ordering_followup_freeze(args: argparse.Namespace) -> int:
+    manifest = write_followup_corpora(
+        Path(args.out),
+        artifact_repo=Path(args.structural_order_source).expanduser().resolve(),
+        seed=args.seed,
+        overwrite=args.overwrite,
+    )
+    print(
+        "wrote structural follow-up suite: "
+        f"{args.out} ({manifest['family_count']} families, "
+        f"{manifest['heldout_task_count']} held-out tasks)"
+    )
+    return 0
+
+
+def _parse_corpus_sizes(raw: str) -> tuple[int, ...]:
+    try:
+        sizes = tuple(int(part.strip()) for part in raw.split(",") if part.strip())
+    except ValueError as exc:
+        raise SystemExit("corpus sizes must be comma-separated positive integers") from exc
+    if not sizes or any(size < 1 for size in sizes):
+        raise SystemExit("corpus sizes must be comma-separated positive integers")
+    return tuple(dict.fromkeys(sizes))
+
+
+def _source_bundle_sha256(paths: list[Path]) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(paths):
+        digest.update(path.name.encode())
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _cmd_beads_ordering_followup_mutations(args: argparse.Namespace) -> int:
+    fixture_dir = Path(args.fixture_dir).resolve()
+    corpora = load_followup_corpora(fixture_dir)
+    sizes = _parse_corpus_sizes(args.sizes)
+    rows = run_mutation_experiment(
+        corpora,
+        sizes=sizes,
+        event_count=args.event_count,
+        seed=args.seed,
+        page_size=args.page_size,
+    )
+    mem_repo = Path(__file__).resolve().parents[2]
+    beads_repo = Path(args.beads_repo).expanduser().resolve()
+    beads_bin = Path(_require_beads_bin(args.beads_bin))
+    source_shas = {corpus.structural_order_source_git_sha for corpus in corpora.values()}
+    if len(source_shas) != 1 or not next(iter(source_shas)):
+        raise SystemExit("follow-up fixtures do not share one structural-order source SHA")
+    preregistration = Path(args.preregistration).resolve()
+    ordering_package = Path(__file__).resolve().parent / "beads_ordering"
+    provenance: dict[str, object] = {
+        "mem_git_sha": git_sha(mem_repo),
+        "mem_git_dirty": git_dirty(mem_repo),
+        "mem_git_diff_sha256": git_diff_sha256(mem_repo),
+        "beads_git_sha": git_sha(beads_repo),
+        "beads_git_dirty": git_dirty(beads_repo),
+        "beads_git_diff_sha256": git_diff_sha256(beads_repo),
+        "beads_bin": str(beads_bin),
+        "beads_bin_sha256": file_sha256(beads_bin),
+        "structural_order_source_git_sha": next(iter(source_shas)),
+        "fixture_manifest_sha256": file_sha256(fixture_dir / "manifest.json"),
+        "preregistration_sha256": file_sha256(preregistration),
+        "followup_source_sha256": _source_bundle_sha256(
+            [
+                ordering_package / "followup_corpus.py",
+                ordering_package / "models.py",
+                ordering_package / "mutation.py",
+                Path(__file__).resolve(),
+                preregistration,
+            ]
+        ),
+    }
+    manifest = write_mutation_experiment(
+        rows,
+        Path(args.out),
+        provenance=provenance,
+        seed=args.seed,
+        event_count=args.event_count,
+    )
+    print(f"wrote mutation replay: {args.out} " f"({manifest['row_count']} task-policy snapshots)")
+    return 0
+
+
+def _cmd_beads_ordering_followup_rank_scaling(args: argparse.Namespace) -> int:
+    fixture_dir = Path(args.fixture_dir).resolve()
+    corpora = load_followup_corpora(fixture_dir)
+    sizes = _parse_corpus_sizes(args.sizes)
+    rows = benchmark_rank_scaling(
+        corpora,
+        sizes=sizes,
+        repeats=args.repeats,
+    )
+    mem_repo = Path(__file__).resolve().parents[2]
+    beads_repo = Path(args.beads_repo).expanduser().resolve()
+    beads_bin = Path(_require_beads_bin(args.beads_bin))
+    source_shas = {corpus.structural_order_source_git_sha for corpus in corpora.values()}
+    if len(source_shas) != 1 or not next(iter(source_shas)):
+        raise SystemExit("follow-up fixtures do not share one structural-order source SHA")
+    provenance: dict[str, object] = {
+        "mem_git_sha": git_sha(mem_repo),
+        "mem_git_dirty": git_dirty(mem_repo),
+        "mem_git_diff_sha256": git_diff_sha256(mem_repo),
+        "beads_git_sha": git_sha(beads_repo),
+        "beads_git_dirty": git_dirty(beads_repo),
+        "beads_git_diff_sha256": git_diff_sha256(beads_repo),
+        "beads_bin": str(beads_bin),
+        "beads_bin_sha256": file_sha256(beads_bin),
+        "structural_order_source_git_sha": next(iter(source_shas)),
+        "fixture_manifest_sha256": file_sha256(fixture_dir / "manifest.json"),
+        "followup_source_sha256": _source_bundle_sha256(
+            [
+                Path(__file__).resolve().parent / "beads_ordering" / "followup_corpus.py",
+                Path(__file__).resolve().parent / "beads_ordering" / "models.py",
+                Path(__file__).resolve().parent / "beads_ordering" / "mutation.py",
+                Path(__file__).resolve(),
+            ]
+        ),
+    }
+    manifest = write_rank_scaling(rows, Path(args.out), provenance=provenance)
+    print(f"wrote rank scaling: {args.out} ({manifest['row_count']} measurements)")
+    return 0
+
+
+def _cmd_beads_ordering_followup_oracle(args: argparse.Namespace) -> int:
+    fixture_dir = Path(args.fixture_dir).resolve()
+    validation_dir = Path(args.validation_dir).resolve()
+    workspace_root = Path(args.workspace_root).resolve()
+    corpora = load_followup_corpora(fixture_dir)
+    arms = _parse_ordering_arms(args.arms)
+    page_sizes = _parse_page_sizes(args.page_sizes)
+    beads_bin = _require_beads_bin(args.beads_bin)
+    bm25f = BM25FConfig(
+        key_weight=args.bm25f_key_weight,
+        alias_weight=args.bm25f_alias_weight,
+        title_weight=args.bm25f_title_weight,
+        body_weight=args.bm25f_body_weight,
+        k1=args.bm25f_k1,
+        b=args.bm25f_b,
+    )
+    rows = collect_oracle_evidence(
+        corpora=corpora,
+        validation_dir=validation_dir,
+        workspace_root=workspace_root,
+        beads_bin=beads_bin,
+        arms=arms,
+        page_sizes=page_sizes,
+        bm25f=bm25f,
+    )
+    mem_repo = Path(__file__).resolve().parents[2]
+    beads_repo = Path(args.beads_repo).expanduser().resolve()
+    source_shas = {corpus.structural_order_source_git_sha for corpus in corpora.values()}
+    if len(source_shas) != 1 or not next(iter(source_shas)):
+        raise SystemExit("follow-up fixtures do not share one structural-order source SHA")
+    validation_paths = sorted(validation_dir.glob("*.json"))
+    provenance: dict[str, object] = {
+        "mem_git_sha": git_sha(mem_repo),
+        "mem_git_dirty": git_dirty(mem_repo),
+        "mem_git_diff_sha256": git_diff_sha256(mem_repo),
+        "beads_git_sha": git_sha(beads_repo),
+        "beads_git_dirty": git_dirty(beads_repo),
+        "beads_git_diff_sha256": git_diff_sha256(beads_repo),
+        "beads_bin": beads_bin,
+        "beads_bin_sha256": file_sha256(Path(beads_bin)),
+        "structural_order_source_git_sha": next(iter(source_shas)),
+        "fixture_manifest_sha256": file_sha256(fixture_dir / "manifest.json"),
+        "validation_bundle_sha256": _source_bundle_sha256(validation_paths),
+        "arms": [arm.value for arm in arms],
+        "page_sizes": [str(value) for value in page_sizes],
+        "bm25f": bm25f.model_dump(),
+        "agent_outcomes": "collected separately in the authenticated follow-up agent grid",
+    }
+    manifest = write_oracle_evidence(rows, Path(args.out), provenance=provenance)
+    print(f"wrote follow-up oracle evidence: {args.out} ({manifest['row_count']} cells)")
+    return 0
+
+
+def _cmd_beads_ordering_followup_agent_analyze(args: argparse.Namespace) -> int:
+    fixture_dir = Path(args.fixture_dir).resolve()
+    corpora = load_followup_corpora(fixture_dir)
+    rows = [
+        OrderingRunResult.model_validate_json(line)
+        for raw_path in args.raw
+        for line in Path(raw_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    if len({row.run_id for row in rows}) != len(rows):
+        raise SystemExit("follow-up agent inputs contain duplicate run IDs")
+    task_metadata = {
+        task.task_id: {
+            "graph_family": task.graph_family,
+            "failure_case": task.failure_case,
+        }
+        for corpus in corpora.values()
+        for task in corpus.tasks
+    }
+    provenance: dict[str, object] = {
+        "fixture_manifest_sha256": file_sha256(fixture_dir / "manifest.json"),
+        "mem_git_shas": sorted({row.mem_git_sha for row in rows}),
+        "mem_git_diff_sha256s": sorted({row.mem_git_diff_sha256 for row in rows}),
+        "beads_git_shas": sorted({row.beads_git_sha for row in rows}),
+        "beads_git_diff_sha256s": sorted({row.beads_git_diff_sha256 for row in rows}),
+        "beads_bin_sha256s": sorted({row.beads_bin_sha256 for row in rows}),
+        "structural_order_source_git_shas": sorted(
+            {row.structural_order_source_git_sha for row in rows}
+        ),
+        "agent_models": sorted({row.agent_model for row in rows}),
+        "agent_cli_versions": sorted({row.agent_cli_version for row in rows}),
+    }
+    manifest = write_agent_followup_evidence(
+        rows,
+        task_metadata,
+        Path(args.out),
+        provenance=provenance,
+    )
+    print(
+        f"wrote follow-up agent analysis: {args.out} "
+        f"({manifest['observation_count']} observations, {manifest['cell_count']} cells)"
+    )
+    return 0
+
+
 def _validated_ordering_inputs(
     args: argparse.Namespace,
+    *,
+    arms: list[OrderingArm],
 ) -> tuple[FrozenCorpus, str, Path, BM25FConfig, dict[str, object]]:
     corpus = _load_ordering_fixture(args.fixture)
     beads_bin = _require_beads_bin(args.beads_bin)
@@ -289,38 +578,43 @@ def _validated_ordering_inputs(
         b=args.bm25f_b,
     )
     truth: dict[str, object] = {}
-    selected_ids = set(args.task_ids.split(",")) if args.task_ids else None
-    for size in sorted({task.corpus_size for task in corpus.tasks}):
-        tasks = [
-            task
-            for task in corpus.tasks
-            if task.corpus_size == size and (selected_ids is None or task.task_id in selected_ids)
-        ]
-        if not tasks:
-            continue
-        workspace = workspace_root / f"corpus-{size}"
+    selected_tasks = _select_ordering_tasks(
+        corpus,
+        task_ids_raw=args.task_ids,
+        split_raw=args.task_split,
+    )
+    selected_ids = {task.task_id for task in selected_tasks}
+    task_scoped = any(arm in CONTROL_ARMS for arm in arms)
+    for task in selected_tasks:
+        workspace = task_workspace(workspace_root, task, task_scoped=task_scoped)
         seed_beads_workspace(
-            corpus=corpus, corpus_size=size, beads_bin=beads_bin, workspace=workspace
+            corpus=corpus,
+            corpus_size=task.corpus_size,
+            beads_bin=beads_bin,
+            workspace=workspace,
+            control_task_id=task.task_id if task_scoped else None,
         )
-        for task in tasks:
-            ranks = validate_rank_truth(
-                task=task, workspace=workspace, beads_bin=beads_bin, bm25f=bm25f
-            )
-            truth[task.task_id] = {
-                "total_matched": ranks.total_matched,
-                "candidate_digest": ranks.candidate_digest,
-                "ranks": {
-                    arm.value: dict(memory_ranks) for arm, memory_ranks in ranks.ranks.items()
-                },
-            }
-    if selected_ids is not None and set(truth) != selected_ids:
+        ranks = validate_rank_truth(
+            task=task,
+            workspace=workspace,
+            beads_bin=beads_bin,
+            bm25f=bm25f,
+            arms=arms,
+        )
+        truth[task.task_id] = {
+            "total_matched": ranks.total_matched,
+            "candidate_digest": ranks.candidate_digest,
+            "ranks": {arm.value: dict(memory_ranks) for arm, memory_ranks in ranks.ranks.items()},
+        }
+    if set(truth) != selected_ids:
         missing = sorted(selected_ids - set(truth))
         raise SystemExit(f"unknown task IDs: {', '.join(missing)}")
     return corpus, beads_bin, workspace_root, bm25f, truth
 
 
 def _cmd_beads_ordering_validate(args: argparse.Namespace) -> int:
-    corpus, beads_bin, _, bm25f, truth = _validated_ordering_inputs(args)
+    arms = _parse_ordering_arms(args.arms)
+    corpus, beads_bin, _, bm25f, truth = _validated_ordering_inputs(args, arms=arms)
     payload = {
         "schema_version": corpus.schema_version,
         "fixture_digest": corpus_digest(corpus),
@@ -336,12 +630,14 @@ def _cmd_beads_ordering_validate(args: argparse.Namespace) -> int:
 
 
 def _cmd_beads_ordering_run(args: argparse.Namespace) -> int:
-    corpus, beads_bin, workspace_root, bm25f, truth_payload = _validated_ordering_inputs(args)
+    arms = _parse_ordering_arms(args.arms)
+    corpus, beads_bin, workspace_root, bm25f, truth_payload = _validated_ordering_inputs(
+        args, arms=arms
+    )
     claude_credentials = (
         Path(args.claude_credentials).expanduser().resolve() if args.claude_credentials else None
     )
     model, cli_version = validate_paid_run(args.model, claude_credentials=claude_credentials)
-    arms = _parse_ordering_arms(args.arms)
     page_sizes = _parse_page_sizes(args.page_sizes)
     mode = ExperimentMode(args.mode)
     out = Path(args.out).resolve()
@@ -350,26 +646,31 @@ def _cmd_beads_ordering_run(args: argparse.Namespace) -> int:
     beads_repo = Path(args.beads_repo).expanduser().resolve()
     mem_sha = git_sha(mem_repo)
     mem_dirty = git_dirty(mem_repo)
+    mem_diff_digest = git_diff_sha256(mem_repo)
     beads_sha = git_sha(beads_repo)
     beads_dirty = git_dirty(beads_repo)
+    beads_diff_digest = git_diff_sha256(beads_repo)
     beads_binary_digest = file_sha256(Path(beads_bin))
     selected_tasks = [task for task in corpus.tasks if task.task_id in truth_payload]
+    task_scoped = any(arm in CONTROL_ARMS for arm in arms)
     cells = [
         (task, arm, page_size, repeat)
         for task in selected_tasks
         for arm in arms
         for page_size in page_sizes
-        for repeat in range(args.repeats)
+        for repeat in _repeat_indices(start=args.repeat_start, count=args.repeats)
     ]
     random.Random(args.order_seed).shuffle(cells)
     prompt_digest = hashlib.sha256(b"beads-ordering-agent-protocol-v5").hexdigest()
     manifest = {
-        "schema_version": 2,
+        "schema_version": 3,
         "started_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "mem_git_sha": mem_sha,
         "mem_git_dirty": mem_dirty,
+        "mem_git_diff_sha256": mem_diff_digest,
         "beads_git_sha": beads_sha,
         "beads_git_dirty": beads_dirty,
+        "beads_git_diff_sha256": beads_diff_digest,
         "beads_bin": beads_bin,
         "beads_bin_sha256": beads_binary_digest,
         "structural_order_source_git_sha": corpus.structural_order_source_git_sha,
@@ -391,13 +692,27 @@ def _cmd_beads_ordering_run(args: argparse.Namespace) -> int:
             ),
             "hits-hub": "global query-independent HITS hub descending, then canonical Memory ID",
             "bm25f": "global BM25F score over the same literal-match set, then canonical Memory ID",
+            "control-automatic": (
+                "task-scoped materialization of the automatic reverse-PageRank order"
+            ),
+            "control-semantic": (
+                "frozen pin, boost, neutral, demote bands over automatic order; stable within band"
+            ),
+            "control-strategy": (
+                "frozen operator-selected query-independent strategy for the graph family"
+            ),
+            "control-raw": (
+                "frozen explicit numeric ranks first, then automatic order, then canonical ID"
+            ),
         },
         "page_sizes": [str(value) for value in page_sizes],
         "arms": [arm.value for arm in arms],
         "mode": mode.value,
         "repeats": args.repeats,
+        "repeat_start": args.repeat_start,
         "order_seed": args.order_seed,
         "max_tool_calls": args.max_tool_calls,
+        "task_split": args.task_split,
         "agent_model": model,
         "agent_cli_version": cli_version,
         "agent_settings": {"autoMemoryEnabled": False},
@@ -426,8 +741,10 @@ def _cmd_beads_ordering_run(args: argparse.Namespace) -> int:
             if (
                 row.mem_git_sha != mem_sha
                 or row.mem_git_dirty != mem_dirty
+                or row.mem_git_diff_sha256 != mem_diff_digest
                 or row.beads_git_sha != beads_sha
                 or row.beads_git_dirty != beads_dirty
+                or row.beads_git_diff_sha256 != beads_diff_digest
                 or row.beads_bin_sha256 != beads_binary_digest
                 or row.structural_order_source_git_sha != corpus.structural_order_source_git_sha
                 or row.agent_model != model
@@ -457,7 +774,7 @@ def _cmd_beads_ordering_run(args: argparse.Namespace) -> int:
                 page_size=page_size,
                 mode=mode,
                 repeat=repeat,
-                workspace=workspace_root / f"corpus-{task.corpus_size}",
+                workspace=task_workspace(workspace_root, task, task_scoped=task_scoped),
                 beads_bin=beads_bin,
                 bm25f=bm25f,
                 rank_truth=rank_truth,
@@ -465,8 +782,10 @@ def _cmd_beads_ordering_run(args: argparse.Namespace) -> int:
                 cli_version=cli_version,
                 mem_sha=mem_sha,
                 mem_dirty=mem_dirty,
+                mem_git_diff_sha256=mem_diff_digest,
                 beads_sha=beads_sha,
                 beads_dirty=beads_dirty,
+                beads_git_diff_sha256=beads_diff_digest,
                 beads_bin_sha256=beads_binary_digest,
                 structural_order_source_git_sha=corpus.structural_order_source_git_sha,
                 artifacts_dir=out,
@@ -507,6 +826,12 @@ def _add_ordering_input_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--beads-bin", default=os.environ.get("BEADS_BIN"))
     parser.add_argument("--workspace-root", required=True)
     parser.add_argument("--task-ids", default="", help="optional comma-separated task IDs")
+    parser.add_argument(
+        "--task-split",
+        choices=["all", *(split.value for split in TaskSplit)],
+        default="all",
+        help="restrict validation/run cells to one frozen task split",
+    )
     _add_bm25f_flags(parser)
 
 
@@ -580,10 +905,83 @@ def main(argv: list[str] | None = None) -> int:
     p_freeze.add_argument("--overwrite", action="store_true")
     p_freeze.set_defaults(func=_cmd_beads_ordering_freeze)
 
+    p_followup_freeze = sub.add_parser(
+        "beads-ordering-followup-freeze",
+        help="write independently varied structural-ordering follow-up corpora",
+    )
+    p_followup_freeze.add_argument("--out", default=str(_DEFAULT_ORDERING_FOLLOWUP_DIR))
+    p_followup_freeze.add_argument("--seed", type=int, default=5878)
+    p_followup_freeze.add_argument(
+        "--structural-order-source",
+        required=True,
+        help="pinned structural-order source checkout used to materialize graph priors",
+    )
+    p_followup_freeze.add_argument("--overwrite", action="store_true")
+    p_followup_freeze.set_defaults(func=_cmd_beads_ordering_followup_freeze)
+
+    p_followup_mutations = sub.add_parser(
+        "beads-ordering-followup-mutations",
+        help="replay structural-rank mutations and refresh policies",
+    )
+    p_followup_mutations.add_argument("--fixture-dir", default=str(_DEFAULT_ORDERING_FOLLOWUP_DIR))
+    p_followup_mutations.add_argument(
+        "--preregistration", default=str(_DEFAULT_ORDERING_FOLLOWUP_PREREGISTRATION)
+    )
+    p_followup_mutations.add_argument("--beads-repo", required=True)
+    p_followup_mutations.add_argument("--beads-bin", default=os.environ.get("BEADS_BIN"))
+    p_followup_mutations.add_argument("--sizes", default="50,100,500")
+    p_followup_mutations.add_argument("--event-count", type=int, default=40)
+    p_followup_mutations.add_argument("--page-size", type=int, default=10)
+    p_followup_mutations.add_argument("--seed", type=int, default=5878)
+    p_followup_mutations.add_argument("--out", required=True)
+    p_followup_mutations.set_defaults(func=_cmd_beads_ordering_followup_mutations)
+
+    p_followup_scaling = sub.add_parser(
+        "beads-ordering-followup-rank-scaling",
+        help="measure structural rank compute cost across corpus sizes",
+    )
+    p_followup_scaling.add_argument("--fixture-dir", default=str(_DEFAULT_ORDERING_FOLLOWUP_DIR))
+    p_followup_scaling.add_argument("--beads-repo", required=True)
+    p_followup_scaling.add_argument("--beads-bin", default=os.environ.get("BEADS_BIN"))
+    p_followup_scaling.add_argument("--sizes", default="50,100,500,2000,10000")
+    p_followup_scaling.add_argument("--repeats", type=int, default=3)
+    p_followup_scaling.add_argument("--out", required=True)
+    p_followup_scaling.set_defaults(func=_cmd_beads_ordering_followup_rank_scaling)
+
+    p_followup_oracle = sub.add_parser(
+        "beads-ordering-followup-oracle",
+        help="collect deterministic rank and reference-navigation follow-up evidence",
+    )
+    p_followup_oracle.add_argument("--fixture-dir", default=str(_DEFAULT_ORDERING_FOLLOWUP_DIR))
+    p_followup_oracle.add_argument("--validation-dir", required=True)
+    p_followup_oracle.add_argument("--workspace-root", required=True)
+    p_followup_oracle.add_argument("--beads-repo", required=True)
+    p_followup_oracle.add_argument("--beads-bin", default=os.environ.get("BEADS_BIN"))
+    p_followup_oracle.add_argument(
+        "--arms",
+        default=",".join((*[arm.value for arm in ARMS], *[arm.value for arm in CONTROL_ARMS])),
+    )
+    p_followup_oracle.add_argument("--page-sizes", default="5,10,20,all")
+    p_followup_oracle.add_argument("--out", required=True)
+    _add_bm25f_flags(p_followup_oracle)
+    p_followup_oracle.set_defaults(func=_cmd_beads_ordering_followup_oracle)
+
+    p_followup_agent_analysis = sub.add_parser(
+        "beads-ordering-followup-agent-analyze",
+        help="average targeted repeats and analyze the follow-up agent grid",
+    )
+    p_followup_agent_analysis.add_argument(
+        "--fixture-dir", default=str(_DEFAULT_ORDERING_FOLLOWUP_DIR)
+    )
+    p_followup_agent_analysis.add_argument("--raw", required=True, nargs="+")
+    p_followup_agent_analysis.add_argument("--out", required=True)
+    p_followup_agent_analysis.set_defaults(func=_cmd_beads_ordering_followup_agent_analyze)
+
     p_validate = sub.add_parser(
         "beads-ordering-validate", help="seed Beads and verify fixed candidate-set parity"
     )
     _add_ordering_input_flags(p_validate)
+    p_validate.add_argument("--arms", default=",".join(arm.value for arm in ARMS))
     p_validate.add_argument("--out", required=True)
     p_validate.set_defaults(func=_cmd_beads_ordering_validate)
 
@@ -604,6 +1002,12 @@ def main(argv: list[str] | None = None) -> int:
         "--mode", choices=[mode.value for mode in ExperimentMode], default="search-only"
     )
     p_ordering_run.add_argument("--repeats", type=int, default=1)
+    p_ordering_run.add_argument(
+        "--repeat-start",
+        type=int,
+        default=0,
+        help="first repeat index (useful for preregistered targeted repeats)",
+    )
     p_ordering_run.add_argument("--order-seed", type=int, default=5877)
     p_ordering_run.add_argument("--max-tool-calls", type=int, default=12)
     p_ordering_run.add_argument("--out", required=True)

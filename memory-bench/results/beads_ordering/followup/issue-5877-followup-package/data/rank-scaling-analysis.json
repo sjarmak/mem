@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "row_count": 105,
+  "by_corpus_size": {
+    "50": {
+      "rows": 21,
+      "graph_families": 7,
+      "arithmetic": [
+        "pinned-update-order"
+      ],
+      "compute_ms": {
+        "count": 21,
+        "p50": 2.523114,
+        "p90": 2.898825,
+        "mean": 2.087037047619048,
+        "min": 0.490528,
+        "max": 2.953158
+      },
+      "edge_count": {
+        "count": 21,
+        "p50": 24.0,
+        "p90": 161.0,
+        "mean": 65.57142857142857,
+        "min": 15.0,
+        "max": 161.0
+      }
+    },
+    "100": {
+      "rows": 21,
+      "graph_families": 7,
+      "arithmetic": [
+        "pinned-update-order"
+      ],
+      "compute_ms": {
+        "count": 21,
+        "p50": 9.393423,
+        "p90": 11.188269,
+        "mean": 7.655493238095238,
+        "min": 0.945559,
+        "max": 11.595879
+      },
+      "edge_count": {
+        "count": 21,
+        "p50": 43.0,
+        "p90": 243.0,
+        "mean": 107.14285714285714,
+        "min": 31.0,
+        "max": 243.0
+      }
+    },
+    "500": {
+      "rows": 21,
+      "graph_families": 7,
+      "arithmetic": [
+        "pinned-update-order"
+      ],
+      "compute_ms": {
+        "count": 21,
+        "p50": 282.081333,
+        "p90": 290.0765,
+        "mean": 239.36116047619046,
+        "min": 4.188965,
+        "max": 318.327803
+      },
+      "edge_count": {
+        "count": 21,
+        "p50": 178.0,
+        "p90": 767.0,
+        "mean": 298.57142857142856,
+        "min": 164.0,
+        "max": 767.0
+      }
+    },
+    "2000": {
+      "rows": 21,
+      "graph_families": 7,
+      "arithmetic": [
+        "aggregated-dangling-mass"
+      ],
+      "compute_ms": {
+        "count": 21,
+        "p50": 14.276532,
+        "p90": 20.261907,
+        "mean": 15.621537666666669,
+        "min": 13.072835,
+        "max": 27.934805
+      },
+      "edge_count": {
+        "count": 21,
+        "p50": 712.0,
+        "p90": 3068.0,
+        "mean": 1194.2857142857142,
+        "min": 656.0,
+        "max": 3068.0
+      }
+    },
+    "10000": {
+      "rows": 21,
+      "graph_families": 7,
+      "arithmetic": [
+        "aggregated-dangling-mass"
+      ],
+      "compute_ms": {
+        "count": 21,
+        "p50": 80.375985,
+        "p90": 103.759208,
+        "mean": 82.21460042857143,
+        "min": 68.955838,
+        "max": 106.480517
+      },
+      "edge_count": {
+        "count": 21,
+        "p50": 3560.0,
+        "p90": 15340.0,
+        "mean": 5971.428571428572,
+        "min": 3280.0,
+        "max": 15340.0
+      }
+    }
+  }
+}

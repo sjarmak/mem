@@ -49,6 +49,12 @@ STRUCTURAL_ARMS: tuple[OrderingArm, ...] = (
     OrderingArm.HITS_HUB,
 )
 ARMS: tuple[OrderingArm, ...] = (OrderingArm.KEY, *STRUCTURAL_ARMS, OrderingArm.BM25F)
+CONTROL_ARMS: tuple[OrderingArm, ...] = (
+    OrderingArm.CONTROL_AUTOMATIC,
+    OrderingArm.CONTROL_SEMANTIC,
+    OrderingArm.CONTROL_STRATEGY,
+    OrderingArm.CONTROL_RAW,
+)
 
 
 class OrderingExperimentError(RuntimeError):
@@ -90,6 +96,20 @@ def git_dirty(repo: Path) -> bool:
     return bool(completed.stdout.strip())
 
 
+def git_diff_sha256(repo: Path) -> str:
+    completed = subprocess.run(
+        ["git", "diff", "--binary", "HEAD", "--", "."],
+        cwd=repo,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    if completed.returncode != 0:
+        stderr = completed.stderr.decode(errors="replace")
+        raise OrderingExperimentError(f"cannot hash git diff for {repo}: {stderr}")
+    return hashlib.sha256(completed.stdout).hexdigest()
+
+
 def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -103,17 +123,41 @@ def corpus_digest(corpus: FrozenCorpus) -> str:
 
 
 def seed_beads_workspace(
-    *, corpus: FrozenCorpus, corpus_size: int, beads_bin: str, workspace: Path
+    *,
+    corpus: FrozenCorpus,
+    corpus_size: int,
+    beads_bin: str,
+    workspace: Path,
+    control_task_id: str | None = None,
 ) -> None:
     """Materialize one nested corpus using Beads' memory import surface."""
 
+    stored_values = tuple(
+        (memory.key, memory.stored_value(corpus_size, control_task_id=control_task_id))
+        for memory in corpus.memories[:corpus_size]
+    )
     expected = hashlib.sha256(
-        "\n".join(memory.model_dump_json() for memory in corpus.memories[:corpus_size]).encode()
+        "\n".join(f"{key}\0{value}" for key, value in stored_values).encode()
+    ).hexdigest()
+    legacy_expected = hashlib.sha256(
+        "\n".join(
+            memory.model_dump_json(exclude={"control_ranks_by_task"})
+            for memory in corpus.memories[:corpus_size]
+        ).encode()
     ).hexdigest()
     marker = workspace / ".membench-corpus.json"
     if marker.exists():
         raw = json.loads(marker.read_text(encoding="utf-8"))
-        if raw == {"corpus_size": corpus_size, "fixture_digest": expected}:
+        if raw == {
+            "corpus_size": corpus_size,
+            "fixture_digest": expected,
+            "control_task_id": control_task_id,
+        }:
+            return
+        if control_task_id is None and raw == {
+            "corpus_size": corpus_size,
+            "fixture_digest": legacy_expected,
+        }:
             return
         raise OrderingExperimentError(
             f"{workspace} contains a different frozen corpus; choose a new workspace root"
@@ -150,10 +194,12 @@ def seed_beads_workspace(
             {
                 "_type": "memory",
                 "key": memory.key,
-                "value": memory.stored_value(corpus_size),
+                "value": stored_value,
             }
         )
-        for memory in corpus.memories[:corpus_size]
+        for memory, (_, stored_value) in zip(
+            corpus.memories[:corpus_size], stored_values, strict=True
+        )
     )
     completed = subprocess.run(
         [beads_bin, "import", "-", "--quiet"],
@@ -167,9 +213,25 @@ def seed_beads_workspace(
     if completed.returncode != 0:
         raise OrderingExperimentError(f"bd import failed: {completed.stderr.strip()}")
     marker.write_text(
-        json.dumps({"corpus_size": corpus_size, "fixture_digest": expected}, indent=2) + "\n",
+        json.dumps(
+            {
+                "corpus_size": corpus_size,
+                "fixture_digest": expected,
+                "control_task_id": control_task_id,
+            },
+            indent=2,
+        )
+        + "\n",
         encoding="utf-8",
     )
+
+
+def task_workspace(root: Path, task: OrderingTask, *, task_scoped: bool) -> Path:
+    """Choose a stable workspace; control ranks require one corpus image per task."""
+
+    if task_scoped:
+        return root / "tasks" / task.task_id
+    return root / f"corpus-{task.corpus_size}"
 
 
 def validate_rank_truth(
@@ -281,8 +343,10 @@ def run_agent_cell(
     cli_version: str,
     mem_sha: str,
     mem_dirty: bool,
+    mem_git_diff_sha256: str,
     beads_sha: str,
     beads_dirty: bool,
+    beads_git_diff_sha256: str,
     beads_bin_sha256: str,
     structural_order_source_git_sha: str,
     artifacts_dir: Path,
@@ -394,8 +458,10 @@ def run_agent_cell(
         failure=failure,
         mem_git_sha=mem_sha,
         mem_git_dirty=mem_dirty,
+        mem_git_diff_sha256=mem_git_diff_sha256,
         beads_git_sha=beads_sha,
         beads_git_dirty=beads_dirty,
+        beads_git_diff_sha256=beads_git_diff_sha256,
         beads_bin_sha256=beads_bin_sha256,
         structural_order_source_git_sha=structural_order_source_git_sha,
         agent_model=resolved_model,

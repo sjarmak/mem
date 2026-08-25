@@ -11,13 +11,14 @@ already returned by `memoryops.List`; it cannot add or remove a candidate.
 ## Pinned implementation
 
 - mem harness branch: the current `mem` checkout
-- Beads worktree: `/home/ds/gastownhall/beads-worktrees/memory-ordering-5877`
+- Beads worktree: set explicitly as `BEADS_WORKTREE`
 - Beads branch: `exp/memory-pagination-ordering-5877`
-- experimental binary: `/home/ds/.local/bin/bd-memory-ordering-5877`
+- experimental binary: set explicitly as `BEADS_BIN`
 
-Every run row and manifest records the mem SHA, Beads SHA, dirty flags, exact
-binary SHA-256, structural-order source SHA, agent model, and Claude CLI version.
-Set `BEADS_BIN` explicitly; the harness never imports Beads code.
+Every run row and manifest records the mem SHA, Beads SHA, dirty flags, SHA-256
+of each tracked worktree diff, exact binary SHA-256, structural-order source
+SHA, fixture digest, agent model, and Claude CLI version. Set `BEADS_BIN`
+explicitly; the harness never imports Beads code.
 
 ## Ordering conventions
 
@@ -45,24 +46,39 @@ cursor transcription errors cannot masquerade as retrieval failures.
 ## Build and validate
 
 ```bash
-cd /home/ds/gastownhall/beads-worktrees/memory-ordering-5877
-go test ./cmd/bd -run '^TestExperimental|^TestParseExperimentalMemory|^TestMatchesKnownCommand' -count=1
-go build -o /home/ds/.local/bin/bd-memory-ordering-5877 ./cmd/bd
+export MEM_REPO=/path/to/mem
+export BEADS_WORKTREE=/path/to/experimental-beads-worktree
+export BEADS_BIN=/path/to/bd-memory-ordering-5877
+export STRUCTURAL_ORDER_SOURCE=/path/to/pinned/structural-order-source
+export AGENT_CREDENTIALS=/path/to/authenticated-profile.json
 
-cd /home/ds/projects/mem/memory-bench
-export BEADS_BIN=/home/ds/.local/bin/bd-memory-ordering-5877
+cd "$BEADS_WORKTREE"
+go test ./cmd/bd -run '^TestExperimental|^TestParseExperimentalMemory|^TestMatchesKnownCommand' -count=1
+go build -o "$BEADS_BIN" ./cmd/bd
+
+cd "$MEM_REPO/memory-bench"
 python3 -m membench.cli beads-ordering-freeze \
-  --structural-order-source /home/ds/projects/Artifacts-ranked-searching \
+  --structural-order-source "$STRUCTURAL_ORDER_SOURCE" \
   --out fixtures/beads_ordering/corpus.json --overwrite
 python3 -m membench.cli beads-ordering-validate \
   --fixture fixtures/beads_ordering/corpus.json \
-  --workspace-root ../.mem/beads-ordering-workspaces-v4 \
-  --out results/beads_ordering/validation-structural.json
+  --workspace-root ../.mem/beads-ordering-workspaces-v5 \
+  --out results/beads_ordering/validation-heldout.json
 ```
 
-The validation command seeds nested 50/100/500-Memory Beads workspaces, exhausts
-all default arms, and refuses unless candidate IDs, count, digest, and compact
-projection are identical modulo rank/order.
+The frozen fixture contains 12 development-only tasks and 24 held-out tasks,
+eight at each 50/100/500-Memory corpus size. Twelve held-out tasks preserve
+sanitized shapes from real local software-engineering records; only a
+non-identifying source hash and shape category are retained. The validation
+command seeds nested workspaces, exhausts every arm, and refuses unless
+candidate IDs, count, digest, and compact projection are identical modulo
+rank/order.
+
+The six structural priors were screened mechanically on the 12 development
+tasks. Before held-out ranks were materialized,
+`results/beads_ordering/preregistration.json` locked `reverse-pagerank` as the
+entry-point finalist and `hits-hub` as the branch-heavy finalist. The held-out
+agent matrix does not revisit that selection.
 
 ## Experiment 1: ordering × page size
 
@@ -73,15 +89,16 @@ never logged or hashed.
 ```bash
 python3 -m membench.cli beads-ordering-run \
   --fixture fixtures/beads_ordering/corpus.json \
-  --workspace-root ../.mem/beads-ordering-workspaces-v4 \
-  --beads-repo /home/ds/gastownhall/beads-worktrees/memory-ordering-5877 \
+  --workspace-root ../.mem/beads-ordering-workspaces-v5 \
+  --beads-repo "$BEADS_WORKTREE" \
   --beads-bin "$BEADS_BIN" \
   --model claude-haiku-4-5-20251001 \
-  --claude-credentials /home/ds/.claude/.credentials.json \
-  --arms key,indegree,outdegree,pagerank,reverse-pagerank,hits-authority,hits-hub,bm25f \
-  --page-sizes 3,5,10,20,50,all \
+  --claude-credentials "$AGENT_CREDENTIALS" \
+  --task-split heldout \
+  --arms key,reverse-pagerank,hits-hub,bm25f \
+  --page-sizes 5,10,20,all \
   --mode search-only --repeats 1 --order-seed 5877 --max-tool-calls 12 \
-  --out results/beads_ordering/search-only
+  --out results/beads_ordering/heldout-pass-1-search-only
 ```
 
 Run one arm reproducibly by changing `--arms` and choosing a distinct output
@@ -94,15 +111,16 @@ reused.
 ```bash
 python3 -m membench.cli beads-ordering-run \
   --fixture fixtures/beads_ordering/corpus.json \
-  --workspace-root ../.mem/beads-ordering-workspaces-v4 \
-  --beads-repo /home/ds/gastownhall/beads-worktrees/memory-ordering-5877 \
+  --workspace-root ../.mem/beads-ordering-workspaces-v5 \
+  --beads-repo "$BEADS_WORKTREE" \
   --beads-bin "$BEADS_BIN" \
   --model claude-haiku-4-5-20251001 \
-  --claude-credentials /home/ds/.claude/.credentials.json \
-  --arms key,indegree,outdegree,pagerank,reverse-pagerank,hits-authority,hits-hub,bm25f \
-  --page-sizes 3,5,10,20,50,all \
+  --claude-credentials "$AGENT_CREDENTIALS" \
+  --task-split heldout \
+  --arms key,reverse-pagerank,hits-hub,bm25f \
+  --page-sizes 5,10,20,all \
   --mode navigation --repeats 1 --order-seed 5877 --max-tool-calls 12 \
-  --out results/beads_ordering/navigation
+  --out results/beads_ordering/heldout-pass-1-navigation
 ```
 
 Search-only mode allows recall only for Memories already shown in discovery.
@@ -114,9 +132,9 @@ Beads matcher, order, compact projection, page size, and model stay fixed.
 
 ```bash
 python3 -m membench.cli beads-ordering-analyze \
-  --raw results/beads_ordering/search-only/raw-results.jsonl \
-        results/beads_ordering/navigation/raw-results.jsonl \
-  --out results/beads_ordering/combined
+  --raw results/beads_ordering/heldout-pass-1-search-only/raw-results.jsonl \
+        results/beads_ordering/heldout-pass-1-navigation/raw-results.jsonl \
+  --out results/beads_ordering/heldout-pass-1-combined
 ```
 
 Outputs are `raw-results.jsonl`, per-run retrieval logs and Claude streams,
@@ -125,3 +143,11 @@ Candidate-generation and ordering milliseconds are server-side measures;
 compact bytes/tokens, pages, recalls, and tool calls measure agent ingestion and
 round trips. The roughly bytes/4 token estimate is explicit and is not presented
 as provider tokenizer ground truth.
+
+The combined analysis computes paired deltas within task/repeat/mode/page size,
+then clusters repeats by task before reporting distributions. It refuses to
+issue a mechanism verdict until all 768 initial cells are present. BM25F earns
+an ownership recommendation only if it saves at least one median page or 20%
+median compact tokens versus both structural finalists, does not regress task
+success, and retains the material advantage with navigation. Otherwise the
+registered recommendation is query-independent ordering plus navigation.
