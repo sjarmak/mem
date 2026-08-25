@@ -20,6 +20,14 @@ from pathlib import Path
 from typing import cast
 
 from membench.beads_ordering.corpus import build_frozen_corpus
+from membench.beads_ordering.density_linkage import (
+    load_density_linkage_manifest,
+    write_density_linkage_manifest,
+)
+from membench.beads_ordering.density_linkage_evidence import (
+    collect_density_linkage_oracle,
+    write_density_linkage_oracle,
+)
 from membench.beads_ordering.followup_corpus import (
     load_followup_corpora,
     write_followup_corpora,
@@ -348,6 +356,95 @@ def _cmd_beads_ordering_followup_freeze(args: argparse.Namespace) -> int:
         f"{args.out} ({manifest['family_count']} families, "
         f"{manifest['heldout_task_count']} held-out tasks)"
     )
+    return 0
+
+
+def _cmd_beads_ordering_density_linkage_freeze(args: argparse.Namespace) -> int:
+    manifest = write_density_linkage_manifest(
+        Path(args.fixture_dir).resolve(),
+        Path(args.out).resolve(),
+        preregistration=Path(args.preregistration).resolve(),
+        overwrite=args.overwrite,
+    )
+    print(
+        "wrote density/linkage manifest: "
+        f"{args.out} ({manifest['base_task_count']} base tasks, "
+        f"{manifest['variant_count']} variants)"
+    )
+    return 0
+
+
+def _cmd_beads_ordering_density_linkage_materialize(args: argparse.Namespace) -> int:
+    variants = load_density_linkage_manifest(
+        Path(args.fixture_dir).resolve(), Path(args.manifest).resolve()
+    )
+    try:
+        variant = variants[args.variant_id]
+    except KeyError as exc:
+        raise SystemExit(f"unknown density/linkage variant: {args.variant_id}") from exc
+    out = Path(args.out).resolve()
+    if out.exists() and not args.overwrite:
+        raise SystemExit(f"{out} exists; pass --overwrite to replace it")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(variant.corpus.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    print(f"wrote density/linkage fixture: {out} ({args.variant_id})")
+    return 0
+
+
+def _cmd_beads_ordering_density_linkage_oracle(args: argparse.Namespace) -> int:
+    fixture_dir = Path(args.fixture_dir).resolve()
+    manifest_path = Path(args.manifest).resolve()
+    variants = load_density_linkage_manifest(fixture_dir, manifest_path)
+    arms = _parse_ordering_arms(args.arms)
+    page_sizes = _parse_page_sizes(args.page_sizes)
+    beads_bin = _require_beads_bin(args.beads_bin)
+    bm25f = BM25FConfig(
+        key_weight=args.bm25f_key_weight,
+        alias_weight=args.bm25f_alias_weight,
+        title_weight=args.bm25f_title_weight,
+        body_weight=args.bm25f_body_weight,
+        k1=args.bm25f_k1,
+        b=args.bm25f_b,
+    )
+    rows = collect_density_linkage_oracle(
+        variants=variants,
+        workspace_root=Path(args.workspace_root).resolve(),
+        beads_bin=beads_bin,
+        arms=arms,
+        page_sizes=page_sizes,
+        bm25f=bm25f,
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    mem_repo = Path(__file__).resolve().parents[2]
+    beads_repo = Path(args.beads_repo).expanduser().resolve()
+    package = Path(__file__).resolve().parent / "beads_ordering"
+    provenance: dict[str, object] = {
+        "mem_git_sha": git_sha(mem_repo),
+        "mem_git_dirty": git_dirty(mem_repo),
+        "mem_git_diff_sha256": git_diff_sha256(mem_repo),
+        "beads_git_sha": git_sha(beads_repo),
+        "beads_git_dirty": git_dirty(beads_repo),
+        "beads_git_diff_sha256": git_diff_sha256(beads_repo),
+        "beads_bin": beads_bin,
+        "beads_bin_sha256": file_sha256(Path(beads_bin)),
+        "structural_order_source_git_sha": manifest["structural_order_source_git_sha"],
+        "base_fixture_manifest_sha256": file_sha256(fixture_dir / "manifest.json"),
+        "density_linkage_manifest_sha256": file_sha256(manifest_path),
+        "preregistration_sha256": manifest["preregistration_sha256"],
+        "density_linkage_source_sha256": _source_bundle_sha256(
+            [
+                package / "density_linkage.py",
+                package / "density_linkage_evidence.py",
+                package / "models.py",
+                Path(__file__).resolve(),
+            ]
+        ),
+        "arms": [arm.value for arm in arms],
+        "page_sizes": [str(page_size) for page_size in page_sizes],
+        "bm25f": bm25f.model_dump(),
+    }
+    evidence_manifest = write_density_linkage_oracle(rows, Path(args.out), provenance=provenance)
+    print(f"wrote density/linkage oracle: {args.out} " f"({evidence_manifest['row_count']} cells)")
     return 0
 
 
@@ -918,6 +1015,56 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_followup_freeze.add_argument("--overwrite", action="store_true")
     p_followup_freeze.set_defaults(func=_cmd_beads_ordering_followup_freeze)
+
+    p_density_linkage_freeze = sub.add_parser(
+        "beads-ordering-density-linkage-freeze",
+        help="freeze candidate-density and reference-linkage variant recipes",
+    )
+    p_density_linkage_freeze.add_argument(
+        "--fixture-dir", default=str(_DEFAULT_ORDERING_FOLLOWUP_DIR)
+    )
+    p_density_linkage_freeze.add_argument(
+        "--preregistration",
+        default=str(
+            Path(__file__).resolve().parents[1]
+            / "fixtures"
+            / "beads_ordering"
+            / "density-linkage-preregistration.json"
+        ),
+    )
+    p_density_linkage_freeze.add_argument("--out", required=True)
+    p_density_linkage_freeze.add_argument("--overwrite", action="store_true")
+    p_density_linkage_freeze.set_defaults(func=_cmd_beads_ordering_density_linkage_freeze)
+
+    p_density_linkage_materialize = sub.add_parser(
+        "beads-ordering-density-linkage-materialize",
+        help="materialize one frozen density/linkage variant for the existing runner",
+    )
+    p_density_linkage_materialize.add_argument(
+        "--fixture-dir", default=str(_DEFAULT_ORDERING_FOLLOWUP_DIR)
+    )
+    p_density_linkage_materialize.add_argument("--manifest", required=True)
+    p_density_linkage_materialize.add_argument("--variant-id", required=True)
+    p_density_linkage_materialize.add_argument("--out", required=True)
+    p_density_linkage_materialize.add_argument("--overwrite", action="store_true")
+    p_density_linkage_materialize.set_defaults(func=_cmd_beads_ordering_density_linkage_materialize)
+
+    p_density_linkage_oracle = sub.add_parser(
+        "beads-ordering-density-linkage-oracle",
+        help="collect deterministic ordering and navigation evidence for density/linkage variants",
+    )
+    p_density_linkage_oracle.add_argument(
+        "--fixture-dir", default=str(_DEFAULT_ORDERING_FOLLOWUP_DIR)
+    )
+    p_density_linkage_oracle.add_argument("--manifest", required=True)
+    p_density_linkage_oracle.add_argument("--workspace-root", required=True)
+    p_density_linkage_oracle.add_argument("--beads-repo", required=True)
+    p_density_linkage_oracle.add_argument("--beads-bin", default=os.environ.get("BEADS_BIN"))
+    p_density_linkage_oracle.add_argument("--arms", default="key,pagerank,bm25f,control-semantic")
+    p_density_linkage_oracle.add_argument("--page-sizes", default="5,all")
+    p_density_linkage_oracle.add_argument("--out", required=True)
+    _add_bm25f_flags(p_density_linkage_oracle)
+    p_density_linkage_oracle.set_defaults(func=_cmd_beads_ordering_density_linkage_oracle)
 
     p_followup_mutations = sub.add_parser(
         "beads-ordering-followup-mutations",
