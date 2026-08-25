@@ -39,6 +39,8 @@ Recommended boundary:
   estimates, full aggregate analysis, and provenance manifest for 2,400
   observations / 1,008 cells.
 - `data/targeted-repeat-selection.json` — locked rule and selected repeat groups.
+- `data/supplemental-scope-density.json` — post-hoc scope audit and independently
+  reproduced unbounded-cell reasoning-load signal.
 - `data/oracle-*` — 840 deterministic ordering/page-size/control cells.
 - `data/mutation-*` — 4,200 chronological mutation/rank-refresh snapshots.
 - `data/rank-scaling-*` — 105 rank-compute measurements through 10,000 Memories.
@@ -59,4 +61,7 @@ data, not user messages.
 
 The package tests ordering after fixed literal candidate generation. It does
 not compare FTS, embeddings, semantic expansion, persistent search indexes, or
-production ranking data structures.
+production ranking data structures. The primary Memory is a literal candidate
+by construction; candidate-generation recall needs a separate lexical-miss
+experiment. The supplemental density observation is explicitly exploratory
+because corpus size, match-set size, and task identity co-varied.

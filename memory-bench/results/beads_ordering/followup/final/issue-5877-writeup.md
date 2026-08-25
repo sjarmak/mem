@@ -69,6 +69,31 @@ the registered 0.9 overlap guardrail. Every post-mutation continuation was
 invalidated. Optimized batch rank computation measured p50/p90 80/104 ms at
 10,000 Memories, so the experiment found no need for specialized rank plumbing.
 
+## Scope precondition: matching was held fixed
+
+The parity gate requires each task's literal candidate IDs to equal its frozen
+primary, acceptable-entry-point, and distractor labels. The primary Memory was
+therefore already a candidate by construction: 36/36 tasks in the original
+fixture, with candidate parity also passing all 28 follow-up tasks. This is the
+causal strength of the ordering experiment, but also its boundary. It measures
+ordering after successful matching; it does not measure literal-matcher recall
+or compare literal, FTS, semantic, or hybrid candidate generation.
+
+## Exploratory signal: retrieval success is not enough
+
+A post-hoc reanalysis of the original experiment found 192 unbounded cells in
+which every arm saw the complete candidate projection and the primary Memory
+was visible 192/192 times. There were still 49 task failures, with zero
+abstentions or premature stops; 35/49 failures recalled the relevant Memory
+first. Failures rose from 4/64 at 50 Memories to 19/64 at 100 and 26/64 at 500.
+
+This shows that correct retrieval does not guarantee correct use of Memory. It
+does **not** yet prove a causal distractor-density effect, because corpus size,
+match-set size, and task identity changed together. The controlled follow-up is
+to hold a 500-Memory corpus fixed and vary matched-candidate counts near 10, 40,
+and 150 within each graph family. Candidate-generation misses remain a separate
+experiment, so they do not contaminate the ordering comparison.
+
 ## Recommendation for R6
 
 1. Keep key order as the compatibility default and bounded compact discovery
@@ -83,6 +108,9 @@ invalidated. Optimized batch rank computation measured p50/p90 80/104 ms at
 5. Prefer semantic controls over raw numeric rank and avoid specialized
    maintenance/indexing machinery until production telemetry shows a budget
    miss.
+6. Before adding ranking machinery, isolate candidate/distractor load at fixed
+   corpus size; separately evaluate candidate-generation recall on lexical-miss
+   tasks.
 
 These results test retrieval policy, not candidate-generation quality or
 production data structures. They do not compare FTS, embeddings, or semantic

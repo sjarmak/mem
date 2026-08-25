@@ -108,6 +108,22 @@ of interventions, stale overrides, and implementation complexity.
 These thresholds map measurements to architectural actions. Results that do
 not clear them remain evidence for experimentation, not a production default.
 
+## Post-run interpretation boundary
+
+The candidate-parity gate makes the primary Memory a literal candidate by
+construction. That is required for a clean ordering comparison, but means this
+experiment cannot estimate candidate-generation recall. A recovered post-hoc
+analysis of 192 original-study unbounded cells also found 49 task failures even
+though the primary Memory was visible in every cell; 35 of those failures
+recalled it first. Treat this as an exploratory reasoning-load signal, not a
+causal density result, because corpus size, match-set size, and task identity
+co-varied.
+
+The architecture verdict is unchanged. The next controlled behavior study
+should vary matched-candidate density near 10/40/150 at a fixed 500-Memory
+corpus. A lexical-miss candidate-generation study remains separate so it cannot
+confound the ordering experiment.
+
 ## Freeze the follow-up inputs
 
 Use the pinned local checkout that implements the registered structural priors;

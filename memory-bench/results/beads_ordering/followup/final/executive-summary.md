@@ -68,6 +68,29 @@ selected from the complete list.
 
 The evidence therefore supports bounded discovery with a configurable page
 size and explicit continuation. It does not support one universal structural
-default or moving BM25F into Beads. The next useful evidence is production
-telemetry on real match-set/burial distributions and mutation frequency, not a
-larger ranking implementation.
+default or moving BM25F into Beads.
+
+## Scope and exploratory reasoning-load signal
+
+Both ordering experiments deliberately start after candidate generation. Their
+parity gate requires the literal candidate set to equal the frozen relevance
+labels, so the primary Memory is present by construction (36/36 original tasks;
+candidate parity also passed all 28 follow-up tasks). The results answer “how
+should already-matched Memories be ordered?” They do not measure whether the
+literal matcher finds the right Memory in the first place.
+
+A recovered post-hoc analysis adds a separate warning. In 192 original-study
+unbounded cells, every agent saw the complete candidate set and the primary
+Memory was visible 192/192 times. The agent still failed 49 times; in 35 of
+those failures it recalled the relevant Memory first. Failures rose from 4/64
+at 50 Memories to 19/64 at 100 and 26/64 at 500. This suggests that reasoning
+or distractor load remains after retrieval succeeds, but it is exploratory:
+corpus size, match-set size, and task identity co-vary, so density is not yet a
+causal conclusion.
+
+This does not change the architecture recommendation. It changes the next
+evidence priority: test candidate density at a fixed corpus size before adding
+more ranking machinery. Separately test candidate-generation recall on tasks
+where the right Memory does not literally match. Production telemetry on real
+match-set, burial, and mutation distributions remains valuable after those two
+controlled experiments.

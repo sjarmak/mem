@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "evidence_status": "exploratory-post-hoc",
+  "scope_precondition": {
+    "statement": "The ordering experiments measure ordering only after the literal matcher has already included the primary Memory.",
+    "enforcement": "For every task, candidate membership must equal the frozen set of primary, acceptable-entry-point, and distractor labels.",
+    "original_fixture_tasks_with_primary_candidate": "36/36",
+    "followup_fixture_tasks_with_candidate_parity": "28/28",
+    "implication": "No result in this package estimates candidate-generation recall or compares literal, FTS, semantic, or hybrid matching."
+  },
+  "prior_experiment_unbounded_observation": {
+    "status": "exploratory; discovered after the original confirmatory analysis",
+    "unbounded_cells": 192,
+    "primary_memory_visible": 192,
+    "task_failures": 49,
+    "failures_with_relevant_first_recall": 35,
+    "failure_abstentions": 0,
+    "failure_premature_stops": 0,
+    "by_corpus_size": {
+      "50": {
+        "cells": 64,
+        "failures": 4
+      },
+      "100": {
+        "cells": 64,
+        "failures": 19
+      },
+      "500": {
+        "cells": 64,
+        "failures": 26
+      }
+    },
+    "source_sha256": {
+      "initial_search_only": "4174a385c2b57ed9acb89aec28e1611cd8302b42fdf20a6524d733e7dd4b500d",
+      "initial_navigation": "edb7902a1c9d44cb808418fc11cf967c4d093f91180042ab7e1cafcb9980a6ee",
+      "original_analysis": "be638a2ba114e601345397283da90a00dbfc35e988725683aad0ced7fdaeda27"
+    }
+  },
+  "interpretation": {
+    "supported": "Showing every matched candidate does not guarantee correct use of the relevant Memory; reasoning or selection load remains after retrieval succeeds.",
+    "not_supported": "The observation does not isolate distractor density causally because corpus size, match-set size, and task identity co-vary.",
+    "next_test": "At a fixed 500-Memory corpus, vary matched-candidate counts near 10, 40, and 150 within each graph family while keeping the useful Memory, labels, model, projection, and ordering fixed."
+  },
+  "decision_impact": {
+    "current_architecture_recommendation_changed": false,
+    "reason": "The ordering comparisons remain paired and causally isolated; this evidence adds a separate reasoning-load limitation.",
+    "next_work_changed": true,
+    "change": "Prioritize a fixed-corpus candidate-density experiment, while keeping candidate-generation recall as a separate lexical-miss experiment."
+  },
+  "recovery_audit": {
+    "source_commit": "8715068e404de7122f5bd9bdeb8a3a5f21f2e141",
+    "proposed_amendment_adopted": false,
+    "reason": "All 1008 initial follow-up agent cells completed before the proposed amendment's registered timestamp, so it cannot serve as a preregistration. Only independently reproduced scope and exploratory observations are retained."
+  }
+}

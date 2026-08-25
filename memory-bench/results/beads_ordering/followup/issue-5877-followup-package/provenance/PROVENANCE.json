@@ -9,7 +9,8 @@
     "followup_agent_independent_tasks": 21,
     "followup_oracle_cells": 840,
     "followup_mutation_snapshots": 4200,
-    "followup_rank_scaling_measurements": 105
+    "followup_rank_scaling_measurements": 105,
+    "prior_unbounded_cells_in_supplemental_audit": 192
   },
   "provenance": {
     "mem_git_sha_at_runs": "0edb58ea8227adddf2f3476f328ebe8261e191dd",
@@ -32,12 +33,14 @@
     "mutation_raw_sha256": "270c0d2fe558ce94eeae4f79191381451e2b0439e125d9a701522b000f00ef62",
     "mutation_analysis_sha256": "9544e4672e3b1a964c5bf11b93b3428e64346f47ba4bab8a38e34cb61e5d9918",
     "rank_scaling_raw_sha256": "015e585b3157627c5533421bc4b62c65127473e4a8e4682bec9c9ed9c24faf20",
-    "rank_scaling_analysis_sha256": "2ff908ad3d345b9d027f68476a0f0db04a1356ac0b71865195f2076f24017847"
+    "rank_scaling_analysis_sha256": "2ff908ad3d345b9d027f68476a0f0db04a1356ac0b71865195f2076f24017847",
+    "supplemental_scope_density_sha256": "e7ff4343618d75dd27109c3138f9f895ce514c377a0cb8a034a180f96b42c342"
   },
   "sanitization": [
     "Local paths replaced by portable placeholders or omitted.",
     "Author identity headers removed from patch files.",
     "No conversation messages, prompts, model text, agent streams, credentials, or authentication diagnostics included.",
-    "Per-run agent evidence is a metric-only projection with queries and free-form text removed."
+    "Per-run agent evidence is a metric-only projection with queries and free-form text removed.",
+    "Recovered design-amendment claims were not imported as preregistered evidence; only independently reproduced post-hoc aggregates are included."
   ]
 }
