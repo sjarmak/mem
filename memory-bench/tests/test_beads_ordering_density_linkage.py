@@ -26,6 +26,9 @@ from membench.beads_ordering.models import MemoryFixture, OrderingArm
 ROOT = Path(__file__).resolve().parents[1]
 BASE_FIXTURES = ROOT / "fixtures" / "beads_ordering" / "followup"
 PREREGISTRATION = ROOT / "fixtures" / "beads_ordering" / "density-linkage-preregistration.json"
+SHARDING_AMENDMENT = (
+    ROOT / "fixtures" / "beads_ordering" / "density-linkage-agent-sharding-amendment.json"
+)
 
 
 def _literal_matches(memories: tuple[MemoryFixture, ...], query: str) -> set[str]:
@@ -415,10 +418,31 @@ def test_density_linkage_agent_plan_is_complete_filtered_and_shard_stable() -> N
         for cell in shard
         if cell.arm is OrderingArm.CONTROL_SEMANTIC
     )
+    for shard in shards:
+        variant_ids = {cell.variant_id for cell in shard}
+        recipes = [variants[variant_id].recipe for variant_id in variant_ids]
+        assert {recipe.candidate_count for recipe in recipes} == set(CANDIDATE_COUNTS)
+        assert {recipe.linkage_level for recipe in recipes} == set(LINKAGE_LEVELS)
+        for count in CANDIDATE_COUNTS:
+            assert sum(recipe.candidate_count == count for recipe in recipes) == 21
+        for level in LINKAGE_LEVELS:
+            assert sum(recipe.linkage_level is level for recipe in recipes) == 21
 
     assert plan_density_linkage_agent_cells(shard_index=1, **kwargs) == shards[1]
     with pytest.raises(ValueError, match="shard index"):
         plan_density_linkage_agent_cells(shard_index=3, **kwargs)
+
+
+def test_agent_sharding_amendment_excludes_confounded_pilot_before_restart() -> None:
+    payload = json.loads(SHARDING_AMENDMENT.read_text(encoding="utf-8"))
+
+    assert payload["status"] == "locked-before-confirmatory-density-linkage-agent-grid"
+    assert payload["confirmatory_agent_outcomes_examined"] is False
+    assert payload["excluded_pilot"]["completed_cells"] == 34
+    assert payload["excluded_pilot"]["infrastructure_failures"] == 0
+    assert payload["replacement_assignment"]["name"] == "factor-balanced Latin rotation"
+    assert "mod 3" in payload["replacement_assignment"]["formula"]
+    assert payload["confirmatory_output_root"].endswith("agent-balanced-shards")
 
 
 def test_cli_routes_density_linkage_agent_shard_without_recording_credentials(

@@ -56,10 +56,24 @@ def plan_density_linkage_agent_cells(
         raise ValueError("shard count must be positive")
     if shard_index < 0 or shard_index >= shard_count:
         raise ValueError("shard index must be between zero and shard count minus one")
+    family_tasks: dict[str, list[str]] = {}
+    for variant in variants.values():
+        tasks = family_tasks.setdefault(variant.recipe.graph_family, [])
+        if variant.recipe.base_task_id not in tasks:
+            tasks.append(variant.recipe.base_task_id)
+    family_tasks = {family: sorted(tasks) for family, tasks in family_tasks.items()}
+    candidate_counts = sorted({variant.recipe.candidate_count for variant in variants.values()})
+    linkage_levels = sorted({variant.recipe.linkage_level.value for variant in variants.values()})
+
+    def assigned_shard(variant_id: str) -> int:
+        recipe = variants[variant_id].recipe
+        task_index = family_tasks[recipe.graph_family].index(recipe.base_task_id)
+        candidate_index = candidate_counts.index(recipe.candidate_count)
+        linkage_index = linkage_levels.index(recipe.linkage_level.value)
+        return (task_index + candidate_index + linkage_index) % shard_count
+
     selected_variants = [
-        variant_id
-        for index, variant_id in enumerate(sorted(variants))
-        if index % shard_count == shard_index
+        variant_id for variant_id in sorted(variants) if assigned_shard(variant_id) == shard_index
     ]
     normalized_modes = tuple(ExperimentMode(mode) for mode in modes)
     cells = [
@@ -218,6 +232,10 @@ def run_density_linkage_agent_shard(
         "agent_settings": {"autoMemoryEnabled": False},
         "agent_auth": (
             "oauth-environment" if claude_credentials is None else "copied-oauth-credentials"
+        ),
+        "sharding_convention": (
+            "factor-balanced Latin rotation over task-within-family, candidate count, "
+            "and linkage level"
         ),
         "bm25f": bm25f.model_dump(),
         "variant_ids": selected_variant_ids,

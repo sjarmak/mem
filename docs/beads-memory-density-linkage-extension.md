@@ -86,6 +86,17 @@ all “rich graphs” merely from the level name.
 - Candidate-generation recall remains a separate experiment. Every variant in
   this study still includes the primary Memory literally by construction.
 
+## Agent sharding correction
+
+The first 34 authentication-smoke cells exposed a pre-outcome assignment flaw:
+lexicographic modulo sharding aligned each reference level with one OAuth
+account. Those pilot traces are retained but excluded from all estimates. The
+locked replacement is a three-way Latin rotation over task-within-family,
+candidate count, and linkage level. Every account now receives exactly 21
+variants at each candidate count, 21 at each linkage level, and nine from each
+graph family. See
+[`density-linkage-agent-sharding-amendment.json`](../memory-bench/fixtures/beads_ordering/density-linkage-agent-sharding-amendment.json).
+
 ## Reproduction shape
 
 The implementation adds commands to freeze and validate the recipe manifest,

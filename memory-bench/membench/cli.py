@@ -482,6 +482,9 @@ def _cmd_beads_ordering_density_linkage_run(args: argparse.Namespace) -> int:
         "base_fixture_manifest_sha256": file_sha256(fixture_dir / "manifest.json"),
         "density_linkage_manifest_sha256": file_sha256(manifest_path),
         "preregistration_sha256": raw_manifest["preregistration_sha256"],
+        "agent_sharding_amendment_sha256": file_sha256(
+            Path(args.agent_sharding_amendment).resolve()
+        ),
     }
     manifest = run_density_linkage_agent_shard(
         variants=variants,
@@ -1135,6 +1138,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_density_linkage_run.add_argument("--fixture-dir", default=str(_DEFAULT_ORDERING_FOLLOWUP_DIR))
     p_density_linkage_run.add_argument("--manifest", required=True)
+    p_density_linkage_run.add_argument(
+        "--agent-sharding-amendment",
+        default=str(
+            Path(__file__).resolve().parents[1]
+            / "fixtures"
+            / "beads_ordering"
+            / "density-linkage-agent-sharding-amendment.json"
+        ),
+    )
     p_density_linkage_run.add_argument("--workspace-root", required=True)
     p_density_linkage_run.add_argument("--beads-repo", required=True)
     p_density_linkage_run.add_argument("--beads-bin", default=os.environ.get("BEADS_BIN"))
