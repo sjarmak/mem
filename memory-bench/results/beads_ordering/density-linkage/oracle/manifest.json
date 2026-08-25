@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "row_count": 1323,
+  "raw_results_sha256": "e20dca5a5143f225d2ec19ff2e3b904efea2db0cfeec16b24ca3053094b9da63",
+  "analysis_sha256": "2b093d4124ec3d69280ef63e8871857330cf40b4ed0f2a264f147b6c7f73d916",
+  "provenance": {
+    "mem_git_sha": "d3bbf53f2ff8d286194ee38edd30078f93926f97",
+    "mem_git_dirty": true,
+    "mem_git_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "beads_git_sha": "c89168fc0942f18dd08fd35296c6fdebdd3e1dd7",
+    "beads_git_dirty": true,
+    "beads_git_diff_sha256": "afb24525b9be6d70bbca433d906aeec78188f24d8bea19928ba700e619aa2627",
+    "beads_bin": "/tmp/bd-memory-ordering-5877",
+    "beads_bin_sha256": "47aadd114f3afe16918ff5eff27f2e7d85bafc4003101ee7a4939c04252853de",
+    "structural_order_source_git_sha": "b1c55df8c3bd799262bdf2eede2b3e3f705d8848",
+    "base_fixture_manifest_sha256": "fd6c88e687dcbbe8feaebb67ed512bf9063f4d9db39edb272f0b7ee6f0a20682",
+    "density_linkage_manifest_sha256": "240aaf29465c85d1c185f27c50df68cfb4b7a221549a78a93423ff27dd1bdcd7",
+    "preregistration_sha256": "a78d9c8b5b68fb5396ce9d30ef935219c388564193384b0f6b751307c4bc28ac",
+    "density_linkage_source_sha256": "5aad9c80d2e97247249b7eb33ace261af618965470db707a1c2296fd918d17c3",
+    "arms": [
+      "key",
+      "pagerank",
+      "bm25f",
+      "control-semantic"
+    ],
+    "page_sizes": [
+      "5",
+      "all"
+    ],
+    "bm25f": {
+      "key_weight": 6.0,
+      "alias_weight": 5.0,
+      "title_weight": 3.0,
+      "body_weight": 1.0,
+      "k1": 1.2,
+      "b": 0.75
+    }
+  }
+}

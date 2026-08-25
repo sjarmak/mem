@@ -13,6 +13,9 @@ from membench.beads_ordering.density_linkage import (
     load_density_linkage_manifest,
     write_density_linkage_manifest,
 )
+from membench.beads_ordering.density_linkage_agent import (
+    plan_density_linkage_agent_cells,
+)
 from membench.beads_ordering.density_linkage_evidence import (
     analyze_density_linkage_oracle,
     write_density_linkage_oracle,
@@ -372,3 +375,111 @@ def test_cli_runs_density_linkage_oracle_with_explicit_provenance(
     assert provenance["mem_git_sha"]
     assert provenance["structural_order_source_git_sha"] == "b" * 40
     assert seen["out"] == out
+
+
+def test_density_linkage_agent_plan_is_complete_filtered_and_shard_stable() -> None:
+    variants = load_density_linkage_manifest(
+        BASE_FIXTURES, ROOT / "fixtures" / "beads_ordering" / "density-linkage" / "manifest.json"
+    )
+    kwargs = {
+        "variants": variants,
+        "arms": (
+            OrderingArm.KEY,
+            OrderingArm.PAGERANK,
+            OrderingArm.BM25F,
+            OrderingArm.CONTROL_SEMANTIC,
+        ),
+        "page_sizes": (5, "all"),
+        "modes": ("search-only", "navigation"),
+        "repeat_indices": (0,),
+        "shard_count": 3,
+        "order_seed": 5879,
+    }
+    shards = [plan_density_linkage_agent_cells(shard_index=index, **kwargs) for index in range(3)]
+    identities = [
+        {
+            (cell.variant_id, cell.arm.value, str(cell.page_size), cell.mode.value, cell.repeat)
+            for cell in shard
+        }
+        for shard in shards
+    ]
+
+    assert all(len(shard) == 63 * 14 for shard in shards)
+    assert not identities[0] & identities[1]
+    assert not identities[0] & identities[2]
+    assert not identities[1] & identities[2]
+    assert len(set.union(*identities)) == 189 * 14
+    assert all(
+        cell.page_size == "all"
+        for shard in shards
+        for cell in shard
+        if cell.arm is OrderingArm.CONTROL_SEMANTIC
+    )
+
+    assert plan_density_linkage_agent_cells(shard_index=1, **kwargs) == shards[1]
+    with pytest.raises(ValueError, match="shard index"):
+        plan_density_linkage_agent_cells(shard_index=3, **kwargs)
+
+
+def test_cli_routes_density_linkage_agent_shard_without_recording_credentials(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from membench import cli
+
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "structural_order_source_git_sha": "b" * 40,
+                "preregistration_sha256": "c" * 64,
+                "variants": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    credentials = tmp_path / "credentials.json"
+    credentials.write_text("{}", encoding="utf-8")
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(cli, "load_density_linkage_manifest", lambda *_: {})
+
+    def fake_run(**kwargs: object) -> dict[str, object]:
+        seen.update(kwargs)
+        return {"planned_cell_count": 0}
+
+    monkeypatch.setattr(cli, "run_density_linkage_agent_shard", fake_run)
+    out = tmp_path / "agent-shard"
+    assert (
+        cli.main(
+            [
+                "beads-ordering-density-linkage-run",
+                "--fixture-dir",
+                str(BASE_FIXTURES),
+                "--manifest",
+                str(manifest_path),
+                "--workspace-root",
+                str(tmp_path / "workspaces"),
+                "--beads-repo",
+                str(ROOT.parent),
+                "--beads-bin",
+                "/bin/true",
+                "--model",
+                "claude-haiku-4-5-20251001",
+                "--claude-credentials",
+                str(credentials),
+                "--shard-index",
+                "1",
+                "--shard-count",
+                "3",
+                "--out",
+                str(out),
+            ]
+        )
+        == 0
+    )
+    assert seen["shard_index"] == 1
+    assert seen["shard_count"] == 3
+    assert seen["out"] == out
+    provenance = seen["suite_provenance"]
+    assert isinstance(provenance, dict)
+    assert "claude_credentials" not in provenance

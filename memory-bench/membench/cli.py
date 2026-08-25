@@ -24,6 +24,9 @@ from membench.beads_ordering.density_linkage import (
     load_density_linkage_manifest,
     write_density_linkage_manifest,
 )
+from membench.beads_ordering.density_linkage_agent import (
+    run_density_linkage_agent_shard,
+)
 from membench.beads_ordering.density_linkage_evidence import (
     collect_density_linkage_oracle,
     write_density_linkage_oracle,
@@ -445,6 +448,66 @@ def _cmd_beads_ordering_density_linkage_oracle(args: argparse.Namespace) -> int:
     }
     evidence_manifest = write_density_linkage_oracle(rows, Path(args.out), provenance=provenance)
     print(f"wrote density/linkage oracle: {args.out} " f"({evidence_manifest['row_count']} cells)")
+    return 0
+
+
+def _cmd_beads_ordering_density_linkage_run(args: argparse.Namespace) -> int:
+    fixture_dir = Path(args.fixture_dir).resolve()
+    manifest_path = Path(args.manifest).resolve()
+    variants = load_density_linkage_manifest(fixture_dir, manifest_path)
+    arms = _parse_ordering_arms(args.arms)
+    page_sizes = _parse_page_sizes(args.page_sizes)
+    try:
+        modes = tuple(
+            ExperimentMode(value.strip()) for value in args.modes.split(",") if value.strip()
+        )
+    except ValueError as exc:
+        raise SystemExit("modes must be comma-separated experiment modes") from exc
+    if not modes:
+        raise SystemExit("at least one experiment mode is required")
+    beads_bin = _require_beads_bin(args.beads_bin)
+    bm25f = BM25FConfig(
+        key_weight=args.bm25f_key_weight,
+        alias_weight=args.bm25f_alias_weight,
+        title_weight=args.bm25f_title_weight,
+        body_weight=args.bm25f_body_weight,
+        k1=args.bm25f_k1,
+        b=args.bm25f_b,
+    )
+    raw_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    credentials = (
+        Path(args.claude_credentials).expanduser().resolve() if args.claude_credentials else None
+    )
+    suite_provenance: dict[str, object] = {
+        "base_fixture_manifest_sha256": file_sha256(fixture_dir / "manifest.json"),
+        "density_linkage_manifest_sha256": file_sha256(manifest_path),
+        "preregistration_sha256": raw_manifest["preregistration_sha256"],
+    }
+    manifest = run_density_linkage_agent_shard(
+        variants=variants,
+        workspace_root=Path(args.workspace_root).resolve(),
+        beads_bin=beads_bin,
+        beads_repo=Path(args.beads_repo).expanduser().resolve(),
+        mem_repo=Path(__file__).resolve().parents[2],
+        arms=arms,
+        page_sizes=page_sizes,
+        modes=modes,
+        repeats=args.repeats,
+        repeat_start=args.repeat_start,
+        shard_index=args.shard_index,
+        shard_count=args.shard_count,
+        order_seed=args.order_seed,
+        bm25f=bm25f,
+        model=args.model,
+        claude_credentials=credentials,
+        max_tool_calls=args.max_tool_calls,
+        out=Path(args.out).resolve(),
+        suite_provenance=suite_provenance,
+    )
+    print(
+        f"completed density/linkage agent shard {args.shard_index}/{args.shard_count}: "
+        f"{manifest['planned_cell_count']} cells"
+    )
     return 0
 
 
@@ -1065,6 +1128,30 @@ def main(argv: list[str] | None = None) -> int:
     p_density_linkage_oracle.add_argument("--out", required=True)
     _add_bm25f_flags(p_density_linkage_oracle)
     p_density_linkage_oracle.set_defaults(func=_cmd_beads_ordering_density_linkage_oracle)
+
+    p_density_linkage_run = sub.add_parser(
+        "beads-ordering-density-linkage-run",
+        help="run a resumable authenticated agent shard over density/linkage variants",
+    )
+    p_density_linkage_run.add_argument("--fixture-dir", default=str(_DEFAULT_ORDERING_FOLLOWUP_DIR))
+    p_density_linkage_run.add_argument("--manifest", required=True)
+    p_density_linkage_run.add_argument("--workspace-root", required=True)
+    p_density_linkage_run.add_argument("--beads-repo", required=True)
+    p_density_linkage_run.add_argument("--beads-bin", default=os.environ.get("BEADS_BIN"))
+    p_density_linkage_run.add_argument("--model", required=True)
+    p_density_linkage_run.add_argument("--claude-credentials", default="")
+    p_density_linkage_run.add_argument("--arms", default="key,pagerank,bm25f,control-semantic")
+    p_density_linkage_run.add_argument("--page-sizes", default="5,all")
+    p_density_linkage_run.add_argument("--modes", default="search-only,navigation")
+    p_density_linkage_run.add_argument("--repeats", type=int, default=1)
+    p_density_linkage_run.add_argument("--repeat-start", type=int, default=0)
+    p_density_linkage_run.add_argument("--shard-index", type=int, required=True)
+    p_density_linkage_run.add_argument("--shard-count", type=int, required=True)
+    p_density_linkage_run.add_argument("--order-seed", type=int, default=5879)
+    p_density_linkage_run.add_argument("--max-tool-calls", type=int, default=12)
+    p_density_linkage_run.add_argument("--out", required=True)
+    _add_bm25f_flags(p_density_linkage_run)
+    p_density_linkage_run.set_defaults(func=_cmd_beads_ordering_density_linkage_run)
 
     p_followup_mutations = sub.add_parser(
         "beads-ordering-followup-mutations",

@@ -1,0 +1,2344 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "deterministic ordering and navigation oracle; not agent outcomes",
+  "row_count": 1323,
+  "base_task_count": 21,
+  "variant_count": 189,
+  "curves": [
+    {
+      "candidate_count": 10,
+      "linkage_level": "enriched",
+      "arm": "bm25f",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 597.2857142857143,
+        "p50": 604.0,
+        "p90": 627.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 21.761904761904763,
+        "p50": 2.0,
+        "p90": 86.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 3.276217698668203,
+        "p50": 1.6666666666666667,
+        "p90": 8.45631067961165
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "enriched",
+      "arm": "bm25f",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1222.047619047619,
+        "p50": 1224.0,
+        "p90": 1235.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 21.761904761904763,
+        "p50": 2.0,
+        "p90": 86.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 3.276217698668203,
+        "p50": 1.6666666666666667,
+        "p90": 8.45631067961165
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "enriched",
+      "arm": "control-semantic",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1222.047619047619,
+        "p50": 1224.0,
+        "p90": 1235.0
+      },
+      "dfs_reached_primary_probability": 1.0,
+      "dfs_graph_hops": {
+        "mean": 0.0,
+        "p50": 0.0,
+        "p90": 0.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 1.8571428571428572,
+        "p50": 2.0,
+        "p90": 4.0
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "enriched",
+      "arm": "key",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 0.6666666666666666,
+      "pages_to_first_useful": {
+        "mean": 1.3333333333333333,
+        "p50": 1.0,
+        "p90": 2.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 847.3809523809524,
+        "p50": 649.0,
+        "p90": 1255.0
+      },
+      "dfs_reached_primary_probability": 0.6666666666666666,
+      "dfs_graph_hops": {
+        "mean": 32.23809523809524,
+        "p50": 8.0,
+        "p90": 86.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 3.660909310704631,
+        "p50": 2.3333333333333335,
+        "p90": 7.484848484848484
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "enriched",
+      "arm": "key",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1222.047619047619,
+        "p50": 1224.0,
+        "p90": 1235.0
+      },
+      "dfs_reached_primary_probability": 0.6666666666666666,
+      "dfs_graph_hops": {
+        "mean": 32.23809523809524,
+        "p50": 8.0,
+        "p90": 86.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 3.660909310704631,
+        "p50": 2.3333333333333335,
+        "p90": 7.484848484848484
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "enriched",
+      "arm": "pagerank",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 611.6666666666666,
+        "p50": 618.0,
+        "p90": 625.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 32.285714285714285,
+        "p50": 8.0,
+        "p90": 86.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 3.81963946943479,
+        "p50": 2.3333333333333335,
+        "p90": 7.484848484848484
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "enriched",
+      "arm": "pagerank",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1222.047619047619,
+        "p50": 1224.0,
+        "p90": 1235.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 32.285714285714285,
+        "p50": 8.0,
+        "p90": 86.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 3.81963946943479,
+        "p50": 2.3333333333333335,
+        "p90": 7.484848484848484
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "native",
+      "arm": "bm25f",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 597.2857142857143,
+        "p50": 604.0,
+        "p90": 627.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 1.9523809523809523,
+        "p50": 1.0,
+        "p90": 4.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.7238095238095238,
+        "p50": 0.5,
+        "p90": 1.0
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "native",
+      "arm": "bm25f",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1222.047619047619,
+        "p50": 1224.0,
+        "p90": 1235.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 1.9523809523809523,
+        "p50": 1.0,
+        "p90": 4.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.7238095238095238,
+        "p50": 0.5,
+        "p90": 1.0
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "native",
+      "arm": "control-semantic",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1222.047619047619,
+        "p50": 1224.0,
+        "p90": 1235.0
+      },
+      "dfs_reached_primary_probability": 1.0,
+      "dfs_graph_hops": {
+        "mean": 0.0,
+        "p50": 0.0,
+        "p90": 0.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.23809523809523808,
+        "p50": 0.0,
+        "p90": 1.0
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "native",
+      "arm": "key",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 0.6666666666666666,
+      "pages_to_first_useful": {
+        "mean": 1.3333333333333333,
+        "p50": 1.0,
+        "p90": 2.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 847.3809523809524,
+        "p50": 649.0,
+        "p90": 1255.0
+      },
+      "dfs_reached_primary_probability": 0.6666666666666666,
+      "dfs_graph_hops": {
+        "mean": 20.80952380952381,
+        "p50": 4.0,
+        "p90": 32.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 2.2894342143454542,
+        "p50": 1.0,
+        "p90": 3.642857142857143
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "native",
+      "arm": "key",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1222.047619047619,
+        "p50": 1224.0,
+        "p90": 1235.0
+      },
+      "dfs_reached_primary_probability": 0.6666666666666666,
+      "dfs_graph_hops": {
+        "mean": 20.80952380952381,
+        "p50": 4.0,
+        "p90": 32.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 2.2894342143454542,
+        "p50": 1.0,
+        "p90": 3.642857142857143
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "native",
+      "arm": "pagerank",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 0.8571428571428571,
+      "pages_to_first_useful": {
+        "mean": 1.1428571428571428,
+        "p50": 1.0,
+        "p90": 2.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 695.2380952380952,
+        "p50": 608.0,
+        "p90": 1234.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 7.285714285714286,
+        "p50": 0.0,
+        "p90": 14.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 1.0694424069839352,
+        "p50": 0.0,
+        "p90": 3.4
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "native",
+      "arm": "pagerank",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1222.047619047619,
+        "p50": 1224.0,
+        "p90": 1235.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 7.285714285714286,
+        "p50": 0.0,
+        "p90": 14.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 1.0694424069839352,
+        "p50": 0.0,
+        "p90": 3.4
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "sparse",
+      "arm": "bm25f",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 597.2857142857143,
+        "p50": 604.0,
+        "p90": 627.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 1.0952380952380953,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.5095238095238095,
+        "p50": 0.5,
+        "p90": 1.0
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "sparse",
+      "arm": "bm25f",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1222.047619047619,
+        "p50": 1224.0,
+        "p90": 1235.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 1.0952380952380953,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.5095238095238095,
+        "p50": 0.5,
+        "p90": 1.0
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "sparse",
+      "arm": "control-semantic",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1222.047619047619,
+        "p50": 1224.0,
+        "p90": 1235.0
+      },
+      "dfs_reached_primary_probability": 1.0,
+      "dfs_graph_hops": {
+        "mean": 0.0,
+        "p50": 0.0,
+        "p90": 0.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.14285714285714285,
+        "p50": 0.0,
+        "p90": 1.0
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "sparse",
+      "arm": "key",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 0.6666666666666666,
+      "pages_to_first_useful": {
+        "mean": 1.3333333333333333,
+        "p50": 1.0,
+        "p90": 2.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 847.3809523809524,
+        "p50": 649.0,
+        "p90": 1255.0
+      },
+      "dfs_reached_primary_probability": 0.6666666666666666,
+      "dfs_graph_hops": {
+        "mean": 5.714285714285714,
+        "p50": 1.0,
+        "p90": 14.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 1.191485918038713,
+        "p50": 0.6666666666666666,
+        "p90": 1.3777777777777778
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "sparse",
+      "arm": "key",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1222.047619047619,
+        "p50": 1224.0,
+        "p90": 1235.0
+      },
+      "dfs_reached_primary_probability": 0.6666666666666666,
+      "dfs_graph_hops": {
+        "mean": 5.714285714285714,
+        "p50": 1.0,
+        "p90": 14.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 1.191485918038713,
+        "p50": 0.6666666666666666,
+        "p90": 1.3777777777777778
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "sparse",
+      "arm": "pagerank",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 0.8571428571428571,
+      "pages_to_first_useful": {
+        "mean": 1.1428571428571428,
+        "p50": 1.0,
+        "p90": 2.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 701.3333333333334,
+        "p50": 616.0,
+        "p90": 1247.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 3.3333333333333335,
+        "p50": 0.0,
+        "p90": 7.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.46657218442932724,
+        "p50": 0.0,
+        "p90": 1.2
+      }
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "sparse",
+      "arm": "pagerank",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1222.047619047619,
+        "p50": 1224.0,
+        "p90": 1235.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 3.3333333333333335,
+        "p50": 0.0,
+        "p90": 7.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.46657218442932724,
+        "p50": 0.0,
+        "p90": 1.2
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "enriched",
+      "arm": "bm25f",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 569.2857142857143,
+        "p50": 569.0,
+        "p90": 576.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 21.761904761904763,
+        "p50": 2.0,
+        "p90": 86.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 3.276217698668203,
+        "p50": 1.6666666666666667,
+        "p90": 8.45631067961165
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "enriched",
+      "arm": "bm25f",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 4535.761904761905,
+        "p50": 4551.0,
+        "p90": 4659.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 21.761904761904763,
+        "p50": 2.0,
+        "p90": 86.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 3.276217698668203,
+        "p50": 1.6666666666666667,
+        "p90": 8.45631067961165
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "enriched",
+      "arm": "control-semantic",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 4535.761904761905,
+        "p50": 4551.0,
+        "p90": 4659.0
+      },
+      "dfs_reached_primary_probability": 1.0,
+      "dfs_graph_hops": {
+        "mean": 0.0,
+        "p50": 0.0,
+        "p90": 0.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 1.8571428571428572,
+        "p50": 2.0,
+        "p90": 4.0
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "enriched",
+      "arm": "key",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 0.6666666666666666,
+      "pages_to_first_useful": {
+        "mean": 2.380952380952381,
+        "p50": 1.0,
+        "p90": 5.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1502.5238095238096,
+        "p50": 649.0,
+        "p90": 3145.0
+      },
+      "dfs_reached_primary_probability": 0.6666666666666666,
+      "dfs_graph_hops": {
+        "mean": 32.23809523809524,
+        "p50": 8.0,
+        "p90": 86.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 3.660909310704631,
+        "p50": 2.3333333333333335,
+        "p90": 7.484848484848484
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "enriched",
+      "arm": "key",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 4535.761904761905,
+        "p50": 4551.0,
+        "p90": 4659.0
+      },
+      "dfs_reached_primary_probability": 0.6666666666666666,
+      "dfs_graph_hops": {
+        "mean": 32.23809523809524,
+        "p50": 8.0,
+        "p90": 86.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 3.660909310704631,
+        "p50": 2.3333333333333335,
+        "p90": 7.484848484848484
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "enriched",
+      "arm": "pagerank",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 0.7142857142857143,
+      "pages_to_first_useful": {
+        "mean": 2.0476190476190474,
+        "p50": 1.0,
+        "p90": 6.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1245.5714285714287,
+        "p50": 618.0,
+        "p90": 3523.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 32.285714285714285,
+        "p50": 8.0,
+        "p90": 86.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 3.81963946943479,
+        "p50": 2.3333333333333335,
+        "p90": 7.484848484848484
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "enriched",
+      "arm": "pagerank",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 4535.761904761905,
+        "p50": 4551.0,
+        "p90": 4659.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 32.285714285714285,
+        "p50": 8.0,
+        "p90": 86.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 3.81963946943479,
+        "p50": 2.3333333333333335,
+        "p90": 7.484848484848484
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "native",
+      "arm": "bm25f",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 569.2857142857143,
+        "p50": 569.0,
+        "p90": 576.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 1.9523809523809523,
+        "p50": 1.0,
+        "p90": 4.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.7238095238095238,
+        "p50": 0.5,
+        "p90": 1.0
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "native",
+      "arm": "bm25f",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 4535.761904761905,
+        "p50": 4551.0,
+        "p90": 4659.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 1.9523809523809523,
+        "p50": 1.0,
+        "p90": 4.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.7238095238095238,
+        "p50": 0.5,
+        "p90": 1.0
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "native",
+      "arm": "control-semantic",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 4535.761904761905,
+        "p50": 4551.0,
+        "p90": 4659.0
+      },
+      "dfs_reached_primary_probability": 1.0,
+      "dfs_graph_hops": {
+        "mean": 0.0,
+        "p50": 0.0,
+        "p90": 0.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.23809523809523808,
+        "p50": 0.0,
+        "p90": 1.0
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "native",
+      "arm": "key",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 0.6666666666666666,
+      "pages_to_first_useful": {
+        "mean": 2.380952380952381,
+        "p50": 1.0,
+        "p90": 5.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1502.5238095238096,
+        "p50": 649.0,
+        "p90": 3145.0
+      },
+      "dfs_reached_primary_probability": 0.6666666666666666,
+      "dfs_graph_hops": {
+        "mean": 20.80952380952381,
+        "p50": 4.0,
+        "p90": 32.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 2.2894342143454542,
+        "p50": 1.0,
+        "p90": 3.642857142857143
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "native",
+      "arm": "key",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 4535.761904761905,
+        "p50": 4551.0,
+        "p90": 4659.0
+      },
+      "dfs_reached_primary_probability": 0.6666666666666666,
+      "dfs_graph_hops": {
+        "mean": 20.80952380952381,
+        "p50": 4.0,
+        "p90": 32.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 2.2894342143454542,
+        "p50": 1.0,
+        "p90": 3.642857142857143
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "native",
+      "arm": "pagerank",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 0.6190476190476191,
+      "pages_to_first_useful": {
+        "mean": 1.619047619047619,
+        "p50": 1.0,
+        "p90": 3.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 950.2380952380952,
+        "p50": 620.0,
+        "p90": 1744.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 7.285714285714286,
+        "p50": 0.0,
+        "p90": 14.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 1.0694424069839352,
+        "p50": 0.0,
+        "p90": 3.4
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "native",
+      "arm": "pagerank",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 4535.761904761905,
+        "p50": 4551.0,
+        "p90": 4659.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 7.285714285714286,
+        "p50": 0.0,
+        "p90": 14.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 1.0694424069839352,
+        "p50": 0.0,
+        "p90": 3.4
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "sparse",
+      "arm": "bm25f",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 569.2857142857143,
+        "p50": 569.0,
+        "p90": 576.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 1.0952380952380953,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.5095238095238095,
+        "p50": 0.5,
+        "p90": 1.0
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "sparse",
+      "arm": "bm25f",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 4535.761904761905,
+        "p50": 4551.0,
+        "p90": 4659.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 1.0952380952380953,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.5095238095238095,
+        "p50": 0.5,
+        "p90": 1.0
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "sparse",
+      "arm": "control-semantic",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 4535.761904761905,
+        "p50": 4551.0,
+        "p90": 4659.0
+      },
+      "dfs_reached_primary_probability": 1.0,
+      "dfs_graph_hops": {
+        "mean": 0.0,
+        "p50": 0.0,
+        "p90": 0.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.14285714285714285,
+        "p50": 0.0,
+        "p90": 1.0
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "sparse",
+      "arm": "key",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 0.6666666666666666,
+      "pages_to_first_useful": {
+        "mean": 2.380952380952381,
+        "p50": 1.0,
+        "p90": 5.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1502.5238095238096,
+        "p50": 649.0,
+        "p90": 3145.0
+      },
+      "dfs_reached_primary_probability": 0.6666666666666666,
+      "dfs_graph_hops": {
+        "mean": 5.714285714285714,
+        "p50": 1.0,
+        "p90": 14.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 1.191485918038713,
+        "p50": 0.6666666666666666,
+        "p90": 1.3777777777777778
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "sparse",
+      "arm": "key",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 4535.761904761905,
+        "p50": 4551.0,
+        "p90": 4659.0
+      },
+      "dfs_reached_primary_probability": 0.6666666666666666,
+      "dfs_graph_hops": {
+        "mean": 5.714285714285714,
+        "p50": 1.0,
+        "p90": 14.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 1.191485918038713,
+        "p50": 0.6666666666666666,
+        "p90": 1.3777777777777778
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "sparse",
+      "arm": "pagerank",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 0.8095238095238095,
+      "pages_to_first_useful": {
+        "mean": 1.5238095238095237,
+        "p50": 1.0,
+        "p90": 2.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 915.3333333333334,
+        "p50": 597.0,
+        "p90": 1190.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 3.3333333333333335,
+        "p50": 0.0,
+        "p90": 7.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.46657218442932724,
+        "p50": 0.0,
+        "p90": 1.2
+      }
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "sparse",
+      "arm": "pagerank",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 4535.761904761905,
+        "p50": 4551.0,
+        "p90": 4659.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 3.3333333333333335,
+        "p50": 0.0,
+        "p90": 7.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.46657218442932724,
+        "p50": 0.0,
+        "p90": 1.2
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "enriched",
+      "arm": "bm25f",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 568.3333333333334,
+        "p50": 569.0,
+        "p90": 576.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 21.761904761904763,
+        "p50": 2.0,
+        "p90": 86.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 3.276217698668203,
+        "p50": 1.6666666666666667,
+        "p90": 8.45631067961165
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "enriched",
+      "arm": "bm25f",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 16201.714285714286,
+        "p50": 16177.0,
+        "p90": 16466.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 21.761904761904763,
+        "p50": 2.0,
+        "p90": 86.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 3.276217698668203,
+        "p50": 1.6666666666666667,
+        "p90": 8.45631067961165
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "enriched",
+      "arm": "control-semantic",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 16201.714285714286,
+        "p50": 16177.0,
+        "p90": 16466.0
+      },
+      "dfs_reached_primary_probability": 1.0,
+      "dfs_graph_hops": {
+        "mean": 0.0,
+        "p50": 0.0,
+        "p90": 0.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 1.8571428571428572,
+        "p50": 2.0,
+        "p90": 4.0
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "enriched",
+      "arm": "key",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 0.6666666666666666,
+      "pages_to_first_useful": {
+        "mean": 3.0476190476190474,
+        "p50": 1.0,
+        "p90": 7.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1893.2380952380952,
+        "p50": 649.0,
+        "p90": 4366.0
+      },
+      "dfs_reached_primary_probability": 0.6666666666666666,
+      "dfs_graph_hops": {
+        "mean": 32.23809523809524,
+        "p50": 8.0,
+        "p90": 86.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 3.660909310704631,
+        "p50": 2.3333333333333335,
+        "p90": 7.484848484848484
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "enriched",
+      "arm": "key",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 16201.714285714286,
+        "p50": 16177.0,
+        "p90": 16466.0
+      },
+      "dfs_reached_primary_probability": 0.6666666666666666,
+      "dfs_graph_hops": {
+        "mean": 32.23809523809524,
+        "p50": 8.0,
+        "p90": 86.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 3.660909310704631,
+        "p50": 2.3333333333333335,
+        "p90": 7.484848484848484
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "enriched",
+      "arm": "pagerank",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 0.7142857142857143,
+      "pages_to_first_useful": {
+        "mean": 3.7142857142857144,
+        "p50": 1.0,
+        "p90": 15.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 2199.6190476190477,
+        "p50": 620.0,
+        "p90": 8945.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 32.285714285714285,
+        "p50": 8.0,
+        "p90": 86.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 3.81963946943479,
+        "p50": 2.3333333333333335,
+        "p90": 7.484848484848484
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "enriched",
+      "arm": "pagerank",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 16201.714285714286,
+        "p50": 16177.0,
+        "p90": 16466.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 32.285714285714285,
+        "p50": 8.0,
+        "p90": 86.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 3.81963946943479,
+        "p50": 2.3333333333333335,
+        "p90": 7.484848484848484
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "native",
+      "arm": "bm25f",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 568.3333333333334,
+        "p50": 569.0,
+        "p90": 576.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 1.9523809523809523,
+        "p50": 1.0,
+        "p90": 4.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.7238095238095238,
+        "p50": 0.5,
+        "p90": 1.0
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "native",
+      "arm": "bm25f",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 16201.714285714286,
+        "p50": 16177.0,
+        "p90": 16466.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 1.9523809523809523,
+        "p50": 1.0,
+        "p90": 4.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.7238095238095238,
+        "p50": 0.5,
+        "p90": 1.0
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "native",
+      "arm": "control-semantic",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 16201.714285714286,
+        "p50": 16177.0,
+        "p90": 16466.0
+      },
+      "dfs_reached_primary_probability": 1.0,
+      "dfs_graph_hops": {
+        "mean": 0.0,
+        "p50": 0.0,
+        "p90": 0.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.23809523809523808,
+        "p50": 0.0,
+        "p90": 1.0
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "native",
+      "arm": "key",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 0.6666666666666666,
+      "pages_to_first_useful": {
+        "mean": 3.0476190476190474,
+        "p50": 1.0,
+        "p90": 7.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1893.2380952380952,
+        "p50": 649.0,
+        "p90": 4366.0
+      },
+      "dfs_reached_primary_probability": 0.6666666666666666,
+      "dfs_graph_hops": {
+        "mean": 20.80952380952381,
+        "p50": 4.0,
+        "p90": 32.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 2.2894342143454542,
+        "p50": 1.0,
+        "p90": 3.642857142857143
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "native",
+      "arm": "key",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 16201.714285714286,
+        "p50": 16177.0,
+        "p90": 16466.0
+      },
+      "dfs_reached_primary_probability": 0.6666666666666666,
+      "dfs_graph_hops": {
+        "mean": 20.80952380952381,
+        "p50": 4.0,
+        "p90": 32.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 2.2894342143454542,
+        "p50": 1.0,
+        "p90": 3.642857142857143
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "native",
+      "arm": "pagerank",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 0.5714285714285714,
+      "pages_to_first_useful": {
+        "mean": 2.619047619047619,
+        "p50": 1.0,
+        "p90": 8.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1532.142857142857,
+        "p50": 620.0,
+        "p90": 4657.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 7.285714285714286,
+        "p50": 0.0,
+        "p90": 14.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 1.0694424069839352,
+        "p50": 0.0,
+        "p90": 3.4
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "native",
+      "arm": "pagerank",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 16201.714285714286,
+        "p50": 16177.0,
+        "p90": 16466.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 7.285714285714286,
+        "p50": 0.0,
+        "p90": 14.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 1.0694424069839352,
+        "p50": 0.0,
+        "p90": 3.4
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "sparse",
+      "arm": "bm25f",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 568.3333333333334,
+        "p50": 569.0,
+        "p90": 576.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 1.0952380952380953,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.5095238095238095,
+        "p50": 0.5,
+        "p90": 1.0
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "sparse",
+      "arm": "bm25f",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 16201.714285714286,
+        "p50": 16177.0,
+        "p90": 16466.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 1.0952380952380953,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.5095238095238095,
+        "p50": 0.5,
+        "p90": 1.0
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "sparse",
+      "arm": "control-semantic",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 16201.714285714286,
+        "p50": 16177.0,
+        "p90": 16466.0
+      },
+      "dfs_reached_primary_probability": 1.0,
+      "dfs_graph_hops": {
+        "mean": 0.0,
+        "p50": 0.0,
+        "p90": 0.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.14285714285714285,
+        "p50": 0.0,
+        "p90": 1.0
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "sparse",
+      "arm": "key",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 0.6666666666666666,
+      "pages_to_first_useful": {
+        "mean": 3.0476190476190474,
+        "p50": 1.0,
+        "p90": 7.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1893.2380952380952,
+        "p50": 649.0,
+        "p90": 4366.0
+      },
+      "dfs_reached_primary_probability": 0.6666666666666666,
+      "dfs_graph_hops": {
+        "mean": 5.714285714285714,
+        "p50": 1.0,
+        "p90": 14.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 1.191485918038713,
+        "p50": 0.6666666666666666,
+        "p90": 1.3777777777777778
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "sparse",
+      "arm": "key",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 16201.714285714286,
+        "p50": 16177.0,
+        "p90": 16466.0
+      },
+      "dfs_reached_primary_probability": 0.6666666666666666,
+      "dfs_graph_hops": {
+        "mean": 5.714285714285714,
+        "p50": 1.0,
+        "p90": 14.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 1.191485918038713,
+        "p50": 0.6666666666666666,
+        "p90": 1.3777777777777778
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "sparse",
+      "arm": "pagerank",
+      "page_size": "5",
+      "task_count": 21,
+      "page_one_useful_probability": 0.5714285714285714,
+      "pages_to_first_useful": {
+        "mean": 2.1904761904761907,
+        "p50": 1.0,
+        "p90": 3.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 1299.904761904762,
+        "p50": 624.0,
+        "p90": 1776.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 3.3333333333333335,
+        "p50": 0.0,
+        "p90": 7.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.46657218442932724,
+        "p50": 0.0,
+        "p90": 1.2
+      }
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "sparse",
+      "arm": "pagerank",
+      "page_size": "all",
+      "task_count": 21,
+      "page_one_useful_probability": 1.0,
+      "pages_to_first_useful": {
+        "mean": 1.0,
+        "p50": 1.0,
+        "p90": 1.0
+      },
+      "response_tokens_to_first_useful": {
+        "mean": 16201.714285714286,
+        "p50": 16177.0,
+        "p90": 16466.0
+      },
+      "dfs_reached_primary_probability": 0.7619047619047619,
+      "dfs_graph_hops": {
+        "mean": 3.3333333333333335,
+        "p50": 0.0,
+        "p90": 7.0
+      },
+      "dfs_branching_factor_mean": {
+        "mean": 0.46657218442932724,
+        "p50": 0.0,
+        "p90": 1.2
+      }
+    }
+  ],
+  "paired_policy_contrasts": [
+    {
+      "candidate_count": 10,
+      "linkage_level": "enriched",
+      "page_size": "5",
+      "reference": "key",
+      "contender": "pagerank",
+      "pair_count": 21,
+      "page_one_gain": 0.3333333333333333,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.04354587869362364
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "enriched",
+      "page_size": "all",
+      "reference": "key",
+      "contender": "pagerank",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.0
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "native",
+      "page_size": "5",
+      "reference": "key",
+      "contender": "pagerank",
+      "pair_count": 21,
+      "page_one_gain": 0.19047619047619047,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.04314329738058552
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "native",
+      "page_size": "all",
+      "reference": "key",
+      "contender": "pagerank",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.0
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "sparse",
+      "page_size": "5",
+      "reference": "key",
+      "contender": "pagerank",
+      "pair_count": 21,
+      "page_one_gain": 0.19047619047619047,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.041990668740279936
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "sparse",
+      "page_size": "all",
+      "reference": "key",
+      "contender": "pagerank",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.0
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "enriched",
+      "page_size": "5",
+      "reference": "key",
+      "contender": "pagerank",
+      "pair_count": 21,
+      "page_one_gain": 0.047619047619047616,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.059282371294851796
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "enriched",
+      "page_size": "all",
+      "reference": "key",
+      "contender": "pagerank",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.0
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "native",
+      "page_size": "5",
+      "reference": "key",
+      "contender": "pagerank",
+      "pair_count": 21,
+      "page_one_gain": -0.047619047619047616,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.07956318252730109
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "native",
+      "page_size": "all",
+      "reference": "key",
+      "contender": "pagerank",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.0
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "sparse",
+      "page_size": "5",
+      "reference": "key",
+      "contender": "pagerank",
+      "pair_count": 21,
+      "page_one_gain": 0.14285714285714285,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.08398133748055987
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "sparse",
+      "page_size": "all",
+      "reference": "key",
+      "contender": "pagerank",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.0
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "enriched",
+      "page_size": "5",
+      "reference": "key",
+      "contender": "pagerank",
+      "pair_count": 21,
+      "page_one_gain": 0.047619047619047616,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.06708268330733229
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "enriched",
+      "page_size": "all",
+      "reference": "key",
+      "contender": "pagerank",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.0
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "native",
+      "page_size": "5",
+      "reference": "key",
+      "contender": "pagerank",
+      "pair_count": 21,
+      "page_one_gain": -0.09523809523809523,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.08204334365325078
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "native",
+      "page_size": "all",
+      "reference": "key",
+      "contender": "pagerank",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.0
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "sparse",
+      "page_size": "5",
+      "reference": "key",
+      "contender": "pagerank",
+      "pair_count": 21,
+      "page_one_gain": -0.09523809523809523,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.05023547880690738
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "sparse",
+      "page_size": "all",
+      "reference": "key",
+      "contender": "pagerank",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.0
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "enriched",
+      "page_size": "5",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.016
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "enriched",
+      "page_size": "all",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.0
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "native",
+      "page_size": "5",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "pair_count": 21,
+      "page_one_gain": 0.14285714285714285,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": -0.0048
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "native",
+      "page_size": "all",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.0
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "sparse",
+      "page_size": "5",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "pair_count": 21,
+      "page_one_gain": 0.14285714285714285,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.03398058252427184
+    },
+    {
+      "candidate_count": 10,
+      "linkage_level": "sparse",
+      "page_size": "all",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.0
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "enriched",
+      "page_size": "5",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "pair_count": 21,
+      "page_one_gain": 0.2857142857142857,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.08225806451612903
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "enriched",
+      "page_size": "all",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.0
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "native",
+      "page_size": "5",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "pair_count": 21,
+      "page_one_gain": 0.38095238095238093,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.08064516129032258
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "native",
+      "page_size": "all",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.0
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "sparse",
+      "page_size": "5",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "pair_count": 21,
+      "page_one_gain": 0.19047619047619047,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.04436860068259386
+    },
+    {
+      "candidate_count": 40,
+      "linkage_level": "sparse",
+      "page_size": "all",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.0
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "enriched",
+      "page_size": "5",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "pair_count": 21,
+      "page_one_gain": 0.2857142857142857,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.08133971291866028
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "enriched",
+      "page_size": "all",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.0
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "native",
+      "page_size": "5",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "pair_count": 21,
+      "page_one_gain": 0.42857142857142855,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.08223684210526316
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "native",
+      "page_size": "all",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.0
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "sparse",
+      "page_size": "5",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "pair_count": 21,
+      "page_one_gain": 0.42857142857142855,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.07980456026058631
+    },
+    {
+      "candidate_count": 150,
+      "linkage_level": "sparse",
+      "page_size": "all",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "pair_count": 21,
+      "page_one_gain": 0.0,
+      "median_pages_saved": 0.0,
+      "median_compact_token_saving_fraction": 0.0
+    }
+  ],
+  "linkage_interactions": [
+    {
+      "candidate_count": 10,
+      "page_size": "5",
+      "reference": "key",
+      "contender": "pagerank",
+      "page_one_gain_change_enriched_minus_sparse": 0.14285714285714285,
+      "median_pages_saved_change_enriched_minus_sparse": 0.0,
+      "compact_token_saving_change_enriched_minus_sparse": 0.0015552099533437044
+    },
+    {
+      "candidate_count": 10,
+      "page_size": "5",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "page_one_gain_change_enriched_minus_sparse": -0.14285714285714285,
+      "median_pages_saved_change_enriched_minus_sparse": 0.0,
+      "compact_token_saving_change_enriched_minus_sparse": -0.017980582524271843
+    },
+    {
+      "candidate_count": 10,
+      "page_size": "all",
+      "reference": "key",
+      "contender": "pagerank",
+      "page_one_gain_change_enriched_minus_sparse": 0.0,
+      "median_pages_saved_change_enriched_minus_sparse": 0.0,
+      "compact_token_saving_change_enriched_minus_sparse": 0.0
+    },
+    {
+      "candidate_count": 10,
+      "page_size": "all",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "page_one_gain_change_enriched_minus_sparse": 0.0,
+      "median_pages_saved_change_enriched_minus_sparse": 0.0,
+      "compact_token_saving_change_enriched_minus_sparse": 0.0
+    },
+    {
+      "candidate_count": 40,
+      "page_size": "5",
+      "reference": "key",
+      "contender": "pagerank",
+      "page_one_gain_change_enriched_minus_sparse": -0.09523809523809523,
+      "median_pages_saved_change_enriched_minus_sparse": 0.0,
+      "compact_token_saving_change_enriched_minus_sparse": -0.024698966185708077
+    },
+    {
+      "candidate_count": 40,
+      "page_size": "5",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "page_one_gain_change_enriched_minus_sparse": 0.09523809523809523,
+      "median_pages_saved_change_enriched_minus_sparse": 0.0,
+      "compact_token_saving_change_enriched_minus_sparse": 0.03788946383353518
+    },
+    {
+      "candidate_count": 40,
+      "page_size": "all",
+      "reference": "key",
+      "contender": "pagerank",
+      "page_one_gain_change_enriched_minus_sparse": 0.0,
+      "median_pages_saved_change_enriched_minus_sparse": 0.0,
+      "compact_token_saving_change_enriched_minus_sparse": 0.0
+    },
+    {
+      "candidate_count": 40,
+      "page_size": "all",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "page_one_gain_change_enriched_minus_sparse": 0.0,
+      "median_pages_saved_change_enriched_minus_sparse": 0.0,
+      "compact_token_saving_change_enriched_minus_sparse": 0.0
+    },
+    {
+      "candidate_count": 150,
+      "page_size": "5",
+      "reference": "key",
+      "contender": "pagerank",
+      "page_one_gain_change_enriched_minus_sparse": 0.14285714285714285,
+      "median_pages_saved_change_enriched_minus_sparse": 0.0,
+      "compact_token_saving_change_enriched_minus_sparse": 0.016847204500424907
+    },
+    {
+      "candidate_count": 150,
+      "page_size": "5",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "page_one_gain_change_enriched_minus_sparse": -0.14285714285714285,
+      "median_pages_saved_change_enriched_minus_sparse": 0.0,
+      "compact_token_saving_change_enriched_minus_sparse": 0.0015351526580739683
+    },
+    {
+      "candidate_count": 150,
+      "page_size": "all",
+      "reference": "key",
+      "contender": "pagerank",
+      "page_one_gain_change_enriched_minus_sparse": 0.0,
+      "median_pages_saved_change_enriched_minus_sparse": 0.0,
+      "compact_token_saving_change_enriched_minus_sparse": 0.0
+    },
+    {
+      "candidate_count": 150,
+      "page_size": "all",
+      "reference": "pagerank",
+      "contender": "bm25f",
+      "page_one_gain_change_enriched_minus_sparse": 0.0,
+      "median_pages_saved_change_enriched_minus_sparse": 0.0,
+      "compact_token_saving_change_enriched_minus_sparse": 0.0
+    }
+  ]
+}
