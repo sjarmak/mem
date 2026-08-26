@@ -222,6 +222,11 @@ def test_agent_followup_analysis_pairs_operator_controls_against_automatic() -> 
     assert comparison["reference"] == "control-automatic"
     assert comparison["contender"] == "control-semantic"
     assert comparison["task_success_delta"]["estimate"] == 1.0
+    control = analysis["control_surface"]
+    assert control["status"] == "incomplete-control-arms"
+    semantic = control["comparisons"][0]
+    assert semantic["neutral_pair_count"] == 1
+    assert semantic["affected_pair_count"] == 0
 
 
 def test_agent_followup_svg_plots_repeat_balanced_page_curves() -> None:

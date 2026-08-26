@@ -264,12 +264,191 @@ def analyze_agent_followup(
                             ),
                         }
                     )
+
+    control_arms = {
+        "control-automatic",
+        "control-semantic",
+        "control-strategy",
+        "control-raw",
+    }
+    control_results: list[dict[str, object]] = []
+    if "control-automatic" in arms:
+        for contender in sorted(control_arms - {"control-automatic"}):
+            if contender not in arms:
+                continue
+            for mode in sorted({str(row["mode"]) for row in cells}):
+                for page_size in sorted(
+                    {str(row["page_size"]) for row in cells},
+                    key=lambda value: 10_000 if value == "all" else int(value),
+                ):
+                    pairs = [
+                        (row, by_cell[(str(row["task_id"]), mode, page_size, contender)])
+                        for row in cells
+                        if row["mode"] == mode
+                        and row["page_size"] == page_size
+                        and row["arm"] == "control-automatic"
+                        and (str(row["task_id"]), mode, page_size, contender) in by_cell
+                    ]
+                    if not pairs:
+                        continue
+                    affected = [
+                        pair for pair in pairs if not pair[0]["page_one_acceptable_visible"]
+                    ]
+                    neutral = [pair for pair in pairs if pair[0]["page_one_acceptable_visible"]]
+
+                    def success_delta(
+                        selected: Sequence[tuple[Mapping[str, object], Mapping[str, object]]],
+                        *,
+                        seed_offset: int,
+                    ) -> dict[str, float | int | None]:
+                        return _task_cluster_ci(
+                            [
+                                {
+                                    "graph_family": base["graph_family"],
+                                    "delta": _as_float(candidate["task_success"])
+                                    - _as_float(base["task_success"]),
+                                }
+                                for base, candidate in selected
+                            ],
+                            field="delta",
+                            seed=bootstrap_seed + seed_offset,
+                            resamples=bootstrap_resamples,
+                        )
+
+                    control_results.append(
+                        {
+                            "reference": "control-automatic",
+                            "contender": contender,
+                            "mode": mode,
+                            "page_size": page_size,
+                            "pair_count": len(pairs),
+                            "affected_pair_count": len(affected),
+                            "neutral_pair_count": len(neutral),
+                            "placement_changed_pair_count": sum(
+                                base["primary_page"] != candidate["primary_page"]
+                                or base["acceptable_page"] != candidate["acceptable_page"]
+                                for base, candidate in pairs
+                            ),
+                            "page_one_recovery_fraction": (
+                                sum(
+                                    bool(candidate["page_one_acceptable_visible"])
+                                    for _, candidate in affected
+                                )
+                                / len(affected)
+                                if affected
+                                else None
+                            ),
+                            "affected_task_success_delta": success_delta(affected, seed_offset=101),
+                            "neutral_task_success_delta": success_delta(neutral, seed_offset=211),
+                            "task_success_delta": success_delta(pairs, seed_offset=307),
+                        }
+                    )
+
+    semantic_results = [
+        result for result in control_results if result["contender"] == "control-semantic"
+    ]
+    control_gate_rows: list[dict[str, object]] = []
+    for control_result in semantic_results:
+        neutral_summary = control_result["neutral_task_success_delta"]
+        assert isinstance(neutral_summary, Mapping)
+        recovery = control_result["page_one_recovery_fraction"]
+        recovery_clears = isinstance(recovery, (int, float)) and recovery >= 0.25
+        neutral_low = neutral_summary.get("low")
+        neutral_clears = isinstance(neutral_low, (int, float)) and neutral_low >= -0.03
+        control_gate_rows.append(
+            {
+                "mode": control_result["mode"],
+                "page_size": control_result["page_size"],
+                "recovery_clears_0_25": recovery_clears,
+                "neutral_nonregression_clears_minus_0_03": neutral_clears,
+                "clears": recovery_clears and neutral_clears,
+            }
+        )
+
+    semantic_raw_results: list[dict[str, object]] = []
+    if {"control-semantic", "control-raw"} <= set(arms):
+        for mode in sorted({str(row["mode"]) for row in cells}):
+            for page_size in sorted(
+                {str(row["page_size"]) for row in cells},
+                key=lambda value: 10_000 if value == "all" else int(value),
+            ):
+                pairs = [
+                    (row, by_cell[(str(row["task_id"]), mode, page_size, "control-raw")])
+                    for row in cells
+                    if row["mode"] == mode
+                    and row["page_size"] == page_size
+                    and row["arm"] == "control-semantic"
+                    and (str(row["task_id"]), mode, page_size, "control-raw") in by_cell
+                ]
+                if not pairs:
+                    continue
+                delta = _task_cluster_ci(
+                    [
+                        {
+                            "graph_family": semantic["graph_family"],
+                            "delta": _as_float(semantic["task_success"])
+                            - _as_float(raw["task_success"]),
+                        }
+                        for semantic, raw in pairs
+                    ],
+                    field="delta",
+                    seed=bootstrap_seed + 401,
+                    resamples=bootstrap_resamples,
+                )
+                low = delta.get("low")
+                high = delta.get("high")
+                semantic_raw_results.append(
+                    {
+                        "mode": mode,
+                        "page_size": page_size,
+                        "pair_count": len(pairs),
+                        "semantic_minus_raw_task_success": delta,
+                        "equivalence_margin": 0.05,
+                        "equivalence_clears": isinstance(low, (int, float))
+                        and isinstance(high, (int, float))
+                        and low >= -0.05
+                        and high <= 0.05,
+                    }
+                )
+
+    observed_control_cells = {
+        (str(row["mode"]), str(row["page_size"]), str(row["arm"]))
+        for row in cells
+        if str(row["arm"]) in control_arms
+    }
+    observed_modes = {str(row["mode"]) for row in cells}
+    observed_pages = {str(row["page_size"]) for row in cells}
+    expected_control_cells = {
+        (mode, page, arm)
+        for mode in observed_modes
+        for page in observed_pages
+        for arm in control_arms
+    }
+    control_matrix_complete = expected_control_cells <= observed_control_cells
     return {
         "observation_count": len(rows),
         "cell_count": len(cells),
         "repeat_averaging": "equal weight per task/mode/page/policy cell",
         "curves": curves,
         "paired_policy_comparisons": comparisons,
+        "control_surface": {
+            "status": ("measured" if control_arms <= set(arms) else "incomplete-control-arms"),
+            "thresholds": {
+                "minimum_failure_case_recovery_fraction": 0.25,
+                "maximum_neutral_task_success_regression": 0.03,
+            },
+            "comparisons": control_results,
+            "semantic_gate_cells": control_gate_rows,
+            "semantic_gate_passed_all_cells": bool(control_gate_rows)
+            and all(bool(row["clears"]) for row in control_gate_rows),
+            "semantic_vs_raw": semantic_raw_results,
+            "semantic_equivalent_to_raw_all_cells": bool(semantic_raw_results)
+            and all(bool(row["equivalence_clears"]) for row in semantic_raw_results),
+            "matrix_complete_for_observed_modes_and_pages": control_matrix_complete,
+            "decision_ready": control_arms <= set(arms)
+            and control_matrix_complete
+            and bool(semantic_raw_results),
+        },
         "cells": cells,
     }
 
