@@ -75,6 +75,7 @@ _MANIFEST_WAVE_SHARED_FIELDS = tuple(
     }
 )
 _MANIFEST_REQUIRED_FIELDS = (*_MANIFEST_HELD_FIELDS, "agent_model", "selection_manifest_sha256")
+_POLICY_COMPARISONS = (("key", "pagerank"), ("pagerank", "bm25f"))
 
 
 def _index_rows(rows: Sequence[OrderingRunResult], *, wave: str) -> dict[str, OrderingRunResult]:
@@ -236,6 +237,123 @@ def _failures(rows: Sequence[OrderingRunResult]) -> dict[str, object]:
     return {"count": len(run_ids), "run_ids": run_ids}
 
 
+def _policy_effect_metrics(
+    reference: OrderingRunResult,
+    contender: OrderingRunResult,
+) -> dict[str, float]:
+    metrics = {
+        "page_one_gain": float(contender.page_one_acceptable_visible)
+        - float(reference.page_one_acceptable_visible),
+        "pages_requested_saved": float(reference.pages_requested - contender.pages_requested),
+        "compact_tokens_to_first_useful_reduction_fraction": _fraction_saved(
+            reference.compact_tokens_to_first_useful,
+            contender.compact_tokens_to_first_useful,
+        ),
+        "retrieval_tokens_to_first_useful_saved": float(
+            reference.retrieval_tokens_to_first_useful - contender.retrieval_tokens_to_first_useful
+        ),
+        "retrieval_tool_calls_saved": float(
+            reference.retrieval_tool_calls - contender.retrieval_tool_calls
+        ),
+        "full_recalls_saved": float(reference.full_recalls - contender.full_recalls),
+        "graph_hops_delta": float(contender.graph_hops_total - reference.graph_hops_total),
+        "retrieval_latency_ms_saved": (
+            reference.retrieval_latency_ms - contender.retrieval_latency_ms
+        ),
+        "end_to_end_ms_saved": reference.end_to_end_ms - contender.end_to_end_ms,
+        "task_success_delta": float(contender.task_success) - float(reference.task_success),
+    }
+    if reference.pages_to_first_useful is not None and contender.pages_to_first_useful is not None:
+        metrics["pages_to_first_useful_saved"] = float(
+            reference.pages_to_first_useful - contender.pages_to_first_useful
+        )
+    if (
+        reference.time_to_first_useful_ms is not None
+        and contender.time_to_first_useful_ms is not None
+    ):
+        metrics["time_to_first_useful_ms_saved"] = (
+            reference.time_to_first_useful_ms - contender.time_to_first_useful_ms
+        )
+    return metrics
+
+
+def _policy_replication(
+    bridge_rows: Sequence[OrderingRunResult],
+    secondary_rows: Sequence[OrderingRunResult],
+    task_metadata: Mapping[str, Mapping[str, object]],
+    *,
+    seed: int,
+    resamples: int,
+) -> list[dict[str, object]]:
+    bridge = {(row.task_id, row.arm.value): row for row in bridge_rows}
+    secondary = {(row.task_id, row.arm.value): row for row in secondary_rows}
+    linkages = sorted({str(metadata["linkage_level"]) for metadata in task_metadata.values()})
+    mean_metrics = {"page_one_gain", "task_success_delta", "graph_hops_delta"}
+    output: list[dict[str, object]] = []
+
+    for group_index, (linkage, (reference_arm, contender_arm)) in enumerate(
+        (linkage, comparison) for linkage in linkages for comparison in _POLICY_COMPARISONS
+    ):
+        by_wave: dict[str, dict[str, list[tuple[str, str, float]]]] = {
+            "bridge": defaultdict(list),
+            "secondary": defaultdict(list),
+            "secondary_minus_bridge": defaultdict(list),
+        }
+        for task_id, metadata in sorted(task_metadata.items()):
+            if str(metadata["linkage_level"]) != linkage:
+                continue
+            rows = (
+                bridge.get((task_id, reference_arm)),
+                bridge.get((task_id, contender_arm)),
+                secondary.get((task_id, reference_arm)),
+                secondary.get((task_id, contender_arm)),
+            )
+            if any(row is None or row.failure is not None for row in rows):
+                continue
+            bridge_reference, bridge_contender, secondary_reference, secondary_contender = rows
+            assert bridge_reference is not None
+            assert bridge_contender is not None
+            assert secondary_reference is not None
+            assert secondary_contender is not None
+            family = str(metadata["graph_family"])
+            task = str(metadata["base_task_id"])
+            bridge_metrics = _policy_effect_metrics(bridge_reference, bridge_contender)
+            secondary_metrics = _policy_effect_metrics(secondary_reference, secondary_contender)
+            for metric in sorted(bridge_metrics.keys() & secondary_metrics.keys()):
+                bridge_value = bridge_metrics[metric]
+                secondary_value = secondary_metrics[metric]
+                by_wave["bridge"][metric].append((family, task, bridge_value))
+                by_wave["secondary"][metric].append((family, task, secondary_value))
+                by_wave["secondary_minus_bridge"][metric].append(
+                    (family, task, secondary_value - bridge_value)
+                )
+        if not by_wave["bridge"]:
+            continue
+
+        summaries: dict[str, object] = {}
+        for wave_index, (wave, metrics) in enumerate(by_wave.items()):
+            summaries[wave] = {
+                metric: hierarchical_summary(
+                    values,
+                    statistic="mean" if metric in mean_metrics else "median",
+                    seed=seed + group_index * 1000 + wave_index * 100 + metric_index,
+                    resamples=resamples,
+                )
+                for metric_index, (metric, values) in enumerate(sorted(metrics.items()))
+            }
+        task_success = by_wave["bridge"]["task_success_delta"]
+        output.append(
+            {
+                "linkage_level": linkage,
+                "reference": reference_arm,
+                "contender": contender_arm,
+                "pair_count": len(task_success),
+                **summaries,
+            }
+        )
+    return output
+
+
 def compare_density_linkage_replication(
     bridge_rows: Sequence[OrderingRunResult],
     secondary_rows: Sequence[OrderingRunResult],
@@ -332,8 +450,19 @@ def compare_density_linkage_replication(
             "task_success_delta": "secondary minus bridge",
             "graph_hops_delta": "secondary minus bridge; direction is descriptive",
             "server_ordering_ms_delta": "secondary minus bridge; model should not affect it",
+            "policy_replication": (
+                "within-wave positive values favor the contender; secondary-minus-bridge "
+                "is the change in contender advantage under the secondary model"
+            ),
         },
         "contrasts": contrasts,
+        "policy_replication": _policy_replication(
+            bridge_rows,
+            secondary_rows,
+            task_metadata,
+            seed=bootstrap_seed + 10_000,
+            resamples=bootstrap_resamples,
+        ),
     }
 
 
@@ -392,11 +521,61 @@ def _render_report(analysis: Mapping[str, object]) -> str:
             f"{_format_interval(contrast.get('pages_to_first_useful_saved'))} | "
             f"{compact_reduction} |"
         )
+    lines.extend(
+        [
+            "",
+            "## Ordering-effect replication",
+            "",
+            "Within each model, positive values favor the contender. The change column is "
+            "secondary minus bridge.",
+            "",
+            "| links | comparison | pairs | bridge success delta | secondary success delta | "
+            "change [90% CI] | bridge compact saving | secondary compact saving |",
+            "|---|---|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    policy_replication = analysis["policy_replication"]
+    assert isinstance(policy_replication, Sequence)
+    for comparison in policy_replication:
+        assert isinstance(comparison, Mapping)
+        bridge = comparison["bridge"]
+        secondary = comparison["secondary"]
+        change = comparison["secondary_minus_bridge"]
+        assert isinstance(bridge, Mapping)
+        assert isinstance(secondary, Mapping)
+        assert isinstance(change, Mapping)
+        label = f"{comparison['reference']}→{comparison['contender']}"
+        bridge_compact = _format_interval(
+            bridge.get("compact_tokens_to_first_useful_reduction_fraction"), percent=True
+        )
+        secondary_compact = _format_interval(
+            secondary.get("compact_tokens_to_first_useful_reduction_fraction"), percent=True
+        )
+        lines.append(
+            f"| {comparison['linkage_level']} | {label} | {comparison['pair_count']} | "
+            f"{_format_interval(bridge.get('task_success_delta'), percent=True)} | "
+            f"{_format_interval(secondary.get('task_success_delta'), percent=True)} | "
+            f"{_format_interval(change.get('task_success_delta'), percent=True)} | "
+            f"{bridge_compact} | {secondary_compact} |"
+        )
     return "\n".join(lines) + "\n"
 
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _sanitized_observations(rows: Sequence[OrderingRunResult]) -> bytes:
+    projections: list[dict[str, object]] = []
+    for row in sorted(rows, key=lambda item: item.run_id):
+        projection = row.model_dump(mode="json")
+        for excluded in ("query", "final_answer", "failure"):
+            projection.pop(excluded, None)
+        projection["failure_present"] = row.failure is not None
+        projections.append(projection)
+    return "".join(
+        json.dumps(projection, sort_keys=True) + "\n" for projection in projections
+    ).encode()
 
 
 def write_density_linkage_replication_comparison(
@@ -419,19 +598,25 @@ def write_density_linkage_replication_comparison(
     out.mkdir(parents=True, exist_ok=True)
     analysis_path = out / "analysis.json"
     report_path = out / "report.md"
+    bridge_projection_path = out / "bridge-sanitized-observations.jsonl"
+    secondary_projection_path = out / "secondary-sanitized-observations.jsonl"
     analysis_path.write_text(
         json.dumps(analysis, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     report_path.write_text(_render_report(analysis), encoding="utf-8")
+    bridge_projection_path.write_bytes(_sanitized_observations(bridge_rows))
+    secondary_projection_path.write_bytes(_sanitized_observations(secondary_rows))
     manifest: dict[str, object] = {
         "schema_version": 1,
         "privacy_projection": (
-            "paired metrics only; excludes queries, model text, failure diagnostics, "
-            "credentials, and local paths"
+            "paired and per-run metrics only; excludes queries, model text, failure "
+            "diagnostics, credentials, and local paths"
         ),
         "artifact_sha256s": {
             "analysis.json": _sha256(analysis_path),
             "report.md": _sha256(report_path),
+            "bridge-sanitized-observations.jsonl": _sha256(bridge_projection_path),
+            "secondary-sanitized-observations.jsonl": _sha256(secondary_projection_path),
         },
         "provenance": dict(provenance),
     }

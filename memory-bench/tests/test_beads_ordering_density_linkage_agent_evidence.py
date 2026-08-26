@@ -352,6 +352,20 @@ def test_replication_comparison_pairs_models_and_reports_clustered_deltas() -> N
         "p50"
     ] == pytest.approx(0.5)
     assert enriched_key["task_success_delta"]["estimate"] == 1
+    enriched_policy = next(
+        row
+        for row in analysis["policy_replication"]
+        if row["linkage_level"] == "enriched"
+        and row["reference"] == "key"
+        and row["contender"] == "pagerank"
+    )
+    assert enriched_policy["pair_count"] == 2
+    assert enriched_policy["bridge"]["task_success_delta"]["n"] == 2
+    assert enriched_policy["secondary"]["task_success_delta"]["estimate"] == 0
+    assert (
+        enriched_policy["secondary_minus_bridge"]["task_success_delta"]["estimate"]
+        == -enriched_policy["bridge"]["task_success_delta"]["estimate"]
+    )
 
 
 def test_replication_comparison_separates_failures_and_rejects_protocol_drift() -> None:
@@ -434,15 +448,33 @@ def test_replication_comparison_writer_excludes_model_text_and_failure_diagnosti
         bootstrap_resamples=20,
     )
 
-    encoded = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in (tmp_path / "analysis.json", tmp_path / "report.md", tmp_path / "manifest.json")
+    artifact_paths = (
+        tmp_path / "analysis.json",
+        tmp_path / "report.md",
+        tmp_path / "manifest.json",
+        tmp_path / "bridge-sanitized-observations.jsonl",
+        tmp_path / "secondary-sanitized-observations.jsonl",
     )
+    encoded = "\n".join(path.read_text(encoding="utf-8") for path in artifact_paths)
     assert "private query text" not in encoded
     assert "private model answer" not in encoded
     assert "private provider diagnostic" not in encoded
-    assert manifest["privacy_projection"].startswith("paired metrics only")
-    assert manifest["artifact_sha256s"].keys() == {"analysis.json", "report.md"}
+    assert manifest["privacy_projection"].startswith("paired and per-run metrics only")
+    assert manifest["artifact_sha256s"].keys() == {
+        "analysis.json",
+        "report.md",
+        "bridge-sanitized-observations.jsonl",
+        "secondary-sanitized-observations.jsonl",
+    }
+    bridge_projection = json.loads(
+        (tmp_path / "bridge-sanitized-observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()[0]
+    )
+    assert "query" not in bridge_projection
+    assert "final_answer" not in bridge_projection
+    assert "failure" not in bridge_projection
+    assert bridge_projection["failure_present"] is False
 
 
 def test_grid_validation_detects_embedded_failure_and_provenance_drift() -> None:
