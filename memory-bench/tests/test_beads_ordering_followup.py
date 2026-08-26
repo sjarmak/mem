@@ -165,6 +165,15 @@ def test_agent_followup_analysis_averages_repeats_before_policy_aggregation() ->
 
     assert analysis["observation_count"] == 4
     assert analysis["cell_count"] == 2
+    assert analysis["targeted_repeat_groups"] == [
+        {
+            "task_id": "task",
+            "mode": "navigation",
+            "page_size": "5",
+            "reasons": ["task-success-disagreement"],
+            "repeat_indices": [1, 2],
+        }
+    ]
     key = next(curve for curve in analysis["curves"] if curve["arm"] == "key")
     assert key["task_success_rate"]["estimate"] == 0.5
     assert key["compact_tokens_to_first_useful"]["p50"] == 200

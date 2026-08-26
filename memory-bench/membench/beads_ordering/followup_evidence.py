@@ -429,6 +429,7 @@ def analyze_agent_followup(
         "observation_count": len(rows),
         "cell_count": len(cells),
         "repeat_averaging": "equal weight per task/mode/page/policy cell",
+        "targeted_repeat_groups": select_targeted_repeat_groups(rows),
         "curves": curves,
         "paired_policy_comparisons": comparisons,
         "control_surface": {
