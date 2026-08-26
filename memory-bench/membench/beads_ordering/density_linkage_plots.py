@@ -187,6 +187,11 @@ def _save_pair(figure: Any, base: Path, pyplot: Any) -> list[Path]:
     svg = base.with_suffix(".svg")
     png = base.with_suffix(".png")
     figure.savefig(svg, format="svg", metadata={"Date": None})
+    svg_text = svg.read_text(encoding="utf-8")
+    svg.write_text(
+        "\n".join(line.rstrip() for line in svg_text.splitlines()) + "\n",
+        encoding="utf-8",
+    )
     figure.savefig(
         png,
         format="png",

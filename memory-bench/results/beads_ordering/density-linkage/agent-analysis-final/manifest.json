@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "observation_count": 5256,
+  "usable_observation_count": 5254,
+  "source_observations_sha256": "0e1a30d4dd9396f3fb51cde5906a99dffeb03fe634c2cd35c82f08caf308103d",
+  "sanitized_observations_sha256": "4af105e10f130d9c67d55a1a0efa9c8c7e558f5fcdd734a6ee92bde58fd602b0",
+  "cell_estimates_sha256": "b7304c8530a8407cef76f49b7e55c6a18d9a65098d5a034e213717ead1e0510b",
+  "analysis_sha256": "26a6442b38178e9f31184d3694965dec555f90e560921bdc367776a64445da60",
+  "targeted_repeat_manifest_sha256": "efc5db91bb794f1a83dba065af3d7d03e9603c63822cc72ff46c720ebc36bc64",
+  "targeted_repeat_manifest_source": "locked-pre-outcome-input",
+  "privacy_projection": "per-run metrics only; excludes queries, model text, failure text, and credential paths",
+  "analysis_mem_git_sha": "5259a7cd8a862c2a95b5eb023ce6e2bbed0dc648",
+  "analysis_mem_git_dirty": true,
+  "analysis_mem_git_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "analysis_source_sha256": "070e031429c0530ec7b021bca2df71d7a53eaab0b768100d78944d5ec1993ac8",
+  "density_linkage_manifest_sha256": "240aaf29465c85d1c185f27c50df68cfb4b7a221549a78a93423ff27dd1bdcd7",
+  "preregistration_sha256": "a78d9c8b5b68fb5396ce9d30ef935219c388564193384b0f6b751307c4bc28ac",
+  "raw_input_names": [
+    "raw-results.jsonl",
+    "raw-results.jsonl",
+    "raw-results.jsonl",
+    "raw-results.jsonl",
+    "raw-results.jsonl",
+    "raw-results.jsonl"
+  ],
+  "raw_input_sha256s": [
+    "957bb202ad2f6dafaccd242a9c7f322f8505a75f8c76f6d1f07be73b14def020",
+    "194f3c669d0f30a183e4396a6112951f7b53abf0d097df83e3e36efe1906efc0",
+    "834b50bf609275b5bef3a4fcb6298e06bc455640e3adeca70127f97fbf9f826a",
+    "55edcc1c414afef91214e39b02ec480d30ce42b034c7edce76aff2d9f68f4baa",
+    "24ed938b4838cadbfa0f6a89df33a68ed15e662638cfdc48441aa66d9fb2fac6",
+    "fefce255c3b197b13bd8f36524d8df8047d16edeab7ebabfaf54ef227e766817"
+  ],
+  "shard_manifest_names": [
+    "shard-0",
+    "shard-1",
+    "shard-2",
+    "shard-0",
+    "shard-1",
+    "shard-2"
+  ],
+  "shard_manifest_sha256s": [
+    "442339e91f84f7f537fdafba68409907b955cd8f86c57d16698aac96c5be521c",
+    "765a7773aebd26536b17ac54f769c3cc603c7fc7186416c7e6b1f4d304570af0",
+    "5b9f19377e0413a1831e321b429197f6aaf3765c496f49f2358252ab8afaa89d",
+    "137b50513337bc56c73f9a95e2caf2b041189d718e59b075f61dd58444709823",
+    "f70281f8fa038a9f6f4e91db414a039248fbc07773fc4f9fe81c3795eaa73e68",
+    "47d19d831e148793a119b66e91bae2afd2ac94f85e6ba982c83a7ea6220b7010"
+  ]
+}

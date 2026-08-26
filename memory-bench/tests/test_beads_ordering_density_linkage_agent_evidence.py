@@ -737,6 +737,7 @@ def test_density_linkage_plots_emit_inert_svg_and_png_pairs(tmp_path: Path) -> N
             assert "<svg" in svg
             assert "<script" not in svg
             assert "onload=" not in svg
+            assert all(line == line.rstrip() for line in svg.splitlines())
         else:
             assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
 
