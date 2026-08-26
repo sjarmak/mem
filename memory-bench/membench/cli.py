@@ -34,6 +34,7 @@ from membench.beads_ordering.density_linkage_evidence import (
     collect_density_linkage_oracle,
     write_density_linkage_oracle,
 )
+from membench.beads_ordering.density_linkage_plots import render_density_linkage_plots
 from membench.beads_ordering.followup_corpus import (
     load_followup_corpora,
     write_followup_corpora,
@@ -580,6 +581,13 @@ def _cmd_beads_ordering_density_linkage_agent_analyze(args: argparse.Namespace) 
         f"wrote density/linkage agent analysis: {args.out} "
         f"({evidence['usable_observation_count']}/{evidence['observation_count']} usable)"
     )
+    return 0
+
+
+def _cmd_beads_ordering_density_linkage_plot(args: argparse.Namespace) -> int:
+    analysis = json.loads(Path(args.analysis).read_text(encoding="utf-8"))
+    outputs = render_density_linkage_plots(analysis, Path(args.out).resolve())
+    print(f"wrote {len(outputs)} density/linkage plot files to {args.out}")
     return 0
 
 
@@ -1251,6 +1259,14 @@ def main(argv: list[str] | None = None) -> int:
     p_density_linkage_agent_analysis.set_defaults(
         func=_cmd_beads_ordering_density_linkage_agent_analyze
     )
+
+    p_density_linkage_plot = sub.add_parser(
+        "beads-ordering-density-linkage-plot",
+        help="render paired SVG and PNG figures from a density/linkage analysis",
+    )
+    p_density_linkage_plot.add_argument("--analysis", required=True)
+    p_density_linkage_plot.add_argument("--out", required=True)
+    p_density_linkage_plot.set_defaults(func=_cmd_beads_ordering_density_linkage_plot)
 
     p_followup_mutations = sub.add_parser(
         "beads-ordering-followup-mutations",

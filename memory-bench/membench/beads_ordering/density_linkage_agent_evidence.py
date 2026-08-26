@@ -820,10 +820,134 @@ def render_density_linkage_agent_report(analysis: Mapping[str, object]) -> str:
             f"{float(pages['p50']):.1f}/{float(pages['p90']):.1f} | "
             f"{float(tokens['p50']):.0f}/{float(tokens['p90']):.0f} |"
         )
+
+    def summary(raw: object, field: str = "estimate", *, percent: bool = False) -> str:
+        if not isinstance(raw, Mapping):
+            return "—"
+        value = raw.get(field)
+        if not isinstance(value, (int, float)):
+            return "—"
+        return f"{float(value):+.1%}" if percent else f"{float(value):+.2f}"
+
     lines.extend(
         [
             "",
-            "## Registered contrasts",
+            "## Candidate-density control",
+            "",
+            "Primary-first, unbounded visibility. Positive success/failure values mean the "
+            "150-candidate condition was worse than 10 candidates.",
+            "",
+            "| links | mode | success drop [90% CI] | correct-use failure increase | "
+            "retrieval-token growth p50 |",
+            "|---|---|---:|---:|---:|",
+        ]
+    )
+    density = analysis.get("density_endpoint_contrasts")
+    if isinstance(density, Sequence):
+        for contrast in density:
+            if not isinstance(contrast, Mapping):
+                continue
+            success = contrast["task_success_drop_10_to_150"]
+            if not isinstance(success, Mapping):
+                continue
+            lines.append(
+                f"| {contrast['linkage_level']} | {contrast['mode']} | "
+                f"{summary(success, percent=True)} "
+                f"[{summary(success, 'low', percent=True)}, "
+                f"{summary(success, 'high', percent=True)}] | "
+                f"{summary(contrast['correct_use_failure_increase_10_to_150'], percent=True)} | "
+                f"{summary(contrast['retrieval_token_growth_10_to_150'], 'p50')} |"
+            )
+
+    policy = analysis.get("policy_contrasts")
+    policy_rows = (
+        [row for row in policy if isinstance(row, Mapping)] if isinstance(policy, Sequence) else []
+    )
+    for reference, contender, heading in (
+        ("key", "pagerank", "PageRank versus key"),
+        ("pagerank", "bm25f", "BM25F versus PageRank"),
+    ):
+        lines.extend(
+            [
+                "",
+                f"## {heading}",
+                "",
+                "Navigation with five-result pages. Positive values favor the contender.",
+                "",
+                "| candidates | links | page-one gain | pages saved p50 | "
+                "compact-token saving p50 | success delta [90% CI] |",
+                "|---:|---|---:|---:|---:|---:|",
+            ]
+        )
+        for contrast in policy_rows:
+            if (
+                contrast.get("reference") != reference
+                or contrast.get("contender") != contender
+                or contrast.get("mode") != "navigation"
+                or contrast.get("page_size") != "5"
+            ):
+                continue
+            success = contrast["task_success_delta"]
+            if not isinstance(success, Mapping):
+                continue
+            lines.append(
+                f"| {contrast['candidate_count']} | {contrast['linkage_level']} | "
+                f"{summary(contrast['page_one_gain'], percent=True)} | "
+                f"{summary(contrast['pages_saved'], 'p50')} | "
+                f"{summary(contrast['compact_token_reduction_fraction'], 'p50', percent=True)} | "
+                f"{summary(success, percent=True)} "
+                f"[{summary(success, 'low', percent=True)}, "
+                f"{summary(success, 'high', percent=True)}] |"
+            )
+
+    lines.extend(
+        [
+            "",
+            "## Linkage interaction",
+            "",
+            "Enriched-minus-sparse change in PageRank's advantage over key order, under "
+            "navigation with five-result pages.",
+            "",
+            "| candidates | page-one change | pages-saved change p50 | "
+            "compact-saving change p50 | success-advantage change |",
+            "|---:|---:|---:|---:|---:|",
+        ]
+    )
+    interactions = analysis.get("linkage_interactions")
+    if isinstance(interactions, Sequence):
+        for contrast in interactions:
+            if not isinstance(contrast, Mapping):
+                continue
+            if (
+                contrast.get("reference") != "key"
+                or contrast.get("contender") != "pagerank"
+                or contrast.get("mode") != "navigation"
+                or contrast.get("page_size") != "5"
+            ):
+                continue
+            page_one = summary(contrast["page_one_gain_change_enriched_minus_sparse"], percent=True)
+            pages = summary(contrast["pages_saved_change_enriched_minus_sparse"], "p50")
+            tokens = summary(
+                contrast["compact_token_saving_change_enriched_minus_sparse"],
+                "p50",
+                percent=True,
+            )
+            lines.append(
+                f"| {contrast['candidate_count']} | "
+                f"{page_one} | {pages} | {tokens} | "
+                f"{summary(contrast['task_success_change_enriched_minus_sparse'], percent=True)} |"
+            )
+
+    triggers = analysis.get("targeted_repeat_triggers")
+    lines.extend(["", "## Targeted repeats", ""])
+    if isinstance(triggers, Mapping):
+        for name, raw in triggers.items():
+            count = len(raw) if isinstance(raw, Sequence) else 0
+            lines.append(f"- {str(name).replace('_', ' ')}: {count} groups")
+    lines.extend(
+        [
+            "",
+            "## Machine-readable evidence",
             "",
             "The machine-readable density, policy, linkage-interaction, and repeat-trigger "
             "tables are in `analysis.json`. Raw model text is deliberately excluded from "

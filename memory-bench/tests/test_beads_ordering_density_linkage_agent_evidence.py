@@ -11,6 +11,7 @@ from membench.beads_ordering.density_linkage_agent_evidence import (
     validate_density_linkage_agent_grid,
     write_density_linkage_agent_evidence,
 )
+from membench.beads_ordering.density_linkage_plots import render_density_linkage_plots
 from membench.beads_ordering.models import ExperimentMode, OrderingArm, OrderingRunResult
 
 
@@ -221,7 +222,11 @@ def test_evidence_writer_excludes_queries_model_text_failures_and_credentials(
     assert manifest["privacy_projection"].startswith("per-run metrics only")
     analysis = json.loads((tmp_path / "analysis.json").read_text(encoding="utf-8"))
     assert analysis["integrity"]["embedded_failure_count"] == 1
-    assert (tmp_path / "report.md").exists()
+    report = (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert "PageRank versus key" in report
+    assert "BM25F versus PageRank" in report
+    assert "Linkage interaction" in report
+    assert "Targeted repeats" in report
     assert (tmp_path / "targeted-repeat-manifest.json").exists()
     assert "targeted_repeat_manifest_sha256" in manifest
 
@@ -293,3 +298,57 @@ def test_repeat_manifest_mechanically_expands_registered_triggers_without_duplic
     assert manifest["selection_rule"] == "density-linkage-preregistration targeted-repeat rule"
     assert manifest["reason_counts"]["policy-task-success-disagreement"] > 0
     assert manifest["reason_counts"]["density-endpoint-disagreement"] > 0
+
+
+def test_density_linkage_plots_emit_inert_svg_and_png_pairs(tmp_path: Path) -> None:
+    analysis = analyze_density_linkage_agents(
+        _synthetic_rows(),
+        _metadata(),
+        bootstrap_seed=11,
+        bootstrap_resamples=50,
+    )
+
+    outputs = render_density_linkage_plots(analysis, tmp_path)
+
+    assert {path.suffix for path in outputs} == {".svg", ".png"}
+    assert len(outputs) == 6
+    for path in outputs:
+        assert path.exists()
+        if path.suffix == ".svg":
+            svg = path.read_text(encoding="utf-8")
+            assert "<svg" in svg
+            assert "<script" not in svg
+            assert "onload=" not in svg
+        else:
+            assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_cli_renders_density_linkage_plot_pairs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from membench import cli
+
+    analysis_path = tmp_path / "analysis.json"
+    analysis_path.write_text('{"curves": []}\n', encoding="utf-8")
+    seen: dict[str, object] = {}
+
+    def fake_render(analysis: object, out: Path) -> list[Path]:
+        seen["analysis"] = analysis
+        seen["out"] = out
+        return [out / "one.svg", out / "one.png"]
+
+    monkeypatch.setattr(cli, "render_density_linkage_plots", fake_render)
+    out = tmp_path / "plots"
+    assert (
+        cli.main(
+            [
+                "beads-ordering-density-linkage-plot",
+                "--analysis",
+                str(analysis_path),
+                "--out",
+                str(out),
+            ]
+        )
+        == 0
+    )
+    assert seen == {"analysis": {"curves": []}, "out": out}
