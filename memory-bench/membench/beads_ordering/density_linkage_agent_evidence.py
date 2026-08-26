@@ -863,6 +863,66 @@ def _repeat_run_id(row: OrderingRunResult, repeat: int) -> str:
     return f"{row.task_id}:{row.mode.value}:{row.arm.value}:" f"p{row.page_size}:r{repeat}"
 
 
+def build_density_linkage_replication_manifest(
+    task_metadata: Mapping[str, Mapping[str, object]],
+    *,
+    primary_analysis_sha256: str,
+    model: str,
+    expected_base_task_count: int = 21,
+) -> dict[str, object]:
+    """Seal the smallest factor slice that exercises all ordering decision gates."""
+
+    if len(primary_analysis_sha256) != 64 or any(
+        character not in "0123456789abcdef" for character in primary_analysis_sha256
+    ):
+        raise ValueError("primary analysis SHA-256 must be lowercase hexadecimal")
+    if not model or expected_base_task_count < 1:
+        raise ValueError("model and expected base-task count are required")
+
+    linkage_levels = ("sparse", "native", "enriched")
+    arms = _PRIMARY_POLICIES
+    selected_tasks: list[str] = []
+    base_tasks_by_linkage: dict[str, set[str]] = defaultdict(set)
+    for task_id, metadata in sorted(task_metadata.items()):
+        linkage = str(metadata["linkage_level"])
+        if _as_int(metadata["candidate_count"]) != 150 or linkage not in linkage_levels:
+            continue
+        selected_tasks.append(task_id)
+        base_tasks_by_linkage[linkage].add(str(metadata["base_task_id"]))
+
+    expected = set.union(*(base_tasks_by_linkage[level] for level in linkage_levels))
+    if len(expected) != expected_base_task_count or any(
+        base_tasks_by_linkage[level] != expected for level in linkage_levels
+    ):
+        raise ValueError("replication slice does not contain every base task at each linkage level")
+
+    run_ids = sorted(
+        f"{task_id}:navigation:{arm}:p5:r0" for task_id in selected_tasks for arm in arms
+    )
+    return {
+        "schema_version": 1,
+        "status": "sealed-before-secondary-configuration-outcomes",
+        "selection_rule": "registered decision-edge factors only",
+        "primary_analysis_sha256": primary_analysis_sha256,
+        "selected_cell_count": len(run_ids),
+        "base_task_count": len(expected),
+        "factors": {
+            "candidate_count": 150,
+            "page_size": "5",
+            "mode": "navigation",
+            "linkage_levels": list(linkage_levels),
+            "arms": list(arms),
+            "repeat": 0,
+        },
+        "secondary_configuration": {
+            "model": model,
+            "max_tool_calls": 12,
+            "agent_settings": {"autoMemoryEnabled": False},
+        },
+        "run_ids": run_ids,
+    }
+
+
 def _interval_touches_magnitude(summary: Mapping[str, object], threshold: float) -> bool:
     low = summary.get("low")
     high = summary.get("high")

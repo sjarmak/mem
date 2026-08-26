@@ -8,6 +8,7 @@ import pytest
 from membench.beads_ordering.density_linkage_agent_evidence import (
     analyze_density_linkage_agents,
     build_density_linkage_repeat_manifest,
+    build_density_linkage_replication_manifest,
     validate_density_linkage_agent_grid,
     write_density_linkage_agent_evidence,
 )
@@ -217,6 +218,40 @@ def test_combined_analysis_preserves_paired_density_policy_and_linkage_contrasts
     assert pages_tail["top"][0]["graph_family"] == "family-b"
 
 
+def test_replication_manifest_locks_only_the_decision_edge() -> None:
+    metadata = {
+        f"task-{task}--c{candidate:03d}--links-{linkage}": {
+            "base_task_id": f"task-{task}",
+            "candidate_count": candidate,
+            "linkage_level": linkage,
+        }
+        for task in ("a", "b")
+        for candidate in (40, 150)
+        for linkage in ("sparse", "native", "enriched")
+    }
+
+    manifest = build_density_linkage_replication_manifest(
+        metadata,
+        primary_analysis_sha256="f" * 64,
+        model="claude-secondary-exact-id",
+        expected_base_task_count=2,
+    )
+
+    assert manifest["status"] == "sealed-before-secondary-configuration-outcomes"
+    assert manifest["selected_cell_count"] == 18
+    assert manifest["factors"] == {
+        "candidate_count": 150,
+        "page_size": "5",
+        "mode": "navigation",
+        "linkage_levels": ["sparse", "native", "enriched"],
+        "arms": ["key", "pagerank", "bm25f"],
+        "repeat": 0,
+    }
+    assert all("--c150--" in run_id for run_id in manifest["run_ids"])
+    assert all(":navigation:" in run_id and ":p5:r0" in run_id for run_id in manifest["run_ids"])
+    assert manifest["secondary_configuration"]["model"] == "claude-secondary-exact-id"
+
+
 def test_grid_validation_detects_embedded_failure_and_provenance_drift() -> None:
     rows = _synthetic_rows()
     failed = rows[0].model_copy(update={"failure": "oauth expired"})
@@ -312,6 +347,67 @@ def test_cli_combines_density_linkage_agent_shards(
     provenance = seen["provenance"]
     assert isinstance(provenance, dict)
     assert len(provenance["raw_input_sha256s"]) == 2
+
+
+def test_cli_seals_density_linkage_replication_plan(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from membench import cli
+
+    manifest_path = tmp_path / "density-manifest.json"
+    manifest_path.write_text('{"schema_version": 1, "base_task_count": 2}\n', encoding="utf-8")
+    analysis_path = tmp_path / "primary-analysis.json"
+    analysis_path.write_text(
+        json.dumps(
+            {
+                "decision_gates": {
+                    "candidate_density_behaviorally_material": True,
+                    "pagerank_benefit_link_dependent": False,
+                    "structural_default_supported": False,
+                    "query_specific_beads_ownership_supported": False,
+                }
+            }
+        )
+        + "\n"
+    )
+    monkeypatch.setattr(
+        cli,
+        "load_density_linkage_manifest",
+        lambda *_: {
+            f"task-{task}--c150--links-{linkage}": {
+                "base_task_id": f"task-{task}",
+                "candidate_count": 150,
+                "linkage_level": linkage,
+            }
+            for task in ("a", "b")
+            for linkage in ("sparse", "native", "enriched")
+        },
+    )
+    out = tmp_path / "replication-plan.json"
+
+    assert (
+        cli.main(
+            [
+                "beads-ordering-density-linkage-replication-plan",
+                "--fixture-dir",
+                str(tmp_path),
+                "--manifest",
+                str(manifest_path),
+                "--primary-analysis",
+                str(analysis_path),
+                "--model",
+                "claude-secondary-exact-id",
+                "--out",
+                str(out),
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["selected_cell_count"] == 18
+    assert payload["primary_analysis_sha256"]
+    assert payload["primary_gate_verdicts"]["candidate_density_behaviorally_material"] is True
+    assert payload["secondary_configuration"]["model"] == "claude-secondary-exact-id"
 
 
 def test_repeat_manifest_mechanically_expands_registered_triggers_without_duplicates() -> None:

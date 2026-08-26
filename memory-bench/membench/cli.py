@@ -29,6 +29,7 @@ from membench.beads_ordering.density_linkage_agent import (
     run_density_linkage_agent_shard,
 )
 from membench.beads_ordering.density_linkage_agent_evidence import (
+    build_density_linkage_replication_manifest,
     write_density_linkage_agent_evidence,
 )
 from membench.beads_ordering.density_linkage_evidence import (
@@ -588,6 +589,50 @@ def _cmd_beads_ordering_density_linkage_agent_analyze(args: argparse.Namespace) 
         f"wrote density/linkage agent analysis: {args.out} "
         f"({evidence['usable_observation_count']}/{evidence['observation_count']} usable)"
     )
+    return 0
+
+
+def _cmd_beads_ordering_density_linkage_replication_plan(args: argparse.Namespace) -> int:
+    fixture_dir = Path(args.fixture_dir).resolve()
+    manifest_path = Path(args.manifest).resolve()
+    analysis_path = Path(args.primary_analysis).resolve()
+    variants = load_density_linkage_manifest(fixture_dir, manifest_path)
+    task_metadata: dict[str, dict[str, object]] = {}
+    for variant_id, variant in variants.items():
+        if isinstance(variant, dict):
+            task_metadata[str(variant_id)] = dict(variant)
+            continue
+        recipe = variant.recipe
+        task_metadata[variant.corpus.tasks[0].task_id] = {
+            "base_task_id": recipe.base_task_id,
+            "candidate_count": recipe.candidate_count,
+            "linkage_level": recipe.linkage_level.value,
+        }
+    manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
+    gates = analysis.get("decision_gates")
+    if not isinstance(gates, dict):
+        raise SystemExit("primary analysis must contain decision_gates")
+    plan = build_density_linkage_replication_manifest(
+        task_metadata,
+        primary_analysis_sha256=file_sha256(analysis_path),
+        model=args.model,
+        expected_base_task_count=int(manifest_payload["base_task_count"]),
+    )
+    gate_names = (
+        "candidate_density_behaviorally_material",
+        "pagerank_benefit_link_dependent",
+        "structural_default_supported",
+        "query_specific_beads_ownership_supported",
+    )
+    if any(not isinstance(gates.get(name), bool) for name in gate_names):
+        raise SystemExit("primary analysis is missing a registered boolean decision gate")
+    plan["primary_gate_verdicts"] = {name: gates[name] for name in gate_names}
+    plan["density_linkage_manifest_sha256"] = file_sha256(manifest_path)
+    out = Path(args.out).resolve()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
+    print(f"wrote sealed replication plan: {out} ({plan['selected_cell_count']} cells)")
     return 0
 
 
@@ -1311,6 +1356,21 @@ def main(argv: list[str] | None = None) -> int:
     p_density_linkage_agent_analysis.add_argument("--out", required=True)
     p_density_linkage_agent_analysis.set_defaults(
         func=_cmd_beads_ordering_density_linkage_agent_analyze
+    )
+
+    p_density_linkage_replication = sub.add_parser(
+        "beads-ordering-density-linkage-replication-plan",
+        help="seal the decision-edge cells for a secondary agent configuration",
+    )
+    p_density_linkage_replication.add_argument(
+        "--fixture-dir", default=str(_DEFAULT_ORDERING_FOLLOWUP_DIR)
+    )
+    p_density_linkage_replication.add_argument("--manifest", required=True)
+    p_density_linkage_replication.add_argument("--primary-analysis", required=True)
+    p_density_linkage_replication.add_argument("--model", required=True)
+    p_density_linkage_replication.add_argument("--out", required=True)
+    p_density_linkage_replication.set_defaults(
+        func=_cmd_beads_ordering_density_linkage_replication_plan
     )
 
     p_density_linkage_plot = sub.add_parser(
