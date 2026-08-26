@@ -319,6 +319,7 @@ def _replication_shard_manifest(model: str, *, max_tool_calls: int = 12) -> dict
         "preregistration_sha256": "7" * 64,
         "agent_sharding_amendment_sha256": "8" * 64,
         "agent_auth": "copied-oauth-credentials",
+        "selection_manifest_sha256": ("4" if model == "bridge-model" else "5") * 64,
     }
 
 

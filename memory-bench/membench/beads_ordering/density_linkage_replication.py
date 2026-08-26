@@ -74,6 +74,7 @@ _MANIFEST_WAVE_SHARED_FIELDS = tuple(
         "variant_ids",
     }
 )
+_MANIFEST_REQUIRED_FIELDS = (*_MANIFEST_HELD_FIELDS, "agent_model", "selection_manifest_sha256")
 
 
 def _index_rows(rows: Sequence[OrderingRunResult], *, wave: str) -> dict[str, OrderingRunResult]:
@@ -101,9 +102,7 @@ def _manifest_index(
         raise ValueError(f"{wave} contains no shard manifests")
     index: dict[int, Mapping[str, object]] = {}
     for manifest in manifests:
-        missing = [
-            field for field in (*_MANIFEST_HELD_FIELDS, "agent_model") if field not in manifest
-        ]
+        missing = [field for field in _MANIFEST_REQUIRED_FIELDS if field not in manifest]
         if missing:
             raise ValueError(f"{wave} manifest is missing required fields: {', '.join(missing)}")
         shard = manifest["shard_index"]
@@ -145,9 +144,12 @@ def validate_replication_wave_manifests(
 
     for wave, index in (("bridge", bridge), ("secondary", secondary)):
         first = index[min(index)]
-        for field in _MANIFEST_WAVE_SHARED_FIELDS:
+        for field in (*_MANIFEST_WAVE_SHARED_FIELDS, "selection_manifest_sha256"):
             if any(manifest[field] != first[field] for manifest in index.values()):
                 raise ValueError(f"{wave} manifests disagree on shared field {field}")
+        selection_sha = first["selection_manifest_sha256"]
+        if not isinstance(selection_sha, str) or len(selection_sha) != 64:
+            raise ValueError(f"{wave} selection manifest SHA-256 is invalid")
 
     for shard in sorted(bridge):
         mismatches = [
