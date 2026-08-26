@@ -1,0 +1,22 @@
+{
+  "artifact_names": [
+    "analysis.json",
+    "report.md"
+  ],
+  "artifact_sha256s": {
+    "analysis.json": "d0f57202833f781b2bec5a17e8c912c83b773427e482e2b009baf2b00e93ff78",
+    "report.md": "3476451a05a11dbeb9be65aa605cc4a990656d1892638607163626f265ab7118"
+  },
+  "privacy_projection": "aggregate counts and distributions only",
+  "provenance": {
+    "beads_bin_sha256": "47aadd114f3afe16918ff5eff27f2e7d85bafc4003101ee7a4939c04252853de",
+    "beads_git_diff_sha256": "afb24525b9be6d70bbca433d906aeec78188f24d8bea19928ba700e619aa2627",
+    "beads_git_dirty": true,
+    "beads_git_sha": "c89168fc0942f18dd08fd35296c6fdebdd3e1dd7",
+    "collector_source_sha256": "5adcbb6150362a669253eb4174440e08cb9b1b9cff09756e800e76544064f19e",
+    "mem_git_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "mem_git_dirty": true,
+    "mem_git_sha": "e08b557e02c004d58e03883c4a7b397f599564a4"
+  },
+  "schema_version": 1
+}

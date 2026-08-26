@@ -1,0 +1,236 @@
+{
+  "evidence": {
+    "locked_repeat_cells": 2610,
+    "primary_observations": 5256,
+    "primary_usable_observations": 5254,
+    "real_project_workspaces_scanned": 200,
+    "replication_cells": 378
+  },
+  "files": [
+    {
+      "bytes": 3592,
+      "path": "DECISION.md",
+      "sha256": "d11de9e8f99073e3b51f0bd961ec105d57ecf4eb2b56ec7ce3837ec69d8fe1da"
+    },
+    {
+      "bytes": 3207,
+      "path": "ISSUE_COMMENT.md",
+      "sha256": "dcda5bf2ced733918f4dfd9830b66900b45d9c6a2e13e357e943e2977bdc5fe5"
+    },
+    {
+      "bytes": 5724,
+      "path": "README.md",
+      "sha256": "6a6e32f505b45e8a8659b902bab6daf0eef39d6f6fba539d64dc4686e009c426"
+    },
+    {
+      "bytes": 4338,
+      "path": "REPRODUCE.md",
+      "sha256": "aeb5ba7a52822826afef1a005e450fefa6033dcbc708ebbd3fa59f6678299f91"
+    },
+    {
+      "bytes": 248883,
+      "path": "data/page-size-analysis.json",
+      "sha256": "be638a2ba114e601345397283da90a00dbfc35e988725683aad0ced7fdaeda27"
+    },
+    {
+      "bytes": 112002,
+      "path": "data/page-size-report.md",
+      "sha256": "f8c35f0fdd5b226cafb76ebb3710d9909d9a973a78764c03ab19eb4a26154c02"
+    },
+    {
+      "bytes": 6122355,
+      "path": "data/primary-analysis.json",
+      "sha256": "26a6442b38178e9f31184d3694965dec555f90e560921bdc367776a64445da60"
+    },
+    {
+      "bytes": 3210562,
+      "path": "data/primary-cell-estimates.jsonl",
+      "sha256": "b7304c8530a8407cef76f49b7e55c6a18d9a65098d5a034e213717ead1e0510b"
+    },
+    {
+      "bytes": 12078,
+      "path": "data/primary-report.md",
+      "sha256": "e50e6619bddcd035986aae62d8e276b9f3450af760ed413a714f7bf11f34379a"
+    },
+    {
+      "bytes": 10129789,
+      "path": "data/primary-sanitized-observations.jsonl",
+      "sha256": "4af105e10f130d9c67d55a1a0efa9c8c7e558f5fcdd734a6ee92bde58fd602b0"
+    },
+    {
+      "bytes": 3580,
+      "path": "data/real-project-shapes-analysis.json",
+      "sha256": "d0f57202833f781b2bec5a17e8c912c83b773427e482e2b009baf2b00e93ff78"
+    },
+    {
+      "bytes": 973,
+      "path": "data/real-project-shapes-report.md",
+      "sha256": "3476451a05a11dbeb9be65aa605cc4a990656d1892638607163626f265ab7118"
+    },
+    {
+      "bytes": 120161,
+      "path": "data/replication-analysis.json",
+      "sha256": "b1ab52ca00096c5a4960291e32f4b9d6539b84ac80ca685edb59db05648c8358"
+    },
+    {
+      "bytes": 363374,
+      "path": "data/replication-bridge-sanitized-observations.jsonl",
+      "sha256": "7e6302e70de1403ec5fb2a669f324169758294abfe79a310cad54ac1d33873f7"
+    },
+    {
+      "bytes": 2457,
+      "path": "data/replication-report.md",
+      "sha256": "1dff41e7304c4b1612c9a25cecb3aafa8daf51bc935c9547583681450d5b9f5f"
+    },
+    {
+      "bytes": 363401,
+      "path": "data/replication-secondary-sanitized-observations.jsonl",
+      "sha256": "19e3c14555be3bf52c37edba0d8787ccc1d064fb00e06513709fe945c574ef1d"
+    },
+    {
+      "bytes": 2694,
+      "path": "fixtures/agent-sharding-amendment.json",
+      "sha256": "c86403f0c55bffe22bb595ae2d6b72bb70353cad2372db439625f2192de838de"
+    },
+    {
+      "bytes": 475150,
+      "path": "fixtures/density-linkage-manifest.json",
+      "sha256": "240aaf29465c85d1c185f27c50df68cfb4b7a221549a78a93423ff27dd1bdcd7"
+    },
+    {
+      "bytes": 9071,
+      "path": "fixtures/density-linkage-preregistration.json",
+      "sha256": "a78d9c8b5b68fb5396ce9d30ef935219c388564193384b0f6b751307c4bc28ac"
+    },
+    {
+      "bytes": 2507,
+      "path": "fixtures/replication-amendment.json",
+      "sha256": "4e2e19f19cbb0cd8d7a9fe0b7ca5e31c37738a8d6fad80aab75835de3df26c9f"
+    },
+    {
+      "bytes": 11009,
+      "path": "patches/beads-experimental.patch.gz",
+      "sha256": "7ebe6e965356345821f85166d832ea312039092aa6ee12be2a5c995aefeecc02"
+    },
+    {
+      "bytes": 462988,
+      "path": "patches/mem-experiment-harness.patch.gz",
+      "sha256": "f5a9df9d66595d40feb07742e96b50e674bd50ff1fa5505c073b04b187f2e31d"
+    },
+    {
+      "bytes": 81758,
+      "path": "plots/compact-token-cost.png",
+      "sha256": "70c79aef57835c98540aee5896efc67f3f848b468ca38116eed3ecaae92d479b"
+    },
+    {
+      "bytes": 71393,
+      "path": "plots/compact-token-cost.svg",
+      "sha256": "db9592fe01b8fcc03ac24d929a0691193abf3848303aab2fae212df4100aca05"
+    },
+    {
+      "bytes": 86036,
+      "path": "plots/page-one-useful.png",
+      "sha256": "c00851b5a699ecfbe658a432fe1914022a44accb742eda47659052fe0128425a"
+    },
+    {
+      "bytes": 69806,
+      "path": "plots/page-one-useful.svg",
+      "sha256": "1ea9086bdc69ba3993d10b03b3a57e0b7cf7faaf99ebe08f185a418238f48677"
+    },
+    {
+      "bytes": 37883,
+      "path": "plots/page-size-navigation.png",
+      "sha256": "31fc34b09a59aabf47b4b36a8754c1c1f9082152b72b75019d97af7e70fe6603"
+    },
+    {
+      "bytes": 3080,
+      "path": "plots/page-size-navigation.svg",
+      "sha256": "ff008f738532b1f3d2ac541a06393bb0b7a5b2235cb30638c17c49c540cedf5e"
+    },
+    {
+      "bytes": 37567,
+      "path": "plots/page-size-search-only.png",
+      "sha256": "344d6dab3db3976ae1672e55ab27719bb35881d0df255c3f7e9a9204e65e596e"
+    },
+    {
+      "bytes": 3081,
+      "path": "plots/page-size-search-only.svg",
+      "sha256": "f8f261df946f635dce4d3952649d27ccbc2e6e3ae0a79b9ad960b34875e24484"
+    },
+    {
+      "bytes": 110786,
+      "path": "plots/task-success.png",
+      "sha256": "0ce2195789ea14f0f052763d1715818b442d972ff312084ba7fd5e11218e295f"
+    },
+    {
+      "bytes": 68636,
+      "path": "plots/task-success.svg",
+      "sha256": "a74949ff8cb3d15c76e0509c4b54a5292a4ee5d24920898ce4ddc19d5e8a4e2d"
+    },
+    {
+      "bytes": 1169,
+      "path": "provenance/continuation-conformance.json",
+      "sha256": "da1f0a302d71f8b4519c51594482fd1b61a176cde9db2329d781079aa3521370"
+    },
+    {
+      "bytes": 2491,
+      "path": "provenance/primary-analysis-manifest.json",
+      "sha256": "6cf6dfb9f8f06ef05e55d9c344466ecc70d925a432c7f4e3d38c349e28767c8c"
+    },
+    {
+      "bytes": 718,
+      "path": "provenance/quality-gates.json",
+      "sha256": "ba67db54b45c900dc3024227e7a648cfe076b842e78a6b795264fc6428ca94da"
+    },
+    {
+      "bytes": 948,
+      "path": "provenance/real-project-shapes-manifest.json",
+      "sha256": "a31ff0dc0ed9458fd1833cb33c8204619d1b6f107c72bdb865ab588bf3aba82a"
+    },
+    {
+      "bytes": 17974,
+      "path": "provenance/replication-bridge-selection.json",
+      "sha256": "4cce9944b2c2c71a1d04c8de088ac7a3c3ee8c8ba027f36dd5516f2a1c79c256"
+    },
+    {
+      "bytes": 3300,
+      "path": "provenance/replication-comparison-manifest.json",
+      "sha256": "e3f71a4d312bce60d5d310310bafd31a6f56aaa57406c6edf7949da058407eb0"
+    },
+    {
+      "bytes": 17975,
+      "path": "provenance/replication-secondary-selection.json",
+      "sha256": "6a4958a334030079d5a816ad4366c2bd1eeea0918154054db12bf26204e15ee7"
+    },
+    {
+      "bytes": 2112,
+      "path": "provenance/source-provenance.json",
+      "sha256": "38a25de2fd007f969e531d23db9bce75904fee9a9845c7d8026d53751fe217c5"
+    },
+    {
+      "bytes": 780718,
+      "path": "provenance/targeted-repeat-manifest.json",
+      "sha256": "efc5db91bb794f1a83dba065af3d7d03e9603c63822cc72ff46c720ebc36bc64"
+    }
+  ],
+  "generated_on": "2026-08-26",
+  "issue_url": "https://github.com/gastownhall/beads/issues/5877",
+  "privacy_profile": "public-sanitized-allowlist",
+  "purpose": "Evidence for the R6 bounded Memory discovery, continuation, ordering-policy, and consumer-boundary decision.",
+  "recommendation": "Standardize compact bounded discovery and fail-closed continuation; retain deterministic mechanical order as the core contract; keep query-specific and structural ranking optional or consumer-owned pending stronger replicated downstream benefit.",
+  "sanitization": {
+    "excluded": [
+      "run queries",
+      "model answers",
+      "agent streams",
+      "retrieval logs",
+      "failure diagnostics",
+      "credentials",
+      "local filesystem paths",
+      "conversation and user-message content"
+    ],
+    "patch_note": "Exact compressed source diffs include authored fixture queries, field names, and synthetic test literals; they contain no run traces or personal content.",
+    "strict_non_patch_scan": "pass"
+  },
+  "schema_version": 3
+}

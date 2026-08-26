@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "mem": {
+    "ruff_check": "pass",
+    "black_check": "pass: 454 files unchanged",
+    "mypy_strict": "pass: 222 source files",
+    "pytest": "pass: 2765 passed, 1 skipped",
+    "typescript_npm_check": "pass: typecheck, eslint, prettier, 908 tests"
+  },
+  "beads": {
+    "focused_memory_tests": "pass",
+    "embedded_continuation_conformance": "pass",
+    "isolated_make_test": "pass: 39.1% total coverage",
+    "ci_pr_lint": "not green because of three pre-existing findings outside the experimental Memory diff",
+    "ci_pr_lint_findings": [
+      "backend/conformance/issue_operations_contract.go:1257 G602",
+      "cmd/bd/main.go:1922 G304",
+      "cmd/bd/main.go:1931 G304"
+    ]
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "status": "locked-before-confirmatory-density-linkage-agent-grid",
+  "registered_at": "2026-08-25T13:21:55Z",
+  "parent_preregistration": "density-linkage-preregistration.json",
+  "parent_preregistration_sha256": "a78d9c8b5b68fb5396ce9d30ef935219c388564193384b0f6b751307c4bc28ac",
+  "deterministic_oracle_examined": true,
+  "confirmatory_agent_outcomes_examined": false,
+  "reason": "The initial lexicographic modulo shard plan mapped linkage suffixes onto account shards: enriched to shard 0, native to shard 1, and sparse to shard 2. That makes account an exact linkage confound and is invalid for the linkage interaction.",
+  "excluded_pilot": {
+    "status": "authentication and mechanism smoke only; excluded from every confirmatory estimate and targeted-repeat rule",
+    "completed_cells": 34,
+    "infrastructure_failures": 0,
+    "incomplete_interrupted_cells": 3,
+    "outcome_inspection_before_exclusion": "Only completion, infrastructure-failure status, and an early aggregate success count were inspected. No density, linkage, policy, task-family, or interaction comparison was computed.",
+    "paths": [
+      "results/beads_ordering/density-linkage/agent-shards/shard-0",
+      "results/beads_ordering/density-linkage/agent-shards/shard-1",
+      "results/beads_ordering/density-linkage/agent-shards/shard-2"
+    ]
+  },
+  "replacement_assignment": {
+    "name": "factor-balanced Latin rotation",
+    "formula": "shard = (task_index_within_graph_family + candidate_count_index + linkage_level_index) mod 3",
+    "task_index_order": "canonical base task ID ascending within graph family",
+    "candidate_count_order": [
+      10,
+      40,
+      150
+    ],
+    "linkage_level_order": [
+      "enriched",
+      "native",
+      "sparse"
+    ],
+    "balance": "Each of three shards receives exactly 63 variants: 21 at each candidate count, 21 at each linkage level, and 9 from each graph family. Each base task rotates across accounts over its nine density-by-linkage variants.",
+    "agent_accounts": "Three authenticated OAuth profiles; credentials are not evidence and are never copied into results."
+  },
+  "unchanged": [
+    "all 189 frozen variants and corpus hashes",
+    "candidate and linkage definitions",
+    "retrieval policies",
+    "page sizes and navigation modes",
+    "model, prompt, tool budget, and BM25F weights",
+    "decision thresholds and analysis plan",
+    "targeted-repeat rule"
+  ],
+  "confirmatory_output_root": "results/beads_ordering/density-linkage/agent-balanced-shards",
+  "rule": "No result under the excluded pilot paths may enter confirmatory raw results, summaries, plots, confidence intervals, or repeat selection."
+}

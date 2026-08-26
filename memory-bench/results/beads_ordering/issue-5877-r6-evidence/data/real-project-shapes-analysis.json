@@ -1,0 +1,122 @@
+{
+  "corpus_size": {
+    "max": 147,
+    "mean": 29.066666666666666,
+    "min": 2,
+    "n": 15,
+    "p50": 5.0,
+    "p90": 79.39999999999998
+  },
+  "experimental_regime_comparison": {
+    "10": {
+      "fraction_observed_at_or_below": 0.9336917562724014
+    },
+    "150": {
+      "fraction_observed_at_or_below": 1.0
+    },
+    "40": {
+      "fraction_observed_at_or_below": 0.992831541218638
+    }
+  },
+  "limitations": [
+    "local workspace discovery is a convenience sample, not a random population",
+    "native probes are derived mechanically from compact legacy Memory records",
+    "derived probes approximate lexical conditions and are not observed user searches",
+    "available projects expose keyed Memory values, not canonical Memory Bead references",
+    "reference density is unavailable rather than assumed to be zero"
+  ],
+  "link_density": {
+    "available": false,
+    "project_count": 0,
+    "reason": "canonical-memory-references-not-observable"
+  },
+  "match_set_size": {
+    "all_native_probes": {
+      "fraction_gt_page_size": {
+        "10": 0.06630824372759857,
+        "20": 0.026881720430107527,
+        "5": 0.1111111111111111,
+        "50": 0.0035842293906810036
+      },
+      "max": 59,
+      "mean": 2.6594982078853047,
+      "min": 0,
+      "n": 558,
+      "nonzero_fraction": 0.6362007168458781,
+      "p50": 1.0,
+      "p90": 6.0
+    },
+    "content_bigram_probes": {
+      "fraction_gt_page_size": {
+        "10": 0.0,
+        "20": 0.0,
+        "5": 0.0,
+        "50": 0.0
+      },
+      "max": 3,
+      "mean": 0.35,
+      "min": 0,
+      "n": 300,
+      "nonzero_fraction": 0.3233333333333333,
+      "p50": 0.0,
+      "p90": 1.0
+    },
+    "key_token_probes": {
+      "fraction_gt_page_size": {
+        "10": 0.1434108527131783,
+        "20": 0.05813953488372093,
+        "5": 0.24031007751937986,
+        "50": 0.007751937984496124
+      },
+      "max": 59,
+      "mean": 5.344961240310077,
+      "min": 1,
+      "n": 258,
+      "nonzero_fraction": 1.0,
+      "p50": 2.0,
+      "p90": 14.0
+    }
+  },
+  "privacy_projection": "aggregate counts and distributions only",
+  "probe_configuration": {
+    "max_per_kind_per_project": 20,
+    "seed": 5879
+  },
+  "probe_protocol": "native-compact-v1",
+  "provenance": {
+    "beads_bin_sha256": "47aadd114f3afe16918ff5eff27f2e7d85bafc4003101ee7a4939c04252853de",
+    "beads_git_diff_sha256": "afb24525b9be6d70bbca433d906aeec78188f24d8bea19928ba700e619aa2627",
+    "beads_git_dirty": true,
+    "beads_git_sha": "c89168fc0942f18dd08fd35296c6fdebdd3e1dd7",
+    "collector_source_sha256": "5adcbb6150362a669253eb4174440e08cb9b1b9cff09756e800e76544064f19e",
+    "mem_git_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "mem_git_dirty": true,
+    "mem_git_sha": "e08b557e02c004d58e03883c4a7b397f599564a4"
+  },
+  "sampling": {
+    "duplicate_memory_snapshots": 148,
+    "failures_by_code": {
+      "bd-error": 25
+    },
+    "unique_memory_snapshots": 15,
+    "unique_workspaces": 225,
+    "workspace_candidates": 225,
+    "workspaces_scanned": 200,
+    "workspaces_with_memories": 163
+  },
+  "sampling_frame": {
+    "deduplication": "identical compact candidate snapshots counted once",
+    "discovery": "recursive .beads workspaces beneath operator-supplied roots",
+    "exclusions": [
+      ".git",
+      ".mem",
+      ".venv",
+      "node_modules",
+      "__pycache__",
+      "memory-bench/results"
+    ],
+    "failure_handling": "fixed aggregate categories only; diagnostics discarded"
+  },
+  "schema_version": 1,
+  "study": "beads-memory-real-project-shapes"
+}

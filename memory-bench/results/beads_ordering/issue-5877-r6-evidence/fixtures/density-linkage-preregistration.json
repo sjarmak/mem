@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "status": "locked-before-density-linkage-outcomes",
+  "registered_at": "2026-08-25T12:21:48Z",
+  "new_variant_outcomes_examined": false,
+  "tracking_bead": "mem-wo2d3",
+  "question": "At a fixed 500-Memory corpus and fixed task/query, does matched-candidate density impair useful Memory use, and how strongly does ordinary PageRank's benefit over key order depend on reference-link richness once navigation is available?",
+  "scope": {
+    "ordering_question": "Compare key, ordinary PageRank, and same-candidate BM25F without changing lexical membership within a variant.",
+    "density_question": "Compare nested candidate sets of 10, 40, and 150 while holding task, query, primary Memory, acceptable entry points, corpus size, model, prompt, and ordering policy fixed.",
+    "linkage_question": "Compare sparse, native, and enriched reference graphs while holding Memory identity/content, candidate membership, task, query, and model fixed.",
+    "not_candidate_generation": "The primary Memory remains a literal candidate by construction. Literal-matcher recall is tracked separately in mem-lbuvd."
+  },
+  "prior_evidence": {
+    "mem_git_sha": "3f427da151c7b25fc41851d02d0f465164520d2a",
+    "base_fixture_manifest_sha256": "fd6c88e687dcbbe8feaebb67ed512bf9063f4d9db39edb272f0b7ee6f0a20682",
+    "prior_agent_analysis_sha256": "5ac24dec5bec853c43711f457a05c8ce4403dcc75995c000515827a96a365ed8",
+    "prior_decision_gates_sha256": "9fea37363befc65c1df4f2fed56c43c865105ad7a7073e6e4b2af10339d4c942",
+    "posthoc_scope_density_sha256": "e7ff4343618d75dd27109c3138f9f895ce514c377a0cb8a034a180f96b42c342",
+    "experimental_beads_git_sha": "c89168fc0942f18dd08fd35296c6fdebdd3e1dd7",
+    "experimental_beads_diff_sha256": "afb24525b9be6d70bbca433d906aeec78188f24d8bea19928ba700e619aa2627",
+    "structural_order_source_git_sha": "b1c55df8c3bd799262bdf2eede2b3e3f705d8848"
+  },
+  "task_design": {
+    "base_tasks": "All 21 frozen held-out tasks from the seven-family structural follow-up.",
+    "independent_unit": "base task within graph family; density and linkage cells are repeated measures, not additional independent tasks",
+    "corpus_size": 500,
+    "candidate_counts": [
+      10,
+      40,
+      150
+    ],
+    "candidate_sets_nested": true,
+    "candidate_recipe": "Keep the frozen primary and acceptable entry points. Select distractors deterministically by frozen original-label order followed by SHA-256(task_id, Memory ID). Remove the exact query phrase from nonselected Memories and add the same bounded historical-guidance surface to selected new distractors.",
+    "candidate_parity_required_across_policies": true,
+    "primary_and_entry_labels_unchanged": true,
+    "fixed_compact_projection_across_policies": true,
+    "reuse_warning": "The task semantics were used in the prior ordering study. Only the newly frozen density/linkage contrasts are confirmatory; this is not an independent fresh-task replication."
+  },
+  "linkage_levels": {
+    "sparse": "Preserve each frozen shortest acceptable-entry-to-primary path, when one exists, plus a deterministic 25% SHA-256 sample of all other native edges.",
+    "native": "Use the frozen authored reference graph unchanged.",
+    "enriched": "Use every native edge and add the reciprocal backlink for every native edge, with duplicates and self-links removed.",
+    "invariants": [
+      "The sparse graph is a subset of the native graph.",
+      "The native graph is a subset of the enriched graph.",
+      "Existing entry-to-primary reachability is preserved in sparse.",
+      "An originally unlinked primary is not given an answer-specific edge.",
+      "Memory content and lexical candidate membership do not change across linkage levels."
+    ],
+    "reported_graph_metrics": [
+      "edge_count",
+      "nonisolated_node_fraction",
+      "mean_outdegree",
+      "p90_outdegree",
+      "weak_component_count",
+      "largest_weak_component_fraction",
+      "primary_indegree",
+      "entry_to_primary_reachable",
+      "shortest_entry_to_primary_hops",
+      "candidate_to_useful_reachable_fraction"
+    ]
+  },
+  "agent_matrix": {
+    "primary_policies": [
+      "key",
+      "pagerank",
+      "bm25f"
+    ],
+    "position_control": "control-semantic places the primary first and acceptable entries next; run only with unbounded visibility to isolate candidate-ingestion load from burial",
+    "page_sizes": [
+      "5",
+      "all"
+    ],
+    "modes": [
+      "search-only",
+      "navigation"
+    ],
+    "initial_repeats": 1,
+    "targeted_repeat_rule": "Add two repeats only for infrastructure failure, policy task-success disagreement, density endpoint disagreement, or an interaction confidence interval touching a decision threshold.",
+    "agent_blind_to_density_linkage_and_policy": true,
+    "model_prompt_budget_fixed": true
+  },
+  "rank_computation": {
+    "pagerank_damping": 0.85,
+    "pagerank_iterations": 100,
+    "arithmetic": "aggregated-dangling-mass",
+    "boundary": "This is the algebraically equivalent linear-time dangling-mass implementation already differentially checked by the follow-up harness; ranks are derived fixture data and are never persisted as Memory state."
+  },
+  "primary_endpoints": {
+    "density": [
+      "task_success under unbounded primary-first position control",
+      "correct-use failure after relevant-first recall",
+      "retrieval and total tokens",
+      "end-to-end latency"
+    ],
+    "linkage": [
+      "PageRank minus key page-one useful probability",
+      "PageRank minus key pages and compact tokens to first useful",
+      "PageRank minus key task success under navigation",
+      "graph hops, recalls, branching, and navigation reachability"
+    ],
+    "ranking_increment": [
+      "BM25F minus PageRank cost and success at each density/linkage level"
+    ]
+  },
+  "decision_thresholds": {
+    "candidate_density_material": {
+      "minimum_task_success_drop_10_to_150": 0.1,
+      "or_minimum_correct_use_failure_increase": 0.1,
+      "rule": "Call candidate density behaviorally material only if the paired 90% task-clustered interval clears either threshold under the unbounded primary-first control. Token growth alone is an ingestion-cost result, not a reasoning-failure result."
+    },
+    "structural_benefit_link_dependent": {
+      "minimum_page_one_interaction": 0.15,
+      "minimum_median_page_interaction": 1.0,
+      "minimum_compact_token_interaction_fraction": 0.2,
+      "rule": "Call PageRank materially link-dependent only if its paired advantage over key changes from sparse to enriched by one registered threshold under navigation without a greater-than-five-point task-success regression."
+    },
+    "structural_default": {
+      "task_success_noninferiority_margin": 0.05,
+      "minimum_page_one_gain": 0.15,
+      "minimum_compact_token_reduction": 0.1,
+      "rule": "Do not make structural order a default if it clears the benefit threshold only in enriched graphs or has a severe graph-family tail. In that case retain it as an optional derived strategy gated by observed graph coverage."
+    },
+    "query_specific_ownership": {
+      "median_pages_saved": 1.0,
+      "median_compact_token_saving": 0.2,
+      "requires_navigation_persistence": true,
+      "requires_no_task_success_regression": true,
+      "rule": "The prior consumer-side BM25F boundary changes only if BM25F clears a registered cost threshold over PageRank in realistic native/enriched navigation cells, especially at 150 candidates."
+    }
+  },
+  "analysis": {
+    "confidence_level": 0.9,
+    "bootstrap_seed": 5879,
+    "bootstrap_resamples": 5000,
+    "cluster_by": [
+      "graph_family",
+      "base_task_id"
+    ],
+    "average_repeats_before_policy_aggregation": true,
+    "paired_repeated_measures": true,
+    "report_p50_p90": true,
+    "stratify_by": [
+      "candidate_count",
+      "linkage_level",
+      "graph_family",
+      "baseline_burial_depth"
+    ],
+    "interaction_contrasts": [
+      "candidate_count 150 minus 10 within task/policy/linkage/page/mode",
+      "PageRank minus key within task/density/linkage/page/mode",
+      "BM25F minus PageRank within task/density/linkage/page/mode",
+      "enriched minus sparse change in each policy contrast"
+    ]
+  },
+  "sequence": [
+    "Freeze the variant manifest and hashes.",
+    "Validate deterministic candidate nesting, candidate/projection parity, link-set nesting, reachability preservation, and rank permutations.",
+    "Run the complete deterministic oracle grid.",
+    "Run development smoke cells.",
+    "Run initial held-out agent cells.",
+    "Select targeted repeats mechanically.",
+    "Analyze and amend the issue package without mixing these results into candidate-generation claims."
+  ],
+  "out_of_scope": [
+    "literal versus FTS or semantic candidate generation",
+    "embeddings",
+    "production Beads schema or search-index changes",
+    "new rank-maintenance plumbing",
+    "claiming that raw link count alone measures link quality",
+    "treating transformed variants as independent new task families"
+  ]
+}

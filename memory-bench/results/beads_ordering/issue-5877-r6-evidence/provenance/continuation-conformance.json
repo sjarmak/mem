@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "beads_branch": "exp/memory-pagination-ordering-5877",
+  "beads_base_sha": "8d86c06bf231cbc0907436a111fb7b75d39ee12d",
+  "beads_experimental_sha": "3302247cb4cd3a9a05227819029269c331245d05",
+  "beads_binary_sha256": "83a40eab197ae5a24859832ce18424f8d2f8357b3c4e282f5b081f0d9edf5893",
+  "contract": {
+    "unchanged_candidate_snapshot": "continues completely without duplicates or skips",
+    "matching_state_change": "fails closed with an explicit restart requirement",
+    "nonmatching_write": "continuation remains valid"
+  },
+  "matching_mutations_tested": [
+    "body content",
+    "lifecycle projection",
+    "reference projection",
+    "materialized order",
+    "candidate addition",
+    "candidate removal"
+  ],
+  "verification": {
+    "focused_pure_tests": "pass",
+    "embedded_cli_provider_test": "pass",
+    "isolated_full_make_test": "pass",
+    "full_test_coverage_percent": 39.1,
+    "ci_pr_lint": "pre-existing findings outside changed Memory files",
+    "ci_pr_lint_findings": [
+      "backend/conformance/issue_operations_contract.go:1257 G602",
+      "cmd/bd/main.go:1922 G304",
+      "cmd/bd/main.go:1931 G304"
+    ]
+  }
+}

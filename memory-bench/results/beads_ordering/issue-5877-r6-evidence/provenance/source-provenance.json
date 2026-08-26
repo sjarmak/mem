@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "mem": {
+    "experiment_base_sha": "0749ca0e3156964ac533482c29e47163c6c9578a",
+    "initial_experiment_commit": "1bc973f1966f3f95bdf146e41d3618aa2a169701",
+    "final_primary_evidence_commit": "19e295a874303b45ca39a4e1e17bf0de872df1a8",
+    "replication_analysis_commit": "0c23a7eb377ea7ca805880b451d2b2b54b4e7857",
+    "replication_evidence_commit": "661b22ce5aea2fbddd7cc1529cd35200b5356ee4",
+    "harness_patch_range": "0749ca0e3156964ac533482c29e47163c6c9578a..661b22ce5aea2fbddd7cc1529cd35200b5356ee4"
+  },
+  "beads": {
+    "experiment_base_sha": "8d86c06bf231cbc0907436a111fb7b75d39ee12d",
+    "bounded_discovery_sha": "ea4af85402176de090ce58499825124930b3b154",
+    "structural_ordering_sha": "c89168fc0942f18dd08fd35296c6fdebdd3e1dd7",
+    "continuation_conformance_sha": "3302247cb4cd3a9a05227819029269c331245d05",
+    "final_binary_sha256": "83a40eab197ae5a24859832ce18424f8d2f8357b3c4e282f5b081f0d9edf5893",
+    "run_binary_sha256": "47aadd114f3afe16918ff5eff27f2e7d85bafc4003101ee7a4939c04252853de",
+    "run_tracked_diff_sha256": "afb24525b9be6d70bbca433d906aeec78188f24d8bea19928ba700e619aa2627"
+  },
+  "analysis": {
+    "primary_observations": 5256,
+    "primary_usable_observations": 5254,
+    "locked_repeat_cells": 2610,
+    "locked_repeat_active_failures": 0,
+    "replication_cells_per_model": 189,
+    "replication_total_cells": 378,
+    "replication_active_failures": 0,
+    "bootstrap_confidence_level": 0.9,
+    "primary_bootstrap_seed": 5879,
+    "replication_bootstrap_seed": 5880,
+    "bootstrap_resamples": 5000
+  },
+  "privacy": {
+    "profile": "public-sanitized",
+    "included": [
+      "aggregate analyses",
+      "sanitized per-run metrics",
+      "frozen authored fixtures and labels",
+      "source diffs",
+      "Git and binary provenance"
+    ],
+    "excluded": [
+      "queries from run traces",
+      "model answers",
+      "agent event streams",
+      "retrieval event logs",
+      "failure diagnostics",
+      "credentials and authentication material",
+      "local filesystem paths",
+      "conversation or user-message content"
+    ]
+  }
+}
