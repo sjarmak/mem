@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
+from membench.beads_ordering.client import BeadsExperimentClient
 from membench.beads_ordering.corpus import build_frozen_corpus
 from membench.beads_ordering.density_linkage import (
     load_density_linkage_manifest,
@@ -60,6 +61,12 @@ from membench.beads_ordering.mutation import (
     write_rank_scaling,
 )
 from membench.beads_ordering.ranked_searching import enrich_with_ranked_searching
+from membench.beads_ordering.real_project_shapes import (
+    ShapeProvenance,
+    collect_real_project_shapes,
+    discover_beads_workspaces,
+    write_real_project_shape_evidence,
+)
 from membench.beads_ordering.report import write_report
 from membench.beads_ordering.runner import (
     ARMS,
@@ -588,6 +595,52 @@ def _cmd_beads_ordering_density_linkage_plot(args: argparse.Namespace) -> int:
     analysis = json.loads(Path(args.analysis).read_text(encoding="utf-8"))
     outputs = render_density_linkage_plots(analysis, Path(args.out).resolve())
     print(f"wrote {len(outputs)} density/linkage plot files to {args.out}")
+    return 0
+
+
+def _cmd_beads_ordering_real_project_shapes(args: argparse.Namespace) -> int:
+    beads_bin = Path(args.beads_bin).expanduser().resolve() if args.beads_bin else None
+    if beads_bin is None or not beads_bin.is_file():
+        raise SystemExit("--beads-bin or BEADS_BIN must name the experimental bd executable")
+    beads_repo = Path(args.beads_repo).expanduser().resolve()
+    mem_repo = Path(__file__).resolve().parents[2]
+    discovery = discover_beads_workspaces([Path(value) for value in args.root])
+    bm25f = BM25FConfig()
+    shapes, sampling = collect_real_project_shapes(
+        discovery,
+        client_factory=lambda workspace: BeadsExperimentClient(
+            beads_bin=str(beads_bin),
+            workspace=str(workspace),
+            page_size="all",
+            bm25f=bm25f,
+        ),
+        max_probes_per_kind=args.max_probes_per_kind,
+        seed=args.seed,
+    )
+    source = Path(__file__).resolve().parent / "beads_ordering" / "real_project_shapes.py"
+    provenance = ShapeProvenance(
+        mem_git_sha=git_sha(mem_repo),
+        mem_git_diff_sha256=git_diff_sha256(mem_repo),
+        beads_git_sha=git_sha(beads_repo),
+        beads_git_diff_sha256=git_diff_sha256(beads_repo),
+        beads_bin_sha256=file_sha256(beads_bin),
+        collector_source_sha256=file_sha256(source),
+        mem_git_dirty=git_dirty(mem_repo),
+        beads_git_dirty=git_dirty(beads_repo),
+    )
+    write_real_project_shape_evidence(
+        shapes,
+        Path(args.out).resolve(),
+        sampling=sampling,
+        provenance=provenance,
+        max_probes_per_kind=args.max_probes_per_kind,
+        probe_seed=args.seed,
+    )
+    print(
+        "wrote privacy-safe real-project Memory shapes: "
+        f"{sampling.unique_memory_snapshots} unique non-empty snapshots, "
+        f"{sampling.workspaces_scanned} workspaces scanned"
+    )
     return 0
 
 
@@ -1267,6 +1320,23 @@ def main(argv: list[str] | None = None) -> int:
     p_density_linkage_plot.add_argument("--analysis", required=True)
     p_density_linkage_plot.add_argument("--out", required=True)
     p_density_linkage_plot.set_defaults(func=_cmd_beads_ordering_density_linkage_plot)
+
+    p_real_project_shapes = sub.add_parser(
+        "beads-ordering-real-project-shapes",
+        help="measure privacy-safe aggregate Memory corpus and lexical match shapes",
+    )
+    p_real_project_shapes.add_argument(
+        "--root",
+        action="append",
+        required=True,
+        help="filesystem root to scan; repeat for multiple roots",
+    )
+    p_real_project_shapes.add_argument("--beads-repo", required=True)
+    p_real_project_shapes.add_argument("--beads-bin", default=os.environ.get("BEADS_BIN"))
+    p_real_project_shapes.add_argument("--max-probes-per-kind", type=int, default=20)
+    p_real_project_shapes.add_argument("--seed", type=int, default=5879)
+    p_real_project_shapes.add_argument("--out", required=True)
+    p_real_project_shapes.set_defaults(func=_cmd_beads_ordering_real_project_shapes)
 
     p_followup_mutations = sub.add_parser(
         "beads-ordering-followup-mutations",

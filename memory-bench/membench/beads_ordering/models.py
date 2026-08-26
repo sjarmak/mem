@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class OrderingArm(StrEnum):
@@ -65,6 +65,14 @@ class CompactMemory(BaseModel):
     excerpt: str
     matched_fields: tuple[str, ...] = ()
     rank: int = Field(ge=1)
+
+    @field_validator("matched_fields", mode="before")
+    @classmethod
+    def normalize_null_matched_fields(cls, value: object) -> object:
+        # Empty-search inventory pages have no match provenance. Go encodes a
+        # nil slice as JSON null; normalize it to the same empty tuple used when
+        # the field is omitted.
+        return () if value is None else value
 
 
 class DiscoveryPage(BaseModel):
