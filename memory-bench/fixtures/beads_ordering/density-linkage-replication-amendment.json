@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "status": "sealed-before-bridge-and-secondary-outcomes",
+  "registered_at": "2026-08-26T04:37:11Z",
+  "parent_manifest": "density-linkage/manifest.json",
+  "parent_manifest_sha256": "240aaf29465c85d1c185f27c50df68cfb4b7a221549a78a93423ff27dd1bdcd7",
+  "primary_repeat_selection_sha256": "efc5db91bb794f1a83dba065af3d7d03e9603c63822cc72ff46c720ebc36bc64",
+  "registered_mem_git_sha": "b750cc75b4e113c95d4009c45e87a230ce4f355c",
+  "reason": "The initial primary grid used agent CLI 2.1.245, while the internally pinned targeted-repeat phase uses 2.1.246. Targeted repeats cover 159 of the 189 decision-edge cells, leaving 30 without a same-CLI primary observation. A complete same-model bridge wave removes that nuisance variable before comparing models.",
+  "inspection_before_amendment": {
+    "bridge_outcomes_examined": false,
+    "secondary_model_outcomes_examined": false,
+    "primary_information_used": [
+      "run and manifest provenance",
+      "mechanical decision-slice coverage count"
+    ],
+    "primary_outcomes_used_to_expand_selection": false
+  },
+  "fixed_slice": {
+    "candidate_count": 150,
+    "page_size": "5",
+    "mode": "navigation",
+    "linkage_levels": [
+      "sparse",
+      "native",
+      "enriched"
+    ],
+    "arms": [
+      "key",
+      "pagerank",
+      "bm25f"
+    ],
+    "base_tasks": 21,
+    "cells_per_wave": 189,
+    "repeat": 0
+  },
+  "waves": [
+    {
+      "name": "same-model-cli-bridge",
+      "model": "claude-haiku-4-5-20251001",
+      "cell_count": 189
+    },
+    {
+      "name": "secondary-model-replication",
+      "model": "claude-sonnet-4-5-20250929",
+      "cell_count": 189
+    }
+  ],
+  "held_constant": [
+    "frozen corpus and relevance labels",
+    "literal lexical candidate membership",
+    "compact discovery projection",
+    "ordering arms and BM25F weights",
+    "page size and navigation mode",
+    "prompt and task protocol",
+    "maximum 12 retrieval-tool calls",
+    "autoMemoryEnabled=false",
+    "experimental Beads SHA, tracked diff, and binary"
+  ],
+  "selection_rule": "After the complete primary analysis is sealed, generate both wave manifests mechanically from the same final analysis SHA and require identical run IDs and factors apart from the declared model.",
+  "analysis_rule": "Keep both waves out of the primary confirmatory gate analysis. Compare the secondary wave directly with the bridge wave by frozen task, linkage level, and arm; report uncertainty and infrastructure failures separately."
+}
