@@ -39,6 +39,19 @@ class DensityLinkageAgentCell:
     repeat: int
 
 
+def density_linkage_agent_run_id(
+    variant: DensityLinkageVariant,
+    *,
+    arm: OrderingArm,
+    page_size: int | str,
+    mode: str | ExperimentMode,
+    repeat: int,
+) -> str:
+    task = variant.corpus.tasks[0]
+    normalized_mode = ExperimentMode(mode)
+    return f"{task.task_id}:{normalized_mode.value}:{arm.value}:" f"p{page_size}:r{repeat}"
+
+
 def plan_density_linkage_agent_cells(
     *,
     variants: Mapping[str, DensityLinkageVariant],
@@ -49,6 +62,7 @@ def plan_density_linkage_agent_cells(
     shard_index: int,
     shard_count: int,
     order_seed: int,
+    selected_run_ids: set[str] | frozenset[str] | None = None,
 ) -> list[DensityLinkageAgentCell]:
     """Build a stable, disjoint agent shard with the preregistered position control."""
 
@@ -91,6 +105,19 @@ def plan_density_linkage_agent_cells(
         for mode in normalized_modes
         for repeat in repeat_indices
     ]
+    if selected_run_ids is not None:
+        cells = [
+            cell
+            for cell in cells
+            if density_linkage_agent_run_id(
+                variants[cell.variant_id],
+                arm=cell.arm,
+                page_size=cell.page_size,
+                mode=cell.mode,
+                repeat=cell.repeat,
+            )
+            in selected_run_ids
+        ]
     random.Random(order_seed + shard_index).shuffle(cells)
     return cells
 
@@ -150,6 +177,7 @@ def run_density_linkage_agent_shard(
     max_tool_calls: int,
     out: Path,
     suite_provenance: Mapping[str, object],
+    selected_run_ids: set[str] | frozenset[str] | None = None,
 ) -> dict[str, Any]:
     """Run one resumable account shard through the existing neutral agent cell."""
 
@@ -164,6 +192,7 @@ def run_density_linkage_agent_shard(
         shard_index=shard_index,
         shard_count=shard_count,
         order_seed=order_seed,
+        selected_run_ids=selected_run_ids,
     )
     selected_variant_ids = sorted({cell.variant_id for cell in cells})
     if not selected_variant_ids:
@@ -239,6 +268,7 @@ def run_density_linkage_agent_shard(
         ),
         "bm25f": bm25f.model_dump(),
         "variant_ids": selected_variant_ids,
+        "selection_run_count": None if selected_run_ids is None else len(selected_run_ids),
         **dict(suite_provenance),
     }
     out.mkdir(parents=True, exist_ok=True)
@@ -256,9 +286,12 @@ def run_density_linkage_agent_shard(
     for index, cell in enumerate(cells, start=1):
         variant = variants[cell.variant_id]
         task = variant.corpus.tasks[0]
-        run_id = (
-            f"{task.task_id}:{cell.mode.value}:{cell.arm.value}:"
-            f"p{cell.page_size}:r{cell.repeat}"
+        run_id = density_linkage_agent_run_id(
+            variant,
+            arm=cell.arm,
+            page_size=cell.page_size,
+            mode=cell.mode,
+            repeat=cell.repeat,
         )
         result_path = out / "runs" / run_id.replace(":", "__") / "result.json"
         if result_path.exists():

@@ -27,6 +27,9 @@ from membench.beads_ordering.density_linkage import (
 from membench.beads_ordering.density_linkage_agent import (
     run_density_linkage_agent_shard,
 )
+from membench.beads_ordering.density_linkage_agent_evidence import (
+    write_density_linkage_agent_evidence,
+)
 from membench.beads_ordering.density_linkage_evidence import (
     collect_density_linkage_oracle,
     write_density_linkage_oracle,
@@ -486,6 +489,17 @@ def _cmd_beads_ordering_density_linkage_run(args: argparse.Namespace) -> int:
             Path(args.agent_sharding_amendment).resolve()
         ),
     }
+    selected_run_ids: set[str] | None = None
+    if args.selection_manifest:
+        selection_path = Path(args.selection_manifest).resolve()
+        selection_payload = json.loads(selection_path.read_text(encoding="utf-8"))
+        raw_run_ids = selection_payload.get("run_ids")
+        if not isinstance(raw_run_ids, list) or not all(
+            isinstance(run_id, str) for run_id in raw_run_ids
+        ):
+            raise SystemExit("selection manifest must contain a string run_ids list")
+        selected_run_ids = set(raw_run_ids)
+        suite_provenance["selection_manifest_sha256"] = file_sha256(selection_path)
     manifest = run_density_linkage_agent_shard(
         variants=variants,
         workspace_root=Path(args.workspace_root).resolve(),
@@ -506,10 +520,65 @@ def _cmd_beads_ordering_density_linkage_run(args: argparse.Namespace) -> int:
         max_tool_calls=args.max_tool_calls,
         out=Path(args.out).resolve(),
         suite_provenance=suite_provenance,
+        selected_run_ids=selected_run_ids,
     )
     print(
         f"completed density/linkage agent shard {args.shard_index}/{args.shard_count}: "
         f"{manifest['planned_cell_count']} cells"
+    )
+    return 0
+
+
+def _cmd_beads_ordering_density_linkage_agent_analyze(args: argparse.Namespace) -> int:
+    fixture_dir = Path(args.fixture_dir).resolve()
+    manifest_path = Path(args.manifest).resolve()
+    variants = load_density_linkage_manifest(fixture_dir, manifest_path)
+    rows = [
+        OrderingRunResult.model_validate_json(line)
+        for raw_path in args.raw
+        for line in Path(raw_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    task_metadata: dict[str, dict[str, object]] = {}
+    for variant_id, variant in variants.items():
+        if isinstance(variant, dict):
+            task_metadata[str(variant_id)] = dict(variant)
+            continue
+        recipe = variant.recipe
+        task = variant.corpus.tasks[0]
+        task_metadata[task.task_id] = {
+            "base_task_id": recipe.base_task_id,
+            "graph_family": recipe.graph_family,
+            "failure_case": recipe.failure_case,
+            "candidate_count": recipe.candidate_count,
+            "linkage_level": recipe.linkage_level.value,
+            **{
+                f"graph_{key}": value
+                for key, value in recipe.graph_metrics.model_dump(mode="json").items()
+            },
+        }
+    raw_paths = [Path(value).resolve() for value in args.raw]
+    shard_manifests = [Path(value).resolve() for value in args.shard_manifests]
+    manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    provenance: dict[str, object] = {
+        "density_linkage_manifest_sha256": file_sha256(manifest_path),
+        "preregistration_sha256": manifest_payload.get("preregistration_sha256", ""),
+        "raw_input_names": [path.name for path in raw_paths],
+        "raw_input_sha256s": [file_sha256(path) for path in raw_paths],
+        "shard_manifest_names": [path.parent.name for path in shard_manifests],
+        "shard_manifest_sha256s": [file_sha256(path) for path in shard_manifests],
+    }
+    evidence = write_density_linkage_agent_evidence(
+        rows,
+        task_metadata,
+        Path(args.out).resolve(),
+        provenance=provenance,
+        bootstrap_seed=args.bootstrap_seed,
+        bootstrap_resamples=args.bootstrap_resamples,
+    )
+    print(
+        f"wrote density/linkage agent analysis: {args.out} "
+        f"({evidence['usable_observation_count']}/{evidence['observation_count']} usable)"
     )
     return 0
 
@@ -1152,6 +1221,7 @@ def main(argv: list[str] | None = None) -> int:
     p_density_linkage_run.add_argument("--beads-bin", default=os.environ.get("BEADS_BIN"))
     p_density_linkage_run.add_argument("--model", required=True)
     p_density_linkage_run.add_argument("--claude-credentials", default="")
+    p_density_linkage_run.add_argument("--selection-manifest", default="")
     p_density_linkage_run.add_argument("--arms", default="key,pagerank,bm25f,control-semantic")
     p_density_linkage_run.add_argument("--page-sizes", default="5,all")
     p_density_linkage_run.add_argument("--modes", default="search-only,navigation")
@@ -1164,6 +1234,23 @@ def main(argv: list[str] | None = None) -> int:
     p_density_linkage_run.add_argument("--out", required=True)
     _add_bm25f_flags(p_density_linkage_run)
     p_density_linkage_run.set_defaults(func=_cmd_beads_ordering_density_linkage_run)
+
+    p_density_linkage_agent_analysis = sub.add_parser(
+        "beads-ordering-density-linkage-agent-analyze",
+        help="combine balanced density/linkage agent shards and compute registered contrasts",
+    )
+    p_density_linkage_agent_analysis.add_argument(
+        "--fixture-dir", default=str(_DEFAULT_ORDERING_FOLLOWUP_DIR)
+    )
+    p_density_linkage_agent_analysis.add_argument("--manifest", required=True)
+    p_density_linkage_agent_analysis.add_argument("--raw", required=True, nargs="+")
+    p_density_linkage_agent_analysis.add_argument("--shard-manifests", nargs="+", default=[])
+    p_density_linkage_agent_analysis.add_argument("--bootstrap-seed", type=int, default=5879)
+    p_density_linkage_agent_analysis.add_argument("--bootstrap-resamples", type=int, default=5000)
+    p_density_linkage_agent_analysis.add_argument("--out", required=True)
+    p_density_linkage_agent_analysis.set_defaults(
+        func=_cmd_beads_ordering_density_linkage_agent_analyze
+    )
 
     p_followup_mutations = sub.add_parser(
         "beads-ordering-followup-mutations",

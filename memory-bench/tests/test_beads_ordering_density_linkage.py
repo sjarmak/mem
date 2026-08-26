@@ -14,6 +14,7 @@ from membench.beads_ordering.density_linkage import (
     write_density_linkage_manifest,
 )
 from membench.beads_ordering.density_linkage_agent import (
+    density_linkage_agent_run_id,
     plan_density_linkage_agent_cells,
 )
 from membench.beads_ordering.density_linkage_evidence import (
@@ -433,6 +434,55 @@ def test_density_linkage_agent_plan_is_complete_filtered_and_shard_stable() -> N
         plan_density_linkage_agent_cells(shard_index=3, **kwargs)
 
 
+def test_density_linkage_agent_plan_filters_to_exact_registered_repeat_run_ids() -> None:
+    variants = load_density_linkage_manifest(
+        BASE_FIXTURES, ROOT / "fixtures" / "beads_ordering" / "density-linkage" / "manifest.json"
+    )
+    variant_id = sorted(variants)[0]
+    selected = {
+        density_linkage_agent_run_id(
+            variants[variant_id],
+            arm=OrderingArm.KEY,
+            page_size=5,
+            mode="navigation",
+            repeat=1,
+        ),
+        density_linkage_agent_run_id(
+            variants[variant_id],
+            arm=OrderingArm.BM25F,
+            page_size="all",
+            mode="search-only",
+            repeat=2,
+        ),
+    }
+    cells = [
+        cell
+        for shard in range(3)
+        for cell in plan_density_linkage_agent_cells(
+            variants=variants,
+            arms=[OrderingArm.KEY, OrderingArm.BM25F],
+            page_sizes=[5, "all"],
+            modes=["search-only", "navigation"],
+            repeat_indices=[1, 2],
+            shard_index=shard,
+            shard_count=3,
+            order_seed=5879,
+            selected_run_ids=selected,
+        )
+    ]
+
+    assert {
+        density_linkage_agent_run_id(
+            variants[cell.variant_id],
+            arm=cell.arm,
+            page_size=cell.page_size,
+            mode=cell.mode,
+            repeat=cell.repeat,
+        )
+        for cell in cells
+    } == selected
+
+
 def test_agent_sharding_amendment_excludes_confounded_pilot_before_restart() -> None:
     payload = json.loads(SHARDING_AMENDMENT.read_text(encoding="utf-8"))
 
@@ -464,6 +514,8 @@ def test_cli_routes_density_linkage_agent_shard_without_recording_credentials(
     )
     credentials = tmp_path / "credentials.json"
     credentials.write_text("{}", encoding="utf-8")
+    selection = tmp_path / "selection.json"
+    selection.write_text(json.dumps({"run_ids": ["selected:r1"]}), encoding="utf-8")
     seen: dict[str, object] = {}
     monkeypatch.setattr(cli, "load_density_linkage_manifest", lambda *_: {})
 
@@ -491,6 +543,8 @@ def test_cli_routes_density_linkage_agent_shard_without_recording_credentials(
                 "claude-haiku-4-5-20251001",
                 "--claude-credentials",
                 str(credentials),
+                "--selection-manifest",
+                str(selection),
                 "--shard-index",
                 "1",
                 "--shard-count",
@@ -504,6 +558,8 @@ def test_cli_routes_density_linkage_agent_shard_without_recording_credentials(
     assert seen["shard_index"] == 1
     assert seen["shard_count"] == 3
     assert seen["out"] == out
+    assert seen["selected_run_ids"] == {"selected:r1"}
     provenance = seen["suite_provenance"]
     assert isinstance(provenance, dict)
     assert "claude_credentials" not in provenance
+    assert provenance["selection_manifest_sha256"]
