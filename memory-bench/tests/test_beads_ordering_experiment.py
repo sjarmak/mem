@@ -22,6 +22,7 @@ from membench.beads_ordering.models import (
 )
 from membench.beads_ordering.ranked_searching import (
     RANKED_SEARCHING_PRIORS,
+    _resolve_structural_order_module,
     enrich_with_ranked_searching,
 )
 from membench.beads_ordering.report import render_markdown, render_page_size_svg
@@ -271,6 +272,23 @@ def test_ranked_searching_orders_are_materialized_per_nested_corpus() -> None:
     stored = first.stored_value(50)
     assert "structural_rank_pagerank: 50" in stored
     assert "structural_rank_hits_hub: 50" in stored
+
+
+def test_structural_order_source_resolution_is_name_agnostic(tmp_path: Path) -> None:
+    direct = tmp_path / "implementation"
+    entrypoint = direct / "cmd" / "benchmark0" / "main.go"
+    entrypoint.parent.mkdir(parents=True)
+    entrypoint.touch()
+
+    assert _resolve_structural_order_module(direct) == direct
+
+    wrapper = tmp_path / "wrapper"
+    nested = wrapper / "arbitrary" / "layout"
+    nested_entrypoint = nested / "cmd" / "benchmark0" / "main.go"
+    nested_entrypoint.parent.mkdir(parents=True)
+    nested_entrypoint.touch()
+
+    assert _resolve_structural_order_module(wrapper) == nested
 
 
 def test_score_agent_run_accounts_to_first_useful_memory() -> None:

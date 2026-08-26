@@ -20,8 +20,27 @@ RANKED_SEARCHING_PRIORS: tuple[str, ...] = (
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 
 
-class RankedSearchingArtifactError(RuntimeError):
+class StructuralOrderSourceError(RuntimeError):
     pass
+
+
+def _resolve_structural_order_module(source: Path) -> Path:
+    """Find the benchmark entrypoint without depending on its checkout name."""
+
+    entrypoint = Path("cmd") / "benchmark0" / "main.go"
+    if (source / entrypoint).is_file():
+        return source
+    modules = sorted(path.parent.parent.parent for path in source.glob(f"**/{entrypoint}"))
+    if not modules:
+        raise StructuralOrderSourceError(
+            f"structural-order source has no {entrypoint} entrypoint: {source}"
+        )
+    if len(modules) > 1:
+        rendered = ", ".join(str(module) for module in modules)
+        raise StructuralOrderSourceError(
+            f"structural-order source has multiple benchmark entrypoints: {rendered}"
+        )
+    return modules[0]
 
 
 def _artifact_memory(memory: MemoryFixture) -> dict[str, object]:
@@ -49,14 +68,10 @@ def artifact_structural_orders(
     artifact_repo: Path,
     runner: Runner = subprocess.run,
 ) -> dict[str, tuple[str, ...]]:
-    """Invoke the ranked-searching benchmark and extract its static orders."""
+    """Invoke the pinned structural-order implementation and extract static orders."""
 
-    module = artifact_repo / "29-ranked-searching" / "beads-usecase"
-    if not (module / "cmd" / "benchmark0" / "main.go").is_file():
-        raise RankedSearchingArtifactError(
-            f"ranked-searching artifact is missing under {artifact_repo}"
-        )
-    with tempfile.TemporaryDirectory(prefix="membench-ranked-searching-") as raw:
+    module = _resolve_structural_order_module(artifact_repo)
+    with tempfile.TemporaryDirectory(prefix="membench-structural-order-") as raw:
         temp = Path(raw)
         corpus_path = temp / "corpus.json"
         spec_path = temp / "spec.json"
@@ -103,14 +118,14 @@ def artifact_structural_orders(
             timeout=300,
         )
         if completed.returncode != 0:
-            raise RankedSearchingArtifactError(
-                f"ranked-searching artifact failed: {completed.stderr.strip()}"
+            raise StructuralOrderSourceError(
+                f"structural-order source failed: {completed.stderr.strip()}"
             )
         try:
             trials = json.loads((out / "trials.json").read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            raise RankedSearchingArtifactError(
-                "ranked-searching artifact did not emit valid trials.json"
+            raise StructuralOrderSourceError(
+                "structural-order source did not emit valid trials.json"
             ) from exc
 
     expected = {memory.id for memory in memories}
@@ -123,17 +138,17 @@ def artifact_structural_orders(
         if name not in orders:
             orders[name] = ids
         elif orders[name] != ids:
-            raise RankedSearchingArtifactError(
-                f"artifact emitted inconsistent {name} orders across policies"
+            raise StructuralOrderSourceError(
+                f"structural-order source emitted inconsistent {name} orders across policies"
             )
     if set(orders) != set(RANKED_SEARCHING_PRIORS):
-        raise RankedSearchingArtifactError(
-            "artifact omitted one or more requested structural priors"
+        raise StructuralOrderSourceError(
+            "structural-order source omitted one or more requested structural priors"
         )
     for name, ids in orders.items():
         if len(ids) != len(expected) or set(ids) != expected:
-            raise RankedSearchingArtifactError(
-                f"artifact {name} order is not a permutation of the corpus"
+            raise StructuralOrderSourceError(
+                f"structural-order source {name} is not a permutation of the corpus"
             )
     return orders
 
@@ -171,7 +186,7 @@ def enrich_with_ranked_searching(
             timeout=30,
         )
         if completed.returncode != 0:
-            raise RankedSearchingArtifactError(
+            raise StructuralOrderSourceError(
                 f"cannot resolve structural-order source commit: {completed.stderr.strip()}"
             )
         source_sha = completed.stdout.strip()

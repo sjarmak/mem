@@ -1329,7 +1329,7 @@ def main(argv: list[str] | None = None) -> int:
     p_freeze.add_argument(
         "--structural-order-source",
         required=True,
-        help="checkout containing 29-ranked-searching used to materialize structural priors",
+        help="pinned source checkout used to materialize query-independent graph priors",
     )
     p_freeze.add_argument("--overwrite", action="store_true")
     p_freeze.set_defaults(func=_cmd_beads_ordering_freeze)
