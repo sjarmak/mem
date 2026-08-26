@@ -1,0 +1,82 @@
+{
+  "artifact_sha256s": {
+    "analysis.json": "b1ab52ca00096c5a4960291e32f4b9d6539b84ac80ca685edb59db05648c8358",
+    "bridge-sanitized-observations.jsonl": "7e6302e70de1403ec5fb2a669f324169758294abfe79a310cad54ac1d33873f7",
+    "report.md": "1dff41e7304c4b1612c9a25cecb3aafa8daf51bc935c9547583681450d5b9f5f",
+    "secondary-sanitized-observations.jsonl": "19e3c14555be3bf52c37edba0d8787ccc1d064fb00e06513709fe945c574ef1d"
+  },
+  "privacy_projection": "paired and per-run metrics only; excludes queries, model text, failure diagnostics, credentials, and local paths",
+  "provenance": {
+    "analysis_mem_git_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "analysis_mem_git_dirty": true,
+    "analysis_mem_git_sha": "0c23a7eb377ea7ca805880b451d2b2b54b4e7857",
+    "analysis_source_sha256": "efdaf3c93b029785b6d5b5519b320a7a9e4ace7cf1f96d9d0ebe0b40b12f36ab",
+    "bridge_manifest_sha256s": [
+      "f992b2202721128fedf5c2a254125794c8ea46b2b2133cb8ebf9bf5751030f45",
+      "b53f588136208cd10ec1ce1b471a16054c7b2a1bd4598755748f9060aaec73df",
+      "38d9324797bc6b3b510d8801ec4e6de797d88f96ead755f35ed3e88ca9913a73"
+    ],
+    "bridge_raw_sha256s": [
+      "92787939f87a9cda769c4efcd749ceeb771e302de9509f00e8edab3a5937b0e0",
+      "0a149e52c05d1186edf7d47dbed423b48b961e556df6edfccdb25a5b0a441a3c",
+      "14c55a8094114b761ed1bca68c776ea9282817c0a987edfe1f8ec16e416f8b2c"
+    ],
+    "density_linkage_manifest_sha256": "240aaf29465c85d1c185f27c50df68cfb4b7a221549a78a93423ff27dd1bdcd7",
+    "manifest_validation": {
+      "allowed_wave_differences": [
+        "agent_model",
+        "selection_manifest_sha256",
+        "started_at"
+      ],
+      "bridge_model": "claude-haiku-4-5-20251001",
+      "cells_per_wave": 189,
+      "held_constant_fields": [
+        "schema_version",
+        "shard_index",
+        "shard_count",
+        "planned_cell_count",
+        "variant_count",
+        "variant_ids",
+        "mem_git_sha",
+        "mem_git_dirty",
+        "mem_git_diff_sha256",
+        "beads_git_sha",
+        "beads_git_dirty",
+        "beads_git_diff_sha256",
+        "beads_bin_sha256",
+        "structural_order_source_git_sha",
+        "arms",
+        "page_sizes",
+        "modes",
+        "repeats",
+        "repeat_start",
+        "order_seed",
+        "max_tool_calls",
+        "agent_cli_version",
+        "agent_settings",
+        "sharding_convention",
+        "bm25f",
+        "selection_run_count",
+        "base_fixture_manifest_sha256",
+        "density_linkage_manifest_sha256",
+        "preregistration_sha256",
+        "agent_sharding_amendment_sha256",
+        "agent_auth"
+      ],
+      "secondary_model": "claude-sonnet-4-5-20250929",
+      "shard_count": 3,
+      "valid": true
+    },
+    "secondary_manifest_sha256s": [
+      "5db48230fedf0b473206aa18b752aa5bda6f5a2bbe73dd1db67b26f58a14ec96",
+      "541c711dfc57ed18a089e47f242dd68ba67e51d945112b06f5157e70d7282a17",
+      "2be3f3ad5c4b8abe9157993a85a88651322bb1550781aaaa3aa429aea3318e55"
+    ],
+    "secondary_raw_sha256s": [
+      "188953665f58aaf1b3b2e8bfa0f9cbf1d052233643ea71e012beec19ec33c76a",
+      "05b24fc38adbec4a999206d78da95ea7dc1d03eb99bc9c9d55068edf9281beeb",
+      "4d257624b9741a370a6d356589a295b243a60ce29c676ab9828f73c2bdaeee88"
+    ]
+  },
+  "schema_version": 1
+}
