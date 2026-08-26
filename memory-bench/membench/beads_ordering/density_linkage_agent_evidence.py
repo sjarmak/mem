@@ -952,11 +952,11 @@ def render_density_linkage_agent_report(analysis: Mapping[str, object]) -> str:
     lines.extend(
         [
             "",
-        "## Navigation, page size 5",
-        "",
-        "| candidates | links | policy | success [90% CI] | page-one useful | "
-        "pages p50/p90 | compact tokens p50/p90 |",
-        "|---:|---|---|---:|---:|---:|---:|",
+            "## Navigation, page size 5",
+            "",
+            "| candidates | links | policy | success [90% CI] | page-one useful | "
+            "pages p50/p90 | compact tokens p50/p90 |",
+            "|---:|---|---|---:|---:|---:|---:|",
         ]
     )
     curves = analysis["curves"]
