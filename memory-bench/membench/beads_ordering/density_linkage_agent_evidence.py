@@ -78,7 +78,7 @@ def _distribution(values: Sequence[float]) -> dict[str, float | int | None]:
     }
 
 
-def _hierarchical_summary(
+def hierarchical_summary(
     values: Sequence[tuple[str, str, float]],
     *,
     statistic: str = "mean",
@@ -236,7 +236,7 @@ def _summary(
     seed: int,
     resamples: int,
 ) -> dict[str, float | int | None]:
-    return _hierarchical_summary(
+    return hierarchical_summary(
         [(str(cell["graph_family"]), str(cell["base_task_id"]), value) for cell, value in rows],
         statistic=statistic,
         seed=seed,

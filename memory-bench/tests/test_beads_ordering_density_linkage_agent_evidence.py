@@ -13,6 +13,11 @@ from membench.beads_ordering.density_linkage_agent_evidence import (
     write_density_linkage_agent_evidence,
 )
 from membench.beads_ordering.density_linkage_plots import render_density_linkage_plots
+from membench.beads_ordering.density_linkage_replication import (
+    compare_density_linkage_replication,
+    validate_replication_wave_manifests,
+    write_density_linkage_replication_comparison,
+)
 from membench.beads_ordering.models import ExperimentMode, OrderingArm, OrderingRunResult
 
 
@@ -252,6 +257,193 @@ def test_replication_manifest_locks_only_the_decision_edge() -> None:
     assert manifest["secondary_configuration"]["model"] == "claude-secondary-exact-id"
 
 
+def _replication_waves() -> tuple[list[OrderingRunResult], list[OrderingRunResult]]:
+    bridge = [
+        row.model_copy(update={"agent_model": "bridge-model", "agent_cli_version": "2.1.246"})
+        for row in _synthetic_rows()
+        if row.total_matched == 150 and row.arm.value in {"key", "pagerank", "bm25f"}
+    ]
+    secondary = [
+        row.model_copy(
+            update={
+                "agent_model": "secondary-model",
+                "agent_cli_version": "2.1.246",
+                "pages_requested": max(1, row.pages_requested - 1),
+                "pages_to_first_useful": max(1, (row.pages_to_first_useful or 1) - 1),
+                "compact_tokens_to_first_useful": row.compact_tokens_to_first_useful // 2,
+                "retrieval_tokens_to_first_useful": row.retrieval_tokens_to_first_useful // 2,
+                "tool_calls_to_first_useful": max(1, row.tool_calls_to_first_useful - 1),
+                "retrieval_tool_calls": max(1, row.retrieval_tool_calls - 1),
+                "time_to_first_useful_ms": (row.time_to_first_useful_ms or 0) / 2,
+                "retrieval_latency_ms": row.retrieval_latency_ms / 2,
+                "end_to_end_ms": row.end_to_end_ms / 2,
+                "task_success": True,
+            }
+        )
+        for row in bridge
+    ]
+    return bridge, secondary
+
+
+def _replication_shard_manifest(model: str, *, max_tool_calls: int = 12) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "shard_index": 0,
+        "shard_count": 1,
+        "planned_cell_count": 12,
+        "variant_count": 4,
+        "variant_ids": ["a", "b", "c", "d"],
+        "mem_git_sha": "a" * 40,
+        "mem_git_dirty": False,
+        "mem_git_diff_sha256": "0" * 64,
+        "beads_git_sha": "b" * 40,
+        "beads_git_dirty": True,
+        "beads_git_diff_sha256": "1" * 64,
+        "beads_bin_sha256": "2" * 64,
+        "structural_order_source_git_sha": "c" * 40,
+        "arms": ["key", "pagerank", "bm25f"],
+        "page_sizes": ["5"],
+        "modes": ["navigation"],
+        "repeats": 1,
+        "repeat_start": 0,
+        "order_seed": 5879,
+        "max_tool_calls": max_tool_calls,
+        "agent_model": model,
+        "agent_cli_version": "2.1.246",
+        "agent_settings": {"autoMemoryEnabled": False},
+        "sharding_convention": "factor-balanced Latin rotation",
+        "bm25f": {"key_weight": 6.0, "title_weight": 3.0, "body_weight": 1.0},
+        "selection_run_count": 12,
+        "base_fixture_manifest_sha256": "6" * 64,
+        "density_linkage_manifest_sha256": "3" * 64,
+        "preregistration_sha256": "7" * 64,
+        "agent_sharding_amendment_sha256": "8" * 64,
+        "agent_auth": "copied-oauth-credentials",
+    }
+
+
+def test_replication_comparison_pairs_models_and_reports_clustered_deltas() -> None:
+    bridge, secondary = _replication_waves()
+
+    analysis = compare_density_linkage_replication(
+        bridge,
+        secondary,
+        _metadata(),
+        bootstrap_seed=17,
+        bootstrap_resamples=100,
+    )
+
+    assert analysis["bridge_model"] == "bridge-model"
+    assert analysis["secondary_model"] == "secondary-model"
+    assert analysis["expected_pair_count"] == 12
+    assert analysis["comparable_pair_count"] == 12
+    assert analysis["missing_run_ids"] == {"bridge": [], "secondary": []}
+    assert analysis["infrastructure_failures"]["bridge"]["count"] == 0
+    assert analysis["infrastructure_failures"]["secondary"]["count"] == 0
+    enriched_key = next(
+        row
+        for row in analysis["contrasts"]
+        if row["linkage_level"] == "enriched" and row["arm"] == "key"
+    )
+    assert enriched_key["pair_count"] == 2
+    assert enriched_key["pages_to_first_useful_saved"]["p50"] == 1
+    assert enriched_key["compact_tokens_to_first_useful_reduction_fraction"][
+        "p50"
+    ] == pytest.approx(0.5)
+    assert enriched_key["task_success_delta"]["estimate"] == 1
+
+
+def test_replication_comparison_separates_failures_and_rejects_protocol_drift() -> None:
+    bridge, secondary = _replication_waves()
+    secondary[0] = secondary[0].model_copy(update={"failure": "private provider diagnostic"})
+
+    analysis = compare_density_linkage_replication(
+        bridge,
+        secondary,
+        _metadata(),
+        bootstrap_seed=17,
+        bootstrap_resamples=20,
+    )
+
+    assert analysis["comparable_pair_count"] == 11
+    assert analysis["infrastructure_failures"]["secondary"] == {
+        "count": 1,
+        "run_ids": [secondary[0].run_id],
+    }
+    assert "private provider diagnostic" not in json.dumps(analysis)
+
+    mismatched = list(secondary)
+    mismatched[1] = mismatched[1].model_copy(update={"agent_cli_version": "different-cli"})
+    with pytest.raises(ValueError, match="held-constant protocol mismatch"):
+        compare_density_linkage_replication(
+            bridge,
+            mismatched,
+            _metadata(),
+            bootstrap_seed=17,
+            bootstrap_resamples=20,
+        )
+
+
+def test_replication_comparison_requires_identical_run_sets() -> None:
+    bridge, secondary = _replication_waves()
+
+    with pytest.raises(ValueError, match="identical run ID sets"):
+        compare_density_linkage_replication(
+            bridge,
+            secondary[:-1],
+            _metadata(),
+            bootstrap_seed=17,
+            bootstrap_resamples=20,
+        )
+
+
+def test_replication_manifest_validation_allows_only_model_and_selection_digest_to_differ() -> None:
+    bridge = _replication_shard_manifest("bridge-model")
+    secondary = _replication_shard_manifest("secondary-model")
+    bridge["selection_manifest_sha256"] = "4" * 64
+    secondary["selection_manifest_sha256"] = "5" * 64
+
+    validation = validate_replication_wave_manifests([bridge], [secondary])
+
+    assert validation["valid"] is True
+    assert validation["bridge_model"] == "bridge-model"
+    assert validation["secondary_model"] == "secondary-model"
+    assert validation["shard_count"] == 1
+    assert validation["cells_per_wave"] == 12
+
+    drifted = dict(secondary)
+    drifted["max_tool_calls"] = 10
+    with pytest.raises(ValueError, match=r"manifest protocol mismatch.*max_tool_calls"):
+        validate_replication_wave_manifests([bridge], [drifted])
+
+
+def test_replication_comparison_writer_excludes_model_text_and_failure_diagnostics(
+    tmp_path: Path,
+) -> None:
+    bridge, secondary = _replication_waves()
+    secondary[0] = secondary[0].model_copy(update={"failure": "private provider diagnostic"})
+
+    manifest = write_density_linkage_replication_comparison(
+        bridge,
+        secondary,
+        _metadata(),
+        tmp_path,
+        provenance={"bridge_raw_sha256": "a" * 64, "secondary_raw_sha256": "b" * 64},
+        bootstrap_seed=17,
+        bootstrap_resamples=20,
+    )
+
+    encoded = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (tmp_path / "analysis.json", tmp_path / "report.md", tmp_path / "manifest.json")
+    )
+    assert "private query text" not in encoded
+    assert "private model answer" not in encoded
+    assert "private provider diagnostic" not in encoded
+    assert manifest["privacy_projection"].startswith("paired metrics only")
+    assert manifest["artifact_sha256s"].keys() == {"analysis.json", "report.md"}
+
+
 def test_grid_validation_detects_embedded_failure_and_provenance_drift() -> None:
     rows = _synthetic_rows()
     failed = rows[0].model_copy(update={"failure": "oauth expired"})
@@ -439,6 +631,70 @@ def test_cli_seals_density_linkage_replication_plan(
     assert payload["primary_analysis_sha256"]
     assert payload["primary_gate_verdicts"]["candidate_density_behaviorally_material"] is True
     assert payload["secondary_configuration"]["model"] == "claude-secondary-exact-id"
+
+
+def test_cli_compares_density_linkage_replication_waves(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from membench import cli
+
+    manifest_path = tmp_path / "density-manifest.json"
+    manifest_path.write_text('{"schema_version": 1}\n', encoding="utf-8")
+    bridge, secondary = _replication_waves()
+    bridge_raw = tmp_path / "bridge.jsonl"
+    secondary_raw = tmp_path / "secondary.jsonl"
+    bridge_raw.write_text("\n".join(row.model_dump_json() for row in bridge) + "\n")
+    secondary_raw.write_text("\n".join(row.model_dump_json() for row in secondary) + "\n")
+    bridge_manifest = tmp_path / "bridge-manifest.json"
+    secondary_manifest = tmp_path / "secondary-manifest.json"
+    bridge_manifest.write_text(json.dumps(_replication_shard_manifest("bridge-model")) + "\n")
+    secondary_manifest.write_text(json.dumps(_replication_shard_manifest("secondary-model")) + "\n")
+    monkeypatch.setattr(cli, "load_density_linkage_manifest", lambda *_: _metadata())
+    seen: dict[str, object] = {}
+
+    def fake_write(*args: object, **kwargs: object) -> dict[str, object]:
+        seen["bridge"] = args[0]
+        seen["secondary"] = args[1]
+        seen["metadata"] = args[2]
+        seen["out"] = args[3]
+        seen["provenance"] = kwargs["provenance"]
+        return {"schema_version": 1}
+
+    monkeypatch.setattr(cli, "write_density_linkage_replication_comparison", fake_write)
+    out = tmp_path / "comparison"
+
+    assert (
+        cli.main(
+            [
+                "beads-ordering-density-linkage-replication-compare",
+                "--manifest",
+                str(manifest_path),
+                "--bridge-raw",
+                str(bridge_raw),
+                "--secondary-raw",
+                str(secondary_raw),
+                "--bridge-manifests",
+                str(bridge_manifest),
+                "--secondary-manifests",
+                str(secondary_manifest),
+                "--out",
+                str(out),
+            ]
+        )
+        == 0
+    )
+    assert len(seen["bridge"]) == len(bridge)  # type: ignore[arg-type]
+    assert len(seen["secondary"]) == len(secondary)  # type: ignore[arg-type]
+    assert seen["metadata"] == _metadata()
+    assert seen["out"] == out
+    provenance = seen["provenance"]
+    assert isinstance(provenance, dict)
+    assert len(provenance["analysis_mem_git_sha"]) == 40
+    assert len(provenance["bridge_raw_sha256s"]) == 1
+    assert len(provenance["secondary_raw_sha256s"]) == 1
+    assert len(provenance["bridge_manifest_sha256s"]) == 1
+    assert len(provenance["secondary_manifest_sha256s"]) == 1
+    assert provenance["manifest_validation"]["valid"] is True
 
 
 def test_repeat_manifest_mechanically_expands_registered_triggers_without_duplicates() -> None:

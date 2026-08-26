@@ -37,6 +37,10 @@ from membench.beads_ordering.density_linkage_evidence import (
     write_density_linkage_oracle,
 )
 from membench.beads_ordering.density_linkage_plots import render_density_linkage_plots
+from membench.beads_ordering.density_linkage_replication import (
+    validate_replication_wave_manifests,
+    write_density_linkage_replication_comparison,
+)
 from membench.beads_ordering.followup_corpus import (
     load_followup_corpora,
     write_followup_corpora,
@@ -647,6 +651,79 @@ def _cmd_beads_ordering_density_linkage_replication_plan(args: argparse.Namespac
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
     print(f"wrote sealed replication plan: {out} ({plan['selected_cell_count']} cells)")
+    return 0
+
+
+def _cmd_beads_ordering_density_linkage_replication_compare(args: argparse.Namespace) -> int:
+    fixture_dir = Path(args.fixture_dir).resolve()
+    manifest_path = Path(args.manifest).resolve()
+    variants = load_density_linkage_manifest(fixture_dir, manifest_path)
+    task_metadata: dict[str, dict[str, object]] = {}
+    for variant_id, variant in variants.items():
+        if isinstance(variant, dict):
+            task_metadata[str(variant_id)] = dict(variant)
+            continue
+        recipe = variant.recipe
+        task_metadata[variant.corpus.tasks[0].task_id] = {
+            "base_task_id": recipe.base_task_id,
+            "graph_family": recipe.graph_family,
+            "candidate_count": recipe.candidate_count,
+            "linkage_level": recipe.linkage_level.value,
+        }
+
+    def load_rows(paths: list[str]) -> list[OrderingRunResult]:
+        return [
+            OrderingRunResult.model_validate_json(line)
+            for raw_path in paths
+            for line in Path(raw_path).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+    bridge_raw = [Path(value).resolve() for value in args.bridge_raw]
+    secondary_raw = [Path(value).resolve() for value in args.secondary_raw]
+    bridge_manifests = [Path(value).resolve() for value in args.bridge_manifests]
+    secondary_manifests = [Path(value).resolve() for value in args.secondary_manifests]
+
+    def load_manifests(paths: list[Path]) -> list[dict[str, object]]:
+        payloads: list[dict[str, object]] = []
+        for path in paths:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError(f"replication shard manifest must be an object: {path.name}")
+            payloads.append(payload)
+        return payloads
+
+    manifest_validation = validate_replication_wave_manifests(
+        load_manifests(bridge_manifests), load_manifests(secondary_manifests)
+    )
+    mem_repo = Path(__file__).resolve().parents[2]
+    comparison_source = (
+        Path(__file__).resolve().parent / "beads_ordering" / "density_linkage_replication.py"
+    )
+    provenance: dict[str, object] = {
+        "analysis_mem_git_sha": git_sha(mem_repo),
+        "analysis_mem_git_dirty": git_dirty(mem_repo),
+        "analysis_mem_git_diff_sha256": git_diff_sha256(mem_repo),
+        "analysis_source_sha256": _source_bundle_sha256(
+            [Path(__file__).resolve(), comparison_source]
+        ),
+        "density_linkage_manifest_sha256": file_sha256(manifest_path),
+        "bridge_raw_sha256s": [file_sha256(path) for path in bridge_raw],
+        "secondary_raw_sha256s": [file_sha256(path) for path in secondary_raw],
+        "bridge_manifest_sha256s": [file_sha256(path) for path in bridge_manifests],
+        "secondary_manifest_sha256s": [file_sha256(path) for path in secondary_manifests],
+        "manifest_validation": manifest_validation,
+    }
+    write_density_linkage_replication_comparison(
+        load_rows(args.bridge_raw),
+        load_rows(args.secondary_raw),
+        task_metadata,
+        Path(args.out).resolve(),
+        provenance=provenance,
+        bootstrap_seed=args.bootstrap_seed,
+        bootstrap_resamples=args.bootstrap_resamples,
+    )
+    print(f"wrote density/linkage replication comparison: {args.out}")
     return 0
 
 
@@ -1390,6 +1467,31 @@ def main(argv: list[str] | None = None) -> int:
     p_density_linkage_replication.add_argument("--out", required=True)
     p_density_linkage_replication.set_defaults(
         func=_cmd_beads_ordering_density_linkage_replication_plan
+    )
+
+    p_density_linkage_replication_compare = sub.add_parser(
+        "beads-ordering-density-linkage-replication-compare",
+        help="compare paired same-protocol bridge and secondary-model waves",
+    )
+    p_density_linkage_replication_compare.add_argument(
+        "--fixture-dir", default=str(_DEFAULT_ORDERING_FOLLOWUP_DIR)
+    )
+    p_density_linkage_replication_compare.add_argument("--manifest", required=True)
+    p_density_linkage_replication_compare.add_argument("--bridge-raw", nargs="+", required=True)
+    p_density_linkage_replication_compare.add_argument("--secondary-raw", nargs="+", required=True)
+    p_density_linkage_replication_compare.add_argument(
+        "--bridge-manifests", nargs="+", required=True
+    )
+    p_density_linkage_replication_compare.add_argument(
+        "--secondary-manifests", nargs="+", required=True
+    )
+    p_density_linkage_replication_compare.add_argument("--bootstrap-seed", type=int, default=5880)
+    p_density_linkage_replication_compare.add_argument(
+        "--bootstrap-resamples", type=int, default=5000
+    )
+    p_density_linkage_replication_compare.add_argument("--out", required=True)
+    p_density_linkage_replication_compare.set_defaults(
+        func=_cmd_beads_ordering_density_linkage_replication_compare
     )
 
     p_density_linkage_plot = sub.add_parser(
