@@ -375,6 +375,9 @@ def test_cli_combines_density_linkage_agent_shards(
     provenance = seen["provenance"]
     assert isinstance(provenance, dict)
     assert len(provenance["raw_input_sha256s"]) == 2
+    assert len(provenance["analysis_mem_git_sha"]) == 40
+    assert len(provenance["analysis_mem_git_diff_sha256"]) == 64
+    assert len(provenance["analysis_source_sha256"]) == 64
 
 
 def test_cli_seals_density_linkage_replication_plan(

@@ -572,7 +572,17 @@ def _cmd_beads_ordering_density_linkage_agent_analyze(args: argparse.Namespace) 
         Path(args.locked_repeat_manifest).resolve() if args.locked_repeat_manifest else None
     )
     manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    mem_repo = Path(__file__).resolve().parents[2]
+    analysis_source = (
+        Path(__file__).resolve().parent / "beads_ordering" / "density_linkage_agent_evidence.py"
+    )
     provenance: dict[str, object] = {
+        "analysis_mem_git_sha": git_sha(mem_repo),
+        "analysis_mem_git_dirty": git_dirty(mem_repo),
+        "analysis_mem_git_diff_sha256": git_diff_sha256(mem_repo),
+        "analysis_source_sha256": _source_bundle_sha256(
+            [Path(__file__).resolve(), analysis_source]
+        ),
         "density_linkage_manifest_sha256": file_sha256(manifest_path),
         "preregistration_sha256": manifest_payload.get("preregistration_sha256", ""),
         "raw_input_names": [path.name for path in raw_paths],
