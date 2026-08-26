@@ -457,6 +457,14 @@ def test_grid_validation_detects_embedded_failure_and_provenance_drift() -> None
     assert integrity["embedded_failure_count"] == 1
     assert integrity["embedded_failure_run_ids"] == [failed.run_id]
     assert integrity["provenance_cardinality"]["mem_git_sha"] == 2
+    assert len(integrity["provenance_profiles"]) == 2
+    assert sum(profile["observation_count"] for profile in integrity["provenance_profiles"]) == len(
+        rows
+    )
+    assert {profile["mem_git_sha"] for profile in integrity["provenance_profiles"]} == {
+        "a" * 40,
+        "d" * 40,
+    }
     assert integrity["unknown_task_ids"] == []
     assert integrity["duplicate_run_ids"] == []
 

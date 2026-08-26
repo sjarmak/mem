@@ -14,8 +14,10 @@ from membench.beads_ordering.models import OrderingRunResult
 _PRIMARY_POLICIES = ("key", "pagerank", "bm25f")
 _PROVENANCE_FIELDS = (
     "mem_git_sha",
+    "mem_git_dirty",
     "mem_git_diff_sha256",
     "beads_git_sha",
+    "beads_git_dirty",
     "beads_git_diff_sha256",
     "beads_bin_sha256",
     "structural_order_source_git_sha",
@@ -144,6 +146,17 @@ def validate_density_linkage_agent_grid(
     provenance = {
         field: len({str(getattr(row, field)) for row in rows}) for field in _PROVENANCE_FIELDS
     }
+    profile_rows: dict[tuple[object, ...], list[OrderingRunResult]] = defaultdict(list)
+    for row in rows:
+        profile_rows[tuple(getattr(row, field) for field in _PROVENANCE_FIELDS)].append(row)
+    provenance_profiles = [
+        {
+            **dict(zip(_PROVENANCE_FIELDS, profile, strict=True)),
+            "observation_count": len(profile_observations),
+            "embedded_failure_count": sum(row.failure is not None for row in profile_observations),
+        }
+        for profile, profile_observations in sorted(profile_rows.items())
+    ]
     return {
         "observation_count": len(rows),
         "unique_run_count": len(set(run_ids)),
@@ -152,6 +165,7 @@ def validate_density_linkage_agent_grid(
         "embedded_failure_run_ids": embedded_failures,
         "unknown_task_ids": sorted({row.task_id for row in rows} - set(task_metadata)),
         "provenance_cardinality": provenance,
+        "provenance_profiles": provenance_profiles,
         "provenance_consistent": all(count == 1 for count in provenance.values()),
         "factor_inventory": {
             "arms": sorted({row.arm.value for row in rows}),
