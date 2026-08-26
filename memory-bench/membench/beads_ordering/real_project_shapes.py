@@ -356,6 +356,19 @@ def summarize_real_project_shapes(
         "study": "beads-memory-real-project-shapes",
         "privacy_projection": "aggregate counts and distributions only",
         "probe_protocol": _PROBE_PROTOCOL,
+        "sampling_frame": {
+            "discovery": "recursive .beads workspaces beneath operator-supplied roots",
+            "exclusions": [
+                ".git",
+                ".mem",
+                ".venv",
+                "node_modules",
+                "__pycache__",
+                "memory-bench/results",
+            ],
+            "deduplication": "identical compact candidate snapshots counted once",
+            "failure_handling": "fixed aggregate categories only; diagnostics discarded",
+        },
         "probe_configuration": {
             "max_per_kind_per_project": max_probes_per_kind,
             "seed": probe_seed,
@@ -418,6 +431,17 @@ def _render_report(evidence: Mapping[str, object]) -> str:
         "Only aggregate numeric distributions are retained. Workspace paths, Memory "
         "identifiers, keys, compact text, derived probes, and command diagnostics are "
         "discarded.\n\n"
+        "## Method\n\n"
+        "- Sampling frame: recursively discovered `.beads` workspaces beneath "
+        "operator-supplied roots; generated, dependency, cache, and experiment-result "
+        "trees were excluded.\n"
+        "- Probe derivation: bounded deterministic key tokens and title/excerpt bigrams "
+        "from the compact discovery projection.\n"
+        "- Snapshot deduplication: identical compact candidate snapshots were counted "
+        "once.\n"
+        "- Failure handling: only fixed aggregate categories survive; diagnostics are "
+        "discarded.\n\n"
+        "## Results\n\n"
         f"- Workspace candidates: {sampling['workspace_candidates']}\n"
         f"- Workspaces scanned: {sampling['workspaces_scanned']}\n"
         f"- Workspaces with Memory records: {sampling['workspaces_with_memories']}\n"

@@ -171,6 +171,19 @@ def test_aggregate_evidence_reports_distributions_without_project_rows() -> None
     )
 
     assert evidence["privacy_projection"] == "aggregate counts and distributions only"
+    assert evidence["sampling_frame"] == {
+        "discovery": "recursive .beads workspaces beneath operator-supplied roots",
+        "exclusions": [
+            ".git",
+            ".mem",
+            ".venv",
+            "node_modules",
+            "__pycache__",
+            "memory-bench/results",
+        ],
+        "deduplication": "identical compact candidate snapshots counted once",
+        "failure_handling": "fixed aggregate categories only; diagnostics discarded",
+    }
     assert "projects" not in evidence
     assert evidence["corpus_size"]["p50"] == 42.0
     assert evidence["match_set_size"]["all_native_probes"]["p90"] == pytest.approx(32.0)
@@ -210,6 +223,9 @@ def test_writer_never_serializes_memory_content_queries_paths_or_project_ids(
     assert "/home/" not in combined
     assert "query" not in combined.lower()
     assert "memory body" not in combined.lower()
+    assert "Sampling frame" in combined
+    assert "Probe derivation" in combined
+    assert "Snapshot deduplication" in combined
     assert not (tmp_path / "raw.jsonl").exists()
 
 
