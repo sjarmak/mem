@@ -674,7 +674,7 @@ def _bound(summary: object, name: str) -> float | None:
     return float(value) if isinstance(value, (int, float)) else None
 
 
-def _clears_positive(summary: object, threshold: float) -> bool:
+def _lower_bound_at_least(summary: object, threshold: float) -> bool:
     low = _bound(summary, "low")
     return low is not None and low >= threshold
 
@@ -683,11 +683,6 @@ def _clears_magnitude(summary: object, threshold: float) -> bool:
     low = _bound(summary, "low")
     high = _bound(summary, "high")
     return low is not None and high is not None and (low >= threshold or high <= -threshold)
-
-
-def _lower_at_least(summary: object, threshold: float) -> bool:
-    low = _bound(summary, "low")
-    return low is not None and low >= threshold
 
 
 def _evaluate_decision_gates(
@@ -699,8 +694,10 @@ def _evaluate_decision_gates(
         {
             "linkage_level": row["linkage_level"],
             "mode": row["mode"],
-            "success_drop_clears": _clears_positive(row.get("task_success_drop_10_to_150"), 0.1),
-            "correct_use_failure_clears": _clears_positive(
+            "success_drop_clears": _lower_bound_at_least(
+                row.get("task_success_drop_10_to_150"), 0.1
+            ),
+            "correct_use_failure_clears": _lower_bound_at_least(
                 row.get("correct_use_failure_increase_10_to_150"), 0.1
             ),
         }
@@ -758,10 +755,10 @@ def _evaluate_decision_gates(
             or row.get("linkage_level") not in {"sparse", "native"}
         ):
             continue
-        benefit = _clears_positive(row.get("page_one_gain"), 0.15) or _clears_positive(
+        benefit = _lower_bound_at_least(row.get("page_one_gain"), 0.15) or _lower_bound_at_least(
             row.get("compact_token_reduction_fraction"), 0.1
         )
-        noninferior = _lower_at_least(row.get("task_success_delta"), -0.05)
+        noninferior = _lower_bound_at_least(row.get("task_success_delta"), -0.05)
         structural_evidence.append(
             {
                 "candidate_count": row["candidate_count"],
@@ -783,10 +780,10 @@ def _evaluate_decision_gates(
             or row.get("linkage_level") not in {"native", "enriched"}
         ):
             continue
-        cost_clears = _clears_positive(row.get("pages_saved"), 1.0) or _clears_positive(
+        cost_clears = _lower_bound_at_least(row.get("pages_saved"), 1.0) or _lower_bound_at_least(
             row.get("compact_token_reduction_fraction"), 0.2
         )
-        no_regression = _lower_at_least(row.get("task_success_delta"), 0)
+        no_regression = _lower_bound_at_least(row.get("task_success_delta"), 0)
         query_evidence.append(
             {
                 "linkage_level": row["linkage_level"],
