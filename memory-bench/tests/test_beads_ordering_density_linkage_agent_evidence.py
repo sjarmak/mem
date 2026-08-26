@@ -189,6 +189,33 @@ def test_combined_analysis_preserves_paired_density_policy_and_linkage_contrasts
     assert gates["structural_default_supported"] is False
     assert gates["query_specific_beads_ownership_supported"] is False
 
+    family_tail = next(
+        row
+        for row in analysis["family_policy_tails"]
+        if row["candidate_count"] == 150
+        and row["linkage_level"] == "enriched"
+        and row["reference"] == "key"
+        and row["contender"] == "pagerank"
+        and row["graph_family"] == "family-a"
+    )
+    assert family_tail["metrics"]["pages_saved"]["p50"] == 1.0
+    assert family_tail["metrics"]["pages_saved"]["p90"] == 1.0
+
+    task_tail = next(
+        row
+        for row in analysis["task_policy_tails"]
+        if row["candidate_count"] == 150
+        and row["linkage_level"] == "enriched"
+        and row["reference"] == "key"
+        and row["contender"] == "pagerank"
+    )
+    pages_tail = task_tail["metrics"]["pages_saved"]
+    assert pages_tail["negative_count"] == 0
+    assert pages_tail["p50"] == 1.0
+    assert pages_tail["p90"] == 1.0
+    assert pages_tail["bottom"][0]["base_task_id"] == "task-a"
+    assert pages_tail["top"][0]["graph_family"] == "family-b"
+
 
 def test_grid_validation_detects_embedded_failure_and_provenance_drift() -> None:
     rows = _synthetic_rows()
@@ -231,6 +258,8 @@ def test_evidence_writer_excludes_queries_model_text_failures_and_credentials(
     assert "PageRank versus key" in report
     assert "BM25F versus PageRank" in report
     assert "Linkage interaction" in report
+    assert "Graph-family tails" in report
+    assert "Task-level tails" in report
     assert "Targeted repeats" in report
     assert (tmp_path / "targeted-repeat-manifest.json").exists()
     assert "targeted_repeat_manifest_sha256" in manifest

@@ -412,6 +412,92 @@ def _policy_contrasts(
     return output, groups
 
 
+def _tail_distribution(values: Sequence[float]) -> dict[str, float | int | None]:
+    result = _distribution(values)
+    result["p10"] = _percentile(values, 0.1)
+    return result
+
+
+def _task_tail_summary(
+    values: Sequence[tuple[Mapping[str, object], float]],
+) -> dict[str, object]:
+    ordered = sorted(
+        values,
+        key=lambda item: (item[1], str(item[0]["base_task_id"])),
+    )
+
+    def project(item: tuple[Mapping[str, object], float]) -> dict[str, object]:
+        cell, value = item
+        return {
+            "base_task_id": str(cell["base_task_id"]),
+            "graph_family": str(cell["graph_family"]),
+            "value": value,
+        }
+
+    numeric = [value for _cell, value in values]
+    return {
+        **_tail_distribution(numeric),
+        "negative_count": sum(value < 0 for value in numeric),
+        "zero_count": sum(value == 0 for value in numeric),
+        "positive_count": sum(value > 0 for value in numeric),
+        "bottom": [project(item) for item in ordered[:3]],
+        "top": [project(item) for item in reversed(ordered[-3:])],
+    }
+
+
+def _task_policy_tails(
+    groups: Mapping[tuple[object, ...], _ContrastValues],
+) -> list[dict[str, object]]:
+    return [
+        {
+            "candidate_count": key[0],
+            "linkage_level": key[1],
+            "page_size": key[2],
+            "mode": key[3],
+            "reference": key[4],
+            "contender": key[5],
+            "pair_count": len(metrics["pages_saved"]),
+            "metrics": {
+                name: _task_tail_summary(values) for name, values in sorted(metrics.items())
+            },
+        }
+        for key, metrics in sorted(groups.items())
+    ]
+
+
+def _family_policy_tails(
+    groups: Mapping[tuple[object, ...], _ContrastValues],
+) -> list[dict[str, object]]:
+    output: list[dict[str, object]] = []
+    for key, metrics in sorted(groups.items()):
+        families = sorted(
+            {str(cell["graph_family"]) for values in metrics.values() for cell, _value in values}
+        )
+        for family in families:
+            family_metrics = {
+                name: [(cell, value) for cell, value in values if cell["graph_family"] == family]
+                for name, values in metrics.items()
+            }
+            output.append(
+                {
+                    "candidate_count": key[0],
+                    "linkage_level": key[1],
+                    "page_size": key[2],
+                    "mode": key[3],
+                    "reference": key[4],
+                    "contender": key[5],
+                    "graph_family": family,
+                    "pair_count": len(family_metrics["pages_saved"]),
+                    "metrics": {
+                        name: _tail_distribution([value for _cell, value in values])
+                        for name, values in sorted(family_metrics.items())
+                        if values
+                    },
+                }
+            )
+    return output
+
+
 def _linkage_interactions(
     groups: Mapping[tuple[object, ...], Mapping[str, Sequence[tuple[Mapping[str, object], float]]]],
     *,
@@ -764,6 +850,8 @@ def analyze_density_linkage_agents(
         "curves": _curve_rows(cells, seed=bootstrap_seed, resamples=bootstrap_resamples),
         "density_endpoint_contrasts": density,
         "policy_contrasts": policy_contrasts,
+        "family_policy_tails": _family_policy_tails(contrast_groups),
+        "task_policy_tails": _task_policy_tails(contrast_groups),
         "linkage_interactions": interactions,
         "decision_gates": _evaluate_decision_gates(density, policy_contrasts, interactions),
         "targeted_repeat_triggers": _repeat_triggers(rows, task_metadata),
@@ -1098,6 +1186,98 @@ def render_density_linkage_agent_report(analysis: Mapping[str, object]) -> str:
                 f"{summary(contrast['task_success_change_enriched_minus_sparse'], percent=True)} |"
             )
 
+    lines.extend(
+        [
+            "",
+            "## Graph-family tails",
+            "",
+            "Decision-edge cells only: 150 candidates, navigation, five-result pages. "
+            "Positive values favor the contender.",
+            "",
+            "| links | comparison | family | pairs | pages saved p50/p90 | "
+            "compact saving p50/p90 | success delta p50/p90 |",
+            "|---|---|---|---:|---:|---:|---:|",
+        ]
+    )
+    family_tails = analysis.get("family_policy_tails")
+    if isinstance(family_tails, Sequence):
+        for row in family_tails:
+            if not isinstance(row, Mapping):
+                continue
+            if (
+                row.get("candidate_count") != 150
+                or row.get("mode") != "navigation"
+                or row.get("page_size") != "5"
+                or row.get("linkage_level") not in {"native", "enriched"}
+            ):
+                continue
+            metrics = row.get("metrics")
+            if not isinstance(metrics, Mapping):
+                continue
+            pages = metrics.get("pages_saved")
+            tokens = metrics.get("compact_token_reduction_fraction")
+            success = metrics.get("task_success_delta")
+            if not all(isinstance(metric, Mapping) for metric in (pages, tokens, success)):
+                continue
+            comparison = f"{row['reference']}→{row['contender']}"
+            lines.append(
+                f"| {row['linkage_level']} | {comparison} | {row['graph_family']} | "
+                f"{row['pair_count']} | {summary(pages, 'p50')}/{summary(pages, 'p90')} | "
+                f"{summary(tokens, 'p50', percent=True)}/"
+                f"{summary(tokens, 'p90', percent=True)} | "
+                f"{summary(success, 'p50', percent=True)}/"
+                f"{summary(success, 'p90', percent=True)} |"
+            )
+
+    lines.extend(
+        [
+            "",
+            "## Task-level tails",
+            "",
+            "The bottom task is the least favorable observed paired result for the contender. "
+            "Full bottom/top-three records for every metric are retained in `analysis.json`.",
+            "",
+            "| links | comparison | metric | p10/p50/p90 | negative tasks | bottom task |",
+            "|---|---|---|---:|---:|---|",
+        ]
+    )
+    task_tails = analysis.get("task_policy_tails")
+    if isinstance(task_tails, Sequence):
+        for row in task_tails:
+            if not isinstance(row, Mapping):
+                continue
+            if (
+                row.get("candidate_count") != 150
+                or row.get("mode") != "navigation"
+                or row.get("page_size") != "5"
+                or row.get("linkage_level") not in {"native", "enriched"}
+            ):
+                continue
+            metrics = row.get("metrics")
+            if not isinstance(metrics, Mapping):
+                continue
+            comparison = f"{row['reference']}→{row['contender']}"
+            for metric_name in (
+                "pages_saved",
+                "compact_token_reduction_fraction",
+                "task_success_delta",
+            ):
+                metric = metrics.get(metric_name)
+                if not isinstance(metric, Mapping):
+                    continue
+                bottom = metric.get("bottom")
+                bottom_task = "—"
+                if isinstance(bottom, Sequence) and bottom and isinstance(bottom[0], Mapping):
+                    bottom_task = str(bottom[0].get("base_task_id", "—"))
+                percent = metric_name != "pages_saved"
+                lines.append(
+                    f"| {row['linkage_level']} | {comparison} | {metric_name} | "
+                    f"{summary(metric, 'p10', percent=percent)}/"
+                    f"{summary(metric, 'p50', percent=percent)}/"
+                    f"{summary(metric, 'p90', percent=percent)} | "
+                    f"{metric.get('negative_count', '—')} | {bottom_task} |"
+                )
+
     triggers = analysis.get("targeted_repeat_triggers")
     lines.extend(["", "## Targeted repeats", ""])
     if isinstance(triggers, Mapping):
@@ -1110,8 +1290,8 @@ def render_density_linkage_agent_report(analysis: Mapping[str, object]) -> str:
             "## Machine-readable evidence",
             "",
             "The machine-readable density, policy, linkage-interaction, and repeat-trigger "
-            "tables are in `analysis.json`. Raw model text is deliberately excluded from "
-            "the shareable observation projection.",
+            "tables, including all graph-family and task-level tails, are in `analysis.json`. "
+            "Raw model text is deliberately excluded from the shareable observation projection.",
             "",
         ]
     )
