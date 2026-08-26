@@ -1349,6 +1349,23 @@ def render_density_linkage_agent_report(analysis: Mapping[str, object]) -> str:
                     f"{metric.get('negative_count', '—')} | {bottom_task} |"
                 )
 
+    lines.extend(["", "## Provenance profiles", ""])
+    profiles = integrity.get("provenance_profiles")
+    if isinstance(profiles, Sequence):
+        for profile in profiles:
+            if not isinstance(profile, Mapping):
+                continue
+            lines.append(
+                f"- observations={profile['observation_count']}; "
+                f"infrastructure failures={profile['embedded_failure_count']}; "
+                f"mem={profile['mem_git_sha']} "
+                f"(dirty={profile['mem_git_dirty']}, diff={profile['mem_git_diff_sha256']}); "
+                f"Beads={profile['beads_git_sha']} "
+                f"(dirty={profile['beads_git_dirty']}, diff={profile['beads_git_diff_sha256']}); "
+                f"binary={profile['beads_bin_sha256']}; model={profile['agent_model']}; "
+                f"agent CLI={profile['agent_cli_version']}"
+            )
+
     triggers = analysis.get("targeted_repeat_triggers")
     lines.extend(["", "## Targeted repeats", ""])
     if isinstance(triggers, Mapping):

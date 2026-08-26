@@ -496,6 +496,7 @@ def test_evidence_writer_excludes_queries_model_text_failures_and_credentials(
     assert "Linkage interaction" in report
     assert "Graph-family tails" in report
     assert "Task-level tails" in report
+    assert "Provenance profiles" in report
     assert "Targeted repeats" in report
     assert (tmp_path / "targeted-repeat-manifest.json").exists()
     assert "targeted_repeat_manifest_sha256" in manifest
