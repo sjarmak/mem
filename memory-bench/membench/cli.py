@@ -860,6 +860,7 @@ def _cmd_beads_ordering_followup_rank_scaling(args: argparse.Namespace) -> int:
         corpora,
         sizes=sizes,
         repeats=args.repeats,
+        arithmetic=args.arithmetic,
     )
     mem_repo = Path(__file__).resolve().parents[2]
     beads_repo = Path(args.beads_repo).expanduser().resolve()
@@ -1545,6 +1546,15 @@ def main(argv: list[str] | None = None) -> int:
     p_followup_scaling.add_argument("--beads-bin", default=os.environ.get("BEADS_BIN"))
     p_followup_scaling.add_argument("--sizes", default="50,100,500,2000,10000")
     p_followup_scaling.add_argument("--repeats", type=int, default=3)
+    p_followup_scaling.add_argument(
+        "--arithmetic",
+        choices=("boundary", "pinned-update-order", "aggregated-dangling-mass"),
+        default="boundary",
+        help=(
+            "rank arithmetic to time; boundary preserves the reference scorer at sizes <=500 "
+            "and uses aggregated dangling mass above it"
+        ),
+    )
     p_followup_scaling.add_argument("--out", required=True)
     p_followup_scaling.set_defaults(func=_cmd_beads_ordering_followup_rank_scaling)
 

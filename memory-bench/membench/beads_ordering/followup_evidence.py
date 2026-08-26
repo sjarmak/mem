@@ -198,11 +198,13 @@ def analyze_agent_followup(
     }
     arms = sorted({str(row["arm"]) for row in cells})
     comparisons: list[dict[str, object]] = []
-    for reference in ("key", "pagerank", "reverse-pagerank"):
+    for reference in ("key", "pagerank", "reverse-pagerank", "control-automatic"):
         if reference not in arms:
             continue
         for contender in arms:
             if contender == reference:
+                continue
+            if reference == "control-automatic" and not contender.startswith("control-"):
                 continue
             for mode in sorted({str(row["mode"]) for row in cells}):
                 for page_size in sorted(

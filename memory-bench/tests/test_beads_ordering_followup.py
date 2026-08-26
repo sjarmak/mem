@@ -47,6 +47,7 @@ from membench.beads_ordering.mutation import (
     ContinuationEpoch,
     MutationKind,
     RankRefreshPolicy,
+    analyze_mutation_experiment,
     apply_mutation,
     benchmark_rank_scaling,
     build_graph_state,
@@ -173,6 +174,54 @@ def test_agent_followup_analysis_averages_repeats_before_policy_aggregation() ->
         if item["reference"] == "key" and item["contender"] == "bm25f"
     )
     assert comparison["compact_token_reduction_fraction"]["p50"] == 0.5
+
+
+def test_agent_followup_analysis_pairs_operator_controls_against_automatic() -> None:
+    def row(arm: OrderingArm, *, success: bool, tokens: int) -> OrderingRunResult:
+        return OrderingRunResult.model_construct(
+            run_id=f"task:navigation:{arm.value}:p5:r0",
+            task_id="task",
+            arm=arm,
+            mode=ExperimentMode.NAVIGATION,
+            page_size="5",
+            repeat=0,
+            corpus_size=50,
+            total_matched=12,
+            primary_page=2,
+            acceptable_page=1,
+            page_one_acceptable_visible=True,
+            pages_requested=1,
+            compact_tokens_to_first_useful=tokens,
+            retrieval_tokens_to_first_useful=tokens + 10,
+            tool_calls_to_first_useful=1,
+            retrieval_tool_calls=2,
+            time_to_first_useful_ms=1000.0,
+            full_recalls=1,
+            graph_hops_total=0,
+            branching_factor_mean=0.0,
+            retrieval_latency_ms=20.0,
+            server_candidate_generation_ms=4.0,
+            server_ordering_ms=2.0,
+            end_to_end_ms=1200.0,
+            task_success=success,
+            abstained=False,
+            premature_stop=False,
+            failure=None,
+        )
+
+    analysis = analyze_agent_followup(
+        [
+            row(OrderingArm.CONTROL_AUTOMATIC, success=False, tokens=200),
+            row(OrderingArm.CONTROL_SEMANTIC, success=True, tokens=100),
+        ],
+        {"task": {"graph_family": "family", "failure_case": "case"}},
+        bootstrap_resamples=100,
+    )
+
+    comparison = analysis["paired_policy_comparisons"][0]
+    assert comparison["reference"] == "control-automatic"
+    assert comparison["contender"] == "control-semantic"
+    assert comparison["task_success_delta"]["estimate"] == 1.0
 
 
 def test_agent_followup_svg_plots_repeat_balanced_page_curves() -> None:
@@ -1036,7 +1085,6 @@ def test_mutation_experiment_preserves_same_snapshot_candidates_across_policies(
     for row in rows:
         by_sequence.setdefault(row.sequence, []).append(row)
         assert row.page_size == 10
-        assert row.continuation_invalidated is True
     for sequence_rows in by_sequence.values():
         assert len({row.candidate_digest for row in sequence_rows}) == 1
         assert len({row.total_matched for row in sequence_rows}) == 1
@@ -1044,6 +1092,9 @@ def test_mutation_experiment_preserves_same_snapshot_candidates_across_policies(
     exact = [row for row in rows if row.policy is RankRefreshPolicy.EXACT_GLOBAL]
     assert all(row.extra_pages_to_first_useful == 0 for row in exact)
     assert all(row.top_10_overlap == 1.0 for row in exact)
+    assert all(row.continuation_invalidated for row in exact)
+    periodic = [row for row in rows if row.policy is RankRefreshPolicy.PERIODIC_20]
+    assert any(not row.continuation_invalidated for row in periodic)
     unsupported = [row for row in rows if row.policy is RankRefreshPolicy.INCREMENTAL_IF_FEASIBLE]
     assert unsupported and all(not row.supported for row in unsupported)
 
@@ -1085,6 +1136,47 @@ def test_mutation_writer_emits_raw_manifest_and_p50_p90(tmp_path: Path) -> None:
         assert "rank_refresh_ms" in summary
         assert {"p50", "p90"} <= set(summary["rank_refresh_ms"])
         assert "top_10_overlap" in summary
+
+
+def test_mutation_analysis_separates_operational_and_task_snapshots() -> None:
+    corpus = build_followup_corpora(seed=5878)["incident-runbook-sparse-authority"]
+    rows = run_mutation_experiment(
+        {"incident-runbook-sparse-authority": corpus},
+        sizes=(50, 100),
+        event_count=7,
+        seed=5878,
+    )
+
+    analysis = analyze_mutation_experiment(rows)
+
+    assert analysis["schema_version"] == 2
+    assert analysis["task_snapshot_count"] == len(rows)
+    assert analysis["operational_snapshot_count"] == 2 * 7 * len(RankRefreshPolicy)
+    exact = analysis["by_policy"]["exact-global"]
+    assert exact["task_snapshots"] == 2 * 7
+    assert exact["operational_snapshots"] == 2 * 7
+    assert exact["refresh_event_count"] == 2 * 7
+    assert exact["continuation_invalidation_rate"] == 1.0
+    assert exact["rank_freshness_decision_ready"] is False
+    assert exact["task_success_not_measured"] is True
+    assert {"50", "100"} <= set(analysis["strata"]["corpus_size"])
+    assert set(analysis["strata"]["mutation_kind"]) == {kind.value for kind in MutationKind}
+
+
+def test_mutation_analysis_rejects_inconsistent_duplicate_operational_metrics() -> None:
+    corpus = build_followup_corpora(seed=5878)["incident-runbook-sparse-authority"]
+    rows = list(
+        run_mutation_experiment(
+            {"incident-runbook-sparse-authority": corpus},
+            sizes=(50,),
+            event_count=1,
+            seed=5878,
+        )
+    )
+    rows.append(rows[0].model_copy(update={"oracle_compute_ms": rows[0].oracle_compute_ms + 1}))
+
+    with pytest.raises(ValueError, match="inconsistent operational metrics"):
+        analyze_mutation_experiment(rows)
 
 
 def test_cli_runs_mutation_replay_with_explicit_binary_provenance(tmp_path: Path) -> None:
@@ -1159,6 +1251,21 @@ def test_rank_scaling_reports_optimized_large_corpus_curve(tmp_path: Path) -> No
     analysis = json.loads((tmp_path / "rank-scaling-analysis.json").read_text())
     assert set(analysis["by_corpus_size"]) == {"50", "1000"}
     assert {"p50", "p90"} <= set(analysis["by_corpus_size"]["1000"]["compute_ms"])
+    assert "pinned_top_10_overlap" in analysis["by_corpus_size"]["50"]
+
+
+def test_rank_scaling_can_measure_optimized_batch_arithmetic_at_every_size() -> None:
+    corpus = build_followup_corpora(seed=5878)["incident-runbook-sparse-authority"]
+    rows = benchmark_rank_scaling(
+        {"incident-runbook-sparse-authority": corpus},
+        sizes=(50, 500),
+        repeats=1,
+        arithmetic="aggregated-dangling-mass",
+    )
+
+    assert {row.arithmetic for row in rows} == {"aggregated-dangling-mass"}
+    assert all(row.pinned_top_10_overlap is not None for row in rows)
+    assert all(row.pinned_top_10_overlap >= 0.9 for row in rows)
 
 
 def test_cli_runs_rank_scaling_with_provenance(tmp_path: Path) -> None:
@@ -1192,3 +1299,35 @@ def test_cli_runs_rank_scaling_with_provenance(tmp_path: Path) -> None:
         "behavior_sizes": "pinned-update-order",
         "compute-only-sizes": "aggregated-dangling-mass",
     }
+
+
+def test_cli_can_run_comparable_optimized_rank_scaling_curve(tmp_path: Path) -> None:
+    from membench import cli
+
+    out = tmp_path / "scaling-optimized-cli"
+    assert (
+        cli.main(
+            [
+                "beads-ordering-followup-rank-scaling",
+                "--fixture-dir",
+                str(ROOT / "fixtures" / "beads_ordering" / "followup"),
+                "--beads-repo",
+                str(ROOT.parent),
+                "--beads-bin",
+                "/bin/true",
+                "--sizes",
+                "50",
+                "--repeats",
+                "1",
+                "--arithmetic",
+                "aggregated-dangling-mass",
+                "--out",
+                str(out),
+            ]
+        )
+        == 0
+    )
+    manifest = json.loads((out / "rank-scaling-manifest.json").read_text())
+    assert manifest["arithmetic_modes"] == ["aggregated-dangling-mass"]
+    assert manifest["pinned_parity_measured_through_size"] == 50
+    assert manifest["pinned_top_10_overlap"]["count"] == 7

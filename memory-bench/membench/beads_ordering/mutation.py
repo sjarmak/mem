@@ -135,6 +135,7 @@ class RankScalingRow(BaseModel):
     edge_count: int = Field(ge=0)
     compute_ms: float = Field(ge=0)
     order_digest: str
+    pinned_top_10_overlap: float | None = Field(default=None, ge=0, le=1)
 
 
 def build_graph_state(corpus: FrozenCorpus, *, size: int) -> GraphState:
@@ -601,6 +602,22 @@ def _candidate_digest(candidates: set[str]) -> str:
     return hashlib.sha256("\n".join(sorted(candidates)).encode()).hexdigest()
 
 
+def _retrieval_snapshot_digest(
+    state: GraphState,
+    order: tuple[str, ...],
+    candidates: set[str],
+) -> str:
+    """Digest only candidate projection and order relevant to continuation."""
+
+    by_id = {memory.id: memory for memory in state.memories}
+    payload = [
+        by_id[memory_id].model_dump(mode="json") for memory_id in order if memory_id in candidates
+    ]
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
 def run_mutation_experiment(
     corpora: Mapping[str, FrozenCorpus],
     *,
@@ -639,8 +656,16 @@ def run_mutation_experiment(
             effective_orders = dict.fromkeys(policies, initial_order)
             rank_epochs = dict.fromkeys(policies, 0)
             last_refreshes = dict.fromkeys(policies, 0)
-            previous_digests = dict.fromkeys(policies, initial.digest)
-            previous_epochs = dict.fromkeys(policies, 0)
+            previous_digests: dict[tuple[RankRefreshPolicy, str], str] = {}
+            previous_epochs: dict[tuple[RankRefreshPolicy, str], int] = {}
+            for policy in policies:
+                for task in tasks:
+                    candidates = set(candidate_ids(initial, task.query))
+                    key = (policy, task.task_id)
+                    previous_digests[key] = _retrieval_snapshot_digest(
+                        initial, effective_orders[policy], candidates
+                    )
+                    previous_epochs[key] = 0
             current = initial
             for event in events:
                 mutation_started = time.perf_counter_ns()
@@ -703,20 +728,24 @@ def run_mutation_experiment(
                     else:  # pragma: no cover - exhaustive StrEnum handling
                         raise ValueError(f"unsupported refresh policy: {policy}")
 
-                    token = ContinuationEpoch(
-                        state_digest=previous_digests[policy],
-                        rank_epoch=previous_epochs[policy],
-                    )
-                    invalidated = not continuation_is_valid(
-                        token,
-                        state_digest=current.digest,
-                        rank_epoch=rank_epochs[policy],
-                    )
-                    previous_digests[policy] = current.digest
-                    previous_epochs[policy] = rank_epochs[policy]
                     for task in tasks:
                         candidates = task_candidates[task.task_id]
                         effective_order = effective_orders[policy]
+                        continuation_key = (policy, task.task_id)
+                        snapshot_digest = _retrieval_snapshot_digest(
+                            current, effective_order, candidates
+                        )
+                        token = ContinuationEpoch(
+                            state_digest=previous_digests[continuation_key],
+                            rank_epoch=previous_epochs[continuation_key],
+                        )
+                        invalidated = not continuation_is_valid(
+                            token,
+                            state_digest=snapshot_digest,
+                            rank_epoch=rank_epochs[policy],
+                        )
+                        previous_digests[continuation_key] = snapshot_digest
+                        previous_epochs[continuation_key] = rank_epochs[policy]
                         exact_useful = _useful_rank(exact_order, candidates, task)
                         effective_useful = _useful_rank(effective_order, candidates, task)
                         rows.append(
@@ -791,25 +820,120 @@ def _distribution(values: Sequence[float]) -> dict[str, float | int]:
 def analyze_mutation_experiment(
     rows: Sequence[MutationReplayRow],
 ) -> dict[str, Any]:
+    operational_fields = (
+        "event_kind",
+        "strategy",
+        "supported",
+        "feasibility_reason",
+        "state_digest",
+        "rank_epoch",
+        "rank_age_events",
+        "refresh_phase",
+        "mutation_ms",
+        "oracle_compute_ms",
+        "rank_refresh_ms",
+        "top_10_overlap",
+    )
+    unique: dict[tuple[str, int, int, RankRefreshPolicy], MutationReplayRow] = {}
+    for row in rows:
+        key = (row.graph_family, row.corpus_size, row.sequence, row.policy)
+        prior = unique.get(key)
+        if prior is None:
+            unique[key] = row
+            continue
+        if any(getattr(prior, field) != getattr(row, field) for field in operational_fields):
+            raise ValueError(f"inconsistent operational metrics for snapshot {key}")
+    operational_rows = list(unique.values())
+
+    def summarize_policy(
+        task_rows: Sequence[MutationReplayRow],
+        operation_rows: Sequence[MutationReplayRow],
+    ) -> dict[str, object]:
+        refreshes = [row for row in operation_rows if row.refresh_phase != "none"]
+        extra_pages = [float(row.extra_pages_to_first_useful) for row in task_rows]
+        overlap = [row.top_10_overlap for row in operation_rows]
+        invalidations = sum(row.continuation_invalidated for row in task_rows)
+        supported = bool(operation_rows) and all(row.supported for row in operation_rows)
+        p90_extra_pages = _percentile(extra_pages, 0.9)
+        minimum_overlap = min(overlap, default=0.0)
+        invalidation_rate = invalidations / len(task_rows) if task_rows else 0.0
+        surrogate_checks = {
+            "p90_extra_pages_at_most_1": p90_extra_pages <= 1.0,
+            "minimum_top_10_overlap_at_least_0_9": minimum_overlap >= 0.9,
+            "continuation_changes_fail_closed": invalidation_rate > 0.0,
+        }
+        refresh_distribution = _distribution([row.rank_refresh_ms for row in operation_rows])
+        mean_refresh_ms = float(refresh_distribution["mean"])
+        return {
+            "rows": len(task_rows),
+            "supported_rows": sum(row.supported for row in task_rows),
+            "task_snapshots": len(task_rows),
+            "operational_snapshots": len(operation_rows),
+            "supported_operational_snapshots": sum(row.supported for row in operation_rows),
+            "refresh_event_count": len(refreshes),
+            "refresh_event_rate": len(refreshes) / len(operation_rows) if operation_rows else 0.0,
+            "rank_refresh_ms": refresh_distribution,
+            "rank_refresh_when_run_ms": _distribution([row.rank_refresh_ms for row in refreshes]),
+            "amortized_refresh_ms_per_mutation": mean_refresh_ms,
+            "single_core_mutations_per_second_at_mean_refresh_cost": (
+                1000.0 / mean_refresh_ms if mean_refresh_ms > 0 else None
+            ),
+            "oracle_compute_ms": _distribution([row.oracle_compute_ms for row in operation_rows]),
+            "mutation_latency_ms": _distribution([row.mutation_ms for row in operation_rows]),
+            "top_10_overlap": _distribution(overlap),
+            "extra_pages_to_first_useful": _distribution(extra_pages),
+            "useful_page_parity_rate": (
+                sum(row.extra_pages_to_first_useful == 0 for row in task_rows) / len(task_rows)
+                if task_rows
+                else 0.0
+            ),
+            "worse_useful_page_rate": (
+                sum(row.extra_pages_to_first_useful > 0 for row in task_rows) / len(task_rows)
+                if task_rows
+                else 0.0
+            ),
+            "continuation_invalidations": invalidations,
+            "continuation_invalidation_rate": invalidation_rate,
+            "retrieval_surrogate_checks": surrogate_checks,
+            "retrieval_surrogate_gate_passed": supported and all(surrogate_checks.values()),
+            "task_success_not_measured": True,
+            "rank_freshness_decision_ready": False,
+        }
+
     by_policy: dict[str, dict[str, object]] = {}
     for policy in RankRefreshPolicy:
         selected = [row for row in rows if row.policy is policy]
-        by_policy[policy.value] = {
-            "rows": len(selected),
-            "supported_rows": sum(row.supported for row in selected),
-            "rank_refresh_ms": _distribution([row.rank_refresh_ms for row in selected]),
-            "oracle_compute_ms": _distribution([row.oracle_compute_ms for row in selected]),
-            "mutation_latency_ms": _distribution([row.mutation_ms for row in selected]),
-            "top_10_overlap": _distribution([row.top_10_overlap for row in selected]),
-            "extra_pages_to_first_useful": _distribution(
-                [float(row.extra_pages_to_first_useful) for row in selected]
-            ),
-            "continuation_invalidations": sum(row.continuation_invalidated for row in selected),
-        }
+        selected_operational = [row for row in operational_rows if row.policy is policy]
+        by_policy[policy.value] = summarize_policy(selected, selected_operational)
+
+    dimensions: dict[str, Callable[[MutationReplayRow], str]] = {
+        "corpus_size": lambda row: str(row.corpus_size),
+        "mutation_kind": lambda row: row.event_kind.value,
+        "rank_age_events": lambda row: str(row.rank_age_events),
+        "graph_family": lambda row: row.graph_family,
+        "failure_case": lambda row: row.failure_case,
+    }
+    strata: dict[str, dict[str, dict[str, object]]] = {}
+    for dimension, key_fn in dimensions.items():
+        values = sorted({key_fn(row) for row in rows})
+        strata[dimension] = {}
+        for value in values:
+            stratum_tasks = [row for row in rows if key_fn(row) == value]
+            stratum_operations = [row for row in operational_rows if key_fn(row) == value]
+            strata[dimension][value] = {
+                policy.value: summarize_policy(
+                    [row for row in stratum_tasks if row.policy is policy],
+                    [row for row in stratum_operations if row.policy is policy],
+                )
+                for policy in RankRefreshPolicy
+            }
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "row_count": len(rows),
+        "task_snapshot_count": len(rows),
+        "operational_snapshot_count": len(operational_rows),
         "by_policy": by_policy,
+        "strata": strata,
     }
 
 
@@ -829,7 +953,7 @@ def write_mutation_experiment(
     analysis = analyze_mutation_experiment(rows)
     (out / "analysis.json").write_text(json.dumps(analysis, indent=2) + "\n", encoding="utf-8")
     manifest: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "compute-and-retrieval-behavior-replay",
         "row_count": len(rows),
         "seed": seed,
@@ -837,6 +961,9 @@ def write_mutation_experiment(
         "policies": [policy.value for policy in RankRefreshPolicy],
         "rank_strategy": "reverse-pagerank",
         "rank_parameters": {"damping": damping, "iterations": iterations},
+        "continuation_binding": (
+            "task candidate projection and effective order digest plus rank epoch"
+        ),
         "incremental_feasibility": {
             "supported": False,
             "reason": _INCREMENTAL_REASON,
@@ -902,6 +1029,7 @@ def benchmark_rank_scaling(
     strategy: str = "reverse-pagerank",
     damping: float = 0.85,
     iterations: int = 100,
+    arithmetic: str = "boundary",
 ) -> tuple[RankScalingRow, ...]:
     if repeats < 1:
         raise ValueError("rank-scaling repeats must be positive")
@@ -909,9 +1037,29 @@ def benchmark_rank_scaling(
     for family, corpus in sorted(corpora.items()):
         for size in sizes:
             state = scale_graph_state(corpus, size=size)
-            arithmetic = "pinned-update-order" if size <= 500 else "aggregated-dangling-mass"
+            selected_arithmetic = (
+                "pinned-update-order"
+                if arithmetic == "boundary" and size <= 500
+                else "aggregated-dangling-mass" if arithmetic == "boundary" else arithmetic
+            )
+            if selected_arithmetic not in {
+                "pinned-update-order",
+                "aggregated-dangling-mass",
+            }:
+                raise ValueError(f"unsupported rank-scaling arithmetic: {arithmetic}")
             _, edges = _graph_edges(state.memories, reverse=False)
             edge_count = sum(len(targets) for targets in edges)
+            pinned_order = (
+                rank_order(
+                    state.memories,
+                    strategy=strategy,
+                    damping=damping,
+                    iterations=iterations,
+                    arithmetic="pinned-update-order",
+                )
+                if selected_arithmetic == "aggregated-dangling-mass" and size <= 500
+                else None
+            )
             for repeat in range(repeats):
                 started = time.perf_counter_ns()
                 order = rank_order(
@@ -919,7 +1067,7 @@ def benchmark_rank_scaling(
                     strategy=strategy,
                     damping=damping,
                     iterations=iterations,
-                    arithmetic=arithmetic,
+                    arithmetic=selected_arithmetic,
                 )
                 compute_ms = (time.perf_counter_ns() - started) / 1_000_000
                 if len(order) != size or set(order) != {memory.id for memory in state.memories}:
@@ -930,12 +1078,17 @@ def benchmark_rank_scaling(
                         corpus_size=size,
                         repeat=repeat,
                         strategy=strategy,
-                        arithmetic=arithmetic,
+                        arithmetic=selected_arithmetic,
                         iterations=iterations,
                         damping=damping,
                         edge_count=edge_count,
                         compute_ms=compute_ms,
                         order_digest=hashlib.sha256("\n".join(order).encode()).hexdigest(),
+                        pinned_top_10_overlap=(
+                            _top_k_overlap(pinned_order, order)
+                            if pinned_order is not None
+                            else 1.0 if selected_arithmetic == "pinned-update-order" else None
+                        ),
                     )
                 )
     return tuple(rows)
@@ -959,6 +1112,13 @@ def write_rank_scaling(
             "arithmetic": sorted({row.arithmetic for row in selected}),
             "compute_ms": _distribution([row.compute_ms for row in selected]),
             "edge_count": _distribution([float(row.edge_count) for row in selected]),
+            "pinned_top_10_overlap": _distribution(
+                [
+                    row.pinned_top_10_overlap
+                    for row in selected
+                    if row.pinned_top_10_overlap is not None
+                ]
+            ),
         }
     analysis = {
         "schema_version": 1,
@@ -967,6 +1127,11 @@ def write_rank_scaling(
     }
     analysis_path = out / "rank-scaling-analysis.json"
     analysis_path.write_text(json.dumps(analysis, indent=2) + "\n", encoding="utf-8")
+    arithmetic_modes = sorted({row.arithmetic for row in rows})
+    pinned_parity_sizes = [row.corpus_size for row in rows if row.pinned_top_10_overlap is not None]
+    pinned_overlap = [
+        row.pinned_top_10_overlap for row in rows if row.pinned_top_10_overlap is not None
+    ]
     manifest = {
         "schema_version": 1,
         "row_count": len(rows),
@@ -974,6 +1139,9 @@ def write_rank_scaling(
         "analysis_sha256": hashlib.sha256(analysis_path.read_bytes()).hexdigest(),
         "rank_strategy": "reverse-pagerank",
         "rank_parameters": {"damping": 0.85, "iterations": 100},
+        "arithmetic_modes": arithmetic_modes,
+        "pinned_parity_measured_through_size": max(pinned_parity_sizes, default=None),
+        "pinned_top_10_overlap": _distribution(pinned_overlap),
         "arithmetic_boundary": {
             "behavior_sizes": "pinned-update-order",
             "compute-only-sizes": "aggregated-dangling-mass",
