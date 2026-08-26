@@ -183,6 +183,11 @@ def test_combined_analysis_preserves_paired_density_policy_and_linkage_contrasts
     assert density["task_success_drop_10_to_150"]["estimate"] == 1.0
     assert density["correct_use_failure_increase_10_to_150"]["estimate"] == 1.0
     assert density["retrieval_token_growth_10_to_150"]["p50"] == 200.0
+    gates = analysis["decision_gates"]
+    assert gates["candidate_density_behaviorally_material"] is True
+    assert gates["pagerank_benefit_link_dependent"] is True
+    assert gates["structural_default_supported"] is False
+    assert gates["query_specific_beads_ownership_supported"] is False
 
 
 def test_grid_validation_detects_embedded_failure_and_provenance_drift() -> None:

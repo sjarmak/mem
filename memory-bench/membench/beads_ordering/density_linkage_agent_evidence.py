@@ -581,6 +581,150 @@ def _repeat_triggers(
     }
 
 
+def _bound(summary: object, name: str) -> float | None:
+    if not isinstance(summary, Mapping):
+        return None
+    value = summary.get(name)
+    return float(value) if isinstance(value, (int, float)) else None
+
+
+def _clears_positive(summary: object, threshold: float) -> bool:
+    low = _bound(summary, "low")
+    return low is not None and low >= threshold
+
+
+def _clears_magnitude(summary: object, threshold: float) -> bool:
+    low = _bound(summary, "low")
+    high = _bound(summary, "high")
+    return low is not None and high is not None and (low >= threshold or high <= -threshold)
+
+
+def _lower_at_least(summary: object, threshold: float) -> bool:
+    low = _bound(summary, "low")
+    return low is not None and low >= threshold
+
+
+def _evaluate_decision_gates(
+    density: Sequence[Mapping[str, object]],
+    policies: Sequence[Mapping[str, object]],
+    interactions: Sequence[Mapping[str, object]],
+) -> dict[str, object]:
+    density_evidence = [
+        {
+            "linkage_level": row["linkage_level"],
+            "mode": row["mode"],
+            "success_drop_clears": _clears_positive(row.get("task_success_drop_10_to_150"), 0.1),
+            "correct_use_failure_clears": _clears_positive(
+                row.get("correct_use_failure_increase_10_to_150"), 0.1
+            ),
+        }
+        for row in density
+    ]
+    policy_index = {
+        (
+            row.get("candidate_count"),
+            row.get("linkage_level"),
+            row.get("page_size"),
+            row.get("mode"),
+            row.get("reference"),
+            row.get("contender"),
+        ): row
+        for row in policies
+    }
+    interaction_evidence: list[dict[str, object]] = []
+    for row in interactions:
+        if (
+            row.get("reference") != "key"
+            or row.get("contender") != "pagerank"
+            or row.get("mode") != "navigation"
+            or row.get("page_size") != "5"
+        ):
+            continue
+        candidate_count = row.get("candidate_count")
+        enriched = policy_index.get(
+            (candidate_count, "enriched", "5", "navigation", "key", "pagerank")
+        )
+        success_estimate = (
+            _bound(enriched.get("task_success_delta"), "estimate") if enriched is not None else None
+        )
+        clears = (
+            any(
+                (
+                    _clears_magnitude(row.get("page_one_gain_change_enriched_minus_sparse"), 0.15),
+                    _clears_magnitude(row.get("pages_saved_change_enriched_minus_sparse"), 1.0),
+                    _clears_magnitude(
+                        row.get("compact_token_saving_change_enriched_minus_sparse"), 0.2
+                    ),
+                )
+            )
+            and success_estimate is not None
+            and success_estimate >= -0.05
+        )
+        interaction_evidence.append({"candidate_count": candidate_count, "clears": clears})
+
+    structural_evidence: list[dict[str, object]] = []
+    for row in policies:
+        if (
+            row.get("reference") != "key"
+            or row.get("contender") != "pagerank"
+            or row.get("mode") != "navigation"
+            or row.get("page_size") != "5"
+            or row.get("linkage_level") not in {"sparse", "native"}
+        ):
+            continue
+        benefit = _clears_positive(row.get("page_one_gain"), 0.15) or _clears_positive(
+            row.get("compact_token_reduction_fraction"), 0.1
+        )
+        noninferior = _lower_at_least(row.get("task_success_delta"), -0.05)
+        structural_evidence.append(
+            {
+                "candidate_count": row["candidate_count"],
+                "linkage_level": row["linkage_level"],
+                "benefit_clears": benefit,
+                "success_noninferior": noninferior,
+                "supports": benefit and noninferior,
+            }
+        )
+
+    query_evidence: list[dict[str, object]] = []
+    for row in policies:
+        if (
+            row.get("reference") != "pagerank"
+            or row.get("contender") != "bm25f"
+            or row.get("candidate_count") != 150
+            or row.get("mode") != "navigation"
+            or row.get("page_size") != "5"
+            or row.get("linkage_level") not in {"native", "enriched"}
+        ):
+            continue
+        cost_clears = _clears_positive(row.get("pages_saved"), 1.0) or _clears_positive(
+            row.get("compact_token_reduction_fraction"), 0.2
+        )
+        no_regression = _lower_at_least(row.get("task_success_delta"), 0)
+        query_evidence.append(
+            {
+                "linkage_level": row["linkage_level"],
+                "cost_clears": cost_clears,
+                "no_success_regression": no_regression,
+                "supports": cost_clears and no_regression,
+            }
+        )
+    query_levels = {str(row["linkage_level"]) for row in query_evidence if row["supports"]}
+    return {
+        "candidate_density_behaviorally_material": any(
+            row["success_drop_clears"] or row["correct_use_failure_clears"]
+            for row in density_evidence
+        ),
+        "pagerank_benefit_link_dependent": any(bool(row["clears"]) for row in interaction_evidence),
+        "structural_default_supported": any(bool(row["supports"]) for row in structural_evidence),
+        "query_specific_beads_ownership_supported": query_levels == {"native", "enriched"},
+        "density_evidence": density_evidence,
+        "linkage_interaction_evidence": interaction_evidence,
+        "structural_default_evidence": structural_evidence,
+        "query_specific_ownership_evidence": query_evidence,
+    }
+
+
 def analyze_density_linkage_agents(
     rows: Sequence[OrderingRunResult],
     task_metadata: Mapping[str, Mapping[str, object]],
@@ -602,6 +746,7 @@ def analyze_density_linkage_agents(
     interactions = _linkage_interactions(
         contrast_groups, seed=bootstrap_seed + 100, resamples=bootstrap_resamples
     )
+    density = _density_contrasts(cells, seed=bootstrap_seed + 200, resamples=bootstrap_resamples)
     return {
         "schema_version": 1,
         "evidence_kind": "repeat-balanced agent outcomes over frozen candidate sets",
@@ -617,11 +762,10 @@ def analyze_density_linkage_agents(
             "cluster_order": ["graph_family", "base_task_id"],
         },
         "curves": _curve_rows(cells, seed=bootstrap_seed, resamples=bootstrap_resamples),
-        "density_endpoint_contrasts": _density_contrasts(
-            cells, seed=bootstrap_seed + 200, resamples=bootstrap_resamples
-        ),
+        "density_endpoint_contrasts": density,
         "policy_contrasts": policy_contrasts,
         "linkage_interactions": interactions,
+        "decision_gates": _evaluate_decision_gates(density, policy_contrasts, interactions),
         "targeted_repeat_triggers": _repeat_triggers(rows, task_metadata),
         "cells": cells,
     }
@@ -793,12 +937,28 @@ def render_density_linkage_agent_report(analysis: Mapping[str, object]) -> str:
         "Repeated density and linkage variants are paired within base task and graph family. "
         "Intervals are 90% hierarchical cluster bootstraps (family, then task).",
         "",
+        "## Registered decision gates",
+        "",
+    ]
+    gates = analysis.get("decision_gates")
+    if isinstance(gates, Mapping):
+        for key in (
+            "candidate_density_behaviorally_material",
+            "pagerank_benefit_link_dependent",
+            "structural_default_supported",
+            "query_specific_beads_ownership_supported",
+        ):
+            lines.append(f"- {key.replace('_', ' ')}: **{bool(gates.get(key))}**")
+    lines.extend(
+        [
+            "",
         "## Navigation, page size 5",
         "",
         "| candidates | links | policy | success [90% CI] | page-one useful | "
         "pages p50/p90 | compact tokens p50/p90 |",
         "|---:|---|---|---:|---:|---:|---:|",
-    ]
+        ]
+    )
     curves = analysis["curves"]
     if not isinstance(curves, Sequence):
         raise ValueError("analysis has no curves")
