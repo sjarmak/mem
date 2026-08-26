@@ -651,17 +651,6 @@ def test_cli_compares_density_linkage_replication_waves(
     bridge_manifest.write_text(json.dumps(_replication_shard_manifest("bridge-model")) + "\n")
     secondary_manifest.write_text(json.dumps(_replication_shard_manifest("secondary-model")) + "\n")
     monkeypatch.setattr(cli, "load_density_linkage_manifest", lambda *_: _metadata())
-    seen: dict[str, object] = {}
-
-    def fake_write(*args: object, **kwargs: object) -> dict[str, object]:
-        seen["bridge"] = args[0]
-        seen["secondary"] = args[1]
-        seen["metadata"] = args[2]
-        seen["out"] = args[3]
-        seen["provenance"] = kwargs["provenance"]
-        return {"schema_version": 1}
-
-    monkeypatch.setattr(cli, "write_density_linkage_replication_comparison", fake_write)
     out = tmp_path / "comparison"
 
     assert (
@@ -678,17 +667,19 @@ def test_cli_compares_density_linkage_replication_waves(
                 str(bridge_manifest),
                 "--secondary-manifests",
                 str(secondary_manifest),
+                "--bootstrap-resamples",
+                "20",
                 "--out",
                 str(out),
             ]
         )
         == 0
     )
-    assert len(seen["bridge"]) == len(bridge)  # type: ignore[arg-type]
-    assert len(seen["secondary"]) == len(secondary)  # type: ignore[arg-type]
-    assert seen["metadata"] == _metadata()
-    assert seen["out"] == out
-    provenance = seen["provenance"]
+    analysis = json.loads((out / "analysis.json").read_text(encoding="utf-8"))
+    assert analysis["expected_pair_count"] == len(bridge)
+    assert analysis["comparable_pair_count"] == len(bridge)
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    provenance = manifest["provenance"]
     assert isinstance(provenance, dict)
     assert len(provenance["analysis_mem_git_sha"]) == 40
     assert len(provenance["bridge_raw_sha256s"]) == 1
