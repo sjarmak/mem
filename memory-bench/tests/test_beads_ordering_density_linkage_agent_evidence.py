@@ -300,6 +300,28 @@ def test_evidence_writer_excludes_queries_model_text_failures_and_credentials(
     assert "targeted_repeat_manifest_sha256" in manifest
 
 
+def test_evidence_writer_preserves_the_locked_pre_outcome_repeat_manifest(
+    tmp_path: Path,
+) -> None:
+    locked = tmp_path / "locked" / "repeat-manifest.json"
+    locked.parent.mkdir()
+    locked_bytes = b'{"status":"sealed-before-repeat-outcomes","run_ids":["fixed:r1"]}\n'
+    locked.write_bytes(locked_bytes)
+    out = tmp_path / "evidence"
+
+    manifest = write_density_linkage_agent_evidence(
+        _synthetic_rows(),
+        _metadata(),
+        out,
+        provenance={"source": "combined primary observations"},
+        bootstrap_resamples=20,
+        locked_repeat_manifest=locked,
+    )
+
+    assert (out / "targeted-repeat-manifest.json").read_bytes() == locked_bytes
+    assert manifest["targeted_repeat_manifest_source"] == "locked-pre-outcome-input"
+
+
 def test_cli_combines_density_linkage_agent_shards(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -307,6 +329,8 @@ def test_cli_combines_density_linkage_agent_shards(
 
     manifest_path = tmp_path / "density-manifest.json"
     manifest_path.write_text('{"schema_version": 1}\n', encoding="utf-8")
+    locked_repeat_manifest = tmp_path / "locked-repeat.json"
+    locked_repeat_manifest.write_text('{"run_ids": []}\n', encoding="utf-8")
     raw_paths = []
     for index, row in enumerate(_synthetic_rows()[:2]):
         raw = tmp_path / f"shard-{index}.jsonl"
@@ -321,6 +345,7 @@ def test_cli_combines_density_linkage_agent_shards(
         seen["metadata"] = args[1]
         seen["out"] = args[2]
         seen["provenance"] = kwargs["provenance"]
+        seen["locked_repeat_manifest"] = kwargs["locked_repeat_manifest"]
         return {"observation_count": 2, "usable_observation_count": 2}
 
     monkeypatch.setattr(cli, "write_density_linkage_agent_evidence", fake_write)
@@ -335,6 +360,8 @@ def test_cli_combines_density_linkage_agent_shards(
                 str(manifest_path),
                 "--raw",
                 *(str(path) for path in raw_paths),
+                "--locked-repeat-manifest",
+                str(locked_repeat_manifest),
                 "--out",
                 str(out),
             ]
@@ -344,6 +371,7 @@ def test_cli_combines_density_linkage_agent_shards(
     assert len(seen["rows"]) == 2  # type: ignore[arg-type]
     assert seen["metadata"] == metadata
     assert seen["out"] == out
+    assert seen["locked_repeat_manifest"] == locked_repeat_manifest
     provenance = seen["provenance"]
     assert isinstance(provenance, dict)
     assert len(provenance["raw_input_sha256s"]) == 2

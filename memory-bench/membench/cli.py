@@ -568,6 +568,9 @@ def _cmd_beads_ordering_density_linkage_agent_analyze(args: argparse.Namespace) 
         }
     raw_paths = [Path(value).resolve() for value in args.raw]
     shard_manifests = [Path(value).resolve() for value in args.shard_manifests]
+    locked_repeat_manifest = (
+        Path(args.locked_repeat_manifest).resolve() if args.locked_repeat_manifest else None
+    )
     manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     provenance: dict[str, object] = {
         "density_linkage_manifest_sha256": file_sha256(manifest_path),
@@ -584,6 +587,7 @@ def _cmd_beads_ordering_density_linkage_agent_analyze(args: argparse.Namespace) 
         provenance=provenance,
         bootstrap_seed=args.bootstrap_seed,
         bootstrap_resamples=args.bootstrap_resamples,
+        locked_repeat_manifest=locked_repeat_manifest,
     )
     print(
         f"wrote density/linkage agent analysis: {args.out} "
@@ -1351,6 +1355,11 @@ def main(argv: list[str] | None = None) -> int:
     p_density_linkage_agent_analysis.add_argument("--manifest", required=True)
     p_density_linkage_agent_analysis.add_argument("--raw", required=True, nargs="+")
     p_density_linkage_agent_analysis.add_argument("--shard-manifests", nargs="+", default=[])
+    p_density_linkage_agent_analysis.add_argument(
+        "--locked-repeat-manifest",
+        default="",
+        help="copy a repeat selection sealed before outcomes instead of regenerating one",
+    )
     p_density_linkage_agent_analysis.add_argument("--bootstrap-seed", type=int, default=5879)
     p_density_linkage_agent_analysis.add_argument("--bootstrap-resamples", type=int, default=5000)
     p_density_linkage_agent_analysis.add_argument("--out", required=True)

@@ -1366,6 +1366,7 @@ def write_density_linkage_agent_evidence(
     provenance: Mapping[str, object],
     bootstrap_seed: int = 5879,
     bootstrap_resamples: int = 5000,
+    locked_repeat_manifest: Path | None = None,
 ) -> dict[str, object]:
     analysis = analyze_density_linkage_agents(
         rows,
@@ -1377,13 +1378,22 @@ def write_density_linkage_agent_evidence(
     encoded_analysis = (json.dumps(analysis, indent=2) + "\n").encode()
     (out / "analysis.json").write_bytes(encoded_analysis)
     repeat_path = out / "targeted-repeat-manifest.json"
-    write_density_linkage_repeat_manifest(
-        rows,
-        task_metadata,
-        analysis,
-        repeat_path,
-        initial_analysis_sha256=hashlib.sha256(encoded_analysis).hexdigest(),
-    )
+    if locked_repeat_manifest is None:
+        write_density_linkage_repeat_manifest(
+            rows,
+            task_metadata,
+            analysis,
+            repeat_path,
+            initial_analysis_sha256=hashlib.sha256(encoded_analysis).hexdigest(),
+        )
+        repeat_manifest_source = "generated-from-current-analysis"
+    else:
+        encoded_locked = locked_repeat_manifest.read_bytes()
+        locked_payload = json.loads(encoded_locked)
+        if not isinstance(locked_payload.get("run_ids"), list):
+            raise ValueError("locked repeat manifest must contain a run_ids list")
+        repeat_path.write_bytes(encoded_locked)
+        repeat_manifest_source = "locked-pre-outcome-input"
     encoded_repeat_manifest = repeat_path.read_bytes()
     (out / "report.md").write_text(render_density_linkage_agent_report(analysis), encoding="utf-8")
     sanitized: list[dict[str, object]] = []
@@ -1414,6 +1424,7 @@ def write_density_linkage_agent_evidence(
         "cell_estimates_sha256": hashlib.sha256(encoded_cells).hexdigest(),
         "analysis_sha256": hashlib.sha256(encoded_analysis).hexdigest(),
         "targeted_repeat_manifest_sha256": hashlib.sha256(encoded_repeat_manifest).hexdigest(),
+        "targeted_repeat_manifest_source": repeat_manifest_source,
         "privacy_projection": (
             "per-run metrics only; excludes queries, model text, failure text, and credential paths"
         ),
