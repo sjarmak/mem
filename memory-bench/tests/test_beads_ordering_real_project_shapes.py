@@ -190,6 +190,8 @@ def test_aggregate_evidence_reports_distributions_without_project_rows() -> None
     assert evidence["match_set_size"]["all_native_probes"]["fraction_gt_page_size"]["5"] == 0.5
     assert evidence["link_density"]["available"] is False
     assert evidence["link_density"]["reason"] == "canonical-memory-references-not-observable"
+    assert "convenience sample" in " ".join(evidence["limitations"])
+    assert "not observed user searches" in " ".join(evidence["limitations"])
     assert (
         evidence["experimental_regime_comparison"]["40"]["fraction_observed_at_or_below"] == 0.875
     )

@@ -410,7 +410,9 @@ def summarize_real_project_shapes(
             for level in experimental_candidate_levels
         },
         "limitations": [
+            "local workspace discovery is a convenience sample, not a random population",
             "native probes are derived mechanically from compact legacy Memory records",
+            "derived probes approximate lexical conditions and are not observed user searches",
             "available projects expose keyed Memory values, not canonical Memory Bead references",
             "reference density is unavailable rather than assumed to be zero",
         ],
