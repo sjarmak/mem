@@ -148,3 +148,21 @@ observed. These numbers estimate performance on a constructed distribution, not 
 the queries agents actually issue. That is the mirror image of the defect the
 experiment exists to name, and it belongs in the writeup at the same prominence as
 the headline.
+
+## Outcome
+
+The run landed. Numbers, gate verdicts and provenance are in
+`memory-bench/results/lexical_recall/` (`report.md`, `analysis.json`,
+`manifest.json`).
+
+Headline: neither non-literal generator meets the preregistered primary endpoint,
+so `candidate_generation_earns_its_own_arm` is false. The signal sits in the
+secondary endpoint the threat list called out in advance. At recall@10 on the miss
+class the embedding arm reaches 0.444 and FTS 0.250 against the literal arm's 0.000,
+and the per-kind split is where the design pays off: morphological variants are
+recovered by both, synonyms only by the dense arm, and renamed concepts by neither
+at any budget.
+
+One prediction was falsified. The embedding arm was predicted to recover both
+synonym and renamed-concept; it recovers synonyms at 0.556 and renamed concepts at
+0.000. A renamed concept needs an explicit link, not a better retriever.

@@ -1,0 +1,20 @@
+{
+  "bead": "mem-lbuvd",
+  "preregistration_sha256": "ee6f35bf3d79da65cf71b42b1db69223106b01d836e5f268f480e1ab2cf2fed1",
+  "corpus_digest": "1e164b94fa52dd35266ea92b23d031689013af0c6b29bd896a1b9d825882aa45",
+  "files": {
+    "analysis.json": {
+      "sha256": "ce2270a5421b30474e4e87892cb0a20eaa91398ec035c1e73506164554df6ea9",
+      "bytes": 5870
+    },
+    "report.md": {
+      "sha256": "0397be3b0316cc0e939cdc7eee5b3b4bfc4ce833a82a617640d23e816b501678",
+      "bytes": 7646
+    },
+    "run.py": {
+      "sha256": "68b17b3314bbf572ddba3cc4be770ffa6406baf0c14496483cdc2bdfda8c854a",
+      "bytes": 7453
+    }
+  },
+  "privacy": "Recall fractions, gate verdicts, candidate-set sizes and tool provenance digests only. The corpus is synthetic and generated in process from a frozen seed; no real Memory text, bead titles or bodies, agent transcripts, retrieval logs, filesystem paths or identities appear in this package."
+}
