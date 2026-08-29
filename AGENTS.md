@@ -75,6 +75,10 @@ other; run the gates green before claiming done:
   swallow-128 defect was fixed twice — 0985d82 in `landedContent`, then 77bacd0
   under mem-y2x7n — after the guard had been re-derived into three hand-rolled
   copies that mem-y2x7n finally collapsed into `provenance.ts`.)
+- **Never feed a shell loop's worklist on stdin when its body launches agents or
+  subprocesses.** Bind the worklist to a dedicated file descriptor and redirect
+  child stdin, or the first child can consume the remaining rows and make a
+  multi-group run exit 0 after one group.
 
 ## Where to look (references)
 

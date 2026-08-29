@@ -77,6 +77,20 @@ the open validity question (`mem-bxhh` is building a real fail-to-pass corpus to
 calibrate the synthetic shapes against it). Details and competitive-arm wiring in
 `memory-bench/README.md`.
 
+## Project governance
+
+Incubation work is tracked in the public [mem — Research, Community, and
+Delivery](https://github.com/users/sjarmak/projects/4) project. Community
+feedback prioritizes questions; preregistered evaluations, controlled
+experiments, replication, and explicit limitations determine recommendations.
+The operating contract, field semantics, review cadence, and upstream gate are
+documented in [`docs/project-management.md`](docs/project-management.md), with a
+copyable semantic schema in
+[`mem-research-community.json`](.github/projects/mem-research-community.json).
+Work stays in this repo while incubating and moves toward `gastownhall/beads`
+only after the evidence, privacy, reproducibility, minimal-surface, and
+maintainer-sponsorship checks pass.
+
 ## Roadmap
 
 Near-term work, roughly in priority order:
