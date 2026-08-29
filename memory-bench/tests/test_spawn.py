@@ -313,7 +313,7 @@ def test_a_short_diagnosis_is_passed_through_unmarked() -> None:
 # the cases below exercise each claim.
 # --------------------------------------------------------------------------- #
 def test_redact_secret_replaces_the_exact_value() -> None:
-    token = "sgp_deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+    token = "sgp_" + "x" * 36
     out = redact_secret(f"401 Unauthorized presenting {token} to the endpoint", token)
     assert token not in out
     assert "401 Unauthorized" in out  # the diagnosis survives
