@@ -12,9 +12,9 @@
       "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/EDGE",
       "type": "https://fixtures.mem.example/ordering/types/cites",
       "source": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/1",
-      "target": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/9",
+      "target": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/2000",
       "properties": {},
-      "revision": "rev-912bad1497f6b2d6"
+      "revision": "rev-7c72ebdd1d725a20"
     },
     {
       "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/link_b",
@@ -25,12 +25,12 @@
       "revision": "rev-6285cbd0786a360b"
     },
     {
-      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/100",
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/Zeta",
       "type": "https://fixtures.mem.example/ordering/types/cites",
-      "source": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/1",
-      "target": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/2000",
+      "source": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/100",
+      "target": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/9",
       "properties": {},
-      "revision": "rev-ddde0237589ed033"
+      "revision": "rev-5a3bdcca02c6ad3b"
     },
     {
       "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/n%C3%A9e",
@@ -43,18 +43,26 @@
     {
       "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/edge",
       "type": "https://fixtures.mem.example/ordering/types/cites",
-      "source": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/100",
-      "target": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/9",
+      "source": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/10",
+      "target": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/2000",
       "properties": {},
-      "revision": "rev-3c20cb9dfa06d976"
+      "revision": "rev-1d709611a7c7a8ed"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/nee",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Delta",
+      "target": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alpha-two",
+      "properties": {},
+      "revision": "rev-4c8711ea6909dc60"
     },
     {
       "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/Edge",
       "type": "https://fixtures.mem.example/ordering/types/cites",
-      "source": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/10",
-      "target": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/2000",
+      "source": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/1",
+      "target": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/9",
       "properties": {},
-      "revision": "rev-302fc8edc850b348"
+      "revision": "rev-116329de83a052de"
     },
     {
       "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/ne%CC%81e",

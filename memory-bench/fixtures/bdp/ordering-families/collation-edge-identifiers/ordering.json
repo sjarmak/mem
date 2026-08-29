@@ -80,22 +80,23 @@
       }
     },
     "links/": {
-      "total": 14,
+      "total": 15,
       "selected_set": [
         "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/1",
         "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/10",
-        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/100",
         "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/11",
         "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/2",
         "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/9",
         "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/EDGE",
         "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/Edge",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/Zeta",
         "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/edge",
         "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/link-a",
         "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/link_b",
         "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/linkc",
         "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/n%C3%A9e",
-        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/ne%CC%81e"
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/ne%CC%81e",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/nee"
       ],
       "pages": {
         "3": {
@@ -105,7 +106,7 @@
             3,
             3,
             3,
-            2
+            3
           ],
           "spans_multiple_pages": true
         },
@@ -113,7 +114,7 @@
           "page_count": 2,
           "page_item_counts": [
             10,
-            4
+            5
           ],
           "spans_multiple_pages": true
         }
@@ -154,11 +155,11 @@
       "selected_set": [
         "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/1",
         "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/10",
-        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/100",
         "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/11",
         "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/2",
         "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/9",
-        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/EDGE"
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/EDGE",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/Edge"
       ],
       "pages": {
         "3": {
@@ -236,8 +237,7 @@
           "2",
           "9",
           "10",
-          "11",
-          "100"
+          "11"
         ],
         "beads_in_reference_order": [
           "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/1",
@@ -268,7 +268,8 @@
         "link_ids": [
           "EDGE",
           "Edge",
-          "edge"
+          "edge",
+          "Zeta"
         ],
         "beads_in_reference_order": [
           "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Delta",
@@ -319,7 +320,8 @@
         ],
         "link_ids": [
           "n%C3%A9e",
-          "ne%CC%81e"
+          "ne%CC%81e",
+          "nee"
         ],
         "beads_in_reference_order": [
           "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/caf%C3%A9",
@@ -466,15 +468,16 @@
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/9",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/10",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/11",
-            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/100",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/EDGE",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/Edge",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/Zeta",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/edge",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/link-a",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/link_b",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/linkc",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/n%C3%A9e",
-            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/ne%CC%81e"
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/ne%CC%81e",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/nee"
           ]
         },
         {
@@ -515,16 +518,17 @@
           "sequence": [
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/1",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/10",
-            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/100",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/11",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/2",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/9",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/EDGE",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/Edge",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/Zeta",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/edge",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/link-a",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/link_b",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/linkc",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/nee",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/ne%CC%81e",
             "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/n%C3%A9e"
           ]

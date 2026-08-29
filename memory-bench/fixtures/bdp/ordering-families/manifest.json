@@ -603,7 +603,7 @@
         10
       ],
       "bead_count": 23,
-      "link_count": 14,
+      "link_count": 15,
       "type_count": 2,
       "groups": {
         "unpadded-ordinals": [
@@ -687,16 +687,16 @@
           "bytes": 18642
         },
         "dataset/links.json": {
-          "sha256": "0a9ac4a159a12a8a7bde9be02cc6ef51abc5952d10497e48280f6eb4aa9d4ea7",
-          "bytes": 5956
+          "sha256": "4bc68fb8cea81dc2fab92010fca6d4fa6977ecc02c4061ade0c5294482db9562",
+          "bytes": 6388
         },
         "dataset/types.json": {
           "sha256": "62ade02723649a4c5e14cbb2280de6efc0eb82651f86524cdc3a12c8e9dd5b63",
           "bytes": 292
         },
         "ordering.json": {
-          "sha256": "58820b385212711ef7b23a161d1b21a023126485fda31ec0384e59f810739285",
-          "bytes": 28605
+          "sha256": "5ea1a4c5c203fe707a85f74d3eabd4b92dbb949f9de59ad6f7605f7aa2d46b37",
+          "bytes": 28893
         }
       }
     }

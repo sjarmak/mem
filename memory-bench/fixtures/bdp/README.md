@@ -204,7 +204,7 @@ adjacency splits across 16 pages at a limit of 25 and 2 pages at a limit of 200.
 `collation-edge-identifiers` is a separate directory in the same tree, under the
 same Scope prefix and declaring the same two Types, so a consumer loads it in the
 same pass. It is **not one of the seven**, and it is deliberately kept out of
-`families` in the manifest: it has 23 Beads and 14 Links, no hub and no degree
+`families` in the manifest: it has 23 Beads and 15 Links, no hub and no degree
 distribution, so folding it into the density table would make every figure there
 answer a question nobody asked. It is recorded under `collation_family` instead.
 
@@ -262,7 +262,13 @@ finding:
   repeat one of the pair or drop it across a page boundary. Which pairs tie is
   recorded under `ties`; whether a given authority actually loses a record
   depends on how it paginates, so the tree records the pairs rather than
-  predicting the outcome.
+  predicting the outcome. The gates in `tests/test_bdp_collation.py` pick one
+  paginator and show it: served through a keyset continuation, where the cursor
+  is the sort key of the last item and the next page is everything strictly
+  greater, a casefolding authority drops `Gamma` and `gamma` from `beads/` and
+  `Edge` and `edge` from `links/` at a limit of 3, and an NFC-normalizing one
+  drops `cafe%CC%81` and `re%CC%81sume`. An authority sorting by the recorded
+  order serves every set intact.
 - `numeric-aware` and `percent-decoding` are total orders, just different ones.
   Under bdp#8 as proposed, which leaves the choice of order to the
   implementation, an authority documenting either is conformant. They are

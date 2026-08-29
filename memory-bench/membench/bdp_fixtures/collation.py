@@ -200,14 +200,14 @@ COLLATION_GROUPS: tuple[CollationGroup, ...] = (
         exercises="numeric order against codepoint order, with no zero padding to hide it",
         defeats=("numeric-aware",),
         bead_ids=("1", "2", "9", "10", "11", "100", "101", "2000"),
-        link_ids=("1", "2", "9", "10", "11", "100"),
+        link_ids=("1", "2", "9", "10", "11"),
     ),
     CollationGroup(
         name="mixed-case",
         exercises="ASCII case order, where every uppercase letter precedes every lowercase one",
         defeats=("casefold", "punctuation-ignoring"),
         bead_ids=("GAMMA", "Gamma", "gamma", "Delta", "delta", "Zeta"),
-        link_ids=("EDGE", "Edge", "edge"),
+        link_ids=("EDGE", "Edge", "edge", "Zeta"),
     ),
     CollationGroup(
         name="punctuation",
@@ -224,7 +224,7 @@ COLLATION_GROUPS: tuple[CollationGroup, ...] = (
         # encoded combining acute accent. The two decode to the same text under
         # NFC and to different text without it.
         bead_ids=("cafe", "caf%C3%A9", "cafe%CC%81", "r%C3%A9sume", "re%CC%81sume"),
-        link_ids=("n%C3%A9e", "ne%CC%81e"),
+        link_ids=("n%C3%A9e", "ne%CC%81e", "nee"),
     ),
 )
 

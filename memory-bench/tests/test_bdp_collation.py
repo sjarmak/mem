@@ -17,6 +17,7 @@ Everything else here catches a fixture that drifted.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -27,6 +28,7 @@ from membench.bdp_fixtures.collation import (
     COLLATION_LIMITS,
     COLLATION_ORDER_ID,
     RIVALS,
+    RIVALS_BY_NAME,
     CollationError,
     CollationGroup,
     RivalComparator,
@@ -449,3 +451,146 @@ def test_readme_states_what_the_collation_family_is_for() -> None:
     for rival in RIVALS:
         assert f"`{rival.name}`" in text, rival.name
     assert f"{entry['bead_count']} Beads and {entry['link_count']} Links" in text
+
+
+# --- the gate, run against an authority rather than argued -------------------
+#
+# Everything above compares sequences. The bead this family answers asks for
+# something stronger: the family has to go red against an authority that sorts
+# with locale collation or casefolding. So these gates build one and serve the
+# recorded selections from it.
+#
+# The authority is a keyset paginator, which is the construction an
+# implementation with a real index reaches for: the cursor is the sort key of the
+# last item served, and the next page is everything strictly greater. It is also
+# where a comparison rule that ties two ids loses one. Both members of a tied
+# pair compare equal to the cursor, so neither is strictly greater, and a pair
+# straddling a page boundary is served once and then skipped.
+
+# What the small limit actually costs each rule, per recorded collection. A
+# hand-written table rather than a computation, because the interesting property
+# is placement: a tie only costs a record when it straddles a page boundary, so
+# an edit that leaves every tie group sitting inside one page would keep every
+# other gate here green while making the family stop biting.
+KEYSET_LOSSES_AT_THE_SMALL_LIMIT: dict[tuple[str, str], list[str]] = {
+    ("beads/", "casefold"): ["Gamma", "gamma"],
+    ("beads/", "punctuation-ignoring"): ["Gamma", "gamma"],
+    ("beads/", "nfc-normalizing"): ["cafe%CC%81", "re%CC%81sume"],
+    ("links/", "casefold"): ["Edge", "edge"],
+    ("links/", "punctuation-ignoring"): ["Edge", "edge"],
+}
+
+
+def _keyset_pages(selected: list[str], key: Callable[[str], Any], limit: int) -> list[list[str]]:
+    """Serve a selected set as pages, continuing on the comparison key alone.
+
+    Deliberately not offset pagination, which cannot lose a record whatever the
+    comparison does, and deliberately not a tiebreak on the id, which is the fix
+    rather than the fixture.
+    """
+
+    ordered = sorted(selected, key=key)
+    pages: list[list[str]] = []
+    cursor: Any = None
+    while True:
+        available = [
+            identifier for identifier in ordered if cursor is None or key(identifier) > cursor
+        ]
+        if not available:
+            return pages
+        page = available[:limit]
+        pages.append(page)
+        cursor = key(page[-1])
+
+
+def _recorded_sets() -> list[tuple[str, list[str]]]:
+    ordering = _collation("ordering.json")
+    named = [
+        (name, expectation["selected_set"]) for name, expectation in ordering["collections"].items()
+    ]
+    named += [
+        (f"?{next(iter(selection['parameters']))}=", selection["selected_set"])
+        for selection in ordering["selections"]
+    ]
+    return named
+
+
+@pytest.mark.parametrize("limit", COLLATION_LIMITS)
+def test_an_authority_sorting_by_the_recorded_order_serves_every_set_intact(
+    limit: int,
+) -> None:
+    """The control. Without it, a red gate could just mean the harness is broken."""
+
+    for name, selected in _recorded_sets():
+        served = [item for page in _keyset_pages(selected, str, limit) for item in page]
+        assert served == selected, f"{name} at limit {limit}"
+
+
+@pytest.mark.parametrize("rival", RIVALS, ids=lambda rival: rival.name)
+@pytest.mark.parametrize("limit", COLLATION_LIMITS)
+@pytest.mark.parametrize("collection", ["beads/", "links/"])
+def test_an_authority_sorting_by_any_rival_rule_serves_the_wrong_sequence(
+    collection: str, limit: int, rival: RivalComparator
+) -> None:
+    """The gate the bead asks for, on the two whole collections.
+
+    An authority that casefolds, or runs a collator with punctuation weighted as
+    ignorable, hands back a sequence that is not the one recorded, at both
+    advertised limits. So does one that parses digit runs, percent-decodes, or
+    normalizes to NFC.
+    """
+
+    selected = _collation("ordering.json")["collections"][collection]["selected_set"]
+    served = [item for page in _keyset_pages(selected, rival.key, limit) for item in page]
+    assert served != selected, f"{rival.name} on {collection} at limit {limit}"
+
+
+@pytest.mark.parametrize("rival", RIVALS, ids=lambda rival: rival.name)
+@pytest.mark.parametrize("collection", ["beads/", "links/"])
+def test_the_small_limit_costs_exactly_the_records_the_table_names(
+    collection: str, rival: RivalComparator
+) -> None:
+    """A tie is not just a different order: at the small limit it drops records.
+
+    The three rules that tie lose a record here; the two that are total orders
+    lose none, which is the difference `ordering.json` records under
+    `is_a_total_order_over_this_collection` showing up as behaviour.
+    """
+
+    selected = _collation("ordering.json")["collections"][collection]["selected_set"]
+    limit = min(COLLATION_LIMITS)
+    served = [item for page in _keyset_pages(selected, rival.key, limit) for item in page]
+    lost = sorted(_local(item) for item in set(selected) - set(served))
+    assert lost == KEYSET_LOSSES_AT_THE_SMALL_LIMIT.get((collection, rival.name), [])
+    assert len(served) == len(set(served)), "a keyset continuation must not repeat a record"
+
+
+def test_every_record_a_tying_rule_loses_is_one_the_tree_names_as_tied() -> None:
+    """The recorded ties are what explains the loss, so they have to cover it.
+
+    Otherwise `ordering.json` sends a harness author looking at the wrong pair.
+    """
+
+    comparisons = _collation("ordering.json")["collation"]["comparisons"]
+    for (collection, name), lost in KEYSET_LOSSES_AT_THE_SMALL_LIMIT.items():
+        entry = next(x for x in comparisons[collection] if x["comparison"] == name)
+        tied = {_local(item) for group in entry["ties"] for item in group}
+        assert set(lost) <= tied, (collection, name)
+
+
+def test_a_casefolding_authority_loses_a_record_from_a_recorded_selection() -> None:
+    """Not only from a whole collection.
+
+    A selection is the case a harness is most likely to exercise, and it is the
+    one where an authority holds a smaller working set and is most tempted to
+    continue on the comparison key alone.
+    """
+
+    selection = next(
+        s for s in _collation("ordering.json")["selections"] if "source" in s["parameters"]
+    )
+    selected = selection["selected_set"]
+    served = [
+        item for page in _keyset_pages(selected, RIVALS_BY_NAME["casefold"].key, 3) for item in page
+    ]
+    assert sorted(_local(item) for item in set(selected) - set(served)) == ["Edge"]
