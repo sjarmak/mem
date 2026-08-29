@@ -1,0 +1,19 @@
+{
+  "id": "https://fixtures.mem.example/ordering/types/cites",
+  "name": "Cites",
+  "description": "A reference from one Memory to another, within one Scope.",
+  "describes": "link",
+  "conformsTo": [],
+  "source": {
+    "conformsTo": [
+      "https://fixtures.mem.example/ordering/types/memory"
+    ],
+    "external": "none"
+  },
+  "target": {
+    "conformsTo": [
+      "https://fixtures.mem.example/ordering/types/memory"
+    ],
+    "external": "none"
+  }
+}

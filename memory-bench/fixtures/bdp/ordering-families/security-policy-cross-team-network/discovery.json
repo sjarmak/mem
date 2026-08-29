@@ -1,0 +1,14 @@
+{
+  "bdpVersion": "0",
+  "profile": "read",
+  "scope": "https://fixtures.mem.example/ordering/security-policy-cross-team-network/",
+  "beads": "https://fixtures.mem.example/ordering/security-policy-cross-team-network/beads/",
+  "links": "https://fixtures.mem.example/ordering/security-policy-cross-team-network/links/",
+  "types": "https://fixtures.mem.example/ordering/security-policy-cross-team-network/types/",
+  "limits": {
+    "page": {
+      "defaultItems": 25,
+      "maximumItems": 200
+    }
+  }
+}

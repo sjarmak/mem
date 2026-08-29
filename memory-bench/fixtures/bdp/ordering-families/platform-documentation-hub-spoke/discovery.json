@@ -1,0 +1,14 @@
+{
+  "bdpVersion": "0",
+  "profile": "read",
+  "scope": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/",
+  "beads": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/",
+  "links": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/",
+  "types": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/types/",
+  "limits": {
+    "page": {
+      "defaultItems": 25,
+      "maximumItems": 200
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "items": [
+    {
+      "id": "https://fixtures.mem.example/ordering/types/memory",
+      "name": "Memory",
+      "describes": "bead"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/types/cites",
+      "name": "Cites",
+      "describes": "link"
+    }
+  ],
+  "next": null
+}

@@ -25,7 +25,11 @@ harbor = ["harbor>=0.3"]
 # transitively today (harbor, pre-commit), but a guard that silently SKIPS when
 # an undeclared dep is absent is the precise failure this repo's gates exist to
 # prevent — so it is declared.
-dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.11", "black>=24.0", "types-toml>=0.10", "pyyaml>=6.0", "matplotlib>=3.8"]
+# jsonschema: the BDP fixture gate validates every emitted record against the
+# vendored bdp-v0 bundle. Same reasoning as pyyaml above - it arrives
+# transitively today (harbor, mcp), and a validation gate that SKIPS when its
+# validator is missing reports green for fixtures nobody checked.
+dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.11", "black>=24.0", "types-toml>=0.10", "pyyaml>=6.0", "matplotlib>=3.8", "jsonschema>=4.20"]
 
 [project.scripts]
 membench = "membench.cli:main"

@@ -1,0 +1,14 @@
+{
+  "bdpVersion": "0",
+  "profile": "read",
+  "scope": "https://fixtures.mem.example/ordering/release-engineering-branching-playbooks/",
+  "beads": "https://fixtures.mem.example/ordering/release-engineering-branching-playbooks/beads/",
+  "links": "https://fixtures.mem.example/ordering/release-engineering-branching-playbooks/links/",
+  "types": "https://fixtures.mem.example/ordering/release-engineering-branching-playbooks/types/",
+  "limits": {
+    "page": {
+      "defaultItems": 25,
+      "maximumItems": 200
+    }
+  }
+}

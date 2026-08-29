@@ -1,0 +1,3333 @@
+{
+  "items": [
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00278",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a3fe47f17c15",
+      "properties": {},
+      "revision": "rev-6ca070a6b3b88a66"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00176",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/609f540d13f8",
+      "properties": {},
+      "revision": "rev-0a3efd82abf6bd0b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00199",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/6b4aefbee7b3",
+      "properties": {},
+      "revision": "rev-196751965c446c74"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00033",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/04c11c17cc8b",
+      "properties": {},
+      "revision": "rev-8da98d3acfcbb6c9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00003",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/056c4299da40",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/14f40b1cd73f",
+      "properties": {},
+      "revision": "rev-7ff7688b6670d6c3"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00253",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/91f81e964789",
+      "properties": {},
+      "revision": "rev-38e4fa9f2857382b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00402",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/ff65c0510c1d",
+      "properties": {},
+      "revision": "rev-1e3625868e949697"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00108",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/39539c88cc71",
+      "properties": {},
+      "revision": "rev-c497d05f98ffd941"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00305",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/b1f011c0209b",
+      "properties": {},
+      "revision": "rev-6aa80ea7a473914d"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00237",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/8681b62682bf",
+      "properties": {},
+      "revision": "rev-cfef41e59b021f87"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00113",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/3bc1b85854f2",
+      "properties": {},
+      "revision": "rev-052412e71062b8ec"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00255",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/93541d06afec",
+      "properties": {},
+      "revision": "rev-cf0812e18b63522f"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00227",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/7e35db0f3567",
+      "properties": {},
+      "revision": "rev-7715468777d9b7cc"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00265",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/996813fe58c9",
+      "properties": {},
+      "revision": "rev-e6d1b9a5950a8cb8"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00009",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/23571465d1c5",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/fddb66564640",
+      "properties": {},
+      "revision": "rev-b5bb574f6bc06b51"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00282",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a4fc9bc8bda1",
+      "properties": {},
+      "revision": "rev-904e79990f4e6397"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00392",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/fb65f67f7bdc",
+      "properties": {},
+      "revision": "rev-63147a4eda5dfe44"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00107",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/3952c036dd8f",
+      "properties": {},
+      "revision": "rev-ddc38e1951380426"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00388",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/f3b80aba440e",
+      "properties": {},
+      "revision": "rev-152d4ef7c874d112"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00244",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/8a03351b715a",
+      "properties": {},
+      "revision": "rev-c8c7c1c243a4bf26"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00242",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/8864933be77c",
+      "properties": {},
+      "revision": "rev-de43d59f85150c12"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00156",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/56d8c0019893",
+      "properties": {},
+      "revision": "rev-dc480fb95f87bacb"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00121",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/409014ab3659",
+      "properties": {},
+      "revision": "rev-b69db10bb706f84e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00132",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/472aa8e6a33d",
+      "properties": {},
+      "revision": "rev-e601b16d1ad36fd0"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00016",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/58775c23393f",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/b073d1fa1fe1",
+      "properties": {},
+      "revision": "rev-0ca9772c1fd8edf1"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00386",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/f26826d8f84a",
+      "properties": {},
+      "revision": "rev-be3acf5bcef02f7c"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00025",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/014b70bb2324",
+      "properties": {},
+      "revision": "rev-49e053a60a38f3a5"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00143",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/4d32e5d8db60",
+      "properties": {},
+      "revision": "rev-3e87d554eafcf5fd"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00212",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/74d5b93160cb",
+      "properties": {},
+      "revision": "rev-f035511628c6fa0c"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00339",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/d0665aa4f3a2",
+      "properties": {},
+      "revision": "rev-f84f77c234e137d9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00228",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/7f2acc9fa438",
+      "properties": {},
+      "revision": "rev-96f185ec40df32e3"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00349",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/dc5b2c03c855",
+      "properties": {},
+      "revision": "rev-74741740d5785be3"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00159",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/58b5d31e8d2c",
+      "properties": {},
+      "revision": "rev-6228976f384d83c6"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00097",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/30c6f38fa4f6",
+      "properties": {},
+      "revision": "rev-48afe864e676d0ec"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00073",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/24a385d72dde",
+      "properties": {},
+      "revision": "rev-e841519363168b3e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00357",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/e152eb54efad",
+      "properties": {},
+      "revision": "rev-ede5689f20b31a25"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00288",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a8371efc2d65",
+      "properties": {},
+      "revision": "rev-3ab742a8149af3ec"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00168",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/5b12a825d252",
+      "properties": {},
+      "revision": "rev-da98a9367c5b53dd"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00325",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/c21af2482a80",
+      "properties": {},
+      "revision": "rev-3e47e927cdc77eae"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00052",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/17f3872812e0",
+      "properties": {},
+      "revision": "rev-d50fec5b11842085"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00041",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/0b96fad2172f",
+      "properties": {},
+      "revision": "rev-984bee2ee81a87f5"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00371",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/e850593b328c",
+      "properties": {},
+      "revision": "rev-61162870022229d5"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00056",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/19de00c5994c",
+      "properties": {},
+      "revision": "rev-dfa43f3ae0c2bad0"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00034",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/05cd1018d807",
+      "properties": {},
+      "revision": "rev-2951979badc34cfc"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00191",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/687a45e01542",
+      "properties": {},
+      "revision": "rev-5e11fda34c16ed7d"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00316",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/bb24d6a01a45",
+      "properties": {},
+      "revision": "rev-20f76c27aae6eaec"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00256",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/94867213c298",
+      "properties": {},
+      "revision": "rev-2d4ab495d1052156"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00214",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/752f3f60578b",
+      "properties": {},
+      "revision": "rev-0404298a70204510"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00031",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/03f496e51f1e",
+      "properties": {},
+      "revision": "rev-13e3997a6f5e4530"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00084",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/2a3b019c1932",
+      "properties": {},
+      "revision": "rev-864b88761d634d3e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00062",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/1cd9af4de9c5",
+      "properties": {},
+      "revision": "rev-b9c94b70df213e6b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00330",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/c6e0dd8ae8a5",
+      "properties": {},
+      "revision": "rev-5d8b263e8a4598e4"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00181",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/63313464bff3",
+      "properties": {},
+      "revision": "rev-ca234198ba763177"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00184",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/651202c5bc24",
+      "properties": {},
+      "revision": "rev-0ed2c400b78bc6a5"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00229",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/7fed29c345bd",
+      "properties": {},
+      "revision": "rev-58ebc56ba0ffcabe"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00135",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/48e6790ff4b7",
+      "properties": {},
+      "revision": "rev-57576b82e57b0323"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00308",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/b45939a82df8",
+      "properties": {},
+      "revision": "rev-292abe9b6881b5c4"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00401",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/fee12eba5fcd",
+      "properties": {},
+      "revision": "rev-8c035d9d9ba22c61"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00161",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/58dd7a254363",
+      "properties": {},
+      "revision": "rev-2851e87914bf87b2"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00300",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/afc8943be411",
+      "properties": {},
+      "revision": "rev-4e64306031bb7477"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00290",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a8b5176dfbc5",
+      "properties": {},
+      "revision": "rev-cc639c83172a30d7"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00383",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/f1f7d81504db",
+      "properties": {},
+      "revision": "rev-6cb4ec412bb0241e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00011",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/3bbee8ecade3",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/e65269bba8ab",
+      "properties": {},
+      "revision": "rev-22f7c7f780a96b5f"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00222",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/7b414b8b7f61",
+      "properties": {},
+      "revision": "rev-cb2cd66425fb4026"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00354",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/df1580f21a3c",
+      "properties": {},
+      "revision": "rev-9399cc07fd18ce7f"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00139",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/4bb05f1203f5",
+      "properties": {},
+      "revision": "rev-3f2281c78d6b87c6"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00166",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/5a543d28d64c",
+      "properties": {},
+      "revision": "rev-b9125157384827a1"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00310",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/b95198b00afa",
+      "properties": {},
+      "revision": "rev-ca16106529acd755"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00204",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/6f41e9261d44",
+      "properties": {},
+      "revision": "rev-79779a5751f402e6"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00411",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/bce8d57502c5",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/7f35f37ed8bd",
+      "properties": {},
+      "revision": "rev-34390f9e0b66a030"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00246",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/8da50e6e6f0a",
+      "properties": {},
+      "revision": "rev-1d1edeafda253efc"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00158",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/57f70cc7ee61",
+      "properties": {},
+      "revision": "rev-60b4d7bd8073c508"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00266",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/9e4ad712eff7",
+      "properties": {},
+      "revision": "rev-595fda0d39fda694"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00194",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/6936b31f0c39",
+      "properties": {},
+      "revision": "rev-039710394f2808db"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00036",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/0795f37873e8",
+      "properties": {},
+      "revision": "rev-c97dc858204c70a9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00332",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/c812a5d9b917",
+      "properties": {},
+      "revision": "rev-638c88c25dee600d"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00356",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/e12af30994f8",
+      "properties": {},
+      "revision": "rev-ccb7fe8f77ce1cdc"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00216",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/77321780aec2",
+      "properties": {},
+      "revision": "rev-3e71f58a9708dd4e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00413",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/d0500992571c",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/ed69b0bd118a",
+      "properties": {},
+      "revision": "rev-204ff7497bc7ff44"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00393",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/fb9526724a77",
+      "properties": {},
+      "revision": "rev-938b03375f1bf5b7"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00382",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/efd165df7cb4",
+      "properties": {},
+      "revision": "rev-c1068f1bd54cae8d"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00081",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/29ddcc9625fd",
+      "properties": {},
+      "revision": "rev-09812b22ad753138"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00015",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/58445565b5c3",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/b2f85327e44d",
+      "properties": {},
+      "revision": "rev-6294c78c246b87de"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00399",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/fe0e61017689",
+      "properties": {},
+      "revision": "rev-8de466066cec83ab"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00415",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/ef0cfe9e9e33",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/0305a8486cc5",
+      "properties": {},
+      "revision": "rev-dd4c8ac4ea1c6fd0"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00301",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/b022f648af74",
+      "properties": {},
+      "revision": "rev-2cfcb82677aad5f4"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00179",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/627737423000",
+      "properties": {},
+      "revision": "rev-23bd798541c94bd8"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00272",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a0eda0616450",
+      "properties": {},
+      "revision": "rev-5b6709deed99bc04"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00167",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/5ac1f433e830",
+      "properties": {},
+      "revision": "rev-a2d4d2f4035e32cb"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00353",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/df119e3dade1",
+      "properties": {},
+      "revision": "rev-21cefc268e5b05b0"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00209",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/7394d2578dd9",
+      "properties": {},
+      "revision": "rev-f771de23f6719e57"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00138",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/4b5510b6c6af",
+      "properties": {},
+      "revision": "rev-268fa7962bc07a6a"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00164",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/5a4d906b47fc",
+      "properties": {},
+      "revision": "rev-42bc2935d210158a"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00195",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/6a4408dfe199",
+      "properties": {},
+      "revision": "rev-3d373360719d87e5"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00080",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/295222c67e4e",
+      "properties": {},
+      "revision": "rev-fc58dcbfc986affd"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00218",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/795505851df3",
+      "properties": {},
+      "revision": "rev-048966445c9b4a26"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00264",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/98b15b09d9ab",
+      "properties": {},
+      "revision": "rev-c437e7b84aced32b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00037",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/07b8f11f4f72",
+      "properties": {},
+      "revision": "rev-9c865150db8c90d8"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00252",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/91c6c7b205c1",
+      "properties": {},
+      "revision": "rev-381237a0ec242ca9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00192",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/68d9e8351d46",
+      "properties": {},
+      "revision": "rev-ac98434bbb00a3a8"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00391",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/fa090a60de95",
+      "properties": {},
+      "revision": "rev-95506beb1235b69d"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00172",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/5d9924043ae3",
+      "properties": {},
+      "revision": "rev-b4540d59a0fa7a27"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00337",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/cf307e169165",
+      "properties": {},
+      "revision": "rev-1eaf80dabd36c294"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00049",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/115b1892b542",
+      "properties": {},
+      "revision": "rev-786fbc2ac6359f6a"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00309",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/b65b040a8e63",
+      "properties": {},
+      "revision": "rev-4638701bd66d0f85"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00117",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/3d919a0d23d8",
+      "properties": {},
+      "revision": "rev-ba7c4ea3ca4a16dd"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00102",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/354dbbb8c352",
+      "properties": {},
+      "revision": "rev-a8bdf8301af72233"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00126",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/444368cc599c",
+      "properties": {},
+      "revision": "rev-f2e90f362a7aab97"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00198",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/6b2592c38e3c",
+      "properties": {},
+      "revision": "rev-38b1330a854fcd44"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00268",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/9ef9391c182f",
+      "properties": {},
+      "revision": "rev-7ae18c6ac9d30d37"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00005",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/1e31e65057f2",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "properties": {},
+      "revision": "rev-93647619ae670f17"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00174",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/5ef31ef061a1",
+      "properties": {},
+      "revision": "rev-92646f47a2216c6e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00341",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/d220c2ef1579",
+      "properties": {},
+      "revision": "rev-319299f4554ce109"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00119",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/3fc38ee54fb7",
+      "properties": {},
+      "revision": "rev-5204c24d47d20f29"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00128",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/44fc1b24babb",
+      "properties": {},
+      "revision": "rev-f49034955bd61492"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00103",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/36881d3e6398",
+      "properties": {},
+      "revision": "rev-42f1594b7e00dcca"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00145",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/4da6123f14bc",
+      "properties": {},
+      "revision": "rev-c3258b18aab0809d"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00010",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/36b0841571fc",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "properties": {},
+      "revision": "rev-1f562ea4659909eb"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00067",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/20a7c378df9d",
+      "properties": {},
+      "revision": "rev-539932976c28fe1b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00098",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/317b0cb2f5d7",
+      "properties": {},
+      "revision": "rev-6f506296bb5f6554"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00351",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/ddf4060d21c0",
+      "properties": {},
+      "revision": "rev-c28804f025bfebb2"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00040",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/0b2349626e3c",
+      "properties": {},
+      "revision": "rev-cf24cfd6ba7b94f9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00257",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/94aaf87f2bad",
+      "properties": {},
+      "revision": "rev-58396978a0ee72b0"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00348",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/da9a81ad7dc0",
+      "properties": {},
+      "revision": "rev-712ff58bbaa48e7a"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00240",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/87bf817cb946",
+      "properties": {},
+      "revision": "rev-e29bfa8450915036"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00249",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/910bc1e9433f",
+      "properties": {},
+      "revision": "rev-f1a35da66d0140e0"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00324",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/c203f97d3c29",
+      "properties": {},
+      "revision": "rev-0a94df3f0075de3d"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00183",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/64c8ff0755f1",
+      "properties": {},
+      "revision": "rev-0fb84f416bb357fc"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00173",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/5ed724f43e3f",
+      "properties": {},
+      "revision": "rev-9f2317d008554eb9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00241",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/885f62fe935e",
+      "properties": {},
+      "revision": "rev-e48cb663af1390f9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00220",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/7a4233719f4b",
+      "properties": {},
+      "revision": "rev-c74ff33e4837ea3c"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00120",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/4061f647c632",
+      "properties": {},
+      "revision": "rev-23fa13ef49ad12d3"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00088",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/2c4a0ec85887",
+      "properties": {},
+      "revision": "rev-1713923a88063c19"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00193",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/68f769462fd0",
+      "properties": {},
+      "revision": "rev-263a9f4592b52f38"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00050",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/11838a7cdbf9",
+      "properties": {},
+      "revision": "rev-37cf1a8da371dde9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00190",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/679a5ebe6d97",
+      "properties": {},
+      "revision": "rev-d450eecd6a2f0545"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00023",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/009b72cec227",
+      "properties": {},
+      "revision": "rev-a5e84f8a5a15d155"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00151",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/545d2febca5c",
+      "properties": {},
+      "revision": "rev-056e241eb1d6c308"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00058",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/1b512f2173c5",
+      "properties": {},
+      "revision": "rev-a61e6a5b7cff7d6e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00129",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/4686afcdbdfe",
+      "properties": {},
+      "revision": "rev-888c4fa9bc471164"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00271",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a0a4649b7dfa",
+      "properties": {},
+      "revision": "rev-a2b3be533f6d423f"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00374",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/eaf3bc43dc4a",
+      "properties": {},
+      "revision": "rev-5df4dd7ccfca2d2e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00122",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/410d92b32fd8",
+      "properties": {},
+      "revision": "rev-31f42796e7fe3eb3"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00141",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/4c0dd82ada15",
+      "properties": {},
+      "revision": "rev-e821616a9f57ffb5"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00233",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/829669bacbfb",
+      "properties": {},
+      "revision": "rev-8cc43f446ba31078"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00203",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/6eda158bd4d3",
+      "properties": {},
+      "revision": "rev-c7b9c5566f026ed2"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00095",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/30af2102e0f2",
+      "properties": {},
+      "revision": "rev-93afa7001f008c30"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00322",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/c07ec4a1857a",
+      "properties": {},
+      "revision": "rev-7476f021f5025cd9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00075",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/257b95dd741c",
+      "properties": {},
+      "revision": "rev-cd1819c9eeaa529e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00369",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/e80b926b288c",
+      "properties": {},
+      "revision": "rev-5285849b84b9ec24"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00189",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/67876ea259cc",
+      "properties": {},
+      "revision": "rev-ab46455eb3a6dff7"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00077",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/27ec07b5335f",
+      "properties": {},
+      "revision": "rev-fc7940f2704c43c2"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00157",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/579c4b4571b3",
+      "properties": {},
+      "revision": "rev-706541f9cbcbc189"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00347",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/da22ab1cf825",
+      "properties": {},
+      "revision": "rev-3775642ed1cf019e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00207",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/7269a51be756",
+      "properties": {},
+      "revision": "rev-654996e6ea00a1e4"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00405",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/9f4a4d5427c1",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/91868538b45b",
+      "properties": {},
+      "revision": "rev-cf94b4caddce717c"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00096",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/30bb6be8d122",
+      "properties": {},
+      "revision": "rev-87ac31474d88d2f1"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00287",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a822774cc3ff",
+      "properties": {},
+      "revision": "rev-15d41e7ccd06e7c9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00208",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/731c0ee45af1",
+      "properties": {},
+      "revision": "rev-cadd530f3581f195"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00057",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/1a09590f7f82",
+      "properties": {},
+      "revision": "rev-8f4478b86af490f7"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00155",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/56807a2e68dc",
+      "properties": {},
+      "revision": "rev-38c60597a41ffde1"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00137",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/4ac9374de51b",
+      "properties": {},
+      "revision": "rev-f629f7609a1ed08f"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00087",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/2ae42d6ae24f",
+      "properties": {},
+      "revision": "rev-2d409fbc31b10b44"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00149",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/53ba3bb639f0",
+      "properties": {},
+      "revision": "rev-d434039ec574d8f7"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00355",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/dfc55b6af27e",
+      "properties": {},
+      "revision": "rev-fe4632f26e96c066"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00215",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/761e8484fe1e",
+      "properties": {},
+      "revision": "rev-e0e2cedef170e88e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00261",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/973b0182e62b",
+      "properties": {},
+      "revision": "rev-15771f915287930c"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00014",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/4acfda5709a0",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "properties": {},
+      "revision": "rev-586a7c4a2ba6ee69"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00226",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/7dfe65ab083a",
+      "properties": {},
+      "revision": "rev-ebe46e4031abca12"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00115",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/3ca62464228c",
+      "properties": {},
+      "revision": "rev-2c3a36e3bc01302b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00125",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/417d4dc30a84",
+      "properties": {},
+      "revision": "rev-cf481ac278001029"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00224",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/7d73b429f950",
+      "properties": {},
+      "revision": "rev-1838e1f9189d1d09"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00100",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/31a66ea1d51b",
+      "properties": {},
+      "revision": "rev-95458efa990f4a28"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00230",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/801a36f8be66",
+      "properties": {},
+      "revision": "rev-d8e9527e0660d021"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00238",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/874e4fd104c8",
+      "properties": {},
+      "revision": "rev-84758d52070dc1b6"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00004",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/108929dbc192",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/f82c20dd1eda",
+      "properties": {},
+      "revision": "rev-aff5a2714515cc9e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00171",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/5d95b35de999",
+      "properties": {},
+      "revision": "rev-0dc0fe68c507b325"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00027",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/017b58b965e1",
+      "properties": {},
+      "revision": "rev-d7d9bb441995fe4d"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00318",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/bba642b93658",
+      "properties": {},
+      "revision": "rev-fa45306633c13419"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00032",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/04288bc555eb",
+      "properties": {},
+      "revision": "rev-18f55a9c166d05c7"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00030",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/0327a49d9c9d",
+      "properties": {},
+      "revision": "rev-c25c210647b5b229"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00045",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/0fa4cdaa6dbf",
+      "properties": {},
+      "revision": "rev-e17747176261aa87"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00406",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a274c0f51d0a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/3fb1c1fc8585",
+      "properties": {},
+      "revision": "rev-3149950b60658125"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00378",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/ec15ba7bbe40",
+      "properties": {},
+      "revision": "rev-103d6bec9726b649"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00065",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/1f45d56a92af",
+      "properties": {},
+      "revision": "rev-52d4a23e7419a55d"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00092",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/2e865eae03e7",
+      "properties": {},
+      "revision": "rev-ca65508966886ead"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00319",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/bc79a921e414",
+      "properties": {},
+      "revision": "rev-e03d6c05eabeaab8"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00200",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/6ce822ba0854",
+      "properties": {},
+      "revision": "rev-a26818fa11011011"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00321",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/bfeabbeb1aba",
+      "properties": {},
+      "revision": "rev-570491a8190dd3c0"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00234",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/82db887d8557",
+      "properties": {},
+      "revision": "rev-30dd0f98fd402ba4"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00213",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/74e4df768283",
+      "properties": {},
+      "revision": "rev-9efe2fbe01d9537f"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00297",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/ad15f56b0e59",
+      "properties": {},
+      "revision": "rev-68f444260207c6a8"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00372",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/e9a1043f3f80",
+      "properties": {},
+      "revision": "rev-37cdbfc1109027cb"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00090",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/2db375344365",
+      "properties": {},
+      "revision": "rev-db9e1e0421c09c95"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00346",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/da127088b53c",
+      "properties": {},
+      "revision": "rev-1ff05b6aaf0d624a"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00306",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/b22646548479",
+      "properties": {},
+      "revision": "rev-54708d412a1b5f07"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00273",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a1d242ff2706",
+      "properties": {},
+      "revision": "rev-d4c5316244296898"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00384",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/f1fcdaa8aa52",
+      "properties": {},
+      "revision": "rev-99406a988f7f51ad"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00146",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/4dd8765d52fb",
+      "properties": {},
+      "revision": "rev-a1ce55b30740ece9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00133",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/47744c7cd46f",
+      "properties": {},
+      "revision": "rev-0a97b91542e861ad"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00295",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/ac38c7adada6",
+      "properties": {},
+      "revision": "rev-0c19eb530215ce86"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00210",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/73b516b3c6da",
+      "properties": {},
+      "revision": "rev-e870d1572650724a"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00054",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/18d89140b993",
+      "properties": {},
+      "revision": "rev-37ca9d5fd2f2b094"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00187",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/66e5aec02ab8",
+      "properties": {},
+      "revision": "rev-1ac3a6c5573a2abb"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00311",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/b960868f8be6",
+      "properties": {},
+      "revision": "rev-653b7175dc310d95"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00336",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/ced4cb43fb53",
+      "properties": {},
+      "revision": "rev-5f071a50ede990ef"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00071",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/23883ac04af3",
+      "properties": {},
+      "revision": "rev-09906bfe107dd2fb"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00144",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/4d3e6ed1b38f",
+      "properties": {},
+      "revision": "rev-2d18a1149cf43b48"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00408",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a9021dd88a59",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/7d527a55c8e9",
+      "properties": {},
+      "revision": "rev-932f4e211143ddd3"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00284",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a778cca816a8",
+      "properties": {},
+      "revision": "rev-39d421884446ef7f"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00147",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/4eb3b5fb4a46",
+      "properties": {},
+      "revision": "rev-a48cf33c11d0e563"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00250",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/911b33ff5552",
+      "properties": {},
+      "revision": "rev-5a384a729b100b8a"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00109",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/3a3381896ee0",
+      "properties": {},
+      "revision": "rev-4e4250b94aad7241"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00338",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/cfe772c939fa",
+      "properties": {},
+      "revision": "rev-c828477cef9e793f"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00206",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/717d2e05ebd8",
+      "properties": {},
+      "revision": "rev-62dac89643eafa7f"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00334",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/cb0997426d0b",
+      "properties": {},
+      "revision": "rev-accc8b1861393996"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00013",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/485ef9fa2033",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/3418d6f1c5cd",
+      "properties": {},
+      "revision": "rev-813f48133b792ecc"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00094",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/2ff3714db4b1",
+      "properties": {},
+      "revision": "rev-44ef597e84b502ee"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00232",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/828e701af0e5",
+      "properties": {},
+      "revision": "rev-c9196e319706c063"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00277",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a3908311b4f8",
+      "properties": {},
+      "revision": "rev-b91abed83fc7f070"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00124",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/4139a7dfde7d",
+      "properties": {},
+      "revision": "rev-96026091ec87c3a0"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00299",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/af61c3d55820",
+      "properties": {},
+      "revision": "rev-b7437d2938474aa2"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00274",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a2c98ab9370f",
+      "properties": {},
+      "revision": "rev-8014a7992fe01f9b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00177",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/613f07964849",
+      "properties": {},
+      "revision": "rev-0fa1b147ea2aa2de"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00397",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/fcee9e286ddc",
+      "properties": {},
+      "revision": "rev-804710fd0b44b661"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00039",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/09194e13533a",
+      "properties": {},
+      "revision": "rev-8aa7bba7675e1b43"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00381",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/efc06f821db6",
+      "properties": {},
+      "revision": "rev-d54c4649189ff464"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00280",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a49435290ebe",
+      "properties": {},
+      "revision": "rev-c855805e9973640c"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00182",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/642aba093e25",
+      "properties": {},
+      "revision": "rev-c64bfbb7071e90e5"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00270",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/9f710b718f42",
+      "properties": {},
+      "revision": "rev-dbce330af646b9b9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00114",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/3c03cf6953f1",
+      "properties": {},
+      "revision": "rev-1f07373a14b5ac21"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00379",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/ed6ac80984c0",
+      "properties": {},
+      "revision": "rev-1e921b8394de9cea"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00219",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/7a0b797d1569",
+      "properties": {},
+      "revision": "rev-3090696624e7d115"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00099",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/317eaf1310fa",
+      "properties": {},
+      "revision": "rev-5cd3b01da40088d2"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00079",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/28c01e103f23",
+      "properties": {},
+      "revision": "rev-2e141bff2005eedf"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00055",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/1951f5245ab4",
+      "properties": {},
+      "revision": "rev-d225be252d077ade"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00112",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/3b7afcc73701",
+      "properties": {},
+      "revision": "rev-8b34ecb5c5ded904"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00377",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/eba3e7d792b4",
+      "properties": {},
+      "revision": "rev-15676dac04dfdd4b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00059",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/1b8e7213937f",
+      "properties": {},
+      "revision": "rev-12741cbdb9d622c2"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00116",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/3cf8c29614dc",
+      "properties": {},
+      "revision": "rev-2923700c3f429ba6"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00404",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/89017b3ada90",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/2c6cfcfbe348",
+      "properties": {},
+      "revision": "rev-23ce90f3c701b40b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00350",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/dddcce881e7a",
+      "properties": {},
+      "revision": "rev-84b2d65bd147a665"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00175",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/5f38f9c91f86",
+      "properties": {},
+      "revision": "rev-474b9b33f3006549"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00340",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/d1ebe52f3caf",
+      "properties": {},
+      "revision": "rev-0fb4fd446acb5b73"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00091",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/2dd5f8b1bcde",
+      "properties": {},
+      "revision": "rev-674304cfb5a08740"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00364",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/e3b4a8a799dc",
+      "properties": {},
+      "revision": "rev-f476c3d45e573845"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00127",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/448a9a4b29d9",
+      "properties": {},
+      "revision": "rev-240edc229cdf999d"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00380",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/edc600101c48",
+      "properties": {},
+      "revision": "rev-b2411ae9dec5dc95"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00396",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/fcedb1ffc95f",
+      "properties": {},
+      "revision": "rev-4455358213f191b2"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00221",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/7b1ea08b5836",
+      "properties": {},
+      "revision": "rev-6e3f9240e084eea2"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00225",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/7dcc9d6f2353",
+      "properties": {},
+      "revision": "rev-b08c4a2e5dd4684b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00304",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/b1a940f8adee",
+      "properties": {},
+      "revision": "rev-7888470e7746bfa2"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00400",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/fe639f4897dd",
+      "properties": {},
+      "revision": "rev-c4b408116af37488"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00160",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/58c3e6f4d558",
+      "properties": {},
+      "revision": "rev-1cebc1b5cb02737a"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00076",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/262284a13bdf",
+      "properties": {},
+      "revision": "rev-2f5768f646da2fb6"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00410",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/b79e4122acf1",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/f8450a19f5c6",
+      "properties": {},
+      "revision": "rev-18921d4d070d39b4"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00361",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/e34c3ee1d44c",
+      "properties": {},
+      "revision": "rev-6c1cf2145699ebf5"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00020",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/70c1230428ad",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "properties": {},
+      "revision": "rev-1db420f5b29b4fe5"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00352",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/de83898e4bc2",
+      "properties": {},
+      "revision": "rev-c9e3c751a4737e54"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00043",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/0d36d1d5e8a4",
+      "properties": {},
+      "revision": "rev-071cda2e1e25318b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00150",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/5443aa16a979",
+      "properties": {},
+      "revision": "rev-13f25a195bd5ddae"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00317",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/bb4ae70c05df",
+      "properties": {},
+      "revision": "rev-3a1daf793bd2a7eb"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00068",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/20fd225c1475",
+      "properties": {},
+      "revision": "rev-ab099ca50f22f88c"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00083",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/2a2d7b2c4c28",
+      "properties": {},
+      "revision": "rev-44b5cfb73c07151d"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00035",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/062e0aac6d62",
+      "properties": {},
+      "revision": "rev-059fe8a947886edc"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00328",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/c46619e28468",
+      "properties": {},
+      "revision": "rev-ae68bf0cfa2fb27e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00018",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/5db310aa28e4",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "properties": {},
+      "revision": "rev-73535f3d3c2a09a3"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00258",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/953e63b6e6f8",
+      "properties": {},
+      "revision": "rev-23920c169b9a9d4b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00370",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/e81c9cda563d",
+      "properties": {},
+      "revision": "rev-2c24981dedb1a100"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00239",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/875658491995",
+      "properties": {},
+      "revision": "rev-6217a068b05a0d9d"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00165",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/5a52e50423b0",
+      "properties": {},
+      "revision": "rev-427a9cc1760f113a"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00359",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/e202596b21a1",
+      "properties": {},
+      "revision": "rev-5c69fa4c572f1349"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00331",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/c6e94911c033",
+      "properties": {},
+      "revision": "rev-609f13effc5eeee4"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00385",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/f24ee09dad94",
+      "properties": {},
+      "revision": "rev-a0b3e5ede22f7ce7"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00066",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/201e8e84c20c",
+      "properties": {},
+      "revision": "rev-a05bd3db58599fb5"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00236",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/865c4f952500",
+      "properties": {},
+      "revision": "rev-6d664a3a7ce314cb"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00019",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/5e56ab1a8dba",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/09565de8ec72",
+      "properties": {},
+      "revision": "rev-9cefe33e34356208"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00298",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/ad73bea4740c",
+      "properties": {},
+      "revision": "rev-3d94730a8c5ab7e3"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00263",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/984dda8a9a47",
+      "properties": {},
+      "revision": "rev-66febf305d87c618"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00028",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/01ad85cdefe9",
+      "properties": {},
+      "revision": "rev-384ca533196c3e82"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00185",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/658222117414",
+      "properties": {},
+      "revision": "rev-fcb25a7be3506c54"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00110",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/3a353a722582",
+      "properties": {},
+      "revision": "rev-948bf037267841f0"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00231",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81f74b3eeefd",
+      "properties": {},
+      "revision": "rev-e112d002a2b62a31"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00008",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/232c09a379ee",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/0b9acc5c1026",
+      "properties": {},
+      "revision": "rev-2c4ba317edcac275"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00248",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/8fcf4f839117",
+      "properties": {},
+      "revision": "rev-40d365e896251b20"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00047",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/1108e1f8c4da",
+      "properties": {},
+      "revision": "rev-998115de74228ea2"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00017",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/5caed09810bd",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/0e5ef86e9894",
+      "properties": {},
+      "revision": "rev-c4d03c2e00998f4c"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00046",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/1024722e2c61",
+      "properties": {},
+      "revision": "rev-9c07d7254a1b06f5"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00169",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/5c7a9bf6e819",
+      "properties": {},
+      "revision": "rev-f115fe45b540aacd"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00303",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/b0768e8e5437",
+      "properties": {},
+      "revision": "rev-84e9d0edc9657101"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00086",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/2acb7f786d6d",
+      "properties": {},
+      "revision": "rev-3343bd369d0d89a7"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00178",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/6159113a84ca",
+      "properties": {},
+      "revision": "rev-020feced6d77d763"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00029",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/0281da7d55cb",
+      "properties": {},
+      "revision": "rev-5e16cb3b1add3e76"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00363",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/e398cc3315f1",
+      "properties": {},
+      "revision": "rev-1cf90f7bfa3b8d77"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00148",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/50fe808e720e",
+      "properties": {},
+      "revision": "rev-52e039384ae2293e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00136",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/4a133d412b45",
+      "properties": {},
+      "revision": "rev-d2f1271e076e96f2"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00012",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/3cd1767de2fa",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/44cf4950aa38",
+      "properties": {},
+      "revision": "rev-148d8fa7997e0feb"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00085",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/2a74241f9fa6",
+      "properties": {},
+      "revision": "rev-72acafd1d48e69bc"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00344",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/d673cddb1b00",
+      "properties": {},
+      "revision": "rev-7b38f045ba16a160"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00269",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/9f22456617a7",
+      "properties": {},
+      "revision": "rev-86feda6b09bd1f60"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00104",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/36b34e3d1718",
+      "properties": {},
+      "revision": "rev-c79458fcb0ad1a34"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00292",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a9e943542b4a",
+      "properties": {},
+      "revision": "rev-09a8812ba4f067df"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00247",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/8f512a57102b",
+      "properties": {},
+      "revision": "rev-5097665be22a09c3"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00403",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/87bad4a7a20f",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/b0f19e7c24ea",
+      "properties": {},
+      "revision": "rev-d143dc45eced8ec8"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00293",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/aa6ef5625c99",
+      "properties": {},
+      "revision": "rev-5417c0c17b6abe35"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00251",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/914a4fea92e9",
+      "properties": {},
+      "revision": "rev-2083674bc4a4816c"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00329",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/c68c48c24c93",
+      "properties": {},
+      "revision": "rev-2dc483de3a73c185"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00358",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/e1bdfc8e394b",
+      "properties": {},
+      "revision": "rev-1952997d12d4136e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00313",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/ba2d696d979e",
+      "properties": {},
+      "revision": "rev-30d4774b9c18b5f8"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00375",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/eb6a6ee1db80",
+      "properties": {},
+      "revision": "rev-b0950a161f8c7c28"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00294",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/ab9d9e707848",
+      "properties": {},
+      "revision": "rev-277d8cd44fe61e7b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00365",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/e4b8263d3312",
+      "properties": {},
+      "revision": "rev-7b238de8e544cf69"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00283",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a5144f59b132",
+      "properties": {},
+      "revision": "rev-54b32da57e577b7c"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00001",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/0003ffeeda0d",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/90ac13010285",
+      "properties": {},
+      "revision": "rev-c3c347dc5c463106"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00153",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/55baf97e4831",
+      "properties": {},
+      "revision": "rev-81697da7e9b376c4"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00163",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/59eb4a98ecbc",
+      "properties": {},
+      "revision": "rev-7942a455e4ca75f3"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00407",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a4978e519e28",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/c4b8d1eed4de",
+      "properties": {},
+      "revision": "rev-6533c940f4fe2c77"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00373",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/ea92bb16136f",
+      "properties": {},
+      "revision": "rev-6e1c98953fd685bc"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00024",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/014593b39367",
+      "properties": {},
+      "revision": "rev-75d1e95c65e9f131"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00070",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/227a92df1567",
+      "properties": {},
+      "revision": "rev-603d4182cc44c3d9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00123",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/41160d01beba",
+      "properties": {},
+      "revision": "rev-30ca143f53c6926b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00180",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/62959ae41d65",
+      "properties": {},
+      "revision": "rev-1e7451b4cdb9163f"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00078",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/2806f962f662",
+      "properties": {},
+      "revision": "rev-72fa8bfb4cbc0a03"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00307",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/b2ca86991e56",
+      "properties": {},
+      "revision": "rev-ab8c12db84d9b6c9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00051",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/1668139a77a8",
+      "properties": {},
+      "revision": "rev-052ac2ea375a5316"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00267",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/9ed5eed4a7fc",
+      "properties": {},
+      "revision": "rev-3e99d61be67818ea"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00061",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/1c9af271bb39",
+      "properties": {},
+      "revision": "rev-0dd851ffadf7d0ae"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00154",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/55ea0ee256ab",
+      "properties": {},
+      "revision": "rev-1e9fab6f77fec3c8"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00314",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/ba7692dcacf8",
+      "properties": {},
+      "revision": "rev-2d9f014905975655"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00286",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a813ca92fcad",
+      "properties": {},
+      "revision": "rev-8506abb0a2a8037b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00142",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/4d16da8db282",
+      "properties": {},
+      "revision": "rev-f440e0cce258f163"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00323",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/c181b903f891",
+      "properties": {},
+      "revision": "rev-c1b9061ab1820d04"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00060",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/1c308db80717",
+      "properties": {},
+      "revision": "rev-11be85d10d05df43"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00093",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/2f027a984eac",
+      "properties": {},
+      "revision": "rev-8752e9adf2d504d9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00345",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/d9a1074f2cf1",
+      "properties": {},
+      "revision": "rev-006459e2e21a4eda"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00289",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a837459b4d0a",
+      "properties": {},
+      "revision": "rev-3f86541f158ffbcb"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00333",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/c9bc8fe04a3b",
+      "properties": {},
+      "revision": "rev-fcdbd26558554a85"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00416",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/f988133feb8e",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "properties": {},
+      "revision": "rev-fef8d9feb5d2d2bb"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00281",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a4d6c08716ba",
+      "properties": {},
+      "revision": "rev-71cba2d06a265d41"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00134",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/47e00824c795",
+      "properties": {},
+      "revision": "rev-8eabd869bd4b2d24"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00069",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/21c8738dff85",
+      "properties": {},
+      "revision": "rev-0b73b42db657ea38"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00170",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/5cf40e28aa96",
+      "properties": {},
+      "revision": "rev-d5228439adeb7462"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00042",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/0d2881d94566",
+      "properties": {},
+      "revision": "rev-d5b687386c5416b4"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00243",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/89d318ee0ef1",
+      "properties": {},
+      "revision": "rev-911f66635061a838"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00063",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/1f1ab3cd714e",
+      "properties": {},
+      "revision": "rev-0b9b9f0fa2b38a08"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00140",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/4bbdd3d1da02",
+      "properties": {},
+      "revision": "rev-e7c81fed6df4aae9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00296",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/ace66cb6c489",
+      "properties": {},
+      "revision": "rev-1445705c18e6e868"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00118",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/3fbc04a13894",
+      "properties": {},
+      "revision": "rev-7b47366d5937cbbc"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00044",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/0efc9285b7c4",
+      "properties": {},
+      "revision": "rev-ca6a07ec48357af6"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00412",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/be8fc6e38564",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/1e19610d9b14",
+      "properties": {},
+      "revision": "rev-1556b5ecb8c4f957"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00390",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/f8d5461d3bcc",
+      "properties": {},
+      "revision": "rev-0196bbc3faa4321c"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00254",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/922d0b81a148",
+      "properties": {},
+      "revision": "rev-7f36146cc6c42284"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00197",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/6afdc611d5d2",
+      "properties": {},
+      "revision": "rev-dc21f5e5dbeebd51"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00053",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/181a54bade7e",
+      "properties": {},
+      "revision": "rev-9caee7349c1ef9ef"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00360",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/e3234b33956a",
+      "properties": {},
+      "revision": "rev-6790769ea85f2660"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00101",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/32b1f3fdc350",
+      "properties": {},
+      "revision": "rev-615593bf57d12561"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00320",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/bf2cc3a9a653",
+      "properties": {},
+      "revision": "rev-338a8d4962f12bbc"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00343",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/d5ec299b3ca3",
+      "properties": {},
+      "revision": "rev-7020116a7ec22486"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00026",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/01734d26af51",
+      "properties": {},
+      "revision": "rev-fa6bcda03f3a14db"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00414",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/ea447b4db16b",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/4ca7e553dea9",
+      "properties": {},
+      "revision": "rev-146208c9e764289d"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00006",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/204f810e7bd5",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/4d17819bb7c5",
+      "properties": {},
+      "revision": "rev-7fe1334cee20b42d"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00205",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/6f6ad0280b09",
+      "properties": {},
+      "revision": "rev-3965c51cb0412b3d"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00394",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/fc3cc6da95cc",
+      "properties": {},
+      "revision": "rev-7c34f200c53bf333"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00064",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/1f21c079b837",
+      "properties": {},
+      "revision": "rev-c05add89e3ae5111"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00130",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/46a279cd147e",
+      "properties": {},
+      "revision": "rev-be1bc67abe64300d"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00082",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/2a268f8a15cf",
+      "properties": {},
+      "revision": "rev-b50c154b2651ea3e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00398",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/fd8ba4bc9e77",
+      "properties": {},
+      "revision": "rev-89fdc27c1cd8bf3e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00072",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/245f6d2bd7c4",
+      "properties": {},
+      "revision": "rev-9c60eec4aad0f986"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00111",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/3a4b274bb631",
+      "properties": {},
+      "revision": "rev-e508d7a8d3c8f4e9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00368",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/e79910e0a6ce",
+      "properties": {},
+      "revision": "rev-69d37ddc8d390dc0"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00366",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/e62585489d55",
+      "properties": {},
+      "revision": "rev-8a37a3ef1a5ca164"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00186",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/668f836085ac",
+      "properties": {},
+      "revision": "rev-0a49e3cfc240d56e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00395",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/fc94e7b272b3",
+      "properties": {},
+      "revision": "rev-72a4c7a5a1b0cfdd"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00335",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/cc3aafd86637",
+      "properties": {},
+      "revision": "rev-ce06e1b77a2abd43"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00007",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/21567f1226ad",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/5d159b4a1a2b",
+      "properties": {},
+      "revision": "rev-4e2e6bce0a65a568"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00022",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/7cd2b942854a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/6319e02448ee",
+      "properties": {},
+      "revision": "rev-d72b228d5cc0d93a"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00342",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/d30c89f993c6",
+      "properties": {},
+      "revision": "rev-70992ee6c3eacdcd"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00326",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/c29bd10409d6",
+      "properties": {},
+      "revision": "rev-0bab665b8e55678b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00291",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a9ad0aa64df4",
+      "properties": {},
+      "revision": "rev-13cceb3a61e28941"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00409",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/aa32397fec6e",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/9462ffb72163",
+      "properties": {},
+      "revision": "rev-c2242c8b2b9447e5"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00389",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/f4dda11d897a",
+      "properties": {},
+      "revision": "rev-68c15d4b810f980b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00089",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/2d9fd5091924",
+      "properties": {},
+      "revision": "rev-ac06a879c1c4116b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00223",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/7d61d36a6b94",
+      "properties": {},
+      "revision": "rev-4a82813fc700e319"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00262",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/980d8b4d1484",
+      "properties": {},
+      "revision": "rev-da56d0b6a02adf88"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00106",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/3894fc989d40",
+      "properties": {},
+      "revision": "rev-1688c0f717dbd8fa"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00279",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a410b604955f",
+      "properties": {},
+      "revision": "rev-8e6bf922f5db17e9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00021",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/7120fccc818d",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/f09538457a2a",
+      "properties": {},
+      "revision": "rev-6b1ec1caf7b109b5"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00362",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/e38c1d3f0586",
+      "properties": {},
+      "revision": "rev-f6499d509eb6131f"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00105",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/370aca4f0adf",
+      "properties": {},
+      "revision": "rev-899e15aa0642625b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00217",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/78e1e3a402af",
+      "properties": {},
+      "revision": "rev-369d513d0a45f905"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00002",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/009d34ffc336",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/93425235b78c",
+      "properties": {},
+      "revision": "rev-6b5287519b264243"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00285",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a7ee586d3c0c",
+      "properties": {},
+      "revision": "rev-55a777d9a6eeea0b"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00202",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/6e8a05add5d2",
+      "properties": {},
+      "revision": "rev-757481c7e834c727"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00048",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/111859d371db",
+      "properties": {},
+      "revision": "rev-6cbcef9d8d5d9631"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00074",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/24ac1c38bafd",
+      "properties": {},
+      "revision": "rev-05b417713e97483f"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00235",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/8445e436ad4f",
+      "properties": {},
+      "revision": "rev-3aaf93f72d2af3c4"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00276",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a386144d5fa8",
+      "properties": {},
+      "revision": "rev-b1033dec57d8aff2"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00152",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/546146da090e",
+      "properties": {},
+      "revision": "rev-a827837a67675795"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00131",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/46b796310925",
+      "properties": {},
+      "revision": "rev-17de6c32705fb4a9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00196",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/6a62747e94b0",
+      "properties": {},
+      "revision": "rev-9a31c7552aa62804"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00211",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/7401df321c26",
+      "properties": {},
+      "revision": "rev-3317c103201d6f01"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00376",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/eb9c9fe2da47",
+      "properties": {},
+      "revision": "rev-887ad1c64d3f2fde"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00387",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/f280899bf670",
+      "properties": {},
+      "revision": "rev-8b99feb4a0dba48f"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00245",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/8d8949f0ea0a",
+      "properties": {},
+      "revision": "rev-467ce1d8eb8ece8e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00275",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/a331a225edc9",
+      "properties": {},
+      "revision": "rev-cbccecd9d8ce1d5c"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00315",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/bae9434b3e0d",
+      "properties": {},
+      "revision": "rev-e81b263cae729c62"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00260",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/96e287ad3e84",
+      "properties": {},
+      "revision": "rev-8bb03e3863b68d7a"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00201",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/6de117a66e72",
+      "properties": {},
+      "revision": "rev-43af2488a9ddbe33"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00302",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/b03c692a3082",
+      "properties": {},
+      "revision": "rev-50a5f8752875959f"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00367",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/e78f5ed2b6ae",
+      "properties": {},
+      "revision": "rev-6b5ed1538fb1b1af"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00327",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/c389a5b69a1d",
+      "properties": {},
+      "revision": "rev-8ea4b6f1a7cb5f93"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00188",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/6761c708e431",
+      "properties": {},
+      "revision": "rev-b1bc8cae940afaaf"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00162",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/59bd663c074c",
+      "properties": {},
+      "revision": "rev-eedf00d6de159fb4"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00038",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/081f01b994c8",
+      "properties": {},
+      "revision": "rev-10bd23b704600697"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00259",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/95f6f3c7adbc",
+      "properties": {},
+      "revision": "rev-d605c5fb5ddd4567"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/links/00312",
+      "type": "https://fixtures.mem.example/ordering/types/cites",
+      "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a",
+      "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/b9656f13e3cd",
+      "properties": {},
+      "revision": "rev-0c05576e713af520"
+    }
+  ],
+  "next": null
+}

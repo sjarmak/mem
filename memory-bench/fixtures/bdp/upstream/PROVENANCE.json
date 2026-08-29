@@ -1,0 +1,11 @@
+{
+  "file": "bdp-v0.schema.json",
+  "upstream_repo": "gastownhall/bdp",
+  "upstream_path": "schemas/bdp-v0.schema.json",
+  "upstream_commit": "f8307699979c29af67a30effb9c3d2702f919813",
+  "upstream_commit_date": "2026-08-29T16:30:27Z",
+  "sha256": "d91e5936e2901abe55a8d9223b02458c2865be8d068b6310a5b71150277895dd",
+  "vendored_on": "2026-08-29",
+  "why_vendored": "The fixture validation gate must run offline and against a pinned contract. Fetching the bundle at test time would make the gate's verdict depend on whichever upstream revision happened to be HEAD, so a fixture could start failing on a day nothing in this repo changed, or keep passing after upstream tightened a constraint.",
+  "refresh": "Re-copy the file, update the commit and sha256 here, then re-run the fixture gate and record what moved. Never edit the vendored copy in place: a locally patched schema that validates our own fixtures proves nothing."
+}

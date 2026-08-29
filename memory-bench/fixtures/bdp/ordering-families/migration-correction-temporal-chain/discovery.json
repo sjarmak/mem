@@ -1,0 +1,14 @@
+{
+  "bdpVersion": "0",
+  "profile": "read",
+  "scope": "https://fixtures.mem.example/ordering/migration-correction-temporal-chain/",
+  "beads": "https://fixtures.mem.example/ordering/migration-correction-temporal-chain/beads/",
+  "links": "https://fixtures.mem.example/ordering/migration-correction-temporal-chain/links/",
+  "types": "https://fixtures.mem.example/ordering/migration-correction-temporal-chain/types/",
+  "limits": {
+    "page": {
+      "defaultItems": 25,
+      "maximumItems": 200
+    }
+  }
+}

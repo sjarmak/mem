@@ -1,0 +1,14 @@
+{
+  "bdpVersion": "0",
+  "profile": "read",
+  "scope": "https://fixtures.mem.example/ordering/data-schema-dependency-dag/",
+  "beads": "https://fixtures.mem.example/ordering/data-schema-dependency-dag/beads/",
+  "links": "https://fixtures.mem.example/ordering/data-schema-dependency-dag/links/",
+  "types": "https://fixtures.mem.example/ordering/data-schema-dependency-dag/types/",
+  "limits": {
+    "page": {
+      "defaultItems": 25,
+      "maximumItems": 200
+    }
+  }
+}

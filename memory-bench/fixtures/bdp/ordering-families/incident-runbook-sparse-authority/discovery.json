@@ -1,0 +1,14 @@
+{
+  "bdpVersion": "0",
+  "profile": "read",
+  "scope": "https://fixtures.mem.example/ordering/incident-runbook-sparse-authority/",
+  "beads": "https://fixtures.mem.example/ordering/incident-runbook-sparse-authority/beads/",
+  "links": "https://fixtures.mem.example/ordering/incident-runbook-sparse-authority/links/",
+  "types": "https://fixtures.mem.example/ordering/incident-runbook-sparse-authority/types/",
+  "limits": {
+    "page": {
+      "defaultItems": 25,
+      "maximumItems": 200
+    }
+  }
+}

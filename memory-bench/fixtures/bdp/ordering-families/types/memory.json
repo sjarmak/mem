@@ -1,0 +1,7 @@
+{
+  "id": "https://fixtures.mem.example/ordering/types/memory",
+  "name": "Memory",
+  "description": "An operating note in a frozen mem ordering graph family.",
+  "describes": "bead",
+  "conformsTo": []
+}

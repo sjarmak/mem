@@ -1483,6 +1483,7 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "black" },
+    { name = "jsonschema" },
     { name = "matplotlib" },
     { name = "mypy" },
     { name = "pytest" },
@@ -1498,6 +1499,7 @@ harbor = [
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=24.0" },
     { name = "harbor", marker = "extra == 'harbor'", specifier = ">=0.3" },
+    { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.20" },
     { name = "matplotlib", marker = "extra == 'dev'", specifier = ">=3.8" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11" },
     { name = "opentelemetry-api", specifier = ">=1.20" },

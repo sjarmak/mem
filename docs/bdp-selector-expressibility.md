@@ -1,7 +1,7 @@
 # BDP Selector expressibility against observed agent retrieval
 
 Bead: `mem-rj2mg`. Preregistration:
-`memory-bench/fixtures/bdp/selector-expressibility-preregistration.json`
+`memory-bench/results/bdp/selector-expressibility-preregistration.json`
 (sha256 `3ffc83e06bc22216e135ca2b2a3b24b8278b99ba1bb1310c1dcae7890e4aeb35`,
 locked before any classification was computed).
 

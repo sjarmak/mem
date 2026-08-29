@@ -1,0 +1,595 @@
+{
+  "schema_version": 4,
+  "bead": "mem-vn4ek",
+  "status": "generated-graph-shapes",
+  "authored_not_measured": "Every graph shape is authored to exercise a consumer policy. None of these structures is a measured field frequency, and nothing here supports a claim about how often they occur in a real store.",
+  "generated_not_projected": "These graphs are generated from this package's own seed. Earlier revisions projected the frozen ordering corpus behind memory-bench, and that corpus cannot be published in this form: it is authored around one distinguished node per family, so degree is the benchmark's answer key. Sweeping degree predicates over the projected Links, `deg==4` returned exactly three Beads in the branching family and all three were gold, and no one of 200 random same-sized decoy sets per family reached that precision in six of the seven families, against a 1.8% base rate. Neutralizing identifiers, free text and property values does not reach that channel, and neither does any rewiring that preserves the degree sequence.",
+  "identifiers_are_opaque": "Bead ids are digests of a generator-side node name, and Link ordinals are assigned after sorting on the published endpoints. Neither the Bead id space nor the Link id space is the order the graph was built in, so the reference order these fixtures record cannot be reproduced by echoing the load order.",
+  "properties_are_synthetic": "Every Bead property is generated from that Bead's own opaque id. Properties exist to give a Selector something to filter on and a page something to weigh; they carry no meaning and no distribution worth reading.",
+  "generator": {
+    "seed": "bdp-fixture-topology/v1",
+    "beads_per_family": 500,
+    "exercises": {
+      "data-schema-dependency-dag": "a flat degree distribution with no hub to special-case",
+      "distributed-system-clustered-components": "the empty selection, and Beads that are in no Link at all",
+      "incident-runbook-sparse-authority": "high indegree against low outdegree, separating ?target= from ?source=",
+      "migration-correction-temporal-chain": "deep paths and short cycles at low degree",
+      "platform-documentation-hub-spoke": "a selection larger than the largest advertised page limit",
+      "release-engineering-branching-playbooks": "several Links sharing one (type, source, target) tuple",
+      "security-policy-cross-team-network": "incident sets that differ from both the inbound and the outbound set"
+    }
+  },
+  "bdp": {
+    "profile": "read",
+    "schema_bundle": "https://raw.githubusercontent.com/gastownhall/bdp/f8307699979c29af67a30effb9c3d2702f919813/schemas/bdp-v0.schema.json",
+    "schema_bundle_commit": "f8307699979c29af67a30effb9c3d2702f919813",
+    "schema_bundle_sha256": "d91e5936e2901abe55a8d9223b02458c2865be8d068b6310a5b71150277895dd",
+    "bead_type": "https://fixtures.mem.example/ordering/types/memory",
+    "link_type": "https://fixtures.mem.example/ordering/types/cites",
+    "reference_order": "ascending-canonical-uri",
+    "page_limits": [
+      25,
+      200
+    ],
+    "bdp8": {
+      "proposal": "https://github.com/gastownhall/bdp/issues/8",
+      "clauses": [
+        "an authority imposes a total order on the selected set",
+        "the order is deterministic for a given selected set",
+        "the order is stable across the pages of one snapshot",
+        "the authority documents the order it uses"
+      ],
+      "leaves_choice_of_order_to_the_implementation": true,
+      "checkable_against_this_tree": [
+        "membership: concatenating every page of a snapshot yields exactly `selected_set`, each id once, with no omission and no repeat",
+        "page partitioning: `page_count` and `page_item_counts` at each recorded limit",
+        "the reference sequence, but only against an authority that documents 'ascending-canonical-uri' as the order it uses"
+      ],
+      "not_checkable_against_this_tree": [
+        "determinism across two reads, which a harness gets by reading twice rather than from any data here",
+        "stability across the pages of one snapshot: no continuation response and no cursor is shipped, so an authority that re-sorts or restarts on continuation passes everything here",
+        "the documentation duty, which is a property of an authority rather than of a fixture"
+      ]
+    }
+  },
+  "shared_types": {
+    "types/cites.json": {
+      "sha256": "ffe4ac3c63ccaf3811db3b86a6e86a56c1747bddc66b7273cdf1130ae2a06698",
+      "bytes": 460,
+      "serves": "https://fixtures.mem.example/ordering/types/cites"
+    },
+    "types/memory.json": {
+      "sha256": "999a9900fb7e241728c0ab952369ae9b5ecbbe0ea99a14a334c615bdf4240efd",
+      "bytes": 205,
+      "serves": "https://fixtures.mem.example/ordering/types/memory"
+    }
+  },
+  "family_count": 7,
+  "families": {
+    "data-schema-dependency-dag": {
+      "scope": "https://fixtures.mem.example/ordering/data-schema-dependency-dag/",
+      "exercises": "a flat degree distribution with no hub to special-case",
+      "bead_count": 500,
+      "link_count": 885,
+      "type_count": 2,
+      "max_outdegree": 3,
+      "max_indegree": 7,
+      "duplicate_endpoint_tuple_links": 0,
+      "hub_predicates_are_pairwise_distinct": true,
+      "serialized_in_reference_order": {
+        "beads.json": false,
+        "links.json": false,
+        "types.json": false
+      },
+      "selections": [
+        {
+          "collection": "links/",
+          "parameters": {
+            "source": "https://fixtures.mem.example/ordering/data-schema-dependency-dag/beads/f769b931a4d5"
+          },
+          "total": 3
+        },
+        {
+          "collection": "links/",
+          "parameters": {
+            "target": "https://fixtures.mem.example/ordering/data-schema-dependency-dag/beads/f769b931a4d5"
+          },
+          "total": 1
+        },
+        {
+          "collection": "links/",
+          "parameters": {
+            "endpoint": "https://fixtures.mem.example/ordering/data-schema-dependency-dag/beads/f769b931a4d5"
+          },
+          "total": 4
+        },
+        {
+          "collection": "beads/",
+          "parameters": {
+            "selector": "$[?@.properties.provenance == \"agent\"]"
+          },
+          "total": 270
+        },
+        {
+          "collection": "beads/",
+          "parameters": {
+            "selector": "$[?@.properties.lifecycle == \"archived\"]"
+          },
+          "total": 5
+        }
+      ],
+      "files": {
+        "discovery.json": {
+          "sha256": "33c4cb9f52e191e746ec6af777c6a24f7714ed479bf8d57a2f1bba0cc8747132",
+          "bytes": 474
+        },
+        "dataset/beads.json": {
+          "sha256": "513b67c8d4ae2c873f79ac553fafe418691259e93c5ac96b878e30c60675838e",
+          "bytes": 403064
+        },
+        "dataset/links.json": {
+          "sha256": "496519f504148945b768ad744cc29adc14e644a46a148eb9dd079646b0c71165",
+          "bytes": 392091
+        },
+        "dataset/types.json": {
+          "sha256": "62ade02723649a4c5e14cbb2280de6efc0eb82651f86524cdc3a12c8e9dd5b63",
+          "bytes": 292
+        },
+        "ordering.json": {
+          "sha256": "06f54213fb2ab6a56bb14bb143f2e752020989353eeac96005f36d5c8bdb9517",
+          "bytes": 160641
+        }
+      }
+    },
+    "distributed-system-clustered-components": {
+      "scope": "https://fixtures.mem.example/ordering/distributed-system-clustered-components/",
+      "exercises": "the empty selection, and Beads that are in no Link at all",
+      "bead_count": 500,
+      "link_count": 275,
+      "type_count": 2,
+      "max_outdegree": 11,
+      "max_indegree": 1,
+      "duplicate_endpoint_tuple_links": 0,
+      "hub_predicates_are_pairwise_distinct": false,
+      "serialized_in_reference_order": {
+        "beads.json": false,
+        "links.json": false,
+        "types.json": false
+      },
+      "selections": [
+        {
+          "collection": "links/",
+          "parameters": {
+            "source": "https://fixtures.mem.example/ordering/distributed-system-clustered-components/beads/ea166d5709b5"
+          },
+          "total": 11
+        },
+        {
+          "collection": "links/",
+          "parameters": {
+            "target": "https://fixtures.mem.example/ordering/distributed-system-clustered-components/beads/ea166d5709b5"
+          },
+          "total": 0
+        },
+        {
+          "collection": "links/",
+          "parameters": {
+            "endpoint": "https://fixtures.mem.example/ordering/distributed-system-clustered-components/beads/ea166d5709b5"
+          },
+          "total": 11
+        },
+        {
+          "collection": "beads/",
+          "parameters": {
+            "selector": "$[?@.properties.provenance == \"agent\"]"
+          },
+          "total": 248
+        },
+        {
+          "collection": "beads/",
+          "parameters": {
+            "selector": "$[?@.properties.lifecycle == \"archived\"]"
+          },
+          "total": 5
+        }
+      ],
+      "files": {
+        "discovery.json": {
+          "sha256": "f892d35c635a4376b5bb299a50a2e9ccb38521875c87f467d5837c68c63aa369",
+          "bytes": 526
+        },
+        "dataset/beads.json": {
+          "sha256": "ebc58de263c55aed2d05c1e4bd63ba9e066c408800e40c6ddb622bf39846a862",
+          "bytes": 408836
+        },
+        "dataset/links.json": {
+          "sha256": "b39b31439182aab97c74a0960a237849e8f6ac3f4a1908c4d14ca243ee111e2f",
+          "bytes": 132586
+        },
+        "dataset/types.json": {
+          "sha256": "62ade02723649a4c5e14cbb2280de6efc0eb82651f86524cdc3a12c8e9dd5b63",
+          "bytes": 292
+        },
+        "ordering.json": {
+          "sha256": "9a48a1e6858acc4dfe2c6dfaecf16bef456de4ad11e1b95e26d97d1aae9a5775",
+          "bytes": 119338
+        }
+      }
+    },
+    "incident-runbook-sparse-authority": {
+      "scope": "https://fixtures.mem.example/ordering/incident-runbook-sparse-authority/",
+      "exercises": "high indegree against low outdegree, separating ?target= from ?source=",
+      "bead_count": 500,
+      "link_count": 467,
+      "type_count": 2,
+      "max_outdegree": 13,
+      "max_indegree": 63,
+      "duplicate_endpoint_tuple_links": 0,
+      "hub_predicates_are_pairwise_distinct": true,
+      "serialized_in_reference_order": {
+        "beads.json": false,
+        "links.json": false,
+        "types.json": false
+      },
+      "selections": [
+        {
+          "collection": "links/",
+          "parameters": {
+            "source": "https://fixtures.mem.example/ordering/incident-runbook-sparse-authority/beads/19a8e07dcad6"
+          },
+          "total": 13
+        },
+        {
+          "collection": "links/",
+          "parameters": {
+            "target": "https://fixtures.mem.example/ordering/incident-runbook-sparse-authority/beads/19a8e07dcad6"
+          },
+          "total": 63
+        },
+        {
+          "collection": "links/",
+          "parameters": {
+            "endpoint": "https://fixtures.mem.example/ordering/incident-runbook-sparse-authority/beads/19a8e07dcad6"
+          },
+          "total": 76
+        },
+        {
+          "collection": "beads/",
+          "parameters": {
+            "selector": "$[?@.properties.provenance == \"agent\"]"
+          },
+          "total": 263
+        },
+        {
+          "collection": "beads/",
+          "parameters": {
+            "selector": "$[?@.properties.lifecycle == \"archived\"]"
+          },
+          "total": 6
+        }
+      ],
+      "files": {
+        "discovery.json": {
+          "sha256": "2d022eafc775d6f21217857af71f760ce1e1307c3eae6dc12d6837538c18b7d3",
+          "bytes": 502
+        },
+        "dataset/beads.json": {
+          "sha256": "d279eba32cbb7a8bc07ebcb623bfb5d46d018258af8b90cfbb522c1a2224ad73",
+          "bytes": 406316
+        },
+        "dataset/links.json": {
+          "sha256": "296f511832555c96584250fedfdd203374a2a68db39a189ec7fc79b35adfda2c",
+          "bytes": 216724
+        },
+        "dataset/types.json": {
+          "sha256": "62ade02723649a4c5e14cbb2280de6efc0eb82651f86524cdc3a12c8e9dd5b63",
+          "bytes": 292
+        },
+        "ordering.json": {
+          "sha256": "422746210a3618c9ef6a9a54d7e567b36353a030f8d5b2c1cd93dda5ebb6e5df",
+          "bytes": 145483
+        }
+      }
+    },
+    "migration-correction-temporal-chain": {
+      "scope": "https://fixtures.mem.example/ordering/migration-correction-temporal-chain/",
+      "exercises": "deep paths and short cycles at low degree",
+      "bead_count": 500,
+      "link_count": 524,
+      "type_count": 2,
+      "max_outdegree": 40,
+      "max_indegree": 4,
+      "duplicate_endpoint_tuple_links": 0,
+      "hub_predicates_are_pairwise_distinct": true,
+      "serialized_in_reference_order": {
+        "beads.json": false,
+        "links.json": false,
+        "types.json": false
+      },
+      "selections": [
+        {
+          "collection": "links/",
+          "parameters": {
+            "source": "https://fixtures.mem.example/ordering/migration-correction-temporal-chain/beads/25239aac6c06"
+          },
+          "total": 40
+        },
+        {
+          "collection": "links/",
+          "parameters": {
+            "target": "https://fixtures.mem.example/ordering/migration-correction-temporal-chain/beads/25239aac6c06"
+          },
+          "total": 4
+        },
+        {
+          "collection": "links/",
+          "parameters": {
+            "endpoint": "https://fixtures.mem.example/ordering/migration-correction-temporal-chain/beads/25239aac6c06"
+          },
+          "total": 44
+        },
+        {
+          "collection": "beads/",
+          "parameters": {
+            "selector": "$[?@.properties.provenance == \"agent\"]"
+          },
+          "total": 254
+        },
+        {
+          "collection": "beads/",
+          "parameters": {
+            "selector": "$[?@.properties.lifecycle == \"archived\"]"
+          },
+          "total": 4
+        }
+      ],
+      "files": {
+        "discovery.json": {
+          "sha256": "c86d1f3ce7d6fdaeb0a52aa36105bf84a8b1f441fcf7a4328bbed08789705324",
+          "bytes": 510
+        },
+        "dataset/beads.json": {
+          "sha256": "16ffcfb342dac3323a4f547833fd5ee8471ed812dec30e1b41fd91493214a0fd",
+          "bytes": 407576
+        },
+        "dataset/links.json": {
+          "sha256": "4b8f445edad519ebac3e4f4c7e0e35d6eba87de4c0be9bfd7163f7340c30720f",
+          "bytes": 246316
+        },
+        "dataset/types.json": {
+          "sha256": "62ade02723649a4c5e14cbb2280de6efc0eb82651f86524cdc3a12c8e9dd5b63",
+          "bytes": 292
+        },
+        "ordering.json": {
+          "sha256": "4be9f9b8b8c551564304bcaebf3364b5aeb22e6c94d2b138df196dc02af44a5c",
+          "bytes": 146426
+        }
+      }
+    },
+    "platform-documentation-hub-spoke": {
+      "scope": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/",
+      "exercises": "a selection larger than the largest advertised page limit",
+      "bead_count": 500,
+      "link_count": 416,
+      "type_count": 2,
+      "max_outdegree": 380,
+      "max_indegree": 6,
+      "duplicate_endpoint_tuple_links": 0,
+      "hub_predicates_are_pairwise_distinct": true,
+      "serialized_in_reference_order": {
+        "beads.json": false,
+        "links.json": false,
+        "types.json": false
+      },
+      "selections": [
+        {
+          "collection": "links/",
+          "parameters": {
+            "source": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a"
+          },
+          "total": 380
+        },
+        {
+          "collection": "links/",
+          "parameters": {
+            "target": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a"
+          },
+          "total": 6
+        },
+        {
+          "collection": "links/",
+          "parameters": {
+            "endpoint": "https://fixtures.mem.example/ordering/platform-documentation-hub-spoke/beads/81a3a8443c7a"
+          },
+          "total": 386
+        },
+        {
+          "collection": "beads/",
+          "parameters": {
+            "selector": "$[?@.properties.provenance == \"agent\"]"
+          },
+          "total": 247
+        },
+        {
+          "collection": "beads/",
+          "parameters": {
+            "selector": "$[?@.properties.lifecycle == \"archived\"]"
+          },
+          "total": 7
+        }
+      ],
+      "files": {
+        "discovery.json": {
+          "sha256": "0ccc9cc8a06a3ba57851e6c8329914156214b0272cf2eae37d1502db1df6bf26",
+          "bytes": 498
+        },
+        "dataset/beads.json": {
+          "sha256": "5ce257c6e1c2e02fb5996f84aba5a5d1011bb1959bae45aa14584c81718795eb",
+          "bytes": 406046
+        },
+        "dataset/links.json": {
+          "sha256": "cc3c397c4424c3a487ed4f9c53f737465c86d18e916a030e30255d3f09981e3e",
+          "bytes": 191812
+        },
+        "dataset/types.json": {
+          "sha256": "62ade02723649a4c5e14cbb2280de6efc0eb82651f86524cdc3a12c8e9dd5b63",
+          "bytes": 292
+        },
+        "ordering.json": {
+          "sha256": "1097f93f34788e58bf358c271eb3bcab9a5bbf75be606ae21218232a28217a74",
+          "bytes": 196449
+        }
+      }
+    },
+    "release-engineering-branching-playbooks": {
+      "scope": "https://fixtures.mem.example/ordering/release-engineering-branching-playbooks/",
+      "exercises": "several Links sharing one (type, source, target) tuple",
+      "bead_count": 500,
+      "link_count": 469,
+      "type_count": 2,
+      "max_outdegree": 31,
+      "max_indegree": 4,
+      "duplicate_endpoint_tuple_links": 5,
+      "hub_predicates_are_pairwise_distinct": true,
+      "serialized_in_reference_order": {
+        "beads.json": false,
+        "links.json": false,
+        "types.json": false
+      },
+      "selections": [
+        {
+          "collection": "links/",
+          "parameters": {
+            "source": "https://fixtures.mem.example/ordering/release-engineering-branching-playbooks/beads/a8d9803e9b41"
+          },
+          "total": 31
+        },
+        {
+          "collection": "links/",
+          "parameters": {
+            "target": "https://fixtures.mem.example/ordering/release-engineering-branching-playbooks/beads/a8d9803e9b41"
+          },
+          "total": 1
+        },
+        {
+          "collection": "links/",
+          "parameters": {
+            "endpoint": "https://fixtures.mem.example/ordering/release-engineering-branching-playbooks/beads/a8d9803e9b41"
+          },
+          "total": 32
+        },
+        {
+          "collection": "beads/",
+          "parameters": {
+            "selector": "$[?@.properties.provenance == \"agent\"]"
+          },
+          "total": 230
+        },
+        {
+          "collection": "beads/",
+          "parameters": {
+            "selector": "$[?@.properties.lifecycle == \"archived\"]"
+          },
+          "total": 4
+        }
+      ],
+      "files": {
+        "discovery.json": {
+          "sha256": "5c7cec3b072a2b80e20b019af09d6227dcdb28f77b7c4c2e8bb057b6154d2f95",
+          "bytes": 526
+        },
+        "dataset/beads.json": {
+          "sha256": "41cfe1ae4415cde6a11c286d5bbdfefc3e9b3dfdc0792cbb95b753f0e79755be",
+          "bytes": 408584
+        },
+        "dataset/links.json": {
+          "sha256": "97e606cb6811ffe6bb1159d3fb50e37735b59b5a1201233f184c43d8636c761d",
+          "bytes": 226094
+        },
+        "dataset/types.json": {
+          "sha256": "62ade02723649a4c5e14cbb2280de6efc0eb82651f86524cdc3a12c8e9dd5b63",
+          "bytes": 292
+        },
+        "ordering.json": {
+          "sha256": "cde20e20e1c2ed81b98dd2535884481526e58d3c9ed97007706decf4c0b08756",
+          "bytes": 141300
+        }
+      }
+    },
+    "security-policy-cross-team-network": {
+      "scope": "https://fixtures.mem.example/ordering/security-policy-cross-team-network/",
+      "exercises": "incident sets that differ from both the inbound and the outbound set",
+      "bead_count": 500,
+      "link_count": 862,
+      "type_count": 2,
+      "max_outdegree": 6,
+      "max_indegree": 15,
+      "duplicate_endpoint_tuple_links": 0,
+      "hub_predicates_are_pairwise_distinct": true,
+      "serialized_in_reference_order": {
+        "beads.json": false,
+        "links.json": false,
+        "types.json": false
+      },
+      "selections": [
+        {
+          "collection": "links/",
+          "parameters": {
+            "source": "https://fixtures.mem.example/ordering/security-policy-cross-team-network/beads/f7383d3a8961"
+          },
+          "total": 6
+        },
+        {
+          "collection": "links/",
+          "parameters": {
+            "target": "https://fixtures.mem.example/ordering/security-policy-cross-team-network/beads/f7383d3a8961"
+          },
+          "total": 5
+        },
+        {
+          "collection": "links/",
+          "parameters": {
+            "endpoint": "https://fixtures.mem.example/ordering/security-policy-cross-team-network/beads/f7383d3a8961"
+          },
+          "total": 11
+        },
+        {
+          "collection": "beads/",
+          "parameters": {
+            "selector": "$[?@.properties.provenance == \"agent\"]"
+          },
+          "total": 249
+        },
+        {
+          "collection": "beads/",
+          "parameters": {
+            "selector": "$[?@.properties.lifecycle == \"archived\"]"
+          },
+          "total": 3
+        }
+      ],
+      "files": {
+        "discovery.json": {
+          "sha256": "f12cd9b2e6116073093f0ce0524a8eae994bb1edbe892ef09519bdbb3004e076",
+          "bytes": 506
+        },
+        "dataset/beads.json": {
+          "sha256": "4ec45fb75aa75bfe316046123d788615bf5e1de458650c4b7ce4c19d11e0c1dc",
+          "bytes": 405620
+        },
+        "dataset/links.json": {
+          "sha256": "cf923bc6b656cbb2473211d23ee528e06ef64f1554c252de4025dee0d379d585",
+          "bytes": 402590
+        },
+        "dataset/types.json": {
+          "sha256": "62ade02723649a4c5e14cbb2280de6efc0eb82651f86524cdc3a12c8e9dd5b63",
+          "bytes": 292
+        },
+        "ordering.json": {
+          "sha256": "4166e707f78bbbc60460204d4af1bcc6d69269ce49a95a2198446bde1992c054",
+          "bytes": 170755
+        }
+      }
+    }
+  }
+}

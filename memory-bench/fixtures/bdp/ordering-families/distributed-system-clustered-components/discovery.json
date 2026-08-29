@@ -1,0 +1,14 @@
+{
+  "bdpVersion": "0",
+  "profile": "read",
+  "scope": "https://fixtures.mem.example/ordering/distributed-system-clustered-components/",
+  "beads": "https://fixtures.mem.example/ordering/distributed-system-clustered-components/beads/",
+  "links": "https://fixtures.mem.example/ordering/distributed-system-clustered-components/links/",
+  "types": "https://fixtures.mem.example/ordering/distributed-system-clustered-components/types/",
+  "limits": {
+    "page": {
+      "defaultItems": 25,
+      "maximumItems": 200
+    }
+  }
+}
