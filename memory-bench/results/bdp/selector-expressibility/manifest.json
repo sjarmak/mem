@@ -3,28 +3,28 @@
   "preregistration_sha256": "3ffc83e06bc22216e135ca2b2a3b24b8278b99ba1bb1310c1dcae7890e4aeb35",
   "files": {
     "analysis.json": {
-      "sha256": "d6799b7821dd310d54e17de966d7f2d8da5da1db19c1a8a97b5618463b11951e",
-      "bytes": 4760
+      "sha256": "99e1f1377618d520256c9346362eeb11731edd0b8d9a69401e571aa8523e9edc",
+      "bytes": 8372
     },
     "classify.py": {
-      "sha256": "decfa055a053754d3ab5b28de4fb1f5a0c6fe44c4afd0574ef8c240c6aafeee8",
-      "bytes": 12859
+      "sha256": "06a70b958a8411a431c0d8c2bdd8d2258d6316b6031bc8a00711d0de5353188d",
+      "bytes": 15358
     },
     "extract.py": {
       "sha256": "1abe82a473ff68afa71e91a8862f54651b3e47396d0d54899759bf97d85966df",
       "bytes": 5724
     },
     "g3.py": {
-      "sha256": "69a59a892a14e52073322747afcdf5a56e51f52543b52747c28419a841fdfada",
-      "bytes": 2307
+      "sha256": "531b2c10d0d3b9b800ed7455c9605d45298b24445c41228e3820f196f52a7724",
+      "bytes": 2762
     },
     "package.py": {
-      "sha256": "64b92325495dbb636447028a53fd50e6ab3c3d3e884953cd7abadcbe7a7a6e22",
-      "bytes": 5687
+      "sha256": "a1289592d33e8f2ff53344a7808d189f3216ca8a172f33c29fdc53bf673568b4",
+      "bytes": 10259
     },
     "report.md": {
-      "sha256": "1cdea3d98147d58387d31765c912d920ebe6b80e8a437d4afe50917c96987403",
-      "bytes": 4888
+      "sha256": "aadc210336004cb9460202c2c8d1b1c5cd77397bed010296a931165e7ca77ae2",
+      "bytes": 7356
     }
   },
   "privacy": "Predicate shapes, taxonomy labels, counts and fractions only. No query literals, free-text arguments, bead titles or bodies, file paths, model text, or identities. The intermediate holding command text stays in a session scratchpad and is not part of this package."

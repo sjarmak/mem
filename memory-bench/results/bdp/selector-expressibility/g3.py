@@ -46,14 +46,24 @@ def surviving_predicates(argv: list[str]) -> list[str]:
 
 def main(inv_path: str) -> None:
     shapes: collections.Counter[tuple[str, tuple[str, ...]]] = collections.Counter()
+    # Every other statistic in this study dedups exact repeats within a session.
+    # G3 must use the same population or its share is not comparable to C1_share.
+    seen: set[tuple[str, str]] = set()
     with open(inv_path, encoding="utf-8") as fh:
         for line in fh:
-            argv = taxonomy.strip_shell(json.loads(line)["argv"])
+            rec = json.loads(line)
+            if taxonomy.is_excluded_origin(str(rec.get("cwd") or "")):
+                continue
+            argv = taxonomy.strip_shell(rec["argv"])
             if any(taxonomy.PLACEHOLDER.search(t) for t in argv) or "--help" in argv:
                 continue
             sub, labels, _free_text, _pos = taxonomy.classify(argv)
             if sub not in taxonomy.PREREG_READ or "C1" not in labels:
                 continue
+            key = (str(rec["session"]), " ".join(argv))
+            if key in seen:
+                continue
+            seen.add(key)
             shapes[(sub, tuple(sorted(set(surviving_predicates(argv)))))] += 1
 
     total = sum(shapes.values())

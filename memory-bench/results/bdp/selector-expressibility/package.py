@@ -44,24 +44,27 @@ def main() -> None:
             "sizes are measured against one present-day store as a proxy."
         ),
         "distinct_superset_shapes": 7,
-        "c1_invocations": 577,
+        "c1_invocations": 342,
         "shape_distribution": {
-            "bd list --status": 523,
-            "bd list (no other predicate)": 36,
-            "bd ready (no other predicate)": 11,
+            "bd list --status": 301,
+            "bd list (no other predicate)": 30,
+            "bd ready (no other predicate)": 5,
             "bd list --assignee": 2,
             "bd ready --exclude-type --metadata-field --unassigned": 2,
-            "bd count --status": 2,
+            "bd count --status": 1,
             "bd list --priority --status": 1,
         },
-        "retains_a_narrowing_predicate": {"count": 530, "share": 0.9186},
+        "retains_a_narrowing_predicate": {"count": 307, "share": 0.8977},
         "present_day_store_proxy": {
             "store": "mem project bead store",
             "superset_size_status_open": 107,
             "superset_size_whole_collection": 1708,
             "caveat": (
-                "one store at one time; queries in the corpus ran against several "
-                "rigs whose collection sizes differ"
+                "One store at one time, and it is the analyst's own project. The "
+                "corpus spans 118 distinct working directories whose collection "
+                "sizes are not measured here. This supports a claim about "
+                "collections of this scale (low thousands of resources), not a "
+                "general property of limit and cursor."
             ),
         },
     }
@@ -69,7 +72,7 @@ def main() -> None:
     analysis["deviations_from_preregistration"] = [
         {
             "item": "corpus resolution",
-            "registered": "resolve session ids through gc session logs, run from the orchestrator rig root",
+            "registered": "resolve session ids via gc session logs from the rig root",
             "actual": (
                 "enumerated transcript JSONL directly from the on-disk agent project "
                 "directories (9,172 files, 6.8 GB)"
@@ -80,13 +83,28 @@ def main() -> None:
             "item": "model classification of free-text intent",
             "registered": "a batched model pass over free-text search arguments",
             "actual": (
-                "not run. The mechanical rule assigns N1 to EVERY non-ID-like "
-                "positional argument, which is the assumption most favorable to the "
-                "'a search predicate is needed' conclusion. G1 is therefore an upper "
-                "bound on the text-search residue, and it still lands below the "
-                "profile-adequate threshold. A model pass could only lower it."
+                "not run. The mechanical rule assigns N1 to every positional "
+                "argument on `bd search` that is not a generated bd id. A model "
+                "pass could only move arguments OUT of N1, so G1 as computed is an "
+                "upper bound on the text-search residue rather than an estimate of "
+                "it, and it still lands below the profile-adequate threshold."
             ),
             "direction": "conservative against the study's own null result",
+        },
+        {
+            "item": "G3 statistic",
+            "registered": "median and p90 superset size a C1 query must enumerate",
+            "actual": (
+                "superset SHAPES counted exactly, with their sizes measured against "
+                "one present-day store as a proxy. Historical result sizes are not "
+                "recoverable from transcripts: the size a query returned on the day "
+                "it ran is not recorded anywhere, and stores have changed since."
+            ),
+            "direction": (
+                "descriptive either way; G3 carries no threshold, but the "
+                "substituted statistic answers 'what must be enumerated' by shape "
+                "rather than by measured size"
+            ),
         },
         {
             "item": "E_NONE reporting bucket",
@@ -110,6 +128,74 @@ def main() -> None:
         "point discarded 27,939 of 31,133 rows",
         "--search, --unassigned and --mol were absent from the flag table",
     ]
+
+    analysis["defects_found_by_independent_review"] = {
+        "note": (
+            "Two independent reviewers audited the classifier and the method after "
+            "the first result was committed. Every defect below is fixed in the "
+            "scripts published here, and the numbers in this file are post-fix."
+        ),
+        "changed_a_published_number": [
+            {
+                "defect": (
+                    "the id pattern matched any hyphenated lowercase token, so a "
+                    "free-text topic query on `bd search` scored as an identity "
+                    "fetch (E0) instead of text (N1)"
+                ),
+                "effect": (
+                    "88 positionals across 799 deduped `bd search` invocations "
+                    "moved from E0 to N1. G1 0.0105 -> 0.0114 session-averaged, "
+                    "0.0464 -> 0.0508 per-invocation. Verdict unchanged."
+                ),
+                "why_it_mattered": (
+                    "it undercounted the text residue, which is the one direction "
+                    "the writeup claimed was impossible"
+                ),
+            },
+            {
+                "defect": (
+                    "g3.py counted raw rows while every other statistic deduped "
+                    "exact repeats within a session"
+                ),
+                "effect": (
+                    "C1 invocations 577 -> 342, matching label_counts_deduped; "
+                    "retains-a-narrowing-predicate 91.9% -> 89.8%; bare 47 -> 35. "
+                    "Shape count and conclusion unchanged."
+                ),
+                "why_it_mattered": ("analysis.json reported 342 and 577 for the same quantity"),
+            },
+            {
+                "defect": (
+                    "E3 fired whenever two labels co-occurred, including "
+                    "combinations containing an inexpressible one such as E1+N1"
+                ),
+                "effect": "E3 3820 -> 39. No gate reads E3.",
+                "why_it_mattered": (
+                    "the taxonomy defines E3 as a boolean combination of "
+                    "EXPRESSIBLE predicates; the loose rule inflated the "
+                    "expressible side with queries the Selector cannot serve"
+                ),
+            },
+        ],
+        "zero_measured_impact_on_this_corpus": [
+            "`bd search --query TEXT` captured its value but never got an N1 label; "
+            "no invocation in the corpus used that form (all 810 use the positional)",
+            "-s means --status on list/search but --sort on `bd ready`, which the "
+            "flat flag table could not express; no corpus row hit the collision",
+            "ten subcommand-local boolean flags were absent from the valueless set, "
+            "so each could have swallowed the token after it as a fake value",
+            "clustered short flags (-qv) parse as one unknown flag; the corpus "
+            "contains no clustered short flag on a read subcommand",
+            "--spec-id was mapped but does not exist in the CLI (dead entry, removed)",
+        ],
+        "known_and_unfixed": [
+            "extract.py can build a fake argv from prose that merely contains the "
+            "token bd. About 12 of 31,133 rows show this shape; 2 survived into the "
+            "counted population, both as ordinary list --status shapes whose label "
+            "is unaffected. No filter was added, because a prose detector here "
+            "would be a semantic heuristic in a layer that is mechanical by design.",
+        ],
+    }
 
     (OUT / "analysis.json").write_text(json.dumps(analysis, indent=2) + "\n")
 

@@ -91,7 +91,6 @@ _add(
     "--wisp-type",
     "--exclude-type",
     "--mol",
-    "--spec-id",
 )
 # E2 ordered comparison
 _add(
@@ -117,6 +116,7 @@ _add(
     "--unassigned",
     "--no-labels",
     "--empty-description",
+    "-u",
     "--has-metadata-key",
     "--deferred",
     "--pinned",
@@ -137,6 +137,7 @@ _add(
     "--spec",
     "--label-pattern",
     "--search",
+    "--query",
 )
 # N2 regular expression
 _add("N2", "--label-regex")
@@ -147,6 +148,12 @@ _add("N3", "--ready", "--deps", "--blocked-by", "--blocks", "--related", "--dire
 _add("N5", "--sort", "--reverse", "-r", "--offset")
 # N6 projection / nested-value selection
 _add("N6", "--format", "--brief", "--skip-labels")
+
+# A short flag can mean different things under different subcommands. `bd ready`
+# has no status filter: there, -s is --sort (ordering), not --status.
+SUBCOMMAND_FLAG_LABEL: dict[tuple[str, str], str] = {
+    ("ready", "-s"): "N5",
+}
 
 SUBCOMMAND_LABEL = {
     "ready": "N3",
@@ -198,11 +205,32 @@ VALUELESS = {
     "--comments",
     "--watch",
     "-w",
+    # subcommand-local booleans. An unlisted flag is assumed to take a value, so
+    # a missing boolean here silently swallows the token after it.
+    "-u",
+    "--claim",
+    "--plain",
+    "--current",
+    "--children",
+    "--refs",
+    "--thread",
+    "--local-time",
+    "--brief-deps",
+    "--include-dependents",
+    "--include-comments",
 }
 
 REDIRECT = re.compile(r"^\d*(>>|>|<)&?\d*$")
 PLACEHOLDER = re.compile(r"^<.+>$|^\$|\{\{|^\.\.\.$|^%s$")
 ID_LIKE = re.compile(r"^[a-z][a-z0-9]*(?:-[0-9a-z.]+)+$", re.IGNORECASE)
+# `bd show` takes an id by construction, so the loose shape above is safe there.
+# `bd search` takes either an id or free text, and the loose shape matches any
+# hyphenated phrase, which would score a topic query as an identity fetch and
+# undercount N1. A generated bd shortcode always carries a digit in its final
+# segment (mem-rj2mg, dr-dcy6, gc-zl1, bd-123, agent-diagnostics-4w02); a
+# hyphenated English phrase does not. Anything else on `search` is free text.
+STRICT_ID = re.compile(r"^[a-z][a-z0-9]*(?:-[0-9a-z.]+)*-[0-9a-z.]*[0-9][0-9a-z.]*$", re.IGNORECASE)
+EXPRESSIBLE_PREDICATES = {"E0", "E1", "E2", "E4"}
 QUERY_CMP = re.compile(r"<=|>=|!=|=|<|>")
 QUERY_BOOL = re.compile(r"\b(AND|OR|NOT)\b", re.IGNORECASE)
 TEXT_QUERY_FIELDS = {"title", "description", "notes"}
@@ -276,14 +304,18 @@ def classify(argv: list[str]) -> tuple[str, set[str], list[str], list[str]]:
         tok = rest[i]
         if tok.startswith("-") and len(tok) > 1:
             name, eq, inline = tok.partition("=")
-            label = FLAG_LABEL.get(name)
+            label = SUBCOMMAND_FLAG_LABEL.get((sub, name)) or FLAG_LABEL.get(name)
             if label:
                 labels.add(label)
-            if name in {"--query", "-q"}:
-                if inline:
-                    free_text.append(inline)
-                elif i + 1 < len(rest):
-                    free_text.append(rest[i + 1])
+            # --query carries free text. -q is --quiet everywhere except search,
+            # where it is the short form of --query; a bare -q captures nothing.
+            if name == "--query" or (name == "-q" and sub == "search"):
+                value = inline
+                if not value and i + 1 < len(rest) and not rest[i + 1].startswith("-"):
+                    value = rest[i + 1]
+                if value:
+                    free_text.append(value)
+                    labels.add("N1")
             if (
                 not eq
                 and name not in VALUELESS
@@ -304,7 +336,7 @@ def classify(argv: list[str]) -> tuple[str, set[str], list[str], list[str]]:
         labels.add("E0" if len(ids) == 1 else "E1")
     elif sub == "search":
         for p in positionals:
-            if ID_LIKE.match(p):
+            if STRICT_ID.match(p):
                 labels.add("E0")
             else:
                 labels.add("N1")
@@ -317,12 +349,25 @@ def classify(argv: list[str]) -> tuple[str, set[str], list[str], list[str]]:
                 labels.add("N1")
                 free_text.append(p)
 
-    predicate = {x for x in labels if x not in {"N5", "N6", "E3"}}
-    if len(predicate) >= 2:
+    # E3 is a boolean combination of EXPRESSIBLE predicates, per the taxonomy.
+    # Counting E1+N1 as E3 would inflate the expressible side with a query the
+    # Selector cannot serve.
+    if len(labels & EXPRESSIBLE_PREDICATES) >= 2:
         labels.add("E3")
     if not labels:
         labels.add("E_NONE")
     return sub, labels, free_text, positionals
+
+
+# The preregistration excludes invocations issued by the memory-bench harness,
+# by any synthetic generator, and by this study itself. Origin is read from the
+# recorded working directory.
+EXCLUDED_ORIGIN_MARKERS = ("memory-bench", "synthetic", "mem-rj2mg")
+
+
+def is_excluded_origin(cwd: str) -> bool:
+    low = cwd.lower()
+    return any(m in low for m in EXCLUDED_ORIGIN_MARKERS)
 
 
 def main(inv_path: str, out_path: str) -> None:
@@ -338,6 +383,9 @@ def main(inv_path: str, out_path: str) -> None:
 
     for line in raw_lines:
         r = json.loads(line)
+        if is_excluded_origin(str(r.get("cwd") or "")):
+            skipped["excluded_origin"] += 1
+            continue
         argv = strip_shell(r["argv"])
         if any(PLACEHOLDER.search(t) for t in argv):
             skipped["placeholder_or_template"] += 1
@@ -402,8 +450,8 @@ def main(inv_path: str, out_path: str) -> None:
 
     g1, n1s = session_frac(is_g1)
     g2, n2s = session_frac(is_g2)
-    g1_nr, _ = session_frac(is_g1, not_ready)
-    g2_nr, _ = session_frac(is_g2, not_ready)
+    g1_nr, n1s_nr = session_frac(is_g1, not_ready)
+    g2_nr, n2s_nr = session_frac(is_g2, not_ready)
 
     label_counts: Counter[str] = Counter()
     for row in rows:
@@ -447,6 +495,12 @@ def main(inv_path: str, out_path: str) -> None:
                 "sensitivity_excluding_bd_ready": {
                     "G1_session_averaged": round(g1_nr, 4),
                     "G2_session_averaged": round(g2_nr, 4),
+                    "G1_n_sessions": n1s_nr,
+                    "G2_n_sessions": n2s_nr,
+                    "note": (
+                        "sessions consisting only of bd ready become empty here and "
+                        "drop out rather than counting as zero"
+                    ),
                 },
                 "C1_share": {
                     "session_averaged": round(session_frac(has_c1)[0], 4),
