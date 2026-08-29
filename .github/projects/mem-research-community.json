@@ -1,0 +1,357 @@
+{
+  "schemaVersion": 1,
+  "name": "mem — Research, Community, and Delivery",
+  "liveProject": {
+    "owner": "sjarmak",
+    "number": 4,
+    "url": "https://github.com/users/sjarmak/projects/4"
+  },
+  "purpose": "Incubate Beads-facing memory work from community signal through reproducible evidence, delivery, outcome audit, and an explicit upstream decision.",
+  "decisionRule": "Community evidence prioritizes questions. Preregistered evaluations, controlled experiments, replication, and explicit limitations determine recommendations.",
+  "sourcesOfTruth": {
+    "publicCommitmentAndDecision": "GitHub Issue",
+    "crossTrackProjection": "GitHub Project",
+    "localExecution": "mem-* bead",
+    "evidence": "Versioned, privacy-safe repository artifact linked from the issue"
+  },
+  "fields": [
+    {
+      "name": "Kind",
+      "type": "SINGLE_SELECT",
+      "options": [
+        "Epic",
+        "Research question",
+        "Community feedback",
+        "Eval infrastructure",
+        "Experiment",
+        "Decision",
+        "Feature",
+        "Bug",
+        "Docs",
+        "Upstream proposal"
+      ]
+    },
+    {
+      "name": "Track",
+      "type": "SINGLE_SELECT",
+      "options": [
+        "Community",
+        "Research",
+        "Eval infrastructure",
+        "Experiment",
+        "Product",
+        "Docs",
+        "Upstream"
+      ]
+    },
+    { "name": "Priority", "type": "SINGLE_SELECT", "options": ["P0", "P1", "P2", "P3"] },
+    { "name": "Risk", "type": "SINGLE_SELECT", "options": ["Low", "Moderate", "High", "Critical"] },
+    {
+      "name": "Estimate confidence",
+      "type": "SINGLE_SELECT",
+      "options": ["Low", "Medium", "High"]
+    },
+    { "name": "Agent difficulty", "type": "NUMBER" },
+    {
+      "name": "Evidence stage",
+      "type": "SINGLE_SELECT",
+      "options": ["None", "Anecdotal", "Observational", "Pilot", "Confirmatory", "Replicated"]
+    },
+    {
+      "name": "Evidence confidence",
+      "type": "SINGLE_SELECT",
+      "options": ["None", "Low", "Medium", "High"]
+    },
+    {
+      "name": "Validation coverage",
+      "type": "SINGLE_SELECT",
+      "options": ["Not started", "Partial", "Complete", "Unavailable"]
+    },
+    {
+      "name": "Decision",
+      "type": "SINGLE_SELECT",
+      "options": ["Undecided", "Adopt", "More evidence", "Defer", "Reject", "Superseded"]
+    },
+    {
+      "name": "Upstream state",
+      "type": "SINGLE_SELECT",
+      "options": [
+        "Incubating",
+        "Not ready",
+        "Ready",
+        "Socializing",
+        "Proposed",
+        "Accepted",
+        "Declined",
+        "Deferred"
+      ]
+    },
+    { "name": "Research question", "type": "TEXT" },
+    { "name": "Evidence link", "type": "TEXT" },
+    { "name": "Upstream link", "type": "TEXT" },
+    { "name": "Target date", "type": "DATE" },
+    { "name": "Outcome review date", "type": "DATE" },
+    { "name": "Initial model", "type": "TEXT" },
+    { "name": "Reasoning effort", "type": "TEXT" },
+    { "name": "Model route", "type": "TEXT" },
+    { "name": "Planning tokens", "type": "NUMBER" },
+    { "name": "Implementation tokens", "type": "NUMBER" },
+    { "name": "Review tokens", "type": "NUMBER" },
+    { "name": "Lifecycle tokens", "type": "NUMBER" },
+    { "name": "Time to first candidate (ms)", "type": "NUMBER" },
+    {
+      "name": "First-pass outcome",
+      "type": "SINGLE_SELECT",
+      "options": ["Pending", "Accepted", "Rework required", "No candidate"]
+    },
+    {
+      "name": "Measurement coverage",
+      "type": "SINGLE_SELECT",
+      "options": ["Complete", "Partial", "Unavailable"]
+    },
+    { "name": "Community signal count", "type": "NUMBER" },
+    {
+      "name": "Task source",
+      "type": "SINGLE_SELECT",
+      "options": [
+        "Sanitized real",
+        "Authored operational",
+        "Synthetic stress",
+        "Replay",
+        "Mixed",
+        "Unknown"
+      ]
+    },
+    {
+      "name": "Contamination control",
+      "type": "SINGLE_SELECT",
+      "options": [
+        "Unassessed",
+        "Public exposure possible",
+        "Held out",
+        "Post-cutoff",
+        "Private",
+        "Synthetic-by-construction"
+      ]
+    },
+    {
+      "name": "Precision status",
+      "type": "SINGLE_SELECT",
+      "options": ["Unassessed", "Underpowered", "Adequate", "Inconclusive"]
+    }
+  ],
+  "views": [
+    {
+      "name": "Overview",
+      "layout": "TABLE",
+      "filter": "is:open",
+      "visibleFields": [
+        "Title",
+        "Assignees",
+        "Status",
+        "Linked pull requests",
+        "Sub-issues progress",
+        "Priority",
+        "Kind",
+        "Track",
+        "Risk"
+      ]
+    },
+    {
+      "name": "Community intake",
+      "layout": "TABLE",
+      "filter": "is:open track:Community",
+      "visibleFields": [
+        "Title",
+        "Assignees",
+        "Status",
+        "Updated",
+        "Priority",
+        "Kind",
+        "Evidence confidence",
+        "Research question",
+        "Evidence stage",
+        "Community signal count"
+      ]
+    },
+    {
+      "name": "Research questions",
+      "layout": "TABLE",
+      "filter": "is:open track:Research",
+      "visibleFields": [
+        "Title",
+        "Assignees",
+        "Status",
+        "Priority",
+        "Evidence confidence",
+        "Validation coverage",
+        "Research question",
+        "Evidence link",
+        "Evidence stage",
+        "Task source",
+        "Contamination control",
+        "Precision status"
+      ]
+    },
+    {
+      "name": "Active validations",
+      "layout": "TABLE",
+      "filter": "is:open AND (track:\"Eval infrastructure\" OR track:Experiment)",
+      "visibleFields": [
+        "Title",
+        "Assignees",
+        "Status",
+        "Priority",
+        "Kind",
+        "Evidence confidence",
+        "Validation coverage",
+        "Research question",
+        "Evidence link",
+        "Risk",
+        "Evidence stage",
+        "Task source",
+        "Contamination control",
+        "Precision status"
+      ]
+    },
+    {
+      "name": "Decision queue",
+      "layout": "TABLE",
+      "filter": "is:open decision:Undecided",
+      "visibleFields": [
+        "Title",
+        "Status",
+        "Priority",
+        "Evidence confidence",
+        "Decision",
+        "Validation coverage",
+        "Evidence link",
+        "Outcome review date",
+        "Risk",
+        "Evidence stage",
+        "Precision status"
+      ]
+    },
+    {
+      "name": "Delivery",
+      "layout": "BOARD",
+      "filter": "is:open AND (track:Product OR track:Docs)",
+      "visibleFields": [
+        "Title",
+        "Assignees",
+        "Status",
+        "Linked pull requests",
+        "Sub-issues progress",
+        "Priority",
+        "Kind",
+        "Risk"
+      ]
+    },
+    {
+      "name": "Upstream readiness",
+      "layout": "TABLE",
+      "filter": "is:open track:Upstream",
+      "visibleFields": [
+        "Title",
+        "Assignees",
+        "Status",
+        "Priority",
+        "Evidence confidence",
+        "Decision",
+        "Validation coverage",
+        "Upstream link",
+        "Risk",
+        "Evidence stage",
+        "Upstream state",
+        "Task source",
+        "Contamination control",
+        "Precision status"
+      ]
+    },
+    {
+      "name": "Outcome audits",
+      "layout": "TABLE",
+      "filter": "is:open has:outcome-review-date",
+      "visibleFields": [
+        "Title",
+        "Assignees",
+        "Status",
+        "Evidence confidence",
+        "Decision",
+        "Evidence link",
+        "Outcome review date",
+        "Evidence stage"
+      ]
+    },
+    {
+      "name": "Agent efficiency",
+      "layout": "TABLE",
+      "filter": "has:lifecycle-tokens",
+      "visibleFields": [
+        "Title",
+        "Linked pull requests",
+        "Agent difficulty",
+        "Estimate confidence",
+        "Reasoning effort",
+        "Model route",
+        "Implementation tokens",
+        "Planning tokens",
+        "Review tokens",
+        "Lifecycle tokens",
+        "First-pass outcome",
+        "Measurement coverage",
+        "Risk",
+        "Initial model",
+        "Time to first candidate (ms)"
+      ]
+    },
+    {
+      "name": "Completed evidence",
+      "layout": "TABLE",
+      "filter": "is:closed -evidence-stage:None",
+      "visibleFields": [
+        "Title",
+        "Kind",
+        "Evidence confidence",
+        "Decision",
+        "Validation coverage",
+        "Evidence link",
+        "Outcome review date",
+        "Track",
+        "Evidence stage",
+        "Task source",
+        "Contamination control",
+        "Precision status"
+      ]
+    }
+  ],
+  "requiredDefaultWorkflows": [
+    "Item added to project",
+    "Item closed",
+    "Auto-close issue",
+    "Pull request linked to issue",
+    "Pull request merged",
+    "Auto-add sub-issues to project"
+  ],
+  "intakeLabels": [
+    "community-feedback",
+    "research-question",
+    "experiment",
+    "evidence-decision",
+    "upstream-proposal"
+  ],
+  "privacyBoundary": {
+    "allowed": [
+      "Aggregates",
+      "Sanitized evidence artifacts",
+      "Public issue and pull request links",
+      "Reproduction instructions"
+    ],
+    "forbidden": [
+      "Raw agent traces",
+      "Credentials or tokens",
+      "Private infrastructure details",
+      "Unconsented identities or transcript text"
+    ]
+  }
+}

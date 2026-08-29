@@ -1,0 +1,81 @@
+name: Preregistered experiment
+description: Specify a pilot or confirmatory evaluation before observing its decision result.
+title: '[Experiment]: '
+labels: ['experiment']
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Parent research question and decision
+      description: Link the research issue and state exactly which decision this run informs.
+    validations:
+      required: true
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Evidence stage
+      options: [Pilot, Confirmatory, Replication]
+    validations:
+      required: true
+  - type: dropdown
+    id: task_source
+    attributes:
+      label: Task source
+      options: [Sanitized real, Authored operational, Synthetic stress, Replay, Mixed, Unknown]
+    validations:
+      required: true
+  - type: textarea
+    id: frozen_inputs
+    attributes:
+      label: Frozen inputs and provenance
+      description: Commits, binaries, fixtures/corpora, task membership, exclusions, configuration, models, and schedules/seeds.
+    validations:
+      required: true
+  - type: textarea
+    id: design
+    attributes:
+      label: Arms, controls, sample, and repeats
+    validations:
+      required: true
+  - type: textarea
+    id: analysis
+    attributes:
+      label: Metrics, gates, and analysis plan
+      description: Separate affected-task benefit, neutral-task regression, runtime/operational cost, failures, and uncertainty.
+    validations:
+      required: true
+  - type: textarea
+    id: contamination
+    attributes:
+      label: Contamination controls
+      description: State answer-leakage risks and the holdout, post-cutoff, private, or synthetic-by-construction defense.
+    validations:
+      required: true
+  - type: textarea
+    id: precision
+    attributes:
+      label: Precision or power assessment
+      description: State the decision threshold, expected variance, independent unit, repeats, and what outcome will be called inconclusive.
+    validations:
+      required: true
+  - type: textarea
+    id: stopping
+    attributes:
+      label: Stopping, rerun, and missing-data rules
+      description: Define these before the decision result is inspected.
+    validations:
+      required: true
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Artifact and privacy plan
+      description: Name raw-to-summary lineage and the sanitized package that another operator can use.
+    validations:
+      required: true
+  - type: checkboxes
+    id: preregister
+    attributes:
+      label: Preregistration check
+      options:
+        - label: The decision gate and analysis plan above were recorded before inspecting the confirmatory result.
+          required: true

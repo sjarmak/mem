@@ -1,0 +1,58 @@
+name: Community feedback
+description: Report a concrete Beads or mem workflow, problem, or unmet need.
+title: '[Community]: '
+labels: ['community-feedback']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One concrete workflow per issue. Please remove secrets, private traces, and identifying details. Community reports prioritize research; they do not predetermine a technical decision.
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow and problem
+      description: What were you trying to accomplish, and where did it break down?
+      placeholder: Include the goal, relevant Beads/mem surface, and the observable failure or friction.
+    validations:
+      required: true
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: Frequency
+      options: [Once, Occasionally, Frequently, Every time, Unknown]
+    validations:
+      required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      options: [Minor friction, Material rework, Blocks a workflow, Risks incorrect work, Unknown]
+    validations:
+      required: true
+  - type: textarea
+    id: observation
+    attributes:
+      label: Evidence observed
+      description: Describe what you directly observed. Link a sanitized reproduction or public example if available.
+    validations:
+      required: true
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Current workaround
+      description: What do you do today, and what does it cost?
+  - type: dropdown
+    id: validation
+    attributes:
+      label: Follow-up participation
+      options:
+        [I can test a prototype, I can answer follow-up questions, Report only, Prefer not to say]
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Public-data check
+      options:
+        - label: I removed secrets, private traces, private infrastructure details, and identifying information I do not have permission to share.
+          required: true

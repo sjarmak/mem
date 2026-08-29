@@ -1,0 +1,57 @@
+name: Upstream proposal
+description: Propose moving a validated, minimal surface from mem incubation into gastownhall/beads.
+title: '[Upstream]: '
+labels: ['upstream-proposal']
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Beads-owned problem and users
+      description: Link upstream community signals or maintainer sponsorship.
+    validations:
+      required: true
+  - type: textarea
+    id: decision
+    attributes:
+      label: Evidence-backed decision
+      description: Link the decision issue and summarize affected-task, neutral-task, cost, and replication results.
+    validations:
+      required: true
+  - type: textarea
+    id: surface
+    attributes:
+      label: Minimal upstream surface
+      description: State what belongs in Beads and what remains mem-only incubation residue.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility, migration, and failure modes
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction and provenance package
+    validations:
+      required: true
+  - type: textarea
+    id: sponsor
+    attributes:
+      label: Upstream sponsor or requested reviewers
+    validations:
+      required: true
+  - type: checkboxes
+    id: gate
+    attributes:
+      label: Readiness gate
+      options:
+        - label: Community or maintainer need is documented.
+          required: true
+        - label: Affected and neutral-task gates pass with costs and limitations reported.
+          required: true
+        - label: A privacy-safe result can be reproduced from pinned inputs.
+          required: true
+        - label: The requested Beads-owned surface is minimal.
+          required: true

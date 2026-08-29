@@ -1,0 +1,74 @@
+name: Research question
+description: Frame a community or engineering signal as a falsifiable, decision-relevant question.
+title: '[Research]: '
+labels: ['research-question']
+body:
+  - type: textarea
+    id: decision
+    attributes:
+      label: Decision this research could change
+      description: Name the concrete adopt, reject, defer, design, or upstream choice.
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Falsifiable question or hypothesis
+      description: State the population, intervention, comparator, and expected outcome where possible.
+    validations:
+      required: true
+  - type: textarea
+    id: signals
+    attributes:
+      label: Linked community or engineering signals
+      description: Link source issues/discussions and explain deduplication; do not copy private reports.
+    validations:
+      required: true
+  - type: dropdown
+    id: task_source
+    attributes:
+      label: Intended task source
+      options: [Sanitized real, Authored operational, Synthetic stress, Replay, Mixed, Unknown]
+    validations:
+      required: true
+  - type: textarea
+    id: gates
+    attributes:
+      label: Affected and neutral-task gates
+      description: Name metrics, baselines, minimum acceptable effect, regression ceiling, and cost ceiling.
+    validations:
+      required: true
+  - type: textarea
+    id: design
+    attributes:
+      label: Proposed design and analysis
+      description: Include sampling, controls, repeats, uncertainty, stopping rule, and contamination controls.
+    validations:
+      required: true
+  - type: textarea
+    id: contamination
+    attributes:
+      label: Contamination and answer-leakage controls
+      description: State public exposure risk, holdout/post-cutoff/private/synthetic controls, and what the harness could reveal.
+    validations:
+      required: true
+  - type: textarea
+    id: precision
+    attributes:
+      label: Precision or power plan
+      description: Explain whether the sample and repeats can resolve the registered decision threshold and how an inconclusive result will be reported.
+    validations:
+      required: true
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Provenance and reproducibility plan
+      description: Identify versions, fixtures/corpora, configurations, seeds/schedules, and privacy-safe artifacts to preserve.
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Threats, limitations, and privacy risks
+    validations:
+      required: true

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Beads community discussion
+    url: https://github.com/gastownhall/beads/discussions
+    about: Discuss broad Beads workflows and ideas with the upstream community before proposing mem-specific work.
+  - name: Security-sensitive report
+    url: https://github.com/sjarmak/mem/security/advisories/new
+    about: Report vulnerabilities privately; never put credentials, private traces, or exploitable details in a public issue.

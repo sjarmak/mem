@@ -1,0 +1,46 @@
+name: Evidence-backed decision
+description: Record a recommendation, its evidence, uncertainty, costs, and follow-up audit.
+title: '[Decision]: '
+labels: ['evidence-decision']
+body:
+  - type: textarea
+    id: decision
+    attributes:
+      label: Decision and scope
+      description: State adopt, more evidence, defer, reject, or supersede, plus the exact surface affected.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence chain
+      description: Link community signals, research question, preregistration, results, and privacy-safe artifacts.
+    validations:
+      required: true
+  - type: textarea
+    id: gates
+    attributes:
+      label: Gate results
+      description: Report affected tasks, neutral tasks, failures, uncertainty, and cost separately.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Include the status quo and explain what evidence would reverse this decision.
+    validations:
+      required: true
+  - type: textarea
+    id: limitations
+    attributes:
+      label: Limitations and unresolved risks
+    validations:
+      required: true
+  - type: textarea
+    id: audit
+    attributes:
+      label: Rollback trigger and outcome audit
+      description: Define what will be checked after delivery and when.
+    validations:
+      required: true
