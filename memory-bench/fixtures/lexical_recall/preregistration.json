@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "status": "locked-before-any-recall-measurement",
+  "registered_at": "2026-08-29T00:00:00Z",
+  "new_outcomes_examined": false,
+  "bead": "mem-lbuvd",
+  "mem_git_sha_at_registration": "fa446506fd07daea260eef260f7fc096bb67ac17",
+  "question": "When the gold Memory does not literally contain the query, does any non-literal candidate generator recall it, and at what candidate-set cost?",
+  "decision_relevance": {
+    "why_now": "The completed ordering experiment and its structural follow-up both pin recall of the primary Memory at 1.0 BY CONSTRUCTION. validate_rank_truth (membench/beads_ordering/runner.py:262) raises unless the literal candidate set EQUALS the labelled set, and the authoring path (beads_ordering/corpus.py:600-645) injects the literal query string into exactly the labelled Memories. Verified 36/36 tasks, zero primary misses.",
+    "consequence": "Neither experiment can say anything about candidate-generation quality. Every ordering conclusion is conditional on the matcher having already recalled the answer. This experiment measures the conditioning event.",
+    "isolation_requirement": "This does NOT modify the ordering corpus, its equality gate, or its result. Mixing candidate generation into that grid would destroy the single-variable isolation that makes the ordering result credible. The ordering gates stay exactly as they are; this experiment gets its own package, its own corpus, and its own subset gate."
+  },
+  "task_classes": {
+    "lexical_miss": {
+      "definition": "A task whose query Q does not appear as a case-insensitive substring of the primary Memory's key or stored value, nor of any acceptable entry point's, while Q DOES appear literally in at least one distractor.",
+      "why_the_distractor_requirement": "Without it the literal matcher returns an empty candidate set and recall is 0 for a degenerate reason. Requiring a literal-matching distractor makes the literal arm return a non-empty but wrong candidate set, which is a real recall miss rather than an empty result.",
+      "n_tasks": 36,
+      "miss_kinds": {
+        "synonym": "Q and the primary's surface form are different words for the same thing (query 'lease renewal', primary text 'tenancy extension').",
+        "abbreviation": "One side is an initialism or contraction of the other, in either direction (query 'time to live', primary text 'TTL').",
+        "renamed_concept": "The corpus records a rename; the primary uses the new name and the query uses the retired one (query 'worker pool', primary text 'executor group').",
+        "morphological": "Same stem, different surface form, so no substring match survives (query 'renewing leases', primary text 'lease renewal')."
+      },
+      "tasks_per_kind": 9,
+      "kind_is_a_reported_stratum_not_a_gate": "n=9 per kind is too small to gate on. Per-kind recall is reported with its n so a reader can see which capability drives any aggregate, and is explicitly not used to reach a verdict."
+    },
+    "lexical_hit_control": {
+      "definition": "The 36 existing beads_ordering tasks, reused UNCHANGED from fixtures/beads_ordering/corpus.json.",
+      "purpose": "A generator that recovers lexical misses but loses Memories the literal matcher already found is not an improvement. Literal recall on this class is 1.0 by construction; the measurement is what the non-literal generators do on the same tasks.",
+      "n_tasks": 36
+    }
+  },
+  "construction_gates": {
+    "when": "at corpus freeze time, mechanically, with no model in the loop",
+    "miss_guarantee": "for the primary and every acceptable entry point, assert Q.lower() not in (key + stored_value()).lower(); raise otherwise",
+    "hit_guarantee": "assert Q.lower() in (key + stored_value()).lower() for at least one distractor; raise otherwise",
+    "no_incidental_matches": "assert the literal candidate set over the frozen corpus is a SUBSET of the labelled set, so an unlabelled Memory never enters the candidate set by accident"
+  },
+  "runtime_gate": {
+    "name": "validate_lexical_miss_truth",
+    "location": "a NEW function in a NEW package (membench/lexical_recall/), never a relaxation of a shared symbol",
+    "why_new": "candidate_parity (membench/beads_ordering/client.py:114-145) is an arm-vs-arm gate that raises when two arms return different candidate sets, and it runs at runner.py:258 BEFORE the label check. An experiment that varies candidate generation makes differing candidate sets the expected outcome, so it needs a parallel seam. runner.py and density_linkage_evidence.py both call the shared symbol and must keep the strict behaviour.",
+    "assertions": [
+      "set(literal_candidate_ids) is a SUBSET of the labelled set",
+      "primary_relevant is NOT in literal_candidate_ids",
+      "the labelled set is unchanged from the frozen fixture"
+    ]
+  },
+  "generators": {
+    "literal": {
+      "what": "Beads' shipped case-insensitive literal substring matcher over key and complete stored value",
+      "how": "bd --json memories <query> --experimental-order key --page-size all, cwd = seeded workspace",
+      "binary": "bd-memory-ordering-5877, pinned by sha256 in every result row; candidate generation in that binary is identical to stock (BM25F reorders the map memoryops.List already returned and cannot add or remove a candidate), so the ordering experiment and this one see the same candidate sets"
+    },
+    "fts": {
+      "what": "SQLite FTS5 over the same document text",
+      "tokenizer": "porter unicode61",
+      "query_form": "the query string split on non-alphanumerics, each term quoted, joined with OR",
+      "why_or_not_phrase": "a phrase query requires adjacency and would make the morphological and synonym kinds fail for a reason unrelated to the tokenizer. Bag-of-words OR is what a search index actually does. This choice materially affects recall and is therefore locked here rather than tuned later.",
+      "ranking_within_the_candidate_set": "bm25()",
+      "index_built_by": "this experiment, in process, over the frozen corpus; no FTS index exists over beads_ordering fixtures today"
+    },
+    "embedding": {
+      "what": "dense retrieval, exact in-process cosine, no ANN",
+      "model": "nomic-embed-text served by the local Ollama daemon, 768 dimensions",
+      "why_this_model": "local, offline, already present, and free, which satisfies the no-paid-API scope. It is not chosen for being the strongest available embedder, and the writeup must say so.",
+      "provenance": "record the Ollama model digest and daemon version in the result",
+      "candidate_set": "top-k by cosine over every Memory in the corpus; k is set by the endpoint's budget rule below, because a dense ranker has no natural cutoff"
+    },
+    "identical_document_text": "all three generators index exactly the string MemoryFixture.stored_value() produces, so no arm sees text another arm does not. This is the fairness control."
+  },
+  "endpoint": {
+    "primary": "recall of primary_relevant in the generator's candidate set at matched-k, averaged over tasks with equal weight, per generator, per class",
+    "matched_k": "k = the size of the LITERAL candidate set for that same task, so every generator spends the same candidate budget",
+    "why_matched_k_is_primary": "recall without a size control is gameable: a generator that returns the whole corpus scores 1.0. Matched-k holds the budget fixed at what the shipped matcher already costs.",
+    "secondary": [
+      "recall@10, a fixed absolute budget, because matched-k varies across tasks",
+      "unbounded recall, which is reported as a ceiling and is expected to be 1.0 for the embedding arm by definition",
+      "useful recall at matched-k, where a hit is the primary OR any acceptable entry point",
+      "candidate-set size actually returned by each generator"
+    ]
+  },
+  "gates": {
+    "G1_recovery": {
+      "statistic": "primary recall@matched-k on the lexical_miss class, per non-literal generator",
+      "recovers_if": ">= 0.50",
+      "does_not_recover_if": "<= 0.20",
+      "inconclusive_band": "(0.20, 0.50) reports no recommendation",
+      "note": "the literal arm's recall on this class is 0 by construction. That is the definition of the class, not a finding, and must not be reported as a measured result."
+    },
+    "G2_no_regression": {
+      "statistic": "primary recall@matched-k on the lexical_hit_control class, per non-literal generator",
+      "preserves_literal_recall_if": ">= 0.95",
+      "regresses_if": "<= 0.80",
+      "inconclusive_band": "(0.80, 0.95) reports no recommendation",
+      "note": "literal recall on this class is 1.0 by construction, so any value below 1.0 is a loss relative to what ships today."
+    },
+    "G3_candidate_cost": {
+      "statistic": "median and p90 of |candidate set| / |literal candidate set| at the unbounded setting",
+      "threshold": "none, reported descriptively"
+    },
+    "combined_recommendation": "candidate generation earns its own arm in future ordering work if and only if some generator is both `recovers` under G1 and `preserves_literal_recall` under G2. Any other combination reports that the shipped literal matcher is not the bottleneck this experiment can demonstrate."
+  },
+  "directional_predictions": {
+    "why_recorded": "a prediction written before measurement can be falsified; one written after cannot.",
+    "fts_recovers_morphological": "the porter tokenizer stems both surface forms to the same token, so FTS should recover the morphological kind and the literal matcher cannot",
+    "fts_fails_synonym_and_renamed": "no lexical overlap survives stemming",
+    "embedding_recovers_synonym_and_renamed": "these are the cases dense retrieval exists for",
+    "abbreviation_is_hard_for_all_three": "an initialism shares no stem with its expansion and is weakly represented in embedding space",
+    "falsification_is_the_point": "if FTS beats the embedding arm on synonyms, or the embedding arm fails the renamed-concept kind, that is the finding and it gets reported at the same prominence as a confirmation"
+  },
+  "independent_unit": "the task",
+  "counting_rule": {
+    "primary": "per-task recall, averaged over tasks with equal weight within a class",
+    "no_session_dimension": "unlike mem-rj2mg there is no session structure here; every task is one deterministic retrieval per generator",
+    "repeats": "the literal and FTS arms are deterministic and run once. The embedding arm runs 3 repeats to detect nondeterminism in the served model, and the writeup reports whether the 3 agreed."
+  },
+  "analysis_plan": {
+    "zfc_split": {
+      "mechanical": "corpus construction gates, substring checks, FTS indexing and querying, cosine ranking, recall arithmetic, all deterministic",
+      "model": "authoring the synonym, abbreviation, renamed-concept, and morphological pairs is semantic work and may use a model, but the OUTPUT is frozen into the fixture and every downstream check is mechanical",
+      "prohibited": "any keyword or regex heuristic standing in for semantic judgment inside the measurement path, and any threshold tuned after seeing a recall number"
+    },
+    "reporting": "recall per generator per class, with per-kind strata and their n; candidate-set sizes; the three gate verdicts; and every deviation from this file with its direction of bias",
+    "negative_result_handling": "a result that no non-literal generator recovers the miss class is reported with the same prominence as a result that one does"
+  },
+  "privacy": {
+    "excluded_from_all_artifacts": ["real bead titles and bodies", "agent streams", "model text", "local filesystem paths", "credentials", "identities", "conversation content"],
+    "published": "the authored fixture, recall counts and fractions, candidate-set sizes, and gate verdicts",
+    "note": "the corpus is authored, not derived from real work records, so there is no leak surface from the bead spine"
+  },
+  "threats_to_validity": [
+    "the miss class is AUTHORED, so its difficulty is set by the author rather than observed. The recall numbers estimate performance on this constructed distribution, not on the queries agents actually issue. This is the mirror image of the defect the experiment exists to name and must be stated at the same prominence.",
+    "recall on the lexical_miss class being 0 for the literal arm is guaranteed by the construction gate. Reporting it as a measured result would repeat exactly the by-construction error this bead was filed against.",
+    "the corpus is synthetic and small relative to a real store, and the 500 generic notes are homogeneous in a way real notes are not",
+    "the embedding arm is pinned to one small local model chosen for being free and offline; a stronger embedder could change G1 in either direction and the result generalizes to this model only",
+    "matched-k favours the literal arm when its candidate set is small; unbounded recall and recall@10 are reported alongside precisely so that a reader can see the effect of the budget rule",
+    "the four miss kinds are not equally represented in real usage and the aggregate weights them equally, which is a choice, not a measurement"
+  ]
+}

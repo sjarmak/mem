@@ -1,0 +1,251 @@
+{
+  "bead": "mem-lbuvd",
+  "corpus": {
+    "lexical_hit_control": {
+      "corpus_sizes": [
+        50,
+        100,
+        500
+      ],
+      "memories": 500,
+      "tasks": 36
+    },
+    "lexical_miss": {
+      "digest": "1e164b94fa52dd35266ea92b23d031689013af0c6b29bd896a1b9d825882aa45",
+      "memories": 680,
+      "seed": 5877,
+      "tasks": 36
+    }
+  },
+  "elapsed_seconds": 27.5,
+  "embedding_repeats": {
+    "documents_re_embedded_each_repeat": true,
+    "n": 3,
+    "top_20_rankings_identical": true
+  },
+  "gates": {
+    "combined_recommendation": {
+      "candidate_generation_earns_its_own_arm": false,
+      "generators_meeting_both_gates": []
+    },
+    "embedding": {
+      "G1_recovery": {
+        "budget_diagnostic": {
+          "budget_saturable_on_every_task": true,
+          "median_labelled_non_primary": 4.0,
+          "median_matched_k": 3.0,
+          "n_tasks": 36,
+          "n_tasks_budget_saturable_by_non_primary_labels": 36,
+          "n_tasks_primary_retrieved_at_any_depth": 36,
+          "primary_rank_minus_matched_k": {
+            "max": 625,
+            "median": 9.0,
+            "min": -2
+          }
+        },
+        "class": "lexical-miss",
+        "statistic": 0.05555555555555555,
+        "verdict": "does_not_recover"
+      },
+      "G2_no_regression": {
+        "class": "lexical-hit-control",
+        "statistic": 1.0,
+        "verdict": "preserves_literal_recall"
+      },
+      "G3_candidate_cost": {
+        "lexical-hit-control": {
+          "median_ratio_vs_literal": 2.5657894736842106,
+          "n_tasks": 36,
+          "p90_ratio_vs_literal": 6.25,
+          "threshold": "none, descriptive"
+        },
+        "lexical-miss": {
+          "median_ratio_vs_literal": 226.66666666666666,
+          "n_tasks": 36,
+          "p90_ratio_vs_literal": 340.0,
+          "threshold": "none, descriptive"
+        }
+      }
+    },
+    "fts": {
+      "G1_recovery": {
+        "budget_diagnostic": {
+          "budget_saturable_on_every_task": true,
+          "median_labelled_non_primary": 4.0,
+          "median_matched_k": 3.0,
+          "n_tasks": 36,
+          "n_tasks_budget_saturable_by_non_primary_labels": 36,
+          "n_tasks_primary_retrieved_at_any_depth": 9,
+          "primary_rank_minus_matched_k": {
+            "max": 2,
+            "median": 2,
+            "min": 2
+          }
+        },
+        "class": "lexical-miss",
+        "statistic": 0.0,
+        "verdict": "does_not_recover"
+      },
+      "G2_no_regression": {
+        "class": "lexical-hit-control",
+        "statistic": 1.0,
+        "verdict": "preserves_literal_recall"
+      },
+      "G3_candidate_cost": {
+        "lexical-hit-control": {
+          "median_ratio_vs_literal": 1.0,
+          "n_tasks": 36,
+          "p90_ratio_vs_literal": 2.272727272727273,
+          "threshold": "none, descriptive"
+        },
+        "lexical-miss": {
+          "median_ratio_vs_literal": 1.5833333333333335,
+          "n_tasks": 36,
+          "p90_ratio_vs_literal": 13.0,
+          "threshold": "none, descriptive"
+        }
+      }
+    }
+  },
+  "preregistration_sha256": "ee6f35bf3d79da65cf71b42b1db69223106b01d836e5f268f480e1ab2cf2fed1",
+  "provenance": {
+    "beads_bin_sha256": "47aadd114f3afe16918ff5eff27f2e7d85bafc4003101ee7a4939c04252853de",
+    "embedding": {
+      "base_url_scheme": "local",
+      "daemon_version": "0.30.10",
+      "digest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+      "model": "nomic-embed-text:latest"
+    },
+    "fts": {
+      "engine": "sqlite fts5",
+      "rank": "bm25",
+      "tokenizer": "porter unicode61"
+    }
+  },
+  "recall": {
+    "lexical-hit-control": {
+      "embedding": {
+        "median_candidate_set_size": 100.0,
+        "median_matched_k": 40.0,
+        "n_tasks": 36,
+        "primary_recall_at_10": 0.9166666666666666,
+        "primary_recall_at_matched_k": 1.0,
+        "primary_recall_unbounded": 1.0,
+        "useful_recall_at_matched_k": 1.0
+      },
+      "fts": {
+        "median_candidate_set_size": 53.0,
+        "median_matched_k": 40.0,
+        "n_tasks": 36,
+        "primary_recall_at_10": 0.9166666666666666,
+        "primary_recall_at_matched_k": 1.0,
+        "primary_recall_unbounded": 1.0,
+        "useful_recall_at_matched_k": 1.0
+      },
+      "literal": {
+        "median_candidate_set_size": 40.0,
+        "median_matched_k": 40.0,
+        "n_tasks": 36,
+        "primary_recall_at_10": 0.027777777777777776,
+        "primary_recall_at_matched_k": 1.0,
+        "primary_recall_unbounded": 1.0,
+        "useful_recall_at_matched_k": 1.0
+      }
+    },
+    "lexical-miss": {
+      "embedding": {
+        "by_miss_kind": {
+          "abbreviation": {
+            "n_tasks": 9,
+            "primary_recall_at_10": 0.2222222222222222,
+            "primary_recall_at_matched_k": 0.0
+          },
+          "morphological": {
+            "n_tasks": 9,
+            "primary_recall_at_10": 1.0,
+            "primary_recall_at_matched_k": 0.2222222222222222
+          },
+          "renamed-concept": {
+            "n_tasks": 9,
+            "primary_recall_at_10": 0.0,
+            "primary_recall_at_matched_k": 0.0
+          },
+          "synonym": {
+            "n_tasks": 9,
+            "primary_recall_at_10": 0.5555555555555556,
+            "primary_recall_at_matched_k": 0.0
+          }
+        },
+        "median_candidate_set_size": 680.0,
+        "median_matched_k": 3.0,
+        "n_tasks": 36,
+        "primary_recall_at_10": 0.4444444444444444,
+        "primary_recall_at_matched_k": 0.05555555555555555,
+        "primary_recall_unbounded": 1.0,
+        "useful_recall_at_matched_k": 0.16666666666666666
+      },
+      "fts": {
+        "by_miss_kind": {
+          "abbreviation": {
+            "n_tasks": 9,
+            "primary_recall_at_10": 0.0,
+            "primary_recall_at_matched_k": 0.0
+          },
+          "morphological": {
+            "n_tasks": 9,
+            "primary_recall_at_10": 1.0,
+            "primary_recall_at_matched_k": 0.0
+          },
+          "renamed-concept": {
+            "n_tasks": 9,
+            "primary_recall_at_10": 0.0,
+            "primary_recall_at_matched_k": 0.0
+          },
+          "synonym": {
+            "n_tasks": 9,
+            "primary_recall_at_10": 0.0,
+            "primary_recall_at_matched_k": 0.0
+          }
+        },
+        "median_candidate_set_size": 4.0,
+        "median_matched_k": 3.0,
+        "n_tasks": 36,
+        "primary_recall_at_10": 0.25,
+        "primary_recall_at_matched_k": 0.0,
+        "primary_recall_unbounded": 0.25,
+        "useful_recall_at_matched_k": 0.25
+      },
+      "literal": {
+        "by_miss_kind": {
+          "abbreviation": {
+            "n_tasks": 9,
+            "primary_recall_at_10": 0.0,
+            "primary_recall_at_matched_k": 0.0
+          },
+          "morphological": {
+            "n_tasks": 9,
+            "primary_recall_at_10": 0.0,
+            "primary_recall_at_matched_k": 0.0
+          },
+          "renamed-concept": {
+            "n_tasks": 9,
+            "primary_recall_at_10": 0.0,
+            "primary_recall_at_matched_k": 0.0
+          },
+          "synonym": {
+            "n_tasks": 9,
+            "primary_recall_at_10": 0.0,
+            "primary_recall_at_matched_k": 0.0
+          }
+        },
+        "median_candidate_set_size": 3.0,
+        "median_matched_k": 3.0,
+        "n_tasks": 36,
+        "primary_recall_at_10": 0.0,
+        "primary_recall_at_matched_k": 0.0,
+        "primary_recall_unbounded": 0.0,
+        "useful_recall_at_matched_k": 0.0
+      }
+    }
+  }
+}
