@@ -16,6 +16,12 @@ root stands for `/ordering/`:
     <family>/dataset/links.json
     <family>/dataset/types.json   the `GET /types/` inventory of summaries
     <family>/ordering.json        the selected sets and page partitions
+
+Eight families are written under that layout: the seven graph shapes, plus the
+collation family, whose payload is the identifier spelling rather than the graph
+shape. It is recorded under `collation_family` in the manifest rather than
+alongside the seven, because every density figure in the manifest and the README
+quantifies over the seven and a 23-Bead family has no density to compare.
 """
 
 from __future__ import annotations
@@ -26,6 +32,17 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from membench.bdp_fixtures.collation import (
+    COLLATION_FAMILY,
+    COLLATION_GROUPS,
+    COLLATION_LIMITS,
+    COLLATION_ORDER_ID,
+    RIVALS,
+    collation_bead_records,
+    collation_expectations,
+    collation_link_records,
+    validate_groups,
+)
 from membench.bdp_fixtures.mapping import (
     BEAD_TYPE_ID,
     CITES_TYPE_ID,
@@ -53,7 +70,7 @@ from membench.bdp_fixtures.topologies import (
     build_edges,
 )
 
-MANIFEST_SCHEMA_VERSION = 4
+MANIFEST_SCHEMA_VERSION = 5
 DEFAULT_OUT = Path("fixtures/bdp/ordering-families")
 
 # The vendored bundle these fixtures were validated against, pinned by commit so
@@ -253,6 +270,97 @@ def emit_family(family: str, out_root: Path) -> JsonObject:
     }
 
 
+def emit_collation_family(out_root: Path) -> JsonObject:
+    """Emit the collation family, which is about identifier spellings, not shape.
+
+    It sits beside the seven graph families and shares their Scope prefix and
+    their two Types, so a consumer fetches it the same way. Everything else about
+    it differs: the ids are authored rather than digested, they are neither
+    fixed-width nor all-lowercase, and the order it records is named for the
+    comparison rule rather than for the field compared.
+    """
+
+    scope = ScopeUrls.for_family(COLLATION_FAMILY)
+    validate_groups(scope)
+    beads = collation_bead_records(scope)
+    links = collation_link_records(scope, beads)
+    summaries = type_summaries()
+    ordering = collation_expectations(beads, links, summaries, scope, limits=COLLATION_LIMITS)
+
+    shipped = {
+        "beads.json": serialization_order(beads),
+        "links.json": serialization_order(links),
+        "types.json": serialization_order(summaries),
+    }
+    for name, records in shipped.items():
+        if len(records) >= 2 and is_canonical_order(records):
+            raise BdpMappingError(
+                f"{COLLATION_FAMILY}/dataset/{name} serialized in reference order, so an "
+                "authority that echoes the order it loaded would pass without ordering at all"
+            )
+
+    directory = out_root / COLLATION_FAMILY
+    files: JsonObject = {}
+    digest, size = _write(
+        directory / "discovery.json", discovery_document(scope, limits=COLLATION_LIMITS)
+    )
+    files["discovery.json"] = {"sha256": digest, "bytes": size}
+    for name, records in shipped.items():
+        digest, size = _write(directory / "dataset" / name, {"items": list(records), "next": None})
+        files[f"dataset/{name}"] = {"sha256": digest, "bytes": size}
+    digest, size = _write(directory / "ordering.json", ordering)
+    files["ordering.json"] = {"sha256": digest, "bytes": size}
+
+    comparisons = ordering["collation"]["comparisons"]
+    return {
+        "scope": scope.scope_url,
+        "exercises": (
+            "collation edges: numeric against codepoint, ASCII case, punctuation a "
+            "variable-weighting collator drops, and NFC against NFD inside percent-encoding"
+        ),
+        "reference_order": COLLATION_ORDER_ID,
+        "page_limits": list(COLLATION_LIMITS),
+        "bead_count": len(beads),
+        "link_count": len(links),
+        "type_count": len(summaries),
+        "groups": {group.name: list(group.defeats) for group in COLLATION_GROUPS},
+        # Which of the comparison rules this family separates from the recorded
+        # order, per id space. The Link ids have to carry the axes themselves:
+        # in the seven graph families they are zero-padded ordinals, which is the
+        # padding this family exists to do without.
+        "comparison_rules_separated": {
+            collection: sorted(
+                entry["comparison"] for entry in report if entry["differs_from_the_reference_order"]
+            )
+            for collection, report in comparisons.items()
+        },
+        # A rule that ties two distinct ids is not a total order, so it fails
+        # gastownhall/bdp#8's first clause whatever order the authority documents.
+        # Recorded apart from the rules that merely return a different order.
+        "comparison_rules_that_are_not_a_total_order": {
+            collection: sorted(
+                entry["comparison"]
+                for entry in report
+                if not entry["is_a_total_order_over_this_collection"]
+            )
+            for collection, report in comparisons.items()
+        },
+        "comparison_rules_considered": [rival.name for rival in RIVALS],
+        "serialized_in_reference_order": {
+            name: is_canonical_order(records) for name, records in shipped.items()
+        },
+        "selections": [
+            {
+                "collection": selection["collection"],
+                "parameters": selection["parameters"],
+                "total": selection["total"],
+            }
+            for selection in ordering["selections"]
+        ],
+        "files": files,
+    }
+
+
 def _hub_predicates_distinct(links: Sequence[Mapping[str, Any]]) -> bool:
     counts: dict[str, int] = {}
     for link in links:
@@ -274,6 +382,7 @@ def emit_all(*, out_root: Path) -> JsonObject:
     families: JsonObject = {}
     for family in sorted(TOPOLOGIES_BY_NAME):
         families[family] = emit_family(family, out_root)
+    collation = emit_collation_family(out_root)
 
     manifest: JsonObject = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
@@ -328,12 +437,25 @@ def emit_all(*, out_root: Path) -> JsonObject:
         "shared_types": shared_types,
         "family_count": len(families),
         "families": families,
+        # Kept out of `families`. The seven are graph shapes at one fixed id
+        # spelling, and every density claim in the README and the manifest
+        # quantifies over them; the collation family is the same protocol at a
+        # deliberately awkward id spelling and has no density to compare. Folding
+        # it in would put a 23-Bead family in a table about hubs and fan-in.
+        "collation_family_note": (
+            "A separate family, under the same Scope prefix and the same two Types, whose "
+            "payload is the identifier spelling rather than the graph shape. It records its own "
+            f"order id ({COLLATION_ORDER_ID}) because 'ascending canonical URI' does not say "
+            "which comparison rule, and on these ids the readings diverge."
+        ),
+        "collation_family": {COLLATION_FAMILY: collation},
     }
 
     written = {out_root / "manifest.json"}
     written |= {out_root / name for name in shared_types}
     for family, entry in families.items():
         written |= {out_root / family / name for name in entry["files"]}
+    written |= {out_root / COLLATION_FAMILY / name for name in collation["files"]}
     # Pruning is deliberately not recorded in the manifest. A "files removed on
     # this run" key would differ between the run that pruned and the identical
     # run after it, which is exactly the drift the determinism gate exists to

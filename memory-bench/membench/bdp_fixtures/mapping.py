@@ -121,7 +121,17 @@ class ScopeUrls:
         return f"{self.base}/beads/{local_id}"
 
     def link(self, ordinal: int) -> str:
-        return f"{self.base}/links/{ordinal:0{LINK_ID_WIDTH}d}"
+        return self.link_local(f"{ordinal:0{LINK_ID_WIDTH}d}")
+
+    def link_local(self, local_id: str) -> str:
+        """A Link URL from an already-spelled local id.
+
+        The seven graph families always reach this through `link`, which
+        zero-pads. The collation family spells its own Link ids, because the
+        padding is exactly the thing it exists to do without.
+        """
+
+        return f"{self.base}/links/{local_id}"
 
     @property
     def scope_url(self) -> str:
@@ -150,7 +160,7 @@ def _digest(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def _revision(record: Mapping[str, Any]) -> str:
+def record_revision(record: Mapping[str, Any]) -> str:
     """A deterministic opaque revision token.
 
     BDP compares revisions only for equality and applies no semantic validation,
@@ -213,7 +223,7 @@ def _provenance(local_id: str) -> str:
     return "agent" if int(_digest(f"provenance:{local_id}")[:8], 16) % 2 == 0 else "human"
 
 
-def _properties(local_id: str) -> JsonObject:
+def bead_properties(local_id: str) -> JsonObject:
     """The published `properties` of one Bead, as a function of its own id alone.
 
     Properties exist here to give a Selector something to filter on and a page
@@ -261,9 +271,9 @@ def bead_records(family: str, scope: ScopeUrls, bead_count: int) -> tuple[JsonOb
         record: JsonObject = {
             "id": url,
             "type": BEAD_TYPE_ID,
-            "properties": _properties(local_id),
+            "properties": bead_properties(local_id),
         }
-        record["revision"] = _revision(record)
+        record["revision"] = record_revision(record)
         records.append(record)
     return tuple(sorted(records, key=lambda record: str(record["id"])))
 
@@ -316,7 +326,7 @@ def link_records(
             "target": target,
             "properties": {},
         }
-        record["revision"] = _revision(record)
+        record["revision"] = record_revision(record)
         records.append(record)
     return tuple(sorted(records, key=lambda record: str(record["id"])))
 
@@ -469,7 +479,7 @@ def _page_item_counts(total: int, limit: int) -> list[int]:
     return [min(limit, total - index * limit) for index in range(count)]
 
 
-def _collection_expectation(selected: Sequence[str], limits: Iterable[int]) -> JsonObject:
+def collection_expectation(selected: Sequence[str], limits: Iterable[int]) -> JsonObject:
     """What a harness may assert about one collection or selection.
 
     `selected_set` is the membership assertion: concatenating every page of the
@@ -495,7 +505,7 @@ def _collection_expectation(selected: Sequence[str], limits: Iterable[int]) -> J
     return expectation
 
 
-def _selection(
+def selection_expectation(
     description: str,
     collection: str,
     parameters: Mapping[str, str],
@@ -507,7 +517,7 @@ def _selection(
         "collection": collection,
         "parameters": dict(parameters),
     }
-    selection.update(_collection_expectation(matched, limits))
+    selection.update(collection_expectation(matched, limits))
     return selection
 
 
@@ -522,7 +532,7 @@ def _highest_outdegree_bead(links: Sequence[Mapping[str, Any]]) -> str:
     return max(counts, key=lambda source: (counts[source], source))
 
 
-def _matching_beads(beads: Sequence[Mapping[str, Any]], key: str, value: str) -> list[str]:
+def matching_beads(beads: Sequence[Mapping[str, Any]], key: str, value: str) -> list[str]:
     matched: list[str] = []
     for record in beads:
         properties = record["properties"]
@@ -624,12 +634,12 @@ def ordering_expectations(
         ),
         "scope": scope.scope_url,
         "collections": {
-            "beads/": _collection_expectation(bead_ids, limits),
-            "links/": _collection_expectation(link_ids, limits),
-            "types/": _collection_expectation(type_ids, limits),
+            "beads/": collection_expectation(bead_ids, limits),
+            "links/": collection_expectation(link_ids, limits),
+            "types/": collection_expectation(type_ids, limits),
         },
         "selections": [
-            _selection(
+            selection_expectation(
                 "Outbound Links of this family's highest-outdegree Bead. Whether a page "
                 "boundary falls inside that one adjacency varies by family and by limit; "
                 "`spans_multiple_pages` says which, per limit.",
@@ -638,7 +648,7 @@ def ordering_expectations(
                 outbound,
                 limits,
             ),
-            _selection(
+            selection_expectation(
                 "Inbound Links of the same Bead. Distinct from the outbound set in the five "
                 "families whose highest-outdegree Bead is itself cited by something. In the "
                 "two forest-shaped families no Bead carries both an inbound and an outbound "
@@ -650,7 +660,7 @@ def ordering_expectations(
                 inbound,
                 limits,
             ),
-            _selection(
+            selection_expectation(
                 "Incident Links of the same Bead, exercising the source-OR-target combination "
                 "inside the endpoint predicate.",
                 "links/",
@@ -658,21 +668,21 @@ def ordering_expectations(
                 incident,
                 limits,
             ),
-            _selection(
+            selection_expectation(
                 "Agent-provenance Beads. About half of every family, so this is the many-page "
                 "Selector case: the selected set is decided before pagination and must stay "
                 "fixed across every continuation of the snapshot.",
                 "beads/",
                 {"selector": '$[?@.properties.provenance == "agent"]'},
-                _matching_beads(beads, "provenance", "agent"),
+                matching_beads(beads, "provenance", "agent"),
                 limits,
             ),
-            _selection(
+            selection_expectation(
                 "Archived Beads: a handful per family. A selection far smaller than either "
                 "page limit, so it must come back as exactly one page with `next` null.",
                 "beads/",
                 {"selector": '$[?@.properties.lifecycle == "archived"]'},
-                _matching_beads(beads, "lifecycle", "archived"),
+                matching_beads(beads, "lifecycle", "archived"),
                 limits,
             ),
         ],

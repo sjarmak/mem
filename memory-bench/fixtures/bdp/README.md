@@ -1,8 +1,13 @@
-# BDP conformance fixtures: seven graph shapes
+# BDP conformance fixtures: seven graph shapes and a collation family
 
 Seven graph families rendered as BDP v0 Read-profile records. They exist to
 exercise collection ordering and pagination at shapes and densities a
 hand-written fixture will not reach.
+
+An eighth directory, `collation-edge-identifiers`, ships beside them and is
+not one of the seven. It holds no interesting graph at all. Its payload is the
+identifier spellings, which is a question the seven cannot ask. See
+[The collation family](#the-collation-family).
 
 Offered on [gastownhall/beads#6051](https://github.com/gastownhall/beads/issues/6051)
 after the ordering gap was accepted on
@@ -93,6 +98,9 @@ ordering-families/
     dataset/links.json       {"items": [linkRecord, ...], "next": null}
     dataset/types.json       {"items": [typeSummary, ...], "next": null}
     ordering.json            the selected sets and page partitions
+  collation-edge-identifiers/
+                             same four documents; identifier spellings, not a
+                             graph shape. Page limits 3 and 10.
 upstream/
   bdp-v0.schema.json         vendored, pinned; see PROVENANCE.json
   PROVENANCE.json            upstream commit, checksum, refresh procedure
@@ -191,6 +199,87 @@ In `platform-documentation-hub-spoke` the outbound selection returns 380
 outbound Links, more than the largest advertised page limit, so one Bead's
 adjacency splits across 16 pages at a limit of 25 and 2 pages at a limit of 200.
 
+## The collation family
+
+`collation-edge-identifiers` is a separate directory in the same tree, under the
+same Scope prefix and declaring the same two Types, so a consumer loads it in the
+same pass. It is **not one of the seven**, and it is deliberately kept out of
+`families` in the manifest: it has 23 Beads and 14 Links, no hub and no degree
+distribution, so folding it into the density table would make every figure there
+answer a question nobody asked. It is recorded under `collation_family` instead.
+
+### Why it has to be separate
+
+The seven exist to vary graph shape, which means holding the identifier spelling
+fixed: their ids are **zero-padded, lowercase and ASCII** so that the order is
+never in question while the shape varies. That is the right choice for them and
+it is exactly what makes them blind here. "Ascending canonical URI" does not say
+whether the comparison decodes percent-escapes, normalizes Unicode, folds case or
+parses digit runs first. Over padded lowercase ASCII every one of those readings
+returns the same sequence, so a conformant-looking authority that sorts
+numerically, case-insensitively, or over unnormalized Unicode passes all seven.
+
+This family is built out of the identifiers on which those readings diverge, so
+it names its comparison rule in the order id: `ascending-canonical-uri-codepoint`,
+ascending by Unicode code point over the canonical URI as written, with no
+decoding, normalization, folding or numeric parsing. Every identifier here is
+still ASCII, so a bytewise UTF-8 comparison and a codepoint comparison agree; the
+non-ASCII lives inside percent-encoding, because a raw non-ASCII id would be an
+IRI rather than a URI.
+
+### The four groups
+
+| Group | Ids | Separates |
+|---|---|---|
+| `unpadded-ordinals` | `1`, `2`, `9`, `10`, `11`, `100`, `101`, `2000` | `numeric-aware` |
+| `mixed-case` | `GAMMA`, `Gamma`, `gamma`, `Delta`, `delta`, `Zeta` | `casefold`, `punctuation-ignoring` |
+| `punctuation` | `alpha`, `alpha-two`, `alpha_one`, `alphathree` | `punctuation-ignoring` |
+| `normalization` | `cafe`, `caf%C3%A9`, `cafe%CC%81`, `r%C3%A9sume`, `re%CC%81sume` | `percent-decoding`, `nfc-normalizing` |
+
+`caf%C3%A9` is U+00E9 percent-encoded; `cafe%CC%81` is `e` followed by the
+encoded combining acute accent. The two spell one label and decode to the same
+text under NFC. Because `%` is 0x25 and `e` is 0x65, the codepoint order is
+`caf%C3%A9`, then `cafe`, then `cafe%CC%81`, an order no rule that decodes first
+will produce.
+
+The Link ids carry the same four axes separately rather than inheriting the
+claim from the Bead ids, since the Link id space is the half the seven families
+pad flat. Each group declares which rules it separates and the declaration is
+checked against the identifiers on every build, so a group that quietly stops
+separating its axis is a build failure rather than a fixture that still reads
+convincingly.
+
+### Two kinds of failure, recorded apart
+
+`ordering.json` records what each of the five comparison rules returns over both
+collections, under `collation.comparisons`, and the two outcomes are not the same
+finding:
+
+- `casefold`, `punctuation-ignoring` and `nfc-normalizing` **tie** ids this
+  family holds distinct, and a tie is not a total order, so such a rule fails
+  the first clause of bdp#8 whatever order the authority documents. A tied pair also
+  threatens membership: a keyset continuation built on the comparison alone can
+  repeat one of the pair or drop it across a page boundary. Which pairs tie is
+  recorded under `ties`; whether a given authority actually loses a record
+  depends on how it paginates, so the tree records the pairs rather than
+  predicting the outcome.
+- `numeric-aware` and `percent-decoding` are total orders, just different ones.
+  Under bdp#8 as proposed, which leaves the choice of order to the
+  implementation, an authority documenting either is conformant. They are
+  detectable only against an authority that documents this family's order, and
+  they are recorded so a harness can report which rule an authority appears to
+  have used rather than only that the sequence was wrong.
+
+A rule that ties gets no recorded `sequence`. With a tie, what a sort returns
+depends on the order the items went in, so writing one down would publish this
+emitter's input order as though it were the rule's answer.
+
+Page limits here are 3 and 10 rather than 25 and 200, small enough that a page
+boundary falls inside a collection of this size. Both recorded selections, the
+outbound Links of the busiest Bead and the `provenance == "agent"` Beads, span
+more than one page at the smaller limit: inside a single page an authority can
+sort the page and be right by accident.
+
 ## What these fixtures do not cover
 
 **Cursors, and therefore the stability clause of bdp#8.** Every shipped
@@ -201,13 +290,12 @@ likewise something a harness gets by reading twice rather than from anything in
 these files, and the documentation duty is a property of an authority rather
 than of a fixture. Tracked as `mem-31sg8`.
 
-**Collation edges.** Link ids are zero-padded to a fixed width so that codepoint
-order over the canonical URI and ordinal order coincide. That is deliberate, and
-it means these fixtures test order totality and page stability but say nothing
-about numeric-vs-codepoint collation, case folding, or Unicode normalization.
-Every id in the tree is pure ASCII, so a bytewise UTF-8 comparison and a
-codepoint comparison cannot disagree here, and an authority that gets non-ASCII
-collation wrong still passes. Tracked as `mem-w0q6q`.
+**Collation, in the seven graph families.** Their Link ids are zero-padded to a
+fixed width and their Bead ids are lowercase hex, so codepoint order, numeric
+order and case-insensitive order all coincide there. Those seven test order
+totality and page stability and say nothing about which comparison rule an
+authority used. `collation-edge-identifiers` is where that question is asked;
+the section above says what it does and does not settle.
 
 **Everything below is also untested here**, and a pass on this tree says nothing
 about any of it:

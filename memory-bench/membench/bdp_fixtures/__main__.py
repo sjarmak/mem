@@ -41,6 +41,11 @@ def main() -> int:
             f"out {entry['max_outdegree']:3d}  in {entry['max_indegree']:3d}  "
             f"repeats {entry['duplicate_endpoint_tuple_links']:2d}"
         )
+    for family, entry in sorted(manifest["collation_family"].items()):
+        print(
+            f"{family:45s} {entry['bead_count']:4d} beads  {entry['link_count']:4d} links  "
+            f"order {entry['reference_order']}"
+        )
     for removed in result["pruned"]:
         print(f"pruned {removed}")
     print(

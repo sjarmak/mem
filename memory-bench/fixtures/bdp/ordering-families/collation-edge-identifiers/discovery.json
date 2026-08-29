@@ -1,0 +1,14 @@
+{
+  "bdpVersion": "0",
+  "profile": "read",
+  "scope": "https://fixtures.mem.example/ordering/collation-edge-identifiers/",
+  "beads": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/",
+  "links": "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/",
+  "types": "https://fixtures.mem.example/ordering/collation-edge-identifiers/types/",
+  "limits": {
+    "page": {
+      "defaultItems": 3,
+      "maximumItems": 10
+    }
+  }
+}
