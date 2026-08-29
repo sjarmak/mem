@@ -150,10 +150,14 @@ def literal_matches(corpus: FrozenMissCorpus, query: str) -> set[str]:
     literal arm always shells the real binary."""
 
     needle = query.lower()
+    # `corpus_size` is passed so freeze-time validation reads the SAME string the
+    # arms index at run time (`document_text`, `seed_beads_workspace`). Identical
+    # today only because this corpus never populates `structural_ranks_by_corpus`.
+    size = len(corpus.memories)
     return {
         memory.id
         for memory in corpus.memories
-        if needle in memory.key.lower() or needle in memory.stored_value().lower()
+        if needle in memory.key.lower() or needle in memory.stored_value(size).lower()
     }
 
 

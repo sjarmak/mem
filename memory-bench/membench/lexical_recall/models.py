@@ -13,9 +13,13 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from membench.beads_ordering.models import MemoryFixture
+
+# The secondary budget, here rather than in the runner so `TaskRecall` can
+# derive its own flags without importing the module that constructs it.
+RECALL_AT_10 = 10
 
 
 class MissKind(StrEnum):
@@ -69,18 +73,6 @@ class FrozenMissCorpus(BaseModel):
     tasks: tuple[LexicalMissTask, ...]
 
 
-class CandidateSet(BaseModel):
-    """What one generator returned for one task, before any budget is applied."""
-
-    model_config = ConfigDict(frozen=True)
-
-    generator: Generator
-    task_id: str
-    ranked_ids: tuple[str, ...]
-    elapsed_ms: float = Field(ge=0)
-    repeat: int = Field(default=0, ge=0)
-
-
 class TaskRecall(BaseModel):
     """Recall of one task under one generator, at every preregistered budget.
 
@@ -96,11 +88,44 @@ class TaskRecall(BaseModel):
     task_class: TaskClass
     miss_kind: MissKind | None
     generator: Generator
+    corpus_size: int = Field(ge=1)
     matched_k: int = Field(ge=0)
     candidate_set_size: int = Field(ge=0)
-    primary_rank: int | None = None
-    useful_rank: int | None = None
+    # Ranks are 1-based positions. `ge=1` makes rank 0 unrepresentable rather than
+    # merely unlikely: a `_rank_of` that returned 0 for "not found" would otherwise
+    # satisfy every `rank <= budget` comparison below and invert recall silently.
+    primary_rank: int | None = Field(default=None, ge=1)
+    useful_rank: int | None = Field(default=None, ge=1)
+    # How many labelled Memories other than the primary exist for this task. When
+    # this is >= matched_k the budget can be consumed entirely by non-primary
+    # labels, so recall at matched-k is bounded below the ceiling by construction.
+    n_labelled_non_primary: int = Field(ge=0)
     primary_at_matched_k: bool
     primary_at_10: bool
     primary_unbounded: bool
     useful_at_matched_k: bool
+
+    @model_validator(mode="after")
+    def _budget_flags_follow_from_the_ranks(self) -> TaskRecall:
+        """Recompute the four booleans instead of trusting the caller.
+
+        These flags are what every reported statistic averages. Deriving them here
+        means a measurement path that computed one of them wrongly fails loudly at
+        construction rather than shifting a headline by a silent amount.
+        """
+
+        expected = {
+            "primary_at_matched_k": self.primary_rank is not None
+            and self.primary_rank <= self.matched_k,
+            "primary_at_10": self.primary_rank is not None and self.primary_rank <= RECALL_AT_10,
+            "primary_unbounded": self.primary_rank is not None,
+            "useful_at_matched_k": self.useful_rank is not None
+            and self.useful_rank <= self.matched_k,
+        }
+        wrong = sorted(name for name, value in expected.items() if getattr(self, name) != value)
+        if wrong:
+            raise ValueError(
+                f"{self.task_id}/{self.generator.value}: budget flags disagree with the "
+                f"ranks ({', '.join(wrong)})"
+            )
+        return self

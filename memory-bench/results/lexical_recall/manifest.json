@@ -4,16 +4,16 @@
   "corpus_digest": "1e164b94fa52dd35266ea92b23d031689013af0c6b29bd896a1b9d825882aa45",
   "files": {
     "analysis.json": {
-      "sha256": "ce2270a5421b30474e4e87892cb0a20eaa91398ec035c1e73506164554df6ea9",
-      "bytes": 5870
+      "sha256": "b20b0573add9db95007f8357b444147156ed5012c179f4d3b02bf0c40e0d1330",
+      "bytes": 7546
     },
     "report.md": {
-      "sha256": "0397be3b0316cc0e939cdc7eee5b3b4bfc4ce833a82a617640d23e816b501678",
-      "bytes": 7646
+      "sha256": "d1420ce725d7f6b836b3c45e03f1f919031742590da0f0e08ffef9282a8bbcaf",
+      "bytes": 12311
     },
     "run.py": {
-      "sha256": "68b17b3314bbf572ddba3cc4be770ffa6406baf0c14496483cdc2bdfda8c854a",
-      "bytes": 7453
+      "sha256": "77d4f61f937a0d827339fe7faf1c8441322ed895657d542d7a9f77be27abe971",
+      "bytes": 9135
     }
   },
   "privacy": "Recall fractions, gate verdicts, candidate-set sizes and tool provenance digests only. The corpus is synthetic and generated in process from a frozen seed; no real Memory text, bead titles or bodies, agent transcripts, retrieval logs, filesystem paths or identities appear in this package."

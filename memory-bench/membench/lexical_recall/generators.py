@@ -104,7 +104,34 @@ class LiteralGenerator:
             if not isinstance(identifier, str):
                 raise GeneratorError("bd memories emitted an item without a string id")
             ranked.append(identifier)
+        self._require_whole_page(payload, len(ranked))
         return tuple(ranked)
+
+    @staticmethod
+    def _require_whole_page(payload: dict[str, object], returned: int) -> None:
+        """Reject a truncated page instead of measuring one.
+
+        `matched_k` is the size of this candidate set, and every arm's budget is
+        scaled by it, so a short page shrinks the whole experiment silently. The
+        control class would catch that through its equality gate; the lexical-miss
+        class would not, because dropping a distractor leaves the returned set a
+        strict subset of the labels, still missing the primary and still non-empty,
+        which is exactly what its subset gate asserts. `beads_ordering.client`
+        checks these same three fields for the same reason.
+        """
+
+        complete = payload.get("complete")
+        if complete is False:
+            raise GeneratorError(
+                f"bd memories returned an incomplete page (continuation="
+                f"{payload.get('continuation')!r}); matched-k would be understated"
+            )
+        total = payload.get("total_matched")
+        if isinstance(total, int) and total != returned:
+            raise GeneratorError(
+                f"bd memories reported total_matched={total} but returned {returned} "
+                "items; matched-k would be understated"
+            )
 
 
 def fts_match_expression(query: str) -> str:

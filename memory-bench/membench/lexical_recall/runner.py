@@ -11,21 +11,21 @@ Relaxing that shared symbol would weaken it for `beads_ordering.runner` and
 
 from __future__ import annotations
 
+import math
 import statistics
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from membench.beads_ordering.models import FrozenCorpus, OrderingTask
+from membench.beads_ordering.models import OrderingTask
 from membench.lexical_recall.generators import CandidateGenerator
 from membench.lexical_recall.models import (
+    RECALL_AT_10,
     FrozenMissCorpus,
     Generator,
     MissKind,
     TaskClass,
     TaskRecall,
 )
-
-RECALL_AT_10 = 10
 
 G1_RECOVERS = 0.50
 G1_DOES_NOT_RECOVER = 0.20
@@ -151,8 +151,10 @@ def measure(
         task_class=spec.task_class,
         miss_kind=spec.miss_kind,
         generator=generator,
+        corpus_size=spec.corpus_size,
         matched_k=matched_k,
         candidate_set_size=len(ranked),
+        n_labelled_non_primary=len(spec.labelled - {spec.primary_relevant}),
         primary_rank=primary_rank,
         useful_rank=useful_rank,
         primary_at_matched_k=primary_rank is not None and primary_rank <= matched_k,
@@ -208,8 +210,15 @@ def recall_summary(rows: Sequence[TaskRecall]) -> dict[str, object]:
             ]
             if not selected:
                 continue
+            distinct = {row.task_id for row in selected}
+            if len(distinct) != len(selected):
+                raise LexicalRecallError(
+                    f"{task_class.value}/{generator.value}: {len(selected)} rows for "
+                    f"{len(distinct)} tasks; the independent unit is the task, so a "
+                    "repeated row would silently reweight every statistic here"
+                )
             entry: dict[str, object] = {
-                "n_tasks": len(selected),
+                "n_tasks": len(distinct),
                 "primary_recall_at_matched_k": _mean([r.primary_at_matched_k for r in selected]),
                 "primary_recall_at_10": _mean([r.primary_at_10 for r in selected]),
                 "primary_recall_unbounded": _mean([r.primary_unbounded for r in selected]),
@@ -240,10 +249,18 @@ def recall_summary(rows: Sequence[TaskRecall]) -> dict[str, object]:
 
 
 def _percentile(values: Sequence[float], fraction: float) -> float:
+    """Nearest-rank: the smallest value at or above the given fraction of the data.
+
+    `round(fraction * (n - 1))` is half-to-even, so at n=6 it rounds 4.5 down and
+    returns the 5th of 6 as the "p90". Correct at the n=36 this file reports today,
+    wrong at the n=9 of a per-kind stratum, which the preregistration also treats
+    as a reported unit.
+    """
+
     if not values:
         raise LexicalRecallError("cannot take a percentile of nothing")
     ordered = sorted(values)
-    index = min(len(ordered) - 1, round(fraction * (len(ordered) - 1)))
+    index = max(0, math.ceil(fraction * len(ordered)) - 1)
     return ordered[index]
 
 
@@ -263,44 +280,121 @@ def g2_verdict(value: float) -> str:
     return "inconclusive"
 
 
+def _budget_diagnostic(rows: Sequence[TaskRecall]) -> dict[str, object]:
+    """How much room G1's budget actually leaves for the primary.
+
+    A recall-at-k statistic is only informative when k can hold the primary. On the
+    lexical-miss class each task ships `matched_k` distractors carrying the query
+    verbatim plus an entry Memory, so at least `matched_k + 1` labelled documents
+    can outrank the primary inside a budget of `matched_k`. Without this block a
+    consumer reads `does_not_recover` as a fact about the ranker when it is a fact
+    about the fixture, which is the same by-construction error the sibling ordering
+    experiment made and this bead exists to avoid repeating.
+    """
+
+    saturable = [r for r in rows if r.n_labelled_non_primary >= r.matched_k]
+    headroom = sorted(r.primary_rank - r.matched_k for r in rows if r.primary_rank is not None)
+    return {
+        "n_tasks": len(rows),
+        "n_tasks_budget_saturable_by_non_primary_labels": len(saturable),
+        "median_matched_k": statistics.median([r.matched_k for r in rows]),
+        "median_labelled_non_primary": statistics.median([r.n_labelled_non_primary for r in rows]),
+        "n_tasks_primary_retrieved_at_any_depth": len(headroom),
+        "primary_rank_minus_matched_k": (
+            {"min": headroom[0], "median": statistics.median(headroom), "max": headroom[-1]}
+            if headroom
+            else None
+        ),
+        # Structural, not a verdict: it says the budget CAN be filled by non-primary
+        # labels on every task, which is why G1 is bounded below the ceiling. A
+        # ranker that puts the primary above all of them still scores, as the dense
+        # arm does on 2 of 36, so this is not a claim that G1 is unfalsifiable.
+        "budget_saturable_on_every_task": len(saturable) == len(rows),
+    }
+
+
+def _cost_ratios(
+    rows: Sequence[TaskRecall], literal_rows: Sequence[TaskRecall]
+) -> dict[str, object]:
+    """Candidate-set size against the literal arm on the SAME task.
+
+    The join key is (task_id, corpus_size), not task_id alone: the control class
+    runs tasks at 50, 100 and 500 Memories, and collapsing those onto one key would
+    silently compare a task against another size's denominator.
+    """
+
+    by_task = {(r.task_id, r.corpus_size): r.candidate_set_size for r in literal_rows}
+    if len(by_task) != len(literal_rows):
+        raise LexicalRecallError(
+            "literal rows collide on (task_id, corpus_size); the cost ratio would "
+            "compare a task against another row's denominator"
+        )
+    ratios: list[float] = []
+    for row in rows:
+        denominator = by_task.get((row.task_id, row.corpus_size))
+        if denominator is None:
+            raise LexicalRecallError(
+                f"{row.task_id} at corpus_size={row.corpus_size} has no literal row, "
+                "so its candidate cost has no denominator"
+            )
+        if denominator == 0:
+            raise LexicalRecallError(
+                f"{row.task_id} at corpus_size={row.corpus_size}: the literal arm "
+                "returned nothing, so the cost ratio is undefined"
+            )
+        ratios.append(row.candidate_set_size / denominator)
+    return {
+        "n_tasks": len(ratios),
+        "median_ratio_vs_literal": statistics.median(ratios),
+        "p90_ratio_vs_literal": _percentile(ratios, 0.9),
+        "threshold": "none, descriptive",
+    }
+
+
 def gate_verdicts(rows: Sequence[TaskRecall]) -> dict[str, object]:
     """G1, G2 and G3 exactly as the preregistration fixes them."""
 
     verdicts: dict[str, object] = {}
     meets_both: list[str] = []
     for generator in (Generator.FTS, Generator.EMBEDDING):
-        miss = [
-            r for r in rows if r.task_class is TaskClass.LEXICAL_MISS and r.generator is generator
-        ]
-        control = [
-            r
-            for r in rows
-            if r.task_class is TaskClass.LEXICAL_HIT_CONTROL and r.generator is generator
-        ]
-        literal_control = [
-            r
-            for r in rows
-            if r.task_class is TaskClass.LEXICAL_HIT_CONTROL and r.generator is Generator.LITERAL
-        ]
+        per_class = {
+            task_class: [r for r in rows if r.task_class is task_class and r.generator is generator]
+            for task_class in TaskClass
+        }
+        literal_by_class = {
+            task_class: [
+                r for r in rows if r.task_class is task_class and r.generator is Generator.LITERAL
+            ]
+            for task_class in TaskClass
+        }
+        miss = per_class[TaskClass.LEXICAL_MISS]
+        control = per_class[TaskClass.LEXICAL_HIT_CONTROL]
         g1_value = _mean([r.primary_at_matched_k for r in miss])
         g2_value = _mean([r.primary_at_matched_k for r in control])
-        by_task = {r.task_id: r.candidate_set_size for r in literal_control}
-        ratios = [
-            r.candidate_set_size / by_task[r.task_id]
-            for r in control
-            if by_task.get(r.task_id, 0) > 0
-        ]
         g1 = g1_verdict(g1_value)
         g2 = g2_verdict(g2_value)
         if g1 == "recovers" and g2 == "preserves_literal_recall":
             meets_both.append(generator.value)
         verdicts[generator.value] = {
-            "G1_recovery": {"statistic": g1_value, "verdict": g1},
-            "G2_no_regression": {"statistic": g2_value, "verdict": g2},
+            "G1_recovery": {
+                "statistic": g1_value,
+                "verdict": g1,
+                "class": TaskClass.LEXICAL_MISS.value,
+                "budget_diagnostic": _budget_diagnostic(miss),
+            },
+            "G2_no_regression": {
+                "statistic": g2_value,
+                "verdict": g2,
+                "class": TaskClass.LEXICAL_HIT_CONTROL.value,
+            },
+            # Reported per class. The preregistered endpoint is "per generator, per
+            # class", and the two differ by two orders of magnitude for a dense arm
+            # that returns the whole corpus: one number labelled only "G3" reads as
+            # the miss class's cost to a reader of a miss-class experiment.
             "G3_candidate_cost": {
-                "median_ratio_vs_literal": statistics.median(ratios) if ratios else None,
-                "p90_ratio_vs_literal": _percentile(ratios, 0.9) if ratios else None,
-                "threshold": "none, descriptive",
+                task_class.value: _cost_ratios(per_class[task_class], literal_by_class[task_class])
+                for task_class in TaskClass
+                if per_class[task_class]
             },
         }
     verdicts["combined_recommendation"] = {
@@ -308,7 +402,3 @@ def gate_verdicts(rows: Sequence[TaskRecall]) -> dict[str, object]:
         "generators_meeting_both_gates": meets_both,
     }
     return verdicts
-
-
-def control_tasks_from(corpus: FrozenCorpus) -> tuple[OrderingTask, ...]:
-    return tuple(corpus.tasks)

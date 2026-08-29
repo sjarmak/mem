@@ -19,8 +19,9 @@ import argparse
 import hashlib
 import json
 import os
-import subprocess
+import shutil
 import time
+import urllib.request
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -57,24 +58,38 @@ def _binary_sha256(path: str) -> str:
 
 def _ollama_provenance(base_url: str, model: str) -> dict[str, str]:
     """Pin the served model. A recall number from a dense arm means nothing without
-    the exact weights that produced it."""
+    the exact weights that produced it, so every failure here raises rather than
+    recording "unknown": a provenance field that degrades in silence documents
+    nothing while looking like it does.
+    """
 
-    completed = subprocess.run(
-        ["curl", "-s", "--max-time", "10", f"{base_url}/api/tags"],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    digest = "unknown"
-    if completed.returncode == 0:
-        try:
-            for entry in json.loads(completed.stdout).get("models", []):
-                if str(entry.get("name", "")).split(":")[0] == model.split(":")[0]:
-                    digest = str(entry.get("digest", "unknown"))
-                    break
-        except json.JSONDecodeError:
-            digest = "unknown"
-    return {"model": model, "digest": digest, "base_url_scheme": "local"}
+    def _get(path: str) -> dict[str, object]:
+        request = urllib.request.Request(f"{base_url.rstrip('/')}{path}")
+        with urllib.request.urlopen(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"ollama {path} returned a non-object payload")
+        return payload
+
+    entries = _get("/api/tags").get("models", [])
+    if not isinstance(entries, list):
+        raise RuntimeError("ollama /api/tags returned a non-list models field")
+    # Exact tag, not the family: with nomic-embed-text:latest and :v1.5 both pulled,
+    # a family match records whichever the daemon happens to list first.
+    wanted = model if ":" in model else f"{model}:latest"
+    for entry in entries:
+        if isinstance(entry, dict) and str(entry.get("name", "")) == wanted:
+            digest = str(entry.get("digest", ""))
+            if not digest:
+                raise RuntimeError(f"ollama lists {wanted} with no digest")
+            return {
+                "model": wanted,
+                "digest": digest,
+                "daemon_version": str(_get("/api/version").get("version", "")),
+                "base_url_scheme": "local",
+            }
+    available = sorted(str(e.get("name", "")) for e in entries if isinstance(e, dict))
+    raise RuntimeError(f"ollama does not serve {wanted}; it has {available}")
 
 
 def _build_generators(
@@ -107,6 +122,14 @@ def main() -> int:
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
 
+    # Resolve before the clock starts. `--beads-bin` defaults to a bare name, and
+    # hashing it for provenance is the LAST thing main() does, so an unresolvable
+    # path would otherwise crash after the full run and discard every result.
+    beads_bin = shutil.which(args.beads_bin) or args.beads_bin
+    if not Path(beads_bin).is_file():
+        parser.error(f"--beads-bin does not resolve to a file: {args.beads_bin}")
+    beads_bin_sha256 = _binary_sha256(beads_bin)
+
     started = time.time()
     root = Path(args.workspace_root)
     stack = LocalModelStack.from_env()
@@ -118,14 +141,14 @@ def main() -> int:
     seed_beads_workspace(
         corpus=miss_corpus.as_seedable_corpus(miss),
         corpus_size=miss_size,
-        beads_bin=args.beads_bin,
+        beads_bin=beads_bin,
         workspace=miss_workspace,
     )
     miss_generators = _build_generators(
         memories=miss.memories,
         corpus_size=miss_size,
         workspace=miss_workspace,
-        beads_bin=args.beads_bin,
+        beads_bin=beads_bin,
         embedder=embedder,
     )
 
@@ -140,14 +163,14 @@ def main() -> int:
         seed_beads_workspace(
             corpus=ordering,
             corpus_size=size,
-            beads_bin=args.beads_bin,
+            beads_bin=beads_bin,
             workspace=workspace,
         )
         control_generators[size] = _build_generators(
             memories=ordering.memories,
             corpus_size=size,
             workspace=workspace,
-            beads_bin=args.beads_bin,
+            beads_bin=beads_bin,
             embedder=embedder,
         )
 
@@ -155,15 +178,18 @@ def main() -> int:
     rows.extend(run_class(control, lambda size: control_generators[size]))
 
     # The preregistration asks for 3 repeats of the embedding arm to detect
-    # nondeterminism in the served model. Document vectors are cached, so a repeat
-    # re-embeds only the query; that is the part that could drift.
+    # nondeterminism in the served model. Each repeat gets a FRESH embedder, so the
+    # 680 document vectors are recomputed too. Reusing the cached documents would
+    # have tested only the query side and reported that as arm stability.
     miss_spec_list = miss_specs(miss)
     repeat_rankings: list[dict[str, tuple[str, ...]]] = []
-    embedding_arm = miss_generators[Generator.EMBEDDING]
     for _ in range(EMBEDDING_REPEATS):
-        repeat_rankings.append(
-            {spec.task_id: embedding_arm.rank(spec.query)[:20] for spec in miss_spec_list}
+        arm = EmbeddingGenerator(
+            memories=miss.memories,
+            corpus_size=miss_size,
+            embedder=OllamaEmbedder(stack.ollama_base_url, stack.ollama_embedding_model),
         )
+        repeat_rankings.append({spec.task_id: arm.rank(spec.query)[:20] for spec in miss_spec_list})
     repeats_agree = all(ranking == repeat_rankings[0] for ranking in repeat_rankings)
 
     payload = {
@@ -187,7 +213,7 @@ def main() -> int:
             },
         },
         "provenance": {
-            "beads_bin_sha256": _binary_sha256(args.beads_bin),
+            "beads_bin_sha256": beads_bin_sha256,
             "embedding": _ollama_provenance(stack.ollama_base_url, stack.ollama_embedding_model),
             "fts": {"engine": "sqlite fts5", "tokenizer": "porter unicode61", "rank": "bm25"},
         },
@@ -195,6 +221,7 @@ def main() -> int:
         "gates": gate_verdicts(rows),
         "embedding_repeats": {
             "n": EMBEDDING_REPEATS,
+            "documents_re_embedded_each_repeat": True,
             "top_20_rankings_identical": repeats_agree,
         },
         "elapsed_seconds": round(time.time() - started, 1),

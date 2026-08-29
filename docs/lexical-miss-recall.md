@@ -156,13 +156,28 @@ The run landed. Numbers, gate verdicts and provenance are in
 `manifest.json`).
 
 Headline: neither non-literal generator meets the preregistered primary endpoint,
-so `candidate_generation_earns_its_own_arm` is false. The signal sits in the
-secondary endpoint the threat list called out in advance. At recall@10 on the miss
-class the embedding arm reaches 0.444 and FTS 0.250 against the literal arm's 0.000,
-and the per-kind split is where the design pays off: morphological variants are
-recovered by both, synonyms only by the dense arm, and renamed concepts by neither
-at any budget.
+so `candidate_generation_earns_its_own_arm` is false. In the preregistration's
+words for that outcome, the shipped literal matcher is not the bottleneck this
+experiment can demonstrate.
+
+The signal sits in the secondary endpoint the threat list called out in advance.
+At recall@10 on the miss class the embedding arm reaches 0.444 and FTS 0.250. The
+literal arm's 0.000 is not a comparator: it is the definition of the class,
+enforced by a construction gate, and reporting it as a baseline would repeat the
+by-construction error this bead was filed against. The arms that can be compared
+are FTS and the dense arm, and the per-kind split is where the design pays off:
+morphological variants are recovered by both, synonyms only by the dense arm, and
+renamed concepts by neither at any budget.
+
+Read the primary endpoint with its `budget_diagnostic`. On all 36 miss tasks the
+matched-k budget can be filled by labelled non-primary documents, and for FTS the
+primary sits at exactly `matched_k + 2` on all 9 tasks where it is retrieved at
+all, so that arm's G1 of 0.000 is a fact about the fixture rather than about
+lexical retrieval. `report.md` §Deviations records the sensitivity check: at a
+budget of 10 both arms land in the inconclusive band and the recommendation is
+unchanged.
 
 One prediction was falsified. The embedding arm was predicted to recover both
-synonym and renamed-concept; it recovers synonyms at 0.556 and renamed concepts at
-0.000. A renamed concept needs an explicit link, not a better retriever.
+synonym and renamed-concept; at recall@10 it recovers synonyms at 0.556 and
+renamed concepts at 0.000, and at the primary endpoint it recovers neither. A
+renamed concept needs an explicit link, not a better retriever.
