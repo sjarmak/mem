@@ -1,0 +1,129 @@
+{
+  "population": {
+    "transcripts_scanned": 9172,
+    "raw_read_invocations": 23076,
+    "deduped_invocations": 16354,
+    "sessions": 3889,
+    "by_subcommand_raw": {
+      "show": 9549,
+      "list": 7970,
+      "ready": 4439,
+      "search": 810,
+      "dep": 211,
+      "blocked": 53,
+      "stats": 29,
+      "query": 10,
+      "count": 5
+    },
+    "unregistered_read_shaped_subcommands": {
+      "memories": 409,
+      "comments": 201,
+      "recall": 16,
+      "status": 6,
+      "history": 5,
+      "stale": 4,
+      "find-duplicates": 3,
+      "graph": 2,
+      "provenance": 1
+    },
+    "skipped": {
+      "dep_write_verb": 234,
+      "unparseable": 252,
+      "placeholder_or_template": 1885,
+      "help_invocation": 612
+    }
+  },
+  "label_counts_deduped": {
+    "E1": 8915,
+    "E0": 5897,
+    "N3": 3938,
+    "E3": 3820,
+    "N1": 759,
+    "C1": 342,
+    "E_NONE": 291,
+    "N5": 197,
+    "N6": 43,
+    "E4": 25,
+    "N4": 24,
+    "E2": 2
+  },
+  "gates": {
+    "G1_search_predicate": {
+      "session_averaged": 0.0105,
+      "per_invocation": 0.0464,
+      "n_sessions": 3889,
+      "verdict": "profile_adequate"
+    },
+    "G2_traversal": {
+      "session_averaged": 0.3569,
+      "per_invocation": 0.2408,
+      "n_sessions": 3889,
+      "verdict": "argues_for_capability"
+    }
+  },
+  "sensitivity_excluding_bd_ready": {
+    "G1_session_averaged": 0.0112,
+    "G2_session_averaged": 0.0051
+  },
+  "C1_share": {
+    "session_averaged": 0.0073,
+    "per_invocation": 0.0209
+  },
+  "free_text_invocations": 717,
+  "preregistration": {
+    "path": "memory-bench/fixtures/bdp/selector-expressibility-preregistration.json",
+    "sha256": "3ffc83e06bc22216e135ca2b2a3b24b8278b99ba1bb1310c1dcae7890e4aeb35",
+    "locked_commit": "2beb545e59b46c10bc0bf2a591d833d9c3c99444"
+  },
+  "G3_enumeration_cost": {
+    "method": "For each C1 (label-containment) query the BDP-expressible superset is that query with the label predicate removed. Historical result sizes cannot be recovered, so superset SHAPES are counted exactly and their sizes are measured against one present-day store as a proxy.",
+    "distinct_superset_shapes": 7,
+    "c1_invocations": 577,
+    "shape_distribution": {
+      "bd list --status": 523,
+      "bd list (no other predicate)": 36,
+      "bd ready (no other predicate)": 11,
+      "bd list --assignee": 2,
+      "bd ready --exclude-type --metadata-field --unassigned": 2,
+      "bd count --status": 2,
+      "bd list --priority --status": 1
+    },
+    "retains_a_narrowing_predicate": {
+      "count": 530,
+      "share": 0.9186
+    },
+    "present_day_store_proxy": {
+      "store": "mem project bead store",
+      "superset_size_status_open": 107,
+      "superset_size_whole_collection": 1708,
+      "caveat": "one store at one time; queries in the corpus ran against several rigs whose collection sizes differ"
+    }
+  },
+  "deviations_from_preregistration": [
+    {
+      "item": "corpus resolution",
+      "registered": "resolve session ids through gc session logs, run from the orchestrator rig root",
+      "actual": "enumerated transcript JSONL directly from the on-disk agent project directories (9,172 files, 6.8 GB)",
+      "direction": "larger denominator than the registered procedure would yield"
+    },
+    {
+      "item": "model classification of free-text intent",
+      "registered": "a batched model pass over free-text search arguments",
+      "actual": "not run. The mechanical rule assigns N1 to EVERY non-ID-like positional argument, which is the assumption most favorable to the 'a search predicate is needed' conclusion. G1 is therefore an upper bound on the text-search residue, and it still lands below the profile-adequate threshold. A model pass could only lower it.",
+      "direction": "conservative against the study's own null result"
+    },
+    {
+      "item": "E_NONE reporting bucket",
+      "registered": "taxonomy E0-E4, C1, N1-N6",
+      "actual": "queries carrying no predicate at all are reported as E_NONE rather than folded into E1. They remain expressible (the empty selector matches the whole collection) and no gate keys on this split.",
+      "direction": "reporting granularity only; no gate affected"
+    }
+  ],
+  "classifier_defects_found_and_fixed": [
+    "bd dep add/remove counted as reads (dep is a read subcommand only for list/tree/show/graph/why/path/cycles)",
+    "the id pattern rejected multi-hyphen ids such as agent-diagnostics-4w02, sending 1,489 identity fetches to 'unparseable'",
+    "--help invocations were classified as retrieval queries (612 of them)",
+    "shell redirection tokens (2>&1) were read as argv placeholders, which at one point discarded 27,939 of 31,133 rows",
+    "--search, --unassigned and --mol were absent from the flag table"
+  ]
+}
