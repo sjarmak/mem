@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "row_count": 175,
+  "raw_sha256": "3c6f234c9b4793d2e3f37b8853937f12f1307f5db983d88d02095c8e92438e43",
+  "analysis_sha256": "d8235e74c5f85c3cfee4efaa7e1da3799d70ee73bcbb0eabd9ca768c9d439191",
+  "rank_strategy": "reverse-pagerank",
+  "rank_parameters": {
+    "damping": 0.85,
+    "iterations": 100
+  },
+  "arithmetic_modes": [
+    "aggregated-dangling-mass"
+  ],
+  "pinned_parity_measured_through_size": 500,
+  "pinned_top_10_overlap": {
+    "count": 105,
+    "p50": 1.0,
+    "p90": 1.0,
+    "mean": 0.819047619047619,
+    "min": 0.0,
+    "max": 1.0
+  },
+  "arithmetic_boundary": {
+    "behavior_sizes": "pinned-update-order",
+    "compute-only-sizes": "aggregated-dangling-mass"
+  },
+  "provenance": {
+    "mem_git_sha": "377b82199d20c55584d7320389ddd41f2dae6a45",
+    "mem_git_dirty": false,
+    "mem_git_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "beads_git_sha": "3302247cb4cd3a9a05227819029269c331245d05",
+    "beads_git_dirty": false,
+    "beads_git_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "beads_bin": "/home/ds/.local/bin/bd-memory-ordering-5877-clean",
+    "beads_bin_sha256": "47aadd114f3afe16918ff5eff27f2e7d85bafc4003101ee7a4939c04252853de",
+    "structural_order_source_git_sha": "b1c55df8c3bd799262bdf2eede2b3e3f705d8848",
+    "fixture_manifest_sha256": "fd6c88e687dcbbe8feaebb67ed512bf9063f4d9db39edb272f0b7ee6f0a20682",
+    "followup_source_sha256": "c3983bd4c92787d274f4021dca71a8726372b55db2cf006603da00676944d919"
+  }
+}

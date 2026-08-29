@@ -1,0 +1,59 @@
+{
+  "evidence": {
+    "control_cells": 672,
+    "control_observations": 1424,
+    "graph_families": 7,
+    "independent_tasks": 21,
+    "mutation_replay_snapshots": 4200,
+    "registered_policies": 5
+  },
+  "files": {
+    "ISSUE_COMMENT.md": "71d603799ce74c7d74e1590b6781687d6ea0adcfaf5707f1233d53617c0f238e",
+    "README.md": "5b2c38bebaddfd88d47d45e109f6c3fd4ab526a445f07842813380e90cdf0eda",
+    "REPRODUCE.md": "15e7b614751f325039aca0d1db3220ef83a53c3059a49f810ed73eb7f2109515",
+    "data/control-agent-analysis/analysis.json": "cda482a7a61dbdbc596760f53a972ea09e04d2d30376e5570bd404b854dbe7d3",
+    "data/control-agent-analysis/cell-estimates.jsonl": "303827a0d0da78e72468919e291d482cba66802c3c0672c9e236fee4d11fb7f9",
+    "data/control-agent-analysis/manifest.json": "95a253c3d870a7189dbeac29fb66f6f23e97ac5b3116db17b07caea4acf0b021",
+    "data/control-agent-analysis/page-size-pages-navigation.svg": "64950908138f56ad9ffcdd7bcf41227098f42cbef16c839846dfbdf21af4a3b2",
+    "data/control-agent-analysis/page-size-pages-search-only.svg": "bb15a5e9df651988f940665e20af7c449031f488dc9b7bc39dad0ad4b4fb4ee6",
+    "data/control-agent-analysis/report.md": "91ccc65cff79bf80c19378ac88d61b22a6d6583eb6a1ef1e4eea5987e9677431",
+    "data/control-agent-analysis/sanitized-observations.jsonl": "314d09e7d4e84b073b746fd3779fb7bb3a624d18bbe6702b3ffb9a2804136048",
+    "data/mutation-replay/analysis.json": "ff7679a67c18204f096061fc2b984eb7605d914cd8ef1f578f736eb568b9439d",
+    "data/mutation-replay/manifest.json": "9c722aeb107c310f0fc523fdf8a810c5a2fb5d7b5432bd3c69ea49f96b495778",
+    "data/rank-scaling-optimized/rank-scaling-analysis.json": "d8235e74c5f85c3cfee4efaa7e1da3799d70ee73bcbb0eabd9ca768c9d439191",
+    "data/rank-scaling-optimized/rank-scaling-manifest.json": "bb3345a59a551318e546b85a56fb91040ec2ffbafeff4131d42c60eb95634eef",
+    "data/workload-rate-model.json": "eeee3a1344d39856f842b06306b463303d923a0a3e467c39edfa8e47c0d9697f"
+  },
+  "generated_on": "2026-08-28",
+  "issue_url": "https://github.com/gastownhall/beads/issues/5877",
+  "privacy_profile": "public-sanitized-allowlist",
+  "provenance": {
+    "agent_cli_versions": [
+      "2.1.246",
+      "2.1.247"
+    ],
+    "agent_model": "claude-haiku-4-5-20251001",
+    "beads_bin_sha256": "47aadd114f3afe16918ff5eff27f2e7d85bafc4003101ee7a4939c04252853de",
+    "beads_git_sha": "3302247cb4cd3a9a05227819029269c331245d05",
+    "fixture_manifest_sha256": "fd6c88e687dcbbe8feaebb67ed512bf9063f4d9db39edb272f0b7ee6f0a20682",
+    "mem_git_sha": "377b82199d20c55584d7320389ddd41f2dae6a45",
+    "preregistration_sha256": "b7c83507ce771bd7c35c6ed4611c8eb3bdfe7e52506b84ed09abcb8d9354ade5"
+  },
+  "purpose": "Lifecycle and control addendum to the R6 evidence package: structural-rank freshness under mutation, specialized rank plumbing, and frozen operator controls.",
+  "recommendation": "Do not standardize persistent structural-rank maintenance, periodic refresh, a rank service, raw numeric rank, strategy-selection, or semantic pin/boost/demote controls in R6; exact recomputation at the read boundary with fail-closed continuations remains consumer policy only.",
+  "relation": "additive to issue-5877-r6-evidence.zip; candidate generation unchanged",
+  "sanitization": {
+    "excluded": [
+      "agent streams",
+      "prompts and model answers",
+      "failure diagnostics",
+      "credential paths",
+      "account identities",
+      "local filesystem paths",
+      "experimental workspaces",
+      "raw mutation-replay results"
+    ],
+    "strict_scan": "pass"
+  },
+  "schema_version": 3
+}

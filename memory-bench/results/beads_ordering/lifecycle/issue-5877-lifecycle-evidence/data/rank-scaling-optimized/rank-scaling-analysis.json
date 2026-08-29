@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "row_count": 175,
+  "by_corpus_size": {
+    "50": {
+      "rows": 35,
+      "graph_families": 7,
+      "arithmetic": [
+        "aggregated-dangling-mass"
+      ],
+      "compute_ms": {
+        "count": 35,
+        "p50": 0.584346,
+        "p90": 0.878358,
+        "mean": 0.6275794857142857,
+        "min": 0.303544,
+        "max": 0.939217
+      },
+      "edge_count": {
+        "count": 35,
+        "p50": 24.0,
+        "p90": 161.0,
+        "mean": 65.57142857142857,
+        "min": 15.0,
+        "max": 161.0
+      },
+      "pinned_top_10_overlap": {
+        "count": 35,
+        "p50": 1.0,
+        "p90": 1.0,
+        "mean": 0.8714285714285714,
+        "min": 0.5,
+        "max": 1.0
+      }
+    },
+    "100": {
+      "rows": 35,
+      "graph_families": 7,
+      "arithmetic": [
+        "aggregated-dangling-mass"
+      ],
+      "compute_ms": {
+        "count": 35,
+        "p50": 1.081877,
+        "p90": 1.7532990000000002,
+        "mean": 1.1724253714285715,
+        "min": 0.606387,
+        "max": 1.767074
+      },
+      "edge_count": {
+        "count": 35,
+        "p50": 43.0,
+        "p90": 243.0,
+        "mean": 107.14285714285714,
+        "min": 31.0,
+        "max": 243.0
+      },
+      "pinned_top_10_overlap": {
+        "count": 35,
+        "p50": 1.0,
+        "p90": 1.0,
+        "mean": 0.8142857142857143,
+        "min": 0.0,
+        "max": 1.0
+      }
+    },
+    "500": {
+      "rows": 35,
+      "graph_families": 7,
+      "arithmetic": [
+        "aggregated-dangling-mass"
+      ],
+      "compute_ms": {
+        "count": 35,
+        "p50": 5.474106,
+        "p90": 8.1003256,
+        "mean": 6.1431191428571434,
+        "min": 3.785031,
+        "max": 23.212026
+      },
+      "edge_count": {
+        "count": 35,
+        "p50": 178.0,
+        "p90": 767.0,
+        "mean": 298.57142857142856,
+        "min": 164.0,
+        "max": 767.0
+      },
+      "pinned_top_10_overlap": {
+        "count": 35,
+        "p50": 0.9,
+        "p90": 1.0,
+        "mean": 0.7714285714285715,
+        "min": 0.0,
+        "max": 1.0
+      }
+    },
+    "2000": {
+      "rows": 35,
+      "graph_families": 7,
+      "arithmetic": [
+        "aggregated-dangling-mass"
+      ],
+      "compute_ms": {
+        "count": 35,
+        "p50": 23.758199,
+        "p90": 28.7535712,
+        "mean": 22.957599714285713,
+        "min": 14.279546,
+        "max": 33.568991
+      },
+      "edge_count": {
+        "count": 35,
+        "p50": 712.0,
+        "p90": 3068.0,
+        "mean": 1194.2857142857142,
+        "min": 656.0,
+        "max": 3068.0
+      },
+      "pinned_top_10_overlap": {
+        "count": 0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "mean": 0.0
+      }
+    },
+    "10000": {
+      "rows": 35,
+      "graph_families": 7,
+      "arithmetic": [
+        "aggregated-dangling-mass"
+      ],
+      "compute_ms": {
+        "count": 35,
+        "p50": 131.521814,
+        "p90": 159.574927,
+        "mean": 135.9136662,
+        "min": 99.216633,
+        "max": 222.712112
+      },
+      "edge_count": {
+        "count": 35,
+        "p50": 3560.0,
+        "p90": 15340.0,
+        "mean": 5971.428571428572,
+        "min": 3280.0,
+        "max": 15340.0
+      },
+      "pinned_top_10_overlap": {
+        "count": 0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "mean": 0.0
+      }
+    }
+  }
+}

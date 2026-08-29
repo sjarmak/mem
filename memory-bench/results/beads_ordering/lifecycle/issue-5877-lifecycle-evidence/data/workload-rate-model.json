@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "status": "derived-illustrative-capacity-model-not-a-deployment-measurement",
+  "source": {
+    "analysis": "mutation-replay-sealed/analysis.json",
+    "analysis_sha256": "ff7679a67c18204f096061fc2b984eb7605d914cd8ef1f578f736eb568b9439d",
+    "measured_exact_mean_refresh_ms": 105.29391634404762,
+    "measured_periodic_5_amortized_ms_per_mutation": 20.857137294047618,
+    "measured_periodic_20_amortized_ms_per_mutation": 5.215109623809524
+  },
+  "assumptions": [
+    "Update and read arrivals are independent stationary Poisson processes.",
+    "Exact refreshes after every update; periodic-N refreshes after each N updates.",
+    "Lazy refresh coalesces all updates since the last read and refreshes on the next read.",
+    "Lazy steady-state refresh rate is updates_per_s * reads_per_s / (updates_per_s + reads_per_s).",
+    "Core demand includes rank computation only; mutation, cursor retry, storage, coordination, and agent-ingestion costs remain separate.",
+    "These scenarios do not relax the preregistered top-10 freshness or continuation-integrity gates."
+  ],
+  "scenarios": [
+    {
+      "updates_per_s": 1,
+      "reads_per_s": 10,
+      "exact_compute_cores": 0.105294,
+      "periodic_5_compute_cores": 0.020857,
+      "periodic_20_compute_cores": 0.005215,
+      "lazy_refreshes_per_s": 0.909091,
+      "lazy_compute_cores": 0.095722
+    },
+    {
+      "updates_per_s": 10,
+      "reads_per_s": 1,
+      "exact_compute_cores": 1.052939,
+      "periodic_5_compute_cores": 0.208571,
+      "periodic_20_compute_cores": 0.052151,
+      "lazy_refreshes_per_s": 0.909091,
+      "lazy_compute_cores": 0.095722
+    },
+    {
+      "updates_per_s": 10,
+      "reads_per_s": 10,
+      "exact_compute_cores": 1.052939,
+      "periodic_5_compute_cores": 0.208571,
+      "periodic_20_compute_cores": 0.052151,
+      "lazy_refreshes_per_s": 5.0,
+      "lazy_compute_cores": 0.52647
+    },
+    {
+      "updates_per_s": 100,
+      "reads_per_s": 10,
+      "exact_compute_cores": 10.529392,
+      "periodic_5_compute_cores": 2.085714,
+      "periodic_20_compute_cores": 0.521511,
+      "lazy_refreshes_per_s": 9.090909,
+      "lazy_compute_cores": 0.957217
+    }
+  ]
+}

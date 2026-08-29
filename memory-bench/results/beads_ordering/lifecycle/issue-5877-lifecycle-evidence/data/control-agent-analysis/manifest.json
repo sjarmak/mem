@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "observation_count": 1424,
+  "cell_count": 672,
+  "source_observations_sha256": "bdddee27c5a6360d3bf57c95fdee8373a243058fe6d496b2e5726f116494702c",
+  "sanitized_observations_sha256": "314d09e7d4e84b073b746fd3779fb7bb3a624d18bbe6702b3ffb9a2804136048",
+  "cell_estimates_sha256": "303827a0d0da78e72468919e291d482cba66802c3c0672c9e236fee4d11fb7f9",
+  "analysis_sha256": "cda482a7a61dbdbc596760f53a972ea09e04d2d30376e5570bd404b854dbe7d3",
+  "privacy_projection": "per-run and derived metrics only; excludes queries, model text, failures, and credential paths",
+  "fixture_manifest_sha256": "fd6c88e687dcbbe8feaebb67ed512bf9063f4d9db39edb272f0b7ee6f0a20682",
+  "mem_git_shas": [
+    "377b82199d20c55584d7320389ddd41f2dae6a45",
+    "37f96657a9d636a0f41748463649b3c59c25641c",
+    "e5da7b5378081c7203569775a433f776ff3e7231"
+  ],
+  "mem_git_diff_sha256s": [
+    "51addeb20d2645470b2444aedba89f14edc56bf020e14ab9807ff407faaf0082",
+    "ac972fbd6a377388b0efbf6ba3a796569e1ab30b7477f969441e02c4577de887",
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  ],
+  "beads_git_shas": [
+    "3302247cb4cd3a9a05227819029269c331245d05"
+  ],
+  "beads_git_diff_sha256s": [
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  ],
+  "beads_bin_sha256s": [
+    "47aadd114f3afe16918ff5eff27f2e7d85bafc4003101ee7a4939c04252853de"
+  ],
+  "structural_order_source_git_shas": [
+    "b1c55df8c3bd799262bdf2eede2b3e3f705d8848"
+  ],
+  "agent_models": [
+    "claude-haiku-4-5-20251001"
+  ],
+  "agent_cli_versions": [
+    "2.1.246",
+    "2.1.247"
+  ]
+}

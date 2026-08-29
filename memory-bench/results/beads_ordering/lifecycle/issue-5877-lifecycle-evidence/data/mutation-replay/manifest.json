@@ -1,0 +1,40 @@
+{
+  "schema_version": 2,
+  "status": "compute-and-retrieval-behavior-replay",
+  "row_count": 4200,
+  "seed": 5878,
+  "event_count": 40,
+  "policies": [
+    "exact-global",
+    "periodic-5",
+    "periodic-20",
+    "stale-until-read",
+    "incremental-if-feasible"
+  ],
+  "rank_strategy": "reverse-pagerank",
+  "rank_parameters": {
+    "damping": 0.85,
+    "iterations": 100
+  },
+  "continuation_binding": "task candidate projection and effective order digest plus rank epoch",
+  "incremental_feasibility": {
+    "supported": false,
+    "reason": "batch-only scorer exposes complete-corpus PageRank; an exact local update would require a new algorithm or dependency and is not feasible under the preregistered PoC boundary"
+  },
+  "provenance": {
+    "mem_git_sha": "377b82199d20c55584d7320389ddd41f2dae6a45",
+    "mem_git_dirty": false,
+    "mem_git_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "beads_git_sha": "3302247cb4cd3a9a05227819029269c331245d05",
+    "beads_git_dirty": false,
+    "beads_git_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "beads_bin": "/home/ds/.local/bin/bd-memory-ordering-5877-clean",
+    "beads_bin_sha256": "47aadd114f3afe16918ff5eff27f2e7d85bafc4003101ee7a4939c04252853de",
+    "structural_order_source_git_sha": "b1c55df8c3bd799262bdf2eede2b3e3f705d8848",
+    "fixture_manifest_sha256": "fd6c88e687dcbbe8feaebb67ed512bf9063f4d9db39edb272f0b7ee6f0a20682",
+    "preregistration_sha256": "b7c83507ce771bd7c35c6ed4611c8eb3bdfe7e52506b84ed09abcb8d9354ade5",
+    "followup_source_sha256": "1db5d586501aaf48bf18812d08ebb5ef494410a999194785cfc825c8f2f74d94"
+  },
+  "raw_results_sha256": "4af922db32258f8b38ed956b4baa10538138ec241a672a626c1ca348be025acd",
+  "analysis_sha256": "ff7679a67c18204f096061fc2b984eb7605d914cd8ef1f578f736eb568b9439d"
+}
