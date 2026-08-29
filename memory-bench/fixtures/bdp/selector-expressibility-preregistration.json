@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "status": "locked-before-any-classification",
+  "registered_at": "2026-08-29T00:00:00Z",
+  "new_outcomes_examined": false,
+  "bead": "mem-rj2mg",
+  "question": "What fraction of the retrieval queries agents actually issue against a bead store is expressible in BDP's bounded RFC 9535 Selector profile, and what does the residue require?",
+  "decision_relevance": "BDP (gastownhall/bdp, docs/specs/bdp.md) exposes no text search. Its Selector supports singular paths, JSON literals, existence tests, comparison, and boolean combination, and excludes joins, graph traversal, projection, aggregation, recursive descent, nested filters, functions, and regular expressions. Whether that profile is adequate is currently an opinion. This measures it against observed agent behavior before the Read profile freezes.",
+  "population": {
+    "source": "resolved agent transcript JSONL",
+    "unit_of_extraction": "one `bd` read invocation appearing in the `command` string of a Bash tool_use block",
+    "why_bash": "the store records only tool_calls_by_type (name to count); argument text exists solely in the raw transcripts, and bd is invoked through Bash rather than a structured tool",
+    "resolution_procedure": "resolve session ids through src/ingest/trace-resolve.ts (gc session logs) run from /home/ds/gas-city; the achievable denominator is whatever resolves and MUST be reported, not assumed",
+    "included_subcommands": ["list", "show", "ready", "query", "search", "dep", "count", "stats", "blocked"],
+    "exclusions": [
+      "write subcommands (create, update, close, reopen, delete, dep add) — BDP mutation is a separate profile",
+      "invocations issued by the memory-bench harness or any synthetic generator rather than by an agent doing real work",
+      "invocations issued by this study itself"
+    ]
+  },
+  "independent_unit": "session",
+  "counting_rule": {
+    "primary": "per-session deduplicated invocations, so a retry loop cannot dominate the estimate",
+    "secondary": "raw invocation counts, reported alongside and never substituted for the primary",
+    "session_level_fractions": "every headline fraction is computed per session and then averaged over sessions with equal weight"
+  },
+  "taxonomy": {
+    "expressible": {
+      "E0": "identity fetch of one resource by id",
+      "E1": "exact equality or set membership on a top-level or properties field",
+      "E2": "ordered comparison on a field",
+      "E3": "boolean combination of the above",
+      "E4": "existence test"
+    },
+    "client_side": {
+      "C1": "expressible only by selecting a superset through the profile and filtering in the client"
+    },
+    "not_expressible": {
+      "N1": "substring, case-insensitive, or free-text matching",
+      "N2": "regular expression matching",
+      "N3": "graph traversal or join across resources, including readiness computation",
+      "N4": "aggregation, counting, or grouping as the requested answer",
+      "N5": "ordering, top-k, or recency limiting",
+      "N6": "projection or selection of a nested value rather than a complete resource"
+    }
+  },
+  "gates": {
+    "G1_search_predicate": {
+      "statistic": "session-averaged fraction of included invocations requiring N1 or N2",
+      "argue_for_search_predicate_if": ">= 0.20",
+      "profile_adequate_if": "<= 0.10",
+      "inconclusive_band": "(0.10, 0.20) reports no recommendation",
+      "note": "N5 is deliberately excluded from this gate. The R6 decision already assigned ordering to consumer policy, and counting it here would double-count a settled question."
+    },
+    "G2_traversal": {
+      "statistic": "session-averaged fraction requiring N3",
+      "argue_for_traversal_support_if": ">= 0.20",
+      "client_owned_is_adequate_if": "<= 0.10",
+      "inconclusive_band": "(0.10, 0.20) reports no recommendation",
+      "note": "BDP states readiness computation is client-owned. A high N3 fraction does not by itself overturn that; it measures the client-side cost the spec assigns."
+    },
+    "G3_enumeration_cost": {
+      "statistic": "median and p90 superset size a C1 query must enumerate",
+      "threshold": "none — reported descriptively as the cost of client-side filtering"
+    }
+  },
+  "analysis_plan": {
+    "zfc_split": {
+      "mechanical": "subcommand and flag parsing where the bd CLI grammar makes the predicate deterministic (for example --status, --type, --label, --priority, --assignee, id arguments)",
+      "model": "intent classification ONLY for free-text arguments, batched, with a fixed output schema and the taxonomy above as a closed label set",
+      "prohibited": "keyword or regex heuristics standing in for the semantic classification, and any hand-tuned threshold inside the classifier"
+    },
+    "reporting": "counts and fractions per taxonomy label, per gate, with clustered intervals at the session level; the residue is broken out by label so a reader can see which missing capability drives it",
+    "negative_result_handling": "a result that the bounded profile is adequate is reported with the same prominence as a result that it is not"
+  },
+  "privacy": {
+    "excluded_from_all_artifacts": ["query literals", "free-text search arguments", "bead titles and bodies", "file paths", "model text", "agent streams", "credentials", "identities"],
+    "published": "predicate shapes, taxonomy labels, counts, and fractions only",
+    "precedent": "prior beads_ordering packages excluded run queries; this holds that line"
+  },
+  "threats_to_validity": [
+    "the corpus is one organization's agents against bd, so it estimates this population and not all bead deployments",
+    "bd's CLI grammar shapes what an agent asks for; a query never issued because the CLI could not express it is invisible to this method, which biases the residue DOWNWARD and must be stated in the writeup",
+    "session-level clustering is handled by the counting rule but sessions are not independent of the rigs they ran in",
+    "classification of free-text intent is model-dependent; report the classifier model and CLI version, and hand-audit a fixed random subsample"
+  ]
+}
