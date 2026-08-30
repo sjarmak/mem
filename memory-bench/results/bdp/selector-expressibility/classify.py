@@ -5,8 +5,10 @@ Mechanical only. Every label below is derived from the bd CLI grammar
 makes the predicate deterministic.
 
 Taxonomy and gates are fixed by the preregistration
-(memory-bench/fixtures/bdp/selector-expressibility-preregistration.json,
-sha256 3ffc83e06bc22216e135ca2b2a3b24b8278b99ba1bb1310c1dcae7890e4aeb35).
+(memory-bench/results/bdp/selector-expressibility-preregistration.json,
+sha256 3ffc83e06bc22216e135ca2b2a3b24b8278b99ba1bb1310c1dcae7890e4aeb35). It was
+locked at commit 2beb545 under memory-bench/fixtures/bdp/ and moved to the path
+above by mem-vn4ek; the bytes are unchanged.
 """
 
 from __future__ import annotations

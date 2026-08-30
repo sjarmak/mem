@@ -8,12 +8,16 @@ import pathlib
 import subprocess
 import sys
 
-OUT = pathlib.Path(sys.argv[1])
-SCRATCH = (
-    pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 else pathlib.Path(__file__).resolve().parent
-)
-
 PREREG_SHA = "3ffc83e06bc22216e135ca2b2a3b24b8278b99ba1bb1310c1dcae7890e4aeb35"
+
+# The preregistration was locked at this commit, before any classification ran.
+# It was committed under PREREG_LOCKED_PATH and moved to PREREG_PATH by
+# mem-vn4ek, which published fixtures/bdp/ as the tree handed to BDP and kept the
+# preregistration out of it as internal study detail. Same bytes, two locations;
+# verify_preregistration checks both before anything is sealed.
+PREREG_LOCKED_COMMIT = "2beb545e59b46c10bc0bf2a591d833d9c3c99444"
+PREREG_LOCKED_PATH = "memory-bench/fixtures/bdp/selector-expressibility-preregistration.json"
+PREREG_PATH = "memory-bench/results/bdp/selector-expressibility-preregistration.json"
 
 
 def sha256(path: pathlib.Path) -> str:
@@ -24,16 +28,84 @@ def sha256(path: pathlib.Path) -> str:
     return h.hexdigest()
 
 
+def repo_root() -> pathlib.Path:
+    return pathlib.Path(
+        subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=pathlib.Path(__file__).resolve().parent,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    )
+
+
+def verify_preregistration(root: pathlib.Path) -> None:
+    """Refuse to seal unless the locked preregistration is intact at both paths.
+
+    A locator that has drifted is recoverable; a preregistration whose bytes have
+    changed since the lock is not, and re-sealing around one would launder the
+    change into a fresh manifest. Both failures abort with the reason named, and a
+    git fault is reported as a fault rather than read as a mismatch.
+    """
+    current = root / PREREG_PATH
+    if not current.is_file():
+        raise SystemExit(f"preregistration not found at {PREREG_PATH}")
+    found = sha256(current)
+    if found != PREREG_SHA:
+        raise SystemExit(f"preregistration at {PREREG_PATH} hashes {found}, expected {PREREG_SHA}")
+    try:
+        locked = subprocess.run(
+            ["git", "show", f"{PREREG_LOCKED_COMMIT}:{PREREG_LOCKED_PATH}"],
+            cwd=root,
+            capture_output=True,
+            check=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise SystemExit(
+            f"could not read the locked preregistration from "
+            f"{PREREG_LOCKED_COMMIT}:{PREREG_LOCKED_PATH}: {exc}"
+        ) from exc
+    locked_sha = hashlib.sha256(locked).hexdigest()
+    if locked_sha != PREREG_SHA:
+        raise SystemExit(
+            f"locked preregistration at {PREREG_LOCKED_COMMIT} hashes {locked_sha}, "
+            f"expected {PREREG_SHA}"
+        )
+
+
 def main() -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
-    analysis = json.loads((SCRATCH / "analysis.json").read_text())
+    out = pathlib.Path(sys.argv[1])
+    scratch = (
+        pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 else pathlib.Path(__file__).resolve().parent
+    )
+    verify_preregistration(repo_root())
+    out.mkdir(parents=True, exist_ok=True)
+    analysis = json.loads((scratch / "analysis.json").read_text())
 
     analysis["preregistration"] = {
-        "path": "memory-bench/fixtures/bdp/selector-expressibility-preregistration.json",
+        "path": PREREG_PATH,
         "sha256": PREREG_SHA,
-        "locked_commit": subprocess.run(
-            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
-        ).stdout.strip(),
+        "locked_commit": PREREG_LOCKED_COMMIT,
+        "locked_at_path": PREREG_LOCKED_PATH,
+        "path_note": (
+            "The locked bytes were committed at locked_at_path and moved to path "
+            "by mem-vn4ek. sha256 is the digest of the same bytes at both "
+            "locations, and package.py verifies both before it seals."
+        ),
+        "not_redacted": {
+            "what": "one absolute local path under the operator's home directory",
+            "fields": ["resolution_procedure"],
+            "why": (
+                "Disclosed rather than removed. The document's value is being "
+                "unaltered after locking, and a redacted copy would not carry the "
+                "sha256 above. The package's own files carry no local paths, so a "
+                "publisher who ships the preregistration alongside them is shipping "
+                "that one string knowingly. Commit 49efed7 stripped it to pass a "
+                "path scan and silently invalidated the digest of a locked "
+                "document; mem-vn4ek restored the locked bytes."
+            ),
+        },
     }
 
     analysis["G3_enumeration_cost"] = {
@@ -197,17 +269,17 @@ def main() -> None:
         ],
     }
 
-    (OUT / "analysis.json").write_text(json.dumps(analysis, indent=2) + "\n")
+    (out / "analysis.json").write_text(json.dumps(analysis, indent=2) + "\n")
 
     for name in ("extract.py", "classify.py", "g3.py", "package.py"):
-        (OUT / name).write_bytes((SCRATCH / name).read_bytes())
+        (out / name).write_bytes((scratch / name).read_bytes())
 
     manifest = {
         "bead": "mem-rj2mg",
         "preregistration_sha256": PREREG_SHA,
         "files": {
             p.name: {"sha256": sha256(p), "bytes": p.stat().st_size}
-            for p in sorted(OUT.iterdir())
+            for p in sorted(out.iterdir())
             if p.is_file() and p.name != "manifest.json"
         },
         "privacy": (
@@ -217,7 +289,7 @@ def main() -> None:
             "session scratchpad and is not part of this package."
         ),
     }
-    (OUT / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(json.dumps(manifest, indent=2))
 
 
