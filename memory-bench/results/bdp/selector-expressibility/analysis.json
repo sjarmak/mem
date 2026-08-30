@@ -81,11 +81,11 @@
     "locked_at_path": "memory-bench/fixtures/bdp/selector-expressibility-preregistration.json",
     "path_note": "The locked bytes were committed at locked_at_path and moved to path by mem-vn4ek. sha256 is the digest of the same bytes at both locations, and package.py verifies both before it seals.",
     "not_redacted": {
-      "what": "one absolute local path under the operator's home directory",
-      "fields": [
-        "resolution_procedure"
+      "locations": [
+        "/population/resolution_procedure"
       ],
-      "why": "Disclosed rather than removed. The document's value is being unaltered after locking, and a redacted copy would not carry the sha256 above. The package's own files carry no local paths, so a publisher who ships the preregistration alongside them is shipping that one string knowingly. Commit 49efed7 stripped it to pass a path scan and silently invalidated the digest of a locked document; mem-vn4ek restored the locked bytes."
+      "what": "RFC 6901 pointers into the locked preregistration whose key or string value carries a local path or an address, computed from the document at seal time rather than asserted here, so the disclosure cannot drift from what the document holds.",
+      "why": "Disclosed rather than removed. The document's value is being unaltered after locking, and a redacted copy would not carry the sha256 above. The package's own files are scanned and carry none, so a publisher who ships the preregistration alongside them is shipping those strings knowingly. Commit 49efed7 stripped one to pass a path scan and silently invalidated the digest of a locked document; mem-vn4ek restored the locked bytes."
     }
   },
   "G3_enumeration_cost": {
