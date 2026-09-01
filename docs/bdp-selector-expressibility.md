@@ -27,7 +27,12 @@ plus `n_tool_calls`. Argument text is not projected. The predicate an agent aske
 for exists only in the raw transcript JSONL, and `bd` is invoked through the Bash
 tool, so a query arrives as a shell command string rather than a structured tool
 input. Extraction is therefore CLI-grammar parsing over transcripts, resolved
-through `src/ingest/trace-resolve.ts` from `/home/ds/gas-city`.
+through `src/ingest/trace-resolve.ts` run from the gas-city checkout.
+
+The locked preregistration states the same step with an absolute local path. That
+copy is disclosed rather than edited, because editing a locked document
+invalidates the digest the result rests on; `analysis.json` records its exact
+location under `preregistration.not_redacted`.
 
 The denominator is whatever resolves. It gets reported, not assumed.
 
