@@ -425,3 +425,120 @@ exclusion), and pinned files can be deleted
 with it). Across the three runs behind this report and the last two, unreadable
 files rose 37 → 66 → 191 and every frozen count fell with them. See A1.10: this is
 attrition, not a rule change, and no screen ordering prevents it.
+
+---
+
+# E0b — prime-delivery share on the hook surface
+
+Bead `mem-h9pum`. Same pinned population, same preregistration lock, same
+offline mechanical rules; a different surface. `injection.py`, artifact
+`injection.json`, tests `tests/test_e0_injection.py`.
+
+## Why E0.3 as specced could not size the R8 bet
+
+E0.3 counted `bd prime` as one more bucket in the agent's own `Bash` traffic. On
+this corpus that bucket holds **47** invocations. It was billed as the exact size
+of what R8 proposes to remove, and it is not: it measures how often an agent
+*typed* `bd prime`, which is nearly never, because prime is fired by a
+**SessionStart hook**. Three specific defects, each answered by this pass:
+
+| defect in E0.3 | what E0b does instead |
+|---|---|
+| the `tool_use`-only gate drops hook-fired prime | reads the host's `type: "attachment"` records (`attachment.type == "hook_success"`), which carry `hookEvent`, the exact `command`, and the hook's `stdout` |
+| the payload that would show delivery was dropped at the `type != "tool_use"` skip | keeps the payload, and for the agent-typed form pairs each `bd prime` `tool_use` with its `tool_result` by id |
+| whether memories were carried depends on store state and the `prime.max-memories` / `max-memory-chars` caps, none of which appear in argv | delivery is not inferred from argv at all — it is read off the emitted text's own structural markers |
+
+## What was measured
+
+**Delivery, not consumption.** A carried payload proves memory bodies were placed
+in the agent's context. It cannot show they were read or acted on;
+mechanism-FIRES is not mechanism-CONSUMED, and a delivery is one step past a
+fire, not the whole distance.
+
+Detection is format-anchored. The current build emits `## Persistent Memories
+(N)` and the count is authoritative; an older build in the corpus emits an
+uncounted `## Memories` heading followed by one `- **key**:` bullet per memory,
+counted by bullets to the next heading. Neither is keyword matching: the
+boilerplate names `bd remember` in prose in **every** payload, empty store or
+not, which is precisely why the prose may not be evidence. No memory body is
+inspected; judging whether an injected memory was useful is semantic and is not
+done in this layer.
+
+## Result
+
+| | count |
+|---|---|
+| prime deliveries with a recoverable payload | **5,891** |
+| carried at least one memory | **3,114** |
+| carried none | 2,777 |
+| undetermined (truncated, unrecoverable) | **0** |
+| **delivery carry share** | **52.9%** |
+| sessions with a prime delivery | 4,498 |
+| sessions with at least one carried delivery | 2,432 (54.1%) |
+| memories delivered, summed over deliveries | **132,551** |
+| largest single payload | 99 memories |
+
+One caveat on that last row's unit: the current build injects each memory's body
+in full, while the older build truncates each to a preview line. Both are
+delivery; only the current one is delivery of the *whole* body, so 132,551 counts
+memories delivered, not full bodies delivered.
+
+By surface: 4,885 `SessionStart:startup`, 870 `SessionStart:compact`, 70
+`resume`, 23 `clear`, 1 `fork`, 12 through the compaction stdout surface, and
+**30** typed by an agent. That last column is the one E0.3 could see.
+
+Every payload resolved: 5,849 off the hook's own `stdout` and 42 inline, none
+left undetermined. The host elides the inline copy of a large payload behind a
+`<persisted-output>` banner, but keeps the complete `stdout` beside it, so the
+elision never cost a verdict here. The unresolvable case is still handled and
+still tested: it scores *undetermined*, never *not carried*, because defaulting a
+truncation to not-carried would understate delivery by exactly the payloads large
+enough to be elided — the ones most likely to be large because they carried
+memories.
+
+## The finding
+
+**Agents received 132,551 memories across 3,114 carrying deliveries;
+over the same corpus they issued 16 keyed targeted reads, wrote 11 unambiguously
+keyed memories, and recovered a previously written key 0 times.** Delivery
+exceeds deliberate retrieval by roughly four orders of magnitude. Practically all
+of what an agent in this corpus "knew" from the memory store arrived by
+**delivery**, not by **choice** — reproducing arXiv 2607.20972's result (harness
+delivery beats storage; voluntary use near zero) on a corpus three orders of
+magnitude larger than that paper's.
+
+That is the size of the R8 bet, stated in the units R8 acts on: R8 proposes to
+stop auto-loading bodies, so it removes ~43 memories per carrying prime
+(mean) and asks agent choice to replace them, from a measured choice rate of
+essentially zero. E0a's near-zero read rate was measured *inside* that delivered
+context; it is not evidence agents would not recall if nothing were delivered,
+and it is not evidence they would.
+
+## Two labels this number may not travel without
+
+1. **Instructed-endogenous.** Same standing instruction as E0a.
+2. **R8-violating source.** This share was produced by the shipped `bd prime`,
+   which auto-injects bodies. R8 asks for no automatic body loading. The share
+   therefore sizes what R8 would *remove*; it is not a measurement of an
+   R8-conformant surface.
+
+**The R8-conformant counterfactual cannot be measured from historical transcripts
+at all.** No prime payload in this corpus was emitted by a binary that withholds
+bodies, because no such binary was ever installed here — 5,891 of 5,891
+deliveries come from the auto-injecting build. So the read rate under
+guidance-only prime has no observational estimate, at any corpus size. E1's
+guidance-strength ladder must **synthesize** the prime surface harness-side and
+generate its own reads; shelling out to the installed `bd` would silently pin
+every rung to the R8-violating condition. That constraint is a result of E0b, not
+an implementation preference.
+
+## Reproducing
+
+```
+uv run python results/memory-use/e0/injection.py \
+    --filelist results/memory-use/e0/filelist.txt --json
+uv run pytest tests/test_e0_injection.py
+```
+
+Both run from `memory-bench/`. The same live-tree caveat as E0a applies: the
+filelist pins paths, not bytes, so population lines can move between runs.

@@ -336,7 +336,13 @@ def test_verb_tokens_appear_only_in_the_verb_tables() -> None:
     """Acceptance criterion, asserted rather than left to a reviewer's grep."""
     pattern = re.compile(r"remember|recall|memories")
     offenders: list[str] = []
+    # The E0a classification layer only. E0b's injection.py names the verbs in its
+    # prose and in the labels it emits, and is held to the property that matters
+    # for it - no matcher keyed on a verb token - by its own gate in
+    # tests/test_e0_injection.py.
     for path in sorted(E0.glob("*.py")):
+        if path.name == "injection.py":
+            continue
         for line in path.read_text(encoding="utf-8").splitlines():
             if pattern.search(line):
                 offenders.append(f"{path.name}: {line.strip()}")
