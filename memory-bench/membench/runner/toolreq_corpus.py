@@ -109,7 +109,19 @@ def unnecessary_twin(task: ToolReqRealAgentTask) -> ToolReqRealAgentTask:
             f"{task.work_id}: necessary task scores no current value, so its unnecessary "
             "twin would withhold the same value it is supposed to state"
         )
-    block = "\n".join([CONTEXT_HEADING, *(f"- {value}" for value in values)])
+    # SORTED, not in the action's authored order, and only at >1 value does the difference
+    # exist at all. The necessary request names its subjects in an order the materialiser chose
+    # ("apply the current value of: <p1>, <p2>."); ``arg_values`` is authored separately and is
+    # not promised to follow it. Emitting the values in authored order next to that subject list
+    # therefore IMPLIES a positional pairing nothing guarantees, and a wrong implied pairing is
+    # worse than none: it invites the agent to attach a value to the wrong subject in exactly the
+    # half that is supposed to be the easy one. A canonical order states no mapping at all, which
+    # is the truth, and matches ``task_fingerprint``'s own treatment of these values as unordered.
+    #
+    # No mapping is NEEDED to solve the twin: the bridged instruction asks for "the required
+    # current value(s)" in one file, and ``score_goal_action`` tests membership of every
+    # ``arg_values`` entry, never their order or their attachment to a subject.
+    block = "\n".join([CONTEXT_HEADING, *(f"- {value}" for value in sorted(values))])
     request = task.goal_step.user_request + CONTEXT_SEPARATOR + block
     for value in task.current_opaque_values:
         if not states_value(request, value):

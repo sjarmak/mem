@@ -26,11 +26,24 @@ are right — never that a real agent behaves this way. Only ``--paid`` produces
 the emitted JSON says which was run: ``mode`` and ``verified`` are always present, and
 ``verified`` is false on the dry path no matter how clean the numbers look.
 
+The PAYLOAD carries the same guard, not just the exit code. It reports ``thresholds_cleared``
+(the arithmetic) and ``verdict`` (what the run licenses) as separate fields, and ``verdict`` is
+``"unverified"`` on the dry path however clean the rates are. The first cut emitted a single
+``accepted: true`` computed from the rates alone, so a consumer reading the JSON — the obvious
+use of ``--json`` — read an unrun preflight as an acceptance while only the exit status was
+guarded.
+
 And the EXIT CODE says it too, because that is the channel a CI gate actually reads. Exit 0 means
 "measured and accepted" and nothing else; an unverified run exits 3 however clean its rates are, a
-measured rejection exits 1, and a refused spend exits 2. The first cut returned ``0 if accepted
-else 1`` and ignored ``verified`` entirely, so a dry run — whose numbers the simulated runner
-entails — exited 0 into a gate as ACCEPT.
+measured rejection exits 1, a refused spend exits 2, and a missing/empty corpus exits 4 — an
+infrastructure absence must never arrive as exit 1, the code that means the corpus was MEASURED
+and rejected. The first cut returned ``0 if accepted else 1`` and ignored ``verified`` entirely,
+so a dry run — whose numbers the simulated runner entails — exited 0 into a gate as ACCEPT.
+
+``empty_store_pass_rate_margin`` is named for what it is. It was ``discrimination_margin``, which
+is the name of E1's primary endpoint — a CALL-rate margin, P(call | necessary) - P(call |
+unnecessary) — while this field is a PASS-rate margin over an empty store. Two different
+quantities under one name is a mislabelled number waiting to be reported as the endpoint.
 
 AS OF THIS COMMIT THE PAID PATH IS UNRUN: no real ``claude -p`` turns have been spent on either
 half, so AC2 is not met. The command to meet it, once spend is authorized:
@@ -43,6 +56,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -80,6 +94,14 @@ EXIT_ACCEPTED = 0  # measured, and the rates clear the thresholds
 EXIT_REJECTED = 1  # measured, and they do not
 EXIT_REFUSED = 2  # refused to spend (no model / metered key / no OAuth token)
 EXIT_UNVERIFIED = 3  # no real turns were spent; there is no verdict to report either way
+EXIT_NO_CORPUS = 4  # the corpus is absent or empty: an infrastructure fault, never a rejection
+
+# The three verdicts the payload can carry. ``VERDICT_UNVERIFIED`` is the dry path's only possible
+# value however clean the rates are, so a consumer reading the JSON rather than the exit status
+# cannot read an unrun preflight as an acceptance.
+VERDICT_ACCEPTED = "accepted"
+VERDICT_REJECTED = "rejected"
+VERDICT_UNVERIFIED = "unverified"
 
 
 @dataclass(frozen=True)
@@ -87,8 +109,14 @@ class NecessityPreflight:
     """Both halves' empty-store pass rates and what they imply about the corpus.
 
     ``verified`` is the load-bearing field: it is true only when real agent turns were spent.
-    ``accepted`` says whether the rates clear the thresholds — a dry run can be ``accepted``
-    and NOT ``verified``, and that combination means "wired correctly, unmeasured"."""
+
+    The first cut carried ``accepted: bool``, computed from the rates alone, and guarded only the
+    EXIT CODE with ``verified``. A consumer reading the JSON — the natural thing to do with
+    ``--json`` — therefore read an UNRUN preflight as an acceptance. So the payload now separates
+    the two questions it was conflating: ``thresholds_cleared`` is the arithmetic (did the rates
+    clear the floor and the ceiling), ``verdict`` is what the run actually licenses, and it is
+    ``unverified`` on the dry path no matter how clean the arithmetic looks. ``exit_code`` carries
+    the process's own answer inside the payload so the two channels cannot disagree."""
 
     mode: str
     verified: bool
@@ -98,8 +126,10 @@ class NecessityPreflight:
     n_unnecessary: int
     necessary_pass_rate: float
     unnecessary_pass_rate: float
-    discrimination_margin: float
-    accepted: bool
+    empty_store_pass_rate_margin: float
+    thresholds_cleared: bool
+    verdict: str
+    exit_code: int
     note: str
 
 
@@ -158,7 +188,15 @@ def necessity_preflight(
     }
     necessary = rates[VARIANT_NECESSARY]
     unnecessary = rates[VARIANT_UNNECESSARY]
-    accepted = unnecessary > UNNECESSARY_PASS_FLOOR and necessary < NECESSARY_PASS_CEILING
+    cleared = unnecessary > UNNECESSARY_PASS_FLOOR and necessary < NECESSARY_PASS_CEILING
+    # An unverified run has no verdict to give, so it reports none — the payload cannot say
+    # "accepted" about turns nobody spent, whatever the arithmetic came out to.
+    if not dry_run:
+        verdict = VERDICT_ACCEPTED if cleared else VERDICT_REJECTED
+        exit_code = EXIT_ACCEPTED if cleared else EXIT_REJECTED
+    else:
+        verdict = VERDICT_UNVERIFIED
+        exit_code = EXIT_UNVERIFIED
     note = (
         "PAID: real claude -p turns; these rates are outcome-side evidence."
         if not dry_run
@@ -179,8 +217,10 @@ def necessity_preflight(
         n_unnecessary=len(halves[VARIANT_UNNECESSARY]),
         necessary_pass_rate=necessary,
         unnecessary_pass_rate=unnecessary,
-        discrimination_margin=unnecessary - necessary,
-        accepted=accepted,
+        empty_store_pass_rate_margin=unnecessary - necessary,
+        thresholds_cleared=cleared,
+        verdict=verdict,
+        exit_code=exit_code,
         note=note,
     )
 
@@ -218,6 +258,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EXIT_REFUSED
 
     _, tasks = load_twin_corpus(args.corpus_dir)
+    # An ABSENT corpus is an infrastructure fault, not a scientific result. Without this it fell
+    # through to ``_half_pass_rate``'s ValueError, or (worse, had that guard been laxer) to an
+    # exit 1 — the code that means "measured, and the corpus was REJECTED". No missing directory
+    # may ever be readable as a rejection.
+    if not tasks:
+        print(
+            f"no tool-requiring tasks under {args.corpus_dir}: the corpus is missing or empty, "
+            "so there is nothing to measure (this is NOT a rejection)",
+            file=sys.stderr,
+        )
+        return EXIT_NO_CORPUS
     result = necessity_preflight(
         tasks,
         corpus_dir=args.corpus_dir,
@@ -231,13 +282,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(
             f"[{result.mode}] necessary {result.necessary_pass_rate:.3f} "
             f"unnecessary {result.unnecessary_pass_rate:.3f} "
-            f"margin {result.discrimination_margin:.3f} "
-            f"-> {'ACCEPT' if result.accepted else 'REJECT'} (verified={result.verified})"
+            f"pass-rate margin {result.empty_store_pass_rate_margin:.3f} "
+            f"-> {result.verdict.upper()} "
+            f"(thresholds_cleared={result.thresholds_cleared}, verified={result.verified})"
         )
         print(result.note)
-    if not result.verified:
-        return EXIT_UNVERIFIED
-    return EXIT_ACCEPTED if result.accepted else EXIT_REJECTED
+    return result.exit_code
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entrypoint

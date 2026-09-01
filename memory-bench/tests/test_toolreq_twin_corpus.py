@@ -12,10 +12,14 @@ from membench.grading.paired_ci import paired_delta_ci
 from membench.metrics.scorers import states_value
 from membench.runner import e1_necessity_preflight, toolreq_corpus
 from membench.runner.e1_necessity_preflight import (
+    EXIT_ACCEPTED,
+    EXIT_NO_CORPUS,
     EXIT_REFUSED,
+    EXIT_REJECTED,
     EXIT_UNVERIFIED,
     NECESSARY_PASS_CEILING,
     UNNECESSARY_PASS_FLOOR,
+    VERDICT_UNVERIFIED,
     necessity_preflight,
 )
 from membench.runner.toolreq_corpus import (
@@ -30,7 +34,7 @@ from membench.runner.toolreq_realagent import (
     VARIANT_UNNECESSARY,
     task_fingerprint,
 )
-from tests.toolreq_helpers import corpus
+from tests.toolreq_helpers import corpus, multi_value_corpus
 
 
 def _twin_corpus(tmp_path: Path, *work_ids: str):
@@ -165,7 +169,8 @@ def test_dry_run_preflight_separates_the_halves(tmp_path: Path) -> None:
     result = necessity_preflight(tasks, corpus_dir=tmp_path / "corpus", repeats=2)
     assert result.unnecessary_pass_rate == 1.0 > UNNECESSARY_PASS_FLOOR
     assert result.necessary_pass_rate == 0.0 < NECESSARY_PASS_CEILING
-    assert result.accepted is True
+    assert result.thresholds_cleared is True
+    assert result.verdict == VERDICT_UNVERIFIED
     assert result.verified is False and result.mode == "dry_run"
     assert "NOT VERIFICATION" in result.note
 
@@ -204,7 +209,7 @@ def test_a_dry_run_cannot_exit_as_acceptance(
     corpus(tmp_path, "w-0", "w-1")
     code = e1_necessity_preflight.main(["--corpus-dir", str(tmp_path / "corpus"), "--json"])
     payload = json.loads(capsys.readouterr().out)
-    assert payload["accepted"] is True and payload["verified"] is False
+    assert payload["thresholds_cleared"] is True and payload["verified"] is False
     assert code == EXIT_UNVERIFIED
     assert "UNRUN" in payload["note"]
 
@@ -248,4 +253,118 @@ def test_a_dry_run_is_never_refused_for_paid_preconditions(
     corpus(tmp_path, "w-0")
     assert (
         e1_necessity_preflight.main(["--corpus-dir", str(tmp_path / "corpus")]) == EXIT_UNVERIFIED
+    )
+
+
+def _multi_twin(tmp_path: Path):
+    """The two-value task and its twin — the shape every other twin test cannot express."""
+    _, tasks = multi_value_corpus(tmp_path)
+    (necessary,) = tasks
+    return necessary, unnecessary_twin(necessary)
+
+
+def test_the_multi_value_twin_states_every_current_value_and_no_stale_one(tmp_path: Path) -> None:
+    necessary, unnecessary = _multi_twin(tmp_path)
+    # The fixture really is the multi-value case, and its authored order really does differ from
+    # the canonical one — without both, the assertions below would hold whether the construction
+    # orders the block or not.
+    assert len(necessary.current_opaque_values) == 2
+    assert list(necessary.current_opaque_values) != sorted(necessary.current_opaque_values)
+
+    for value in necessary.current_opaque_values:
+        assert not states_value(necessary.goal_step.user_request, value)
+        assert states_value(unnecessary.goal_step.user_request, value)
+    forbidden = necessary.goal_step.outcome_checks[0].requires_action[0].forbidden_values
+    assert len(forbidden) == 2
+    for value in forbidden:
+        assert not states_value(unnecessary.goal_step.user_request, value)
+
+
+def test_the_multi_value_context_block_states_no_positional_mapping(tmp_path: Path) -> None:
+    # The follow-up this test exists for. The necessary request names its subjects in an order
+    # authored independently of ``arg_values`` (the fixture reverses them on purpose), so a block
+    # emitted in the action's authored order sits next to that subject list IMPLYING a pairing
+    # that is wrong. The block is canonical (sorted) instead, which asserts no mapping at all —
+    # and none is needed, since the scorer tests membership of every value, not their order.
+    necessary, unnecessary = _multi_twin(tmp_path)
+    _, separator, block = unnecessary.goal_step.user_request.partition(
+        CONTEXT_SEPARATOR + "Current state:\n"
+    )
+    assert separator, unnecessary.goal_step.user_request
+    assert block.splitlines() == [f"- {v}" for v in sorted(necessary.current_opaque_values)]
+    # ...which, on this fixture, is NOT the authored order — so this test reds if the sort goes.
+    assert block.splitlines() != [f"- {v}" for v in necessary.current_opaque_values]
+
+
+def test_the_non_value_text_of_a_multi_value_twin_pair_is_identical(tmp_path: Path) -> None:
+    # test_the_non_value_text_of_a_twin_pair_is_identical, at >1 value: the byte-identity
+    # property is this bead's whole point and it had only ever been exercised on a corpus where
+    # the block has a single line.
+    necessary, unnecessary = _multi_twin(tmp_path)
+    prefix, separator, block = unnecessary.goal_step.user_request.partition(
+        CONTEXT_SEPARATOR + "Current state:\n"
+    )
+    assert separator, unnecessary.goal_step.user_request
+    assert prefix == necessary.goal_step.user_request
+    assert all(line.startswith("- toolreq-") for line in block.splitlines())
+
+
+def test_the_multi_value_twin_is_solvable_with_an_empty_store(tmp_path: Path) -> None:
+    # Necessity, measured rather than labelled, on the multi-value shape: the twin must pass at
+    # the empty-store floor (both values are in its prompt) and the necessary half must not.
+    necessary, unnecessary = _multi_twin(tmp_path)
+    result = necessity_preflight(
+        [necessary, unnecessary], corpus_dir=tmp_path / "corpus", repeats=2
+    )
+    assert result.unnecessary_pass_rate == 1.0
+    assert result.necessary_pass_rate == 0.0
+
+
+def test_the_json_payload_cannot_report_an_unrun_preflight_as_accepted(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The exit code was guarded; the PAYLOAD was not, and ``--json`` exists to be read. A
+    # consumer reading the emitted object must find the dry run's own verdict there, not a
+    # bare ``accepted: true`` computed from rates the simulated runner entails.
+    corpus(tmp_path, "w-0", "w-1")
+    code = e1_necessity_preflight.main(["--corpus-dir", str(tmp_path / "corpus"), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert code == EXIT_UNVERIFIED
+    assert "accepted" not in payload  # the ambiguous field is gone, not merely qualified
+    assert payload["verdict"] == VERDICT_UNVERIFIED
+    assert payload["exit_code"] == EXIT_UNVERIFIED
+    assert payload["verified"] is False
+    # ...while the arithmetic it used to be conflated with is still reported, under its own name.
+    assert payload["thresholds_cleared"] is True
+
+
+def test_the_margin_is_named_a_pass_rate_margin(tmp_path: Path) -> None:
+    # E1's primary endpoint (the user's standing ruling) is a CALL-rate margin. This field is a
+    # PASS-rate margin over an empty store, and sharing the endpoint's name is how a preflight
+    # number gets reported as the endpoint.
+    _, tasks = _twin_corpus(tmp_path, "w-0")
+    result = necessity_preflight(tasks, corpus_dir=tmp_path / "corpus")
+    assert not hasattr(result, "discrimination_margin")
+    assert result.empty_store_pass_rate_margin == pytest.approx(
+        result.unnecessary_pass_rate - result.necessary_pass_rate
+    )
+
+
+def test_an_absent_corpus_is_not_a_rejection(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # An infrastructure absence must not arrive on the channel that means "measured and
+    # REJECTED". Exit 1 is a scientific verdict about a corpus that was actually run.
+    code = e1_necessity_preflight.main(["--corpus-dir", str(tmp_path / "nonexistent"), "--json"])
+    assert code == EXIT_NO_CORPUS
+    assert EXIT_NO_CORPUS not in (EXIT_ACCEPTED, EXIT_REJECTED, EXIT_REFUSED, EXIT_UNVERIFIED)
+    err = capsys.readouterr().err
+    assert "NOT a rejection" in err
+
+
+def test_an_empty_corpus_directory_is_not_a_rejection(tmp_path: Path) -> None:
+    (tmp_path / "empty").mkdir()
+    assert (
+        e1_necessity_preflight.main(["--corpus-dir", str(tmp_path / "empty"), "--json"])
+        == EXIT_NO_CORPUS
     )
