@@ -468,26 +468,26 @@ done in this layer.
 
 | | count |
 |---|---|
-| prime deliveries with a recoverable payload | **5,891** |
-| carried at least one memory | **3,114** |
+| prime deliveries with a recoverable payload | **5,879** |
+| carried at least one memory | **3,102** |
 | carried none | 2,777 |
 | undetermined (truncated, unrecoverable) | **0** |
-| **delivery carry share** | **52.9%** |
-| sessions with a prime delivery | 4,498 |
-| sessions with at least one carried delivery | 2,432 (54.1%) |
-| memories delivered, summed over deliveries | **132,551** |
+| **delivery carry share** | **52.8%** |
+| sessions with a prime delivery | 4,486 |
+| sessions with at least one carried delivery | 2,420 (53.9%) |
+| memories delivered, summed over deliveries | **132,491** |
 | largest single payload | 99 memories |
 
 One caveat on that last row's unit: the current build injects each memory's body
 in full, while the older build truncates each to a preview line. Both are
-delivery; only the current one is delivery of the *whole* body, so 132,551 counts
+delivery; only the current one is delivery of the *whole* body, so 132,491 counts
 memories delivered, not full bodies delivered.
 
-By surface: 4,885 `SessionStart:startup`, 870 `SessionStart:compact`, 70
+By surface: 4,873 `SessionStart:startup`, 870 `SessionStart:compact`, 70
 `resume`, 23 `clear`, 1 `fork`, 12 through the compaction stdout surface, and
 **30** typed by an agent. That last column is the one E0.3 could see.
 
-Every payload resolved: 5,849 off the hook's own `stdout` and 42 inline, none
+Every payload resolved: 5,837 off the hook's own `stdout` and 42 inline, none
 left undetermined. The host elides the inline copy of a large payload behind a
 `<persisted-output>` banner, but keeps the complete `stdout` beside it, so the
 elision never cost a verdict here. The unresolvable case is still handled and
@@ -496,21 +496,56 @@ truncation to not-carried would understate delivery by exactly the payloads larg
 enough to be elided — the ones most likely to be large because they carried
 memories.
 
+## Reconciling E0a's 47 typed primes against E0b's 30 typed deliveries
+
+The two counts are not the same event, and the arithmetic between them ships in
+`injection.json` under `agent_typed_prime_reconciliation`, not only here. E0a
+counts an agent-typed `bd prime` **invocation** in Bash argv. E0b counts a typed
+**delivery**, which additionally requires the paired `tool_result` to carry a
+prime payload. On this run: **49** typed calls seen, **30** paired to a prime
+payload, **4** paired to a result carrying no payload, **15** never paired to any
+`tool_result` in the transcript. A call whose output never reached the transcript
+is an invocation for E0a and not a delivery for E0b; the residual between 49 and
+E0a's published 47 is population drift plus E0a's own help/placeholder screens,
+not a disagreement about any individual record.
+
 ## The finding
 
-**Agents received 132,551 memories across 3,114 carrying deliveries;
+**Agents received 132,491 memories across 3,102 carrying deliveries;
 over the same corpus they issued 16 keyed targeted reads, wrote 11 unambiguously
-keyed memories, and recovered a previously written key 0 times.** Delivery
-exceeds deliberate retrieval by roughly four orders of magnitude. Practically all
-of what an agent in this corpus "knew" from the memory store arrived by
-**delivery**, not by **choice** — reproducing arXiv 2607.20972's result (harness
-delivery beats storage; voluntary use near zero) on a corpus three orders of
-magnitude larger than that paper's.
+keyed memories, and recovered a previously written key 0 times.**
+
+Two ratios, and the sentence must say which one it quotes, because they are not
+the same comparison:
+
+| ratio | units | value |
+|---|---|---|
+| memories delivered : keyed targeted reads | delivered **items** vs read **invocations** | 132,491 : 16 = 8,281x (**3.9 OOM**) |
+| prime deliveries : keyed targeted reads | **invocations** on both sides | 5,879 : 16 = 367x (**2.6 OOM**) |
+
+The like-for-like comparison is the second: **deliberate keyed retrieval is
+outnumbered by automatic delivery by about 2.6 orders of magnitude.** The first
+row is larger only because a single delivery carries ~43 memories on average, and
+it is the right number when the question is how much *material* arrives without
+being asked for. Both inputs are published; neither ratio may be quoted without
+its units.
+
+Practically all of what an agent in this corpus "knew" from the memory store
+arrived by **delivery**, not by **choice** — reproducing arXiv 2607.20972's
+result (harness delivery beats storage; voluntary use near zero) on a corpus
+three orders of magnitude larger than that paper's.
+
+Both standing labels are part of this finding, not a footnote to it. **Every rate
+here is INSTRUCTED-endogenous**, never spontaneous, and **the 52.8% carry share is
+DELIVERY, not consumption** — it proves bodies were placed in the agent's context
+and says nothing about whether any of them were read. Both ship in
+`injection.json` as `interpretation_label`, `r8_label` and `measured_quantity`.
+The full statement of each is below.
 
 That is the size of the R8 bet, stated in the units R8 acts on: R8 proposes to
 stop auto-loading bodies, so it removes ~43 memories per carrying prime
-(mean) and asks agent choice to replace them, from a measured choice rate of
-essentially zero. E0a's near-zero read rate was measured *inside* that delivered
+(mean, 132,491 / 3,102) and asks agent choice to replace them, from a measured
+choice rate of essentially zero. E0a's near-zero read rate was measured *inside* that delivered
 context; it is not evidence agents would not recall if nothing were delivered,
 and it is not evidence they would.
 
@@ -524,7 +559,7 @@ and it is not evidence they would.
 
 **The R8-conformant counterfactual cannot be measured from historical transcripts
 at all.** No prime payload in this corpus was emitted by a binary that withholds
-bodies, because no such binary was ever installed here — 5,891 of 5,891
+bodies, because no such binary was ever installed here — 5,879 of 5,879
 deliveries come from the auto-injecting build. So the read rate under
 guidance-only prime has no observational estimate, at any corpus size. E1's
 guidance-strength ladder must **synthesize** the prime surface harness-side and
@@ -538,6 +573,15 @@ an implementation preference.
 uv run python results/memory-use/e0/injection.py \
     --filelist results/memory-use/e0/filelist.txt --json
 uv run pytest tests/test_e0_injection.py
+```
+
+`injection.json` publishes the aggregates, including the session-level ones. The
+full 4,486-row per-session map is reproducible but not committed — it is 704KB of
+artifact for one acceptance criterion — so add `--per-session` to obtain it:
+
+```
+uv run python results/memory-use/e0/injection.py \
+    --filelist results/memory-use/e0/filelist.txt --per-session --json
 ```
 
 Both run from `memory-bench/`. The same live-tree caveat as E0a applies: the

@@ -39,6 +39,9 @@ is not made in this layer.
 Usage::
 
     uv run python results/memory-use/e0/injection.py --filelist filelist.txt --json
+
+Add ``--per-session`` for the full per-session delivery map; the session-level
+aggregates are published with or without it.
 """
 
 from __future__ import annotations
@@ -171,14 +174,33 @@ class Tally:
     lines: int = 0
     unreadable_files: int = 0
     excluded_after_prereg_lock: int = 0
+    attachments_with_banner_but_other_type: int = 0
+    agent_prime_calls: int = 0
+    agent_prime_calls_unpaired: int = 0
+    agent_prime_results_without_a_prime_payload: int = 0
     events: list[PrimeEvent] = field(default_factory=list)
     origins: Counter[str] = field(default_factory=Counter)
     resolutions: Counter[str] = field(default_factory=Counter)
     forms: Counter[str] = field(default_factory=Counter)
 
 
-def _attachment_event(rec: dict[str, Any]) -> tuple[str, str, str] | None:
-    """Return (origin, inline, full) for a hook-carried prime payload."""
+HOOK_SUCCESS = "hook_success"
+
+
+def _attachment_event(rec: dict[str, Any], tally: Tally) -> tuple[str, str, str] | None:
+    """Return (origin, inline, full) for a hook-carried prime payload.
+
+    Two independent conditions must both hold, and the module's prose, the report
+    and the commit message all state both: the record must be the host's
+    ``hook_success`` attachment, and its payload must be a prime document (it
+    carries the payload's own first-line banner). An earlier revision stated the
+    type check and did not implement it. Every banner-carrying attachment in the
+    pinned population is in fact ``hook_success`` (5,839 / 5,839), so enforcing it
+    moves no count here; it is enforced so that a future host that carries the
+    banner on some other attachment kind cannot silently enter the denominator.
+    A banner-carrying attachment of any other type is counted apart, in
+    ``attachments_with_banner_but_other_type``, rather than dropped in silence.
+    """
     att = rec.get("attachment")
     if not isinstance(att, dict):
         return None
@@ -187,6 +209,9 @@ def _attachment_event(rec: dict[str, Any]) -> tuple[str, str, str] | None:
     inline_text = inline if isinstance(inline, str) else ""
     full_text = stdout if isinstance(stdout, str) else ""
     if PRIME_BANNER not in inline_text and PRIME_BANNER not in full_text:
+        return None
+    if att.get("type") != HOOK_SUCCESS:
+        tally.attachments_with_banner_but_other_type += 1
         return None
     hook = att.get("hookName") or att.get("hookEvent") or "hook"
     return (f"hook:{hook}", inline_text, full_text)
@@ -243,7 +268,7 @@ def scan_file(path: str, lock: str, tally: Tally) -> None:
             ts = str(rec.get("timestamp") or "")
             cwd = str(rec.get("cwd") or "")
 
-            hook = _attachment_event(rec)
+            hook = _attachment_event(rec, tally)
             if hook is not None:
                 origin, inline, full = hook
                 _record(tally, session, ts, cwd, lock, origin, full or None, inline)
@@ -266,6 +291,7 @@ def scan_file(path: str, lock: str, tally: Tally) -> None:
                         and is_prime_invocation(command)
                     ):
                         pending[call_id] = (session, ts, cwd)
+                        tally.agent_prime_calls += 1
                     continue
                 if kind == "tool_result":
                     call_id = block.get("tool_use_id")
@@ -274,10 +300,12 @@ def scan_file(path: str, lock: str, tally: Tally) -> None:
                     call_session, call_ts, call_cwd = pending.pop(call_id)
                     body = _result_text(block)
                     if PRIME_BANNER not in body:
+                        tally.agent_prime_results_without_a_prime_payload += 1
                         continue
                     _record(
                         tally, call_session, call_ts or ts, call_cwd, lock, "agent_bash", None, body
                     )
+    tally.agent_prime_calls_unpaired += len(pending)
 
 
 def _record(
@@ -316,7 +344,15 @@ def per_session(events: list[PrimeEvent]) -> dict[str, dict[str, int]]:
     return dict(sessions)
 
 
-def summarise(tally: Tally) -> dict[str, Any]:
+def summarise(tally: Tally, *, include_per_session: bool = True) -> dict[str, Any]:
+    """Aggregate the tally.
+
+    ``include_per_session`` controls only whether the per-session map is
+    materialised into the result. The session-level aggregates below are computed
+    from it either way, so dropping the map costs no published statistic; it costs
+    the ability to read one session's row out of the artifact, which is why the
+    driver keeps it behind ``--per-session`` rather than deleting it.
+    """
     sessions = per_session(tally.events)
     carried = sum(1 for e in tally.events if e.delivery.carried is True)
     not_carried = sum(1 for e in tally.events if e.delivery.carried is False)
@@ -324,7 +360,7 @@ def summarise(tally: Tally) -> dict[str, Any]:
     determined = carried + not_carried
     counts = [e.delivery.memory_count for e in tally.events if e.delivery.memory_count]
     sessions_with_carry = sum(1 for row in sessions.values() if row["carried"])
-    return {
+    result: dict[str, Any] = {
         "prime_deliveries": len(tally.events),
         "determined": determined,
         "carried": carried,
@@ -339,11 +375,13 @@ def summarise(tally: Tally) -> dict[str, Any]:
         "by_origin": dict(tally.origins),
         "by_resolution": dict(tally.resolutions),
         "by_form": dict(tally.forms),
-        "per_session": sessions,
     }
+    if include_per_session:
+        result["per_session"] = sessions
+    return result
 
 
-def analyse(filelist: pathlib.Path) -> dict[str, Any]:
+def analyse(filelist: pathlib.Path, *, include_per_session: bool = True) -> dict[str, Any]:
     prereg: dict[str, Any] = json.loads(PREREG_PATH.read_text(encoding="utf-8"))
     lock = str(prereg["locked_at_utc"])
     paths = [ln.strip() for ln in filelist.read_text(encoding="utf-8").splitlines() if ln.strip()]
@@ -354,7 +392,7 @@ def analyse(filelist: pathlib.Path) -> dict[str, Any]:
         if tally.files % 1000 == 0:
             print(f"{tally.files}/{len(paths)} files", file=sys.stderr, flush=True)
 
-    summary = summarise(tally)
+    summary = summarise(tally, include_per_session=include_per_session)
     return {
         "bead": "mem-h9pum",
         "study": "E0b",
@@ -368,7 +406,36 @@ def analyse(filelist: pathlib.Path) -> dict[str, Any]:
             "lines_scanned": tally.lines,
             "files_in_filelist_no_longer_readable": tally.unreadable_files,
         },
-        "exclusions": {"after_preregistration_lock": tally.excluded_after_prereg_lock},
+        "exclusions": {
+            "after_preregistration_lock": tally.excluded_after_prereg_lock,
+            "attachments_with_banner_but_other_type": (
+                tally.attachments_with_banner_but_other_type
+            ),
+        },
+        "agent_typed_prime_reconciliation": {
+            "note": (
+                "E0a counts agent-TYPED `bd prime` invocations in Bash argv; E0b counts "
+                "agent-typed prime DELIVERIES, which additionally require the paired "
+                "tool_result to carry a prime payload. The two denominators are not the "
+                "same event, and this block is the arithmetic between them."
+            ),
+            "agent_typed_prime_calls_seen_here": tally.agent_prime_calls,
+            "of_those_paired_to_a_prime_payload": tally.origins.get("agent_bash", 0),
+            "paired_result_carried_no_prime_payload": (
+                tally.agent_prime_results_without_a_prime_payload
+            ),
+            "call_never_paired_to_any_tool_result": tally.agent_prime_calls_unpaired,
+            "e0a_published_agent_typed_prime_invocations": 47,
+            "why_e0a_can_be_higher": (
+                "A call whose result never reached the transcript, or reached it without "
+                "the prime banner (a non-zero exit, an empty store on a build that emits "
+                "nothing, or a result dropped by the host), is an invocation for E0a and "
+                "not a delivery for E0b. E0a's own count also runs under its exclusion "
+                "set (help/placeholder screens), so the residual between "
+                "`agent_typed_prime_calls_seen_here` and 47 is population drift plus "
+                "those screens, not a disagreement about any single record."
+            ),
+        },
         "delivery": summary,
         "measured_quantity": (
             "DELIVERY, not consumption. A carried payload proves memory bodies were "
@@ -394,6 +461,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--filelist", required=True, help="pinned transcript filelist")
     ap.add_argument("--json", action="store_true", help="print the analysis to stdout")
     ap.add_argument("--out", help="also write the analysis to this path")
+    ap.add_argument(
+        "--per-session",
+        action="store_true",
+        help="include the full per-session delivery map (large; ~4.5k rows on the "
+        "pinned population). Session-level aggregates are published either way.",
+    )
     args = ap.parse_args(argv)
 
     filelist = pathlib.Path(args.filelist)
@@ -401,7 +474,7 @@ def main(argv: list[str] | None = None) -> int:
         candidate = HERE / filelist
         if candidate.exists():
             filelist = candidate
-    result = analyse(filelist)
+    result = analyse(filelist, include_per_session=args.per_session)
     text = json.dumps(result, indent=2, sort_keys=False)
     if args.out:
         pathlib.Path(args.out).write_text(text + "\n", encoding="utf-8")

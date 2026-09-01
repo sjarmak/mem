@@ -318,3 +318,111 @@ def test_no_matcher_in_the_delivery_pass_keys_on_a_cli_verb_token() -> None:
     assert patterns, "no compiled pattern found; the gate would pass vacuously"
     verb = re.compile(r"remember|recall|memories")
     assert [p for p in patterns if verb.search(p)] == []
+
+
+# --- what counts as a delivery at all -----------------------------------------
+
+
+def test_a_hook_attachment_whose_payload_is_not_a_prime_document_is_not_counted(
+    tmp_path: Path,
+) -> None:
+    """The population gate, tested at scan level.
+
+    This is the branch that decides the DENOMINATOR of the headline carry share,
+    and it had no test: deleting the `PRIME_BANNER` guard in `_attachment_event`
+    left the whole suite green while the delivery count on a 1500-file subsample
+    moved 305 -> 954, every one of the 649 extra landing in `not_carried`. A hook
+    firing that is not `bd prime` at all - here a SessionStart hook that prints an
+    unrelated banner, and mentions the word "prime" so the line-level prefilter
+    still hands the record to the scanner - is not a prime delivery.
+    """
+    intruder = _hook_record(EMPTY_STORE)
+    other = "Session bootstrap complete. Nothing here is a prime payload.\n"
+    intruder["attachment"]["hookName"] = "SessionStart:startup"
+    intruder["attachment"]["command"] = "echo 'not prime, but mentions prime'"
+    intruder["attachment"]["content"] = other
+    intruder["attachment"]["stdout"] = other
+    tally = _scan([intruder], tmp_path)
+    assert injection.summarise(tally)["prime_deliveries"] == 0
+
+    real = _hook_record(EMPTY_STORE)
+    assert injection.summarise(_scan([real], tmp_path))["prime_deliveries"] == 1
+
+
+def test_a_banner_carrying_attachment_of_another_type_is_not_a_delivery(
+    tmp_path: Path,
+) -> None:
+    """The docstring's stated mechanism, now the implemented one.
+
+    The report and this module say a delivery is read off a record whose
+    `attachment.type == "hook_success"`. Every banner-carrying attachment in the
+    pinned population satisfies that, so enforcing it moves no published count -
+    but an unenforced claim is one a future host can falsify silently, so it is
+    enforced, and the off-type residual is published rather than dropped.
+    """
+    rec = _hook_record(NONEMPTY_STORE)
+    rec["attachment"]["type"] = "hook_failure"
+    tally = _scan([rec], tmp_path)
+    assert injection.summarise(tally)["prime_deliveries"] == 0
+    assert tally.attachments_with_banner_but_other_type == 1
+
+
+def test_an_agent_typed_call_with_no_paired_payload_is_reconciled_not_dropped(
+    tmp_path: Path,
+) -> None:
+    """The 47-vs-30 arithmetic, carried in the artifact instead of in prose."""
+    call: dict[str, Any] = {
+        "type": "assistant",
+        "sessionId": "s4",
+        "timestamp": "2026-08-20T03:00:00.000Z",
+        "message": {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "toolu_9",
+                    "name": "Bash",
+                    "input": {"command": "bd prime"},
+                }
+            ],
+        },
+    }
+    result: dict[str, Any] = {
+        "type": "user",
+        "sessionId": "s4",
+        "timestamp": "2026-08-20T03:00:01.000Z",
+        "message": {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "toolu_9",
+                    "content": "bd prime: command failed, no payload",
+                }
+            ],
+        },
+    }
+    tally = _scan([call, result], tmp_path)
+    assert injection.summarise(tally)["prime_deliveries"] == 0
+    assert tally.agent_prime_calls == 1
+    assert tally.agent_prime_results_without_a_prime_payload == 1
+    assert tally.agent_prime_calls_unpaired == 0
+
+    # A result the line-level prefilter never hands to the scanner (it does not
+    # mention prime at all) leaves the call unpaired rather than payload-less. The
+    # two buckets are named for what was observed, not for what happened on the
+    # host, and they sum with the delivered ones to the calls seen.
+
+    tally = _scan([call], tmp_path)
+    assert tally.agent_prime_calls == 1
+    assert tally.agent_prime_calls_unpaired == 1
+
+
+def test_the_per_session_map_is_optional_and_the_aggregates_are_not(tmp_path: Path) -> None:
+    tally = _scan([_hook_record(NONEMPTY_STORE), _hook_record(EMPTY_STORE)], tmp_path)
+    full = injection.summarise(tally)
+    lean = injection.summarise(tally, include_per_session=False)
+    assert "per_session" in full
+    assert "per_session" not in lean
+    for key in ("sessions_with_a_prime_delivery", "sessions_with_a_carried_delivery"):
+        assert lean[key] == full[key]
