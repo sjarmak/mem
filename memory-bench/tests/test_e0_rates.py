@@ -63,10 +63,17 @@ rates = _load("rates")
 
 
 def argv(command: str) -> list[str]:
-    """The production path from a shell line to one bd argv."""
+    """The production path from a shell line to one bd argv (the classified form)."""
     found = list(cligrammar.bd_invocations(command))
     assert len(found) == 1, command
-    return found[0]
+    return found[0][0]
+
+
+def raw_argv(command: str) -> list[str]:
+    """The same command tokenized WITHOUT the redirection strip."""
+    found = list(cligrammar.bd_invocations(command))
+    assert len(found) == 1, command
+    return found[0][1]
 
 
 # --- bucket assignment --------------------------------------------------------
@@ -82,7 +89,12 @@ def argv(command: str) -> list[str]:
         ("bd recall", verbs.BROWSE_READ),
         ("bd remember deploy-runbook 'drain the queue first'", verbs.MEMORY_WRITE),
         ("bd remember body 2>/dev/null", verbs.MEMORY_WRITE),
-        ("bd remember --get deploy-runbook 2>/dev/null", verbs.MEMORY_WRITE),
+        (
+            "bd remember --get deploy-runbook 2>/dev/null",
+            verbs.ATTEMPTED_READ_VIA_WRITE_VERB,
+        ),
+        ("bd remember --show deploy-runbook", verbs.ATTEMPTED_READ_VIA_WRITE_VERB),
+        ("bd remember --list", verbs.ATTEMPTED_READ_VIA_WRITE_VERB),
         ("bd forget deploy-runbook", verbs.MEMORY_WRITE),
         ("bd prime", verbs.INJECTION),
         ("bd link mem-1a2b mem-3c4d", verbs.DEP_WRITE),
@@ -146,13 +158,16 @@ def test_a_redirected_write_is_not_promoted_out_of_the_ambiguity_band() -> None:
 
 
 def test_a_redirected_attempted_read_cannot_manufacture_a_join_hit() -> None:
-    """`bd remember --get <term>` names no key, so it cannot be a prior write."""
+    """The write verb with an undeclared flag is a READ attempt, never a prior write."""
     tally = rates.Tally()
     _feed(tally, "s1", "/rig/a", "2026-01-01T00:00:00Z", "bd remember --get carried 2>/dev/null")
     _feed(tally, "s2", "/rig/b", "2026-01-01T00:00:04Z", "bd recall carried")
     result = rates.join(tally)
     assert result["keyed_targeted_reads"] == 1
     assert result["hits"]["any"] == 0
+    # ...and it is on the READ side of the widened denominator, not the write side.
+    assert result["denominator_choice"]["widened_result"]["keyed_reads"] == 2
+    assert result["denominator_choice"]["widened_result"]["hits"]["any"] == 0
 
 
 # --- write ambiguity band -----------------------------------------------------
@@ -211,8 +226,8 @@ def test_write_rate_is_published_as_a_band() -> None:
 
 
 def _feed(tally: object, session: str, cwd: str, ts: str, command: str) -> None:
-    for found in cligrammar.bd_invocations(command):
-        rates.record_invocation(found, ts, session, cwd, "2099-01-01T00:00:00Z", tally)
+    for found, raw in cligrammar.bd_invocations(command):
+        rates.record_invocation(found, ts, session, cwd, "2099-01-01T00:00:00Z", tally, raw)
 
 
 def test_cross_session_read_after_write_counts_but_within_session_does_not() -> None:
@@ -310,6 +325,117 @@ def test_no_module_reads_the_body_of_a_write() -> None:
     assert (a.bucket, a.unambiguous, a.key) == (b.bucket, b.unambiguous, b.key)
 
 
+# --- A1.4: the write verb carrying a flag the shipped binary does not declare --
+
+
+def test_the_supported_flag_set_is_the_one_the_shipped_help_declares() -> None:
+    """The pinned literal must equal what the captured help text says, or it drifts.
+
+    Derivation is mechanical and re-runnable: `shipped-cli-help/capture.sh` writes
+    the help text, `help_flag_names` reads flag NAMES out of it by line grammar.
+    Re-deriving here (from the committed files, never from the live binary) is what
+    keeps the analysis path hermetic without letting the literal rot.
+    """
+    captured = sorted(E0.glob("shipped-cli-help/*.help.txt"))
+    assert len(captured) == 2, "both write verbs' help texts must be committed"
+    derived: set[str] = set()
+    for path in captured:
+        derived |= cligrammar.help_flag_names(path.read_text(encoding="utf-8"))
+    assert derived == verbs.WRITE_VERB_SUPPORTED_FLAGS
+    # The specific facts the reclassification rests on.
+    assert "--key" in derived
+    assert derived.isdisjoint({"--show", "--get", "--list"})
+    assert "-k" not in derived, "the shipped binary declares only the long key flag"
+
+
+def test_help_flag_names_reads_names_only_and_ignores_prose() -> None:
+    text = "Usage:\n  bd x --not-a-flag\n\nFlags:\n  -k, --key string   set --nope\n"
+    assert cligrammar.help_flag_names(text) == {"-k", "--key"}
+
+
+def test_an_undeclared_flag_moves_a_write_verb_out_of_the_write_bucket() -> None:
+    """The defect this amendment exists for: 38 of 59 'writes' were read attempts."""
+    result = verbs.classify(argv("bd remember --show deploy-runbook"))
+    assert result.bucket == verbs.ATTEMPTED_READ_VIA_WRITE_VERB
+    assert result.key == "deploy-runbook"
+    assert result.unambiguous is True
+    # A declared flag leaves the write a write.
+    assert verbs.classify(argv("bd remember --json body")).bucket == verbs.MEMORY_WRITE
+
+
+def test_an_undeclared_flag_without_a_key_still_leaves_the_write_bucket() -> None:
+    result = verbs.classify(argv("bd remember --list"))
+    assert result.bucket == verbs.ATTEMPTED_READ_VIA_WRITE_VERB
+    assert result.key is None
+    assert result.unambiguous is False
+
+
+def test_attempted_reads_are_in_the_memory_share_but_not_in_the_write_band() -> None:
+    """E0.5 counts reaches at the memory surface; E0.1 counts stores."""
+    assert verbs.ATTEMPTED_READ_VIA_WRITE_VERB in verbs.MEMORY_BUCKETS
+    tally = rates.Tally()
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:00:00Z", "bd remember --show k")
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:01:00Z", "bd ready")
+    assert rates.write_band(tally)["counts"] == {"unambiguous": 0, "ambiguous": 0}
+    assert rates.session_rate(tally, verbs.MEMORY_BUCKETS)["session_averaged_share"] == 0.5
+
+
+def test_an_attempted_read_never_supplies_a_prior_write_to_the_join() -> None:
+    """It stores nothing, so it must not be joinable from the WRITE side either."""
+    tally = rates.Tally()
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:00:00Z", "bd remember --show carried")
+    _feed(tally, "s2", "/rig/b", "2026-01-02T00:00:00Z", "bd recall carried")
+    result = rates.join(tally)
+    assert result["hits"]["any"] == 0
+    assert result["denominator_choice"]["widened_result"]["hits"]["any"] == 0
+
+
+# --- A1.5: the placeholder screen, restored ------------------------------------
+
+
+def test_a_placeholder_argument_is_screened_even_when_it_looks_like_a_redirection() -> None:
+    """`<key>` is eaten by the redirection strip, so the screen runs on raw argv too."""
+    assert raw_argv("bd recall <key>") == ["bd", "recall", "<key>"]
+    assert argv("bd recall <key>") == ["bd", "recall"]
+    tally = rates.Tally()
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:00:00Z", "bd recall <key>")
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:01:00Z", "bd remember <key> <body>")
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:02:00Z", "bd dep add <from> <to>")
+    assert tally.skipped["placeholder_or_template"] == 3
+    assert tally.invocations == 0
+    assert tally.buckets == {}
+
+
+def test_a_real_key_is_not_mistaken_for_a_placeholder() -> None:
+    tally = rates.Tally()
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:00:00Z", "bd recall deploy-runbook")
+    assert tally.invocations == 1
+    assert tally.buckets[verbs.TARGETED_READ] == 1
+
+
+def test_an_unquoted_comment_is_not_a_positional() -> None:
+    assert argv("bd memories # list them all") == ["bd", "memories"]
+    assert verbs.classify(argv("bd memories # list them all")).bucket == verbs.BROWSE_READ
+    # ...while a quoted `#`, and a `#` inside a word, are content.
+    assert argv("bd remember --key k 'a # b'") == ["bd", "remember", "--key", "k", "a # b"]
+    assert argv("bd recall mem-1#2") == ["bd", "recall", "mem-1#2"]
+
+
+# --- A1.6: a join drop is not an exclusion -------------------------------------
+
+
+def test_an_undated_keyed_event_is_a_join_drop_not_an_exclusion() -> None:
+    tally = rates.Tally()
+    rates.record_invocation(
+        ["bd", "recall", "carried"], "", "s1", "/rig/a", "2099-01-01T00:00:00Z", tally
+    )
+    assert tally.invocations == 1, "it is counted, so it is not screened out"
+    assert tally.buckets[verbs.TARGETED_READ] == 1
+    assert tally.skipped["keyed_event_without_timestamp"] == 0
+    assert tally.join_eligibility_drops["keyed_event_without_timestamp"] == 1
+    assert rates.join(tally)["join_eligibility_drops"] == {"keyed_event_without_timestamp": 1}
+
+
 # --- the CLI the acceptance criteria name -------------------------------------
 
 
@@ -340,7 +466,14 @@ def test_cli_emits_the_preregistered_statistics(tmp_path: Path) -> None:
     assert out["population"]["counted_invocations"] == 6
     assert out["E0.1_memory_write_rate"]["counts"] == {"unambiguous": 1, "ambiguous": 0}
     read = out["E0.2_memory_read_rates"]
-    assert set(read) == {"targeted_read", "search_read", "browse_read", "note"}
+    assert set(read) == {
+        "targeted_read",
+        "search_read",
+        "browse_read",
+        "attempted_read_via_write_verb",
+        "attempted_read_note",
+        "note",
+    }
     assert out["E0.4_read_after_write"]["hits"]["cross_session"] == 1
     # s3 has an injection and a dependency edge and no memory verb, so it must not
     # appear here: `bd link` is `bd dep add` shorthand, not a memory verb.
@@ -351,6 +484,13 @@ def test_cli_emits_the_preregistered_statistics(tmp_path: Path) -> None:
     assert out["reference_buckets"]["dep_write"]["sessions_with_at_least_one"] == 1
     assert "INSTRUCTED-endogenous" in out["interpretation_label"]
     assert set(out["exclusions"]) == {"drifting", "frozen_at_the_preregistration_lock"}
+    # a join drop is reported with the join, never with the screens
+    assert (
+        "keyed_event_without_timestamp"
+        not in out["exclusions"]["frozen_at_the_preregistration_lock"]
+    )
+    assert "join_eligibility_drops" in out["E0.4_read_after_write"]
+    assert out["preregistration_amendment_2_sha256"]
 
 
 def _row(ts: str, session: str, cwd: str, command: str) -> dict[str, object]:

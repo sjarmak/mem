@@ -36,6 +36,7 @@ PREREG_PATH = HERE / "preregistration.json"
 #: The locked preregistration is never edited. Corrections are appended here, and
 #: both digests ship with every number so a published rate names its exact rule set.
 AMENDMENT_PATH = HERE / "preregistration-amendment-1.json"
+AMENDMENT_2_PATH = HERE / "preregistration-amendment-2.json"
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,11 @@ class Tally:
     #: invocation-level exclusion, so it is reported apart from both other groups.
     unreadable_files: int = 0
     skipped: Counter[str] = field(default_factory=Counter)
+    #: Invocations that were COUNTED and bucketed but could not enter the join.
+    #: Not an exclusion: nothing was screened out of the population, a single
+    #: statistic's eligibility was lost. Filing it under exclusions (as the first
+    #: two runs did) overstates what the screens removed.
+    join_eligibility_drops: Counter[str] = field(default_factory=Counter)
     buckets: Counter[str] = field(default_factory=Counter)
     per_session: dict[str, Counter[str]] = field(default_factory=lambda: defaultdict(Counter))
     events: list[Event] = field(default_factory=list)
@@ -109,12 +115,18 @@ def scan_file(path: str, lock: str, tally: Tally) -> None:
                 if not isinstance(command, str) or "bd" not in command:
                     continue
                 tally.bash_blocks += 1
-                for argv in cligrammar.bd_invocations(command):
-                    record_invocation(argv, ts, session, cwd, lock, tally)
+                for argv, raw_argv in cligrammar.bd_invocations(command):
+                    record_invocation(argv, ts, session, cwd, lock, tally, raw_argv)
 
 
 def record_invocation(
-    argv: list[str], ts: str, session: str, cwd: str, lock: str, tally: Tally
+    argv: list[str],
+    ts: str,
+    session: str,
+    cwd: str,
+    lock: str,
+    tally: Tally,
+    raw_argv: list[str] | None = None,
 ) -> None:
     # Self-exclusion runs FIRST. Anything at or after the preregistration lock is
     # this study's own traffic (or later) and is not in the pinned population, so it
@@ -126,7 +138,14 @@ def record_invocation(
         tally.excluded_after_prereg_lock += 1
         return
 
+    # The screen runs on BOTH forms. `strip_redirections` consumes `<key>` as an
+    # input redirection, so a documentation example reaches the classifier as a
+    # bare verb and lands in a real bucket - which is how the preregistered
+    # placeholder arm went quiet. Screening the pre-strip tokenization too
+    # restores it (amendment A1.5).
     reason = cligrammar.is_skippable(argv)
+    if reason is None and raw_argv is not None:
+        reason = cligrammar.is_skippable(raw_argv)
     if reason is not None:
         tally.skipped[reason] += 1
         return
@@ -143,12 +162,16 @@ def record_invocation(
         counts["browse_from_bare_targeted"] += 1
         tally.buckets["browse_from_bare_targeted"] += 1
 
-    joinable = result.bucket in (verbs.TARGETED_READ, verbs.MEMORY_WRITE)
+    joinable = result.bucket in (
+        verbs.TARGETED_READ,
+        verbs.MEMORY_WRITE,
+        verbs.ATTEMPTED_READ_VIA_WRITE_VERB,
+    )
     if joinable and result.key is not None:
         if ts:
             tally.events.append(Event(ts, session, cwd, result.bucket, digest(result.key)))
         else:
-            tally.skipped["keyed_event_without_timestamp"] += 1
+            tally.join_eligibility_drops["keyed_event_without_timestamp"] += 1
 
 
 def mean(values: list[float]) -> float:
@@ -195,53 +218,109 @@ def write_band(tally: Tally) -> dict[str, Any]:
             "which on the shipped CLI means an explicit key flag and nothing else: the "
             "positional argument is the content and the key is auto-generated from it. "
             "The high end adds every unkeyed write. Both ends are write counts; the band "
-            "is over key resolvability, and only the low end can enter the join."
+            "is over key resolvability, and only the low end can enter the join. "
+            "Neither end contains an invocation carrying a flag the shipped binary "
+            "does not declare; those are read attempts and are published beside "
+            "this rate, in E0.2."
         ),
     }
 
 
 def join(tally: Tally) -> dict[str, Any]:
-    """E0.4 read-after-write, published twice (cross-session and cross-directory)."""
+    """E0.4 read-after-write, over TWO denominators and three locality tests.
+
+    The primary denominator is the preregistered one: keyed invocations of the
+    targeted read verb, the reads the shipped binary actually executes. The widened
+    denominator adds the keyed attempted reads spelled with the write verb -
+    invocations the binary rejects on an undeclared flag, so no stored body ever
+    reached the agent.
+
+    Both ship because the rule that moved those invocations out of the write bucket
+    is the same rule that decides whether they belong in this denominator, and a
+    null must not be published over whichever denominator flatters it. Which one is
+    primary is argued in the report, not decided by silence here.
+    """
     events = sorted(tally.events, key=lambda e: (e.ts, e.session))
     writers: dict[str, list[Event]] = defaultdict(list)
-    reads = 0
-    hits_any = 0
-    hits_cross_session = 0
-    hits_cross_cwd = 0
+    keys = ("reads", "any", "cross_session", "cross_cwd")
+    counters: dict[str, dict[str, int]] = {
+        "executed_keyed_reads": dict.fromkeys(keys, 0),
+        "attempted_keyed_reads": dict.fromkeys(keys, 0),
+    }
     for ev in events:
         if ev.bucket == verbs.MEMORY_WRITE:
             writers[ev.key_digest].append(ev)
             continue
-        reads += 1
+        group = (
+            "executed_keyed_reads" if ev.bucket == verbs.TARGETED_READ else "attempted_keyed_reads"
+        )
+        counts = counters[group]
+        counts["reads"] += 1
         prior = writers.get(ev.key_digest)
         if not prior:
             continue
-        hits_any += 1
+        counts["any"] += 1
         if any(w.session != ev.session for w in prior):
-            hits_cross_session += 1
+            counts["cross_session"] += 1
         if any(w.cwd and ev.cwd and w.cwd != ev.cwd for w in prior):
-            hits_cross_cwd += 1
+            counts["cross_cwd"] += 1
+
+    def rates_of(*groups: str) -> dict[str, Any]:
+        reads = sum(counters[g]["reads"] for g in groups)
+        hits = {k: sum(counters[g][k] for g in groups) for k in keys[1:]}
+        return {
+            "keyed_reads": reads,
+            "raw_any": (hits["any"] / reads) if reads else 0.0,
+            "raw_cross_session": (hits["cross_session"] / reads) if reads else 0.0,
+            "raw_cross_working_directory": (hits["cross_cwd"] / reads) if reads else 0.0,
+            "hits": {
+                "any": hits["any"],
+                "cross_session": hits["cross_session"],
+                "cross_working_directory": hits["cross_cwd"],
+            },
+        }
+
+    primary = rates_of("executed_keyed_reads")
+    widened = rates_of("executed_keyed_reads", "attempted_keyed_reads")
     return {
-        "keyed_targeted_reads": reads,
-        "raw_any": (hits_any / reads) if reads else 0.0,
-        "raw_cross_session": (hits_cross_session / reads) if reads else 0.0,
-        "raw_cross_working_directory": (hits_cross_cwd / reads) if reads else 0.0,
-        "hits": {
-            "any": hits_any,
-            "cross_session": hits_cross_session,
-            "cross_working_directory": hits_cross_cwd,
+        # The preregistered field name is kept so this run lines up against the
+        # withdrawn ones; it is the primary denominator's read count.
+        "keyed_targeted_reads": primary["keyed_reads"],
+        **{k: v for k, v in primary.items() if k != "keyed_reads"},
+        "denominator_choice": {
+            "primary": "executed keyed reads only (preregistered): the keyed read verb",
+            "widened": (
+                "primary plus keyed attempted reads spelled with a write verb, which "
+                "the shipped binary rejects on the undeclared flag"
+            ),
+            "widened_result": widened,
+            "rationale": (
+                "The primary denominator answers 'did a read that RAN recover an "
+                "earlier capture'. A rejected invocation retrieved nothing, so it "
+                "cannot evidence reuse, and admitting it would deflate RAW by "
+                "construction. The widened denominator answers the INTENT question "
+                "this statistic is a proxy for - how often an agent named a key it "
+                "expected to be there - which is the reading the same rule change "
+                "supports. Both are published; neither is hidden."
+            ),
         },
+        "join_eligibility_drops": dict(tally.join_eligibility_drops),
+        "join_eligibility_drops_note": (
+            "COUNTED invocations that could not enter the join (an undated keyed "
+            "event has no position in corpus time). Not an exclusion: nothing was "
+            "screened out of the population, so it is reported here and not beside "
+            "the screens."
+        ),
         "interpretation": (
             "RAW is a CLI-EXPRESSIBILITY measurement, not a reuse measurement. It bounds "
             "how much keyed read traffic COULD refer to something captured earlier in the "
             "corpus. It cannot show that the retrieved body was read or acted on: "
-            "mechanism-FIRES is not mechanism-CONSUMED. Publishing it twice lets "
-            "same-directory continuations be read off rather than assumed away."
+            "mechanism-FIRES is not mechanism-CONSUMED. Publishing it twice over locality "
+            "lets same-directory continuations be read off rather than assumed away."
         ),
         "denominator_note": (
-            "Only the targeted read bucket enters this denominator. The search and "
-            "list-all buckets carry no key and can never join, so folding them in would "
-            "deflate RAW by construction."
+            "The search and list-all buckets enter neither denominator. They carry no "
+            "key and can never join, so folding them in would deflate RAW by construction."
         ),
     }
 
@@ -263,6 +342,9 @@ def analyse(filelist: pathlib.Path) -> dict[str, Any]:
         "preregistration_sha256": hashlib.sha256(PREREG_PATH.read_bytes()).hexdigest(),
         "preregistration_amendment_1_sha256": hashlib.sha256(
             AMENDMENT_PATH.read_bytes()
+        ).hexdigest(),
+        "preregistration_amendment_2_sha256": hashlib.sha256(
+            AMENDMENT_2_PATH.read_bytes()
         ).hexdigest(),
         "filelist_sha256": hashlib.sha256(filelist.read_bytes()).hexdigest(),
         "population": {
@@ -289,6 +371,15 @@ def analyse(filelist: pathlib.Path) -> dict[str, Any]:
             "targeted_read": session_rate(tally, (verbs.TARGETED_READ,)),
             "search_read": session_rate(tally, (verbs.SEARCH_READ,)),
             "browse_read": session_rate(tally, (verbs.BROWSE_READ,)),
+            "attempted_read_via_write_verb": session_rate(
+                tally, (verbs.ATTEMPTED_READ_VIA_WRITE_VERB,)
+            ),
+            "attempted_read_note": (
+                "A write verb carrying a flag the shipped bd 1.3.0-rc.1 does not "
+                "declare. The binary rejects these, so nothing was stored and nothing "
+                "was retrieved: they are read ATTEMPTS, published beside E0.1 rather "
+                "than inside it."
+            ),
             "note": (
                 "Never summed into one read rate. The list-all bucket carries no key and "
                 "is join-ineligible by construction, so pooling it inflates apparent "

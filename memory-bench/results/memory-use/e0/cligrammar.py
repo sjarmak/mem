@@ -132,14 +132,56 @@ def argv_of(part: str) -> list[str] | None:
     return argv or None
 
 
-def bd_invocations(command: str) -> Iterator[list[str]]:
-    """extract.py:80-86, widened to BD_EXECUTABLES."""
+def bd_invocations(command: str) -> Iterator[tuple[list[str], list[str]]]:
+    """extract.py:80-86, widened to BD_EXECUTABLES.
+
+    Yields ``(argv, raw_argv)``. ``argv`` is the redirection-stripped form every
+    bucket decision is made on. ``raw_argv`` is the same simple command tokenized
+    WITHOUT the redirection strip, and exists for one reason: ``strip_redirections``
+    consumes ``<key>`` as an input redirection, which is exactly the shape the
+    preregistered ``placeholder_or_template`` screen is meant to catch. Screening
+    both forms restores that arm (amendment A1.5); nothing else reads ``raw_argv``.
+    """
     for part in simple_commands(command):
-        argv = argv_of(strip_redirections(part))
+        body = strip_comment(part)
+        argv = argv_of(strip_redirections(body))
         if not argv:
             continue
-        if os.path.basename(argv[0]) in BD_EXECUTABLES:
-            yield argv
+        if os.path.basename(argv[0]) not in BD_EXECUTABLES:
+            continue
+        yield argv, (argv_of(body) or argv)
+
+
+def strip_comment(part: str) -> str:
+    """Drop an unquoted ``#`` comment from one simple command.
+
+    A ``#`` starts a comment only at the start of a word, so ``mem-1#2`` and a
+    quoted ``#`` are content and survive. Harmless on today's corpus - no counted
+    invocation carries a trailing comment - but a comment word would otherwise
+    tokenize into a POSITIONAL and move an invocation between buckets.
+    """
+    quote: str | None = None
+    i = 0
+    n = len(part)
+    while i < n:
+        ch = part[i]
+        if quote is not None:
+            if ch == "\\" and quote == '"' and i + 1 < n:
+                i += 2
+                continue
+            if ch == quote:
+                quote = None
+            i += 1
+            continue
+        if ch in "'\"":
+            quote = ch
+        elif ch == "\\" and i + 1 < n:
+            i += 2
+            continue
+        elif ch == "#" and (i == 0 or part[i - 1].isspace()):
+            return part[:i]
+        i += 1
+    return part
 
 
 def strip_redirections(part: str) -> str:
@@ -229,6 +271,36 @@ def _skip_redirection(part: str, i: int) -> int:
             break
         i += 1
     return i
+
+
+FLAG_SPEC = re.compile(r"^\s+(?:(-[A-Za-z]), )?(--[a-z][a-z0-9-]*)")
+HELP_FLAG_SECTION = re.compile(r"^[A-Za-z][A-Za-z ]*Flags:$|^Flags:$")
+
+
+def help_flag_names(text: str) -> set[str]:
+    """Every flag name a captured ``--help`` text declares, by line grammar alone.
+
+    A flag section header is a line ending in ``Flags:``; inside one, a declaration
+    line begins with whitespace, an optional short alias, and the long name. Nothing
+    but flag NAMES is read - not their types, not their prose - so this stays on the
+    mechanical side of the ZFC boundary in the same way the argv grammar does.
+    """
+    names: set[str] = set()
+    in_section = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not line[:1].isspace():
+            in_section = bool(HELP_FLAG_SECTION.match(stripped))
+            continue
+        if not in_section or not stripped:
+            continue
+        m = FLAG_SPEC.match(line)
+        if m is None:
+            continue
+        if m.group(1):
+            names.add(m.group(1))
+        names.add(m.group(2))
+    return names
 
 
 def is_skippable(argv: list[str]) -> str | None:

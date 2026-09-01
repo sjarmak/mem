@@ -20,6 +20,14 @@ Buckets, and why the read class is split three ways:
 ``MEMORY_WRITE``
     Explicit capture and its inverse. Its key is resolvable only from an explicit
     key flag; see ``classify``.
+``ATTEMPTED_READ_VIA_WRITE_VERB``
+    A write verb carrying a flag the shipped binary does not have. The capture verb
+    declares exactly one non-global flag (``--key``), so the ``--show`` / ``--get``
+    / ``--list`` forms are not writes at all: they are attempted READS spelled with
+    a write verb, and the binary rejects them on the undeclared flag. Counting them
+    as writes made 38 of 59 published "writes" read attempts.
+    Membership is decided by flag NAME against a set derived mechanically from the
+    shipped ``--help`` text (``shipped-cli-help/``); no argument content is read.
 ``INJECTION``
     Delivery INTO the agent, not capture. Reclassified out of the sealed profile's
     write kind; see preregistration.json.
@@ -41,18 +49,58 @@ MEMORY_WRITE_VERBS = {"remember", "forget"}
 INJECTION_VERBS = {"prime"}
 DEP_WRITE_VERBS = {"link", "dep"}
 KEY_FLAGS = {"--key", "-k"}
+#: Every flag the shipped bd 1.3.0-rc.1 declares for the write verbs, as the union
+#: over their captured help texts (``shipped-cli-help/*.help.txt``, re-captured by
+#: ``shipped-cli-help/capture.sh``). Derived by ``cligrammar.help_flag_names``; the
+#: test suite re-derives it from those committed files and fails on drift. It is
+#: pinned as a literal rather than parsed at run time so the analysis path never
+#: depends on whichever bd is on PATH. ``-k`` is NOT in it: the shipped binary
+#: declares only the long ``--key``.
+WRITE_VERB_SUPPORTED_FLAGS = {
+    "--actor",
+    "--cpu-profile",
+    "--database",
+    "--db",
+    "--directory",
+    "--dolt-auto-commit",
+    "--global",
+    "--help",
+    "--ignore-schema-skew",
+    "--json",
+    "--key",
+    "--mem-profile",
+    "--no-color",
+    "--quiet",
+    "--readonly",
+    "--sandbox",
+    "--verbose",
+    "-C",
+    "-h",
+    "-q",
+    "-v",
+}
 # -----------------------------------------------------------------------------
 
 TARGETED_READ = "targeted_read"
 SEARCH_READ = "search_read"
 BROWSE_READ = "browse_read"
 MEMORY_WRITE = "memory_write"
+ATTEMPTED_READ_VIA_WRITE_VERB = "attempted_read_via_write_verb"
 INJECTION = "injection"
 DEP_WRITE = "dep_write"
 OTHER = "other"
 
-MEMORY_BUCKETS = (TARGETED_READ, SEARCH_READ, BROWSE_READ, MEMORY_WRITE)
-READ_BUCKETS = (TARGETED_READ, SEARCH_READ, BROWSE_READ)
+MEMORY_BUCKETS = (
+    TARGETED_READ,
+    SEARCH_READ,
+    BROWSE_READ,
+    MEMORY_WRITE,
+    ATTEMPTED_READ_VIA_WRITE_VERB,
+)
+#: The attempted-read bucket stays inside the memory-verb share (E0.5): the agent
+#: reached for the memory surface, and E0.5 counts reaches. It is kept out of the
+#: write rate (E0.1), because it stores nothing.
+READ_BUCKETS = (TARGETED_READ, SEARCH_READ, BROWSE_READ, ATTEMPTED_READ_VIA_WRITE_VERB)
 ALL_BUCKETS = (*MEMORY_BUCKETS, INJECTION, DEP_WRITE, OTHER)
 
 
@@ -93,6 +141,15 @@ def classify(argv: list[str]) -> Classified:
         return Classified(BROWSE_READ, unambiguous=True, key=None)
 
     if sub in MEMORY_WRITE_VERBS:
+        if any(f not in WRITE_VERB_SUPPORTED_FLAGS for f in flags):
+            # A flag the shipped binary does not declare. The invocation cannot
+            # have stored anything - bd exits on an unknown flag - so it is not a
+            # write. Its key, when it has one, is the first positional: a write's
+            # positional is content (A1.1), but this shape is not a write, and the
+            # shipped write verb itself RECALLS a bare positional key. Only the
+            # flag NAME is inspected; the argument is never read.
+            key = flag_key if flag_key is not None else (positionals[0] if n >= 1 else None)
+            return Classified(ATTEMPTED_READ_VIA_WRITE_VERB, unambiguous=key is not None, key=key)
         if flag_key is not None:
             return Classified(MEMORY_WRITE, unambiguous=True, key=flag_key)
         # No explicit key flag: the shipped CLI auto-generates the key from the

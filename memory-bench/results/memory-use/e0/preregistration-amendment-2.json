@@ -1,0 +1,62 @@
+{
+  "bead": "mem-e4fby",
+  "study": "E0a - memory-verb base rate over the pinned transcript corpus (offline)",
+  "amendment": 2,
+  "amends": "preregistration.json, as already amended by preregistration-amendment-1.json",
+  "amends_sha256": "301f7917fe30df503271f2ac5b045fde20654a65021acdfb55efb65def75609c",
+  "amendment_1_sha256": "83214c5f2397f85e204f5a0f5d5409dbd54a48d88fbd1e57bcbd47efb7c9a7fa",
+  "recorded_at_utc": "2026-09-01T23:20:00Z",
+  "form": "APPENDED, never a rewrite. preregistration.json and preregistration-amendment-1.json are both left byte-identical and both digests above still verify against their .sha256 files. Deviation ids continue amendment 1's sequence (A1.4 onward) because they amend the same locked clauses; analysis.json carries all three digests, so a published number names its exact rule set.",
+  "trigger": "Review of the amendment-1 run found that the rule A1.2 used to remove the single read-after-write hit was not applied to the write bucket it came from. 38 of the 59 invocations published as E0.1 memory writes carry a flag the shipped bd 1.3.0-rc.1 does not declare, and A1.2's own text calls that shape an attempted READ. A published write rate that is ~64% read attempts is a parsing artifact, and the same rule governs the E0.4 read denominator, so every number regenerates.",
+  "deviations": [
+    {
+      "id": "A1.4",
+      "supersedes": "verb_table.MEMORY_WRITE, and planned_statistics E0.1 and E0.4 by consequence",
+      "locked_text": "\"MEMORY_WRITE\": [\"remember\", \"forget\"]",
+      "amended_rule": "A write-verb invocation carrying any flag NAME the shipped binary does not declare for that verb is bucketed as ATTEMPTED_READ_VIA_WRITE_VERB, not as MEMORY_WRITE. Its key, when it has one, is the explicit key flag if present and otherwise the first positional. The bucket is published beside E0.1, is inside the E0.5 memory-verb share, and enters the E0.4 join only through the widened denominator (below).",
+      "supported_flag_derivation": {
+        "source": "the shipped binary's own help text, captured verbatim into shipped-cli-help/",
+        "command": "shipped-cli-help/capture.sh, which runs `bd --version`, `bd remember --help` and `bd forget --help` and digests all three into shipped-cli-help/shipped-cli-help.sha256",
+        "binary": "bd version 1.3.0-rc.1 (9c6a69ec1)",
+        "extraction": "cligrammar.help_flag_names() reads flag NAMES out of the captured text by line grammar - a section header ending in 'Flags:', then declaration lines beginning with whitespace, an optional short alias, and the long name. Nothing but names is read.",
+        "set": "the union over the two write verbs (forget's set is a subset of remember's): --actor, --cpu-profile, --database, --db, --directory, --dolt-auto-commit, --global, --help, --ignore-schema-skew, --json, --key, --mem-profile, --no-color, --quiet, --readonly, --sandbox, --verbose, -C, -h, -q, -v",
+        "pinning": "the set is a literal in verbs.WRITE_VERB_SUPPORTED_FLAGS, not parsed at analysis time, so no published number depends on whichever bd is on PATH when the script runs. tests/test_e0_rates.py re-derives it from the committed help text and fails on drift.",
+        "zfc": "Mechanical flag-name membership only. No argument value, memory body or help prose is inspected or scored."
+      },
+      "reason": "The shipped `bd remember` declares exactly one non-global flag, --key. `bd remember --show <key>`, `--get <key>` and `--list` are rejected by the binary, so they store nothing; A1.2 already described this shape as an attempted read and used it to remove the sole join hit. Leaving the same 38 invocations in the write bucket kept the conclusion that removed one and discarded the argument that removed it.",
+      "consequence": "E0.1's write counts fall from 59 to 21 - 9 keyed and 12 unkeyed, so 2 of the 38 removed carried an explicit key flag alongside the undeclared one and 36 did not. The removed 38 appear as their own published bucket. E0.5 is unchanged in count: the attempted reads are still memory-verb traffic, and E0.5 counts reaches at the memory surface, not successful ones. A1.4 leaves the E0.4 primary denominator at 16 by design; it falls to 14 for an unrelated reason, A1.5.",
+      "e0_4_denominator_decision": {
+        "decision": "The keyed attempted reads do NOT enter the primary E0.4 denominator. They are published as a second, widened denominator, and both results ship in analysis.json and report.md.",
+        "primary_rationale": "E0.4 asks whether a read that RAN recovered an earlier capture. An invocation the binary rejects retrieved nothing, so it cannot evidence reuse; admitting it would enlarge the denominator with invocations that could not have produced a hit and deflate RAW by construction - the mirror of the pooling error the three-way read split exists to prevent.",
+        "widened_rationale": "E0.4 is explicitly a CLI-EXPRESSIBILITY statistic, not a reuse statistic. Under that reading the question is how often an agent NAMED a key it expected to be there, and a rejected invocation names one just as an executed one does. This is the reading the same rule change supports, so it is published rather than argued away.",
+        "why_both": "The headline null sits over the denominator this rule moves. Publishing one number and not the other would let the choice of denominator do work the reader cannot see."
+      },
+      "not_done": "Neither preregistration.json nor amendment 1 is edited."
+    },
+    {
+      "id": "A1.5",
+      "supersedes": "exclusions.placeholder (the point in the pipeline at which it is applied)",
+      "locked_text": "invocations containing a template/placeholder token, or --help/-h, are excluded and counted.",
+      "amended_rule": "the placeholder and help screens run on BOTH tokenizations of a simple command: the redirection-stripped argv the classifier sees, and the raw argv tokenized without the redirection strip. Either match excludes the invocation.",
+      "reason": "A1.2 moved redirection stripping ahead of tokenization, and the stripper consumes `<key>` as an input redirection - which is exactly the shape the preregistered placeholder regex '^<.+>$' exists to catch. The screen therefore went silent on the documentation-example form: the keyed read verb with a placeholder argument arrived at the classifier as a bare verb, and the write verb with one arrived as an unkeyed write.",
+      "measured_leak": "Measured by isolated revert on the pinned filelist (screen on, screen off, nothing else changed): 109 invocations. 101 landed in `other`, 6 in dep_write, and 2 in TARGETED_READ - so the arm was not harmless after all. The review that requested it estimated 5 into dep_write and 0 into memory buckets; the memory-bucket count is 2, not 0, and those 2 are in the E0.4 primary denominator, which falls 16 -> 14. A published null over a denominator this rule moves is exactly the failure mode A1.4 is also about, so the two ship together.",
+      "also": "Unquoted `#` comments are now dropped from a simple command before tokenization. Harmless on this corpus - no counted invocation carries one - but a comment word would otherwise tokenize into a positional and move an invocation between buckets."
+    },
+    {
+      "id": "A1.6",
+      "supersedes": "nothing in the locked text; corrects how one count is REPORTED",
+      "amended_rule": "keyed_event_without_timestamp is reported under E0.4 as a join_eligibility_drop, not under exclusions.frozen_at_the_preregistration_lock.",
+      "reason": "It is not a screen. The invocation was counted, bucketed, and is inside every published rate; only its position in corpus time is missing, so it cannot enter the join. Filing it beside the screens overstates what the screens removed.",
+      "consequence": "None numerically: the count is 0 on this corpus. The taxonomy is fixed before a non-zero value can be misread."
+    }
+  ],
+  "withdrawn": "Every number published under amendment 1 alone is withdrawn. analysis.json and report.md are regenerated under amendments 1 and 2 together.",
+  "unchanged": [
+    "the population and its pinned filelist, byte-for-byte - E0b rebases onto this branch and the population definition must not move",
+    "the three-way read split and the verb tables themselves",
+    "the ZFC boundary: no argument body is inspected anywhere; A1.4 reads flag NAMES only",
+    "A1.1, A1.2 and A1.3 as recorded in amendment 1",
+    "the decision rule"
+  ],
+  "sealed_package_untouched": "results/bdp/selector-expressibility/ is not modified. Its manifest digests still verify; the helpers used here are copies."
+}
