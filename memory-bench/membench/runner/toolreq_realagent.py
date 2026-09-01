@@ -96,6 +96,13 @@ _OPAQUE_PREFIX = "toolreq"
 DEFAULT_CORPUS = Path(__file__).resolve().parents[2] / "fixtures" / "worlds-tool"
 
 
+# The two E1 variants of one sequence (mem-9q8dg). They SHARE a ``work_id`` on purpose:
+# ``grading.paired_ci.paired_delta_ci`` pairs by key, so a necessary/unnecessary pair keyed
+# apart is not a pair at all — every key would be unmatched and every delta imputed 0.0.
+VARIANT_NECESSARY = "necessary"
+VARIANT_UNNECESSARY = "unnecessary"
+
+
 @dataclass(frozen=True)
 class ToolReqRealAgentTask:
     """One frozen tool-requiring sequence, ready for the real-agent none/oracle sweep.
@@ -104,12 +111,31 @@ class ToolReqRealAgentTask:
     runs it, ``score_goal_action`` grades it). ``oracle_memory`` is the id-exact ceiling
     the ``oracle`` arm surfaces (the ``none`` arm surfaces nothing). ``current_opaque_values``
     are exactly the values a passing ``Write`` must carry — the dry-run simulator keys on
-    them."""
+    them.
+
+    ``variant`` names which half of an E1 twin this is (``runner.toolreq_corpus``). It defaults
+    to ``necessary`` so every pre-E1 caller — both paid grids — keeps constructing exactly the
+    task it always did, under the ``work_id``-named result file it always wrote."""
 
     work_id: str
     goal_step: SequenceStep
     oracle_memory: dict[str, str]
     current_opaque_values: tuple[str, ...]
+    variant: str = VARIANT_NECESSARY
+
+    @property
+    def pair_key(self) -> str:
+        """The key the paired estimator pairs on — shared by a task and its twin."""
+        return self.work_id
+
+    @property
+    def result_id(self) -> str:
+        """The per-task identity a driver may use for a result FILE, which twins must not
+        share. The necessary half keeps the bare ``work_id`` so no existing driver's on-disk
+        layout (or its resume cache) moves under a variant it never had."""
+        if self.variant == VARIANT_NECESSARY:
+            return self.work_id
+        return f"{self.work_id}-{self.variant}"
 
 
 def task_fingerprint(task: ToolReqRealAgentTask) -> str:
@@ -134,6 +160,7 @@ def task_fingerprint(task: ToolReqRealAgentTask) -> str:
     return digest(
         {
             "work_id": task.work_id,
+            "variant": task.variant,
             "oracle_memory": list(task.oracle_memory.items()),
             "current_opaque_values": sorted(task.current_opaque_values),
             "goal_step": task.goal_step.model_dump(mode="json"),
@@ -273,6 +300,7 @@ def adapt_sequence(seq: BenchmarkSequence) -> ToolReqRealAgentTask:
         user_request=user_request,
         available_tools=[REAL_TOOL],
         expected_memory_reads=list(check.requires_memory),
+        memory_necessary=True,
         outcome_checks=[
             OutcomeCheck(
                 check_id=f"{seq.sequence_id}-goal-write",

@@ -1,0 +1,218 @@
+"""mem-9q8dg — the E1 twin corpus: a matched memory-NECESSARY / memory-UNNECESSARY pair
+per frozen tool-requiring sequence.
+
+E1's primary endpoint is a DISCRIMINATION margin,
+``d(rung) = P(call | necessary) - P(call | unnecessary)``. Without an unnecessary half it
+cannot be computed at all, and a ladder that only raises the call rate proves nothing:
+arXiv 2605.09252 shows prompt-only control is blunt — it suppresses NECESSARY calls
+alongside unnecessary ones, so "called MORE" and "called BETTER" are separated only by
+measuring both halves.
+
+Every ``ToolReqRealAgentTask`` is memory-necessary BY CONSTRUCTION: ``adapt_sequence``
+mints opaque tokens that exist only in the establish leg's ``oracle_memory`` and asserts
+the goal request leaks none of them. This module authors the missing half as the MINIMAL
+contrast: the unnecessary twin is the necessary task with its own oracle ceiling INLINED
+into the request. Same tool, same opaque values, same scorer, same forbidden (stale)
+values — the single moved variable is whether the value the ``Write`` must carry is
+already in context.
+
+Two constraints shape it, both mechanical rather than aesthetic:
+
+1. **Twins share a ``work_id``.** ``grading.paired_ci.paired_delta_ci`` pairs BY KEY: under
+   the primary ``itt`` population a key present on one side only contributes an imputed
+   0.0 delta. Disjoint halves therefore yield a 0.0 point estimate with a tight interval
+   no matter what the truth is — a silent, confident null. Sharing the key is what makes
+   ``n_imputed_zero == 0`` achievable, and the test asserts it on the real corpus.
+2. **The label is not the evidence.** ``SequenceStep.memory_necessary`` records the CLAIM;
+   ``runner.e1_necessity_preflight`` runs an empty-store leg-2-only arm over both halves and
+   measures whether a no-memory arm actually solves the unnecessary half and actually fails
+   the necessary one.
+
+ZFC: a deterministic projection — string substitution over already-authored, already
+leak-checked ground truth. No model call, no semantic judgment, no inspection of body text.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any
+
+from membench.metrics.scorers import states_value
+from membench.runner.toolreq_realagent import (
+    DEFAULT_CORPUS,
+    VARIANT_NECESSARY,
+    VARIANT_UNNECESSARY,
+    ToolReqRealAgentTask,
+    load_corpus_with_sequences,
+)
+from membench.schemas.sequence import BenchmarkSequence, ExpectedAction, OutcomeCheck, SequenceStep
+
+# How the unnecessary twin delivers what the necessary twin withholds. Framed as established
+# state rather than as "memory", because the twin's whole point is that NO recall is required:
+# a "retrieved memory" framing would re-introduce the trust variable ``MemoryChannel`` exists to
+# isolate, and would make the twins differ in two ways instead of one.
+_CONTEXT_HEADING = "Known current state (already established for you; no recall required):"
+
+
+def _goal_action(step: SequenceStep) -> ExpectedAction:
+    """The bridged goal's required real-tool action — the source of the values the twin must
+    state and the values it must not. Raises on a step this module did not get from
+    ``adapt_sequence`` (which always mints exactly one check with one action)."""
+    for check in step.outcome_checks:
+        for action in check.requires_action:
+            return action
+    raise ValueError(f"{step.step_id}: bridged goal step has no required action")
+
+
+def unnecessary_twin(task: ToolReqRealAgentTask) -> ToolReqRealAgentTask:
+    """The memory-UNNECESSARY twin of an adapted (necessary) task, under the SAME ``work_id``.
+
+    The twin inlines ``task.oracle_memory``'s facts — the id-exact ceiling, already opaque and
+    already asserted to surface every current value and no superseded one — into the goal
+    request, and drops the memory requirement (``requires_memory`` / ``expected_memory_reads``
+    empty, ``oracle_memory`` empty: there is nothing left for an arm to surface). Scoring is
+    byte-identical: the same ``arg_values`` and ``forbidden_values``, so a twin passes only by
+    writing the current value and never a stale one.
+
+    Raises if the constructed request fails to state a current value, or states a superseded
+    one — the two ways an unnecessary twin would stop being the contrast it claims to be."""
+    if task.variant != VARIANT_NECESSARY:
+        raise ValueError(f"{task.work_id}: can only twin a {VARIANT_NECESSARY!r} task")
+    action = _goal_action(task.goal_step)
+    facts = list(task.oracle_memory.values())
+    if not facts:
+        raise ValueError(
+            f"{task.work_id}: necessary task surfaces no oracle facts, so its unnecessary "
+            "twin would withhold the same value it is supposed to state"
+        )
+    request = "\n".join(
+        [task.goal_step.user_request, "", _CONTEXT_HEADING, *(f"- {fact}" for fact in facts)]
+    )
+    for value in task.current_opaque_values:
+        if not states_value(request, value):
+            raise ValueError(
+                f"{task.work_id}: unnecessary twin does not state current value {value!r}; "
+                "a no-memory arm could not solve it and the twin is not memory-unnecessary"
+            )
+    for value in action.forbidden_values:
+        if states_value(request, value):
+            raise ValueError(
+                f"{task.work_id}: unnecessary twin states superseded value {value!r} — the "
+                "twin would reward a stale write"
+            )
+    step_id = f"{task.goal_step.step_id}-{VARIANT_UNNECESSARY}"
+    goal_step = SequenceStep(
+        step_id=step_id,
+        user_request=request,
+        available_tools=list(task.goal_step.available_tools),
+        expected_memory_reads=[],
+        memory_necessary=False,
+        outcome_checks=[
+            OutcomeCheck(
+                check_id=step_id,
+                description=(
+                    "matched unnecessary twin: the same Write must carry the current (opaque) "
+                    "value and never a superseded one, with the value already in context"
+                ),
+                requires_memory=[],
+                requires_action=[
+                    ExpectedAction(
+                        tool=action.tool,
+                        arg_values=list(action.arg_values),
+                        forbidden_values=list(action.forbidden_values),
+                    )
+                ],
+            )
+        ],
+    )
+    return ToolReqRealAgentTask(
+        work_id=task.work_id,
+        goal_step=goal_step,
+        oracle_memory={},
+        current_opaque_values=task.current_opaque_values,
+        variant=VARIANT_UNNECESSARY,
+    )
+
+
+def twin_tasks(tasks: Sequence[ToolReqRealAgentTask]) -> list[ToolReqRealAgentTask]:
+    """Every task followed by its twin, so the walk order pairs adjacently and the two halves
+    are always the same size."""
+    twinned: list[ToolReqRealAgentTask] = []
+    for task in tasks:
+        twinned.append(task)
+        twinned.append(unnecessary_twin(task))
+    return twinned
+
+
+def load_twin_corpus(
+    corpus_dir: Path = DEFAULT_CORPUS,
+) -> tuple[list[BenchmarkSequence], list[ToolReqRealAgentTask]]:
+    """Load the frozen tool-requiring corpus and return it twinned. The sequences come back
+    UNDOUBLED (one per world sequence): they are the establish-leg substrate, which both
+    variants of a pair share."""
+    sequences, tasks = load_corpus_with_sequences(corpus_dir)
+    return sequences, twin_tasks(tasks)
+
+
+def variant_split(
+    tasks: Sequence[ToolReqRealAgentTask],
+) -> dict[str, list[ToolReqRealAgentTask]]:
+    """The corpus grouped by variant — the two halves the E1 discrimination margin reads."""
+    split: dict[str, list[ToolReqRealAgentTask]] = {
+        VARIANT_NECESSARY: [],
+        VARIANT_UNNECESSARY: [],
+    }
+    for task in tasks:
+        split.setdefault(task.variant, []).append(task)
+    return split
+
+
+def task_payload(task: ToolReqRealAgentTask) -> dict[str, Any]:
+    """One task as JSON — the shape the acceptance check reads
+    (``.tasks[].goal_step.memory_necessary``)."""
+    return {
+        "work_id": task.work_id,
+        "pair_key": task.pair_key,
+        "result_id": task.result_id,
+        "variant": task.variant,
+        "oracle_memory": task.oracle_memory,
+        "current_opaque_values": list(task.current_opaque_values),
+        "goal_step": task.goal_step.model_dump(mode="json"),
+    }
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--corpus-dir", type=Path, default=DEFAULT_CORPUS)
+    ap.add_argument("--json", action="store_true", help="emit the twinned corpus as JSON")
+    args = ap.parse_args(list(argv) if argv is not None else None)
+
+    _, tasks = load_twin_corpus(args.corpus_dir)
+    if not tasks:
+        print(f"no tool-requiring tasks under {args.corpus_dir}", file=sys.stderr)
+        return 1
+    split = variant_split(tasks)
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "corpus_dir": str(args.corpus_dir),
+                    "n_pairs": len(split[VARIANT_NECESSARY]),
+                    "counts": {name: len(half) for name, half in split.items()},
+                    "tasks": [task_payload(task) for task in tasks],
+                },
+                indent=2,
+            )
+        )
+    else:
+        for name, half in split.items():
+            print(f"{name}: {len(half)}")
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover - CLI entrypoint
+    raise SystemExit(main())
