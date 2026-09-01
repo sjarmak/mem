@@ -95,6 +95,13 @@ _OPAQUE_PREFIX = "toolreq"
 # measurement, and a non-editable install has no corpus to point AT — only `--corpus-dir` does.
 DEFAULT_CORPUS = Path(__file__).resolve().parents[2] / "fixtures" / "worlds-tool"
 
+# The corpus is gitignored because it regenerates deterministically. From memory-bench/,
+# one world per seed:
+#     PYTHONPATH=. python3 scripts/generate_worlds.py --seed <n> --personas 4 --tasks 2 \
+#         --offline --tool-requiring --out fixtures/worlds-tool
+# then `python3 scripts/verify_worlds.py fixtures/worlds-tool` to confirm each world
+# reproduces against its manifest.
+
 
 @dataclass(frozen=True)
 class ToolReqRealAgentTask:

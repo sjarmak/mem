@@ -110,10 +110,14 @@ def build_config_builder(
     return builder
 
 
-def _choose_org(seed: int) -> tuple[str, str]:
+def choose_org(seed: int) -> tuple[str, str]:
     """Pick the world's single domain + org_size deterministically from ``seed``.
     These are org-level (one per world); making them constant across rows is what
-    keeps the generated rows describing one organization."""
+    keeps the generated rows describing one organization.
+
+    Public because the SDK-free producer in ``generators.synthetic_records`` must make
+    the same seeded choice: two copies would silently diverge and the two paths would
+    stop being substitutable at a given seed."""
     rng = random.Random(seed)
     return rng.choice(DOMAINS), rng.choice(ORG_SIZES)
 
@@ -147,7 +151,7 @@ def generate_world_records(
         raise ValueError(f"num_records must be >= 1, got {num_records}")
     from data_designer.interface import DataDesigner  # lazy
 
-    domain, org_size = _choose_org(seed)
+    domain, org_size = choose_org(seed)
     augmented = _with_constant_org(spec, domain=domain, org_size=org_size)
     model_config = local_nim_model_config(alias=DEFAULT_MODEL_ALIAS, model=nim_model)
     provider = local_nim_provider(endpoint=nim_endpoint)

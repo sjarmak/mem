@@ -7,9 +7,20 @@ paid API):
     NeMo Data Designer  -> records_to_world -> write_world (freeze)
                                             -> materialize_world -> memory_necessity_gate
 
-This is operator tooling, NOT run in CI — it calls a model. Start a local NIM first
-(see the mem-3453 bead), then run from the ``memory-bench`` dir (the package is not
-pip-installed; tests use a conftest, scripts use ``PYTHONPATH=.``):
+Run it from the ``memory-bench`` dir (the package is not pip-installed; tests use a
+conftest, scripts use ``PYTHONPATH=.``). Two producers, one pipeline:
+
+``--offline`` authors the persona rows deterministically
+(``generators.synthetic_records``) — no endpoint, no SDK, no GPU, and reproducible from
+the seed alone. This is the default choice for benchmark corpora, because the model only
+ever wrote the four flavor fields and the benchmark reads none of them:
+
+    PYTHONPATH=. python3 scripts/generate_worlds.py --seed 0 --personas 4 --tasks 2 \
+        --offline --tool-requiring --out fixtures/worlds-tool
+
+Without ``--offline`` it calls NeMo Data Designer against a LOCAL NIM (no paid API) for
+prose a human would plausibly have written — needed only for a claim that rests on
+surface realism. Start a local NIM first (see the mem-3453 bead):
 
     PYTHONPATH=. python3 scripts/generate_worlds.py --seed 0 --personas 4 --tasks 2 \
         --nim-endpoint http://localhost:8001/v1 --nim-model meta/llama-3.1-8b-instruct
@@ -33,8 +44,15 @@ from membench.generators import (
 from membench.generators.nemo import records_to_world, write_world
 from membench.generators.nemo.model_provider import DEFAULT_NIM_ENDPOINT, DEFAULT_NIM_MODEL
 from membench.generators.nemo.world_builder import generate_world_records
+from membench.generators.synthetic_records import synthetic_world_records
 from membench.generators.world_manifest import build_manifest, write_manifest
 from membench.memory_systems.lexical_system import DEFAULT_TOP_K
+
+# What the manifest records as the world's generator under --offline. The manifest field
+# is named nim_model, but verify_world never reads it (it re-materialises from the seed
+# and the recorded args), so the field is provenance: it must name what actually authored
+# the rows rather than a model that was never called.
+OFFLINE_GENERATOR_ID = "deterministic:synthetic_records"
 
 
 @dataclass(frozen=True)
@@ -95,6 +113,7 @@ def generate_and_freeze(
     nim_model: str,
     out: str,
     tool_requiring: bool = False,
+    offline: bool = False,
     verbose: bool = True,
 ) -> WorldResult:
     """Generate one synthetic world, freeze it under ``<out>/<seed>/``, and gate its tasks.
@@ -105,14 +124,24 @@ def generate_and_freeze(
     (mem-31vl) materialises the goal as a tool action carrying the current value instead of
     a text answer, so retrieval quality is load-bearing through the action.
     """
-    if verbose:
-        print(f"[seed {seed}] generating {personas} persona rows via NeMo @ {nim_endpoint} ...")
-    records = generate_world_records(
-        num_records=personas,
-        seed=seed,
-        nim_endpoint=nim_endpoint,
-        nim_model=nim_model,
-    )
+    # `offline` swaps ONLY the records producer; every downstream step is the same code on
+    # the same rows, so the two paths differ in the four flavor fields and in nothing the
+    # benchmark reads. What the manifest records as the generator identity follows suit.
+    if offline:
+        generator_id = OFFLINE_GENERATOR_ID
+        if verbose:
+            print(f"[seed {seed}] generating {personas} persona rows deterministically ...")
+        records = synthetic_world_records(num_records=personas, seed=seed)
+    else:
+        generator_id = nim_model
+        if verbose:
+            print(f"[seed {seed}] generating {personas} persona rows via NeMo @ {nim_endpoint} ...")
+        records = generate_world_records(
+            num_records=personas,
+            seed=seed,
+            nim_endpoint=nim_endpoint,
+            nim_model=nim_model,
+        )
     world, project = records_to_world(records, seed=seed)
     out_dir = Path(write_world(world, project, base_dir=out))
     if verbose:
@@ -169,7 +198,7 @@ def generate_and_freeze(
         world,
         project,
         sequences,
-        nim_model=nim_model,
+        nim_model=generator_id,
         n_tasks=tasks,
         facts_per_task=facts,
         seed=seed,
@@ -205,6 +234,12 @@ def main() -> int:
         action="store_true",
         help="materialise goals as memory-gated tool actions (mem-31vl) instead of text answers",
     )
+    ap.add_argument(
+        "--offline",
+        action="store_true",
+        help="author the persona rows deterministically instead of calling NeMo: no "
+        "endpoint, no SDK, no GPU. Costs prose realism and nothing else.",
+    )
     args = ap.parse_args()
 
     generate_and_freeze(
@@ -216,6 +251,7 @@ def main() -> int:
         nim_model=args.nim_model,
         out=args.out,
         tool_requiring=args.tool_requiring,
+        offline=args.offline,
     )
     return 0
 

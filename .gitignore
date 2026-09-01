@@ -35,6 +35,12 @@ verify/rig-checkouts.*.json
 # until then these are local generation artifacts, not committed.
 memory-bench/fixtures/worlds/
 
+# The tool-requiring corpus (mem-31vl), same stance. Since mem-qn1jr it is generated
+# deterministically (`scripts/generate_worlds.py --offline --tool-requiring`), so it
+# reproduces byte-for-byte from the seeds and `scripts/verify_worlds.py` re-checks that
+# against each world's manifest. Regenerable exactly means there is nothing to commit.
+memory-bench/fixtures/worlds-tool/
+
 # Python tool caches + coverage artifacts: regenerated locally / in CI, never
 # committed. (Covered by a global excludesfile on dev machines too; pinned here
 # so a fresh checkout / CI is junk-free without relying on global git config.)
