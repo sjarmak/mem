@@ -747,7 +747,14 @@ def test_metrics_do_not_score_a_memory_call_as_a_non_memory_call() -> None:
     ``non_memory_tool_calls``, so the moment a grid hands the agent this surface every endogenous
     memory call inflates the non-memory cost and the latency that goes with it — the arm that calls
     the tool itself would look like the arm doing the most non-memory work. A docstring was the
-    only guard."""
+    only guard.
+
+    The assertions below also carry the round-3 correction to that fix: FIX 6 as shipped moved the
+    bias instead of removing it. It stopped counting the memory call as non-memory and then routed
+    it nowhere, so this very test asserted a two-call step reports ``tool_calls_total == 1`` and a
+    410ms step reports 10. A published cost metric that drops exactly the calls the agent chose to
+    make rewards the arm that uses memory most with the cheapest-looking total, which is the one
+    direction the series cannot afford to be wrong in. Total now means total."""
     result = AgentStepResult(
         final_answer="done",
         tool_calls=[
@@ -764,9 +771,13 @@ def test_metrics_do_not_score_a_memory_call_as_a_non_memory_call() -> None:
         [],
         reads_enabled=False,
     )
+    # The split still holds: the memory call is not non-memory work...
     assert bundle.efficiency.non_memory_tool_calls == 1
-    assert bundle.efficiency.tool_latency_ms == 10
-    assert bundle.efficiency.tool_calls_total == 1
+    # ...and the harness performed no memory event of its own here...
+    assert bundle.efficiency.memory_tool_calls == 0
+    # ...but the agent made TWO tool calls costing 410ms, and the totals say so.
+    assert bundle.efficiency.tool_calls_total == 2
+    assert bundle.efficiency.tool_latency_ms == 410
 
 
 def test_tempdir_prefix_stays_out_of_the_repo() -> None:

@@ -290,6 +290,8 @@ def score_efficiency(
     non_memory_tool_calls: int,
     memory_events: list[MemoryEvent],
     non_memory_tool_latency_ms: float = 0.0,
+    agent_memory_tool_calls: int = 0,
+    agent_memory_tool_latency_ms: float = 0.0,
     turns: int = 0,
     retries: int = 0,
     endogenous_reads: int = 0,
@@ -298,15 +300,31 @@ def score_efficiency(
 ) -> EfficiencyMetrics:
     """Sum tokens / tool-call counts / latencies over a trial.
 
-    `memory_tool_calls` counts the normalized memory events (each retrieve/write is
-    one memory tool call); `tool_latency_ms` sums their measured latency plus the
-    non-memory tool latency. `endogenous_reads` / `endogenous_writes` are the calls the AGENT
-    made, counted by the caller from observed argv, and are reported alongside rather than added
-    in: an arm that retrieves FOR the agent and an agent that reaches for the tool are different
-    facts. `memory_tool_offered` says whether "no endogenous call" is an observation at all.
+    `memory_tool_calls` counts the normalized memory events the HARNESS performed (each
+    retrieve/write is one memory tool call); `tool_latency_ms` sums their measured latency plus the
+    non-memory tool latency. `endogenous_reads` / `endogenous_writes` are what the AGENT did,
+    counted by the caller from observed argv, and are reported alongside rather than added in: an
+    arm that retrieves FOR the agent and an agent that reaches for the tool are different facts.
+    `memory_tool_offered` says whether "no endogenous call" is an observation at all.
+
+    Note the two units, which is why `agent_memory_tool_calls` is not just their sum:
+    `endogenous_reads` / `endogenous_writes` count INVOCATIONS, and one Bash call can carry two
+    (`bd recall a; bd remember b c`), while `agent_memory_tool_calls` counts the CALLS a cost
+    metric is denominated in. Deriving either from the other would quietly misreport whichever
+    question was not being asked.
 
     `cost_usd` and `model_latency_ms` stay 0.0 in the
     deterministic path — they are populated on the Harbor/model path, not here.
+
+    `agent_memory_tool_calls` is the third channel and it exists because the second one moved.
+    Before mem-5sht9's FIX 6, a Bash-wrapped `bd recall` was counted as a non-memory call; FIX 6
+    correctly stopped counting it there but routed it NOWHERE, so `tool_calls_total` silently
+    dropped it. On a published efficiency metric that is the worst possible direction: the arm
+    whose agent actually reaches for memory reports the LOWEST total tool cost, and the cheaper an
+    arm looks the more it looks like the one to ship. `tool_calls_total` must equal the number of
+    tool calls the agent really made, so it sums all three channels, and the latency follows the
+    same rule. Kept as its own parameter rather than folded back into `non_memory_tool_calls`
+    because "how much non-memory work did this cost" is still a question worth answering.
     """
     mem_calls = len(memory_events)
     mem_latency = sum(ev.latency_ms for ev in memory_events)
@@ -315,7 +333,7 @@ def score_efficiency(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         total_tokens=input_tokens + output_tokens,
-        tool_calls_total=non_memory_tool_calls + mem_calls,
+        tool_calls_total=non_memory_tool_calls + mem_calls + agent_memory_tool_calls,
         memory_tool_calls=mem_calls,
         endogenous_memory_tool_calls=endogenous,
         endogenous_memory_reads=endogenous_reads,
@@ -324,7 +342,7 @@ def score_efficiency(
         # observation about the agent, so it stays False rather than reading as a universal miss.
         tool_not_called=memory_tool_offered and endogenous == 0,
         non_memory_tool_calls=non_memory_tool_calls,
-        tool_latency_ms=non_memory_tool_latency_ms + mem_latency,
+        tool_latency_ms=non_memory_tool_latency_ms + mem_latency + agent_memory_tool_latency_ms,
         turns=turns,
         retries=retries,
     )

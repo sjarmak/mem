@@ -87,10 +87,18 @@ def compute_metrics(
     # the arm that calls the tool itself. The split is mechanical (argv shape) and applies to every
     # arm: for the arms that hand the agent no memory tool it is a no-op, because none of their
     # calls match.
+    #
+    # Both halves of that split are then COUNTED. Discarding the memory half (the shipped
+    # `_, non_memory_calls`) moved the bias rather than removing it: the call left
+    # `non_memory_tool_calls` and arrived nowhere, so `tool_calls_total` — a published metric —
+    # under-reported by exactly the number of memory calls the agent chose to make, and the arm
+    # that uses memory most looked cheapest.
     memory_calls, non_memory_calls = partition_memory_calls(agent_result.tool_calls)
     # What the agent CHOSE to do with the tool, read off observed argv. Counted here rather than
     # taken from the agent's own report for the same reason `available_ids` is below: a step whose
-    # measurement is "did it choose to?" cannot let the subject answer.
+    # measurement is "did it choose to?" cannot let the subject answer. These count INVOCATIONS,
+    # not calls — one Bash call can carry two verbs — which is why the cost channel above is
+    # counted separately rather than derived from them.
     invocations = memory_invocations(agent_result.tool_calls)
     endogenous_reads = sum(1 for inv in invocations if inv.is_read)
     endogenous_writes = sum(1 for inv in invocations if inv.is_write)
@@ -103,6 +111,8 @@ def compute_metrics(
         non_memory_tool_calls=len(non_memory_calls),
         memory_events=memory_events,
         non_memory_tool_latency_ms=sum(tc.latency_ms for tc in non_memory_calls),
+        agent_memory_tool_calls=len(memory_calls),
+        agent_memory_tool_latency_ms=sum(tc.latency_ms for tc in memory_calls),
         turns=agent_result.turns,
         endogenous_reads=endogenous_reads,
         endogenous_writes=endogenous_writes,
