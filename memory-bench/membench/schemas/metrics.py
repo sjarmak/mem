@@ -77,6 +77,13 @@ class RetentionMetrics(BaseModel):
     write_miss_rate: float = 0.0
     over_retention_rate: float = 0.0
     noise_write_rate: float = 0.0
+    # Fraction of the agent's writes that landed on an id the step AUTHORED as
+    # forbidden (``SequenceStep.forbidden_memory_writes`` — e.g. re-persisting a
+    # superseded v1). Distinct from ``over_retention_rate``, which is "wrote an id
+    # nobody asked for": a forbidden id is one the harness explicitly named as
+    # wrong-to-write, so this is a directed channel rather than a volume proxy.
+    # 0.0 when no forbidden ids are authored (an honest "not measured here").
+    forbidden_write_rate: float = 0.0
     correct_scope_rate: float = 0.0
     correct_backend_rate: float = 0.0
     stale_memory_removed: bool = False

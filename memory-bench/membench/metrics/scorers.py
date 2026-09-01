@@ -210,6 +210,9 @@ class RetentionInputs:
     correct_backend_ids: list[str] | None = None
     removed_ids: list[str] = field(default_factory=list)
     superseded_expected_ids: list[str] = field(default_factory=list)
+    # Ids the step AUTHORED as forbidden to write (``SequenceStep.forbidden_memory_writes``).
+    # Scored as its own directed rate; ``over_retention_rate``'s arithmetic is untouched.
+    forbidden_write_ids: list[str] = field(default_factory=list)
 
 
 def score_retention(inp: RetentionInputs) -> RetentionMetrics:
@@ -229,6 +232,8 @@ def score_retention(inp: RetentionInputs) -> RetentionMetrics:
 
     superseded = set(inp.superseded_expected_ids)
     removed = set(inp.removed_ids)
+    forbidden = set(inp.forbidden_write_ids)
+    n_forbidden = sum(1 for m in written if m in forbidden)
 
     return RetentionMetrics(
         expected_memory_written=bool(expected) and expected_set.issubset(written_set),
@@ -237,6 +242,7 @@ def score_retention(inp: RetentionInputs) -> RetentionMetrics:
         # Over-retention = ids written that were not asked for, relative to writes.
         over_retention_rate=_ratio(n_noise, len(written)),
         noise_write_rate=_ratio(n_noise, len(written)),
+        forbidden_write_rate=_ratio(n_forbidden, len(written)),
         correct_scope_rate=_ratio(len(set(scope_ids) & written_set), len(written_expected)),
         correct_backend_rate=_ratio(len(set(backend_ids) & written_set), len(written_expected)),
         # Supersession: a superseded id is correctly handled iff it was removed.

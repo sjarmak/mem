@@ -85,6 +85,10 @@ class SequenceStep(BaseModel):
     # id here is a real prior write (_assert_superseded_written). Defaults empty so existing
     # fixtures stay valid.
     superseded_memory_ids: list[str] = Field(default_factory=list)
+    # Ids this step must NOT write (e.g. re-persisting the superseded v1 it was just
+    # told is stale). Scored mechanically as ``RetentionMetrics.forbidden_write_rate``
+    # over the ids actually written. Defaults empty so existing fixtures stay valid.
+    forbidden_memory_writes: list[str] = Field(default_factory=list)
     # S3 retention-schedule oracle (additive; consumer = the RetentionScheduledMemory
     # arm + its scorer). ``record_class`` is the retention class the step's record is
     # assigned at write (the arm's classify input); ``disposition`` is the schedule's
