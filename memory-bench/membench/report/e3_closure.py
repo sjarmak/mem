@@ -26,6 +26,17 @@ Honest absences, carried in the summary rather than silently reported as zeros:
 - ``correct_scope_rate`` is a pass-through default in the deterministic path (no
   arm here distinguishes scope), so it is reported as unmeasured, not as a 1.0 win.
 
+Four further disclosures ride the summary so no number here is read as more than it
+is (see the constants below for the emitted text):
+
+- retrieval is ANSWER-KEY CUED (``ANSWER_KEY_CUE``);
+- ``forbidden_write_rate`` is a channel no wired agent exercises
+  (``FORBIDDEN_WRITE_NOT_EXERCISED``);
+- the floor is an ID-PRESENCE short-circuit, so non-id-keyed arms score 0 by
+  construction (``FLOOR_IS_ID_PRESENCE``);
+- a control-condition arm performs zero writes, so its ceiling is not a closure
+  (``CONDITION_CAVEAT``).
+
 Validity gates ride THIS summary, never a per-cell metric vector: a gate folded into
 a per-seed vector flattens into the paired mean and stops being a gate.
 """
@@ -82,6 +93,58 @@ LOO_SUBSTITUTES = (
     "scope root, so no condition inherits another condition's store",
 )
 
+# DISCLOSURE — retrieval on this path is ANSWER-KEY CUED. run_sequence builds
+# RetrievalRequest(requested_ids=step.expected_memory_reads)
+# (runner/conditions.py), i.e. it hands the arm the ids the fixture already knows
+# are the right ones. Any arm that honors requested_ids therefore reads
+# relevant_memory_retrieved_rate == 1.0 and distractor_retrieval_rate == 0.0 by
+# construction. These two are reported as CUED, never as retrieval quality; the
+# fields that still discriminate are stale_memory_retrieval_rate and
+# missed_required_memory_count (an arm ignoring requested_ids, e.g. a
+# read-everything arm, does move all four).
+ANSWER_KEY_CUED_FIELDS = (
+    "relevant_memory_retrieved_rate",
+    "distractor_retrieval_rate",
+)
+ANSWER_KEY_CUE = (
+    "run_sequence issues RetrievalRequest(requested_ids=step.expected_memory_reads), "
+    "so these fields are GUARANTEED 1.0 / 0.0 for any arm honoring requested_ids. "
+    "They are a cue-compliance check, NOT a measurement of retrieval quality."
+)
+
+# The B step is the only step carrying forbidden_memory_writes, and it expects no
+# writes; both wired agents persist exactly ``expected_memory_writes``. So a 0.0
+# here is STRUCTURAL, not a clean result. A WritesStaleAgent that rewrites the
+# superseded id would move it, but inventing a third reference agent to green a
+# channel is exactly the move this bead already rejected for over_retention_rate;
+# the channel is labeled not-exercised instead, and its unit coverage lives in
+# test_forbidden_write_rate_is_a_directed_channel (scorer level, where it moves).
+FORBIDDEN_WRITE_NOT_EXERCISED = (
+    "NOT EXERCISED: no wired agent writes on a step carrying forbidden ids "
+    "(ScriptedAgent/NeverWritesAgent persist exactly expected_memory_writes, and the "
+    "apply step expects none), so 0.0 is structural rather than a measured clean run"
+)
+
+# The never-writes FLOOR of 0.0 comes from outcome_check_passes short-circuiting on
+# requires_memory not being a subset of available_memory ids — an id-presence check,
+# not the v2 literal being unobtainable. An agent that already held the answer with
+# zero memory would still floor at 0.0.
+FLOOR_IS_ID_PRESENCE = (
+    "closure's 0.0 floor comes from the requires_memory ID-PRESENCE short-circuit, not "
+    "from the v2 literal being unobtainable. CONSEQUENCE: any arm not keyed on harness "
+    "ids - native/builtin agent memory, i.e. the whole E1/E2 line - scores 0 here even "
+    "if it genuinely closed the write->read loop. This endpoint reads id-keyed arms only."
+)
+
+# On a non-MEMORY_ENABLED condition the agent performs no writes at all
+# (runner/conditions.py gates the write loop on MEMORY_ENABLED), so a 1.0 there is
+# the oracle handing over the content, not a write->read closure.
+CONDITION_CAVEAT = (
+    "this arm runs under a CONTROL condition, where run_sequence performs ZERO agent "
+    "writes; closure_rate here reflects the oracle/no-memory path, NOT a write->read "
+    "closure. Only MEMORY_ENABLED runs measure the loop."
+)
+
 
 @dataclass(frozen=True)
 class ClosureCell:
@@ -118,6 +181,16 @@ def score_closure_run(world: ClosureWorld, run: SequenceRun) -> ClosureCell:
     The apply (B) step's trial carries the endpoint; retention is averaged over the
     trials whose step actually expected a write, so establishing steps are not
     diluted by the read-only step's vacuous 0.0."""
+    # Trials are keyed by step_id, so a multi-condition run would collapse
+    # last-write-wins and make closure depend on CONDITION ORDER rather than on the
+    # write. Refuse instead of scoring a silently condition-dependent cell.
+    conditions = sorted({t.condition.value for t in run.trials})
+    if len(conditions) > 1:
+        raise ValueError(
+            "score_closure_run scores a SINGLE-condition run; got "
+            f"{conditions} - keying trials by step_id across conditions is "
+            "last-write-wins and would make closure depend on condition order"
+        )
     trials = {t.step_id: t for t in run.trials}
     apply_trial = trials[world.apply_step_id]
     metrics = apply_trial.metrics
@@ -169,6 +242,8 @@ def summarize_closure(
     closure_rate = mean(1.0 if c.closure else 0.0 for c in cells) if cells else 0.0
     is_ceiling_run = agent_name == "scripted" and arm in ID_EXACT_ARMS
     halt = is_ceiling_run and closure_rate != 1.0
+    condition = _CONTROL_CONDITIONS.get(arm, Condition.MEMORY_ENABLED)
+    forbidden_exercised = any(c.forbidden_write_rate > 0.0 for c in cells)
     return {
         "generator_version": GENERATOR_VERSION,
         "arm": arm,
@@ -189,10 +264,16 @@ def summarize_closure(
             "missed_required_memory_count": (
                 mean(float(c.missed_required_memory_count) for c in cells) if cells else 0.0
             ),
+            "answer_key_cued": list(ANSWER_KEY_CUED_FIELDS),
+            "answer_key_cue": ANSWER_KEY_CUE,
         },
         "retention": {
             "write_hit_rate": mean(c.write_hit_rate for c in cells) if cells else 0.0,
             "forbidden_write_rate": (mean(c.forbidden_write_rate for c in cells) if cells else 0.0),
+            "forbidden_write_rate_exercised": forbidden_exercised,
+            "forbidden_write_rate_note": (
+                "" if forbidden_exercised else FORBIDDEN_WRITE_NOT_EXERCISED
+            ),
         },
         "validity": {
             "is_ceiling_run": is_ceiling_run,
@@ -212,6 +293,10 @@ def summarize_closure(
                 "required id, so it would read 0 whether or not the answer leaked."
             ),
             "loo_substitutes": list(LOO_SUBSTITUTES),
+            "condition": condition.value,
+            "write_read_closure_path": condition is Condition.MEMORY_ENABLED,
+            "condition_caveat": ("" if condition is Condition.MEMORY_ENABLED else CONDITION_CAVEAT),
+            "floor_is_id_presence": FLOOR_IS_ID_PRESENCE,
         },
         "unmeasurable_endpoints": {
             "supersession_correct": (

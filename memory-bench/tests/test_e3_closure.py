@@ -175,3 +175,64 @@ def test_cli_refuses_below_the_seed_floor() -> None:
     with pytest.raises(SystemExit) as exc:
         _main(["--seeds", "5"])
     assert exc.value.code == 2
+
+
+def test_score_closure_run_refuses_a_multi_condition_run() -> None:
+    """Trials are keyed by step_id, so scoring two conditions at once would be
+    last-write-wins and make closure depend on condition ORDER."""
+    world = generate_closure_world(3)
+    experiment = ExperimentConfig(
+        experiment_id="e3-test-multi",
+        agent=AgentConfig(agent_config_id="scripted-ref"),
+        memory=MemoryConfig(memory_config_id="filesystem", system="filesystem"),
+        dataset_id="e3-closure-world",
+        conditions=[Condition.MEMORY_ENABLED, Condition.NO_MEMORY],
+    )
+    run = run_sequence(
+        world.sequence,
+        experiment,
+        ScriptedAgent(),
+        conditions=[Condition.MEMORY_ENABLED, Condition.NO_MEMORY],
+    )
+    assert len({t.condition for t in run.trials}) == 2
+    with pytest.raises(ValueError, match="SINGLE-condition"):
+        score_closure_run(world, run)
+
+
+def test_summary_discloses_the_answer_key_cue_and_unexercised_channels() -> None:
+    cells = run_closure_cells(SEEDS, arm="filesystem", agent_name="scripted")
+    summary = summarize_closure(cells, arm="filesystem", agent_name="scripted", n_seeds=len(SEEDS))
+    retrieval = summary["retrieval"]
+    assert isinstance(retrieval, dict)
+    # The two guaranteed fields are named as cued, right where they are reported.
+    assert retrieval["relevant_memory_retrieved_rate"] == 1.0
+    assert retrieval["distractor_retrieval_rate"] == 0.0
+    assert retrieval["answer_key_cued"] == [
+        "relevant_memory_retrieved_rate",
+        "distractor_retrieval_rate",
+    ]
+    assert "requested_ids" in str(retrieval["answer_key_cue"])
+
+    retention = summary["retention"]
+    assert isinstance(retention, dict)
+    assert retention["forbidden_write_rate"] == 0.0
+    assert retention["forbidden_write_rate_exercised"] is False
+    assert "NOT EXERCISED" in str(retention["forbidden_write_rate_note"])
+
+    validity = summary["validity"]
+    assert isinstance(validity, dict)
+    assert validity["condition"] == Condition.MEMORY_ENABLED.value
+    assert validity["write_read_closure_path"] is True
+    assert validity["condition_caveat"] == ""
+    assert "ID-PRESENCE" in str(validity["floor_is_id_presence"])
+
+
+def test_control_condition_arm_is_flagged_as_not_a_closure() -> None:
+    """--arm oracle runs under ORACLE_MEMORY, where the agent performs ZERO writes,
+    so its 1.0 is the oracle path rather than a write->read closure."""
+    summary = summarize_closure([], arm="oracle", agent_name="scripted", n_seeds=0)
+    validity = summary["validity"]
+    assert isinstance(validity, dict)
+    assert validity["condition"] == Condition.ORACLE_MEMORY.value
+    assert validity["write_read_closure_path"] is False
+    assert "ZERO agent" in str(validity["condition_caveat"])
