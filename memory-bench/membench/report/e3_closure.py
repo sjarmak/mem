@@ -78,6 +78,15 @@ _CONTROL_CONDITIONS = {
 # NOT a fixture failure — the ceiling gate only applies to these.
 ID_EXACT_ARMS = frozenset({"oracle", "filesystem"})
 
+# Arms an endogenous READ can be measured on. Every other arm resolves STRICTLY from
+# `requested_ids` — `run_sequence` hands it the ids the fixture already knows are right — so it
+# cannot answer a query the agent composed itself. Run one under `--endogenous-read` and the arm
+# would return the answer-key ids no matter what the agent asked for, and the read rate would
+# measure the cue rather than the choice. `lexical` is the exception because it RANKS a query.
+# This is a refusal, not a default: silently falling back to the cued path is precisely how a
+# fabricated endogenous number would enter the record.
+ENDOGENOUS_READ_ARMS = frozenset({"lexical"})
+
 _AGENTS: dict[str, type[Agent]] = {
     "scripted": ScriptedAgent,
     "never-writes": NeverWritesAgent,
@@ -365,7 +374,22 @@ def _main(argv: list[str] | None = None) -> int:
     parser.add_argument("--arm", default="filesystem")
     parser.add_argument("--agent", default="scripted", choices=sorted(_AGENTS))
     parser.add_argument("--json", action="store_true", help="emit compact JSON")
+    parser.add_argument(
+        "--endogenous-read",
+        action="store_true",
+        help=(
+            "grade the read as the agent's choice rather than a harness retrieve; only "
+            f"supported on {sorted(ENDOGENOUS_READ_ARMS)}"
+        ),
+    )
     args = parser.parse_args(argv)
+
+    if args.endogenous_read and args.arm not in ENDOGENOUS_READ_ARMS:
+        parser.error(
+            f"--endogenous-read is unsupported on arm {args.arm!r}: it resolves strictly from "
+            "requested_ids, so it would return the fixture's own answer-key ids whatever the "
+            f"agent asked for. Supported arms: {sorted(ENDOGENOUS_READ_ARMS)}"
+        )
 
     if args.seeds < MIN_SEEDS:
         parser.error(

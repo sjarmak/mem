@@ -571,7 +571,14 @@ def test_emitted_keys_do_not_collide_with_efficiency_metrics() -> None:
     """FIX 4 as a property, not a spelling. ``EfficiencyMetrics.memory_tool_calls`` counts
     harness-performed memory EVENTS; the smoke row counts calls the AGENT chose to make. A consumer
     joining the two on a shared key would compare different quantities silently, so the bare names
-    must not appear on the JSON surface at all."""
+    must not appear on the JSON surface at all.
+
+    The property is DIFFERENT quantities under one name, not any shared name. E3b gave
+    ``EfficiencyMetrics`` its own ``endogenous_memory_*`` fields carrying the agent-chosen count
+    this row already reports, and there the shared key is the correct join rather than the silent
+    mismatch: both sides are counted by ``tool_surface`` from observed argv. So those names are
+    exempted BY NAME and the bare ones stay banned — an exemption list that a future bare
+    ``memory_tool_calls`` cannot slip into."""
     row = run_smoke(
         model="m",
         dry_run=False,
@@ -580,7 +587,12 @@ def test_emitted_keys_do_not_collide_with_efficiency_metrics() -> None:
     )
     assert "memory_tool_calls" not in row
     assert "memory_verbs" not in row
-    assert set(EfficiencyMetrics.model_fields) & set(row) == set()
+    deliberately_shared = {
+        "endogenous_memory_tool_calls",
+        "endogenous_memory_reads",
+        "endogenous_memory_writes",
+    }
+    assert set(EfficiencyMetrics.model_fields) & set(row) <= deliberately_shared
 
 
 @requires_bd

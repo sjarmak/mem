@@ -85,6 +85,15 @@ class SequenceStep(BaseModel):
     # id here is a real prior write (_assert_superseded_written). Defaults empty so existing
     # fixtures stay valid.
     superseded_memory_ids: list[str] = Field(default_factory=list)
+    # Whether the READ / WRITE on this step is the AGENT's choice rather than the harness's.
+    # Both default False so every existing fixture keeps the forced-loop semantics E3a graded:
+    # the harness retrieves, the harness records, and closure measures the LOOP. Flipped True,
+    # the harness stops performing that half and the step measures whether the agent chose to do
+    # it — which is the only reading under which a 0 is a finding rather than a broken run. They
+    # are separate flags because the two choices are separately interesting: an agent that writes
+    # but never reads back and one that reads but never records are different failures.
+    read_is_endogenous: bool = False
+    write_is_endogenous: bool = False
     # Ids this step must NOT write (e.g. re-persisting the superseded v1 it was just
     # told is stale). Scored mechanically as ``RetentionMetrics.forbidden_write_rate``
     # over the ids actually written. Defaults empty so existing fixtures stay valid.

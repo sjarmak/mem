@@ -19,7 +19,13 @@ from membench.metrics.scorers import (
     score_synthesis,
 )
 from membench.runner.agent import AgentStepResult
-from membench.runner.tool_surface import partition_memory_calls
+from membench.runner.tool_surface import (
+    MEMORY_TOOL_NAMES,
+    assert_recall_is_bounded,
+    memory_invocations,
+    observed_requested_ids,
+    partition_memory_calls,
+)
 from membench.schemas.memory_event import MemoryEvent
 from membench.schemas.metrics import MetricsBundle, TaskMetrics
 from membench.schemas.sequence import SequenceStep
@@ -81,7 +87,16 @@ def compute_metrics(
     # the arm that calls the tool itself. The split is mechanical (argv shape) and applies to every
     # arm: for the arms that hand the agent no memory tool it is a no-op, because none of their
     # calls match.
-    _, non_memory_calls = partition_memory_calls(agent_result.tool_calls)
+    memory_calls, non_memory_calls = partition_memory_calls(agent_result.tool_calls)
+    # What the agent CHOSE to do with the tool, read off observed argv. Counted here rather than
+    # taken from the agent's own report for the same reason `available_ids` is below: a step whose
+    # measurement is "did it choose to?" cannot let the subject answer.
+    invocations = memory_invocations(agent_result.tool_calls)
+    endogenous_reads = sum(1 for inv in invocations if inv.is_read)
+    endogenous_writes = sum(1 for inv in invocations if inv.is_write)
+    # A memory call arrives as a structured Bash tool_use, so a step that does not offer Bash
+    # cannot receive one and its silence says nothing about the agent.
+    memory_tool_offered = any(name in step.available_tools for name in MEMORY_TOOL_NAMES)
     efficiency = score_efficiency(
         input_tokens=agent_result.input_tokens,
         output_tokens=agent_result.output_tokens,
@@ -89,6 +104,9 @@ def compute_metrics(
         memory_events=memory_events,
         non_memory_tool_latency_ms=sum(tc.latency_ms for tc in non_memory_calls),
         turns=agent_result.turns,
+        endogenous_reads=endogenous_reads,
+        endogenous_writes=endogenous_writes,
+        memory_tool_offered=memory_tool_offered,
     )
 
     # Ordered retrieved ids carry rank; fall back to payload keys if the event
@@ -121,7 +139,15 @@ def compute_metrics(
         )
     )
 
-    available_ids = list(retrieve.payloads) if retrieve is not None else []
+    if step.read_is_endogenous:
+        # The harness performs no retrieve on an endogenous-read step, so what was "available" is
+        # whatever the agent asked for and the harness OBSERVED it ask for. Reading this off
+        # `agent_result` fields the agent populates itself would let the subject grade its own
+        # read, and every synthesis number downstream would inherit that self-report.
+        assert_recall_is_bounded(memory_calls)
+        available_ids = observed_requested_ids(memory_calls)
+    else:
+        available_ids = list(retrieve.payloads) if retrieve is not None else []
     synthesis = score_synthesis(
         SynthesisInputs(
             supporting_required_ids=_supporting_required_ids(step),

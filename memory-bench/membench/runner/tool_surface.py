@@ -282,6 +282,53 @@ _MAX_NESTING = 4
 _DELIMITER_END = frozenset(" \t\n;&|()<>")
 
 
+# The READ half of ``MEMORY_VERBS``, split out because E3b grades reads and writes as separate
+# endogenous choices. ``forget`` is neither: it is a deletion, and folding it into either half
+# would let a delete masquerade as evidence the agent consulted or recorded anything.
+MEMORY_READ_VERBS: tuple[str, ...] = ("recall", "memories")
+MEMORY_WRITE_VERBS: tuple[str, ...] = ("remember",)
+
+# ``bd memories`` with NO search operand lists every memory in the store. That is the unbounded
+# enumerate E3b's read seam must not expose: a leg that can enumerate does not have to REMEMBER
+# where it put something, so ``closure_rate`` would saturate for a reason that is not memory use
+# and the endogenous read measurement would report a ceiling it did not earn. The verb is not
+# removed from ``MEMORY_VERBS`` — an agent that reaches for it has still made a memory call, and
+# the count of that choice is data — it is refused at the read seam, and only in its bare form:
+# ``bd memories dolt`` is a bounded search and stays available. ``bd recall <key>`` needs no bound
+# at all; it is keyed, so one invocation yields one memory by construction.
+ENUMERATE_VERB = "memories"
+
+
+@dataclass(frozen=True)
+class MemoryInvocation:
+    """One observed ``bd`` memory call: the verb and the operands it was given.
+
+    Immutable and operand-carrying because the three endogenous questions are answered by argv
+    shape and nothing else — whether the call READ or WROTE, whether a read was bounded, and which
+    ids it named."""
+
+    verb: str
+    operands: tuple[str, ...] = ()
+
+    @property
+    def is_read(self) -> bool:
+        return self.verb in MEMORY_READ_VERBS
+
+    @property
+    def is_write(self) -> bool:
+        return self.verb in MEMORY_WRITE_VERBS
+
+    @property
+    def is_enumerate(self) -> bool:
+        """A bare list-all. ``bd memories dolt`` is a bounded search and is not one."""
+        return self.verb == ENUMERATE_VERB and not self.operands
+
+    @property
+    def requested_ids(self) -> tuple[str, ...]:
+        """The ids a KEYED read named. Empty for a search: its operand is a query, not an id."""
+        return self.operands if self.verb == "recall" else ()
+
+
 class MemoryToolError(RuntimeError):
     """The memory tool surface could not be provisioned or driven — a missing ``bd``, a failed
     ``bd init``, a store the sandbox would eat, a ``bd`` that resolves back to the shim. Raised,
@@ -692,8 +739,8 @@ def _interpreter_command_string(words: Sequence[str], index: int) -> str | None:
     return None
 
 
-def _verbs_of_segment(words: Sequence[str], depth: int = 0) -> list[str]:
-    """The memory verbs this ONE command segment invokes.
+def _invocations_of_segment(words: Sequence[str], depth: int = 0) -> list[MemoryInvocation]:
+    """The memory invocations this ONE command segment makes, verb AND operands.
 
     Usually at most one — a segment is one invocation — but an interpreter's ``-c`` string is a
     whole command line of its own, so ``sh -c 'bd recall a; bd remember b'`` yields two.
@@ -701,7 +748,13 @@ def _verbs_of_segment(words: Sequence[str], depth: int = 0) -> list[str]:
     Matches the command word by BASENAME (so ``/usr/local/bin/bd`` counts and ``abd`` does not),
     then walks bd's global flags — consuming the value of a value-taking flag — to the first
     non-flag token, which is the subcommand. ``bd issue remember`` therefore does not count:
-    ``issue`` is the subcommand."""
+    ``issue`` is the subcommand.
+
+    The operands are carried because two of the endogenous measurements need them and neither can
+    be recovered from a bare verb: ``bd memories`` with no search term is an ENUMERATE while
+    ``bd memories dolt`` is a bounded search, and ``bd recall <key>`` is the only place the ids the
+    agent actually asked for appear. Operand words after the verb are taken verbatim, minus bd's
+    own options — this is argv shape, not a reading of what the agent meant."""
     index = _skip_prefixes(words, 0)
     if index >= len(words):
         return []
@@ -709,9 +762,9 @@ def _verbs_of_segment(words: Sequence[str], depth: int = 0) -> list[str]:
         nested = _interpreter_command_string(words, index)
         if nested is not None:
             return [
-                verb
+                invocation
                 for segment in command_segments(nested)
-                for verb in _verbs_of_segment(segment, depth + 1)
+                for invocation in _invocations_of_segment(segment, depth + 1)
             ]
     if PurePosixPath(words[index]).name != MEMORY_COMMAND:
         return []
@@ -719,9 +772,17 @@ def _verbs_of_segment(words: Sequence[str], depth: int = 0) -> list[str]:
     while index < len(words) and _is_option(words[index]):
         flag = words[index]
         index += 2 if "=" not in flag and flag in BD_VALUE_FLAGS else 1
-    if index < len(words) and words[index] in MEMORY_VERBS:
-        return [words[index]]
-    return []
+    if index >= len(words) or words[index] not in MEMORY_VERBS:
+        return []
+    verb = words[index]
+    operands = tuple(word for word in words[index + 1 :] if not _is_option(word))
+    return [MemoryInvocation(verb=verb, operands=operands)]
+
+
+def _verbs_of_segment(words: Sequence[str], depth: int = 0) -> list[str]:
+    """The memory verbs this ONE command segment invokes — ``_invocations_of_segment`` without
+    the operands. Kept as the narrow view the counters want."""
+    return [invocation.verb for invocation in _invocations_of_segment(words, depth)]
 
 
 def memory_verbs_in_command(command: str) -> list[str]:
@@ -770,6 +831,63 @@ def endogenous_memory_verbs(calls: Iterable[ToolCall]) -> list[str]:
         if call.name in MEMORY_TOOL_NAMES:
             verbs.extend(memory_verbs_in_command(_command_of(call)))
     return verbs
+
+
+def memory_invocations_in_command(command: str) -> list[MemoryInvocation]:
+    """Every memory invocation in one shell command line, in order — ``memory_verbs_in_command``
+    with the operands kept."""
+    return [
+        invocation
+        for segment in command_segments(command)
+        for invocation in _invocations_of_segment(segment)
+    ]
+
+
+def memory_invocations(calls: Iterable[ToolCall]) -> list[MemoryInvocation]:
+    """Every memory invocation across ``calls``, in stream order. The harness-OBSERVED record of
+    what the agent asked memory for: parsed from the ``command`` argument of structured tool calls,
+    never from the agent's prose or its own account of what it did."""
+    invocations: list[MemoryInvocation] = []
+    for call in calls:
+        if call.name in MEMORY_TOOL_NAMES:
+            invocations.extend(memory_invocations_in_command(_command_of(call)))
+    return invocations
+
+
+def observed_requested_ids(calls: Iterable[ToolCall]) -> list[str]:
+    """The memory ids the agent asked for, in stream order, deduplicated.
+
+    Only keyed ``recall`` operands count. A bounded ``bd memories <term>`` names a QUERY, not an
+    id, and treating a search term as a requested id would credit an agent with asking for
+    whatever the search happened to return. This is the harness's own reading of argv, which is
+    why ``runner/metrics.py`` can use it as ``available_ids`` on an endogenous-read step without
+    trusting the agent's self-report."""
+    seen: list[str] = []
+    for invocation in memory_invocations(calls):
+        for memory_id in invocation.requested_ids:
+            if memory_id not in seen:
+                seen.append(memory_id)
+    return seen
+
+
+def enumerate_invocations(calls: Iterable[ToolCall]) -> list[MemoryInvocation]:
+    """Every unbounded list-all invocation among ``calls`` — see ``ENUMERATE_VERB``."""
+    return [invocation for invocation in memory_invocations(calls) if invocation.is_enumerate]
+
+
+def assert_recall_is_bounded(calls: Iterable[ToolCall]) -> None:
+    """Raise if any observed invocation enumerates the whole store.
+
+    Called at the read seam rather than trusted to a deny-list: ``--disallowedTools`` matches a
+    command PREFIX, and the difference between the refused ``bd memories`` and the permitted
+    ``bd memories dolt`` is the presence of an operand, which a prefix pattern cannot express."""
+    unbounded = enumerate_invocations(calls)
+    if unbounded:
+        raise MemoryToolError(
+            f"unbounded memory enumeration: {len(unbounded)} bare `{MEMORY_COMMAND} "
+            f"{ENUMERATE_VERB}` call(s) would list the whole store, so a later leg could reach a "
+            "value without having recorded where it put it"
+        )
 
 
 def _is_memory_call(call: ToolCall) -> bool:

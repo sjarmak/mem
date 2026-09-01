@@ -37,7 +37,22 @@ class EfficiencyMetrics(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
     tool_calls_total: int = 0
+    # Memory calls the HARNESS performed on the arm's behalf (one per normalized MemoryEvent).
     memory_tool_calls: int = 0
+    # Memory calls the AGENT chose to make, parsed from observed tool_use argv by
+    # ``runner.tool_surface``. Deliberately a SEPARATE counter from ``memory_tool_calls``: summing
+    # them would make an arm that retrieves for the agent indistinguishable from an agent that
+    # reached for the tool itself, which is the one distinction E3b exists to measure.
+    endogenous_memory_tool_calls: int = 0
+    # Of those, the ones that read and the ones that wrote. An agent that only ever writes and an
+    # agent that only ever reads both show up as non-zero above; only this split separates them.
+    endogenous_memory_reads: int = 0
+    endogenous_memory_writes: int = 0
+    # True when the step handed the agent a memory tool and the agent made no memory call at all.
+    # This is NOT a memory failure and must not be scored as one: it records that the measured
+    # behaviour did not occur, which on an endogenous step is the primary observation. False on a
+    # step that offers no memory tool, where "did not call" carries no information.
+    tool_not_called: bool = False
     non_memory_tool_calls: int = 0
     wall_clock_latency_ms: float = 0.0
     model_latency_ms: float = 0.0

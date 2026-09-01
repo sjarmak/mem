@@ -292,22 +292,37 @@ def score_efficiency(
     non_memory_tool_latency_ms: float = 0.0,
     turns: int = 0,
     retries: int = 0,
+    endogenous_reads: int = 0,
+    endogenous_writes: int = 0,
+    memory_tool_offered: bool = False,
 ) -> EfficiencyMetrics:
     """Sum tokens / tool-call counts / latencies over a trial.
 
     `memory_tool_calls` counts the normalized memory events (each retrieve/write is
     one memory tool call); `tool_latency_ms` sums their measured latency plus the
-    non-memory tool latency. `cost_usd` and `model_latency_ms` stay 0.0 in the
+    non-memory tool latency. `endogenous_reads` / `endogenous_writes` are the calls the AGENT
+    made, counted by the caller from observed argv, and are reported alongside rather than added
+    in: an arm that retrieves FOR the agent and an agent that reaches for the tool are different
+    facts. `memory_tool_offered` says whether "no endogenous call" is an observation at all.
+
+    `cost_usd` and `model_latency_ms` stay 0.0 in the
     deterministic path — they are populated on the Harbor/model path, not here.
     """
     mem_calls = len(memory_events)
     mem_latency = sum(ev.latency_ms for ev in memory_events)
+    endogenous = endogenous_reads + endogenous_writes
     return EfficiencyMetrics(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         total_tokens=input_tokens + output_tokens,
         tool_calls_total=non_memory_tool_calls + mem_calls,
         memory_tool_calls=mem_calls,
+        endogenous_memory_tool_calls=endogenous,
+        endogenous_memory_reads=endogenous_reads,
+        endogenous_memory_writes=endogenous_writes,
+        # Only meaningful where a tool was actually offered; elsewhere "did not call" is not an
+        # observation about the agent, so it stays False rather than reading as a universal miss.
+        tool_not_called=memory_tool_offered and endogenous == 0,
         non_memory_tool_calls=non_memory_tool_calls,
         tool_latency_ms=non_memory_tool_latency_ms + mem_latency,
         turns=turns,
