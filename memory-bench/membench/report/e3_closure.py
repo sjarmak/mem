@@ -21,15 +21,17 @@ Honest absences, carried in the summary rather than silently reported as zeros:
   ``MemorySystem`` ABC has no removal op, so ``removed_ids`` is always empty and
   passing ``superseded_expected_ids`` would flip both fields from constant-True to
   constant-FALSE for every arm — a fabricated penalty, not a measurement. The
-  channels that do move — ``stale_memory_retrieval_rate`` and the forbidden-value /
-  forbidden-write rates — are reported instead.
+  channel that still separates a read-everything arm from a compliant one is the
+  outcome check's forbidden-value list, and it is read through the reward.
 - ``correct_scope_rate`` is a pass-through default in the deterministic path (no
   arm here distinguishes scope), so it is reported as unmeasured, not as a 1.0 win.
 
 Four further disclosures ride the summary so no number here is read as more than it
 is (see the constants below for the emitted text):
 
-- retrieval is ANSWER-KEY CUED (``ANSWER_KEY_CUE``);
+- EVERY reported retrieval field is ANSWER-KEY CUED (``ANSWER_KEY_CUE``): on this
+  fixture no retrieval field discriminates among arms that honor ``requested_ids``;
+  only a NON-COMPLIANT read-everything arm moves any of them;
 - ``forbidden_write_rate`` is a channel no wired agent exercises
   (``FORBIDDEN_WRITE_NOT_EXERCISED``);
 - the floor is an ID-PRESENCE short-circuit, so non-id-keyed arms score 0 by
@@ -98,18 +100,23 @@ LOO_SUBSTITUTES = (
 # (runner/conditions.py), i.e. it hands the arm the ids the fixture already knows
 # are the right ones. Any arm that honors requested_ids therefore reads
 # relevant_memory_retrieved_rate == 1.0 and distractor_retrieval_rate == 0.0 by
-# construction. These two are reported as CUED, never as retrieval quality; the
-# fields that still discriminate are stale_memory_retrieval_rate and
-# missed_required_memory_count (an arm ignoring requested_ids, e.g. a
-# read-everything arm, does move all four).
+# construction — and because the fixture requests ONLY the v2 id, the SAME cue pins
+# stale_memory_retrieval_rate and missed_required_memory_count at 0.0 / 0.0 (measured
+# across 20 seeds on filesystem AND oracle). ALL FOUR are reported as CUED, never as
+# retrieval quality: among arms that honor requested_ids no retrieval field here
+# discriminates. Only a NON-COMPLIANT read-everything arm moves any of them.
 ANSWER_KEY_CUED_FIELDS = (
     "relevant_memory_retrieved_rate",
     "distractor_retrieval_rate",
+    "stale_memory_retrieval_rate",
+    "missed_required_memory_count",
 )
 ANSWER_KEY_CUE = (
-    "run_sequence issues RetrievalRequest(requested_ids=step.expected_memory_reads), "
-    "so these fields are GUARANTEED 1.0 / 0.0 for any arm honoring requested_ids. "
-    "They are a cue-compliance check, NOT a measurement of retrieval quality."
+    "run_sequence issues RetrievalRequest(requested_ids=step.expected_memory_reads) and "
+    "the generator requests ONLY the v2 id, so for any arm honoring requested_ids these "
+    "fields are GUARANTEED 1.0 / 0.0 / 0.0 / 0.0. They are a cue-compliance check, NOT a "
+    "measurement of retrieval quality: no retrieval field here discriminates among "
+    "compliant arms, and only a non-compliant read-everything arm moves them."
 )
 
 # The B step is the only step carrying forbidden_memory_writes, and it expects no
@@ -119,6 +126,11 @@ ANSWER_KEY_CUE = (
 # channel is exactly the move this bead already rejected for over_retention_rate;
 # the channel is labeled not-exercised instead, and its unit coverage lives in
 # test_forbidden_write_rate_is_a_directed_channel (scorer level, where it moves).
+FORBIDDEN_WRITE_DENOMINATOR = (
+    "DENOMINATOR: averaged ONLY over steps carrying forbidden_memory_writes (the apply "
+    "step); other steps have no forbidden ids and _ratio(x, 0) = 0.0 would dilute the "
+    "rate toward zero if they were averaged in"
+)
 FORBIDDEN_WRITE_NOT_EXERCISED = (
     "NOT EXERCISED: no wired agent writes on a step carrying forbidden ids "
     "(ScriptedAgent/NeverWritesAgent persist exactly expected_memory_writes, and the "
@@ -143,6 +155,17 @@ CONDITION_CAVEAT = (
     "this arm runs under a CONTROL condition, where run_sequence performs ZERO agent "
     "writes; closure_rate here reflects the oracle/no-memory path, NOT a write->read "
     "closure. Only MEMORY_ENABLED runs measure the loop."
+)
+
+
+# --arm oracle satisfies the ceiling gate without exercising the write path at all
+# (ORACLE_MEMORY performs zero agent writes), so its 1.0 is a WEAKER check than the
+# MEMORY_ENABLED ceiling: it certifies delivery, not closure.
+CEILING_KIND_CAVEAT = (
+    "DELIVERY-ONLY ceiling: this ceiling run is on a control condition with ZERO agent "
+    "writes, so it certifies the delivery path only. It is WEAKER than the "
+    "MEMORY_ENABLED ceiling and does not certify the write->read closure. "
+    "retention.write_hit_rate likewise reads 0.0 here, for the same reason."
 )
 
 
@@ -178,9 +201,10 @@ def _experiment(arm: str, agent_config_id: str) -> ExperimentConfig:
 def score_closure_run(world: ClosureWorld, run: SequenceRun) -> ClosureCell:
     """Read one seed's closure cell off the run's trials.
 
-    The apply (B) step's trial carries the endpoint; retention is averaged over the
-    trials whose step actually expected a write, so establishing steps are not
-    diluted by the read-only step's vacuous 0.0."""
+    The apply (B) step's trial carries the endpoint. Each retention channel is
+    averaged over the steps where it is DEFINED — write_hit_rate over write-expecting
+    steps, forbidden_write_rate over steps carrying forbidden ids — so neither is
+    diluted by a step whose vacuous denominator scores 0.0."""
     # Trials are keyed by step_id, so a multi-condition run would collapse
     # last-write-wins and make closure depend on CONDITION ORDER rather than on the
     # write. Refuse instead of scoring a silently condition-dependent cell.
@@ -198,7 +222,12 @@ def score_closure_run(world: ClosureWorld, run: SequenceRun) -> ClosureCell:
 
     write_steps = [s.step_id for s in world.sequence.steps if s.expected_memory_writes]
     write_hits = [trials[sid].metrics.retention.write_hit_rate for sid in write_steps]
-    forbidden = [t.metrics.retention.forbidden_write_rate for t in run.trials]
+    # forbidden_write_rate is _ratio(n_forbidden, len(written)) and _ratio(x, 0) is 0.0,
+    # so averaging over trials whose step carries no forbidden ids understates the rate
+    # (~3x on this three-step world). Restrict to the steps where the channel is
+    # defined, exactly as write_hit_rate is restricted to write-expecting steps.
+    forbidden_steps = [s.step_id for s in world.sequence.steps if s.forbidden_memory_writes]
+    forbidden = [trials[sid].metrics.retention.forbidden_write_rate for sid in forbidden_steps]
 
     return ClosureCell(
         seed=world.seed,
@@ -271,12 +300,29 @@ def summarize_closure(
             "write_hit_rate": mean(c.write_hit_rate for c in cells) if cells else 0.0,
             "forbidden_write_rate": (mean(c.forbidden_write_rate for c in cells) if cells else 0.0),
             "forbidden_write_rate_exercised": forbidden_exercised,
+            "forbidden_write_rate_denominator": FORBIDDEN_WRITE_DENOMINATOR,
             "forbidden_write_rate_note": (
-                "" if forbidden_exercised else FORBIDDEN_WRITE_NOT_EXERCISED
+                FORBIDDEN_WRITE_DENOMINATOR
+                if forbidden_exercised
+                else f"{FORBIDDEN_WRITE_DENOMINATOR}. {FORBIDDEN_WRITE_NOT_EXERCISED}"
             ),
         },
         "validity": {
             "is_ceiling_run": is_ceiling_run,
+            "ceiling_kind": (
+                ""
+                if not is_ceiling_run
+                else (
+                    "write_read_closure"
+                    if condition is Condition.MEMORY_ENABLED
+                    else "delivery_only"
+                )
+            ),
+            "ceiling_caveat": (
+                ""
+                if (not is_ceiling_run) or condition is Condition.MEMORY_ENABLED
+                else CEILING_KIND_CAVEAT
+            ),
             "ceiling_ok": (not is_ceiling_run) or closure_rate == 1.0,
             "halt": halt,
             "halt_reason": (

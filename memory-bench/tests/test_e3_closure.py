@@ -12,6 +12,8 @@ from membench.memory_systems.base import RetrievalRequest, RetrieveResult
 from membench.memory_systems.filesystem_system import FilesystemMemory
 from membench.metrics.scorers import RetentionInputs, score_retention
 from membench.report.e3_closure import (
+    ANSWER_KEY_CUE,
+    ANSWER_KEY_CUED_FIELDS,
     LOO_SUBSTITUTES,
     MIN_SEEDS,
     _main,
@@ -19,11 +21,12 @@ from membench.report.e3_closure import (
     score_closure_run,
     summarize_closure,
 )
-from membench.runner.agent import ScriptedAgent
+from membench.runner.agent import AgentStepResult, ScriptedAgent
 from membench.runner.conditions import run_sequence
 from membench.runtime import StepContext
 from membench.schemas.conditions import Condition
 from membench.schemas.config import AgentConfig, ExperimentConfig, MemoryConfig
+from membench.schemas.sequence import SequenceStep
 
 SEEDS = list(range(MIN_SEEDS))
 
@@ -207,9 +210,16 @@ def test_summary_discloses_the_answer_key_cue_and_unexercised_channels() -> None
     # The two guaranteed fields are named as cued, right where they are reported.
     assert retrieval["relevant_memory_retrieved_rate"] == 1.0
     assert retrieval["distractor_retrieval_rate"] == 0.0
+    # The generator requests ONLY the v2 id, so the SAME cue pins the stale/missed
+    # fields too — all four are disclosed as cued, and none of them discriminates
+    # among arms that honor requested_ids.
+    assert retrieval["stale_memory_retrieval_rate"] == 0.0
+    assert retrieval["missed_required_memory_count"] == 0.0
     assert retrieval["answer_key_cued"] == [
         "relevant_memory_retrieved_rate",
         "distractor_retrieval_rate",
+        "stale_memory_retrieval_rate",
+        "missed_required_memory_count",
     ]
     assert "requested_ids" in str(retrieval["answer_key_cue"])
 
@@ -236,3 +246,81 @@ def test_control_condition_arm_is_flagged_as_not_a_closure() -> None:
     assert validity["condition"] == Condition.ORACLE_MEMORY.value
     assert validity["write_read_closure_path"] is False
     assert "ZERO agent" in str(validity["condition_caveat"])
+
+
+class WritesStaleAgent(ScriptedAgent):
+    """Test-local control that RE-PERSISTS the superseded id on a step that forbids
+    it, so the forbidden-write channel actually moves. Deliberately test-local: the
+    wired reference agents stay as they are."""
+
+    def __init__(self) -> None:
+        super().__init__(agent_config_id="writes-stale")
+
+    def run_step(
+        self,
+        step: SequenceStep,
+        available_memory: dict[str, str],
+        ctx: StepContext,
+    ) -> AgentStepResult:
+        result = super().run_step(step, available_memory, ctx)
+        result.writes_performed = {
+            **result.writes_performed,
+            **dict.fromkeys(step.forbidden_memory_writes, "re-persisted stale pin"),
+        }
+        return result
+
+
+def test_the_cue_pins_stale_and_missed_on_every_compliant_arm() -> None:
+    """The disclosure's claim, measured: on BOTH id-exact arms the cued fields are
+    constant, so no retrieval field here separates compliant arms."""
+    for arm in ("filesystem", "oracle"):
+        cells = run_closure_cells(SEEDS, arm=arm, agent_name="scripted")
+        summary = summarize_closure(cells, arm=arm, agent_name="scripted", n_seeds=len(SEEDS))
+        retrieval = summary["retrieval"]
+        assert isinstance(retrieval, dict)
+        for field in ANSWER_KEY_CUED_FIELDS:
+            assert field in retrieval, f"{field} disclosed as cued but not reported"
+        assert retrieval["stale_memory_retrieval_rate"] == 0.0, arm
+        assert retrieval["missed_required_memory_count"] == 0.0, arm
+    # The docstring must not promise discrimination it does not have.
+    assert "still discriminate" not in ANSWER_KEY_CUE
+
+
+def test_forbidden_write_rate_denominator_is_the_forbidden_bearing_steps() -> None:
+    """Only the apply step carries forbidden ids; averaging over all three trials
+    understates the rate ~3x, and the denominator caveat must be emitted whether or
+    not the channel was exercised."""
+    world = generate_closure_world(5)
+    run = run_sequence(
+        world.sequence,
+        _experiment("filesystem"),
+        WritesStaleAgent(),
+        conditions=[Condition.MEMORY_ENABLED],
+    )
+    cell = score_closure_run(world, run)
+    all_trial_mean = sum(t.metrics.retention.forbidden_write_rate for t in run.trials) / len(
+        run.trials
+    )
+    assert cell.forbidden_write_rate > 0.0
+    assert cell.forbidden_write_rate == pytest.approx(all_trial_mean * len(run.trials))
+
+    summary = summarize_closure([cell], arm="filesystem", agent_name="scripted", n_seeds=1)
+    retention = summary["retention"]
+    assert isinstance(retention, dict)
+    assert retention["forbidden_write_rate_exercised"] is True
+    # The caveat does NOT switch off at the moment the number becomes non-trivial.
+    assert "DENOMINATOR" in str(retention["forbidden_write_rate_note"])
+    assert "DENOMINATOR" in str(retention["forbidden_write_rate_denominator"])
+
+
+def test_oracle_ceiling_is_named_a_weaker_delivery_only_check() -> None:
+    """--arm oracle satisfies the ceiling gate with ZERO agent writes, so it must not
+    read as a certified write->read closure."""
+    memory_enabled = summarize_closure([], arm="filesystem", agent_name="scripted", n_seeds=0)
+    control = summarize_closure([], arm="oracle", agent_name="scripted", n_seeds=0)
+    assert memory_enabled["validity"]["ceiling_kind"] == "write_read_closure"  # type: ignore[index]
+    assert memory_enabled["validity"]["ceiling_caveat"] == ""  # type: ignore[index]
+    assert control["validity"]["ceiling_kind"] == "delivery_only"  # type: ignore[index]
+    caveat = str(control["validity"]["ceiling_caveat"])  # type: ignore[index]
+    assert "DELIVERY-ONLY" in caveat
+    assert "write_hit_rate" in caveat
