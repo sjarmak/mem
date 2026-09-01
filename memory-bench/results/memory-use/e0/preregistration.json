@@ -1,0 +1,97 @@
+{
+  "bead": "mem-e4fby",
+  "study": "E0a - memory-verb base rate over the pinned transcript corpus (offline)",
+  "series": "MVP Memory Beads (gastownhall/beads#5877), endogenous read+write measurement",
+  "locked_at_utc": "2026-09-01T17:38:07Z",
+  "question": "Over the existing agent-transcript corpus, at what rate do agents issue bd memory verbs, and how much of that read traffic could ever join back to a prior write?",
+  "population": {
+    "procedure": "direct on-disk enumeration of transcript JSONL",
+    "command": "find /home/ds/.claude-homes/*/.claude/projects /home/ds/.claude/projects -name '*.jsonl'",
+    "pinned_by": "filelist.txt, digested in filelist.sha256",
+    "not_used": "gc session-log resolution. The sealed selector-expressibility study (results/bdp/selector-expressibility/report.md, Deviations) preregistered that path and then recorded abandoning it because direct enumeration yields a strictly larger denominator. Re-running it here would shrink the denominator for no gain.",
+    "unit_of_analysis": "session (one transcript file's sessionId), so a single long session cannot dominate a pooled rate"
+  },
+  "extraction": {
+    "layer": "mechanical only",
+    "rule": "Bash tool_use blocks are split into simple commands, each is shlex-parsed into argv, wrapper and env-assignment tokens are stripped, and an invocation counts when the executable basename is the bd CLI. Classification reads argv position 1 (the subcommand) and the flag/positional GRAMMAR of the remaining tokens.",
+    "zfc_boundary": "No free-text argument, memory body, bead title or bead body is inspected, scored or matched. Keys entering the join are compared only as sha256 digests and are never emitted.",
+    "bd_executables": ["bd", "bd-memory-ordering-5877"],
+    "bd_executables_note": "The beads_ordering rig pins a patched build under a distinct basename; it is the same CLI grammar and is counted as bd."
+  },
+  "verb_table": {
+    "TARGETED_READ": "recall with at least one positional key",
+    "SEARCH_READ": "memories with at least one positional term",
+    "BROWSE_READ": "memories with no positional term (list-all), plus recall with no positional key",
+    "MEMORY_WRITE": ["remember", "forget"],
+    "INJECTION": ["prime"],
+    "DEP_WRITE": ["link", "dep"]
+  },
+  "declared_deviations_from_the_sealed_profile": [
+    {
+      "item": "prime reclassified",
+      "sealed": "results/bdp/selector-expressibility/extract.py lists prime in WRITE_SUBCOMMANDS",
+      "here": "prime is an INJECTION verb, not a write",
+      "consequence": "this removes a verb from the sealed profile's write kind. The two studies' write counts are therefore NOT comparable verb-for-verb; this is an explicit deviation, not a correction of the sealed package, which is left byte-identical.",
+      "reason": "bd prime delivers context INTO the agent. Counting it as a write conflates delivery with capture, which is exactly the distinction this study exists to measure (arXiv 2607.20972: delivery beat storage)."
+    },
+    {
+      "item": "link is not a memory verb",
+      "here": "bd link is shorthand for bd dep add, an issue-dependency edge. It is bucketed as DEP_WRITE and stated as a correction in the report. bd unlink does not exist.",
+      "consequence": "any prior count that folded link into memory writes is inflated."
+    },
+    {
+      "item": "READ is not homogeneous",
+      "here": "the read class is split three ways. Only TARGETED_READ carries a key and can therefore enter the read-after-write join denominator; BROWSE_READ carries no key and can inflate a pooled read rate while being join-ineligible by construction."
+    }
+  ],
+  "exclusions": {
+    "self_exclusion": "any invocation whose record timestamp is at or after locked_at_utc is excluded, and the excluded count is published.",
+    "self_exclusion_rationale": "the sealed study's cwd-substring origin gate is INERT for this study: our own sessions run with cwd=/home/ds/projects/mem, which matches none of its markers. A timestamp lock is the mechanism that actually holds here.",
+    "placeholder": "invocations containing a template/placeholder token, or --help/-h, are excluded and counted."
+  },
+  "planned_statistics": [
+    {
+      "id": "E0.1",
+      "name": "memory-write rate",
+      "definition": "session-averaged share of bd invocations that are MEMORY_WRITE, reported with an ambiguity band (see ambiguity_band), plus the fraction of sessions with at least one write."
+    },
+    {
+      "id": "E0.2",
+      "name": "memory-read rate, three buckets",
+      "definition": "session-averaged share of bd invocations in each of TARGETED_READ, SEARCH_READ, BROWSE_READ, reported separately and never summed into a single read rate in the headline."
+    },
+    {
+      "id": "E0.4",
+      "name": "RAW - read-after-write join",
+      "definition": "share of TARGETED_READ invocations whose key digest was written by a MEMORY_WRITE strictly earlier in corpus time. Published TWICE: cross-session (writer session != reader session) and cross-working-directory (writer cwd != reader cwd), so same-rig/same-bead continuations can be read off rather than assumed away.",
+      "interpretation_limit": "RAW is a CLI-EXPRESSIBILITY measurement, not a reuse measurement. It bounds how much read traffic COULD refer to something previously captured; it cannot show the retrieved body was consumed."
+    },
+    {
+      "id": "E0.5",
+      "name": "memory-verb share of bd traffic",
+      "definition": "session-averaged share of bd invocations that are any memory verb (the three read buckets plus MEMORY_WRITE), excluding INJECTION and DEP_WRITE. This is the headline base rate."
+    }
+  ],
+  "ambiguity_band": {
+    "problem": "bd remember accepts both a bare-key form and a --key form, and a single-positional invocation cannot be resolved from argv grammar alone into key-plus-content versus content-only.",
+    "rule": "a write is UNAMBIGUOUS when it carries an explicit --key flag or at least two positionals. A single-positional write is AMBIGUOUS. Every write statistic is published as a band [unambiguous, unambiguous + ambiguous], never as a point estimate."
+  },
+  "interpretation_constraint": {
+    "instructed_endogenous": "Every rate this study reports is INSTRUCTED-endogenous, not spontaneous. /home/ds/projects/CLAUDE.md standingly instructs every agent in this org to use bd remember, and the shipped bd prime teaches the verb in its own emitted text. No rate here may be presented as an untreated baseline.",
+    "no_preliminary_numbers": "No count is published outside the artifact generated from the pinned filelist. A prior ad-hoc scan reported 1,870 / 2,016 / 72 and did not reproduce on re-scan (365 / 339 / 14); both are discarded."
+  },
+  "decision_rule": {
+    "purpose": "E0a gates the rest of the series.",
+    "go": "if the memory-verb share of bd traffic is non-trivial AND the cross-session RAW join is materially below the targeted-read rate, the series proceeds: reads are being issued but are largely not joining prior captures, which is the gap E0b/E1 are designed to move.",
+    "no_go_shape": "if memory verbs are effectively absent from the corpus, no downstream experiment can be powered from real traffic and the series must switch substrate."
+  },
+  "artifacts": [
+    "filelist.txt",
+    "filelist.sha256",
+    "cligrammar.py",
+    "verbs.py",
+    "rates.py",
+    "analysis.json",
+    "report.md"
+  ]
+}
