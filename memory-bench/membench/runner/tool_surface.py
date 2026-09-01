@@ -175,8 +175,15 @@ CALL_TIMEOUT_S = 120.0
 # the one that manufactures the near-zero null this series exists to rule out.
 _SEGMENT_BREAKS = frozenset(";&|()\n<>`")
 
-# `{` and `}` break a segment only when they stand ALONE as shell grouping keywords. Breaking on
-# them unconditionally (d9809a2) split `xargs -I{} bd recall {}` mid-word and lost the call.
+# `{` and `}` break a segment only when they stand ALONE as shell grouping keywords.
+#
+# CORRECTION to this comment as it shipped in 5e45493, which claimed d9809a2's unconditional break
+# "lost the call" on `xargs -I{} bd recall {}`. That is FALSE and the claim is withdrawn: replayed
+# against d9809a2 the command returns ['recall'], because the break splits `-I{}` into `[xargs,
+# -I]` and then starts a fresh `[bd, recall]` segment whose command word is still bd. What the
+# unconditional break actually did was fabricate segments the shell never makes, which is a
+# correctness problem in its own right — an attached brace is literal text — but not an under-count,
+# and this series' whole argument rests on being exact about which direction an instrument errs in.
 _BRACES = frozenset("{}")
 
 # `NAME=value` prefixes may precede the command word: `BEADS_ACTOR=bot bd recall k`.

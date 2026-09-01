@@ -56,6 +56,41 @@ def _event(latency: float = 0.0) -> MemoryEvent:
     )
 
 
+def test_tool_calls_total_counts_every_channel() -> None:
+    """``tool_calls_total`` is the sum of all three channels, and none of them can hide in another.
+
+    A harness retrieve, an agent-made memory call, and ordinary non-memory work are three different
+    facts that must add up. mem-5sht9's FIX 6 stopped counting an agent-made ``bd recall`` as
+    non-memory work, correctly, and then routed it nowhere: the total under-reported by exactly the
+    calls the agent chose to make, so on a published cost metric the arm that uses memory most
+    looked cheapest. An arm is compared against other arms on this number, so a channel that
+    silently contributes zero makes the comparison wrong for every arm at once."""
+    eff = score_efficiency(
+        input_tokens=1,
+        output_tokens=1,
+        non_memory_tool_calls=3,
+        memory_events=[_event(25.0)],
+        non_memory_tool_latency_ms=100.0,
+        agent_memory_tool_calls=2,
+        agent_memory_tool_latency_ms=50.0,
+    )
+    assert eff.non_memory_tool_calls == 3
+    assert eff.memory_tool_calls == 1
+    assert eff.tool_calls_total == 6
+    assert eff.tool_latency_ms == 175.0
+
+    # Defaulting to zero keeps every arm that hands the agent no memory tool byte-identical.
+    unchanged = score_efficiency(
+        input_tokens=1,
+        output_tokens=1,
+        non_memory_tool_calls=3,
+        memory_events=[_event(25.0)],
+        non_memory_tool_latency_ms=100.0,
+    )
+    assert unchanged.tool_calls_total == 4
+    assert unchanged.tool_latency_ms == 125.0
+
+
 # --------------------------------------------------------------------------- #
 # Retrieval: precision / recall / mrr / nDCG / rank / distractor / stale
 # --------------------------------------------------------------------------- #

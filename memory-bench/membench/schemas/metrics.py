@@ -36,6 +36,16 @@ class EfficiencyMetrics(BaseModel):
     total_tokens: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
+    # SCORED METRIC WITH A DEFINITION HISTORY — a number from one SHA is not comparable to a
+    # number from another across these two boundaries, and a cross-SHA table must say so:
+    #   * before d9809a2/5e45493, an agent-made Bash `bd recall` counted as NON-memory work, so
+    #     `non_memory_tool_calls` was inflated by the memory calls the agent chose to make;
+    #   * at 5e45493 (FIX 6) it stopped counting there and was routed nowhere, so `tool_calls_total`
+    #     and `tool_latency_ms` UNDER-reported by that same quantity;
+    #   * from this commit all three channels are summed, and total means total.
+    # The change is a no-op for any arm that hands the agent no memory tool (none of its calls
+    # match), so only the memory-surface arms move — which is exactly why the drift was invisible
+    # until the surface shipped.
     tool_calls_total: int = 0
     memory_tool_calls: int = 0
     non_memory_tool_calls: int = 0
