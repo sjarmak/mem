@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
@@ -9,13 +10,16 @@ import pytest
 
 from membench.grading.paired_ci import paired_delta_ci
 from membench.metrics.scorers import states_value
-from membench.runner import toolreq_corpus
+from membench.runner import e1_necessity_preflight, toolreq_corpus
 from membench.runner.e1_necessity_preflight import (
+    EXIT_REFUSED,
+    EXIT_UNVERIFIED,
     NECESSARY_PASS_CEILING,
     UNNECESSARY_PASS_FLOOR,
     necessity_preflight,
 )
 from membench.runner.toolreq_corpus import (
+    CONTEXT_SEPARATOR,
     load_twin_corpus,
     twin_tasks,
     unnecessary_twin,
@@ -70,10 +74,38 @@ def test_the_unnecessary_twin_states_the_current_value_and_never_a_stale_one(
     assert unnecessary.goal_step.memory_necessary is False
 
 
+def test_the_non_value_text_of_a_twin_pair_is_identical(tmp_path: Path) -> None:
+    # The confound this corpus must not carry (arXiv 2605.09252). E1's endpoint is P(agent
+    # chooses to consult memory), so ANY wording present in one half only and absent from the
+    # other is a prompt-only treatment on the measured behaviour. Off the values themselves the
+    # twin's request must be the necessary request plus a fixed, behaviour-silent scaffold.
+    _, tasks = _twin_corpus(tmp_path, "w-0")
+    necessary, unnecessary = tasks
+
+    # The heading is re-typed here, NOT imported: this test's job is to red when the wording
+    # changes, and importing the constant would let "no recall required" walk back in silently.
+    prefix, separator, block = unnecessary.goal_step.user_request.partition(
+        CONTEXT_SEPARATOR + "Current state:\n"
+    )
+    assert separator, unnecessary.goal_step.user_request
+    assert prefix == necessary.goal_step.user_request
+    # ...and the block is the VALUES and nothing else — no provenance prose, no framing.
+    assert block.splitlines() == [f"- {v}" for v in necessary.current_opaque_values]
+
+
 def test_twins_are_distinct_worlds_to_the_cache(tmp_path: Path) -> None:
     # Same work_id, different measurement: a shared fingerprint would let a cached necessary
     # cell be served as the unnecessary half's result.
+    #
+    # Asserted on two tasks differing ONLY in ``variant``. Comparing the real twins instead is
+    # vacuous — their goal_step and oracle_memory differ too, so the assertion holds even with
+    # ``"variant": task.variant`` deleted from ``task_fingerprint``, i.e. it passes whether the
+    # thing it names works or not.
     _, tasks = _twin_corpus(tmp_path, "w-0")
+    necessary = tasks[0]
+    relabelled = dataclasses.replace(necessary, variant=VARIANT_UNNECESSARY)
+    assert relabelled.goal_step is necessary.goal_step  # nothing else moved
+    assert task_fingerprint(relabelled) != task_fingerprint(necessary)
     assert task_fingerprint(tasks[0]) != task_fingerprint(tasks[1])
 
 
@@ -161,3 +193,59 @@ def test_twin_tasks_of_an_already_twinned_corpus_is_refused(tmp_path: Path) -> N
     _, tasks = _twin_corpus(tmp_path, "w-0")
     with pytest.raises(ValueError, match="can only twin"):
         twin_tasks(tasks)
+
+
+def test_a_dry_run_cannot_exit_as_acceptance(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The gate-facing half of "a label is not evidence". The dry run's rates are entailed by the
+    # simulated runner and DO clear the thresholds, so ``accepted`` is true — and the process must
+    # still not exit 0, because a CI gate reads the exit code, not the ``verified`` field.
+    corpus(tmp_path, "w-0", "w-1")
+    code = e1_necessity_preflight.main(["--corpus-dir", str(tmp_path / "corpus"), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["accepted"] is True and payload["verified"] is False
+    assert code == EXIT_UNVERIFIED
+    assert "UNRUN" in payload["note"]
+
+
+def test_paid_without_a_model_refuses_before_it_loads_anything(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # ``--model`` defaults to "", and the paid path was never exercised, so an authorized run
+    # would have discovered this AT SPEND TIME. The refusal also has to land before the corpus is
+    # read: --corpus-dir names a directory that does not exist, and the run must still refuse for
+    # the model rather than die on the corpus.
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("MEMBENCH_AGENT_MODEL", raising=False)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "stub-token-not-used")
+    code = e1_necessity_preflight.main(
+        ["--corpus-dir", str(tmp_path / "nonexistent"), "--paid", "--json"]
+    )
+    assert code == EXIT_REFUSED
+    assert "REFUSING to spend" in capsys.readouterr().out
+
+
+def test_paid_refuses_a_metered_api_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-stub")
+    code = e1_necessity_preflight.main(
+        ["--corpus-dir", str(tmp_path / "nonexistent"), "--paid", "--model", "stub-model"]
+    )
+    assert code == EXIT_REFUSED
+    assert "ANTHROPIC_API_KEY" in capsys.readouterr().out
+
+
+def test_a_dry_run_is_never_refused_for_paid_preconditions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The refusals gate SPEND, not the free wiring check: a dry run spawns nothing, so an ambient
+    # metered key or a missing token must not turn the default path into an exit 2 (mem-9bh93 —
+    # a gate that reads an ambient env var reds the suite in the shell it targets).
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-stub")
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    corpus(tmp_path, "w-0")
+    assert (
+        e1_necessity_preflight.main(["--corpus-dir", str(tmp_path / "corpus")]) == EXIT_UNVERIFIED
+    )

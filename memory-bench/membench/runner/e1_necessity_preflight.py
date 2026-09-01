@@ -25,17 +25,37 @@ predicted structure BY CONSTRUCTION and proves only that the corpus geometry and
 are right — never that a real agent behaves this way. Only ``--paid`` produces evidence, and
 the emitted JSON says which was run: ``mode`` and ``verified`` are always present, and
 ``verified`` is false on the dry path no matter how clean the numbers look.
+
+And the EXIT CODE says it too, because that is the channel a CI gate actually reads. Exit 0 means
+"measured and accepted" and nothing else; an unverified run exits 3 however clean its rates are, a
+measured rejection exits 1, and a refused spend exits 2. The first cut returned ``0 if accepted
+else 1`` and ignored ``verified`` entirely, so a dry run — whose numbers the simulated runner
+entails — exited 0 into a gate as ACCEPT.
+
+AS OF THIS COMMIT THE PAID PATH IS UNRUN: no real ``claude -p`` turns have been spent on either
+half, so AC2 is not met. The command to meet it, once spend is authorized:
+
+    uv run python -m membench.runner.e1_necessity_preflight --paid --model <id> --repeats 5 --json
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from membench.runner.headless_agent import CellRecorder, MemoryChannel
+from membench.runner.headless_agent import (
+    ENV_OAUTH,
+    REFUSE_API_KEY_SET,
+    REFUSE_UNPINNED_MODEL,
+    CellRecorder,
+    MemoryChannel,
+    a_paid_run_carries_the_metered_api_key,
+    a_paid_run_needs_a_model,
+)
 from membench.runner.realagent_probe import run_arm
 from membench.runner.toolreq_corpus import load_twin_corpus
 from membench.runner.toolreq_realagent import (
@@ -51,6 +71,15 @@ ARM = "none"
 
 UNNECESSARY_PASS_FLOOR = 0.8
 NECESSARY_PASS_CEILING = 0.2
+
+# Exit codes, because this command's channel is read by a CI gate and "exit 0" is the only thing a
+# gate reads reliably. ``accepted`` alone must NEVER produce EXIT_ACCEPTED: the default run is a dry
+# run whose numbers are entailed by the simulated runner, so an unverified accept exiting 0 would
+# publish a wiring check as outcome-side evidence — the exact fabrication AC2 exists to prevent.
+EXIT_ACCEPTED = 0  # measured, and the rates clear the thresholds
+EXIT_REJECTED = 1  # measured, and they do not
+EXIT_REFUSED = 2  # refused to spend (no model / metered key / no OAuth token)
+EXIT_UNVERIFIED = 3  # no real turns were spent; there is no verdict to report either way
 
 
 @dataclass(frozen=True)
@@ -134,9 +163,11 @@ def necessity_preflight(
         "PAID: real claude -p turns; these rates are outcome-side evidence."
         if not dry_run
         else (
-            "DRY RUN — NOT VERIFICATION. simulated_runner writes the current values iff they "
-            "appear in the prompt, so this structure is reproduced by construction and says "
-            "nothing about a real agent. Re-run with --paid for evidence."
+            "DRY RUN — UNRUN, NOT VERIFICATION. simulated_runner writes the current values iff "
+            "they appear in the prompt, so this structure is reproduced by construction and says "
+            "nothing about a real agent. AC2 is UNMET until this is re-run with --paid; the "
+            f"command exits {EXIT_UNVERIFIED}, never {EXIT_ACCEPTED}, so no gate can read it as "
+            "acceptance."
         )
     )
     return NecessityPreflight(
@@ -167,6 +198,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(list(argv) if argv is not None else None)
 
+    # The refusals run BEFORE the corpus is loaded: a refused run must cost nothing at all, and a
+    # gate that trips on the missing corpus first would hide the reason it was actually refused.
+    if a_paid_run_carries_the_metered_api_key(dry_run=not args.paid):
+        print(REFUSE_API_KEY_SET)
+        return EXIT_REFUSED
+    if args.paid and not os.environ.get(ENV_OAUTH):
+        print(
+            f"REFUSING to spend: {ENV_OAUTH} is unset. Source it from an account home\n"
+            "  (~/.claude-homes/accountN/.claude/.credentials.json) and re-run, or drop --paid\n"
+            "  to prove the wiring for free."
+        )
+        return EXIT_REFUSED
+    # --model defaults to "", so this is the gate the whole --paid path used to walk straight past:
+    # an unpinned paid run executes under whichever model the CLI defaults to, and a necessity
+    # verdict that cannot name the model it was measured under is not evidence about any agent.
+    if a_paid_run_needs_a_model(args.model, dry_run=not args.paid):
+        print(REFUSE_UNPINNED_MODEL)
+        return EXIT_REFUSED
+
     _, tasks = load_twin_corpus(args.corpus_dir)
     result = necessity_preflight(
         tasks,
@@ -185,7 +235,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"-> {'ACCEPT' if result.accepted else 'REJECT'} (verified={result.verified})"
         )
         print(result.note)
-    return 0 if result.accepted else 1
+    if not result.verified:
+        return EXIT_UNVERIFIED
+    return EXIT_ACCEPTED if result.accepted else EXIT_REJECTED
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entrypoint

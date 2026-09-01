@@ -11,10 +11,13 @@ measuring both halves.
 Every ``ToolReqRealAgentTask`` is memory-necessary BY CONSTRUCTION: ``adapt_sequence``
 mints opaque tokens that exist only in the establish leg's ``oracle_memory`` and asserts
 the goal request leaks none of them. This module authors the missing half as the MINIMAL
-contrast: the unnecessary twin is the necessary task with its own oracle ceiling INLINED
-into the request. Same tool, same opaque values, same scorer, same forbidden (stale)
-values — the single moved variable is whether the value the ``Write`` must carry is
-already in context.
+contrast: the unnecessary twin is the necessary task with the values it must write INLINED
+into the request under a neutral heading. Same tool, same opaque values, same scorer, same
+forbidden (stale) values — the single moved variable is whether the value the ``Write`` must
+carry is already in context. That claim is enforced, not asserted: off the values themselves the
+two requests are byte-identical apart from a fixed scaffold, and no wording in either half tells
+the agent whether to consult memory (arXiv 2605.09252 — a prompt-only suppression instruction in
+one half manufactures the very margin E1 measures).
 
 Two constraints shape it, both mechanical rather than aesthetic:
 
@@ -51,11 +54,23 @@ from membench.runner.toolreq_realagent import (
 )
 from membench.schemas.sequence import BenchmarkSequence, ExpectedAction, OutcomeCheck, SequenceStep
 
-# How the unnecessary twin delivers what the necessary twin withholds. Framed as established
-# state rather than as "memory", because the twin's whole point is that NO recall is required:
-# a "retrieved memory" framing would re-introduce the trust variable ``MemoryChannel`` exists to
-# isolate, and would make the twins differ in two ways instead of one.
-_CONTEXT_HEADING = "Known current state (already established for you; no recall required):"
+# How the unnecessary twin delivers what the necessary twin withholds.
+#
+# Most of what this block says is load-bearing by being ABSENT. E1's endpoint is P(agent chooses to
+# consult memory), and arXiv 2605.09252 shows prompt-only control is BLUNT: a phrase like "no
+# recall required" is a direct instruction to suppress the measured behaviour, and placed in ONE
+# half of the contrast it manufactures the margin it is meant to measure. So the heading names the
+# block and says nothing about what the agent should DO, and the block carries the VALUES ALONE --
+# no provenance, no "already established", no memory framing. The twin's request is therefore the
+# necessary twin's request plus this fixed scaffold plus the values, which
+# ``test_the_non_value_text_of_a_twin_pair_is_identical`` pins byte-for-byte.
+CONTEXT_HEADING = "Current state:"
+
+# The separator between the bridged request and the context block. Public and reconstructed by the
+# test rather than re-typed there, so the block's SHAPE is asserted in one place -- while the
+# heading's WORDING is re-typed as a literal in the test on purpose, so re-introducing a
+# behaviour-directing heading reds the suite instead of moving quietly with the constant.
+CONTEXT_SEPARATOR = "\n\n"
 
 
 def _goal_action(step: SequenceStep) -> ExpectedAction:
@@ -71,27 +86,31 @@ def _goal_action(step: SequenceStep) -> ExpectedAction:
 def unnecessary_twin(task: ToolReqRealAgentTask) -> ToolReqRealAgentTask:
     """The memory-UNNECESSARY twin of an adapted (necessary) task, under the SAME ``work_id``.
 
-    The twin inlines ``task.oracle_memory``'s facts — the id-exact ceiling, already opaque and
-    already asserted to surface every current value and no superseded one — into the goal
-    request, and drops the memory requirement (``requires_memory`` / ``expected_memory_reads``
-    empty, ``oracle_memory`` empty: there is nothing left for an arm to surface). Scoring is
-    byte-identical: the same ``arg_values`` and ``forbidden_values``, so a twin passes only by
-    writing the current value and never a stale one.
+    The twin appends ``task.current_opaque_values`` — exactly the values a passing ``Write`` must
+    carry, and nothing else — under a neutral heading, and drops the memory requirement
+    (``requires_memory`` / ``expected_memory_reads`` empty, ``oracle_memory`` empty: there is
+    nothing left for an arm to surface). Scoring is byte-identical: the same ``arg_values`` and
+    ``forbidden_values``, so a twin passes only by writing the current value and never a stale one.
+
+    It appends the VALUES, not ``oracle_memory``'s facts, and that is the whole correction of the
+    first cut. Those facts carry authored provenance prose (``— by B. Cee in #meeting``) that the
+    necessary half never sees, so inlining them moved TWO variables — the value's availability and
+    a paragraph of extra text — while the module claimed to move one. Off the values, the twin's
+    request is now byte-identical to the necessary twin's plus a fixed scaffold.
 
     Raises if the constructed request fails to state a current value, or states a superseded
     one — the two ways an unnecessary twin would stop being the contrast it claims to be."""
     if task.variant != VARIANT_NECESSARY:
         raise ValueError(f"{task.work_id}: can only twin a {VARIANT_NECESSARY!r} task")
     action = _goal_action(task.goal_step)
-    facts = list(task.oracle_memory.values())
-    if not facts:
+    values = list(task.current_opaque_values)
+    if not values:
         raise ValueError(
-            f"{task.work_id}: necessary task surfaces no oracle facts, so its unnecessary "
+            f"{task.work_id}: necessary task scores no current value, so its unnecessary "
             "twin would withhold the same value it is supposed to state"
         )
-    request = "\n".join(
-        [task.goal_step.user_request, "", _CONTEXT_HEADING, *(f"- {fact}" for fact in facts)]
-    )
+    block = "\n".join([CONTEXT_HEADING, *(f"- {value}" for value in values)])
+    request = task.goal_step.user_request + CONTEXT_SEPARATOR + block
     for value in task.current_opaque_values:
         if not states_value(request, value):
             raise ValueError(
