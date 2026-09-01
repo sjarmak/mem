@@ -18,7 +18,8 @@ Buckets, and why the read class is split three ways:
     prior write, while still inflating a pooled read rate. Folding it into a single
     "read rate" is the specific error this split exists to prevent.
 ``MEMORY_WRITE``
-    Explicit capture and its inverse.
+    Explicit capture and its inverse. Its key is resolvable only from an explicit
+    key flag; see ``classify``.
 ``INJECTION``
     Delivery INTO the agent, not capture. Reclassified out of the sealed profile's
     write kind; see preregistration.json.
@@ -60,9 +61,10 @@ class Classified:
     """One bd invocation, reduced to grammar."""
 
     bucket: str
-    #: True when the write form is resolvable from argv grammar alone. A single
-    #: positional cannot be resolved into key-plus-content versus content-only, so
-    #: every write statistic carries a band rather than a point estimate.
+    #: True when the invocation names the memory it acts on. For a write that
+    #: means an explicit key flag and nothing else: the shipped CLI auto-generates
+    #: the key from the content, so a positional never names the stored memory.
+    #: Every write statistic therefore carries a band, not a point estimate.
     unambiguous: bool
     #: The key token, for TARGETED_READ and keyed writes. Callers digest it; it is
     #: never emitted.
@@ -91,14 +93,12 @@ def classify(argv: list[str]) -> Classified:
         return Classified(BROWSE_READ, unambiguous=True, key=None)
 
     if sub in MEMORY_WRITE_VERBS:
-        if keyed:
+        if flag_key is not None:
             return Classified(MEMORY_WRITE, unambiguous=True, key=flag_key)
-        if n >= 2:
-            # bare-key form: first positional is the key, the rest is content
-            return Classified(MEMORY_WRITE, unambiguous=True, key=positionals[0])
-        # fewer than two positionals and no key flag: irreducible from grammar
-        # alone into key-plus-content versus content-only, so it supplies no key
-        # and lands in the ambiguity band.
+        # No explicit key flag: the shipped CLI auto-generates the key from the
+        # content, so no positional names the stored memory and none is taken as
+        # one. The invocation still counts as a write; it just supplies no key and
+        # therefore lands in the ambiguity band and never enters the join.
         return Classified(MEMORY_WRITE, unambiguous=False, key=None)
 
     if sub in INJECTION_VERBS:

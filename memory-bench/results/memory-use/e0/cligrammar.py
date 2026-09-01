@@ -13,17 +13,25 @@ simple_commands              extract.py                  53-57
 argv_of                      extract.py                  60-77
 bd_invocations               extract.py                  80-86  (widened)
 blocks                       extract.py                  89-97
-REDIRECT, PLACEHOLDER        classify.py                 223-224
-strip_shell                  classify.py                 239-255
+PLACEHOLDER                  classify.py                 223-224
+strip_redirections           classify.py                 239-255 (rewritten)
 GLOBAL_VALUE_FLAGS           classify.py                 56-65
 normalize                    extract-adjacent classify.py 257-272
 ===========================  ==========================  ==============
 
-Two deliberate divergences from the sealed source, both recorded in
+Three deliberate divergences from the sealed source, all recorded in
 ``preregistration.json``:
 
 * ``bd_invocations`` accepts the beads_ordering rig's patched build, which ships
   under its own basename but is the same CLI grammar.
+* The sealed ``strip_shell`` matched a redirection only as a BARE operator token
+  (``>``, ``2>``, ``2>&1``). ``shlex`` emits an attached redirection as a single
+  token (``2>/dev/null``), which that regex misses, so the target survived into
+  argv and was counted as a POSITIONAL. Redirections are therefore stripped from
+  the raw simple-command text instead, before tokenization, by a quote-aware scan
+  (``strip_redirections``); the token-level helper is gone rather than patched,
+  because no token-level test can tell a redirection apart from a quoted ``>``
+  inside a memory body once ``shlex`` has discarded the quoting.
 * ``normalize`` returns positionals and flags separately, because the E0a verb
   table keys on argument GRAMMAR (how many positionals, is there an explicit
   key flag) and the sealed classifier had no need for that split.
@@ -47,7 +55,6 @@ ENV_ASSIGN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
 WRAPPERS = {"rtk", "env", "time", "sudo", "nice", "command", "uv", "npx", "bunx"}
 
 # classify.py:223-224
-REDIRECT = re.compile(r"^\d*(>>|>|<)&?\d*$")
 PLACEHOLDER = re.compile(r"^<.+>$|^\$|\{\{|^\.\.\.$|^%s$")
 
 # classify.py:56-65
@@ -128,29 +135,100 @@ def argv_of(part: str) -> list[str] | None:
 def bd_invocations(command: str) -> Iterator[list[str]]:
     """extract.py:80-86, widened to BD_EXECUTABLES."""
     for part in simple_commands(command):
-        argv = argv_of(part)
+        argv = argv_of(strip_redirections(part))
         if not argv:
             continue
         if os.path.basename(argv[0]) in BD_EXECUTABLES:
             yield argv
 
 
-def strip_shell(argv: list[str]) -> list[str]:
-    """classify.py:239-255 - drop redirection operators and their targets."""
+def strip_redirections(part: str) -> str:
+    """Remove shell redirections from one simple command, honouring quoting.
+
+    A redirection is an unquoted ``<``/``>`` run, any file-descriptor digits
+    immediately in front of it, an optional ``&``, and the target word that
+    follows (attached, as in ``2>/dev/null``, or separated, as in ``> out.txt``).
+    Everything inside single or double quotes is left alone, so a ``>`` in a
+    memory body is content and survives.
+
+    This runs BEFORE ``shlex`` because ``shlex`` erases the quoting that tells the
+    two apart: it emits ``2>/dev/null`` as one token and ``a > b`` (quoted) as
+    another, and nothing about the resulting token distinguishes them.
+    """
     out: list[str] = []
     i = 0
-    while i < len(argv):
-        tok = argv[i]
-        if REDIRECT.match(tok):
-            # a bare operator consumes its target; `2>&1` carries its own
-            if tok.endswith(("&1", "&2")) or "&" in tok:
-                i += 1
-            else:
+    n = len(part)
+    quote: str | None = None
+    while i < n:
+        ch = part[i]
+        if quote is not None:
+            out.append(ch)
+            if ch == "\\" and quote == '"' and i + 1 < n:
+                out.append(part[i + 1])
                 i += 2
+                continue
+            if ch == quote:
+                quote = None
+            i += 1
             continue
-        out.append(tok)
+        if ch in "'\"":
+            quote = ch
+            out.append(ch)
+            i += 1
+            continue
+        if ch == "\\" and i + 1 < n:
+            out.append(ch)
+            out.append(part[i + 1])
+            i += 2
+            continue
+        if ch in "<>":
+            _drop_fd_prefix(out)
+            i = _skip_redirection(part, i)
+            out.append(" ")
+            continue
+        out.append(ch)
         i += 1
-    return out
+    return "".join(out)
+
+
+def _drop_fd_prefix(out: list[str]) -> None:
+    """Drop a ``2`` or ``&`` that belongs to the redirection about to be stripped.
+
+    Only a STANDALONE prefix is dropped: in ``foo2>x`` the ``2`` is part of the
+    word ``foo2`` and must stay, so the run of digits is removed only when what
+    precedes it is whitespace or the start of the command.
+    """
+    j = len(out)
+    if j and out[j - 1] == "&":
+        j -= 1
+    else:
+        while j and out[j - 1].isdigit():
+            j -= 1
+    if j == len(out):
+        return
+    if j == 0 or out[j - 1].isspace():
+        del out[j:]
+
+
+def _skip_redirection(part: str, i: int) -> int:
+    """Return the index just past the redirection operator and its target."""
+    n = len(part)
+    while i < n and part[i] in "<>&":
+        i += 1
+    while i < n and part[i] in " \t":
+        i += 1
+    quote: str | None = None
+    while i < n:
+        ch = part[i]
+        if quote is not None:
+            if ch == quote:
+                quote = None
+        elif ch in "'\"":
+            quote = ch
+        elif ch.isspace() or ch in "<>":
+            break
+        i += 1
+    return i
 
 
 def is_skippable(argv: list[str]) -> str | None:

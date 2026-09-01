@@ -33,6 +33,9 @@ import verbs
 
 HERE = pathlib.Path(__file__).resolve().parent
 PREREG_PATH = HERE / "preregistration.json"
+#: The locked preregistration is never edited. Corrections are appended here, and
+#: both digests ship with every number so a published rate names its exact rule set.
+AMENDMENT_PATH = HERE / "preregistration-amendment-1.json"
 
 
 @dataclass(frozen=True)
@@ -55,6 +58,9 @@ class Tally:
     bash_blocks: int = 0
     invocations: int = 0
     excluded_after_prereg_lock: int = 0
+    #: Files named in the pinned filelist that no longer open. A file loss, not an
+    #: invocation-level exclusion, so it is reported apart from both other groups.
+    unreadable_files: int = 0
     skipped: Counter[str] = field(default_factory=Counter)
     buckets: Counter[str] = field(default_factory=Counter)
     per_session: dict[str, Counter[str]] = field(default_factory=lambda: defaultdict(Counter))
@@ -77,7 +83,7 @@ def scan_file(path: str, lock: str, tally: Tally) -> None:
     try:
         fh = open(path, encoding="utf-8", errors="replace")  # noqa: SIM115
     except OSError:
-        tally.skipped["unreadable_file"] += 1
+        tally.unreadable_files += 1
         return
     with fh:
         for raw in fh:
@@ -104,20 +110,25 @@ def scan_file(path: str, lock: str, tally: Tally) -> None:
                     continue
                 tally.bash_blocks += 1
                 for argv in cligrammar.bd_invocations(command):
-                    record_invocation(cligrammar.strip_shell(argv), ts, session, cwd, lock, tally)
+                    record_invocation(argv, ts, session, cwd, lock, tally)
 
 
 def record_invocation(
     argv: list[str], ts: str, session: str, cwd: str, lock: str, tally: Tally
 ) -> None:
+    # Self-exclusion runs FIRST. Anything at or after the preregistration lock is
+    # this study's own traffic (or later) and is not in the pinned population, so it
+    # must not be able to move any other exclusion count. Screening for help and
+    # placeholder invocations before the lock made those counts drift between runs
+    # as new sessions landed on disk (964 -> 966 on re-run); ordering the lock first
+    # freezes every published exclusion count against corpus growth.
+    if ts and ts >= lock:
+        tally.excluded_after_prereg_lock += 1
+        return
+
     reason = cligrammar.is_skippable(argv)
     if reason is not None:
         tally.skipped[reason] += 1
-        return
-    # Self-exclusion: anything at or after the preregistration lock is this study's
-    # own traffic (or later), and cannot be part of the population it pinned.
-    if ts and ts >= lock:
-        tally.excluded_after_prereg_lock += 1
         return
 
     result = verbs.classify(argv)
@@ -180,11 +191,11 @@ def write_band(tally: Tally) -> dict[str, Any]:
             "ambiguous": sum(c["write_ambiguous"] for c in tally.per_session.values()),
         },
         "note": (
-            "The band's low end counts only writes whose key is resolvable from argv "
-            "grammar (explicit key flag, or two or more positionals). The high end adds "
-            "single-positional writes, which argv grammar cannot resolve into "
-            "key-plus-content versus content-only. Resolving them would require reading "
-            "the argument's text, which this study does not do."
+            "The band's low end counts only writes that NAME the memory they store, "
+            "which on the shipped CLI means an explicit key flag and nothing else: the "
+            "positional argument is the content and the key is auto-generated from it. "
+            "The high end adds every unkeyed write. Both ends are write counts; the band "
+            "is over key resolvability, and only the low end can enter the join."
         ),
     }
 
@@ -250,6 +261,9 @@ def analyse(filelist: pathlib.Path) -> dict[str, Any]:
         "bead": "mem-e4fby",
         "study": "E0a",
         "preregistration_sha256": hashlib.sha256(PREREG_PATH.read_bytes()).hexdigest(),
+        "preregistration_amendment_1_sha256": hashlib.sha256(
+            AMENDMENT_PATH.read_bytes()
+        ).hexdigest(),
         "filelist_sha256": hashlib.sha256(filelist.read_bytes()).hexdigest(),
         "population": {
             "files_in_filelist": len(paths),
@@ -257,10 +271,17 @@ def analyse(filelist: pathlib.Path) -> dict[str, Any]:
             "bash_blocks_mentioning_bd": tally.bash_blocks,
             "counted_invocations": tally.invocations,
             "sessions_with_bd_traffic": sessions,
+            "files_in_filelist_no_longer_readable": tally.unreadable_files,
         },
         "exclusions": {
-            "after_preregistration_lock": tally.excluded_after_prereg_lock,
-            **dict(tally.skipped),
+            "drifting": {
+                "after_preregistration_lock": tally.excluded_after_prereg_lock,
+                "note": (
+                    "Grows as the corpus grows. It is the only exclusion that can, "
+                    "because it is screened before every other one."
+                ),
+            },
+            "frozen_at_the_preregistration_lock": dict(tally.skipped),
         },
         "bucket_counts": dict(tally.buckets),
         "E0.1_memory_write_rate": write_band(tally),

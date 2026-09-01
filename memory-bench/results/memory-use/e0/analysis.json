@@ -2,70 +2,77 @@
   "bead": "mem-e4fby",
   "study": "E0a",
   "preregistration_sha256": "301f7917fe30df503271f2ac5b045fde20654a65021acdfb55efb65def75609c",
+  "preregistration_amendment_1_sha256": "83214c5f2397f85e204f5a0f5d5409dbd54a48d88fbd1e57bcbd47efb7c9a7fa",
   "filelist_sha256": "239820dc41d54108bb97e535fdc707df77769b3fb04601111c788bd27f66a312",
   "population": {
     "files_in_filelist": 12143,
-    "lines_scanned": 1698464,
-    "bash_blocks_mentioning_bd": 67480,
-    "counted_invocations": 35896,
-    "sessions_with_bd_traffic": 4421
+    "lines_scanned": 1697979,
+    "bash_blocks_mentioning_bd": 67498,
+    "counted_invocations": 35968,
+    "sessions_with_bd_traffic": 4418,
+    "files_in_filelist_no_longer_readable": 22
   },
   "exclusions": {
-    "after_preregistration_lock": 5,
-    "help_invocation": 964,
-    "placeholder_or_template": 2304
+    "drifting": {
+      "after_preregistration_lock": 45,
+      "note": "Grows as the corpus grows. It is the only exclusion that can, because it is screened before every other one."
+    },
+    "frozen_at_the_preregistration_lock": {
+      "help_invocation": 962,
+      "placeholder_or_template": 2215
+    }
   },
   "bucket_counts": {
-    "other": 34863,
-    "memory_write": 60,
-    "dep_write": 481,
+    "other": 34931,
+    "memory_write": 59,
+    "dep_write": 486,
     "targeted_read": 16,
-    "search_read": 382,
-    "browse_read": 47,
+    "search_read": 291,
+    "browse_read": 138,
     "injection": 47
   },
   "E0.1_memory_write_rate": {
     "unambiguous": {
-      "session_averaged_share": 0.00022317834252077675,
-      "sessions_with_at_least_one": 20,
-      "session_prevalence": 0.004523863379325944
+      "session_averaged_share": 9.361001747705987e-05,
+      "sessions_with_at_least_one": 11,
+      "session_prevalence": 0.002489814395654142
     },
     "ambiguity_band_high": {
-      "session_averaged_share": 0.0007837043815777187,
-      "sessions_with_at_least_one": 51,
-      "session_prevalence": 0.011535851617281158
+      "session_averaged_share": 0.0007402926638247975,
+      "sessions_with_at_least_one": 50,
+      "session_prevalence": 0.011317338162064282
     },
     "counts": {
-      "unambiguous": 21,
-      "ambiguous": 39
+      "unambiguous": 11,
+      "ambiguous": 48
     },
-    "note": "The band's low end counts only writes whose key is resolvable from argv grammar (explicit key flag, or two or more positionals). The high end adds single-positional writes, which argv grammar cannot resolve into key-plus-content versus content-only. Resolving them would require reading the argument's text, which this study does not do."
+    "note": "The band's low end counts only writes that NAME the memory they store, which on the shipped CLI means an explicit key flag and nothing else: the positional argument is the content and the key is auto-generated from it. The high end adds every unkeyed write. Both ends are write counts; the band is over key resolvability, and only the low end can enter the join."
   },
   "E0.2_memory_read_rates": {
     "targeted_read": {
-      "session_averaged_share": 4.7815333110343775e-05,
+      "session_averaged_share": 4.733223206769426e-05,
       "sessions_with_at_least_one": 5,
-      "session_prevalence": 0.001130965844831486
+      "session_prevalence": 0.0011317338162064282
     },
     "search_read": {
-      "session_averaged_share": 0.004478638761467637,
-      "sessions_with_at_least_one": 114,
-      "session_prevalence": 0.02578602126215788
+      "session_averaged_share": 0.003394444727676716,
+      "sessions_with_at_least_one": 108,
+      "session_prevalence": 0.02444545043005885
     },
     "browse_read": {
-      "session_averaged_share": 0.00038960211659617034,
-      "sessions_with_at_least_one": 30,
-      "session_prevalence": 0.006785795068988917
+      "session_averaged_share": 0.0014448660492795877,
+      "sessions_with_at_least_one": 67,
+      "session_prevalence": 0.015165233137166138
     },
     "note": "Never summed into one read rate. The list-all bucket carries no key and is join-ineligible by construction, so pooling it inflates apparent retrieval."
   },
   "E0.4_read_after_write": {
     "keyed_targeted_reads": 16,
-    "raw_any": 0.0625,
+    "raw_any": 0.0,
     "raw_cross_session": 0.0,
     "raw_cross_working_directory": 0.0,
     "hits": {
-      "any": 1,
+      "any": 0,
       "cross_session": 0,
       "cross_working_directory": 0
     },
@@ -73,20 +80,20 @@
     "denominator_note": "Only the targeted read bucket enters this denominator. The search and list-all buckets carry no key and can never join, so folding them in would deflate RAW by construction."
   },
   "E0.5_memory_verb_share_of_bd_traffic": {
-    "session_averaged_share": 0.00569976059275187,
-    "sessions_with_at_least_one": 130,
-    "session_prevalence": 0.02940511196561864
+    "session_averaged_share": 0.005626935672848795,
+    "sessions_with_at_least_one": 129,
+    "session_prevalence": 0.029198732458125848
   },
   "reference_buckets": {
     "injection": {
-      "session_averaged_share": 0.0007337390276485705,
+      "session_averaged_share": 0.0007342372660104866,
       "sessions_with_at_least_one": 41,
-      "session_prevalence": 0.009273919927618186
+      "session_prevalence": 0.009280217292892712
     },
     "dep_write": {
-      "session_averaged_share": 0.003387470245564349,
-      "sessions_with_at_least_one": 173,
-      "session_prevalence": 0.03913141823116942
+      "session_averaged_share": 0.0033985939232996157,
+      "sessions_with_at_least_one": 175,
+      "session_prevalence": 0.03961068356722499
     },
     "note": "Neither is a memory verb and neither enters E0.5. The dependency bucket is here because the shorthand form has been miscounted as a memory verb."
   },

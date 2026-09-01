@@ -8,10 +8,13 @@ the report says they mean:
   that carries no key. Only the targeted bucket can enter the read-after-write
   join, so collapsing the three into one "read rate" would inflate apparent
   retrieval with traffic that is join-ineligible by construction.
-- **The write ambiguity band is real, not decorative.** A bare-key
-  `bd remember k body` and a `--key` form both resolve; a single-positional
-  `bd remember body` does not, and resolving it would require reading the
-  argument's text (the ZFC line this study does not cross).
+- **The write ambiguity band is real, not decorative.** Only a `--key` form
+  names the memory it stores; the shipped CLI auto-generates the key from the
+  positional content, so no positional may be read as a key.
+- **Redirections never reach argv.** `shlex` emits `2>/dev/null` as ONE token, so
+  a token-level redirect test lets the target through as a positional. Stripping
+  runs on the raw command text, before tokenization, and a `>` inside a quoted
+  memory body must survive it.
 - **The join is cross-session.** A read whose only prior write is in the SAME
   session must not count as a cross-session hit, or RAW measures continuation
   rather than carry-over.
@@ -63,7 +66,7 @@ def argv(command: str) -> list[str]:
     """The production path from a shell line to one bd argv."""
     found = list(cligrammar.bd_invocations(command))
     assert len(found) == 1, command
-    return cligrammar.strip_shell(found[0])
+    return found[0]
 
 
 # --- bucket assignment --------------------------------------------------------
@@ -78,6 +81,8 @@ def argv(command: str) -> list[str]:
         ("bd memories", verbs.BROWSE_READ),
         ("bd recall", verbs.BROWSE_READ),
         ("bd remember deploy-runbook 'drain the queue first'", verbs.MEMORY_WRITE),
+        ("bd remember body 2>/dev/null", verbs.MEMORY_WRITE),
+        ("bd remember --get deploy-runbook 2>/dev/null", verbs.MEMORY_WRITE),
         ("bd forget deploy-runbook", verbs.MEMORY_WRITE),
         ("bd prime", verbs.INJECTION),
         ("bd link mem-1a2b mem-3c4d", verbs.DEP_WRITE),
@@ -105,14 +110,60 @@ def test_a_value_flag_does_not_swallow_the_positional_that_makes_it_a_search() -
     assert verbs.classify(argv("bd memories --json")).bucket == verbs.BROWSE_READ
 
 
+# --- redirections --------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        ("bd remember body 2>/dev/null", ["bd", "remember", "body"]),
+        ("bd remember --get k 2>/dev/null", ["bd", "remember", "--get", "k"]),
+        ("bd recall k > out.txt", ["bd", "recall", "k"]),
+        ("bd recall k >>log 2>&1", ["bd", "recall", "k"]),
+        ("bd memories 2>&1", ["bd", "memories"]),
+        ("bd memories < terms.txt", ["bd", "memories"]),
+    ],
+)
+def test_a_redirection_never_survives_into_argv(command: str, expected: list[str]) -> None:
+    """`shlex` emits an attached redirection as one token; argv must not see it."""
+    assert argv(command) == expected
+
+
+def test_a_redirect_character_inside_a_quoted_argument_survives() -> None:
+    """The stripper is quote-aware, so a `>` in content is content."""
+    assert argv("bd remember --key k 'a > b'") == ["bd", "remember", "--key", "k", "a > b"]
+
+
+def test_a_digit_that_is_part_of_a_word_is_not_a_file_descriptor() -> None:
+    assert argv("bd-memory-ordering-5877 ready >out") == ["bd-memory-ordering-5877", "ready"]
+
+
+def test_a_redirected_write_is_not_promoted_out_of_the_ambiguity_band() -> None:
+    """The regression the rework exists for: the target was counted as a key."""
+    result = verbs.classify(argv("bd remember body 2>/dev/null"))
+    assert result.unambiguous is False
+    assert result.key is None
+
+
+def test_a_redirected_attempted_read_cannot_manufacture_a_join_hit() -> None:
+    """`bd remember --get <term>` names no key, so it cannot be a prior write."""
+    tally = rates.Tally()
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:00:00Z", "bd remember --get carried 2>/dev/null")
+    _feed(tally, "s2", "/rig/b", "2026-01-01T00:00:04Z", "bd recall carried")
+    result = rates.join(tally)
+    assert result["keyed_targeted_reads"] == 1
+    assert result["hits"]["any"] == 0
+
+
 # --- write ambiguity band -----------------------------------------------------
 
 
-def test_bare_key_write_resolves_to_its_key() -> None:
+def test_only_an_explicit_key_flag_resolves_a_write_key() -> None:
+    """The shipped CLI auto-generates the key from content, so a positional is not one."""
     result = verbs.classify(argv("bd remember deploy-runbook 'drain the queue first'"))
     assert result.bucket == verbs.MEMORY_WRITE
-    assert result.unambiguous is True
-    assert result.key == "deploy-runbook"
+    assert result.unambiguous is False
+    assert result.key is None
 
 
 def test_flag_key_write_resolves_to_the_flag_value_not_the_body() -> None:
@@ -121,9 +172,9 @@ def test_flag_key_write_resolves_to_the_flag_value_not_the_body() -> None:
     assert result.key == "deploy-runbook"
 
 
-def test_whitespace_content_write_is_still_a_two_positional_write() -> None:
+def test_whitespace_content_write_is_still_a_write() -> None:
     """Judging whether content is 'empty' would mean reading it. Count, don't read."""
-    result = verbs.classify(argv("bd remember deploy-runbook '   '"))
+    result = verbs.classify(argv("bd remember --key deploy-runbook '   '"))
     assert result.bucket == verbs.MEMORY_WRITE
     assert result.unambiguous is True
     assert result.key == "deploy-runbook"
@@ -136,9 +187,17 @@ def test_single_positional_write_is_ambiguous_and_supplies_no_key() -> None:
     assert result.key is None
 
 
+def test_a_global_value_flag_does_not_hide_the_subcommand() -> None:
+    """`--db X` consumes X; without that, the subcommand scan stops on the value."""
+    result = verbs.classify(argv("bd --db /tmp/x.db remember --key k body"))
+    assert result.bucket == verbs.MEMORY_WRITE
+    assert result.key == "k"
+    assert verbs.classify(argv("bd -C /tmp/rig remember body")).bucket == verbs.MEMORY_WRITE
+
+
 def test_write_rate_is_published_as_a_band() -> None:
     tally = rates.Tally()
-    _feed(tally, "s1", "/rig/a", "2026-01-01T00:00:00Z", "bd remember k body")
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:00:00Z", "bd remember --key k body")
     _feed(tally, "s1", "/rig/a", "2026-01-01T00:01:00Z", "bd remember body-only")
     _feed(tally, "s1", "/rig/a", "2026-01-01T00:02:00Z", "bd ready")
     _feed(tally, "s1", "/rig/a", "2026-01-01T00:03:00Z", "bd ready")
@@ -153,18 +212,16 @@ def test_write_rate_is_published_as_a_band() -> None:
 
 def _feed(tally: object, session: str, cwd: str, ts: str, command: str) -> None:
     for found in cligrammar.bd_invocations(command):
-        rates.record_invocation(
-            cligrammar.strip_shell(found), ts, session, cwd, "2099-01-01T00:00:00Z", tally
-        )
+        rates.record_invocation(found, ts, session, cwd, "2099-01-01T00:00:00Z", tally)
 
 
 def test_cross_session_read_after_write_counts_but_within_session_does_not() -> None:
     tally = rates.Tally()
     # written in s1 / rig a, read back in s2 / rig b -> a cross-session, cross-cwd hit
-    _feed(tally, "s1", "/rig/a", "2026-01-01T00:00:00Z", "bd remember carried body")
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:00:00Z", "bd remember --key carried body")
     _feed(tally, "s2", "/rig/b", "2026-01-02T00:00:00Z", "bd recall carried")
     # written and read inside s3 -> a near miss: any-hit, but no cross-session hit
-    _feed(tally, "s3", "/rig/c", "2026-01-03T00:00:00Z", "bd remember local body")
+    _feed(tally, "s3", "/rig/c", "2026-01-03T00:00:00Z", "bd remember --key local body")
     _feed(tally, "s3", "/rig/c", "2026-01-03T00:05:00Z", "bd recall local")
 
     result = rates.join(tally)
@@ -177,7 +234,7 @@ def test_a_read_before_its_write_is_not_a_hit() -> None:
     """Ordering is by corpus time; a later write cannot explain an earlier read."""
     tally = rates.Tally()
     _feed(tally, "s2", "/rig/b", "2026-01-01T00:00:00Z", "bd recall carried")
-    _feed(tally, "s1", "/rig/a", "2026-01-02T00:00:00Z", "bd remember carried body")
+    _feed(tally, "s1", "/rig/a", "2026-01-02T00:00:00Z", "bd remember --key carried body")
     assert rates.join(tally)["hits"]["any"] == 0
 
 
@@ -211,6 +268,17 @@ def test_invocations_at_or_after_the_preregistration_lock_are_excluded_and_count
     assert tally.invocations == 1
 
 
+def test_the_lock_is_screened_before_every_other_exclusion() -> None:
+    """A post-lock help invocation must not move a published exclusion count."""
+    tally = rates.Tally()
+    lock = "2026-09-01T17:38:07Z"
+    rates.record_invocation(
+        ["bd", "remember", "--help"], "2026-09-02T00:00:00Z", "self", "/mem", lock, tally
+    )
+    assert tally.excluded_after_prereg_lock == 1
+    assert tally.skipped["help_invocation"] == 0
+
+
 # --- ZFC gate -----------------------------------------------------------------
 
 
@@ -219,13 +287,15 @@ def test_verb_tokens_appear_only_in_the_verb_tables() -> None:
     pattern = re.compile(r"remember|recall|memories")
     offenders: list[str] = []
     for path in sorted(E0.glob("*.py")):
-        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        for line in path.read_text(encoding="utf-8").splitlines():
             if pattern.search(line):
-                offenders.append(f"{path.name}:{lineno}: {line.strip()}")
+                offenders.append(f"{path.name}: {line.strip()}")
+    # Anchored on file and text, not on line numbers: a line number moves whenever a
+    # comment is edited, which would fail this gate for a reason it is not about.
     assert offenders == [
-        'verbs.py:37: TARGETED_READ_VERBS = {"recall"}',
-        'verbs.py:38: SEARCH_OR_BROWSE_VERBS = {"memories"}',
-        'verbs.py:39: MEMORY_WRITE_VERBS = {"remember", "forget"}',
+        'verbs.py: TARGETED_READ_VERBS = {"recall"}',
+        'verbs.py: SEARCH_OR_BROWSE_VERBS = {"memories"}',
+        'verbs.py: MEMORY_WRITE_VERBS = {"remember", "forget"}',
     ]
 
 
@@ -246,10 +316,14 @@ def test_no_module_reads_the_body_of_a_write() -> None:
 def test_cli_emits_the_preregistered_statistics(tmp_path: Path) -> None:
     transcript = tmp_path / "session.jsonl"
     rows = [
-        _row("2026-01-01T00:00:00Z", "s1", "/rig/a", "bd remember carried body"),
+        _row("2026-01-01T00:00:00Z", "s1", "/rig/a", "bd remember --key carried body"),
         _row("2026-01-02T00:00:00Z", "s2", "/rig/b", "bd recall carried"),
         _row("2026-01-02T00:01:00Z", "s2", "/rig/b", "bd memories"),
         _row("2026-01-02T00:02:00Z", "s2", "/rig/b", "bd prime"),
+        # s3 issues an injection and a dependency edge and NOTHING else, so it is
+        # the session that separates "link is a memory verb" from "link is not".
+        _row("2026-01-03T00:00:00Z", "s3", "/rig/c", "bd prime"),
+        _row("2026-01-03T00:01:00Z", "s3", "/rig/c", "bd link mem-1a2b mem-3c4d"),
     ]
     transcript.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
     filelist = tmp_path / "filelist.txt"
@@ -263,15 +337,20 @@ def test_cli_emits_the_preregistered_statistics(tmp_path: Path) -> None:
     )
     assert proc.returncode == 0, proc.stderr
     out = json.loads(proc.stdout)
-    assert out["population"]["counted_invocations"] == 4
+    assert out["population"]["counted_invocations"] == 6
     assert out["E0.1_memory_write_rate"]["counts"] == {"unambiguous": 1, "ambiguous": 0}
     read = out["E0.2_memory_read_rates"]
     assert set(read) == {"targeted_read", "search_read", "browse_read", "note"}
     assert out["E0.4_read_after_write"]["hits"]["cross_session"] == 1
+    # s3 has an injection and a dependency edge and no memory verb, so it must not
+    # appear here: `bd link` is `bd dep add` shorthand, not a memory verb.
     assert out["E0.5_memory_verb_share_of_bd_traffic"]["sessions_with_at_least_one"] == 2
-    # the injection verb is reported, and is NOT folded into the memory-verb share
-    assert out["reference_buckets"]["injection"]["sessions_with_at_least_one"] == 1
+    assert out["E0.5_memory_verb_share_of_bd_traffic"]["session_prevalence"] == pytest.approx(2 / 3)
+    # both reference buckets are reported, and neither is folded into that share
+    assert out["reference_buckets"]["injection"]["sessions_with_at_least_one"] == 2
+    assert out["reference_buckets"]["dep_write"]["sessions_with_at_least_one"] == 1
     assert "INSTRUCTED-endogenous" in out["interpretation_label"]
+    assert set(out["exclusions"]) == {"drifting", "frozen_at_the_preregistration_lock"}
 
 
 def _row(ts: str, session: str, cwd: str, command: str) -> dict[str, object]:
