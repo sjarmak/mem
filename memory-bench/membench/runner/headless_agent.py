@@ -603,6 +603,14 @@ class HeadlessClaudeAgent:
     # bd-on-PATH surface's honest value: it declares no MCP server, rather than passing a path to
     # a config that does not exist. It reaches the argv, so `invocation_fingerprint` covers it.
     mcp_config: str | None = None
+    # Tool patterns the CLI must REFUSE, emitted as `--disallowedTools`. The paid sandbox bounds
+    # the cwd, not the process table: with `--allowedTools Bash` the evaluated agent has a real
+    # shell on the operator's host, and a hung memory shim once drove one to a host-wide
+    # `pkill -9 bd` (mem-5sht9). `tool_surface.HOST_DENIED_TOOLS` is the list any surface handing
+    # out Bash should pass. It is a rule engine and not a kernel boundary — see that module's
+    # host-exposure paragraph for what it does not cover. Lands in the argv, so
+    # `invocation_fingerprint` covers it.
+    disallowed_tools: tuple[str, ...] = ()
     memory_channel: MemoryChannel = MemoryChannel.RECALLED
     # Working dir for the CLI. MUST be an isolated, neutral sandbox — never a mem
     # worktree: the repo's SessionStart hooks / CLAUDE.md / project memory would both
@@ -658,6 +666,8 @@ class HeadlessClaudeAgent:
             argv += ["--model", self._resolved_model]
         if self.constrain_tools and step.available_tools:
             argv += ["--allowedTools", ",".join(step.available_tools)]
+        if self.disallowed_tools:
+            argv += ["--disallowedTools", ",".join(self.disallowed_tools)]
         return argv
 
     def run_step(

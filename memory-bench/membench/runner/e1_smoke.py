@@ -2,9 +2,23 @@
 
 ONE ``claude -p`` run, through the real ``HeadlessClaudeAgent``, in a neutral sandbox, with a
 provisioned ``bd`` shim on ``PATH`` and a pre-seeded memory. It answers exactly one question: can
-the evaluated agent CALL the memory tool at all? A zero here is a HALT for the whole series, not a
-data point — every downstream endogeneity number would be a wiring artifact wearing the shape of
-arXiv 2607.20972's near-zero-voluntary-use finding.
+the evaluated agent CALL the memory tool at all, and does the tool ANSWER? A failure on either is
+a HALT for the whole series, not a data point — every downstream endogeneity number would be a
+wiring artifact wearing the shape of arXiv 2607.20972's near-zero-voluntary-use finding.
+
+**Two conditions, because one is not enough.** The gate demands a non-zero memory tool call count
+AND recovery of the seeded unguessable ``SMOKE_VALUE``. Keying on the count alone (a52bebd) exited
+0 on a live run of 7 calls against a shim that exec'd itself until it hung: the agent tried seven
+times, nothing came back, and the smoke reported the surface reachable. A count proves the agent
+TRIED; only the value coming back through the store proves the surface ANSWERED.
+
+**PAID, and NOT RUN this round.** The real path spends money and is not authorized here. It is
+wired and runnable:
+
+    uv run python -m membench.runner.e1_smoke --model <pinned-model> --json
+
+Its result is UNRUN until an operator runs that command. ``--dry-run`` says so in its own ``paid``
+field, so nothing downstream can read a simulated stream as a reachability result.
 
 **It is not an endogeneity measurement, and its prompt says so by construction.** The smoke
 INSTRUCTS the agent to recall the key. That is the point: instructed use is the upper bound on
@@ -26,7 +40,7 @@ import os
 import subprocess
 import sys
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from membench.runner.headless_agent import (
@@ -43,11 +57,12 @@ from membench.runner.headless_agent import (
 )
 from membench.runner.sandbox import paid_sandbox
 from membench.runner.tool_surface import (
+    HOST_DENIED_TOOLS,
     MEMORY_ALLOWED_TOOLS,
     MemoryToolSurface,
+    endogenous_memory_tool_calls,
+    endogenous_memory_verbs,
     harness_call,
-    memory_tool_calls,
-    memory_verbs,
     provision_memory_tool,
     surface_fingerprint,
 )
@@ -100,32 +115,64 @@ def simulated_runner(surface: MemoryToolSurface) -> object:
 
 def run_smoke(*, model: str, dry_run: bool, timeout_s: float) -> dict[str, object]:
     """Provision the surface, seed one memory, run one agent step, count the memory tool calls."""
-    with tempfile.TemporaryDirectory(prefix="membench-memory-") as root:
-        surface = provision_memory_tool(Path(root))
+    # Sandbox FIRST: `provision_memory_tool` checks the store against it before `bd init` writes
+    # CLAUDE.md/AGENTS.md/.claude anywhere, so a store the wipe would eat, or one that would
+    # contaminate the sandbox's ancestry, is refused before it exists.
+    with (
+        tempfile.TemporaryDirectory(prefix="membench-memory-") as root,
+        paid_sandbox("e1-smoke-") as sandbox,
+    ):
+        surface = provision_memory_tool(Path(root), sandbox=sandbox)
         harness_call(surface, ["remember", SMOKE_VALUE, "--key", SMOKE_KEY])
-        with paid_sandbox("e1-smoke-") as sandbox:
-            runner = simulated_runner(surface) if dry_run else subprocess.run
-            agent = HeadlessClaudeAgent(
-                model=model,
-                runner=runner,  # type: ignore[arg-type]
-                cwd=str(sandbox),
-                env=surface.env(),
-                timeout_s=timeout_s,
-            )
-            step = smoke_step()
-            ctx = StepContext(trial_id="e1-smoke", session_id="e1-smoke", step_id=step.step_id)
-            result = agent.run_step(step, {}, ctx)
+        runner = simulated_runner(surface) if dry_run else subprocess.run
+        agent = HeadlessClaudeAgent(
+            model=model,
+            runner=runner,  # type: ignore[arg-type]
+            cwd=str(sandbox),
+            env=surface.env(),
+            disallowed_tools=HOST_DENIED_TOOLS,
+            timeout_s=timeout_s,
+        )
+        step = smoke_step()
+        ctx = StepContext(trial_id="e1-smoke", session_id="e1-smoke", step_id=step.step_id)
+        result = agent.run_step(step, {}, ctx)
     calls = list(result.tool_calls)
     return {
         "dry_run": dry_run,
+        # The reachability claim is only ever about a PAID run. False here means the stream came
+        # from the simulator, so no downstream gate can read this row as evidence that a real
+        # session reached the tool.
+        "paid": not dry_run,
         "model": resolve_model(model),
         "surface_fingerprint": surface_fingerprint(),
-        "memory_tool_calls": memory_tool_calls(calls),
-        "memory_verbs": memory_verbs(calls),
+        "memory_tool_calls": endogenous_memory_tool_calls(calls),
+        "memory_verbs": endogenous_memory_verbs(calls),
         "tool_names": [call.name for call in calls],
         "recovered_value": SMOKE_VALUE in (result.final_answer or ""),
         "final_answer": result.final_answer,
     }
+
+
+def halt_reason(result: Mapping[str, object]) -> str | None:
+    """Why this smoke HALTs the series, or ``None`` if the surface is proven both reachable and
+    answering.
+
+    TWO conditions, and the second is the one a52bebd was missing. That gate keyed on the call
+    count alone and exited 0 on a live run of 7 calls against a shim that exec'd itself until it
+    hung: every call was made, none returned, ``recovered_value`` was False, and the smoke reported
+    the surface reachable. A count proves the agent TRIED. Only the unguessable ``SMOKE_VALUE``
+    coming back through the store proves the surface ANSWERED — a hung shim, a shim pinned to the
+    wrong store, and a bd that errors all produce calls and no value."""
+    calls = result.get("memory_tool_calls") or 0
+    if not calls:
+        return "the agent made no memory tool call — the surface is unreachable"
+    if not result.get("recovered_value"):
+        return (
+            f"the agent called the memory tool {calls}x but never recovered the seeded value — "
+            "the surface answers nothing (a hung, mis-pinned, or erroring shim looks exactly "
+            "like this, and a call count alone cannot tell them from a working one)"
+        )
+    return None
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -149,14 +196,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         print(
             f"memory_tool_calls={result['memory_tool_calls']} "
-            f"verbs={result['memory_verbs']} recovered={result['recovered_value']}"
+            f"verbs={result['memory_verbs']} recovered={result['recovered_value']} "
+            f"paid={result['paid']}"
         )
-    if not result["memory_tool_calls"]:
-        # A HALT, deliberately louder than a zero row: the series' whole premise is that a zero
-        # call rate MEANS something, and it only does once this smoke has been non-zero.
+    halt = halt_reason(result)
+    if halt is not None:
         print(
-            "HALT: the agent made no memory tool call. The surface is unreachable — do NOT run "
-            f"E1/E2/E3 on this wiring. (OAuth token set: {bool(os.environ.get(ENV_OAUTH))})",
+            f"HALT: {halt}. Do NOT run E1/E2/E3 on this wiring. "
+            f"(OAuth token set: {bool(os.environ.get(ENV_OAUTH))})",
             file=sys.stderr,
         )
         return 1
