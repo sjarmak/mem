@@ -19,6 +19,7 @@ from membench.metrics.scorers import (
     score_synthesis,
 )
 from membench.runner.agent import AgentStepResult
+from membench.runner.tool_surface import partition_memory_calls
 from membench.schemas.memory_event import MemoryEvent
 from membench.schemas.metrics import MetricsBundle, TaskMetrics
 from membench.schemas.sequence import SequenceStep
@@ -72,12 +73,21 @@ def compute_metrics(
         memory_events.append(retrieve.event)
     memory_events.extend(write_events)
 
+    # A memory call the AGENT made arrives as a Bash tool_use whose command invokes a bd memory
+    # verb (mem-5sht9's tool surface), so it is in `tool_calls` like any other. Counting the raw
+    # length here scored every such call as a NON-memory call — the number that answers "how much
+    # non-memory tool work did this cost" would have absorbed the endogenous memory calls the
+    # moment a grid wired the surface, and the arms that pay for retrieval would look cheaper than
+    # the arm that calls the tool itself. The split is mechanical (argv shape) and applies to every
+    # arm: for the arms that hand the agent no memory tool it is a no-op, because none of their
+    # calls match.
+    _, non_memory_calls = partition_memory_calls(agent_result.tool_calls)
     efficiency = score_efficiency(
         input_tokens=agent_result.input_tokens,
         output_tokens=agent_result.output_tokens,
-        non_memory_tool_calls=len(agent_result.tool_calls),
+        non_memory_tool_calls=len(non_memory_calls),
         memory_events=memory_events,
-        non_memory_tool_latency_ms=sum(tc.latency_ms for tc in agent_result.tool_calls),
+        non_memory_tool_latency_ms=sum(tc.latency_ms for tc in non_memory_calls),
         turns=agent_result.turns,
     )
 

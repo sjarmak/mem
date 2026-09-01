@@ -34,7 +34,8 @@ discover it in a real repo. So the only thing that varies across the ladder is t
 **The store.** ``bd init`` puts ``.beads/`` in the cwd, and the cwd is wiped between legs. Here the
 store is minted in its own directory OUTSIDE the sandbox and pinned into every call by a ``bd``
 shim on ``PATH`` that injects ``-C <store>``. ``provision_memory_tool`` calls
-``assert_store_outside`` ITSELF (given a sandbox), so no caller can provision a store the sandbox
+``assert_store_outside`` ITSELF, with a REQUIRED ``sandbox`` argument (no default, so a caller
+cannot omit the check by omitting a word), and no caller can provision a store the sandbox
 would eat: inside the sandbox the wipe deletes it, and ABOVE the sandbox ``bd init`` writes
 ``CLAUDE.md`` / ``AGENTS.md`` / ``.agents`` / ``.claude`` / ``.cursor`` and a git repo into it,
 which Claude Code auto-loads by walking up from the cwd — the very contamination
@@ -167,10 +168,115 @@ CALL_TIMEOUT_S = 120.0
 # Shell metacharacters that END one command and begin the next. A memory call is recognised per
 # COMMAND SEGMENT: `echo bd recall x` is one segment whose command word is `echo` (not a memory
 # call), while `cd /tmp && bd recall x` is two (the second one is).
-_SEGMENT_BREAKS = frozenset(";&|()\n{}<>")
+#
+# The BACKTICK is here for the same reason `(` is: `` `bd recall k` `` is a command substitution
+# whose bd really executes. d9809a2 broke the segment on `$(` (via the `(`) but not on the
+# backtick form, so every backticked memory call was MISSED — the under-count direction, which is
+# the one that manufactures the near-zero null this series exists to rule out.
+_SEGMENT_BREAKS = frozenset(";&|()\n<>`")
+
+# `{` and `}` break a segment only when they stand ALONE as shell grouping keywords. Breaking on
+# them unconditionally (d9809a2) split `xargs -I{} bd recall {}` mid-word and lost the call.
+_BRACES = frozenset("{}")
 
 # `NAME=value` prefixes may precede the command word: `BEADS_ACTOR=bot bd recall k`.
 _ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z_0-9]*=")
+
+# Shell KEYWORDS that may stand in front of a segment's command word. `if bd recall k; then ...`
+# is a real memory call; d9809a2 read `if` as the command word and returned nothing. `for` /
+# `while` / `until` / `case` cover the HEADER segment (whose command word is a variable name, never
+# bd), and `do` / `then` / `else` / `elif` cover the BODY segments, which is where an agent's loop
+# actually calls bd.
+_SHELL_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "!",
+        "case",
+        "do",
+        "done",
+        "elif",
+        "else",
+        "esac",
+        "fi",
+        "for",
+        "if",
+        "in",
+        "then",
+        "until",
+        "while",
+    }
+)
+
+# Wrappers that EXECUTE the command word following them, so the bd behind them is a real call:
+# `sudo bd recall k`, `timeout 30 bd recall k`, `env bd recall k`. Each is skipped along with its
+# own option words, and the next non-option word must still be `bd` — `timeout 30 echo bd recall k`
+# stays a non-call because the scan stops at the first non-option word and it is `echo`.
+_TRANSPARENT_WRAPPERS: frozenset[str] = frozenset(
+    {
+        "command",
+        "doas",
+        "env",
+        "exec",
+        "ionice",
+        "nice",
+        "nohup",
+        "setsid",
+        "stdbuf",
+        "sudo",
+        "time",
+        "timeout",
+        "xargs",
+    }
+)
+
+# Interpreters whose `-c` argument is a COMMAND STRING. `bash -c 'bd recall k'` executes bd, and
+# d9809a2 dropped the string silently. The string is re-tokenized and re-scanned.
+_SHELL_INTERPRETERS: frozenset[str] = frozenset({"ash", "bash", "dash", "ksh", "sh", "zsh"})
+
+# `eval` joins its remaining words into one command string, so it is scanned with the whole tail
+# as that string.
+_EVAL = "eval"
+
+# A bare duration/count a transparent wrapper may take before the command word (`timeout 30`,
+# `timeout 1m`, `nice 10`).
+_DURATION = re.compile(r"^\d+(?:\.\d+)?[smhd]?$")
+
+# Wrapper options that take a SPACE-separated value, so the value is not mistaken for the command
+# word: `sudo -u bot bd recall k`, `xargs -I ARG bd recall ARG`, `timeout -k 5 30 bd recall k`.
+# One flat set rather than per-wrapper tables: over-skipping a word can only ever cost a call whose
+# command word is itself the value of an option, which no real invocation has.
+_WRAPPER_VALUE_FLAGS: frozenset[str] = frozenset(
+    {
+        "--adjustment",
+        "--kill-after",
+        "--signal",
+        "-C",
+        "-E",
+        "-I",
+        "-L",
+        "-P",
+        "-S",
+        "-U",
+        "-a",
+        "-c",
+        "-d",
+        "-e",
+        "-g",
+        "-h",
+        "-i",
+        "-k",
+        "-n",
+        "-o",
+        "-p",
+        "-r",
+        "-s",
+        "-t",
+        "-u",
+    }
+)
+
+# How deep a `-c` command string is followed. `bash -c "sh -c 'bd recall k'"` is already
+# pathological; the bound stops a crafted command from recursing without end.
+_MAX_NESTING = 4
 
 # Characters that terminate a heredoc DELIMITER word: `cat <<EOF` and `cat <<-'EOF' | tee f`.
 _DELIMITER_END = frozenset(" \t\n;&|()<>")
@@ -313,7 +419,7 @@ def assert_store_outside(sandbox: Path, store_dir: Path) -> None:
 def provision_memory_tool(
     root: Path,
     *,
-    sandbox: Path | None = None,
+    sandbox: Path | None,
     bd_binary: str | None = None,
     mcp_config: str | None = None,
     runner: Runner = subprocess.run,
@@ -321,8 +427,13 @@ def provision_memory_tool(
     """Mint a store under ``root`` and a ``bd`` shim that pins every call to it.
 
     ``root`` is the caller's per-repeat directory (a ``TemporaryDirectory``), NOT the sandbox cwd:
-    the whole point is a store the wipe cannot reach. Pass ``sandbox`` and that is CHECKED here
-    (``assert_store_outside``) before ``bd init`` writes anything.
+    the whole point is a store the wipe cannot reach. ``sandbox`` is REQUIRED — keyword-only with
+    no default — and is CHECKED here (``assert_store_outside``) before ``bd init`` writes anything.
+    It was defaulted to ``None`` in d9809a2, which left the check firing only by caller discipline:
+    a cell that simply forgot the argument got a store the wipe eats and a second leg that recalls
+    nothing, with no error anywhere. Passing ``None`` is still allowed but must now be WRITTEN, and
+    it means one thing only: there is no sandbox in this context (the harness-side fixtures that
+    mint a store under ``tmp_path`` and never run an agent).
 
     The shim is a two-line ``sh`` script rather than an env var because ``-C`` lands on the argv
     where the counter can see it (``BEADS_DIR`` would work too — see the docstring's correction —
@@ -483,6 +594,20 @@ def command_segments(command: str) -> list[list[str]]:
                 if line_end == -1:
                     break
             continue
+        if ch in _BRACES:
+            # Grouping keyword only when it stands alone (`{ bd recall k; }`). Attached to a word
+            # it is literal text — `xargs -I{} bd recall {}` must stay one segment.
+            standalone = not has_word and (
+                i + 1 >= n or command[i + 1].isspace() or command[i + 1] in _SEGMENT_BREAKS
+            )
+            if standalone:
+                end_segment()
+                i += 1
+                continue
+            buf.append(ch)
+            has_word = True
+            i += 1
+            continue
         if ch in _SEGMENT_BREAKS:
             end_segment()
             i += 1
@@ -499,33 +624,111 @@ def command_segments(command: str) -> list[list[str]]:
     return segments
 
 
-def _verb_of_segment(words: Sequence[str]) -> str | None:
-    """The memory verb this ONE command segment invokes, or ``None``.
+def _is_option(word: str) -> bool:
+    return word.startswith("-") and word != "-"
 
-    At most one: a segment is one invocation. Skips ``NAME=value`` prefixes, matches the command
-    word by BASENAME (so ``/usr/local/bin/bd`` counts and ``abd`` does not), then walks the global
-    flags — consuming the value of a value-taking flag — to the first non-flag token, which is the
-    subcommand. ``bd issue remember`` therefore does not count: ``issue`` is the subcommand."""
-    index = 0
-    while index < len(words) and _ASSIGNMENT.match(words[index]):
-        index += 1
-    if index >= len(words) or PurePosixPath(words[index]).name != MEMORY_COMMAND:
+
+def _skip_prefixes(words: Sequence[str], index: int) -> int:
+    """Advance past everything that can stand BETWEEN the start of a segment and the command word
+    that actually runs: ``NAME=value`` assignments, shell keywords, and transparent wrappers with
+    their own options.
+
+    d9809a2 skipped assignments only, so ``if bd recall k``, ``do bd recall $k``, ``! bd recall k``,
+    ``sudo bd ...``, ``env bd ...``, ``timeout 30 bd ...`` and ``command bd ...`` all returned the
+    keyword or wrapper as the command word and counted as NO call. Every one of those is an
+    under-count of the primary endpoint.
+
+    Mechanical throughout: membership of a word in a fixed name set and the ``-``-prefix shape of
+    argv. Nothing here reads what a memory says."""
+    moved = True
+    while moved and index < len(words):
+        moved = False
+        while index < len(words) and _ASSIGNMENT.match(words[index]):
+            index += 1
+            moved = True
+        if index < len(words) and words[index] in _SHELL_KEYWORDS:
+            index += 1
+            moved = True
+            continue
+        if index < len(words) and PurePosixPath(words[index]).name in _TRANSPARENT_WRAPPERS:
+            index += 1
+            moved = True
+            # The wrapper's own options, and a bare duration/count (`timeout 30`). The loop then
+            # re-checks assignments and keywords, so `sudo env FOO=1 timeout 5 bd recall k` walks
+            # all the way through.
+            while index < len(words) and (
+                _is_option(words[index]) or _DURATION.match(words[index])
+            ):
+                flag = words[index]
+                index += (
+                    2
+                    if _is_option(flag) and "=" not in flag and flag in _WRAPPER_VALUE_FLAGS
+                    else 1
+                )
+    return index
+
+
+def _interpreter_command_string(words: Sequence[str], index: int) -> str | None:
+    """The command STRING an interpreter segment would execute, or ``None``.
+
+    ``bash -c 'bd recall k'`` and ``sh -lc "bd recall k"`` both yield ``bd recall k``; ``eval``
+    yields its whole joined tail. Returning the string rather than a verb keeps the recursion in
+    one place."""
+    name = PurePosixPath(words[index]).name
+    if name == _EVAL:
+        tail = " ".join(words[index + 1 :])
+        return tail or None
+    if name not in _SHELL_INTERPRETERS:
         return None
+    cursor = index + 1
+    while cursor < len(words):
+        word = words[cursor]
+        if not _is_option(word):
+            return None
+        # `-c`, and clustered short forms like `-lc`; never a long option (`--posix`).
+        if not word.startswith("--") and "c" in word[1:]:
+            return words[cursor + 1] if cursor + 1 < len(words) else None
+        cursor += 1
+    return None
+
+
+def _verbs_of_segment(words: Sequence[str], depth: int = 0) -> list[str]:
+    """The memory verbs this ONE command segment invokes.
+
+    Usually at most one — a segment is one invocation — but an interpreter's ``-c`` string is a
+    whole command line of its own, so ``sh -c 'bd recall a; bd remember b'`` yields two.
+
+    Matches the command word by BASENAME (so ``/usr/local/bin/bd`` counts and ``abd`` does not),
+    then walks bd's global flags — consuming the value of a value-taking flag — to the first
+    non-flag token, which is the subcommand. ``bd issue remember`` therefore does not count:
+    ``issue`` is the subcommand."""
+    index = _skip_prefixes(words, 0)
+    if index >= len(words):
+        return []
+    if depth < _MAX_NESTING:
+        nested = _interpreter_command_string(words, index)
+        if nested is not None:
+            return [
+                verb
+                for segment in command_segments(nested)
+                for verb in _verbs_of_segment(segment, depth + 1)
+            ]
+    if PurePosixPath(words[index]).name != MEMORY_COMMAND:
+        return []
     index += 1
-    while index < len(words) and words[index].startswith("-") and words[index] != "-":
+    while index < len(words) and _is_option(words[index]):
         flag = words[index]
         index += 2 if "=" not in flag and flag in BD_VALUE_FLAGS else 1
     if index < len(words) and words[index] in MEMORY_VERBS:
-        return words[index]
-    return None
+        return [words[index]]
+    return []
 
 
 def memory_verbs_in_command(command: str) -> list[str]:
     """Every memory verb invoked in one shell command line, in order. The mechanical half of the
     counter, exposed so a driver can report WHICH verbs an agent reached for (read vs write is the
     whole endogenous question) rather than only how often."""
-    verbs = [_verb_of_segment(segment) for segment in command_segments(command)]
-    return [verb for verb in verbs if verb is not None]
+    return [verb for segment in command_segments(command) for verb in _verbs_of_segment(segment)]
 
 
 def endogenous_memory_tool_calls(calls: Iterable[ToolCall]) -> int:
@@ -535,16 +738,29 @@ def endogenous_memory_tool_calls(calls: Iterable[ToolCall]) -> int:
     ``endogenous_`` is not decoration. ``EfficiencyMetrics.memory_tool_calls``
     (``schemas/metrics.py``) already exists and counts something else entirely: normalized MEMORY
     EVENTS the harness performed on the arm's behalf (``metrics/scorers.py``). The two must never
-    share a name — and note that ``runner/metrics.py`` passes ``len(agent_result.tool_calls)`` as
-    ``non_memory_tool_calls``, so a Bash-wrapped memory call scores today as a NON-memory call.
-    That is correct for the arms that exist (none of them hand the agent this surface) and is the
-    line a grid must fix when it wires the surface in: subtract this count from the non-memory one.
+    share a name, and neither may the EMITTED row keys — ``e1_smoke`` publishes
+    ``endogenous_memory_tool_calls`` / ``endogenous_memory_verbs``, not the colliding strings.
+    ``runner/metrics.py`` no longer passes ``len(agent_result.tool_calls)`` as
+    ``non_memory_tool_calls``; it splits with ``partition_memory_calls`` first, so a Bash-wrapped
+    memory call is not scored as a non-memory call the moment a grid wires this surface.
 
     Blocks, not verb occurrences — one Bash call chaining two verbs is one tool call, and
     ``endogenous_memory_verbs`` is where the verb-level count lives. Never a scan of the agent's
     prose: the only text read here is the ``command`` argument of a structured tool call, parsed as
     shell words."""
     return sum(1 for call in calls if _is_memory_call(call))
+
+
+def partition_memory_calls(calls: Iterable[ToolCall]) -> tuple[list[ToolCall], list[ToolCall]]:
+    """``(memory_calls, non_memory_calls)`` over one step's tool calls.
+
+    ``runner/metrics.py`` needs the split, not just the count: it reports both a COUNT and a
+    summed LATENCY for non-memory tool calls, and a Bash-wrapped memory call must leave both."""
+    memory: list[ToolCall] = []
+    other: list[ToolCall] = []
+    for call in calls:
+        (memory if _is_memory_call(call) else other).append(call)
+    return memory, other
 
 
 def endogenous_memory_verbs(calls: Iterable[ToolCall]) -> list[str]:

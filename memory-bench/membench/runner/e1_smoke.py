@@ -6,19 +6,30 @@ the evaluated agent CALL the memory tool at all, and does the tool ANSWER? A fai
 a HALT for the whole series, not a data point — every downstream endogeneity number would be a
 wiring artifact wearing the shape of arXiv 2607.20972's near-zero-voluntary-use finding.
 
-**Two conditions, because one is not enough.** The gate demands a non-zero memory tool call count
-AND recovery of the seeded unguessable ``SMOKE_VALUE``. Keying on the count alone (a52bebd) exited
-0 on a live run of 7 calls against a shim that exec'd itself until it hung: the agent tried seven
-times, nothing came back, and the smoke reported the surface reachable. A count proves the agent
-TRIED; only the value coming back through the store proves the surface ANSWERED.
+**Three conditions, because one is not enough.** The gate demands a non-zero memory tool call
+count, recovery of the seeded unguessable ``SMOKE_TOKEN``, and a PAID row. Keying on the count
+alone (a52bebd) exited 0 on a live run of 7 calls against a shim that exec'd itself until it hung:
+the agent tried seven times, nothing came back, and the smoke reported the surface reachable. A
+count proves the agent TRIED; only the token coming back through the store proves the surface
+ANSWERED; and only a paid row proves anything about ``claude -p`` at all.
+
+The row keys are ``endogenous_memory_tool_calls`` / ``endogenous_memory_verbs``. The bead's
+acceptance criterion was written against the older ``.memory_tool_calls``, which collides on the
+JSON surface with ``EfficiencyMetrics.memory_tool_calls`` (harness-performed memory EVENTS); the
+check to run is::
+
+    uv run python -m membench.runner.e1_smoke --model <id> --json \\
+        | jq '.endogenous_memory_tool_calls > 0'
 
 **PAID, and NOT RUN this round.** The real path spends money and is not authorized here. It is
 wired and runnable:
 
     uv run python -m membench.runner.e1_smoke --model <pinned-model> --json
 
-Its result is UNRUN until an operator runs that command. ``--dry-run`` says so in its own ``paid``
-field, so nothing downstream can read a simulated stream as a reachability result.
+Its result is UNRUN until an operator runs that command. ``--dry-run`` says so in its ``paid``
+field AND in its EXIT CODE: an unpaid row is a HALT, so a CI gate reading only the exit status
+cannot mistake the plumbing check for the reachability proof. ``--dry-run`` therefore exits 1 even
+when everything it can exercise works, and that is the intended reading.
 
 **It is not an endogeneity measurement, and its prompt says so by construction.** The smoke
 INSTRUCTS the agent to recall the key. That is the point: instructed use is the upper bound on
@@ -37,6 +48,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -69,17 +81,39 @@ from membench.runner.tool_surface import (
 from membench.runtime import StepContext
 from membench.schemas.sequence import SequenceStep
 
-# The seeded memory the smoke asks for. The VALUE is opaque and unguessable so a recovered answer
+# The seeded memory the smoke asks for. The TOKEN is opaque and unguessable so a recovered answer
 # cannot have been produced by the model's priors — the same reason the builtin arm's engagement
 # check uses opaque tokens rather than plausible facts.
-SMOKE_KEY = "membench-smoke-port"
-SMOKE_VALUE = "the staging widget service listens on port 48317"
+#
+# The token, not the sentence, is what the gate reads. d9809a2 required the whole seeded SENTENCE
+# verbatim in `final_answer` while the prompt asked the agent to REPORT THE VALUE — so an agent
+# that recalled correctly and answered with just the value tripped the HALT on a WORKING surface,
+# and this series' blocking bead would have been declared unreachable by its own instrument. The
+# tests could not see it because the only path exercised was `simulated_runner`, which sets
+# `final_answer` to raw shim stdout and so matched the sentence by construction: fixture geometry
+# making the guard green whether it works or not.
+SMOKE_KEY = "membench-smoke-handle"
+SMOKE_TOKEN = "qx7v9m4k2p"
+SMOKE_VALUE = f"the staging widget service handle is {SMOKE_TOKEN}"
+
+# Word-boundary-ish so the token cannot be recovered as a fragment of some longer identifier the
+# agent happened to print. Mechanical: an exact token match, never a judgment about the answer.
+_TOKEN_PATTERN = re.compile(rf"(?<![0-9A-Za-z]){re.escape(SMOKE_TOKEN)}(?![0-9A-Za-z])")
 
 SMOKE_PROMPT = (
     "A `bd` command-line tool is on your PATH. It stores durable memories: `bd memories` lists "
     f"them, `bd recall <key>` prints one. Recall the memory stored under the key `{SMOKE_KEY}` "
-    "and report the port number it names. Do not guess it."
+    "and report the handle it names, exactly as stored. Do not guess it."
 )
+
+
+def recovered_token(final_answer: str | None) -> bool:
+    """Did the seeded, unguessable token come back in the agent's answer?
+
+    Independent of the full sentence on purpose: an agent asked to report the handle answers with
+    the handle. What proves the surface ANSWERED is the token — which no model can produce without
+    reading the store — arriving by any wording."""
+    return bool(_TOKEN_PATTERN.search(final_answer or ""))
 
 
 def smoke_step() -> SequenceStep:
@@ -113,8 +147,20 @@ def simulated_runner(surface: MemoryToolSurface) -> object:
     return run
 
 
-def run_smoke(*, model: str, dry_run: bool, timeout_s: float) -> dict[str, object]:
-    """Provision the surface, seed one memory, run one agent step, count the memory tool calls."""
+def run_smoke(
+    *,
+    model: str,
+    dry_run: bool,
+    timeout_s: float,
+    runner: object | None = None,
+) -> dict[str, object]:
+    """Provision the surface, seed one memory, run one agent step, count the memory tool calls.
+
+    ``runner`` overrides the process spawner. It exists so a test can drive the WHOLE path —
+    provisioning, argv, stream parse, counter, gate — against an agent that answers in its own
+    words, which is the geometry ``simulated_runner`` cannot produce (it echoes shim stdout, so
+    every assertion about recovery is satisfied by construction). It never makes a run paid: a row
+    is paid only when ``dry_run`` is false AND no runner was substituted."""
     # Sandbox FIRST: `provision_memory_tool` checks the store against it before `bd init` writes
     # CLAUDE.md/AGENTS.md/.claude anywhere, so a store the wipe would eat, or one that would
     # contaminate the sandbox's ancestry, is refused before it exists.
@@ -124,10 +170,10 @@ def run_smoke(*, model: str, dry_run: bool, timeout_s: float) -> dict[str, objec
     ):
         surface = provision_memory_tool(Path(root), sandbox=sandbox)
         harness_call(surface, ["remember", SMOKE_VALUE, "--key", SMOKE_KEY])
-        runner = simulated_runner(surface) if dry_run else subprocess.run
+        spawn = runner if runner is not None else (simulated_runner(surface) if dry_run else None)
         agent = HeadlessClaudeAgent(
             model=model,
-            runner=runner,  # type: ignore[arg-type]
+            runner=spawn if spawn is not None else subprocess.run,  # type: ignore[arg-type]
             cwd=str(sandbox),
             env=surface.env(),
             disallowed_tools=HOST_DENIED_TOOLS,
@@ -140,15 +186,23 @@ def run_smoke(*, model: str, dry_run: bool, timeout_s: float) -> dict[str, objec
     return {
         "dry_run": dry_run,
         # The reachability claim is only ever about a PAID run. False here means the stream came
-        # from the simulator, so no downstream gate can read this row as evidence that a real
-        # session reached the tool.
-        "paid": not dry_run,
+        # from the simulator or an injected runner, so no downstream gate can read this row as
+        # evidence that a real session reached the tool.
+        "paid": not dry_run and runner is None,
         "model": resolve_model(model),
         "surface_fingerprint": surface_fingerprint(),
-        "memory_tool_calls": endogenous_memory_tool_calls(calls),
-        "memory_verbs": endogenous_memory_verbs(calls),
+        # `endogenous_` on the EMITTED keys, not only on the Python symbols. The bare strings
+        # "memory_tool_calls"/"memory_verbs" are `EfficiencyMetrics.memory_tool_calls`
+        # (schemas/metrics.py), which counts harness-performed memory EVENTS; a consumer joining
+        # these rows to metrics rows on the shared name would silently compare two different
+        # quantities. The collision has to close on the JSON surface, not just in Python.
+        "endogenous_memory_tool_calls": endogenous_memory_tool_calls(calls),
+        "endogenous_memory_verbs": endogenous_memory_verbs(calls),
         "tool_names": [call.name for call in calls],
-        "recovered_value": SMOKE_VALUE in (result.final_answer or ""),
+        # The gate reads the TOKEN. The sentence match is reported alongside it as description,
+        # never as the condition: a correct agent paraphrases.
+        "recovered_token": recovered_token(result.final_answer),
+        "recovered_sentence": SMOKE_VALUE in (result.final_answer or ""),
         "final_answer": result.final_answer,
     }
 
@@ -157,20 +211,35 @@ def halt_reason(result: Mapping[str, object]) -> str | None:
     """Why this smoke HALTs the series, or ``None`` if the surface is proven both reachable and
     answering.
 
-    TWO conditions, and the second is the one a52bebd was missing. That gate keyed on the call
-    count alone and exited 0 on a live run of 7 calls against a shim that exec'd itself until it
-    hung: every call was made, none returned, ``recovered_value`` was False, and the smoke reported
-    the surface reachable. A count proves the agent TRIED. Only the unguessable ``SMOKE_VALUE``
-    coming back through the store proves the surface ANSWERED — a hung shim, a shim pinned to the
-    wrong store, and a bd that errors all produce calls and no value."""
-    calls = result.get("memory_tool_calls") or 0
+    THREE conditions.
+
+    The first two are the surface itself. a52bebd keyed on the call count alone and exited 0 on a
+    live run of 7 calls against a shim that exec'd itself until it hung: every call was made, none
+    returned, nothing was recovered, and the smoke reported the surface reachable. A count proves
+    the agent TRIED. Only the unguessable ``SMOKE_TOKEN`` coming back through the store proves the
+    surface ANSWERED — a hung shim, a shim pinned to the wrong store, and a bd that errors all
+    produce calls and no value. Recovery is judged on the TOKEN, not on the seeded sentence: an
+    agent asked to report the handle reports the handle, and demanding the sentence verbatim
+    (d9809a2) HALTS on a working surface.
+
+    The third refuses to call an UNPAID row a result at all. ``paid`` was added for exactly this
+    and then read by nobody, so ``--dry-run`` exited 0 whenever the simulator recovered the value
+    and any CI gate reading the exit code would have taken the plumbing check for the reachability
+    proof. Exit codes are the channel a gate reads; an advisory JSON field is not one."""
+    calls = result.get("endogenous_memory_tool_calls") or 0
     if not calls:
         return "the agent made no memory tool call — the surface is unreachable"
-    if not result.get("recovered_value"):
+    if not result.get("recovered_token"):
         return (
-            f"the agent called the memory tool {calls}x but never recovered the seeded value — "
+            f"the agent called the memory tool {calls}x but never recovered the seeded token — "
             "the surface answers nothing (a hung, mis-pinned, or erroring shim looks exactly "
             "like this, and a call count alone cannot tell them from a working one)"
+        )
+    if not result.get("paid"):
+        return (
+            "this row is not a paid run (paid=false): the plumbing is exercised but reachability "
+            "is UNPROVEN, because the stream came from a simulator rather than from `claude -p`. "
+            "Run `uv run python -m membench.runner.e1_smoke --model <id> --json` to settle it"
         )
     return None
 
@@ -195,14 +264,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(result))
     else:
         print(
-            f"memory_tool_calls={result['memory_tool_calls']} "
-            f"verbs={result['memory_verbs']} recovered={result['recovered_value']} "
-            f"paid={result['paid']}"
+            f"endogenous_memory_tool_calls={result['endogenous_memory_tool_calls']} "
+            f"verbs={result['endogenous_memory_verbs']} "
+            f"recovered_token={result['recovered_token']} paid={result['paid']}"
         )
     halt = halt_reason(result)
     if halt is not None:
+        # An unpaid row is a HALT for a different reason than a broken surface: nothing is known
+        # to be wrong, nothing is known to be right. Saying so keeps the exit code honest without
+        # reporting a defect the run has no evidence for.
+        prescription = (
+            "The surface is UNPROVEN, not broken — run the paid smoke before E1/E2/E3."
+            if result["paid"] is False
+            else "Do NOT run E1/E2/E3 on this wiring."
+        )
         print(
-            f"HALT: {halt}. Do NOT run E1/E2/E3 on this wiring. "
+            f"HALT: {halt}. {prescription} "
             f"(OAuth token set: {bool(os.environ.get(ENV_OAUTH))})",
             file=sys.stderr,
         )

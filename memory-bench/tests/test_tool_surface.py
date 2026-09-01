@@ -29,14 +29,26 @@ from pathlib import Path
 
 import pytest
 
-from membench.runner.e1_smoke import SMOKE_KEY, SMOKE_VALUE, halt_reason, run_smoke
+from membench.runner.agent import AgentStepResult
+from membench.runner.e1_smoke import (
+    SMOKE_KEY,
+    SMOKE_TOKEN,
+    SMOKE_VALUE,
+    halt_reason,
+    run_smoke,
+)
+from membench.runner.e1_smoke import main as smoke_main
 from membench.runner.headless_agent import (
     HeadlessClaudeAgent,
     Leg,
     MemoryChannel,
     _render_only_runner,
+    assistant_event,
     render_cell_calls,
+    result_event,
+    serialize_stream,
 )
+from membench.runner.metrics import compute_metrics
 from membench.runner.tool_surface import (
     HOST_DENIED_TOOLS,
     MEMORY_ALLOWED_TOOLS,
@@ -48,12 +60,14 @@ from membench.runner.tool_surface import (
     endogenous_memory_verbs,
     harness_call,
     memory_verbs_in_command,
+    partition_memory_calls,
     provision_memory_tool,
     resolve_bd_binary,
     settings_fingerprint,
     surface_fingerprint,
 )
 from membench.runner.toolreq_builtin import _wipe_cwd_contents
+from membench.schemas.metrics import EfficiencyMetrics
 from membench.schemas.sequence import SequenceStep
 from membench.schemas.trace import ToolCall
 
@@ -134,6 +148,74 @@ def test_counter_adversarial_argv(command: str, expected: list[str]) -> None:
     assert memory_verbs_in_command(command) == expected
 
 
+@pytest.mark.parametrize(
+    "command,expected",
+    [
+        # --- shell KEYWORDS in front of the command word. d9809a2's `_verb_of_segment` skipped
+        # only NAME=value prefixes, so the keyword BECAME the segment's command word and every one
+        # of these counted as no call. E1's primary endpoint IS the call rate, so each of these is
+        # a bias toward the near-zero null the series exists to rule out.
+        ("if bd recall k; then echo hit; fi", ["recall"]),
+        ("if ! bd recall k; then bd remember v --key k; fi", ["recall", "remember"]),
+        ("for i in 1 2; do bd recall $i; done", ["recall"]),
+        ("while read k; do bd recall $k; done < keys", ["recall"]),
+        ("until bd recall k; do sleep 1; done", ["recall"]),
+        (
+            "if bd recall k > /dev/null 2>&1; then echo yes; else bd memories; fi",
+            ["recall", "memories"],
+        ),
+        ("{ bd recall k; }", ["recall"]),
+        # --- COMMAND SUBSTITUTION. `$(...)` broke the segment via its `(`; the backtick form did
+        # not appear in _SEGMENT_BREAKS at all.
+        ("echo `bd recall k`", ["recall"]),
+        ("v=`bd recall k`", ["recall"]),
+        ("echo $(bd recall k)", ["recall"]),
+        # --- TRANSPARENT WRAPPERS: the process they exec is bd, so the call is a memory call.
+        ("sudo bd recall k", ["recall"]),
+        ("sudo -u bot bd recall k", ["recall"]),
+        ("env bd recall k", ["recall"]),
+        ("env FOO=1 bd recall k", ["recall"]),
+        ("/usr/bin/env bd recall k", ["recall"]),
+        ("timeout 30 bd recall k", ["recall"]),
+        ("timeout -k 5 30s bd recall k", ["recall"]),
+        ("command bd recall k", ["recall"]),
+        ("nohup bd recall k &", ["recall"]),
+        ("time bd recall k", ["recall"]),
+        ("exec bd recall k", ["recall"]),
+        ("stdbuf -oL bd memories", ["memories"]),
+        ("cat keys | xargs -n1 bd recall", ["recall"]),
+        ("cat keys | xargs -I{} bd recall {}", ["recall"]),
+        ("sudo -u bot env FOO=1 timeout 5 bd recall k", ["recall"]),
+        # --- an interpreter's `-c` STRING is a command line, not an opaque argument
+        ("bash -c 'bd recall k'", ["recall"]),
+        ('sh -c "bd recall k"', ["recall"]),
+        ("sh -lc 'bd recall a; bd remember b'", ["recall", "remember"]),
+        ("sudo bash -c 'bd recall k'", ["recall"]),
+        ('eval "bd recall k"', ["recall"]),
+        # --- and none of the wrappers may manufacture a call the shell would not make: the scan
+        # stops at the first non-option word and it has to BE bd.
+        ("timeout 30 echo bd recall k", []),
+        ("sudo echo bd recall k", []),
+        ("command -v bd", []),
+        ("bash -c 'echo bd recall k'", []),
+        ("bash --version", []),
+        ("for bd in a b; do echo $bd; done", []),
+    ],
+)
+def test_counter_sees_wrapped_and_keyworded_calls(command: str, expected: list[str]) -> None:
+    """Every form here returned ``[]`` against d9809a2 (the wrapper/keyword ones) or was invented
+    to pin the other direction of the same fix. Reproduced independently by two verifiers before
+    it was written."""
+    assert memory_verbs_in_command(command) == expected
+
+
+def test_braces_break_a_segment_only_when_they_stand_alone() -> None:
+    """The tokenizer change the ``xargs -I{}`` case rests on: an attached brace is literal text,
+    a standalone one is shell grouping. Breaking on every brace split the word and lost the call."""
+    assert command_segments("xargs -I{} bd recall {}") == [["xargs", "-I{}", "bd", "recall", "{}"]]
+    assert command_segments("{ bd recall k; }") == [["bd", "recall", "k"]]
+
+
 def test_segments_keep_a_quoted_run_as_one_word() -> None:
     """The property the over-count cases rest on: a quoted blob can never split into a command
     word plus a verb, however much shell-shaped text it contains."""
@@ -200,7 +282,7 @@ def test_shim_does_not_self_exec_under_surface_env(tmp_path: Path) -> None:
     prepending another ``-C <store>`` each pass until the argv is unusable; the call never
     returns a clean `bd version`. Every a52bebd test invoked the shim by absolute path under the
     ambient PATH and so passed whether the surface worked or not."""
-    surface = provision_memory_tool(tmp_path)
+    surface = provision_memory_tool(tmp_path, sandbox=None)
     assert Path(surface.bd_binary).is_absolute()
     assert surface.bin_dir.resolve() not in Path(surface.bd_binary).parents
 
@@ -255,7 +337,7 @@ def test_the_old_bare_name_shim_really_does_self_exec(tmp_path: Path) -> None:
 def test_memory_round_trip_through_the_agent_path(tmp_path: Path) -> None:
     """A write and a read spelled the way the agent spells them — bare `bd`, resolved through
     ``surface.env()`` — not through ``harness_call``'s absolute path."""
-    surface = provision_memory_tool(tmp_path)
+    surface = provision_memory_tool(tmp_path, sandbox=None)
     env = {**os.environ, **surface.env()}
     write = subprocess.run(
         [MEMORY_COMMAND, "remember", SMOKE_VALUE, "--key", SMOKE_KEY],
@@ -344,7 +426,7 @@ def test_store_survives_wipe(tmp_path: Path) -> None:
 
 @requires_bd
 def test_provisioned_shim_is_executable_and_pins_the_store(tmp_path: Path) -> None:
-    surface = provision_memory_tool(tmp_path)
+    surface = provision_memory_tool(tmp_path, sandbox=None)
     shim = surface.bin_dir / MEMORY_COMMAND
     assert shim.exists()
     assert shim.stat().st_mode & 0o111
@@ -360,7 +442,7 @@ def test_provision_raises_when_bd_init_fails(tmp_path: Path) -> None:
         return subprocess.CompletedProcess(list(argv), 1, "", "no beads database found")
 
     with pytest.raises(MemoryToolError, match="init"):
-        provision_memory_tool(tmp_path, bd_binary="/bin/sh", runner=failing)
+        provision_memory_tool(tmp_path, sandbox=None, bd_binary="/bin/sh", runner=failing)
 
 
 # --------------------------------------------------------------------------------------
@@ -442,8 +524,8 @@ def test_settings_fingerprint_moves_when_the_tool_surface_changes(tmp_path: Path
 def test_surface_fingerprint_ignores_the_realised_store_path(tmp_path: Path) -> None:
     """Two runs differ only in which tempdir their store landed in. Hashing that path would force
     a permanent MISS and re-spend real money on a difference that moves no measurement."""
-    a = provision_memory_tool(tmp_path / "a")
-    b = provision_memory_tool(tmp_path / "b")
+    a = provision_memory_tool(tmp_path / "a", sandbox=None)
+    b = provision_memory_tool(tmp_path / "b", sandbox=None)
     assert a.store_dir != b.store_dir
     assert a.fingerprint() == b.fingerprint() == surface_fingerprint()
 
@@ -453,23 +535,113 @@ def test_surface_fingerprint_ignores_the_realised_store_path(tmp_path: Path) -> 
 # --------------------------------------------------------------------------------------
 
 
+def answering_runner(final_answer: str) -> object:
+    """A ``claude -p`` stand-in that makes the memory call and then answers IN ITS OWN WORDS.
+
+    This is the geometry ``simulated_runner`` cannot produce. That simulator sets ``final_answer``
+    to raw shim stdout, so the seeded sentence is present by construction and every assertion about
+    recovery passes whether the estimator is right or wrong — which is exactly how d9809a2 shipped
+    a gate that HALTS on a correctly recalling agent. Here the answer is supplied by the test, so
+    the estimator is the only thing under test."""
+
+    def run(argv: Sequence[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        stream = serialize_stream(
+            [
+                assistant_event([("Bash", {"command": f"bd recall {SMOKE_KEY}"})]),
+                result_event(final_answer),
+            ]
+        )
+        return subprocess.CompletedProcess(list(argv), 0, stream, "")
+
+    return run
+
+
 @requires_bd
 def test_dry_run_smoke_reports_a_memory_tool_call() -> None:
     result = run_smoke(model="m", dry_run=True, timeout_s=30.0)
-    assert result["memory_tool_calls"] == 1
-    assert result["memory_verbs"] == ["recall"]
+    assert result["endogenous_memory_tool_calls"] == 1
+    assert result["endogenous_memory_verbs"] == ["recall"]
     assert result["tool_names"] == ["Bash"]
-    assert result["recovered_value"] is True
+    assert result["recovered_token"] is True
     # and it says out loud that it is not a paid reachability result
     assert result["paid"] is False
 
 
+def test_emitted_keys_do_not_collide_with_efficiency_metrics() -> None:
+    """FIX 4 as a property, not a spelling. ``EfficiencyMetrics.memory_tool_calls`` counts
+    harness-performed memory EVENTS; the smoke row counts calls the AGENT chose to make. A consumer
+    joining the two on a shared key would compare different quantities silently, so the bare names
+    must not appear on the JSON surface at all."""
+    row = run_smoke(
+        model="m",
+        dry_run=False,
+        timeout_s=30.0,
+        runner=answering_runner(f"the handle is {SMOKE_TOKEN}"),
+    )
+    assert "memory_tool_calls" not in row
+    assert "memory_verbs" not in row
+    assert set(EfficiencyMetrics.model_fields) & set(row) == set()
+
+
+@requires_bd
+def test_a_paraphrasing_agent_passes_the_gate() -> None:
+    """The defect FIX 2 removes. The prompt asks the agent to REPORT THE HANDLE, so a correctly
+    recalling agent answers with the handle, not with the seeded sentence. d9809a2 required the
+    sentence verbatim and would have HALTED the whole series on a working surface."""
+    row = run_smoke(
+        model="m",
+        dry_run=False,
+        timeout_s=30.0,
+        runner=answering_runner(f"I looked it up: the handle is {SMOKE_TOKEN}."),
+    )
+    assert row["endogenous_memory_tool_calls"] == 1
+    assert row["recovered_token"] is True
+    # the paraphrase does NOT contain the seeded sentence — which is the whole point
+    assert row["recovered_sentence"] is False
+    assert halt_reason({**row, "paid": True}) is None
+
+
+@requires_bd
+def test_an_answer_without_the_token_halts() -> None:
+    """The other side: a plausible answer the agent could have written without reading the store
+    recovers nothing, and must HALT. The token is unguessable precisely so this case is decidable.
+    """
+    row = run_smoke(
+        model="m",
+        dry_run=False,
+        timeout_s=30.0,
+        runner=answering_runner("The staging widget service handle is stored in the memory."),
+    )
+    assert row["recovered_token"] is False
+    reason = halt_reason({**row, "paid": True})
+    assert reason is not None
+    assert "never recovered the seeded token" in reason
+
+
+@requires_bd
+def test_the_token_is_not_recovered_as_a_fragment() -> None:
+    row = run_smoke(
+        model="m",
+        dry_run=False,
+        timeout_s=30.0,
+        runner=answering_runner(f"the handle is x{SMOKE_TOKEN}9"),
+    )
+    assert row["recovered_token"] is False
+
+
 def test_halt_gate_passes_only_when_the_surface_both_answers_and_is_called() -> None:
-    assert halt_reason({"memory_tool_calls": 1, "recovered_value": True}) is None
+    assert (
+        halt_reason(
+            {"endogenous_memory_tool_calls": 1, "recovered_token": True, "paid": True},
+        )
+        is None
+    )
 
 
 def test_halt_gate_halts_on_zero_calls() -> None:
-    reason = halt_reason({"memory_tool_calls": 0, "recovered_value": False})
+    reason = halt_reason(
+        {"endogenous_memory_tool_calls": 0, "recovered_token": False, "paid": True}
+    )
     assert reason is not None
     assert "no memory tool call" in reason
 
@@ -477,9 +649,75 @@ def test_halt_gate_halts_on_zero_calls() -> None:
 def test_halt_gate_halts_when_calls_were_made_but_nothing_came_back() -> None:
     """The observed live failure, as a unit: 7 calls against a self-exec'ing shim, every one of
     them hung, no value recovered — and a52bebd's count-only gate exited 0 on it."""
-    reason = halt_reason({"memory_tool_calls": 7, "recovered_value": False})
+    reason = halt_reason(
+        {"endogenous_memory_tool_calls": 7, "recovered_token": False, "paid": True}
+    )
     assert reason is not None
-    assert "never recovered the seeded value" in reason
+    assert "never recovered the seeded token" in reason
+
+
+def test_halt_gate_refuses_to_bless_an_unpaid_row() -> None:
+    """FIX 3. ``paid`` was added to say a simulated row proves nothing and then read by nobody, so
+    ``--dry-run`` exited 0 whenever the simulator recovered the value. The exit code is the channel
+    a CI gate reads; an advisory JSON field is not one."""
+    reason = halt_reason(
+        {"endogenous_memory_tool_calls": 1, "recovered_token": True, "paid": False}
+    )
+    assert reason is not None
+    assert "not a paid run" in reason
+
+
+@requires_bd
+def test_dry_run_main_exits_nonzero() -> None:
+    """The same refusal at the process boundary, which is where a gate actually observes it."""
+    assert smoke_main(["--dry-run", "--json"]) == 1
+
+
+# --------------------------------------------------------------------------------------
+# the store check is not optional, and a memory call is not a non-memory call
+# --------------------------------------------------------------------------------------
+
+
+def test_provision_requires_the_sandbox_to_be_named() -> None:
+    """FIX 5. ``sandbox`` defaulted to ``None``, so ``assert_store_outside`` fired only by caller
+    discipline: a cell that forgot the argument got a store the wipe eats and a silent miss in the
+    second leg. Keyword-only with NO default means every call site has to state what it is doing."""
+    with pytest.raises(TypeError):
+        provision_memory_tool(Path("/tmp"))  # type: ignore[call-arg]
+
+
+def test_partition_splits_a_bash_wrapped_memory_call_out() -> None:
+    calls = [bash("ls -la"), bash("bd recall k"), ToolCall(name="Read", arguments={})]
+    memory, other = partition_memory_calls(calls)
+    assert [c.arguments.get("command") for c in memory] == ["bd recall k"]
+    assert len(other) == 2
+
+
+def test_metrics_do_not_score_a_memory_call_as_a_non_memory_call() -> None:
+    """FIX 6. ``runner/metrics.py`` passed ``len(agent_result.tool_calls)`` straight through as
+    ``non_memory_tool_calls``, so the moment a grid hands the agent this surface every endogenous
+    memory call inflates the non-memory cost and the latency that goes with it — the arm that calls
+    the tool itself would look like the arm doing the most non-memory work. A docstring was the
+    only guard."""
+    result = AgentStepResult(
+        final_answer="done",
+        tool_calls=[
+            ToolCall(name="Bash", arguments={"command": "ls"}, latency_ms=10),
+            ToolCall(name="Bash", arguments={"command": "bd recall k"}, latency_ms=400),
+        ],
+        check_results={"c1": True},
+        writes_performed={},
+    )
+    bundle = compute_metrics(
+        SequenceStep(step_id="s", user_request="go"),
+        result,
+        None,
+        [],
+        reads_enabled=False,
+    )
+    assert bundle.efficiency.non_memory_tool_calls == 1
+    assert bundle.efficiency.tool_latency_ms == 10
+    assert bundle.efficiency.tool_calls_total == 1
 
 
 def test_tempdir_prefix_stays_out_of_the_repo() -> None:
