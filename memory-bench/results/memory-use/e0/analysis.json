@@ -1,0 +1,94 @@
+{
+  "bead": "mem-e4fby",
+  "study": "E0a",
+  "preregistration_sha256": "301f7917fe30df503271f2ac5b045fde20654a65021acdfb55efb65def75609c",
+  "filelist_sha256": "239820dc41d54108bb97e535fdc707df77769b3fb04601111c788bd27f66a312",
+  "population": {
+    "files_in_filelist": 12143,
+    "lines_scanned": 1698464,
+    "bash_blocks_mentioning_bd": 67480,
+    "counted_invocations": 35896,
+    "sessions_with_bd_traffic": 4421
+  },
+  "exclusions": {
+    "after_preregistration_lock": 5,
+    "help_invocation": 964,
+    "placeholder_or_template": 2304
+  },
+  "bucket_counts": {
+    "other": 34863,
+    "memory_write": 60,
+    "dep_write": 481,
+    "targeted_read": 16,
+    "search_read": 382,
+    "browse_read": 47,
+    "injection": 47
+  },
+  "E0.1_memory_write_rate": {
+    "unambiguous": {
+      "session_averaged_share": 0.00022317834252077675,
+      "sessions_with_at_least_one": 20,
+      "session_prevalence": 0.004523863379325944
+    },
+    "ambiguity_band_high": {
+      "session_averaged_share": 0.0007837043815777187,
+      "sessions_with_at_least_one": 51,
+      "session_prevalence": 0.011535851617281158
+    },
+    "counts": {
+      "unambiguous": 21,
+      "ambiguous": 39
+    },
+    "note": "The band's low end counts only writes whose key is resolvable from argv grammar (explicit key flag, or two or more positionals). The high end adds single-positional writes, which argv grammar cannot resolve into key-plus-content versus content-only. Resolving them would require reading the argument's text, which this study does not do."
+  },
+  "E0.2_memory_read_rates": {
+    "targeted_read": {
+      "session_averaged_share": 4.7815333110343775e-05,
+      "sessions_with_at_least_one": 5,
+      "session_prevalence": 0.001130965844831486
+    },
+    "search_read": {
+      "session_averaged_share": 0.004478638761467637,
+      "sessions_with_at_least_one": 114,
+      "session_prevalence": 0.02578602126215788
+    },
+    "browse_read": {
+      "session_averaged_share": 0.00038960211659617034,
+      "sessions_with_at_least_one": 30,
+      "session_prevalence": 0.006785795068988917
+    },
+    "note": "Never summed into one read rate. The list-all bucket carries no key and is join-ineligible by construction, so pooling it inflates apparent retrieval."
+  },
+  "E0.4_read_after_write": {
+    "keyed_targeted_reads": 16,
+    "raw_any": 0.0625,
+    "raw_cross_session": 0.0,
+    "raw_cross_working_directory": 0.0,
+    "hits": {
+      "any": 1,
+      "cross_session": 0,
+      "cross_working_directory": 0
+    },
+    "interpretation": "RAW is a CLI-EXPRESSIBILITY measurement, not a reuse measurement. It bounds how much keyed read traffic COULD refer to something captured earlier in the corpus. It cannot show that the retrieved body was read or acted on: mechanism-FIRES is not mechanism-CONSUMED. Publishing it twice lets same-directory continuations be read off rather than assumed away.",
+    "denominator_note": "Only the targeted read bucket enters this denominator. The search and list-all buckets carry no key and can never join, so folding them in would deflate RAW by construction."
+  },
+  "E0.5_memory_verb_share_of_bd_traffic": {
+    "session_averaged_share": 0.00569976059275187,
+    "sessions_with_at_least_one": 130,
+    "session_prevalence": 0.02940511196561864
+  },
+  "reference_buckets": {
+    "injection": {
+      "session_averaged_share": 0.0007337390276485705,
+      "sessions_with_at_least_one": 41,
+      "session_prevalence": 0.009273919927618186
+    },
+    "dep_write": {
+      "session_averaged_share": 0.003387470245564349,
+      "sessions_with_at_least_one": 173,
+      "session_prevalence": 0.03913141823116942
+    },
+    "note": "Neither is a memory verb and neither enters E0.5. The dependency bucket is here because the shorthand form has been miscounted as a memory verb."
+  },
+  "interpretation_label": "INSTRUCTED-endogenous, not spontaneous. The org's standing agent instructions direct every agent to capture, and the shipped prime surface teaches the verb in its own emitted text. No rate here is an untreated baseline."
+}
