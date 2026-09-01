@@ -165,6 +165,33 @@ def test_recall_is_bounded() -> None:
         )
 
 
+def test_the_seams_see_a_quoted_capture() -> None:
+    """Every E3b seam is pinned against the QUOTED spelling, not only the bare one.
+
+    5e45493's parser copied characters through a double-quoted run, so ``v="$(bd recall k)"``
+    reached all three seams as no call at all: the endogenous counter read 0, ``available_ids``
+    came back empty, and a quoted ``bd memories`` walked straight past the bounded-read guard to
+    hand a later leg the whole store. Capturing a recall into a variable and quoting it is how an
+    agent actually writes this, so these fixtures live here as well as in the tool-surface table -
+    E3b's guards must not be green only for the spelling that bead happened to enumerate."""
+    quoted = [
+        bash('v="$(bd recall auth-key)"'),
+        bash("echo \"$(bd remember rotation-plan 'rotate on the 1st')\""),
+    ]
+    bundle = compute_metrics(step(), result(quoted), None, [], reads_enabled=False)
+    assert bundle.efficiency.endogenous_memory_reads == 1
+    assert bundle.efficiency.endogenous_memory_writes == 1
+    assert bundle.efficiency.tool_not_called is False
+
+    assert observed_requested_ids(quoted) == ["auth-key"]
+
+    # The AC4 hazard, quoted: this is the form that reached the whole store unguarded.
+    with pytest.raises(MemoryToolError, match="unbounded memory enumeration"):
+        assert_recall_is_bounded([bash('echo "$(bd memories)"')])
+    # And the over-count direction stays refused: a single-quoted run is literal text.
+    assert enumerate_invocations([bash("echo '$(bd memories)'")]) == []
+
+
 def test_tool_call_counter() -> None:
     """An agent that answers in prose and never calls the tool is recorded as ``tool_not_called``.
 
