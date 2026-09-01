@@ -1,0 +1,329 @@
+{
+  "items": [
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/100",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Generated note text. This Bead is a graph node and nothing more.",
+        "aliases": [
+          "Ordering conformance pla"
+        ],
+        "lifecycle": "active",
+        "provenance": "human",
+        "body": "Generated note text. This Bead is a graph node and nothing more. Generated note text. This Bead is a graph node and nothing more. Generated note text. This Bead is a graph node and nothing more. Generated note text. This Bead is a graph node and nothing more. Generated note text. This Bead is a graph node and nothing m"
+      },
+      "revision": "rev-fcea547e0561eeb4"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/caf%C3%A9",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Ordering conformance placeholder. Content intentionally uninform",
+        "aliases": [
+          "Stand-in body text for a"
+        ],
+        "lifecycle": "active",
+        "provenance": "human",
+        "body": "Fixture filler, generated from the Bead id it is attached to. Fixture filler, generated from the Bead id it is attached to. Fixture filler, generated from the Bead id it is attached to. Fixture filler, generated from the Bead id it is attached to. Fixture filler, generated from the Bead id it is attached to. Fixture fi"
+      },
+      "revision": "rev-9a430c348313b0d9"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alpha_one",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "This payload exists so that a page has bytes in it. It says noth",
+        "aliases": [
+          "Fixture filler, generate",
+          "Fixture filler, generate"
+        ],
+        "lifecycle": "active",
+        "provenance": "human",
+        "body": "Filler body for an ordering fixture Bead, derived from no record. Filler body for an ordering fixture Bead, derived from no record. Filler body for an ordering fixture Bead, derived from no record. Filler body for an ordering fixture Bead, derived from no record. Filler body for an ordering fixture Bead, derived from n"
+      },
+      "revision": "rev-a5fa137ecf6203e8"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alpha",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Stand-in body text for a Memory Bead in a generated graph family",
+        "aliases": [],
+        "lifecycle": "active",
+        "provenance": "agent",
+        "body": "Fixture filler, generated from the Bead id it is attached to. Fixture filler, generated from the Bead id it is attached to. Fixture filler, generated from the Bead id it is attached to. Fixture filler, generated from the Bead id it is attached to. Fixture filler, generated from the Bead id it is attached to. Fixture fi"
+      },
+      "revision": "rev-41fb2f352fa1f2bc"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/cafe%CC%81",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Fixture filler, generated from the Bead id it is attached to. Fi",
+        "aliases": [],
+        "lifecycle": "active",
+        "provenance": "human",
+        "body": "This payload exists so that a page has bytes in it. It says nothing. This payload exists so that a page has bytes in it. It says nothing. This payload exists so that a page has bytes in it. It says nothing. This payload exists so that a page has bytes in it. It says nothing. This payload exists so that a page has bytes"
+      },
+      "revision": "rev-e3f0cb9b2b096dbf"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/11",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Fixture filler, generated from the Bead id it is attached to. Fi",
+        "aliases": [
+          "Stand-in body text for a",
+          "Neutral text sized to a "
+        ],
+        "lifecycle": "active",
+        "provenance": "human",
+        "body": "Neutral text sized to a plausible operating note and nothing more. Neutral text sized to a plausible operating note and nothing more. Neutral text sized to a plausible operating note and nothing more. Neutral text sized to a plausible operating note and nothing more. Neutral text sized to a plausible operating note and"
+      },
+      "revision": "rev-ee043b1de1583d71"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/re%CC%81sume",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Ordering conformance placeholder. Content intentionally uninform",
+        "aliases": [
+          "Neutral text sized to a ",
+          "This payload exists so t"
+        ],
+        "lifecycle": "active",
+        "provenance": "human",
+        "body": "This payload exists so that a page has bytes in it. It says nothing. This payload exists so that a page has bytes in it. It says nothing. This payload exists so that a page has bytes in it. It says nothing. This payload exists so that a page has bytes in it. It says nothing. This payload exists so that a page has bytes"
+      },
+      "revision": "rev-af352f343c9b2e1e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alphathree",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Placeholder prose for a BDP collection-ordering conformance fixt",
+        "aliases": [
+          "Stand-in body text for a",
+          "Generated note text. Thi"
+        ],
+        "lifecycle": "active",
+        "provenance": "human",
+        "body": "This payload exists so that a page has bytes in it. It says nothing. This payload exists so that a page has bytes in it. It says nothing. This payload exists so that a page has bytes in it. It says nothing. This payload exists so that a page has bytes in it. It says nothing. This payload exists so that a page has bytes"
+      },
+      "revision": "rev-9e194f26948079d2"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/r%C3%A9sume",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Filler body for an ordering fixture Bead, derived from no record",
+        "aliases": [
+          "Stand-in body text for a",
+          "Neutral text sized to a "
+        ],
+        "lifecycle": "active",
+        "provenance": "agent",
+        "body": "Filler body for an ordering fixture Bead, derived from no record. Filler body for an ordering fixture Bead, derived from no record. Filler body for an ordering fixture Bead, derived from no record. Filler body for an ordering fixture Bead, derived from no record. Filler body for an ordering fixture Bead, derived from n"
+      },
+      "revision": "rev-6e53675d91da0a5e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/10",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Fixture filler, generated from the Bead id it is attached to. Fi",
+        "aliases": [
+          "Placeholder prose for a "
+        ],
+        "lifecycle": "active",
+        "provenance": "human",
+        "body": "Placeholder prose for a BDP collection-ordering conformance fixture. Placeholder prose for a BDP collection-ordering conformance fixture. Placeholder prose for a BDP collection-ordering conformance fixture. Placeholder prose for a BDP collection-ordering conformance fixture. Placeholder prose for a BDP collection-order"
+      },
+      "revision": "rev-d23007dc6d2b3cdf"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/1",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Fixture filler, generated from the Bead id it is attached to. Fi",
+        "aliases": [
+          "This payload exists so t"
+        ],
+        "lifecycle": "active",
+        "provenance": "human",
+        "body": "Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated grap"
+      },
+      "revision": "rev-b58e5f26f2c738ca"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Delta",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Fixture filler, generated from the Bead id it is attached to. Fi",
+        "aliases": [
+          "Generated note text. Thi"
+        ],
+        "lifecycle": "active",
+        "provenance": "human",
+        "body": "Neutral text sized to a plausible operating note and nothing more. Neutral text sized to a plausible operating note and nothing more. Neutral text sized to a plausible operating note and nothing more. Neutral text sized to a plausible operating note and nothing more. Neutral text sized to a plausible operating note and"
+      },
+      "revision": "rev-87084f0a5a64f91c"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/gamma",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Filler body for an ordering fixture Bead, derived from no record",
+        "aliases": [
+          "Fixture filler, generate",
+          "Filler body for an order"
+        ],
+        "lifecycle": "active",
+        "provenance": "human",
+        "body": "Fixture filler, generated from the Bead id it is attached to. Fixture filler, generated from the Bead id it is attached to. Fixture filler, generated from the Bead id it is attached to. Fixture filler, generated from the Bead id it is attached to. Fixture filler, generated from the Bead id it is attached to. Fixture fi"
+      },
+      "revision": "rev-27fe40edc1e25e29"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Zeta",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Neutral text sized to a plausible operating note and nothing mor",
+        "aliases": [
+          "Stand-in body text for a"
+        ],
+        "lifecycle": "active",
+        "provenance": "human",
+        "body": "Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated grap"
+      },
+      "revision": "rev-e615cfb3f5473064"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/2",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Placeholder prose for a BDP collection-ordering conformance fixt",
+        "aliases": [
+          "Filler body for an order"
+        ],
+        "lifecycle": "active",
+        "provenance": "agent",
+        "body": "Ordering conformance placeholder. Content intentionally uninformative. Ordering conformance placeholder. Content intentionally uninformative. Ordering conformance placeholder. Content intentionally uninformative. Ordering conformance placeholder. Content intentionally uninformative. Ordering conformance placeholder. Co"
+      },
+      "revision": "rev-327d9e7081c7b284"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Gamma",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "This payload exists so that a page has bytes in it. It says noth",
+        "aliases": [
+          "Placeholder prose for a ",
+          "Placeholder prose for a "
+        ],
+        "lifecycle": "active",
+        "provenance": "human",
+        "body": "Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated grap"
+      },
+      "revision": "rev-5a27fff632910c04"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alpha-two",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Filler body for an ordering fixture Bead, derived from no record",
+        "aliases": [
+          "Fixture filler, generate"
+        ],
+        "lifecycle": "active",
+        "provenance": "agent",
+        "body": "Placeholder prose for a BDP collection-ordering conformance fixture. Placeholder prose for a BDP collection-ordering conformance fixture. Placeholder prose for a BDP collection-ordering conformance fixture. Placeholder prose for a BDP collection-ordering conformance fixture. Placeholder prose for a BDP collection-order"
+      },
+      "revision": "rev-0ef41886cfce6997"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/cafe",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Neutral text sized to a plausible operating note and nothing mor",
+        "aliases": [],
+        "lifecycle": "active",
+        "provenance": "human",
+        "body": "Generated note text. This Bead is a graph node and nothing more. Generated note text. This Bead is a graph node and nothing more. Generated note text. This Bead is a graph node and nothing more. Generated note text. This Bead is a graph node and nothing more. Generated note text. This Bead is a graph node and nothing m"
+      },
+      "revision": "rev-72bd57a98de959e7"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/9",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Neutral text sized to a plausible operating note and nothing mor",
+        "aliases": [
+          "Generated note text. Thi",
+          "This payload exists so t"
+        ],
+        "lifecycle": "active",
+        "provenance": "human",
+        "body": "Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated grap"
+      },
+      "revision": "rev-ad104032d8c7edda"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/delta",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "This payload exists so that a page has bytes in it. It says noth",
+        "aliases": [
+          "Neutral text sized to a "
+        ],
+        "lifecycle": "active",
+        "provenance": "human",
+        "body": "Generated note text. This Bead is a graph node and nothing more. Generated note text. This Bead is a graph node and nothing more. Generated note text. This Bead is a graph node and nothing more. Generated note text. This Bead is a graph node and nothing more. Generated note text. This Bead is a graph node and nothing m"
+      },
+      "revision": "rev-7aea239247383651"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/2000",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Fixture filler, generated from the Bead id it is attached to. Fi",
+        "aliases": [
+          "Neutral text sized to a ",
+          "Neutral text sized to a "
+        ],
+        "lifecycle": "active",
+        "provenance": "agent",
+        "body": "Ordering conformance placeholder. Content intentionally uninformative. Ordering conformance placeholder. Content intentionally uninformative. Ordering conformance placeholder. Content intentionally uninformative. Ordering conformance placeholder. Content intentionally uninformative. Ordering conformance placeholder. Co"
+      },
+      "revision": "rev-362e48a9824eaf0e"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/101",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Neutral text sized to a plausible operating note and nothing mor",
+        "aliases": [],
+        "lifecycle": "active",
+        "provenance": "agent",
+        "body": "Generated note text. This Bead is a graph node and nothing more. Generated note text. This Bead is a graph node and nothing more. Generated note text. This Bead is a graph node and nothing more. Generated note text. This Bead is a graph node and nothing more. Generated note text. This Bead is a graph node and nothing m"
+      },
+      "revision": "rev-d442214a99d830d4"
+    },
+    {
+      "id": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/GAMMA",
+      "type": "https://fixtures.mem.example/ordering/types/memory",
+      "properties": {
+        "title": "Filler body for an ordering fixture Bead, derived from no record",
+        "aliases": [
+          "Fixture filler, generate",
+          "Stand-in body text for a"
+        ],
+        "lifecycle": "active",
+        "provenance": "human",
+        "body": "Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated graph family. Stand-in body text for a Memory Bead in a generated grap"
+      },
+      "revision": "rev-e7c79e4f6c3934bf"
+    }
+  ],
+  "next": null
+}

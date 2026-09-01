@@ -1,4 +1,9 @@
-"""Gates for the BDP conformance fixtures (mem-vn4ek).
+"""Gates for the seven generated BDP graph shapes (mem-vn4ek).
+
+The eighth directory in the same tree, `collation-edge-identifiers`, is gated in
+`test_bdp_collation.py`: it varies identifier spellings rather than graph shape,
+so none of the density, degree or hub-predicate reasoning below applies to it.
+Readers shared by both modules live in `tests/bdp_support.py`.
 
 Five things have to hold or the fixtures are not usable by anyone else:
 regeneration is byte-identical, every document validates against the pinned
@@ -23,7 +28,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
 from membench.bdp_fixtures.emit import (
@@ -43,8 +47,8 @@ from membench.bdp_fixtures.mapping import (
     TYPES_BASE,
     BdpMappingError,
     ScopeUrls,
-    _properties,
     bead_local_id,
+    bead_properties,
     bead_records,
     descriptor_filename,
     discovery_document,
@@ -64,18 +68,21 @@ from membench.bdp_fixtures.topologies import (
     TopologyError,
     build_edges,
 )
-
-REPO = Path(__file__).resolve().parents[1]
-FIXTURES = REPO / DEFAULT_OUT
-PACKAGE = REPO / "fixtures/bdp"
-SOURCE_PACKAGE = REPO / "membench/bdp_fixtures"
-SCHEMA = PACKAGE / "upstream/bdp-v0.schema.json"
-README = PACKAGE / "README.md"
-
-# An absolute path from somebody's machine, in the spellings that would actually
-# appear. The package is meant to be published, so one of these anywhere in it is
-# a leak, not a cosmetic problem.
-LOCAL_PATH = re.compile(r"(/home/[a-z]|/Users/[A-Za-z]|[A-Za-z]:\\\\)")
+from tests.bdp_support import (
+    FIXTURES,
+    LOCAL_PATH,
+    PACKAGE,
+    SCHEMA,
+    SOURCE_PACKAGE,
+    load_bundle,
+)
+from tests.bdp_support import chunks as _chunks
+from tests.bdp_support import families as _families
+from tests.bdp_support import local as _local
+from tests.bdp_support import manifest as _manifest
+from tests.bdp_support import read as _read
+from tests.bdp_support import readme as _readme
+from tests.bdp_support import validator as _validator
 
 # The family whose shape exists to carry Links that share a (type, source,
 # target) tuple, and the one whose shape exists to carry Beads in no Link.
@@ -86,53 +93,7 @@ OVERSIZED_SELECTION_FAMILY = "platform-documentation-hub-spoke"
 
 @pytest.fixture(scope="module")
 def bundle() -> dict[str, Any]:
-    loaded: dict[str, Any] = json.loads(SCHEMA.read_text(encoding="utf-8"))
-    return loaded
-
-
-def _validator(bundle: dict[str, Any], definition: str) -> Draft202012Validator:
-    if definition not in bundle["$defs"]:
-        raise AssertionError(f"the pinned bundle has no $defs/{definition}")
-    schema = dict(bundle)
-    schema["$ref"] = f"#/$defs/{definition}"
-    return Draft202012Validator(schema)
-
-
-def _families() -> list[str]:
-    return sorted(TOPOLOGIES_BY_NAME)
-
-
-def _read(family: str, *parts: str) -> Any:
-    return json.loads(FIXTURES.joinpath(family, *parts).read_text(encoding="utf-8"))
-
-
-def _manifest() -> dict[str, Any]:
-    loaded: dict[str, Any] = json.loads((FIXTURES / "manifest.json").read_text(encoding="utf-8"))
-    return loaded
-
-
-def _local(url: str) -> str:
-    return url.rsplit("/", 1)[-1]
-
-
-def _chunks(items: list[str], limit: int) -> list[list[str]]:
-    """Page an ordered list by accumulation.
-
-    Deliberately not the emitter's stride-over-range formulation: a test that
-    re-implements the code under test character for character asserts only that
-    the expression was copied correctly.
-    """
-
-    pages: list[list[str]] = []
-    current: list[str] = []
-    for item in items:
-        current.append(item)
-        if len(current) == limit:
-            pages.append(current)
-            current = []
-    if current:
-        pages.append(current)
-    return pages
+    return load_bundle()
 
 
 def _degrees(family: str) -> tuple[dict[str, int], dict[str, int]]:
@@ -169,7 +130,9 @@ def test_manifest_checksums_match_the_files_on_disk() -> None:
         raw = (FIXTURES / name).read_bytes()
         assert hashlib.sha256(raw).hexdigest() == entry["sha256"], name
         assert len(raw) == entry["bytes"], name
-    for family, family_entry in manifest["families"].items():
+    recorded = dict(manifest["families"])
+    recorded.update(manifest["collation_family"])
+    for family, family_entry in recorded.items():
         for name, entry in family_entry["files"].items():
             raw = (FIXTURES / family / name).read_bytes()
             assert hashlib.sha256(raw).hexdigest() == entry["sha256"], f"{family}/{name}"
@@ -385,7 +348,7 @@ def test_every_published_property_is_reproducible_from_the_bead_id_alone(family:
     """
 
     for record in _read(family, "dataset", "beads.json")["items"]:
-        assert record["properties"] == _properties(_local(record["id"]))
+        assert record["properties"] == bead_properties(_local(record["id"]))
 
 
 @pytest.mark.parametrize("family", _families())
@@ -955,10 +918,6 @@ def test_the_density_selection_names_the_hub_the_shipped_links_have(family: str)
 
 
 # --- the README ------------------------------------------------------------
-
-
-def _readme() -> str:
-    return README.read_text(encoding="utf-8")
 
 
 def test_readme_density_table_matches_the_manifest() -> None:

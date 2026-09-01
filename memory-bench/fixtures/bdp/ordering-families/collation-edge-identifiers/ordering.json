@@ -1,0 +1,552 @@
+{
+  "reference_order": "ascending-canonical-uri-codepoint",
+  "reference_order_note": "Ascending by Unicode code point over the canonical URI as written: no percent-decoding, no Unicode normalization, no case folding, no numeric parsing. Every identifier in this family is ASCII, so a bytewise UTF-8 comparison and a codepoint comparison agree here; the non-ASCII lives inside percent-encoding.",
+  "why_this_family_names_its_own_order": "The seven graph families record 'ascending-canonical-uri'. Their ids are ASCII and fixed-width, so every reading of that phrase returns the same sequence and the ambiguity never surfaces. It surfaces here. 'Ascending canonical URI' does not say whether the comparison decodes, normalizes, folds case or parses digits first, and this family is built out of the identifiers on which those readings diverge, so it names the comparison rule in the order id.",
+  "bdp8": {
+    "proposal": "https://github.com/gastownhall/bdp/issues/8",
+    "clauses": [
+      "an authority imposes a total order on the selected set",
+      "the order is deterministic for a given selected set",
+      "the order is stable across the pages of one snapshot",
+      "the authority documents the order it uses"
+    ],
+    "leaves_choice_of_order_to_the_implementation": true,
+    "checkable_against_this_tree": [
+      "membership: concatenating every page of a snapshot yields exactly `selected_set`, each id once, with no omission and no repeat",
+      "page partitioning: `page_count` and `page_item_counts` at each recorded limit",
+      "the reference sequence, but only against an authority that documents 'ascending-canonical-uri' as the order it uses"
+    ],
+    "not_checkable_against_this_tree": [
+      "determinism across two reads, which a harness gets by reading twice rather than from any data here",
+      "stability across the pages of one snapshot: no continuation response and no cursor is shipped, so an authority that re-sorts or restarts on continuation passes everything here",
+      "the documentation duty, which is a property of an authority rather than of a fixture"
+    ]
+  },
+  "serialization_note": "The `items` arrays under dataset/ are the load set and are deliberately NOT in the reference order, as in the seven graph families.",
+  "membership_is_the_order_independent_assertion": "Concatenating every page of one snapshot must yield `selected_set` exactly, each id once, and that check holds whatever order the authority documents. It is the assertion a tie threatens: a comparison rule that cannot separate two ids leaves their relative position to whatever the authority falls back on, and a keyset continuation built on the comparison alone can then repeat one or skip one. Whether a given authority actually loses a record depends on how it paginates, so this tree records which rules tie which ids rather than predicting the outcome; `collation.comparisons[].ties` names the pairs that would explain a membership failure here.",
+  "scope": "https://fixtures.mem.example/ordering/collation-edge-identifiers/",
+  "collections": {
+    "beads/": {
+      "total": 23,
+      "selected_set": [
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/1",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/10",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/100",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/101",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/11",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/2",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/2000",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/9",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Delta",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/GAMMA",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Gamma",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Zeta",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alpha",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alpha-two",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alpha_one",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alphathree",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/caf%C3%A9",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/cafe",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/cafe%CC%81",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/delta",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/gamma",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/r%C3%A9sume",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/re%CC%81sume"
+      ],
+      "pages": {
+        "3": {
+          "page_count": 8,
+          "page_item_counts": [
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            2
+          ],
+          "spans_multiple_pages": true
+        },
+        "10": {
+          "page_count": 3,
+          "page_item_counts": [
+            10,
+            10,
+            3
+          ],
+          "spans_multiple_pages": true
+        }
+      }
+    },
+    "links/": {
+      "total": 15,
+      "selected_set": [
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/1",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/10",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/11",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/2",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/9",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/EDGE",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/Edge",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/Zeta",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/edge",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/link-a",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/link_b",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/linkc",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/n%C3%A9e",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/ne%CC%81e",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/nee"
+      ],
+      "pages": {
+        "3": {
+          "page_count": 5,
+          "page_item_counts": [
+            3,
+            3,
+            3,
+            3,
+            3
+          ],
+          "spans_multiple_pages": true
+        },
+        "10": {
+          "page_count": 2,
+          "page_item_counts": [
+            10,
+            5
+          ],
+          "spans_multiple_pages": true
+        }
+      }
+    },
+    "types/": {
+      "total": 2,
+      "selected_set": [
+        "https://fixtures.mem.example/ordering/types/cites",
+        "https://fixtures.mem.example/ordering/types/memory"
+      ],
+      "pages": {
+        "3": {
+          "page_count": 1,
+          "page_item_counts": [
+            2
+          ],
+          "spans_multiple_pages": false
+        },
+        "10": {
+          "page_count": 1,
+          "page_item_counts": [
+            2
+          ],
+          "spans_multiple_pages": false
+        }
+      }
+    }
+  },
+  "selections": [
+    {
+      "description": "Outbound Links of this family's highest-outdegree Bead. A selection rather than a whole collection, and it spans more than one page, so the comparison rule has to hold across a continuation over the authored Link ids rather than only inside a single page.",
+      "collection": "links/",
+      "parameters": {
+        "source": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/1"
+      },
+      "total": 7,
+      "selected_set": [
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/1",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/10",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/11",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/2",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/9",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/EDGE",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/Edge"
+      ],
+      "pages": {
+        "3": {
+          "page_count": 3,
+          "page_item_counts": [
+            3,
+            3,
+            1
+          ],
+          "spans_multiple_pages": true
+        },
+        "10": {
+          "page_count": 1,
+          "page_item_counts": [
+            7
+          ],
+          "spans_multiple_pages": false
+        }
+      }
+    },
+    {
+      "description": "Beads whose provenance is 'agent'. About half the family, so the selected set spans pages and the order has to hold across a continuation rather than inside one page.",
+      "collection": "beads/",
+      "parameters": {
+        "selector": "$[?@.properties.provenance == \"agent\"]"
+      },
+      "total": 6,
+      "selected_set": [
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/101",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/2",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/2000",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alpha",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alpha-two",
+        "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/r%C3%A9sume"
+      ],
+      "pages": {
+        "3": {
+          "page_count": 2,
+          "page_item_counts": [
+            3,
+            3
+          ],
+          "spans_multiple_pages": true
+        },
+        "10": {
+          "page_count": 1,
+          "page_item_counts": [
+            6
+          ],
+          "spans_multiple_pages": false
+        }
+      }
+    }
+  ],
+  "collation": {
+    "groups": [
+      {
+        "name": "unpadded-ordinals",
+        "exercises": "numeric order against codepoint order, with no zero padding to hide it",
+        "defeats": [
+          "numeric-aware"
+        ],
+        "bead_ids": [
+          "1",
+          "2",
+          "9",
+          "10",
+          "11",
+          "100",
+          "101",
+          "2000"
+        ],
+        "link_ids": [
+          "1",
+          "2",
+          "9",
+          "10",
+          "11"
+        ],
+        "beads_in_reference_order": [
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/1",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/10",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/100",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/101",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/11",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/2",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/2000",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/9"
+        ]
+      },
+      {
+        "name": "mixed-case",
+        "exercises": "ASCII case order, where every uppercase letter precedes every lowercase one",
+        "defeats": [
+          "casefold",
+          "punctuation-ignoring"
+        ],
+        "bead_ids": [
+          "GAMMA",
+          "Gamma",
+          "gamma",
+          "Delta",
+          "delta",
+          "Zeta"
+        ],
+        "link_ids": [
+          "EDGE",
+          "Edge",
+          "edge",
+          "Zeta"
+        ],
+        "beads_in_reference_order": [
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Delta",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/GAMMA",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Gamma",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Zeta",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/delta",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/gamma"
+        ]
+      },
+      {
+        "name": "punctuation",
+        "exercises": "separators inside a common stem, which a variable-weighting collator drops",
+        "defeats": [
+          "punctuation-ignoring"
+        ],
+        "bead_ids": [
+          "alpha",
+          "alpha-two",
+          "alpha_one",
+          "alphathree"
+        ],
+        "link_ids": [
+          "link-a",
+          "link_b",
+          "linkc"
+        ],
+        "beads_in_reference_order": [
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alpha",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alpha-two",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alpha_one",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alphathree"
+        ]
+      },
+      {
+        "name": "normalization",
+        "exercises": "one label percent-encoded from NFC and from NFD, beside its unaccented form",
+        "defeats": [
+          "percent-decoding",
+          "nfc-normalizing"
+        ],
+        "bead_ids": [
+          "cafe",
+          "caf%C3%A9",
+          "cafe%CC%81",
+          "r%C3%A9sume",
+          "re%CC%81sume"
+        ],
+        "link_ids": [
+          "n%C3%A9e",
+          "ne%CC%81e",
+          "nee"
+        ],
+        "beads_in_reference_order": [
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/caf%C3%A9",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/cafe",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/cafe%CC%81",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/r%C3%A9sume",
+          "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/re%CC%81sume"
+        ]
+      }
+    ],
+    "comparisons": {
+      "beads/": [
+        {
+          "comparison": "numeric-aware",
+          "describes": "digit runs compared as integers, so `2` precedes `10`",
+          "is_a_total_order_over_this_collection": true,
+          "differs_from_the_reference_order": true,
+          "ties": [],
+          "bdp8_reading": "a total order, but a different one; conformant under the proposal as written and detectable only against an authority that documents 'ascending-canonical-uri-codepoint'",
+          "sequence": [
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/1",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/2",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/9",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/10",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/11",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/100",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/101",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/2000",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Delta",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/GAMMA",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Gamma",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Zeta",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alpha",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alpha-two",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alpha_one",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alphathree",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/caf%C3%A9",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/cafe",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/cafe%CC%81",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/delta",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/gamma",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/r%C3%A9sume",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/re%CC%81sume"
+          ]
+        },
+        {
+          "comparison": "casefold",
+          "describes": "case folded before comparing, so `alpha` precedes `Zeta`",
+          "is_a_total_order_over_this_collection": false,
+          "differs_from_the_reference_order": true,
+          "ties": [
+            [
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Delta",
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/delta"
+            ],
+            [
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/GAMMA",
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Gamma",
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/gamma"
+            ]
+          ],
+          "bdp8_reading": "not a total order over these ids, so it fails the first clause whatever order the authority documents"
+        },
+        {
+          "comparison": "punctuation-ignoring",
+          "describes": "punctuation dropped and case folded, as a collator at primary strength",
+          "is_a_total_order_over_this_collection": false,
+          "differs_from_the_reference_order": true,
+          "ties": [
+            [
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Delta",
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/delta"
+            ],
+            [
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/GAMMA",
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Gamma",
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/gamma"
+            ]
+          ],
+          "bdp8_reading": "not a total order over these ids, so it fails the first clause whatever order the authority documents"
+        },
+        {
+          "comparison": "percent-decoding",
+          "describes": "percent-decoded before comparing, so the encoded octets stop deciding",
+          "is_a_total_order_over_this_collection": true,
+          "differs_from_the_reference_order": true,
+          "ties": [],
+          "bdp8_reading": "a total order, but a different one; conformant under the proposal as written and detectable only against an authority that documents 'ascending-canonical-uri-codepoint'",
+          "sequence": [
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/1",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/10",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/100",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/101",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/11",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/2",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/2000",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/9",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Delta",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/GAMMA",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Gamma",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/Zeta",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alpha",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alpha-two",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alpha_one",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/alphathree",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/cafe",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/cafe%CC%81",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/caf%C3%A9",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/delta",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/gamma",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/re%CC%81sume",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/r%C3%A9sume"
+          ]
+        },
+        {
+          "comparison": "nfc-normalizing",
+          "describes": "percent-decoded and normalized to NFC, so NFC and NFD spellings tie",
+          "is_a_total_order_over_this_collection": false,
+          "differs_from_the_reference_order": true,
+          "ties": [
+            [
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/caf%C3%A9",
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/cafe%CC%81"
+            ],
+            [
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/r%C3%A9sume",
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/re%CC%81sume"
+            ]
+          ],
+          "bdp8_reading": "not a total order over these ids, so it fails the first clause whatever order the authority documents"
+        }
+      ],
+      "links/": [
+        {
+          "comparison": "numeric-aware",
+          "describes": "digit runs compared as integers, so `2` precedes `10`",
+          "is_a_total_order_over_this_collection": true,
+          "differs_from_the_reference_order": true,
+          "ties": [],
+          "bdp8_reading": "a total order, but a different one; conformant under the proposal as written and detectable only against an authority that documents 'ascending-canonical-uri-codepoint'",
+          "sequence": [
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/1",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/2",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/9",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/10",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/11",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/EDGE",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/Edge",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/Zeta",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/edge",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/link-a",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/link_b",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/linkc",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/n%C3%A9e",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/ne%CC%81e",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/nee"
+          ]
+        },
+        {
+          "comparison": "casefold",
+          "describes": "case folded before comparing, so `alpha` precedes `Zeta`",
+          "is_a_total_order_over_this_collection": false,
+          "differs_from_the_reference_order": true,
+          "ties": [
+            [
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/EDGE",
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/Edge",
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/edge"
+            ]
+          ],
+          "bdp8_reading": "not a total order over these ids, so it fails the first clause whatever order the authority documents"
+        },
+        {
+          "comparison": "punctuation-ignoring",
+          "describes": "punctuation dropped and case folded, as a collator at primary strength",
+          "is_a_total_order_over_this_collection": false,
+          "differs_from_the_reference_order": true,
+          "ties": [
+            [
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/EDGE",
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/Edge",
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/edge"
+            ]
+          ],
+          "bdp8_reading": "not a total order over these ids, so it fails the first clause whatever order the authority documents"
+        },
+        {
+          "comparison": "percent-decoding",
+          "describes": "percent-decoded before comparing, so the encoded octets stop deciding",
+          "is_a_total_order_over_this_collection": true,
+          "differs_from_the_reference_order": true,
+          "ties": [],
+          "bdp8_reading": "a total order, but a different one; conformant under the proposal as written and detectable only against an authority that documents 'ascending-canonical-uri-codepoint'",
+          "sequence": [
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/1",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/10",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/11",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/2",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/9",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/EDGE",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/Edge",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/Zeta",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/edge",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/link-a",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/link_b",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/linkc",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/nee",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/ne%CC%81e",
+            "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/n%C3%A9e"
+          ]
+        },
+        {
+          "comparison": "nfc-normalizing",
+          "describes": "percent-decoded and normalized to NFC, so NFC and NFD spellings tie",
+          "is_a_total_order_over_this_collection": false,
+          "differs_from_the_reference_order": true,
+          "ties": [
+            [
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/n%C3%A9e",
+              "https://fixtures.mem.example/ordering/collation-edge-identifiers/links/ne%CC%81e"
+            ]
+          ],
+          "bdp8_reading": "not a total order over these ids, so it fails the first clause whatever order the authority documents"
+        }
+      ]
+    }
+  }
+}

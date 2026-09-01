@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "bead": "mem-vn4ek",
   "status": "generated-graph-shapes",
   "authored_not_measured": "Every graph shape is authored to exercise a consumer policy. None of these structures is a measured field frequency, and nothing here supports a claim about how often they occur in a real store.",
@@ -588,6 +588,115 @@
         "ordering.json": {
           "sha256": "4166e707f78bbbc60460204d4af1bcc6d69269ce49a95a2198446bde1992c054",
           "bytes": 170755
+        }
+      }
+    }
+  },
+  "collation_family_note": "A separate family, under the same Scope prefix and the same two Types, whose payload is the identifier spelling rather than the graph shape. It records its own order id (ascending-canonical-uri-codepoint) because 'ascending canonical URI' does not say which comparison rule, and on these ids the readings diverge.",
+  "collation_family": {
+    "collation-edge-identifiers": {
+      "scope": "https://fixtures.mem.example/ordering/collation-edge-identifiers/",
+      "exercises": "collation edges: numeric against codepoint, ASCII case, punctuation a variable-weighting collator drops, and NFC against NFD inside percent-encoding",
+      "reference_order": "ascending-canonical-uri-codepoint",
+      "page_limits": [
+        3,
+        10
+      ],
+      "bead_count": 23,
+      "link_count": 15,
+      "type_count": 2,
+      "groups": {
+        "unpadded-ordinals": [
+          "numeric-aware"
+        ],
+        "mixed-case": [
+          "casefold",
+          "punctuation-ignoring"
+        ],
+        "punctuation": [
+          "punctuation-ignoring"
+        ],
+        "normalization": [
+          "percent-decoding",
+          "nfc-normalizing"
+        ]
+      },
+      "comparison_rules_separated": {
+        "beads/": [
+          "casefold",
+          "nfc-normalizing",
+          "numeric-aware",
+          "percent-decoding",
+          "punctuation-ignoring"
+        ],
+        "links/": [
+          "casefold",
+          "nfc-normalizing",
+          "numeric-aware",
+          "percent-decoding",
+          "punctuation-ignoring"
+        ]
+      },
+      "comparison_rules_that_are_not_a_total_order": {
+        "beads/": [
+          "casefold",
+          "nfc-normalizing",
+          "punctuation-ignoring"
+        ],
+        "links/": [
+          "casefold",
+          "nfc-normalizing",
+          "punctuation-ignoring"
+        ]
+      },
+      "comparison_rules_considered": [
+        "numeric-aware",
+        "casefold",
+        "punctuation-ignoring",
+        "percent-decoding",
+        "nfc-normalizing"
+      ],
+      "serialized_in_reference_order": {
+        "beads.json": false,
+        "links.json": false,
+        "types.json": false
+      },
+      "selections": [
+        {
+          "collection": "links/",
+          "parameters": {
+            "source": "https://fixtures.mem.example/ordering/collation-edge-identifiers/beads/1"
+          },
+          "total": 7
+        },
+        {
+          "collection": "beads/",
+          "parameters": {
+            "selector": "$[?@.properties.provenance == \"agent\"]"
+          },
+          "total": 6
+        }
+      ],
+      "files": {
+        "discovery.json": {
+          "sha256": "fcb7f81ccf4c9c428a218e049d49471814226bcf7a1ec6e8a5471de429e9a166",
+          "bytes": 472
+        },
+        "dataset/beads.json": {
+          "sha256": "3b0229654249b048aedb05aed9cb35301bce540ef270ec7e72724d7658d770d3",
+          "bytes": 18642
+        },
+        "dataset/links.json": {
+          "sha256": "4bc68fb8cea81dc2fab92010fca6d4fa6977ecc02c4061ade0c5294482db9562",
+          "bytes": 6388
+        },
+        "dataset/types.json": {
+          "sha256": "62ade02723649a4c5e14cbb2280de6efc0eb82651f86524cdc3a12c8e9dd5b63",
+          "bytes": 292
+        },
+        "ordering.json": {
+          "sha256": "5ea1a4c5c203fe707a85f74d3eabd4b92dbb949f9de59ad6f7605f7aa2d46b37",
+          "bytes": 28893
         }
       }
     }
