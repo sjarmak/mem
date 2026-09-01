@@ -170,6 +170,28 @@ def test_counter_adversarial_argv(command: str, expected: list[str]) -> None:
         ("echo `bd recall k`", ["recall"]),
         ("v=`bd recall k`", ["recall"]),
         ("echo $(bd recall k)", ["recall"]),
+        # ...and the same substitution INSIDE a double-quoted run, which 5e45493 copied through
+        # without scanning. Capturing a recall into a variable is the canonical agent spelling and
+        # quoting it is the habitual one, so this miss ran in the direction of the near-zero null.
+        ('v="$(bd recall k)"', ["recall"]),
+        ('echo "$(bd recall k)"', ["recall"]),
+        ('echo "`bd recall k`"', ["recall"]),
+        ('test -n "$(bd recall k)" && echo yes', ["recall"]),
+        ('echo "$(bd memories)"', ["memories"]),
+        ('echo "prefix $(bd recall a) $(bd remember b c)"', ["recall", "remember"]),
+        # A SINGLE-quoted run is literal - the shell expands nothing there - so the same text
+        # must not manufacture a call. This is the over-count direction of the same change.
+        ("echo '$(bd recall k)'", []),
+        ("echo '`bd recall k`'", []),
+        ('echo "$(( 1 + 2 ))"', []),
+        # --- lesser wrappers named in review alongside the substitution defect
+        ("watch bd memories", ["memories"]),
+        ("watch -n 5 bd memories", ["memories"]),
+        ("script -c 'bd recall k' /dev/null", ["recall"]),
+        # NOT widened, and deliberately: an escaped space makes ONE argv word, so bd is handed
+        # "recall k" and has no such subcommand. Counting it would invent a call the shell does
+        # not make, which is the over-count this table's second half exists to prevent.
+        ("bd recall\\ k", []),
         # --- TRANSPARENT WRAPPERS: the process they exec is bd, so the call is a memory call.
         ("sudo bd recall k", ["recall"]),
         ("sudo -u bot bd recall k", ["recall"]),
@@ -214,6 +236,21 @@ def test_braces_break_a_segment_only_when_they_stand_alone() -> None:
     a standalone one is shell grouping. Breaking on every brace split the word and lost the call."""
     assert command_segments("xargs -I{} bd recall {}") == [["xargs", "-I{}", "bd", "recall", "{}"]]
     assert command_segments("{ bd recall k; }") == [["bd", "recall", "k"]]
+
+
+def test_a_quoted_substitution_is_scanned_but_a_quoted_literal_is_not() -> None:
+    """The two halves of the double-quote rule, pinned at the tokenizer rather than the counter.
+
+    The shell RUNS ``$(...)`` inside double quotes and does not inside single quotes, so the
+    scanner has to split on exactly that line. Pinning it here as well as in the verb table is
+    deliberate: the verb table would still pass if the substitution leaked into the surrounding
+    word instead of becoming its own segment."""
+    assert command_segments('v="$(bd recall k)"') == [["v="], ["bd", "recall", "k"]]
+    assert command_segments("echo '$(bd recall k)'") == [["echo", "$(bd recall k)"]]
+    # Nested, because an agent that quotes once tends to quote twice.
+    assert ["bd", "recall", "k"] in command_segments('echo "$(echo \\"$(bd recall k)\\")"')
+    # Unterminated: the tail is still scanned rather than swallowed whole.
+    assert ["bd", "recall", "k"] in command_segments('echo "$(bd recall k')
 
 
 def test_segments_keep_a_quoted_run_as_one_word() -> None:

@@ -224,13 +224,16 @@ _TRANSPARENT_WRAPPERS: frozenset[str] = frozenset(
         "sudo",
         "time",
         "timeout",
+        "watch",
         "xargs",
     }
 )
 
 # Interpreters whose `-c` argument is a COMMAND STRING. `bash -c 'bd recall k'` executes bd, and
 # d9809a2 dropped the string silently. The string is re-tokenized and re-scanned.
-_SHELL_INTERPRETERS: frozenset[str] = frozenset({"ash", "bash", "dash", "ksh", "sh", "zsh"})
+_SHELL_INTERPRETERS: frozenset[str] = frozenset(
+    {"ash", "bash", "dash", "ksh", "script", "sh", "zsh"}
+)
 
 # `eval` joins its remaining words into one command string, so it is scanned with the whole tail
 # as that string.
@@ -543,6 +546,30 @@ def harness_call(
 # --------------------------------------------------------------------------------------
 
 
+def _read_substitution(command: str, start: int) -> tuple[str, int]:
+    """Read one command substitution beginning at ``start`` and return (inner text, index after).
+
+    ``$(`` is matched to its balanced ``)`` so a nested substitution survives; a backtick runs to
+    the next backtick. An unterminated form yields the rest of the line, which is what the shell
+    would complain about and what an agent could otherwise hide a call behind."""
+    if command[start] == "`":
+        end = command.find("`", start + 1)
+        if end == -1:
+            return command[start + 1 :], len(command)
+        return command[start + 1 : end], end + 1
+    depth = 0
+    i = start + 1  # sits on the "(" of "$("
+    while i < len(command):
+        if command[i] == "(":
+            depth += 1
+        elif command[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return command[start + 2 : i], i + 1
+        i += 1
+    return command[start + 2 :], len(command)
+
+
 def command_segments(command: str) -> list[list[str]]:
     """Split one shell command line into its command segments, each a list of words.
 
@@ -550,6 +577,12 @@ def command_segments(command: str) -> list[list[str]]:
 
     * a quoted run stays ONE word, so ``echo "bd recall x"`` is ``[echo, 'bd recall x']`` — the
       quoted blob can never be read as a command word plus a verb;
+    * but a command SUBSTITUTION inside a double-quoted run is scanned, because the shell runs it:
+      ``v="$(bd recall k)"`` executes bd exactly as ``v=$(bd recall k)`` does. 5e45493 copied
+      characters straight through a double-quoted run, so capturing a recall into a variable —
+      the canonical agent spelling — and quoting it — the habitual one — counted as NO call. That
+      miss direction is byte-identical to the near-zero-voluntary-use null E1 exists to rule out.
+      A single-quoted run is still literal: the shell does not expand there;
     * a ``#`` starting a word drops the rest of the line, so a commented-out call is not a call;
     * a heredoc BODY is skipped to its delimiter, so prose inside ``<<EOF ... EOF`` is not scanned;
     * ``;``, ``&``, ``|``, ``(``, ``)``, ``{``, ``}``, ``<``, ``>`` and newline start a new
@@ -558,6 +591,7 @@ def command_segments(command: str) -> list[list[str]]:
 
     Mechanical throughout: this reads argv SHAPE. It never looks at what a memory says."""
     segments: list[list[str]] = []
+    substituted: list[list[str]] = []
     words: list[str] = []
     buf: list[str] = []
     has_word = False
@@ -583,6 +617,10 @@ def command_segments(command: str) -> list[list[str]]:
     while i < n:
         ch = command[i]
         if quote is not None:
+            if quote == '"' and (command[i : i + 2] == "$(" or ch == "`"):
+                inner, i = _read_substitution(command, i)
+                substituted.extend(command_segments(inner))
+                continue
             if ch == quote:
                 quote = None
             elif ch == "\\" and quote == '"' and i + 1 < n:
@@ -668,7 +706,7 @@ def command_segments(command: str) -> list[list[str]]:
         i += 1
 
     end_segment()
-    return segments
+    return segments + substituted
 
 
 def _is_option(word: str) -> bool:
