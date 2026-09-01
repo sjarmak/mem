@@ -126,3 +126,27 @@ class ScriptedAgent:
             input_tokens=input_tokens,
             output_tokens=output_tokens,
         )
+
+
+class NeverWritesAgent(ScriptedAgent):
+    """The closure FLOOR control: behaves like ``ScriptedAgent`` but persists nothing.
+
+    Everything else — recall, grading, the tool call — is identical, so the only
+    difference between it and the reference agent is the write. Under a write-bearing
+    arm that makes it the clean floor for E3a: a later step can only read what an
+    earlier step wrote, so closure must collapse to 0. It is a control, not a model of
+    a real agent's write policy.
+    """
+
+    def __init__(self, agent_config_id: str = "never-writes") -> None:
+        super().__init__(agent_config_id=agent_config_id)
+
+    def run_step(
+        self,
+        step: SequenceStep,
+        available_memory: dict[str, str],
+        ctx: StepContext,
+    ) -> AgentStepResult:
+        result = super().run_step(step, available_memory, ctx)
+        result.writes_performed = {}
+        return result

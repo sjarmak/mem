@@ -107,6 +107,7 @@ def compute_metrics(
         RetentionInputs(
             written_ids=written_ids,
             expected_writes=list(step.expected_memory_writes),
+            forbidden_write_ids=list(step.forbidden_memory_writes),
         )
     )
 
