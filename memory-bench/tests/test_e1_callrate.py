@@ -9,6 +9,7 @@ and the priced plan they disclose.
 
 from __future__ import annotations
 
+import json
 import subprocess
 from itertools import pairwise
 from typing import Any
@@ -26,6 +27,7 @@ from membench.runner.e1_grid import (
     STAGED_RUNGS,
     STAGED_TASKS,
     PreflightHaltError,
+    ResumeMismatchError,
     RungCell,
     assert_gates_ride_outside_metrics,
     call_rate_gates,
@@ -33,13 +35,16 @@ from membench.runner.e1_grid import (
     guidance_words,
     monotonicity_violations,
     planned_call_count,
+    pooled_rates,
     preflight_gate,
     preflight_verdict,
+    resume_cells,
     rung_step,
     staged_plan,
     summarize,
 )
 from membench.runner.headless_agent import (
+    HeadlessAgentError,
     HeadlessClaudeAgent,
     MemoryChannel,
     assistant_event,
@@ -267,7 +272,7 @@ def test_margin_needs_both_halves() -> None:
 
 
 def test_a_cell_cannot_claim_impossible_counts() -> None:
-    with pytest.raises(ValueError, match="calling_runs 5 > runs 4"):
+    with pytest.raises(ValueError, match="calling_runs 5 > measured 4"):
         _cell("R1", VARIANT_NECESSARY, calling=5)
     with pytest.raises(ValueError, match="cannot cover"):
         RungCell(
@@ -519,3 +524,231 @@ def test_fire_staged_refuses_without_a_token(
     monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
     assert e1_grid.main(["--fire-staged", "--model", MODEL]) == e1_grid.EXIT_REFUSED
     assert "CLAUDE_CODE_OAUTH_TOKEN" in capsys.readouterr().err
+
+
+# --- timeouts are unmeasured legs, cells pool, and a dead fire resumes -----------------
+
+
+def _timeout_error() -> HeadlessAgentError:
+    """The exact shape ``spawn.run_checked`` raises: a HeadlessAgentError CAUSED BY
+    TimeoutExpired."""
+    try:
+        raise subprocess.TimeoutExpired(cmd=["claude", "-p"], timeout=600.0)
+    except subprocess.TimeoutExpired as exc:
+        err = HeadlessAgentError("claude -p did not finish within 600.0s")
+        err.__cause__ = exc
+        return err
+
+
+def _timing_out_runner(timeout_legs: set[int], *commands: str) -> Any:
+    """`_calling_runner`, except the legs numbered in ``timeout_legs`` (0-based, per cell) time out
+    the way the first staged fire's cell 13 did."""
+    leg = {"n": 0}
+    calling = _calling_runner(*commands)
+
+    def runner(argv: Any, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        i = leg["n"]
+        leg["n"] += 1
+        if i in timeout_legs:
+            raise _timeout_error()
+        result: subprocess.CompletedProcess[str] = calling(argv, **kwargs)
+        return result
+
+    return runner
+
+
+def test_a_timed_out_leg_is_unmeasured_not_a_non_calling_run(tmp_path: Any) -> None:
+    """Three legs, the middle one times out, the other two call: the rate is 2/2, not 2/3, and
+    the timeout is REPORTED on the cell rather than folded into the zero side of the rate."""
+    _seqs, tasks = corpus_one(tmp_path)
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R0",
+        repeats=3,
+        model=MODEL,
+        dry_run=False,
+        runner=_timing_out_runner({1}, "bd recall k"),
+    )
+    assert cell.runs == 3
+    assert cell.timed_out_runs == 1
+    assert cell.measured_runs == 2
+    assert cell.calling_runs == 2
+    assert cell.call_rate == pytest.approx(1.0)
+    assert cell.work_id == tasks[0].work_id
+    assert cell.metrics()["timed_out_runs"] == 1
+
+
+def test_only_the_timeout_is_tolerated_per_leg(tmp_path: Any) -> None:
+    """A non-zero exit, a missing binary, a refused token: those are a broken rig, and a broken rig
+    tolerated leg by leg is a cell full of 'timeouts' that reads as a measured zero."""
+    _seqs, tasks = corpus_one(tmp_path)
+
+    def broken(argv: Any, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise HeadlessAgentError("claude -p exited 1")
+
+    with pytest.raises(HeadlessAgentError, match="exited 1"):
+        e1_grid.run_rung_cell(
+            tasks[0], rung="R0", repeats=1, model=MODEL, dry_run=False, runner=broken
+        )
+    assert e1_grid.is_spawn_timeout(_timeout_error()) is True
+    assert e1_grid.is_spawn_timeout(HeadlessAgentError("did not finish within 600.0s")) is False
+
+
+def test_a_cell_whose_every_leg_timed_out_has_no_rate() -> None:
+    """Measured nothing is not measured zero: no ``call_rate``, and it contributes NOTHING to a
+    pooled rate rather than a 0 to its numerator and denominator."""
+    cell = RungCell(
+        rung="R4",
+        variant=VARIANT_NECESSARY,
+        runs=5,
+        calling_runs=0,
+        memory_calls=0,
+        read_calls=0,
+        write_calls=0,
+        paid=True,
+        work_id="w-dead",
+        timed_out_runs=5,
+    )
+    with pytest.raises(ValueError, match="every leg timed out"):
+        _ = cell.call_rate
+    assert cell.metrics()["call_rate"] is None
+    assert pooled_rates([cell], VARIANT_NECESSARY) == {}
+    with pytest.raises(ValueError, match="timed_out_runs 6"):
+        RungCell(
+            rung="R4",
+            variant=VARIANT_NECESSARY,
+            runs=5,
+            calling_runs=0,
+            memory_calls=0,
+            read_calls=0,
+            write_calls=0,
+            paid=True,
+            timed_out_runs=6,
+        )
+
+
+def test_rates_pool_over_task_cells_not_last_wins_and_not_a_mean() -> None:
+    """The first staged fire's gate block read R0/necessary as 0.8 — the LAST task cell's 4/5 —
+    while the pooled rate over eight cells was 16/40 = 0.4. Three cells here: 4/5, 1/5, and 1/2
+    (three of its legs timed out). Pooled = 6/12 = 0.5. Last-wins says 0.5 too by accident of
+    order, so the cells are listed with the 4/5 LAST; a mean of cell rates says 0.5 as well, so
+    the 1/2 cell's denominator is what separates the three readings: pooled 6/12, last 0.8,
+    mean (0.8 + 0.2 + 0.5) / 3 = 0.5. The 1/5 cell is therefore weighted 5:2 against the 1/2."""
+    cells = [
+        _cell("R0", VARIANT_NECESSARY, calling=1, runs=5),
+        RungCell(
+            rung="R0",
+            variant=VARIANT_NECESSARY,
+            runs=5,
+            calling_runs=1,
+            memory_calls=1,
+            read_calls=1,
+            write_calls=0,
+            paid=True,
+            timed_out_runs=3,
+        ),
+        _cell("R0", VARIANT_NECESSARY, calling=4, runs=5),
+        _cell("R0", VARIANT_UNNECESSARY, calling=1, runs=5),
+        _cell("R0", VARIANT_UNNECESSARY, calling=2, runs=5),
+    ]
+    assert pooled_rates(cells, VARIANT_NECESSARY) == {"R0": pytest.approx(6 / 12)}
+    assert pooled_rates(cells, VARIANT_UNNECESSARY) == {"R0": pytest.approx(3 / 10)}
+    assert discrimination_margins(cells) == {"R0": pytest.approx(6 / 12 - 3 / 10)}
+    gates = call_rate_gates(cells)
+    assert gates["monotonicity"]["call_rate_by_rung"] == {"R0": pytest.approx(6 / 12)}
+
+
+def test_a_cell_row_round_trips_through_the_artifact() -> None:
+    cell = RungCell(
+        rung="R4",
+        variant=VARIANT_UNNECESSARY,
+        runs=5,
+        calling_runs=2,
+        memory_calls=7,
+        read_calls=5,
+        write_calls=2,
+        paid=True,
+        verbs=("native_read", "recall"),
+        work_id="w-7",
+        timed_out_runs=1,
+    )
+    assert RungCell.from_row(cell.row()) == cell
+    assert cell.key == ("R4", VARIANT_UNNECESSARY, "w-7")
+
+
+def test_staged_cells_keeps_landed_cells_and_buys_only_the_rest(tmp_path: Any) -> None:
+    """Resume: a cell already keyed ``(rung, variant, work_id)`` in ``landed`` is returned in place
+    and its runner is never invoked. The kept cell is distinguishable from a re-run (its counts are
+    ones the runner could not produce), so a resume that quietly re-bought it would show."""
+    _seqs, tasks = corpus_one(tmp_path)
+    spawned: list[str] = []
+
+    def counting(argv: Any, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        spawned.append(" ".join(argv))
+        return subprocess.CompletedProcess(list(argv), 0, serialize_stream([result_event()]), "")
+
+    prior = RungCell(
+        rung="R0",
+        variant=tasks[0].variant,
+        runs=1,
+        calling_runs=1,
+        memory_calls=9,
+        read_calls=9,
+        write_calls=0,
+        paid=True,
+        work_id=tasks[0].work_id,
+    )
+    cells = e1_grid.staged_cells(
+        tasks,
+        model=MODEL,
+        rungs=("R0", "R4"),
+        n_tasks=1,
+        repeats=1,
+        runner=counting,
+        landed=[prior],
+    )
+    key = (tasks[0].variant, tasks[0].work_id)
+    assert [c.key for c in cells] == [("R0", *key), ("R4", *key)]
+    assert cells[0] is prior
+    assert cells[1].memory_calls == 0
+    assert len(spawned) == 1
+
+
+def test_resume_refuses_another_rigs_artifact_and_drops_unmeasured_cells() -> None:
+    dead = RungCell(
+        rung="R0",
+        variant=VARIANT_NECESSARY,
+        runs=5,
+        calling_runs=0,
+        memory_calls=0,
+        read_calls=0,
+        write_calls=0,
+        paid=True,
+        work_id="w-dead",
+        timed_out_runs=5,
+    )
+    live = _cell("R0", VARIANT_UNNECESSARY, calling=2, runs=5)
+    summary = summarize([dead, live], model=MODEL, dry_run=False, repeats=5)
+    assert resume_cells(summary, model=MODEL) == [live]
+    with pytest.raises(ResumeMismatchError, match="model="):
+        resume_cells(summary, model="claude-other-model-2")
+    with pytest.raises(ResumeMismatchError, match="surface="):
+        resume_cells({**summary, "surface_fingerprint": "stale"}, model=MODEL)
+
+
+def test_fire_staged_resumes_from_its_own_out_file(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """End to end through the CLI: a --fire-staged pointed at an --out written by a rig with a
+    different surface fingerprint is REFUSED, so a mid-run upgrade cannot land in the old grid."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "t")
+    _seqs, _tasks = corpus_one(tmp_path)
+    out = tmp_path / "partial.json"
+    cell = _cell("R0", VARIANT_NECESSARY, calling=1)
+    summary = summarize([cell], model=MODEL, dry_run=False, repeats=5)
+    out.write_text(json.dumps({**summary, "surface_fingerprint": "stale"}), encoding="utf-8")
+    argv = ["--corpus-dir", str(tmp_path / "corpus"), "--fire-staged", "--model", MODEL]
+    code = e1_grid.main([*argv, "--out", str(out)])
+    assert code == e1_grid.EXIT_REFUSED
+    assert "REFUSED" in capsys.readouterr().err

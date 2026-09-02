@@ -54,6 +54,7 @@ from membench.runner.headless_agent import (
     ENV_OAUTH,
     REFUSE_API_KEY_SET,
     REFUSE_UNPINNED_MODEL,
+    HeadlessAgentError,
     HeadlessClaudeAgent,
     MemoryChannel,
     a_paid_run_carries_the_metered_api_key,
@@ -71,6 +72,7 @@ from membench.runner.tool_surface import (
     memory_invocations,
     native_memory_accesses,
     provision_memory_tool,
+    surface_fingerprint,
 )
 from membench.runner.toolreq_corpus import load_twin_corpus
 from membench.runner.toolreq_realagent import (
@@ -225,15 +227,29 @@ class RungCell:
     write_calls: int
     paid: bool
     verbs: tuple[str, ...] = ()
+    # Which task this cell ran. Cells are keyed ``(rung, variant, work_id)``: with eight tasks per
+    # variant, a ``(rung, variant)`` key names eight cells, and the first staged fire's gate block
+    # read the LAST of them as the rung's rate (a 0.8 that was one task's 4/5).
+    work_id: str = ""
+    # Legs that hit the spawn timeout. They are ATTEMPTED (they were paid for and ``runs`` counts
+    # them) but NOT MEASURED: an unmeasured leg is not a non-calling leg, and scoring it as one
+    # biases the call rate down, in the direction that manufactures this series' null.
+    timed_out_runs: int = 0
 
     def __post_init__(self) -> None:
         if self.runs <= 0:
             raise ValueError(
                 f"{self.rung}/{self.variant}: a cell with {self.runs} run(s) measured nothing"
             )
-        if self.calling_runs > self.runs:
+        if not 0 <= self.timed_out_runs <= self.runs:
             raise ValueError(
-                f"{self.rung}/{self.variant}: calling_runs {self.calling_runs} > runs {self.runs}"
+                f"{self.rung}/{self.variant}: timed_out_runs {self.timed_out_runs} "
+                f"outside 0..{self.runs}"
+            )
+        if self.calling_runs > self.measured_runs:
+            raise ValueError(
+                f"{self.rung}/{self.variant}: calling_runs {self.calling_runs} > measured "
+                f"{self.measured_runs}"
             )
         if self.memory_calls < self.calling_runs:
             raise ValueError(
@@ -242,8 +258,18 @@ class RungCell:
             )
 
     @property
+    def measured_runs(self) -> int:
+        """The call-rate DENOMINATOR: legs that returned a stream."""
+        return self.runs - self.timed_out_runs
+
+    @property
     def call_rate(self) -> float:
-        return self.calling_runs / self.runs
+        """Over MEASURED legs. Raises on a cell that measured nothing rather than reporting a rate
+        of zero for it; ``pooled_rates`` sums numerators and denominators across cells and never
+        needs this on an unmeasured cell."""
+        if self.measured_runs == 0:
+            raise ValueError(f"{self.rung}/{self.variant}/{self.work_id}: every leg timed out")
+        return self.calling_runs / self.measured_runs
 
     def metrics(self) -> dict[str, Any]:
         """The per-cell metric vector. The GATE BLOCK IS NOT IN HERE, and that is load-bearing:
@@ -252,11 +278,13 @@ class RungCell:
         SUMMARY instead, and ``assert_gates_ride_outside_metrics`` enforces the separation."""
         return {
             "runs": self.runs,
+            "timed_out_runs": self.timed_out_runs,
+            "measured_runs": self.measured_runs,
             "calling_runs": self.calling_runs,
             "memory_calls": self.memory_calls,
             "read_calls": self.read_calls,
             "write_calls": self.write_calls,
-            "call_rate": self.call_rate,
+            "call_rate": self.call_rate if self.measured_runs else None,
             "paid": self.paid,
         }
 
@@ -264,10 +292,33 @@ class RungCell:
         return {
             "rung": self.rung,
             "variant": self.variant,
+            "work_id": self.work_id,
             "guidance_words": guidance_words(self.rung),
             "verbs": list(self.verbs),
             "metrics": self.metrics(),
         }
+
+    @property
+    def key(self) -> tuple[str, str, str]:
+        return (self.rung, self.variant, self.work_id)
+
+    @classmethod
+    def from_row(cls, row: Mapping[str, Any]) -> RungCell:
+        """The inverse of ``row`` — what a resume reads back from a partial artifact."""
+        m = row["metrics"]
+        return cls(
+            rung=str(row["rung"]),
+            variant=str(row["variant"]),
+            runs=int(m["runs"]),
+            calling_runs=int(m["calling_runs"]),
+            memory_calls=int(m["memory_calls"]),
+            read_calls=int(m["read_calls"]),
+            write_calls=int(m["write_calls"]),
+            paid=bool(m["paid"]),
+            verbs=tuple(str(v) for v in row.get("verbs", ())),
+            work_id=str(row.get("work_id", "")),
+            timed_out_runs=int(m.get("timed_out_runs", 0)),
+        )
 
 
 # --------------------------------------------------------------------------------------
@@ -324,24 +375,38 @@ def monotonicity_violations(
     ]
 
 
+def pooled_rates(cells: Sequence[RungCell], variant: str) -> dict[str, float]:
+    """P(call | variant) per rung, POOLED over every task cell of that ``(rung, variant)``: the sum
+    of calling legs over the sum of measured legs.
+
+    Pooled, not last-wins and not a mean of per-cell rates. The first staged fire's gate block
+    built ``{rung: cell.call_rate}`` over eight task cells per rung and reported the eighth
+    cell's 4/5 as "R0 = 0.8" while the pooled rate was 16/40. A mean of cell rates would weight a
+    cell with one measured leg the same as one with five. Rungs whose measured denominator is zero
+    are omitted, never reported as 0.0."""
+    calling: dict[str, int] = {}
+    measured: dict[str, int] = {}
+    for cell in cells:
+        if cell.variant != variant:
+            continue
+        calling[cell.rung] = calling.get(cell.rung, 0) + cell.calling_runs
+        measured[cell.rung] = measured.get(cell.rung, 0) + cell.measured_runs
+    return {rung: calling[rung] / measured[rung] for rung in measured if measured[rung]}
+
+
 def discrimination_margins(cells: Sequence[RungCell]) -> dict[str, float]:
     """``d(rung) = P(call | necessary) - P(call | unnecessary)`` per rung — E1's PRIMARY endpoint.
 
     Only rungs with BOTH halves measured get a margin: a margin computed against a missing half
     would be a call rate wearing the endpoint's name, and E1's whole point is that those two
     numbers can move independently."""
-    by_rung: dict[str, dict[str, float]] = {}
-    for cell in cells:
-        by_rung.setdefault(cell.rung, {})[cell.variant] = cell.call_rate
-    return {
-        rung: halves[VARIANT_NECESSARY] - halves[VARIANT_UNNECESSARY]
-        for rung, halves in by_rung.items()
-        if VARIANT_NECESSARY in halves and VARIANT_UNNECESSARY in halves
-    }
+    necessary = pooled_rates(cells, VARIANT_NECESSARY)
+    unnecessary = pooled_rates(cells, VARIANT_UNNECESSARY)
+    return {rung: necessary[rung] - unnecessary[rung] for rung in necessary if rung in unnecessary}
 
 
 def _rates_on(cells: Sequence[RungCell], variant: str) -> dict[str, float]:
-    return {cell.rung: cell.call_rate for cell in cells if cell.variant == variant}
+    return pooled_rates(cells, variant)
 
 
 def call_rate_gates(cells: Sequence[RungCell], *, tolerance: float = 0.0) -> dict[str, Any]:
@@ -423,6 +488,7 @@ def summarize(
         "experiment": "e1-guidance-ladder",
         "channel": CHANNEL.value,
         "model": resolve_model(model) or "cli-default",
+        "surface_fingerprint": surface_fingerprint(),
         "dry_run": dry_run,
         "repeats": repeats,
         "paid": all(cell.paid for cell in cells) if cells else False,
@@ -473,6 +539,7 @@ def run_rung_cell(
     total = 0
     reads = 0
     writes = 0
+    timed_out = 0
     verbs: list[str] = []
     step = rung_step(task, rung)
     for i in range(repeats):
@@ -496,7 +563,22 @@ def run_rung_cell(
                 session_id=f"e1-{rung}-{task.result_id}",
                 step_id=step.step_id,
             )
-            result = agent.run_step(step, {}, ctx)
+            try:
+                result = agent.run_step(step, {}, ctx)
+            except HeadlessAgentError as exc:
+                if not is_spawn_timeout(exc):
+                    raise
+                # A leg that never returned a stream is UNMEASURED, not silent. The first staged
+                # fire died here at cell 13/32 and took the run with it; scoring the leg as a
+                # non-calling run instead would bias every rate toward the null. It is counted
+                # in ``timed_out_runs`` and left out of the denominator.
+                timed_out += 1
+                print(
+                    f"[timeout] {rung}/{task.variant}/{task.work_id} leg {i}: {exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                continue
         calls = list(result.tool_calls)
         # BOTH affordances count. The bd shim is the one this rig provisions; the native memory
         # file is the one the model reaches for first (mem-gj0pc), and scoring only the former
@@ -524,7 +606,19 @@ def run_rung_cell(
         write_calls=writes,
         paid=not dry_run and runner is None,
         verbs=tuple(verbs),
+        work_id=task.work_id,
+        timed_out_runs=timed_out,
     )
+
+
+def is_spawn_timeout(exc: HeadlessAgentError) -> bool:
+    """Whether a ``HeadlessAgentError`` is the spawn timeout and nothing else.
+
+    Decided on the CAUSE CHAIN (``spawn.run_checked`` raises ``from subprocess.TimeoutExpired``),
+    not on the message. Only the timeout is tolerated per leg: a missing CLI, a refused token, or
+    a non-zero exit is a broken rig, and a broken rig tolerated leg by leg is a cell full of
+    "timeouts" that reads as a measured zero."""
+    return isinstance(exc.__cause__, subprocess.TimeoutExpired)
 
 
 # --------------------------------------------------------------------------------------
@@ -594,6 +688,7 @@ def staged_cells(
     timeout_s: float = 600.0,
     runner: object | None = None,
     on_cell: Callable[[RungCell], None] | None = None,
+    landed: Sequence[RungCell] = (),
 ) -> list[RungCell]:
     """Execute the staged fire: every ``(rung, variant, task)`` cell, ``repeats`` legs each.
 
@@ -601,16 +696,22 @@ def staged_cells(
     ``staged_plan`` counts ``len(rungs) * n_tasks * repeats * 2``, so capping the flat list would
     spend half of it and report a whole grid. The variant split is done here for that reason.
 
-    ``on_cell`` is called with each completed cell as it lands. There is no resume cache
-    (mem-78gwf), so a multi-hour fire that dies mid-run would otherwise leave nothing; the callback
-    is how a driver persists partial evidence it has already paid for."""
+    ``on_cell`` is called with each completed cell as it lands; ``landed`` is the resume cache
+    (mem-78gwf): cells already paid for, keyed ``(rung, variant, work_id)``, are returned in
+    place and not re-run. The caller decides whether a prior artifact is admissible against the
+    current rig (``resume_cells``); this function only honours the keys it is handed."""
     by_variant: dict[str, list[ToolReqRealAgentTask]] = {}
     for task in tasks:
         by_variant.setdefault(task.variant, []).append(task)
+    done = {cell.key: cell for cell in landed}
     cells: list[RungCell] = []
     for rung in rungs:
         for variant in sorted(by_variant):
             for task in by_variant[variant][:n_tasks]:
+                prior = done.get((rung, variant, task.work_id))
+                if prior is not None:
+                    cells.append(prior)
+                    continue
                 cell = run_rung_cell(
                     task,
                     rung=rung,
@@ -715,6 +816,31 @@ def _refusal(*, dry_run: bool, model: str) -> str | None:
     return None
 
 
+class ResumeMismatchError(RuntimeError):
+    """A partial artifact was produced by a different rig than the one about to resume it."""
+
+
+def resume_cells(summary: Mapping[str, Any], *, model: str) -> list[RungCell]:
+    """The cells a partial ``--out`` artifact contributes to a resumed fire.
+
+    Admissible only when the artifact's model and surface fingerprint match the rig now running:
+    a CLI upgrade or a model swap mid-run would otherwise land in the same grid as the cells it
+    did not produce, and the grid would read as one measurement. Cells that measured nothing
+    (every leg timed out) are NOT carried over; a resume is the chance to measure them."""
+    want_model = resolve_model(model) or "cli-default"
+    want_surface = surface_fingerprint()
+    got_model = summary.get("model")
+    got_surface = summary.get("surface_fingerprint")
+    if got_model != want_model or got_surface != want_surface:
+        raise ResumeMismatchError(
+            f"partial artifact was produced under model={got_model!r} "
+            f"surface={got_surface!r}; this rig is model={want_model!r} "
+            f"surface={want_surface!r}. Not resuming into a different rig's grid."
+        )
+    cells = [RungCell.from_row(row) for row in summary.get("cells", ())]
+    return [cell for cell in cells if cell.measured_runs > 0]
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--corpus-dir", type=Path, default=DEFAULT_CORPUS)
@@ -745,7 +871,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--out",
         type=Path,
         default=None,
-        help="where to write the summary; cells are appended as they land (no resume cache)",
+        help=(
+            "where to write the summary; cells are written as they land, and an existing file "
+            "here is RESUMED (its landed cells are kept, not re-bought) when it matches this rig"
+        ),
     )
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(list(argv) if argv is not None else None)
@@ -779,20 +908,32 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.fire_staged:
         plan = staged_plan(len(tasks))
-        print(json.dumps({"firing": plan}, indent=2), file=sys.stderr)
         landed: list[RungCell] = []
+        if args.out is not None and args.out.exists():
+            try:
+                prior = json.loads(args.out.read_text(encoding="utf-8"))
+                landed.extend(resume_cells(prior, model=args.model))
+            except (ValueError, KeyError, TypeError) as exc:
+                print(f"{args.out}: not a readable partial artifact: {exc}", file=sys.stderr)
+                return EXIT_REFUSED
+            except ResumeMismatchError as exc:
+                print(f"REFUSED: {exc}", file=sys.stderr)
+                return EXIT_REFUSED
+        print(json.dumps({"firing": plan, "resumed_cells": len(landed)}, indent=2), file=sys.stderr)
 
         def _record(cell: RungCell) -> None:
             landed.append(cell)
             print(
-                f"[{len(landed)}] {cell.rung}/{cell.variant} "
-                f"{cell.calling_runs}/{cell.runs} calling, {cell.memory_calls} call(s)",
+                f"[{len(landed)}] {cell.rung}/{cell.variant}/{cell.work_id} "
+                f"{cell.calling_runs}/{cell.measured_runs} calling "
+                f"({cell.timed_out_runs} timed out), {cell.memory_calls} call(s)",
                 file=sys.stderr,
                 flush=True,
             )
             if args.out is not None:
-                # Partial evidence, written as it is paid for. mem-78gwf: there is no resume, so a
-                # fire that dies at cell 90 must still leave the 89 cells it bought.
+                # Partial evidence, written as it is paid for: a fire that dies at cell 90 leaves
+                # the 89 cells it bought, and the next --fire-staged with the same --out resumes
+                # from them (mem-78gwf).
                 args.out.write_text(
                     json.dumps(
                         summarize(landed, model=args.model, dry_run=False, repeats=plan["repeats"]),
@@ -807,6 +948,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             n_tasks=plan["n_tasks"],
             repeats=plan["repeats"],
             on_cell=_record,
+            landed=list(landed),
         )
         summary = summarize(cells, model=args.model, dry_run=False, repeats=plan["repeats"])
         print(json.dumps(summary, indent=2))
