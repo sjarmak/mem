@@ -204,7 +204,9 @@ def _attachment_event(rec: dict[str, Any], tally: Tally) -> tuple[str, str, str]
     ``hook_success`` attachment, and its payload must be a prime document (it
     carries the payload's own first-line banner). An earlier revision stated the
     type check and did not implement it. Every banner-carrying attachment in the
-    pinned population is in fact ``hook_success`` (5,839 / 5,839), so enforcing it
+    pinned population is in fact ``hook_success`` - re-derived from this tree's own
+    run, the hook-origin deliveries in ``injection.json`` sum to 5,812 and
+    ``attachments_with_banner_but_other_type`` is 0 - so enforcing it
     moves no count here; it is enforced so that a future host that carries the
     banner on some other attachment kind cannot silently enter the denominator.
     A banner-carrying attachment of any other type is counted apart, in

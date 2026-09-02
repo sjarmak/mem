@@ -304,12 +304,45 @@ def test_a_help_or_placeholder_prime_line_is_screened_exactly_as_e0a_screens_it(
     assert injection.is_prime_invocation("bd prime <session-id>") is False
 
 
-def test_the_e0a_count_in_the_reconciliation_is_read_from_e0as_artifact() -> None:
-    """Not transcribed. A hand-typed number is how two studies drift apart."""
+def test_the_e0a_count_in_the_reconciliation_is_read_from_e0as_artifact(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Not transcribed. A hand-typed number is how two studies drift apart.
+
+    Asserting only against the real artifact is half vacuous: the published value
+    IS 47, so a body hardcoded to ``return 47`` satisfies it. The load-bearing
+    assertion is behavioural - pointed at an artifact carrying a DIFFERENT
+    injection count, the function must follow the artifact.
+    """
     published = json.loads((E0 / "analysis.json").read_text(encoding="utf-8"))
     assert injection.e0a_typed_primes() == published["bucket_counts"]["injection"]
+
+    other = dict(published)
+    other["bucket_counts"] = dict(published["bucket_counts"])
+    other["bucket_counts"]["injection"] = published["bucket_counts"]["injection"] + 101
+    fake = tmp_path / "analysis.json"
+    fake.write_text(json.dumps(other), encoding="utf-8")
+    monkeypatch.setattr(injection, "E0A_ANALYSIS_PATH", fake)
+    assert injection.e0a_typed_primes() == published["bucket_counts"]["injection"] + 101
+
     source = (E0 / "injection.py").read_text(encoding="utf-8")
     assert 'e0a_published_agent_typed_prime_invocations": e0a_typed_primes()' in source
+
+
+def test_the_off_type_residual_quoted_in_the_module_is_the_one_this_run_produced() -> None:
+    """The docstring quotes a population figure; it must come from the artifact.
+
+    An earlier revision quoted 5,839 / 5,839, carried over from the superseded
+    run. Re-derived here from `injection.json`: the hook-origin deliveries and the
+    off-type residual the module's own guard counts.
+    """
+    artifact = json.loads((E0 / "injection.json").read_text(encoding="utf-8"))
+    hook_origin = sum(
+        n for origin, n in artifact["delivery"]["by_origin"].items() if origin.startswith("hook:")
+    )
+    assert artifact["exclusions"]["attachments_with_banner_but_other_type"] == 0
+    doc = injection._attachment_event.__doc__ or ""
+    assert f"{hook_origin:,}" in doc
 
 
 def test_every_e0a_amendment_is_digested_not_just_the_first() -> None:
@@ -322,31 +355,114 @@ def test_every_e0a_amendment_is_digested_not_just_the_first() -> None:
 # --- ZFC gate -----------------------------------------------------------------
 
 
+#: Callables whose string arguments are matched AGAINST text rather than emitted.
+MATCHING_CALLS = frozenset(
+    {
+        "compile",
+        "search",
+        "match",
+        "fullmatch",
+        "findall",
+        "finditer",
+        "sub",
+        "subn",
+        "split",
+        "rsplit",
+        "partition",
+        "rpartition",
+        "startswith",
+        "endswith",
+        "find",
+        "rfind",
+        "index",
+        "rindex",
+        "count",
+        "replace",
+    }
+)
+
+
+def _module_level_strings(tree: ast.Module) -> dict[str, str]:
+    """Name -> value for module-level ``NAME = "literal"`` bindings.
+
+    Without this, the gate is evaded by binding the token to a constant and
+    comparing against the name.
+    """
+    bound: dict[str, str] = {}
+    for node in tree.body:
+        targets: list[ast.expr] = []
+        if isinstance(node, ast.Assign):
+            targets = list(node.targets)
+        elif isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+        else:
+            continue
+        value = node.value
+        if not isinstance(value, ast.Constant) or not isinstance(value.value, str):
+            continue
+        for target in targets:
+            if isinstance(target, ast.Name):
+                bound[target.id] = value.value
+    return bound
+
+
+def _string_operands(node: ast.expr, bound: dict[str, str]) -> list[str]:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return [node.value]
+    if isinstance(node, ast.Name) and node.id in bound:
+        return [bound[node.id]]
+    if isinstance(node, ast.Tuple | ast.List | ast.Set):
+        return [v for element in node.elts for v in _string_operands(element, bound)]
+    return []
+
+
 def test_no_matcher_in_the_delivery_pass_keys_on_a_cli_verb_token() -> None:
     """The E0a gate's counterpart for this module.
 
     `injection.py` names the memory verbs in its prose and in the labels it emits,
     so the line-level grep that holds `verbs.py` cannot hold it. What must hold is
-    narrower and stronger: no pattern this module MATCHES WITH may contain a verb
+    narrower and stronger: no string this module MATCHES WITH may contain a verb
     token. Detection keys on the emitted document's headings, never on the CLI
     vocabulary.
+
+    "Matches with" is every construct that can decide a branch on text, not only
+    `re.compile`: a plain `"you may recall the following memories" in text` is the
+    same keyword matcher spelled differently, and an earlier revision of this gate
+    read only `re.compile`'s first argument and let it through. Covered here:
+    compiled patterns, both sides of every comparison (`==`, `!=`, `in`, `not
+    in`), and the string arguments of the str/re matching calls above - with
+    module-level string constants resolved so the token cannot be hidden behind a
+    name.
     """
     source = (E0 / "injection.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    bound = _module_level_strings(tree)
+
     patterns: list[str] = []
-    for node in ast.walk(ast.parse(source)):
+    operands: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Compare):
+            for side in [node.left, *node.comparators]:
+                operands.extend(_string_operands(side, bound))
+            continue
         if not isinstance(node, ast.Call):
             continue
         func = node.func
         name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
-        if name != "compile" or not node.args:
+        if name not in MATCHING_CALLS:
             continue
-        first = node.args[0]
-        assert isinstance(first, ast.Constant) and isinstance(first.value, str), ast.dump(first)
-        patterns.append(first.value)
+        if name == "compile":
+            assert node.args, ast.dump(node)
+            first = node.args[0]
+            assert isinstance(first, ast.Constant) and isinstance(first.value, str), ast.dump(first)
+            patterns.append(first.value)
+        for arg in node.args:
+            operands.extend(_string_operands(arg, bound))
 
     assert patterns, "no compiled pattern found; the gate would pass vacuously"
+    assert operands, "no matched-against string found; the gate would pass vacuously"
     verb = re.compile(r"remember|recall|memories")
-    assert [p for p in patterns if verb.search(p)] == []
+    assert [p for p in patterns + operands if verb.search(p)] == []
 
 
 # --- what counts as a delivery at all -----------------------------------------
