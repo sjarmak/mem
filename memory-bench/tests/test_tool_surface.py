@@ -53,6 +53,7 @@ from membench.runner.tool_surface import (
     HOST_DENIED_TOOLS,
     MEMORY_ALLOWED_TOOLS,
     MEMORY_COMMAND,
+    NATIVE_MEMORY_TOOL_NAMES,
     MemoryToolError,
     assert_store_outside,
     command_segments,
@@ -60,6 +61,8 @@ from membench.runner.tool_surface import (
     endogenous_memory_verbs,
     harness_call,
     memory_verbs_in_command,
+    native_memory_accesses,
+    native_memory_calls,
     partition_memory_calls,
     provision_memory_tool,
     resolve_bd_binary,
@@ -494,9 +497,13 @@ def _step() -> SequenceStep:
 
 
 def test_argv_allows_bash_so_the_memory_tool_is_reachable() -> None:
+    """Both affordances must be reachable: `Bash` for the bd shim, `Read`/`Edit` for the native
+    memory files (mem-gj0pc). The expectation is spelled out rather than read off the constant, so
+    a tool silently dropped from the clamp fails here instead of agreeing with itself."""
     agent = HeadlessClaudeAgent(model="m", runner=_render_only_runner)
     argv = agent.argv_for(_step(), {})
-    assert argv[argv.index("--allowedTools") + 1] == "Bash,Write"
+    allowed = argv[argv.index("--allowedTools") + 1].split(",")
+    assert allowed == ["Bash", "Write", "Read", "Edit"]
 
 
 def test_argv_emits_the_host_signal_deny_list() -> None:
@@ -807,3 +814,68 @@ def test_env_pin_survives_the_sandbox_wipe_boundary(tmp_path: Path) -> None:
     sandbox = tmp_path / "sandbox"
     surface = provision_memory_tool(tmp_path / "root", sandbox=sandbox)
     assert not Path(surface.env()["CLAUDE_CONFIG_DIR"]).is_relative_to(sandbox)
+
+
+def _read_call(path: str, tool: str = "Read") -> ToolCall:
+    return ToolCall(name=tool, arguments={"file_path": path})
+
+
+def test_native_memory_access_is_recognized_under_the_pinned_config_dir(tmp_path: Path) -> None:
+    """mem-gj0pc's exact shape: a Read of MEMORY.md under the pinned config dir counts."""
+    config = tmp_path / "config"
+    memory = config / "projects" / "-tmp" / "memory"
+    memory.mkdir(parents=True)
+    calls = [_read_call(str(memory / "MEMORY.md"))]
+    accesses = native_memory_accesses(calls, config_dir=config)
+    assert [a.verb for a in accesses] == ["native_read"]
+    assert native_memory_calls(calls, config_dir=config) == 1
+
+
+def test_a_settings_read_under_the_config_dir_is_not_a_memory_call(tmp_path: Path) -> None:
+    """Containment is necessary and NOT sufficient — the `memory` segment is required too, or the
+    agent reading its own settings would be scored as recalling."""
+    config = tmp_path / "config"
+    config.mkdir()
+    assert native_memory_calls([_read_call(str(config / "settings.json"))], config_dir=config) == 0
+
+
+def test_a_memory_path_outside_the_pinned_config_dir_is_not_attributed(tmp_path: Path) -> None:
+    """The operator's own memory index is not the agent's reach. A path that merely LOOKS like a
+    memory file, outside the surface, counts for nothing."""
+    config = tmp_path / "config"
+    config.mkdir()
+    outsider = tmp_path / "elsewhere" / "memory" / "MEMORY.md"
+    outsider.parent.mkdir(parents=True)
+    assert native_memory_calls([_read_call(str(outsider))], config_dir=config) == 0
+
+
+def test_native_reads_and_writes_are_told_apart(tmp_path: Path) -> None:
+    """Distinct counts per direction, and neither equals the total: two reads, one write."""
+    config = tmp_path / "config"
+    memory = config / "projects" / "-tmp" / "memory"
+    memory.mkdir(parents=True)
+    calls = [
+        _read_call(str(memory / "MEMORY.md")),
+        _read_call(str(memory / "a-topic.md")),
+        _read_call(str(memory / "b-topic.md"), tool="Write"),
+    ]
+    accesses = native_memory_accesses(calls, config_dir=config)
+    assert sum(1 for a in accesses if a.is_read) == 2
+    assert sum(1 for a in accesses if a.is_write) == 1
+    assert [a.verb for a in accesses] == ["native_read", "native_read", "native_write"]
+
+
+def test_an_unpinned_surface_attributes_nothing(tmp_path: Path) -> None:
+    """No pinned config dir means no path the harness owns, so the recognizer reports nothing
+    rather than falling back to the operator's home."""
+    assert (
+        native_memory_calls([_read_call("/home/someone/.claude/memory/MEMORY.md")], config_dir=None)
+        == 0
+    )
+
+
+def test_the_native_tools_are_actually_allowed(tmp_path: Path) -> None:
+    """A recognizer for a tool the step forbids measures nothing. `Read` was denied on the first
+    paid cycle, which is why the reach came back permission_denied."""
+    assert "Read" in MEMORY_ALLOWED_TOOLS
+    assert set(NATIVE_MEMORY_TOOL_NAMES) - {"NotebookEdit"} <= set(MEMORY_ALLOWED_TOOLS)

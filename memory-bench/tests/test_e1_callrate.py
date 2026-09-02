@@ -442,3 +442,35 @@ def test_run_rung_cell_is_unpaid_and_empty_on_the_dry_run_path(tmp_path: Any) ->
     assert cell.memory_calls == 0
     assert cell.calling_runs == 0
     assert cell.paid is False
+
+
+def _native_reach_runner() -> Any:
+    """mem-gj0pc's exact transcript: the agent says it will check memory and Reads MEMORY.md under
+    the pinned config dir. The path is read back off the env the cell handed the runner, which is
+    the only way a fixture can name a per-repeat tempdir it never chose."""
+
+    def runner(argv: Any, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        env = kwargs.get("env") or {}
+        config = env["CLAUDE_CONFIG_DIR"]  # type: ignore[index]
+        target = f"{config}/projects/-tmp/memory/MEMORY.md"
+        events = [
+            assistant_event([("Read", {"file_path": target})]),
+            result_event(),
+        ]
+        return subprocess.CompletedProcess(list(argv), 0, serialize_stream(events), "")
+
+    return runner
+
+
+def test_a_native_memory_reach_counts_as_a_memory_call(tmp_path: Any) -> None:
+    """The first paid R4 cycle scored this reach as ZERO because the counter saw bd verbs only.
+    Both surfaces count now, so the same stream is one read and no writes."""
+    _seqs, tasks = corpus_one(tmp_path)
+    cell = e1_grid.run_rung_cell(
+        tasks[0], rung="R4", repeats=1, model=MODEL, dry_run=False, runner=_native_reach_runner()
+    )
+    assert cell.memory_calls == 1
+    assert cell.calling_runs == 1
+    assert cell.read_calls == 1
+    assert cell.write_calls == 0
+    assert list(cell.verbs) == ["native_read"]

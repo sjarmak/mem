@@ -69,6 +69,7 @@ from membench.runner.tool_surface import (
     endogenous_memory_tool_calls,
     endogenous_memory_verbs,
     memory_invocations,
+    native_memory_accesses,
     provision_memory_tool,
 )
 from membench.runner.toolreq_corpus import load_twin_corpus
@@ -497,13 +498,22 @@ def run_rung_cell(
             )
             result = agent.run_step(step, {}, ctx)
         calls = list(result.tool_calls)
-        n = endogenous_memory_tool_calls(calls)
+        # BOTH affordances count. The bd shim is the one this rig provisions; the native memory
+        # file is the one the model reaches for first (mem-gj0pc), and scoring only the former
+        # reported an agent that said "let me check memory" and did as a ZERO. The question the
+        # rung ladder asks is whether the agent reaches for memory AT ALL, not whether it picks
+        # the harness's preferred door.
+        native = native_memory_accesses(calls, config_dir=surface.config_dir)
+        n = endogenous_memory_tool_calls(calls) + len(native)
         total += n
         calling += 1 if n else 0
         invocations = memory_invocations(calls)
         reads += sum(1 for inv in invocations if inv.is_read)
+        reads += sum(1 for access in native if access.is_read)
         writes += sum(1 for inv in invocations if inv.is_write)
+        writes += sum(1 for access in native if access.is_write)
         verbs.extend(endogenous_memory_verbs(calls))
+        verbs.extend(access.verb for access in native)
     return RungCell(
         rung=rung,
         variant=task.variant,

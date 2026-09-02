@@ -119,7 +119,28 @@ MEMORY_TOOL_NAMES: tuple[str, ...] = ("Bash",)
 
 # What the step must allow for the tool to be reachable at all. The goal leg's historical
 # `--allowedTools Write` clamp is precisely what made every memory call impossible.
-MEMORY_ALLOWED_TOOLS: tuple[str, ...] = ("Bash", "Write")
+MEMORY_ALLOWED_TOOLS: tuple[str, ...] = ("Bash", "Write", "Read", "Edit")
+
+# The SECOND memory affordance, and the one the model reaches for first. mem-gj0pc: handed a `bd`
+# shim and nothing else, the evaluated agent's first move was a Read of Claude Code's NATIVE
+# MEMORY.md. Counting only bd verbs scored that reach as ZERO, which is exactly the disposition
+# null this series exists to rule out. Both surfaces count, so `Read` and `Edit` are allowed and
+# the file-path recognizer below sits beside the argv one. The native path is reachable only
+# because `MemoryToolSurface.env()` pins CLAUDE_CONFIG_DIR under the surface root; without that
+# pin these tool names would admit a read of the OPERATOR's memory index, not the agent's.
+NATIVE_MEMORY_TOOL_NAMES: tuple[str, ...] = ("Read", "Write", "Edit", "NotebookEdit")
+
+# Which of those WRITE. `Read` reads; the rest mutate.
+NATIVE_MEMORY_WRITE_TOOLS: frozenset[str] = frozenset({"Write", "Edit", "NotebookEdit"})
+
+# The tool arguments that name a path. Structural, like every other rule in this module: the
+# recognizer reads the ARGUMENT, never the agent's prose about what it opened.
+NATIVE_MEMORY_PATH_ARGS: tuple[str, ...] = ("file_path", "path", "notebook_path")
+
+# The directory segment Claude Code keeps a project's memory under
+# (`<config>/projects/<slug>/memory/...`). Required IN ADDITION to containment in the pinned
+# config dir, so reading `settings.json` is not scored as a memory call.
+NATIVE_MEMORY_SEGMENT = "memory"
 
 # Passed as `--disallowedTools` wherever this surface is handed to a real agent. NOT a sandbox:
 # see the module docstring's host-exposure paragraph for what it does not cover. It exists because
@@ -984,3 +1005,84 @@ def _is_memory_call(call: ToolCall) -> bool:
 def _command_of(call: ToolCall) -> str:
     command = call.arguments.get("command")
     return command if isinstance(command, str) else ""
+
+
+@dataclass(frozen=True)
+class NativeMemoryAccess:
+    """One observed access to Claude Code's NATIVE memory files: the tool, the path, the direction.
+
+    Deliberately NOT a ``MemoryInvocation``: that type's verb comes from the bd verb tables and its
+    operands are argv words, and forcing a file path through it would put a path where every
+    consumer expects a key. The two are summed by the caller, never merged here."""
+
+    tool: str
+    path: str
+    is_write: bool
+
+    @property
+    def is_read(self) -> bool:
+        return not self.is_write
+
+    @property
+    def verb(self) -> str:
+        """The verb name the E1 rows publish, namespaced so a native access can never be read as a
+        bd verb in a verb histogram."""
+        return "native_write" if self.is_write else "native_read"
+
+
+def _path_of(call: ToolCall) -> str:
+    for key in NATIVE_MEMORY_PATH_ARGS:
+        value = call.arguments.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return ""
+
+
+def _is_native_memory_path(path: str, *, config_dir: Path) -> bool:
+    """Containment in the PINNED config dir AND a ``memory`` path segment.
+
+    Both, not either: containment alone would score a settings read as a memory call, and the
+    segment alone would score any path anywhere that happens to contain the word."""
+    if not path:
+        return False
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        return False
+    try:
+        relative = candidate.resolve().relative_to(Path(config_dir).resolve())
+    except ValueError:
+        return False
+    return NATIVE_MEMORY_SEGMENT in relative.parts
+
+
+def native_memory_accesses(
+    calls: Iterable[ToolCall], *, config_dir: Path | None
+) -> list[NativeMemoryAccess]:
+    """Every native-memory access across ``calls``, in stream order.
+
+    ``config_dir=None`` means the surface pins no config dir, so there is no path the harness owns
+    and nothing can be attributed — it returns nothing rather than guessing, because a recognizer
+    that fell back to matching ``~/.claude`` would count a read of the OPERATOR's memory as the
+    agent's own."""
+    if config_dir is None:
+        return []
+    found: list[NativeMemoryAccess] = []
+    for call in calls:
+        if call.name not in NATIVE_MEMORY_TOOL_NAMES:
+            continue
+        path = _path_of(call)
+        if not _is_native_memory_path(path, config_dir=config_dir):
+            continue
+        found.append(
+            NativeMemoryAccess(
+                tool=call.name, path=path, is_write=call.name in NATIVE_MEMORY_WRITE_TOOLS
+            )
+        )
+    return found
+
+
+def native_memory_calls(calls: Iterable[ToolCall], *, config_dir: Path | None) -> int:
+    """How many tool calls reached the native memory surface. Calls, not paths: one Edit is one
+    call, matching ``endogenous_memory_tool_calls``'s block-not-verb rule so the two are summable.
+    """
+    return len(native_memory_accesses(calls, config_dir=config_dir))
