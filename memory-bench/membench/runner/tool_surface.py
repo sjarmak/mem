@@ -372,6 +372,7 @@ class MemoryToolSurface:
     bin_dir: Path
     bd_binary: str
     mcp_config: str | None = None
+    config_dir: Path | None = None
 
     def env(self) -> dict[str, str]:
         """``PATH`` with the shim dir FIRST, so ``bd`` resolves to the store-pinned wrapper even
@@ -379,8 +380,18 @@ class MemoryToolSurface:
         it, so the OAuth token and the rest of the environment survive.
 
         Shim-first is exactly why ``bd_binary`` must be an absolute path outside ``bin_dir``; see
-        ``resolve_bd_binary``."""
-        return {"PATH": os.pathsep.join([str(self.bin_dir), os.environ.get("PATH", "")])}
+        ``resolve_bd_binary``.
+
+        ``CLAUDE_CONFIG_DIR`` is pinned alongside it, and for a reason the first paid E1 cycle
+        made concrete (mem-gj0pc): handed only ``PATH``, the evaluated agent reached for Claude
+        Code's NATIVE memory file and resolved it against the OPERATOR's real account home. Only
+        the ``allowedTools`` clamp stopped the read. Pinning the config dir under this surface's
+        own root puts that path INSIDE the measured surface, so a native reach lands somewhere the
+        harness owns and can see instead of somewhere it must not reach at all."""
+        env = {"PATH": os.pathsep.join([str(self.bin_dir), os.environ.get("PATH", "")])}
+        if self.config_dir is not None:
+            env["CLAUDE_CONFIG_DIR"] = str(self.config_dir)
+        return env
 
     def fingerprint(self) -> str:
         return surface_fingerprint(mcp_config=self.mcp_config)
@@ -509,8 +520,10 @@ def provision_memory_tool(
     but an inherited env var is invisible in the executed command line)."""
     store_dir = root / "store"
     bin_dir = root / "bin"
+    config_dir = root / "config"
     store_dir.mkdir(parents=True, exist_ok=True)
     bin_dir.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir(parents=True, exist_ok=True)
     if sandbox is not None:
         assert_store_outside(sandbox, store_dir)
     binary = resolve_bd_binary(bd_binary, refuse_under=bin_dir)
@@ -530,7 +543,11 @@ def provision_memory_tool(
     shim.write_text(f'#!/bin/sh\nexec "{binary}" -C "{store_dir}" "$@"\n', encoding="utf-8")
     shim.chmod(shim.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return MemoryToolSurface(
-        store_dir=store_dir, bin_dir=bin_dir, bd_binary=binary, mcp_config=mcp_config
+        store_dir=store_dir,
+        bin_dir=bin_dir,
+        bd_binary=binary,
+        mcp_config=mcp_config,
+        config_dir=config_dir,
     )
 
 

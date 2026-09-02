@@ -785,3 +785,25 @@ def test_tempdir_prefix_stays_out_of_the_repo() -> None:
     the repo would be both a leak and a contaminated ancestor."""
     with tempfile.TemporaryDirectory(prefix="membench-memory-") as root:
         assert Path(root).is_absolute()
+
+
+def test_env_pins_claude_config_dir_under_the_surface_root(tmp_path: Path) -> None:
+    """The native memory path must resolve inside the surface, never in the operator's home.
+
+    mem-gj0pc: the first paid E1 cycle handed the agent PATH only, and it reached for Claude
+    Code's native MEMORY.md under the real account home. Only the allowedTools clamp stopped the
+    read."""
+    surface = provision_memory_tool(tmp_path / "root", sandbox=tmp_path / "sandbox")
+    env = surface.env()
+    pinned = Path(env["CLAUDE_CONFIG_DIR"])
+    assert pinned.is_dir()
+    assert pinned.is_relative_to(tmp_path / "root")
+    assert not pinned.is_relative_to(Path.home() / ".claude")
+
+
+def test_env_pin_survives_the_sandbox_wipe_boundary(tmp_path: Path) -> None:
+    """The config dir lives beside the store, OUTSIDE the sandbox cwd — the same wipe boundary the
+    store gets, and for the same reason: a native memory write the wipe eats is invisible."""
+    sandbox = tmp_path / "sandbox"
+    surface = provision_memory_tool(tmp_path / "root", sandbox=sandbox)
+    assert not Path(surface.env()["CLAUDE_CONFIG_DIR"]).is_relative_to(sandbox)
