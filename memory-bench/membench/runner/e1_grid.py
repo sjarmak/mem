@@ -44,7 +44,7 @@ import os
 import subprocess
 import sys
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from itertools import pairwise
 from pathlib import Path
@@ -584,6 +584,48 @@ def staged_plan(n_tasks: int) -> dict[str, Any]:
     }
 
 
+def staged_cells(
+    tasks: Sequence[ToolReqRealAgentTask],
+    *,
+    model: str,
+    rungs: Sequence[str] = STAGED_RUNGS,
+    n_tasks: int = STAGED_TASKS,
+    repeats: int = STAGED_REPEATS,
+    timeout_s: float = 600.0,
+    runner: object | None = None,
+    on_cell: Callable[[RungCell], None] | None = None,
+) -> list[RungCell]:
+    """Execute the staged fire: every ``(rung, variant, task)`` cell, ``repeats`` legs each.
+
+    ``n_tasks`` is applied PER VARIANT, which is what makes the bill the priced one.
+    ``staged_plan`` counts ``len(rungs) * n_tasks * repeats * 2``, so capping the flat list would
+    spend half of it and report a whole grid. The variant split is done here for that reason.
+
+    ``on_cell`` is called with each completed cell as it lands. There is no resume cache
+    (mem-78gwf), so a multi-hour fire that dies mid-run would otherwise leave nothing; the callback
+    is how a driver persists partial evidence it has already paid for."""
+    by_variant: dict[str, list[ToolReqRealAgentTask]] = {}
+    for task in tasks:
+        by_variant.setdefault(task.variant, []).append(task)
+    cells: list[RungCell] = []
+    for rung in rungs:
+        for variant in sorted(by_variant):
+            for task in by_variant[variant][:n_tasks]:
+                cell = run_rung_cell(
+                    task,
+                    rung=rung,
+                    repeats=repeats,
+                    model=model,
+                    dry_run=False,
+                    timeout_s=timeout_s,
+                    runner=runner,
+                )
+                cells.append(cell)
+                if on_cell is not None:
+                    on_cell(cell)
+    return cells
+
+
 def preflight_verdict(result: Mapping[str, Any]) -> tuple[str, str]:
     """Classify ONE preflight cycle's result row into its ``(kind, line)`` — the halt logic, as a
     pure function over a row, so it is testable against a FIXTURE without spending anything.
@@ -691,10 +733,24 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"T={STAGED_TASKS}, R={STAGED_REPEATS}"
         ),
     )
+    ap.add_argument(
+        "--fire-staged",
+        action="store_true",
+        help=(
+            "EXECUTE the staged spend priced by --staged. Separate from --staged on purpose: "
+            "pricing and spending must not be the same keystroke."
+        ),
+    )
+    ap.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="where to write the summary; cells are appended as they land (no resume cache)",
+    )
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(list(argv) if argv is not None else None)
 
-    paid = args.preflight or args.staged
+    paid = args.preflight or args.fire_staged
     refusal = _refusal(dry_run=not paid, model=args.model)
     if refusal is not None:
         print(refusal, file=sys.stderr)
@@ -719,6 +775,41 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"HALT: {exc.line}. Do NOT pay for the interior rungs.", file=sys.stderr)
             return EXIT_HALT
         print(json.dumps(gated, indent=2))
+        return EXIT_OK
+
+    if args.fire_staged:
+        plan = staged_plan(len(tasks))
+        print(json.dumps({"firing": plan}, indent=2), file=sys.stderr)
+        landed: list[RungCell] = []
+
+        def _record(cell: RungCell) -> None:
+            landed.append(cell)
+            print(
+                f"[{len(landed)}] {cell.rung}/{cell.variant} "
+                f"{cell.calling_runs}/{cell.runs} calling, {cell.memory_calls} call(s)",
+                file=sys.stderr,
+                flush=True,
+            )
+            if args.out is not None:
+                # Partial evidence, written as it is paid for. mem-78gwf: there is no resume, so a
+                # fire that dies at cell 90 must still leave the 89 cells it bought.
+                args.out.write_text(
+                    json.dumps(
+                        summarize(landed, model=args.model, dry_run=False, repeats=plan["repeats"]),
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+
+        cells = staged_cells(
+            tasks,
+            model=args.model,
+            n_tasks=plan["n_tasks"],
+            repeats=plan["repeats"],
+            on_cell=_record,
+        )
+        summary = summarize(cells, model=args.model, dry_run=False, repeats=plan["repeats"])
+        print(json.dumps(summary, indent=2))
         return EXIT_OK
 
     if args.staged:

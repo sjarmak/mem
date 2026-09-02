@@ -354,7 +354,8 @@ def test_cli_refuses_to_spend_without_an_oauth_token(
 ) -> None:
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
-    assert e1_grid.main(["--staged", "--model", MODEL]) == e1_grid.EXIT_REFUSED
+    # --staged prices and spends nothing, so it is no longer a paid path; --fire-staged is.
+    assert e1_grid.main(["--fire-staged", "--model", MODEL]) == e1_grid.EXIT_REFUSED
     assert "CLAUDE_CODE_OAUTH_TOKEN" in capsys.readouterr().err
 
 
@@ -474,3 +475,47 @@ def test_a_native_memory_reach_counts_as_a_memory_call(tmp_path: Any) -> None:
     assert cell.read_calls == 1
     assert cell.write_calls == 0
     assert list(cell.verbs) == ["native_read"]
+
+
+def test_staged_cells_applies_the_task_cap_per_variant_not_across_the_list(tmp_path: Any) -> None:
+    """The priced bill is len(rungs) * n_tasks * repeats * 2, so `n_tasks` is PER VARIANT. Capping
+    the flat list instead would run half the grid and report a whole one."""
+    _seqs, tasks = corpus_one(tmp_path)
+    calls: list[tuple[str, str]] = []
+
+    def counting(argv: Any, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(list(argv), 0, serialize_stream([result_event()]), "")
+
+    cells = e1_grid.staged_cells(
+        tasks * 4,
+        model=MODEL,
+        rungs=("R0",),
+        n_tasks=2,
+        repeats=1,
+        runner=counting,
+        on_cell=lambda cell: calls.append((cell.rung, cell.variant)),
+    )
+    variants = {task.variant for task in tasks * 4}
+    assert len(cells) == 2 * len(variants)
+    assert calls == [(cell.rung, cell.variant) for cell in cells]
+
+
+def test_fire_staged_is_a_different_flag_from_the_one_that_prices_it(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """--staged still prices and spends nothing. Authorization and execution stay two keystrokes."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "t")
+    _seqs, _tasks = corpus_one(tmp_path)
+    code = e1_grid.main(["--corpus-dir", str(tmp_path / "corpus"), "--staged", "--model", MODEL])
+    assert code == e1_grid.EXIT_OK
+    assert "PRICED, NOT FIRED" in capsys.readouterr().err
+
+
+def test_fire_staged_refuses_without_a_token(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    assert e1_grid.main(["--fire-staged", "--model", MODEL]) == e1_grid.EXIT_REFUSED
+    assert "CLAUDE_CODE_OAUTH_TOKEN" in capsys.readouterr().err
