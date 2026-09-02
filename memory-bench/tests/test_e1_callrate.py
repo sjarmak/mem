@@ -1015,12 +1015,25 @@ def test_a_secret_in_a_leg_stream_is_redacted_before_it_is_persisted(tmp_path: A
 
 def test_the_out_file_is_written_atomically(tmp_path: Any) -> None:
     """A truncate-then-write leaves a window where the file that makes a resume possible is a
-    partial file, and a kill inside it costs every cell the fire has bought."""
+    partial file, and a kill inside it costs every cell the fire has bought.
+
+    Content and a clean tmp are NOT enough to assert here: a copy-over-the-top passes both while
+    still writing in place. What separates a rename from a copy is observable, so assert THAT — the
+    destination gets a new inode, and a reader holding the old file keeps reading the old bytes
+    rather than watching them change underneath it (an isolated-revert mutant that swapped
+    ``os.replace`` for ``shutil.copyfile`` survived the weaker assertions)."""
     out = tmp_path / "summary.json"
     out.write_text('{"cells": []}', encoding="utf-8")
-    e1_grid.atomic_write_json(out, {"cells": [1, 2, 3]})
-    assert json.loads(out.read_text(encoding="utf-8")) == {"cells": [1, 2, 3]}
-    assert list(tmp_path.glob("*.tmp-*")) == []
+    before = out.stat().st_ino
+    held = out.open("rb")
+    try:
+        e1_grid.atomic_write_json(out, {"cells": [1, 2, 3]})
+        assert json.loads(out.read_text(encoding="utf-8")) == {"cells": [1, 2, 3]}
+        assert list(tmp_path.glob("*.tmp-*")) == []
+        assert out.stat().st_ino != before
+        assert json.loads(held.read().decode("utf-8")) == {"cells": []}
+    finally:
+        held.close()
 
 
 def test_two_fires_cannot_share_one_out_file(tmp_path: Any) -> None:
@@ -1101,6 +1114,108 @@ def test_a_fire_publishes_the_grid_it_ran_and_the_legs_under_it(
         for rung in ("R0", "R4")
         for variant in (VARIANT_NECESSARY, VARIANT_UNNECESSARY)
     )
+
+
+def test_a_resumed_fire_publishes_the_grid_order_not_the_order_it_bought_them_in(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The per-cell accumulator writes ``--out`` as the fire goes, and the accumulator is ordered
+    RESUMED-FIRST, then newly bought. The grid is ordered by (rung, variant, task). Those coincide
+    on a fresh fire, which is why a mutant that dropped the final rewrite survived the fresh-fire
+    test. Resume the LAST two cells of the grid so the two orders genuinely disagree, and pin that
+    --out publishes the grid."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "t")
+    monkeypatch.setattr(e1_grid, "resolve_cli_version", lambda: "9.9.9")
+    monkeypatch.setattr(e1_grid, "STAGED_REPEATS", 1)
+    _seqs, tasks = corpus_one(tmp_path)
+    monkeypatch.setattr(e1_grid, "run_rung_cell", _fake_cells(tasks))
+    _, twins = load_twin_corpus(tmp_path / "corpus")
+    work_id = tasks[0].work_id
+
+    # R4 is the TAIL of the grid; resuming it and buying R0 puts the accumulator at R4,R4,R0,R0.
+    out = tmp_path / "summary.json"
+    resumed = [
+        _cell("R4", VARIANT_NECESSARY, calling=1, runs=1, work_id=work_id),
+        _cell("R4", VARIANT_UNNECESSARY, calling=0, runs=1, work_id=work_id),
+    ]
+    out.write_text(
+        json.dumps(
+            summarize(
+                resumed,
+                model=MODEL,
+                dry_run=False,
+                repeats=1,
+                cli_version="9.9.9",
+                corpus=corpus_fingerprint(twins),
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    code = e1_grid.main(
+        [
+            "--corpus-dir",
+            str(tmp_path / "corpus"),
+            "--fire-staged",
+            "--model",
+            MODEL,
+            "--out",
+            str(out),
+        ]
+    )
+    assert code == e1_grid.EXIT_OK
+    printed = json.loads(capsys.readouterr().out)
+    grid_order = [
+        (rung, variant)
+        for rung in ("R0", "R4")
+        for variant in (VARIANT_NECESSARY, VARIANT_UNNECESSARY)
+    ]
+    assert [(row["rung"], row["variant"]) for row in printed["cells"]] == grid_order
+    # The whole point: the file and the pipe agree, and both hold the grid.
+    assert json.loads(out.read_text(encoding="utf-8")) == printed
+    # Only the two R0 cells were bought; the R4 pair came back from the artifact untouched.
+    assert sum(1 for row in printed["cells"] if row["rung"] == "R4") == 2
+
+
+def test_a_halt_on_the_very_first_cell_still_leaves_an_artifact(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Every completed cell persists ``--out`` on its way out, so a halt LATER in the fire is
+    already covered by the last cell's write. The uncovered case is a halt before any cell
+    completes: without the halt handler's own write there is no artifact at all, and the operator
+    is left with a legs directory and no record of which rig produced it."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "t")
+    monkeypatch.setattr(e1_grid, "resolve_cli_version", lambda: "9.9.9")
+    monkeypatch.setattr(e1_grid, "STAGED_REPEATS", 1)
+    _seqs, _tasks = corpus_one(tmp_path)
+
+    def refuse_immediately(task: Any, **kwargs: Any) -> RungCell:
+        raise e1_grid.QuotaHaltError("the account refused the call")
+
+    monkeypatch.setattr(e1_grid, "run_rung_cell", refuse_immediately)
+    out = tmp_path / "summary.json"
+    code = e1_grid.main(
+        [
+            "--corpus-dir",
+            str(tmp_path / "corpus"),
+            "--fire-staged",
+            "--model",
+            MODEL,
+            "--out",
+            str(out),
+        ]
+    )
+    assert code == e1_grid.EXIT_HALT
+    assert out.exists()
+    kept = json.loads(out.read_text(encoding="utf-8"))
+    assert kept["cells"] == []
+    # The identity is the part worth keeping: it says which rig halted, so the next fire can tell
+    # a resume from a restart.
+    assert kept["cli_version"] == "9.9.9"
+    assert kept["model"] == MODEL
+    assert not (tmp_path / "summary.json.lock").exists()
 
 
 def test_a_quota_refusal_mid_fire_keeps_what_it_bought(
