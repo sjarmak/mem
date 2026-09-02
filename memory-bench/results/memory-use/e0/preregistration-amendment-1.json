@@ -1,0 +1,44 @@
+{
+  "bead": "mem-e4fby",
+  "study": "E0a - memory-verb base rate over the pinned transcript corpus (offline)",
+  "amendment": 1,
+  "amends": "preregistration.json",
+  "amends_sha256": "301f7917fe30df503271f2ac5b045fde20654a65021acdfb55efb65def75609c",
+  "recorded_at_utc": "2026-09-01T21:40:00Z",
+  "form": "APPENDED, never a rewrite. preregistration.json is left byte-identical and its digest above still verifies against preregistration.sha256. This file is the recorded deviation; analysis.json carries both digests so a published number names the exact rule set that produced it.",
+  "trigger": "Review of the first analysis run reproduced two measurement defects that invalidate every number it published. Both are recorded here rather than fixed silently in the locked clause.",
+  "deviations": [
+    {
+      "id": "A1.1",
+      "supersedes": "ambiguity_band.rule",
+      "locked_text": "a write is UNAMBIGUOUS when it carries an explicit --key flag or at least two positionals. A single-positional write is AMBIGUOUS.",
+      "amended_rule": "a write is UNAMBIGUOUS if and only if it carries an explicit key flag (--key / -k). Every write with no key flag is AMBIGUOUS, whatever its positional count. No positional is ever read as a key.",
+      "reason": "The locked rule inferred a bare-key write form that the shipped CLI does not have. `bd remember --help` on the host build (bd 1.3.0-rc.1) states: 'The positional arg is the memory CONTENT (the key is auto-generated from it unless --key is given)', and 'if the arg is a bare key naming an existing memory, it is RECALLED instead of stored'. So a positional never names a memory being stored, and a two-positional write does not resolve into key-plus-content. The locked rule's rationale rested on a grammar the CLI contradicts.",
+      "consequence": "Writes move from the band's low end to its high end. The band still brackets the same total write count; what changes is how many writes can supply a key to the E0.4 join, which is strictly fewer.",
+      "not_done": "preregistration.json is not edited. Its ambiguity_band clause stands as the record of what was locked before the CLI was checked."
+    },
+    {
+      "id": "A1.2",
+      "supersedes": "extraction.rule (the tokenization step only)",
+      "locked_text": "each is shlex-parsed into argv, wrapper and env-assignment tokens are stripped",
+      "amended_rule": "shell redirections are stripped from the raw simple-command text, by a quote-aware scan, BEFORE shlex tokenization.",
+      "reason": "The sealed helper matched a redirection only as a bare operator token. shlex emits an attached redirection as ONE token ('2>/dev/null'), which that test misses, so the redirection target survived into argv and was counted as a POSITIONAL. The first run called 21 writes unambiguous: 11 by explicit key flag, 10 by the locked bare-key rule alone. Nine of those 10 owe their second positional to a redirect target, and all 10 are `bd remember --show <key>` or `bd remember --get <key>`, which are attempted reads. No token-level test can repair this: once shlex has discarded quoting, a redirection token and a quoted '>' inside a memory body are indistinguishable, so the strip has to run on text that still carries its quotes.",
+      "consequence": "Positional counts fall for every redirected invocation. Combined with A1.1 this removes the sole read-after-write hit the first run reported: it was `bd remember --get <term> 2>/dev/null`, an ATTEMPTED READ whose redirection target was counted as content and whose first positional was then read as a key, joined to a `bd recall <term>` four seconds later. The corrected join is 0/16, not 1/16. (`--get` is not a flag of the shipped `bd remember`; the corrected rule keeps it out of the join without needing to know what it meant, because it carries no key flag.)"
+    },
+    {
+      "id": "A1.3",
+      "supersedes": "exclusions (ordering only; no exclusion is added or removed)",
+      "amended_rule": "the locked-timestamp self-exclusion is screened BEFORE the help and placeholder exclusions.",
+      "reason": "The first run screened help and placeholder invocations first, so post-lock traffic could still move those counts: the help count went 964 -> 966 between two runs over a growing corpus. A published exclusion count must be a property of the pinned population, not of when the script was run.",
+      "consequence": "Exactly one exclusion count can now grow with the corpus (after_preregistration_lock), and the emitted artifact separates it from the frozen ones. Counted invocations are unaffected."
+    }
+  ],
+  "unchanged": [
+    "population and its pinned filelist",
+    "the verb table and the three-way read split",
+    "the ZFC boundary: no argument body is inspected anywhere",
+    "the three declared deviations from the sealed selector-expressibility profile",
+    "the decision rule"
+  ],
+  "sealed_package_untouched": "results/bdp/selector-expressibility/ is not modified. Its manifest digests still verify; the helpers used here are copies."
+}

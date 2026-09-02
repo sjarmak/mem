@@ -1,0 +1,61 @@
+{
+  "bead": "mem-h9pum",
+  "study": "E0b",
+  "preregistration_sha256": "301f7917fe30df503271f2ac5b045fde20654a65021acdfb55efb65def75609c",
+  "preregistration_amendment_1_sha256": "83214c5f2397f85e204f5a0f5d5409dbd54a48d88fbd1e57bcbd47efb7c9a7fa",
+  "preregistration_amendment_2_sha256": "928e5912fe9b275d7b3be31c3211a7d8a2a93472182a9f73e61922686b0635ae",
+  "preregistration_amendment_3_sha256": "d9a03f8763d0686dc46d89d3a3373b32e4adafd6dc5c32342592efab72753563",
+  "filelist_sha256": "239820dc41d54108bb97e535fdc707df77769b3fb04601111c788bd27f66a312",
+  "population": {
+    "files_in_filelist": 12143,
+    "lines_scanned": 1688004,
+    "files_in_filelist_no_longer_readable": 191
+  },
+  "exclusions": {
+    "after_preregistration_lock": 2,
+    "attachments_with_banner_but_other_type": 0
+  },
+  "agent_typed_prime_reconciliation": {
+    "note": "E0a counts agent-TYPED `bd prime` invocations in Bash argv; E0b counts agent-typed prime DELIVERIES, which additionally require the paired tool_result to carry a prime payload. The two denominators are not the same event, and this block is the arithmetic between them.",
+    "agent_typed_prime_calls_seen_here": 47,
+    "of_those_paired_to_a_prime_payload": 30,
+    "paired_result_carried_no_prime_payload": 2,
+    "call_never_paired_to_any_tool_result": 15,
+    "e0a_published_agent_typed_prime_invocations": 47,
+    "why_e0a_can_be_higher": "A call whose result never reached the transcript, or reached it without the prime banner (a non-zero exit, an empty store on a build that emits nothing, or a result dropped by the host), is an invocation for E0a and not a delivery for E0b. Both counts now run the SAME exclusion set - E0b screens help and placeholder invocations exactly as E0a does - so the residual between `agent_typed_prime_calls_seen_here` and E0a's published count is corpus attrition between the two runs, not a disagreement about any single record."
+  },
+  "delivery": {
+    "prime_deliveries": 5854,
+    "determined": 5854,
+    "carried": 3078,
+    "not_carried": 2776,
+    "undetermined_truncated": 0,
+    "delivery_carry_share": 0.5257943286641612,
+    "sessions_with_a_prime_delivery": 4461,
+    "sessions_with_a_carried_delivery": 2396,
+    "session_carry_prevalence": 0.5370993050885452,
+    "memories_delivered_total": 132329,
+    "memories_delivered_max_in_one_payload": 99,
+    "by_origin": {
+      "hook:SessionStart:startup": 4849,
+      "hook:SessionStart:resume": 70,
+      "local_command_stdout": 12,
+      "hook:SessionStart:compact": 870,
+      "agent_bash": 30,
+      "hook:SessionStart:clear": 22,
+      "hook:SessionStart:fork": 1
+    },
+    "by_resolution": {
+      "hook_stdout": 5812,
+      "inline": 42
+    },
+    "by_form": {
+      "legacy_memories_bullets": 1798,
+      "persistent_memories_header": 1280,
+      "no_memories_section": 2776
+    }
+  },
+  "measured_quantity": "DELIVERY, not consumption. A carried payload proves memory bodies were placed in the agent's context by the prime surface; it cannot show they were read or acted on.",
+  "r8_label": "This delivery share is produced by an R8-VIOLATING binary. The shipped bd prime emits a memories section followed by full bodies; R8 asks for no automatic body loading. The share therefore sizes what the R8 bet would REMOVE from the agent's context, and is not a measurement of an R8-conformant prime surface, which does not exist in this corpus.",
+  "interpretation_label": "INSTRUCTED-endogenous, not spontaneous. No number in the E0 series is an untreated baseline."
+}
