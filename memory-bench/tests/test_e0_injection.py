@@ -290,6 +290,35 @@ def test_a_non_prime_bd_call_is_not_a_delivery(tmp_path: Path) -> None:
     assert injection.is_prime_invocation("bd list --status=open") is False
 
 
+def test_a_help_or_placeholder_prime_line_is_screened_exactly_as_e0a_screens_it() -> None:
+    """The reconciliation compares E0b's typed count against E0a's published one.
+
+    E0a drops help screens and placeholder/template lines before it counts, so E0b
+    must drop the same ones. Delete the screen in `is_prime_invocation` and a
+    `bd prime --help` becomes a typed invocation here and not there, and the
+    residual the artifact calls corpus attrition silently becomes a rule
+    disagreement.
+    """
+    assert injection.is_prime_invocation("bd prime") is True
+    assert injection.is_prime_invocation("bd prime --help") is False
+    assert injection.is_prime_invocation("bd prime <session-id>") is False
+
+
+def test_the_e0a_count_in_the_reconciliation_is_read_from_e0as_artifact() -> None:
+    """Not transcribed. A hand-typed number is how two studies drift apart."""
+    published = json.loads((E0 / "analysis.json").read_text(encoding="utf-8"))
+    assert injection.e0a_typed_primes() == published["bucket_counts"]["injection"]
+    source = (E0 / "injection.py").read_text(encoding="utf-8")
+    assert 'e0a_published_agent_typed_prime_invocations": e0a_typed_primes()' in source
+
+
+def test_every_e0a_amendment_is_digested_not_just_the_first() -> None:
+    """E0a corrects its lock by APPENDING amendments; digesting one pins a stale set."""
+    on_disk = sorted(E0.glob("preregistration-amendment-*.json"))
+    assert len(on_disk) >= 3
+    assert list(injection.AMENDMENT_PATHS) == on_disk
+
+
 # --- ZFC gate -----------------------------------------------------------------
 
 
@@ -330,8 +359,11 @@ def test_a_hook_attachment_whose_payload_is_not_a_prime_document_is_not_counted(
 
     This is the branch that decides the DENOMINATOR of the headline carry share,
     and it had no test: deleting the `PRIME_BANNER` guard in `_attachment_event`
-    left the whole suite green while the delivery count on a 1500-file subsample
-    moved 305 -> 954, every one of the 649 extra landing in `not_carried`. A hook
+    left the whole suite green while the delivery count on the first 1500 files of
+    the pinned filelist moved 304 -> 837 (re-derived against this tree), with
+    `carried` unchanged at 292 and every one of the 533 extra landing in
+    `not_carried` (12 -> 453) or `undetermined` (0 -> 92) - i.e. entirely in the
+    denominator of the published share and nowhere in its numerator. A hook
     firing that is not `bd prime` at all - here a SessionStart hook that prints an
     unrelated banner, and mentions the word "prime" so the line-level prefilter
     still hands the record to the scanner - is not a prime delivery.
@@ -416,6 +448,43 @@ def test_an_agent_typed_call_with_no_paired_payload_is_reconciled_not_dropped(
     tally = _scan([call], tmp_path)
     assert tally.agent_prime_calls == 1
     assert tally.agent_prime_calls_unpaired == 1
+
+
+def test_the_documented_invocation_returns_a_denominator_and_a_per_session_map(
+    tmp_path: Path, capsys: Any
+) -> None:
+    """The bead's acceptance criterion, run as the CLI the bead names.
+
+    `--filelist ... --json` with no other flag must produce a NONZERO denominator
+    and per-session carried / not-carried counts. The map is opt-OUT for size
+    (`--no-per-session`), never opt-in, or the documented command would answer
+    only half the criterion.
+    """
+    path = tmp_path / "session.jsonl"
+    path.write_text(
+        "\n".join(json.dumps(r) for r in (_hook_record(NONEMPTY_STORE), _hook_record(EMPTY_STORE)))
+        + "\n",
+        encoding="utf-8",
+    )
+    filelist = tmp_path / "filelist.txt"
+    filelist.write_text(str(path) + "\n", encoding="utf-8")
+
+    assert injection.main(["--filelist", str(filelist), "--json"]) == 0
+    out = json.loads(capsys.readouterr().out)
+
+    assert out["delivery"]["determined"] == 2
+    assert out["delivery"]["prime_deliveries"] > 0
+    assert out["delivery"]["per_session"]["s1"] == {
+        "deliveries": 2,
+        "carried": 1,
+        "not_carried": 1,
+        "undetermined": 0,
+    }
+
+    assert injection.main(["--filelist", str(filelist), "--json", "--no-per-session"]) == 0
+    lean = json.loads(capsys.readouterr().out)
+    assert "per_session" not in lean["delivery"]
+    assert lean["delivery"]["determined"] == 2
 
 
 def test_the_per_session_map_is_optional_and_the_aggregates_are_not(tmp_path: Path) -> None:

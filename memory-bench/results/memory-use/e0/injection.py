@@ -40,8 +40,10 @@ Usage::
 
     uv run python results/memory-use/e0/injection.py --filelist filelist.txt --json
 
-Add ``--per-session`` for the full per-session delivery map; the session-level
-aggregates are published with or without it.
+The per-session carried / not-carried map is part of that output. Pass
+``--no-per-session`` to drop it (it is ~4.5k rows on the pinned population, which
+is why the committed ``injection.json`` is generated with that flag); the
+session-level aggregates are published either way.
 """
 
 from __future__ import annotations
@@ -62,7 +64,14 @@ import cligrammar
 
 HERE = pathlib.Path(__file__).resolve().parent
 PREREG_PATH = HERE / "preregistration.json"
-AMENDMENT_PATH = HERE / "preregistration-amendment-1.json"
+#: Every amendment E0a has appended, in order. E0a's lock is corrected by
+#: APPENDING numbered amendments, never by editing the locked file, so a study
+#: reading that lock must digest all of them or it pins a stale correction set.
+AMENDMENT_PATHS = sorted(HERE.glob("preregistration-amendment-*.json"))
+#: E0a's own emitted artifact. The agent-typed prime count E0b reconciles against
+#: is READ from it rather than transcribed, so the two studies cannot drift apart
+#: by a hand edit.
+E0A_ANALYSIS_PATH = HERE / "analysis.json"
 
 #: The prime payload's own first line, on every build seen in the corpus. It is
 #: what identifies a blob as prime output regardless of which surface carried it.
@@ -238,8 +247,21 @@ def _result_text(block: dict[str, Any]) -> str:
 
 
 def is_prime_invocation(command: str) -> bool:
-    """True when a shell command line contains a ``bd prime`` invocation."""
-    for argv in cligrammar.bd_invocations(command):
+    """True when a shell command line contains a COUNTED ``bd prime`` invocation.
+
+    Screening is E0a's, run on both tokenizations exactly as ``rates.py`` runs it
+    (the full preregistered alternation on the redirection-stripped argv, the
+    narrowed raw screen on the pre-strip form). A help screen or a
+    placeholder/template line is not an invocation for E0a, so it must not be one
+    here either: the agent-typed reconciliation compares this count against E0a's,
+    and two differently-screened counts do not reconcile.
+    """
+    for argv, raw_argv in cligrammar.bd_invocations(command):
+        reason = cligrammar.is_skippable(argv)
+        if reason is None:
+            reason = cligrammar.is_skippable_raw(raw_argv)
+        if reason is not None:
+            continue
         sub, _positionals, _flags = cligrammar.normalize(argv)
         if sub == "prime":
             return True
@@ -381,6 +403,12 @@ def summarise(tally: Tally, *, include_per_session: bool = True) -> dict[str, An
     return result
 
 
+def e0a_typed_primes() -> int:
+    """E0a's published agent-typed ``bd prime`` count, read from E0a's own artifact."""
+    doc = json.loads(E0A_ANALYSIS_PATH.read_text(encoding="utf-8"))
+    return int(doc["bucket_counts"]["injection"])
+
+
 def analyse(filelist: pathlib.Path, *, include_per_session: bool = True) -> dict[str, Any]:
     prereg: dict[str, Any] = json.loads(PREREG_PATH.read_text(encoding="utf-8"))
     lock = str(prereg["locked_at_utc"])
@@ -397,9 +425,10 @@ def analyse(filelist: pathlib.Path, *, include_per_session: bool = True) -> dict
         "bead": "mem-h9pum",
         "study": "E0b",
         "preregistration_sha256": hashlib.sha256(PREREG_PATH.read_bytes()).hexdigest(),
-        "preregistration_amendment_1_sha256": hashlib.sha256(
-            AMENDMENT_PATH.read_bytes()
-        ).hexdigest(),
+        **{
+            f"preregistration_amendment_{i}_sha256": hashlib.sha256(a.read_bytes()).hexdigest()
+            for i, a in enumerate(AMENDMENT_PATHS, start=1)
+        },
         "filelist_sha256": hashlib.sha256(filelist.read_bytes()).hexdigest(),
         "population": {
             "files_in_filelist": len(paths),
@@ -425,15 +454,16 @@ def analyse(filelist: pathlib.Path, *, include_per_session: bool = True) -> dict
                 tally.agent_prime_results_without_a_prime_payload
             ),
             "call_never_paired_to_any_tool_result": tally.agent_prime_calls_unpaired,
-            "e0a_published_agent_typed_prime_invocations": 47,
+            "e0a_published_agent_typed_prime_invocations": e0a_typed_primes(),
             "why_e0a_can_be_higher": (
                 "A call whose result never reached the transcript, or reached it without "
                 "the prime banner (a non-zero exit, an empty store on a build that emits "
                 "nothing, or a result dropped by the host), is an invocation for E0a and "
-                "not a delivery for E0b. E0a's own count also runs under its exclusion "
-                "set (help/placeholder screens), so the residual between "
-                "`agent_typed_prime_calls_seen_here` and 47 is population drift plus "
-                "those screens, not a disagreement about any single record."
+                "not a delivery for E0b. Both counts now run the SAME exclusion set - "
+                "E0b screens help and placeholder invocations exactly as E0a does - so "
+                "the residual between `agent_typed_prime_calls_seen_here` and E0a's "
+                "published count is corpus attrition between the two runs, not a "
+                "disagreement about any single record."
             ),
         },
         "delivery": summary,
@@ -462,11 +492,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true", help="print the analysis to stdout")
     ap.add_argument("--out", help="also write the analysis to this path")
     ap.add_argument(
-        "--per-session",
-        action="store_true",
-        help="include the full per-session delivery map (large; ~4.5k rows on the "
-        "pinned population). Session-level aggregates are published either way.",
+        "--no-per-session",
+        dest="per_session",
+        action="store_false",
+        help="drop the full per-session delivery map from the output (~4.5k rows, "
+        "~700KB on the pinned population). The session-level aggregates are "
+        "published either way; the committed artifact is generated with this flag.",
     )
+    ap.set_defaults(per_session=True)
     args = ap.parse_args(argv)
 
     filelist = pathlib.Path(args.filelist)
