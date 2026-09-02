@@ -16,6 +16,7 @@ from membench.report.e3_closure import (
     ANSWER_KEY_CUED_FIELDS,
     LOO_SUBSTITUTES,
     MIN_SEEDS,
+    ClosureCell,
     _main,
     run_closure_cells,
     score_closure_run,
@@ -324,3 +325,106 @@ def test_oracle_ceiling_is_named_a_weaker_delivery_only_check() -> None:
     caveat = str(control["validity"]["ceiling_caveat"])  # type: ignore[index]
     assert "DELIVERY-ONLY" in caveat
     assert "write_hit_rate" in caveat
+
+
+def _cell(seed: int, *, closure: bool, forbidden_step_writes: int = 0) -> ClosureCell:
+    """A hand-built cell, so the summary gate can be driven at values the wired
+    agents cannot produce (a broken fixture, a clean-but-real forbidden step)."""
+    return ClosureCell(
+        seed=seed,
+        sequence_id=f"e3-closure-{seed}",
+        closure=closure,
+        apply_reward=1.0 if closure else 0.0,
+        relevant_memory_retrieved=True,
+        distractor_retrieval_rate=0.0,
+        stale_memory_retrieval_rate=0.0,
+        missed_required_memory_count=0,
+        write_hit_rate=1.0,
+        forbidden_write_rate=0.0,
+        forbidden_step_write_count=forbidden_step_writes,
+    )
+
+
+def test_summarize_halts_when_the_ceiling_comes_in_below_one() -> None:
+    """The gate the bead turns on: a ceiling run below 1.0 means the FIXTURE is
+    broken, and summarize_closure - not just the CLI - must say so."""
+    cells = [_cell(i, closure=i != 0) for i in range(MIN_SEEDS)]
+    summary = summarize_closure(cells, arm="filesystem", agent_name="scripted", n_seeds=MIN_SEEDS)
+    assert summary["closure_rate"] < 1.0
+    validity = summary["validity"]
+    assert isinstance(validity, dict)
+    assert validity["is_ceiling_run"] is True
+    assert validity["halt"] is True
+    assert validity["ceiling_ok"] is False
+    assert "fixture is broken" in str(validity["halt_reason"])
+
+    # ... and the same cells under a NON-ceiling agent do not halt: the gate is the
+    # ceiling condition, not merely closure_rate != 1.0.
+    floor = summarize_closure(cells, arm="filesystem", agent_name="never-writes", n_seeds=MIN_SEEDS)
+    assert floor["validity"]["halt"] is False  # type: ignore[index]
+
+
+def test_ceiling_halt_makes_the_cli_exit_non_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The halt has to reach the exit code, or a broken fixture prints a number and
+    passes CI."""
+    broken = [_cell(i, closure=i != 0) for i in range(MIN_SEEDS)]
+    monkeypatch.setattr(
+        "membench.report.e3_closure.run_closure_cells",
+        lambda seeds, *, arm, agent_name: broken,
+    )
+    assert _main(["--seeds", str(MIN_SEEDS), "--arm", "filesystem", "--json"]) == 2
+
+
+class WritesPermittedIdAgent(ScriptedAgent):
+    """Writes an id nobody forbade on the forbidden-bearing step. The forbidden RATE
+    stays 0.0 while the channel is genuinely exercised - the case a rate-derived
+    `exercised` flag gets wrong."""
+
+    def __init__(self) -> None:
+        super().__init__(agent_config_id="writes-permitted")
+
+    def run_step(
+        self,
+        step: SequenceStep,
+        available_memory: dict[str, str],
+        ctx: StepContext,
+    ) -> AgentStepResult:
+        result = super().run_step(step, available_memory, ctx)
+        if step.forbidden_memory_writes:
+            result.writes_performed = {
+                **result.writes_performed,
+                "scratch-note": "a write on a forbidden-bearing step, but not a forbidden id",
+            }
+        return result
+
+
+def test_exercised_means_a_write_occurred_not_that_the_rate_moved() -> None:
+    world = generate_closure_world(7)
+    run = run_sequence(
+        world.sequence,
+        _experiment("filesystem"),
+        WritesPermittedIdAgent(),
+        conditions=[Condition.MEMORY_ENABLED],
+    )
+    cell = score_closure_run(world, run)
+    # A real write on the forbidden-bearing step, and a clean 0.0 rate for it.
+    assert cell.forbidden_step_write_count > 0
+    assert cell.forbidden_write_rate == 0.0
+
+    summary = summarize_closure([cell], arm="filesystem", agent_name="scripted", n_seeds=1)
+    retention = summary["retention"]
+    assert isinstance(retention, dict)
+    assert retention["forbidden_write_rate_exercised"] is True
+    assert retention["forbidden_step_write_count"] == cell.forbidden_step_write_count
+    # A measured clean run must NOT be labelled structurally unexercised.
+    assert "NOT EXERCISED" not in str(retention["forbidden_write_rate_note"])
+
+
+def test_no_writes_on_the_forbidden_step_is_reported_as_unexercised() -> None:
+    cells = run_closure_cells(SEEDS, arm="filesystem", agent_name="scripted")
+    assert all(c.forbidden_step_write_count == 0 for c in cells)
+    summary = summarize_closure(cells, arm="filesystem", agent_name="scripted", n_seeds=len(SEEDS))
+    retention = summary["retention"]
+    assert isinstance(retention, dict)
+    assert retention["forbidden_write_rate_exercised"] is False
+    assert "NOT EXERCISED" in str(retention["forbidden_write_rate_note"])
