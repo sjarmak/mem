@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 
 from membench.schemas.handoff import (
@@ -65,6 +65,28 @@ def states_value(text: str, value: str) -> bool:
     ``v2`` does not match ``checkout_v2``) — a format-anchored mechanical match on an
     authored ground-truth string, not a semantic heuristic (the ZFC boundary)."""
     return re.search(rf"(?<!\w){re.escape(value)}(?!\w)", text) is not None
+
+
+def content_recovered_write_ids(stored_text: str, expected_writes: Mapping[str, str]) -> list[str]:
+    """The expected write ids whose AUTHORED LITERAL is recoverable from ``stored_text``.
+
+    The endogenous-write grade (E3b): an agent that chooses its own key produces an id no
+    harness-authored id set can name, so grading the write by id equality measures id-naming
+    discipline and scores a correct fact stored under a self-chosen key as a miss. Here the id is
+    credited when the step's authored content for it is stated in what the agent actually stored,
+    word-boundary matched by ``states_value`` — the same mechanical authored-literal matcher used
+    everywhere else in this module, never a fuzzy or semantic one (anything fuzzier belongs to a
+    judge outside this file).
+
+    An empty authored literal is never a hit: ``states_value(text, "")`` is true of any text, so
+    crediting it would hand every endogenous step a free write.
+
+    Order follows ``expected_writes`` so the returned list is deterministic."""
+    return [
+        mid
+        for mid, literal in expected_writes.items()
+        if literal and states_value(stored_text, literal)
+    ]
 
 
 def _call_args_text(call: ToolCall) -> str:
@@ -210,6 +232,9 @@ class RetentionInputs:
     correct_backend_ids: list[str] | None = None
     removed_ids: list[str] = field(default_factory=list)
     superseded_expected_ids: list[str] = field(default_factory=list)
+    # Ids the step AUTHORED as forbidden to write (``SequenceStep.forbidden_memory_writes``).
+    # Scored as its own directed rate; ``over_retention_rate``'s arithmetic is untouched.
+    forbidden_write_ids: list[str] = field(default_factory=list)
 
 
 def score_retention(inp: RetentionInputs) -> RetentionMetrics:
@@ -229,6 +254,8 @@ def score_retention(inp: RetentionInputs) -> RetentionMetrics:
 
     superseded = set(inp.superseded_expected_ids)
     removed = set(inp.removed_ids)
+    forbidden = set(inp.forbidden_write_ids)
+    n_forbidden = sum(1 for m in written if m in forbidden)
 
     return RetentionMetrics(
         expected_memory_written=bool(expected) and expected_set.issubset(written_set),
@@ -237,6 +264,7 @@ def score_retention(inp: RetentionInputs) -> RetentionMetrics:
         # Over-retention = ids written that were not asked for, relative to writes.
         over_retention_rate=_ratio(n_noise, len(written)),
         noise_write_rate=_ratio(n_noise, len(written)),
+        forbidden_write_rate=_ratio(n_forbidden, len(written)),
         correct_scope_rate=_ratio(len(set(scope_ids) & written_set), len(written_expected)),
         correct_backend_rate=_ratio(len(set(backend_ids) & written_set), len(written_expected)),
         # Supersession: a superseded id is correctly handled iff it was removed.
@@ -284,26 +312,59 @@ def score_efficiency(
     non_memory_tool_calls: int,
     memory_events: list[MemoryEvent],
     non_memory_tool_latency_ms: float = 0.0,
+    agent_memory_tool_calls: int = 0,
+    agent_memory_tool_latency_ms: float = 0.0,
     turns: int = 0,
     retries: int = 0,
+    endogenous_reads: int = 0,
+    endogenous_writes: int = 0,
+    memory_tool_offered: bool = False,
 ) -> EfficiencyMetrics:
     """Sum tokens / tool-call counts / latencies over a trial.
 
-    `memory_tool_calls` counts the normalized memory events (each retrieve/write is
-    one memory tool call); `tool_latency_ms` sums their measured latency plus the
-    non-memory tool latency. `cost_usd` and `model_latency_ms` stay 0.0 in the
+    `memory_tool_calls` counts the normalized memory events the HARNESS performed (each
+    retrieve/write is one memory tool call); `tool_latency_ms` sums their measured latency plus the
+    non-memory tool latency. `endogenous_reads` / `endogenous_writes` are what the AGENT did,
+    counted by the caller from observed argv, and are reported alongside rather than added in: an
+    arm that retrieves FOR the agent and an agent that reaches for the tool are different facts.
+    `memory_tool_offered` says whether "no endogenous call" is an observation at all.
+
+    Note the two units, which is why `agent_memory_tool_calls` is not just their sum:
+    `endogenous_reads` / `endogenous_writes` count INVOCATIONS, and one Bash call can carry two
+    (`bd recall a; bd remember b c`), while `agent_memory_tool_calls` counts the CALLS a cost
+    metric is denominated in. Deriving either from the other would quietly misreport whichever
+    question was not being asked.
+
+    `cost_usd` and `model_latency_ms` stay 0.0 in the
     deterministic path — they are populated on the Harbor/model path, not here.
+
+    `agent_memory_tool_calls` is the third channel and it exists because the second one moved.
+    Before mem-5sht9's FIX 6, a Bash-wrapped `bd recall` was counted as a non-memory call; FIX 6
+    correctly stopped counting it there but routed it NOWHERE, so `tool_calls_total` silently
+    dropped it. On a published efficiency metric that is the worst possible direction: the arm
+    whose agent actually reaches for memory reports the LOWEST total tool cost, and the cheaper an
+    arm looks the more it looks like the one to ship. `tool_calls_total` must equal the number of
+    tool calls the agent really made, so it sums all three channels, and the latency follows the
+    same rule. Kept as its own parameter rather than folded back into `non_memory_tool_calls`
+    because "how much non-memory work did this cost" is still a question worth answering.
     """
     mem_calls = len(memory_events)
     mem_latency = sum(ev.latency_ms for ev in memory_events)
+    endogenous = endogenous_reads + endogenous_writes
     return EfficiencyMetrics(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         total_tokens=input_tokens + output_tokens,
-        tool_calls_total=non_memory_tool_calls + mem_calls,
+        tool_calls_total=non_memory_tool_calls + mem_calls + agent_memory_tool_calls,
         memory_tool_calls=mem_calls,
+        endogenous_memory_tool_calls=endogenous,
+        endogenous_memory_reads=endogenous_reads,
+        endogenous_memory_writes=endogenous_writes,
+        # Only meaningful where a tool was actually offered; elsewhere "did not call" is not an
+        # observation about the agent, so it stays False rather than reading as a universal miss.
+        tool_not_called=memory_tool_offered and endogenous == 0,
         non_memory_tool_calls=non_memory_tool_calls,
-        tool_latency_ms=non_memory_tool_latency_ms + mem_latency,
+        tool_latency_ms=non_memory_tool_latency_ms + mem_latency + agent_memory_tool_latency_ms,
         turns=turns,
         retries=retries,
     )

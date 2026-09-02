@@ -36,8 +36,33 @@ class EfficiencyMetrics(BaseModel):
     total_tokens: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
+    # SCORED METRIC WITH A DEFINITION HISTORY — a number from one SHA is not comparable to a
+    # number from another across these two boundaries, and a cross-SHA table must say so:
+    #   * before d9809a2/5e45493, an agent-made Bash `bd recall` counted as NON-memory work, so
+    #     `non_memory_tool_calls` was inflated by the memory calls the agent chose to make;
+    #   * at 5e45493 (FIX 6) it stopped counting there and was routed nowhere, so `tool_calls_total`
+    #     and `tool_latency_ms` UNDER-reported by that same quantity;
+    #   * from this commit all three channels are summed, and total means total.
+    # The change is a no-op for any arm that hands the agent no memory tool (none of its calls
+    # match), so only the memory-surface arms move — which is exactly why the drift was invisible
+    # until the surface shipped.
     tool_calls_total: int = 0
+    # Memory calls the HARNESS performed on the arm's behalf (one per normalized MemoryEvent).
     memory_tool_calls: int = 0
+    # Memory calls the AGENT chose to make, parsed from observed tool_use argv by
+    # ``runner.tool_surface``. Deliberately a SEPARATE counter from ``memory_tool_calls``: summing
+    # them would make an arm that retrieves for the agent indistinguishable from an agent that
+    # reached for the tool itself, which is the one distinction E3b exists to measure.
+    endogenous_memory_tool_calls: int = 0
+    # Of those, the ones that read and the ones that wrote. An agent that only ever writes and an
+    # agent that only ever reads both show up as non-zero above; only this split separates them.
+    endogenous_memory_reads: int = 0
+    endogenous_memory_writes: int = 0
+    # True when the step handed the agent a memory tool and the agent made no memory call at all.
+    # This is NOT a memory failure and must not be scored as one: it records that the measured
+    # behaviour did not occur, which on an endogenous step is the primary observation. False on a
+    # step that offers no memory tool, where "did not call" carries no information.
+    tool_not_called: bool = False
     non_memory_tool_calls: int = 0
     wall_clock_latency_ms: float = 0.0
     model_latency_ms: float = 0.0
@@ -77,6 +102,13 @@ class RetentionMetrics(BaseModel):
     write_miss_rate: float = 0.0
     over_retention_rate: float = 0.0
     noise_write_rate: float = 0.0
+    # Fraction of the agent's writes that landed on an id the step AUTHORED as
+    # forbidden (``SequenceStep.forbidden_memory_writes`` — e.g. re-persisting a
+    # superseded v1). Distinct from ``over_retention_rate``, which is "wrote an id
+    # nobody asked for": a forbidden id is one the harness explicitly named as
+    # wrong-to-write, so this is a directed channel rather than a volume proxy.
+    # 0.0 when no forbidden ids are authored (an honest "not measured here").
+    forbidden_write_rate: float = 0.0
     correct_scope_rate: float = 0.0
     correct_backend_rate: float = 0.0
     stale_memory_removed: bool = False

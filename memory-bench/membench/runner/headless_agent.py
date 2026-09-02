@@ -596,6 +596,21 @@ class HeadlessClaudeAgent:
     runner: Runner
     strict_mcp: bool = True
     constrain_tools: bool = True
+    # Path to the MCP server config `--strict-mcp-config` should restrict the session TO. Without
+    # it, strict mode boots NO servers at all, so every `mcp__<server>__<tool>` name in
+    # `--allowedTools` is unreachable and an MCP-surfaced tool can never be called — a wiring
+    # zero indistinguishable from an agent that chose not to call it (mem-5sht9). `None` is the
+    # bd-on-PATH surface's honest value: it declares no MCP server, rather than passing a path to
+    # a config that does not exist. It reaches the argv, so `invocation_fingerprint` covers it.
+    mcp_config: str | None = None
+    # Tool patterns the CLI must REFUSE, emitted as `--disallowedTools`. The paid sandbox bounds
+    # the cwd, not the process table: with `--allowedTools Bash` the evaluated agent has a real
+    # shell on the operator's host, and a hung memory shim once drove one to a host-wide
+    # `pkill -9 bd` (mem-5sht9). `tool_surface.HOST_DENIED_TOOLS` is the list any surface handing
+    # out Bash should pass. It is a rule engine and not a kernel boundary — see that module's
+    # host-exposure paragraph for what it does not cover. Lands in the argv, so
+    # `invocation_fingerprint` covers it.
+    disallowed_tools: tuple[str, ...] = ()
     memory_channel: MemoryChannel = MemoryChannel.RECALLED
     # Working dir for the CLI. MUST be an isolated, neutral sandbox — never a mem
     # worktree: the repo's SessionStart hooks / CLAUDE.md / project memory would both
@@ -639,6 +654,11 @@ class HeadlessClaudeAgent:
         argv = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"]
         if self.strict_mcp:
             argv.append("--strict-mcp-config")
+        if self.mcp_config:
+            # Emitted ALONGSIDE --strict-mcp-config, never instead of it: strict mode is the
+            # boot-hang guard, and the config names the one server the session may boot. Passing
+            # strict without a config is what made every MCP tool unreachable.
+            argv += ["--mcp-config", self.mcp_config]
         if self._pass_model:
             # Use the RESOLVED model: when the model comes from MEMBENCH_AGENT_MODEL
             # (not the `model=` kwarg), `self.model` is "" and would pass an empty
@@ -646,6 +666,8 @@ class HeadlessClaudeAgent:
             argv += ["--model", self._resolved_model]
         if self.constrain_tools and step.available_tools:
             argv += ["--allowedTools", ",".join(step.available_tools)]
+        if self.disallowed_tools:
+            argv += ["--disallowedTools", ",".join(self.disallowed_tools)]
         return argv
 
     def run_step(
@@ -728,6 +750,7 @@ def cell_agent(
     runner: Runner,
     cwd: str | None = None,
     env: Mapping[str, str] | None = None,
+    mcp_config: str | None = None,
 ) -> HeadlessClaudeAgent:
     """The agent one ``(arm, channel)`` cell runs ALL its legs through.
 
@@ -749,7 +772,11 @@ def cell_agent(
     so a leg cannot be run through an unrecorded agent by omission (``render_cell_calls``, which
     never executes, passes ``_render_only_runner``). ``cwd`` and ``env`` are the only things the
     fingerprint path leaves at their defaults: neither appears in the argv, so a rendered invocation
-    is byte-identical to the sent one without them."""
+    is byte-identical to the sent one without them.
+
+    ``mcp_config`` is NOT one of those: it lands in the argv, so a rendered plan that omitted it
+    would hash a command line the cell does not send, and the write boundary would refuse the
+    measurement. It is threaded through ``render_cell_calls`` for that reason."""
     return HeadlessClaudeAgent(
         model=model,
         runner=runner,
@@ -757,18 +784,26 @@ def cell_agent(
         constrain_tools=True,
         cwd=cwd,
         env=env,
+        mcp_config=mcp_config,
     )
 
 
 def render_cell_calls(
-    *, arm: str, channel: MemoryChannel, legs: Sequence[Leg], model: str
+    *,
+    arm: str,
+    channel: MemoryChannel,
+    legs: Sequence[Leg],
+    model: str,
+    mcp_config: str | None = None,
 ) -> CellCalls:
     """The command lines one ``(arm, channel)`` cell WILL spawn — the plan, rendered from the legs
     the arm executes, through the agent that executes them.
 
     EVERY leg, in order. A fingerprint over the scored leg alone would call two runs identical while
     an earlier leg differed — and for the builtin arm the earlier leg is the one under test."""
-    agent = cell_agent(model=model, channel=channel, runner=_render_only_runner)
+    agent = cell_agent(
+        model=model, channel=channel, runner=_render_only_runner, mcp_config=mcp_config
+    )
     return CellCalls(
         arm=arm,
         channel=channel.value,
