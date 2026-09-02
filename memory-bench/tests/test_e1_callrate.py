@@ -9,6 +9,7 @@ and the priced plan they disclose.
 
 from __future__ import annotations
 
+import subprocess
 from itertools import pairwise
 from typing import Any
 
@@ -38,7 +39,13 @@ from membench.runner.e1_grid import (
     staged_plan,
     summarize,
 )
-from membench.runner.headless_agent import HeadlessClaudeAgent, MemoryChannel
+from membench.runner.headless_agent import (
+    HeadlessClaudeAgent,
+    MemoryChannel,
+    assistant_event,
+    result_event,
+    serialize_stream,
+)
 from membench.runner.toolreq_realagent import VARIANT_NECESSARY, VARIANT_UNNECESSARY
 from tests.toolreq_helpers import corpus_one, noop_cli_runner
 
@@ -371,3 +378,67 @@ def test_cli_reports_a_missing_corpus_as_infrastructure_not_a_result(
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     (tmp_path / "empty").mkdir()
     assert e1_grid.main(["--corpus-dir", str(tmp_path / "empty")]) == e1_grid.EXIT_NO_CORPUS
+
+
+# --------------------------------------------------------------------------------------
+# run_rung_cell end-to-end (pre-spend smoke, mem-eg850)
+#
+# Every other test in this file exercises run_rung_cell's PARTS — rung_step, the counter, the
+# gates — and none of them execute the function itself. That left the first paid keystroke as the
+# first end-to-end execution of the cell, which is the one place a wiring defect costs money to
+# find. These two tests drive the real function with an injected runner: the store provisioning,
+# the sandbox, the argv render, the stream parse and the counter all run for real, and only the
+# `claude -p` spawn is replaced.
+# --------------------------------------------------------------------------------------
+
+
+def _calling_runner(*commands: str) -> Any:
+    """A `claude -p` stand-in whose stream carries `commands` as Bash tool_use blocks.
+
+    Deliberately UNCONDITIONAL: it emits the same calls at every rung, so it can prove the cell
+    counts what the stream contains and can never reproduce a rung effect. `_silent_runner` is the
+    zero end of the same fixture."""
+
+    def runner(argv: Any, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        events = [
+            assistant_event([("Bash", {"command": command}) for command in commands]),
+            result_event(),
+        ]
+        return subprocess.CompletedProcess(list(argv), 0, serialize_stream(events), "")
+
+    return runner
+
+
+def test_run_rung_cell_counts_the_memory_calls_its_stream_carries(tmp_path: Any) -> None:
+    """The whole cell, executed: provision a store, render the rung's step, parse the stream, count.
+
+    Three calls per repeat over two repeats is six, split two reads / one write per repeat. The
+    read and write counts are deliberately UNEQUAL and neither equals the total: a fixture with
+    reads == writes passes whether or not the two filters are swapped, which is the geometry this
+    test was first written with and which let a swapped-filter mutant survive."""
+    _seqs, tasks = corpus_one(tmp_path)
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=2,
+        model=MODEL,
+        dry_run=False,
+        runner=_calling_runner("bd remember --key k 'a value'", "bd recall k", "bd recall other"),
+    )
+    assert cell.runs == 2
+    assert cell.calling_runs == 2
+    assert cell.memory_calls == 6
+    assert cell.read_calls == 4
+    assert cell.write_calls == 2
+    assert set(cell.verbs) == {"remember", "recall"}
+    assert cell.paid is False
+
+
+def test_run_rung_cell_is_unpaid_and_empty_on_the_dry_run_path(tmp_path: Any) -> None:
+    """The free path proves the plumbing and measures zero, and says so in `paid` — the pairing that
+    keeps a green smoke from reading as a mechanism result."""
+    _seqs, tasks = corpus_one(tmp_path)
+    cell = e1_grid.run_rung_cell(tasks[0], rung="R4", repeats=1, model=MODEL, dry_run=True)
+    assert cell.memory_calls == 0
+    assert cell.calling_runs == 0
+    assert cell.paid is False
