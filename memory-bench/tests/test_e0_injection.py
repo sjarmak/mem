@@ -382,64 +382,96 @@ MATCHING_CALLS = frozenset(
 )
 
 
-def _module_level_strings(tree: ast.Module) -> dict[str, str]:
-    """Name -> value for module-level ``NAME = "literal"`` bindings.
+def _bound_strings(tree: ast.Module) -> dict[str, list[str]]:
+    """Name -> the string values assigned to it, at ANY scope.
 
-    Without this, the gate is evaded by binding the token to a constant and
-    comparing against the name.
+    Without this, the gate is evaded by binding the token to a name and
+    comparing against the name; restricting the scan to module level only moves
+    that binding one indent to the right. Values are resolved through
+    `_string_operands`, so a name bound to a set/list/tuple of tokens, to a
+    concatenation, or to another already-bound name resolves too. Two passes,
+    because a name may be bound before the name it is built from is seen.
     """
-    bound: dict[str, str] = {}
-    for node in tree.body:
-        targets: list[ast.expr] = []
-        if isinstance(node, ast.Assign):
-            targets = list(node.targets)
-        elif isinstance(node, ast.AnnAssign):
-            targets = [node.target]
-        else:
-            continue
-        value = node.value
-        if not isinstance(value, ast.Constant) or not isinstance(value.value, str):
-            continue
-        for target in targets:
-            if isinstance(target, ast.Name):
-                bound[target.id] = value.value
+    bound: dict[str, list[str]] = {}
+    for _ in range(2):
+        for node in ast.walk(tree):
+            targets: list[ast.expr] = []
+            if isinstance(node, ast.Assign):
+                targets = list(node.targets)
+            elif isinstance(node, ast.AnnAssign):
+                targets = [node.target]
+            else:
+                continue
+            if node.value is None:
+                continue
+            values = _string_operands(node.value, bound)
+            if not values:
+                continue
+            for target in targets:
+                if isinstance(target, ast.Name):
+                    bound.setdefault(target.id, [])
+                    bound[target.id] = sorted(set(bound[target.id]) | set(values))
     return bound
 
 
-def _string_operands(node: ast.expr, bound: dict[str, str]) -> list[str]:
+def _string_operands(node: ast.expr, bound: dict[str, list[str]]) -> list[str]:
+    """Every string value this expression can denote, as far as it is decidable.
+
+    Constant folding over ``+`` and over ``"".join([...])`` is load-bearing: a
+    single concatenation splits a token across two literals, and a gate that
+    trips on the plain literal reads two harmless halves instead.
+    """
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return [node.value]
     if isinstance(node, ast.Name) and node.id in bound:
-        return [bound[node.id]]
+        return list(bound[node.id])
     if isinstance(node, ast.Tuple | ast.List | ast.Set):
         return [v for element in node.elts for v in _string_operands(element, bound)]
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left = _string_operands(node.left, bound)
+        right = _string_operands(node.right, bound)
+        if len(left) == 1 and len(right) == 1:
+            return [left[0] + right[0]]
+        return left + right
+    if isinstance(node, ast.JoinedStr):
+        parts = [
+            v.value for v in node.values if isinstance(v, ast.Constant) and isinstance(v.value, str)
+        ]
+        return ["".join(parts)] if parts else []
+    if isinstance(node, ast.Call):
+        func = node.func
+        if isinstance(func, ast.Attribute) and func.attr == "join" and node.args:
+            sep = _string_operands(func.value, bound)
+            pieces = _string_operands(node.args[0], bound)
+            if pieces:
+                joined = (sep[0] if len(sep) == 1 else "").join(pieces)
+                return [joined, *pieces]
+        return []
     return []
 
 
-def test_no_matcher_in_the_delivery_pass_keys_on_a_cli_verb_token() -> None:
-    """The E0a gate's counterpart for this module.
+def _iterable_operands(tree: ast.Module, bound: dict[str, list[str]]) -> list[str]:
+    """Strings denoted by the iterable of every comprehension and ``for``.
 
-    `injection.py` names the memory verbs in its prose and in the labels it emits,
-    so the line-level grep that holds `verbs.py` cannot hold it. What must hold is
-    narrower and stronger: no string this module MATCHES WITH may contain a verb
-    token. Detection keys on the emitted document's headings, never on the CLI
-    vocabulary.
-
-    "Matches with" is every construct that can decide a branch on text, not only
-    `re.compile`: a plain `"you may recall the following memories" in text` is the
-    same keyword matcher spelled differently, and an earlier revision of this gate
-    read only `re.compile`'s first argument and let it through. Covered here:
-    compiled patterns, both sides of every comparison (`==`, `!=`, `in`, `not
-    in`), and the string arguments of the str/re matching calls above - with
-    module-level string constants resolved so the token cannot be hidden behind a
-    name.
+    A multi-token matcher is most naturally written as a membership test over a
+    literal collection (``any(t in text for t in {...})``), and that set literal
+    is an ``ast.comprehension.iter`` - a node the comparison/call walk never
+    reaches.
     """
-    source = (E0 / "injection.py").read_text(encoding="utf-8")
+    out: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.comprehension | ast.For | ast.AsyncFor):
+            out.extend(_string_operands(node.iter, bound))
+    return out
+
+
+def _matched_strings(source: str) -> tuple[list[str], list[str]]:
+    """(compiled patterns, strings compared or matched against) in ``source``."""
     tree = ast.parse(source)
-    bound = _module_level_strings(tree)
+    bound = _bound_strings(tree)
 
     patterns: list[str] = []
-    operands: list[str] = []
+    operands: list[str] = _iterable_operands(tree, bound)
     for node in ast.walk(tree):
         if isinstance(node, ast.Compare):
             for side in [node.left, *node.comparators]:
@@ -458,11 +490,70 @@ def test_no_matcher_in_the_delivery_pass_keys_on_a_cli_verb_token() -> None:
             patterns.append(first.value)
         for arg in node.args:
             operands.extend(_string_operands(arg, bound))
+    return patterns, operands
+
+
+VERB = re.compile(r"remember|recall|memories")
+
+#: Spellings of a CLI-verb matcher that some revision of this gate could not
+#: see. Each is a whole module body; the collector must find the verb in each.
+EVADING_SPELLINGS = (
+    'if any(t in text for t in {"zzz", "recall-marker"}):\n    pass\n',
+    'for token in ["memories-marker"]:\n    if token in text:\n        pass\n',
+    'if ("you may re" + "call the following") in text:\n    pass\n',
+    'if "".join(["zzz-memo", "ries-marker"]) in text:\n    pass\n',
+    'if f"remember" in text:\n    pass\n',
+    'if text.startswith("bd remember"):\n    pass\n',
+    'PAT = "recall"\nif PAT in text:\n    pass\n',
+    'def f(text):\n    tok = "recall"\n    return tok in text\n',
+    'TOKENS = {"memories-marker"}\n\n\ndef f(text):\n    return any(t in text for t in TOKENS)\n',
+)
+
+
+def test_the_gate_sees_every_spelling_that_once_evaded_it() -> None:
+    """The gate's own coverage, asserted directly.
+
+    Without this, a refactor that quietly makes `_string_operands` return `[]`
+    for a construct leaves the gate green on a module that matches on a verb.
+    Two of the spellings below (the comprehension iterable and the concatenated
+    literal) were demonstrated live against `injection.py` under a full green
+    suite.
+    """
+    for body in EVADING_SPELLINGS:
+        _, operands = _matched_strings(body)
+        assert [o for o in operands if VERB.search(o)], body
+
+
+def test_no_matcher_in_the_delivery_pass_keys_on_a_cli_verb_token() -> None:
+    """The E0a gate's counterpart for this module.
+
+    `injection.py` names the memory verbs in its prose and in the labels it emits,
+    so the line-level grep that holds `verbs.py` cannot hold it. What must hold is
+    narrower and stronger: no string this module MATCHES WITH may contain a verb
+    token. Detection keys on the emitted document's headings, never on the CLI
+    vocabulary.
+
+    "Matches with" is every construct that can decide a branch on text, not only
+    `re.compile`: a plain `"you may recall the following memories" in text` is the
+    same keyword matcher spelled differently, and an earlier revision of this gate
+    read only `re.compile`'s first argument and let it through. Covered here:
+    compiled patterns, both sides of every comparison (`==`, `!=`, `in`, `not
+    in`), the string arguments of the str/re matching calls above, and the
+    iterable of every comprehension and `for` - with module-level constants
+    resolved, `+` and `str.join` folded, so the token cannot be hidden behind a
+    name, split across two literals, or parked in a set the walk never entered.
+    Two of those last three each let a live matcher through a fully green suite.
+    """
+    source = (E0 / "injection.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    patterns, operands = _matched_strings(source)
+    iterables = _iterable_operands(tree, _bound_strings(tree))
 
     assert patterns, "no compiled pattern found; the gate would pass vacuously"
     assert operands, "no matched-against string found; the gate would pass vacuously"
-    verb = re.compile(r"remember|recall|memories")
-    assert [p for p in patterns + operands if verb.search(p)] == []
+    assert _matched_strings(EVADING_SPELLINGS[0])[1], "the iterable operand source collects nothing"
+    assert [v for v in iterables if VERB.search(v)] == []
+    assert [p for p in patterns + operands if VERB.search(p)] == []
 
 
 # --- what counts as a delivery at all -----------------------------------------
