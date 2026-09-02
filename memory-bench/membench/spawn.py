@@ -135,10 +135,35 @@ def run_checked(
         # blank a real stderr into whitespace and silently move the fallback above --
         # the selection is the pinned rung, so nothing may run ahead of it.
         detail = (completed.stderr or "").strip() or (completed.stdout or "").strip()
-        raise error(
-            f"{what} failed (exit {completed.returncode}): {sanitised_child_output(detail)}"
+        raise with_child(
+            error(f"{what} failed (exit {completed.returncode}): {sanitised_child_output(detail)}"),
+            completed,
         )
     return completed
+
+
+# The child a non-zero exit came from, carried ON the exception. The message is redacted and
+# truncated by design, so a caller that needs to CLASSIFY the failure (a quota refusal is not a
+# broken rig; one halts the sweep cleanly, the other is a leg to skip) cannot read the message and
+# must not: that is prose matching on a string this module deliberately mangles. The structured
+# child travels instead, and the classification reads a field.
+_CHILD_ATTR = "spawn_child"
+
+
+def with_child(exc: BaseException, completed: subprocess.CompletedProcess[str]) -> BaseException:
+    """Attach ``completed`` to ``exc`` and return it, so the raise site stays one expression."""
+    setattr(exc, _CHILD_ATTR, completed)
+    return exc
+
+
+def child_of(exc: BaseException) -> subprocess.CompletedProcess[str] | None:
+    """The child process behind a ``run_checked`` non-zero diagnosis, or ``None``.
+
+    ``None`` for every other failure shape (missing binary, OSError, timeout) — those never had a
+    completed child — and for exceptions raised anywhere else. A caller that gets ``None`` has
+    learned that it cannot classify structurally, which is the honest answer, not a default."""
+    child = getattr(exc, _CHILD_ATTR, None)
+    return child if isinstance(child, subprocess.CompletedProcess) else None
 
 
 def redact_credentials(detail: str) -> str:

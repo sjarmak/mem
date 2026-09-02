@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from dataclasses import replace
 from itertools import pairwise
 from typing import Any
 
@@ -26,12 +27,15 @@ from membench.runner.e1_grid import (
     STAGED_REPEATS,
     STAGED_RUNGS,
     STAGED_TASKS,
+    LegRecord,
     PreflightHaltError,
     ResumeMismatchError,
     RungCell,
     assert_gates_ride_outside_metrics,
     call_rate_gates,
+    corpus_fingerprint,
     discrimination_margins,
+    grid_keys,
     guidance_words,
     monotonicity_violations,
     planned_call_count,
@@ -51,7 +55,9 @@ from membench.runner.headless_agent import (
     result_event,
     serialize_stream,
 )
+from membench.runner.toolreq_corpus import load_twin_corpus
 from membench.runner.toolreq_realagent import VARIANT_NECESSARY, VARIANT_UNNECESSARY
+from membench.spawn import with_child
 from tests.toolreq_helpers import corpus_one, noop_cli_runner
 
 MODEL = "claude-test-model-1"
@@ -63,7 +69,7 @@ def _agent(**kwargs: Any) -> HeadlessClaudeAgent:
     return HeadlessClaudeAgent(model=MODEL, runner=noop_cli_runner, **kwargs)
 
 
-def _cell(rung: str, variant: str, *, calling: int, runs: int = 4) -> RungCell:
+def _cell(rung: str, variant: str, *, calling: int, runs: int = 4, work_id: str = "") -> RungCell:
     return RungCell(
         rung=rung,
         variant=variant,
@@ -73,6 +79,7 @@ def _cell(rung: str, variant: str, *, calling: int, runs: int = 4) -> RungCell:
         read_calls=calling,
         write_calls=0,
         paid=True,
+        work_id=work_id,
     )
 
 
@@ -578,18 +585,102 @@ def test_a_timed_out_leg_is_unmeasured_not_a_non_calling_run(tmp_path: Any) -> N
     assert cell.metrics()["timed_out_runs"] == 1
 
 
-def test_only_the_timeout_is_tolerated_per_leg(tmp_path: Any) -> None:
-    """A non-zero exit, a missing binary, a refused token: those are a broken rig, and a broken rig
-    tolerated leg by leg is a cell full of 'timeouts' that reads as a measured zero."""
+def test_an_isolated_failed_leg_is_unmeasured_and_kept_apart_from_a_timeout(
+    tmp_path: Any,
+) -> None:
+    """One leg fails, the others return: the failure leaves the DENOMINATOR the way a timeout does,
+    and is reported on its own field so the diagnosis is not folded into 'it timed out'."""
+    _seqs, tasks = corpus_one(tmp_path)
+    calls = {"n": 0}
+
+    def flaky(argv: Any, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise HeadlessAgentError("claude -p failed (exit 1): transient")
+        return _calling_runner("bd recall k")(argv)
+
+    cell = e1_grid.run_rung_cell(
+        tasks[0], rung="R0", repeats=3, model=MODEL, dry_run=False, runner=flaky
+    )
+    assert (cell.runs, cell.errored_runs, cell.timed_out_runs) == (3, 1, 0)
+    assert cell.measured_runs == 2
+    assert cell.calling_runs == 2
+    assert cell.call_rate == pytest.approx(1.0)
+    assert cell.metrics()["errored_runs"] == 1
+
+
+def test_consecutive_failed_legs_halt_rather_than_filling_the_grid(tmp_path: Any) -> None:
+    """A broken rig fails EVERY leg. Tolerating that leg by leg buys a whole grid of cells that
+    measured nothing, so a run of failures is a halt — and the run has to be CONSECUTIVE, or a
+    flake in each of three cells would halt a fire that is working."""
     _seqs, tasks = corpus_one(tmp_path)
 
     def broken(argv: Any, **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        raise HeadlessAgentError("claude -p exited 1")
+        raise HeadlessAgentError("claude -p failed (exit 1): rig is broken")
 
-    with pytest.raises(HeadlessAgentError, match="exited 1"):
+    with pytest.raises(e1_grid.RigHaltError, match="3 consecutive"):
         e1_grid.run_rung_cell(
-            tasks[0], rung="R0", repeats=1, model=MODEL, dry_run=False, runner=broken
+            tasks[0], rung="R0", repeats=5, model=MODEL, dry_run=False, runner=broken
         )
+
+    interleaved = {"n": 0}
+
+    def every_other(argv: Any, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        interleaved["n"] += 1
+        if interleaved["n"] % 2 == 0:
+            raise HeadlessAgentError("claude -p failed (exit 1): flake")
+        return _calling_runner("bd recall k")(argv)
+
+    cell = e1_grid.run_rung_cell(
+        tasks[0], rung="R0", repeats=5, model=MODEL, dry_run=False, runner=every_other
+    )
+    assert (cell.errored_runs, cell.measured_runs, cell.calling_runs) == (2, 3, 3)
+
+
+def test_a_quota_refusal_halts_the_fire_and_is_read_off_the_stream_not_the_message(
+    tmp_path: Any,
+) -> None:
+    """The account refusing is not a defect and not a measurement: every further leg would fail the
+    same way and be billed as nothing.
+
+    Classified on the CLI's own ``api_error_status`` field, carried on the exception by
+    ``run_checked``. Not on the message — ``run_checked`` redacts and truncates that by design, so
+    a fire that matched prose there would keep spending against an exhausted account whenever the
+    wording moved."""
+    _seqs, tasks = corpus_one(tmp_path)
+    refusal = subprocess.CompletedProcess(
+        ["claude"],
+        1,
+        json.dumps(
+            {
+                "type": "result",
+                "is_error": True,
+                "api_error_status": 429,
+                "result": "session limit",
+            }
+        ),
+        "",
+    )
+
+    def refused(argv: Any, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise with_child(HeadlessAgentError("claude -p failed (exit 1): <redacted>"), refusal)
+
+    with pytest.raises(e1_grid.QuotaHaltError, match="refused the call"):
+        e1_grid.run_rung_cell(
+            tasks[0], rung="R0", repeats=5, model=MODEL, dry_run=False, runner=refused
+        )
+    # The message says nothing about a quota; only the stream field does.
+    assert e1_grid.is_quota_halt(HeadlessAgentError("You've hit your session limit")) is False
+    served = subprocess.CompletedProcess(["claude"], 1, '{"type":"result","is_error":true}', "")
+    assert e1_grid.is_quota_halt(with_child(HeadlessAgentError("boom"), served)) is False
+    # A non-result event carrying a status is NOT the account refusing.
+    tool = subprocess.CompletedProcess(
+        ["claude"], 1, '{"type":"assistant","api_error_status":429}', ""
+    )
+    assert e1_grid.is_quota_halt(with_child(HeadlessAgentError("boom"), tool)) is False
+
+
+def test_the_timeout_classifier_reads_the_cause_chain(tmp_path: Any) -> None:
     assert e1_grid.is_spawn_timeout(_timeout_error()) is True
     assert e1_grid.is_spawn_timeout(HeadlessAgentError("did not finish within 600.0s")) is False
 
@@ -609,7 +700,7 @@ def test_a_cell_whose_every_leg_timed_out_has_no_rate() -> None:
         work_id="w-dead",
         timed_out_runs=5,
     )
-    with pytest.raises(ValueError, match="every leg timed out"):
+    with pytest.raises(ValueError, match="no leg returned a stream"):
         _ = cell.call_rate
     assert cell.metrics()["call_rate"] is None
     assert pooled_rates([cell], VARIANT_NECESSARY) == {}
@@ -714,6 +805,57 @@ def test_staged_cells_keeps_landed_cells_and_buys_only_the_rest(tmp_path: Any) -
     assert len(spawned) == 1
 
 
+IDENTITY = {"cli_version": "9.9.9", "corpus": "corpus-abc", "repeats": 5}
+
+
+def _fake_cells(tasks: Any) -> Any:
+    """``run_rung_cell`` without the spawn: the CLI paths under test are the resume, the lock, the
+    artifact and the halts, and driving those through a real sandbox per leg buys nothing but
+    minutes."""
+
+    def make(task: Any, **kwargs: Any) -> RungCell:
+        on_leg = kwargs.get("on_leg")
+        if on_leg is not None:
+            for i in range(int(kwargs["repeats"])):
+                on_leg(
+                    LegRecord(
+                        rung=str(kwargs["rung"]),
+                        variant=task.variant,
+                        work_id=task.work_id,
+                        leg=i,
+                        status="ok",
+                        memory_calls=1,
+                        read_calls=1,
+                        stream='{"type":"result"}',
+                    )
+                )
+        return RungCell(
+            rung=str(kwargs["rung"]),
+            variant=task.variant,
+            runs=int(kwargs["repeats"]),
+            calling_runs=int(kwargs["repeats"]),
+            memory_calls=int(kwargs["repeats"]),
+            read_calls=int(kwargs["repeats"]),
+            write_calls=0,
+            paid=True,
+            work_id=task.work_id,
+        )
+
+    return make
+
+
+def _identified(cells: list[RungCell], **over: Any) -> dict[str, Any]:
+    return summarize(
+        cells,
+        model=MODEL,
+        dry_run=False,
+        repeats=5,
+        cli_version=str(IDENTITY["cli_version"]),
+        corpus=str(IDENTITY["corpus"]),
+        **over,
+    )
+
+
 def test_resume_refuses_another_rigs_artifact_and_drops_unmeasured_cells() -> None:
     dead = RungCell(
         rung="R0",
@@ -727,13 +869,173 @@ def test_resume_refuses_another_rigs_artifact_and_drops_unmeasured_cells() -> No
         work_id="w-dead",
         timed_out_runs=5,
     )
-    live = _cell("R0", VARIANT_UNNECESSARY, calling=2, runs=5)
-    summary = summarize([dead, live], model=MODEL, dry_run=False, repeats=5)
-    assert resume_cells(summary, model=MODEL) == [live]
-    with pytest.raises(ResumeMismatchError, match="model="):
-        resume_cells(summary, model="claude-other-model-2")
-    with pytest.raises(ResumeMismatchError, match="surface="):
-        resume_cells({**summary, "surface_fingerprint": "stale"}, model=MODEL)
+    live = _cell("R0", VARIANT_UNNECESSARY, calling=2, runs=5, work_id="w-live")
+    summary = _identified([dead, live])
+    assert resume_cells(summary, model=MODEL, **IDENTITY) == [live]
+    with pytest.raises(ResumeMismatchError, match="model"):
+        resume_cells(summary, model="claude-other-model-2", **IDENTITY)
+    with pytest.raises(ResumeMismatchError, match="surface_fingerprint"):
+        resume_cells({**summary, "surface_fingerprint": "stale"}, model=MODEL, **IDENTITY)
+
+
+def test_resume_refuses_every_identity_field_it_cannot_match() -> None:
+    """Each field names something that changes what a leg MEASURES, so each one alone is enough to
+    refuse: a different binary, a different corpus, a different number of legs per cell."""
+    summary = _identified([_cell("R0", VARIANT_NECESSARY, calling=2, runs=5, work_id="w-0")])
+    with pytest.raises(ResumeMismatchError, match="cli_version"):
+        resume_cells(summary, model=MODEL, **{**IDENTITY, "cli_version": "9.9.10"})
+    with pytest.raises(ResumeMismatchError, match="corpus_fingerprint"):
+        resume_cells(summary, model=MODEL, **{**IDENTITY, "corpus": "corpus-xyz"})
+    with pytest.raises(ResumeMismatchError, match="repeat"):
+        resume_cells(summary, model=MODEL, **{**IDENTITY, "repeats": 3})
+    # A blank field on the RIG is a refusal too: an identity it cannot state cannot be matched.
+    with pytest.raises(ResumeMismatchError, match="cannot state its own"):
+        resume_cells(summary, model=MODEL, **{**IDENTITY, "cli_version": ""})
+
+
+def test_resume_drops_unpaid_and_unkeyed_rows_and_refuses_duplicates_and_strangers() -> None:
+    """The filters and the refusals are different answers to different problems, and which is
+    which is load-bearing.
+
+    An unpaid row is a FIXTURE's call rate and a row with no ``work_id`` keys to a cell no task
+    has: both are dropped, and the real cells get bought. A duplicate key or a cell outside this
+    grid means the artifact was written by a fire this one is not continuing — nothing here can
+    pick the right row, so it refuses rather than publishing half of each."""
+    paid = _cell("R0", VARIANT_NECESSARY, calling=2, runs=5, work_id="w-0")
+    unpaid = RungCell(
+        rung="R0",
+        variant=VARIANT_UNNECESSARY,
+        runs=5,
+        calling_runs=5,
+        memory_calls=5,
+        read_calls=5,
+        write_calls=0,
+        paid=False,
+        work_id="w-0",
+    )
+    unkeyed = _cell("R4", VARIANT_NECESSARY, calling=3, runs=5)
+    assert resume_cells(_identified([paid, unpaid, unkeyed]), model=MODEL, **IDENTITY) == [paid]
+
+    dup = _identified([paid, paid])
+    with pytest.raises(ResumeMismatchError, match="twice"):
+        resume_cells(dup, model=MODEL, **IDENTITY)
+
+    with pytest.raises(ResumeMismatchError, match="not a cell of the grid"):
+        resume_cells(
+            _identified([paid]), model=MODEL, grid=[("R0", VARIANT_NECESSARY, "w-9")], **IDENTITY
+        )
+
+
+def test_grid_keys_names_exactly_the_cells_the_fire_buys(tmp_path: Any) -> None:
+    """The set a resume is checked against is built by the same per-variant slice the fire
+    executes, so a row can never be refused as a stranger to a grid that will in fact buy it."""
+    _seqs, tasks = corpus_one(tmp_path)
+    keys = grid_keys(tasks, rungs=("R0", "R4"), n_tasks=1)
+    spawned: list[Any] = []
+
+    def counting(argv: Any, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        spawned.append(argv)
+        return _calling_runner()(argv, **kwargs)
+
+    cells = e1_grid.staged_cells(
+        tasks, model=MODEL, rungs=("R0", "R4"), n_tasks=1, repeats=1, runner=counting
+    )
+    assert [cell.key for cell in cells] == keys
+
+
+def test_the_corpus_fingerprint_moves_when_a_task_does(tmp_path: Any) -> None:
+    """Order is not a measured input; the task set is. A twin whose request changed is a different
+    measurement, and this is the field that stops a resume pooling it with the old one."""
+    _seqs, tasks = corpus_one(tmp_path)
+    twin = replace(tasks[0], variant=VARIANT_UNNECESSARY)
+    both = [tasks[0], twin]
+    assert corpus_fingerprint(both) == corpus_fingerprint(list(reversed(both)))
+    assert corpus_fingerprint(both) != corpus_fingerprint(tasks)
+    reworded = replace(
+        twin,
+        goal_step=twin.goal_step.model_copy(
+            update={"user_request": f"{twin.goal_step.user_request} (and the other two subjects)"}
+        ),
+    )
+    assert corpus_fingerprint([tasks[0], reworded]) != corpus_fingerprint(both)
+
+
+def test_every_leg_is_persisted_with_the_stream_it_was_counted_from(tmp_path: Any) -> None:
+    """The cell is a count; the leg is the evidence under it.
+
+    Every counter change this rig has made changed what a leg SCORES, and a scoring fix with no
+    stream to re-score costs the whole grid again in real money. The stream is redacted on the way
+    out: an evidence file outlives the reason it was kept, and the env this runs under carries an
+    OAuth token."""
+    _seqs, tasks = corpus_one(tmp_path)
+    legs: list[LegRecord] = []
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=3,
+        model=MODEL,
+        dry_run=False,
+        runner=_timing_out_runner({1}, "bd recall k", "bd remember k=v"),
+        on_leg=legs.append,
+    )
+    assert [leg.status for leg in legs] == ["ok", "timeout", "ok"]
+    assert [leg.leg for leg in legs] == [0, 1, 2]
+    assert {leg.work_id for leg in legs} == {tasks[0].work_id}
+    ok = [leg for leg in legs if leg.status == "ok"]
+    # The legs RECONSTRUCT the cell: same calls, same read/write split. A per-leg record that
+    # cannot be summed back to the cell it came from is not evidence for that cell.
+    assert sum(leg.memory_calls for leg in ok) == cell.memory_calls
+    assert sum(leg.read_calls for leg in ok) == cell.read_calls
+    assert sum(leg.write_calls for leg in ok) == cell.write_calls
+    assert all("bd recall k" in leg.stream for leg in ok)
+    timed_out = next(leg for leg in legs if leg.status == "timeout")
+    assert timed_out.stream == "" and timed_out.detail
+    assert legs[0].filename == f"R4__{tasks[0].variant}__{tasks[0].work_id}__0.json"
+
+
+def test_a_secret_in_a_leg_stream_is_redacted_before_it_is_persisted(tmp_path: Any) -> None:
+    """The stream is written to a file that outlives the run. Redaction happens where the record is
+    BUILT, not where it is written, so a caller that persists it some other way cannot leak."""
+    _seqs, tasks = corpus_one(tmp_path)
+    legs: list[LegRecord] = []
+
+    def leaky(argv: Any, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        events = [
+            assistant_event([("Bash", {"command": "bd recall k"})]),
+            result_event("token sk-ant-oat01-DEADBEEFdeadbeefDEADBEEFdeadbeef0123456789ab"),
+        ]
+        return subprocess.CompletedProcess(list(argv), 0, serialize_stream(events), "")
+
+    e1_grid.run_rung_cell(
+        tasks[0], rung="R0", repeats=1, model=MODEL, dry_run=False, runner=leaky, on_leg=legs.append
+    )
+    assert "DEADBEEFdeadbeef" not in legs[0].stream
+    assert "bd recall k" in legs[0].stream
+
+
+def test_the_out_file_is_written_atomically(tmp_path: Any) -> None:
+    """A truncate-then-write leaves a window where the file that makes a resume possible is a
+    partial file, and a kill inside it costs every cell the fire has bought."""
+    out = tmp_path / "summary.json"
+    out.write_text('{"cells": []}', encoding="utf-8")
+    e1_grid.atomic_write_json(out, {"cells": [1, 2, 3]})
+    assert json.loads(out.read_text(encoding="utf-8")) == {"cells": [1, 2, 3]}
+    assert list(tmp_path.glob("*.tmp-*")) == []
+
+
+def test_two_fires_cannot_share_one_out_file(tmp_path: Any) -> None:
+    """Both would resume from it, both would re-buy the cells the other is buying, and the last
+    writer would publish its own half as the grid."""
+    out = tmp_path / "summary.json"
+    with e1_grid.out_lock(out):
+        assert (tmp_path / "summary.json.lock").exists()
+        with pytest.raises(ResumeMismatchError, match="another fire holds"), e1_grid.out_lock(out):
+            pass
+    assert not (tmp_path / "summary.json.lock").exists()
+    # Released on the way out of a FAILING fire too, or one crash locks the artifact forever.
+    with pytest.raises(RuntimeError, match="boom"), e1_grid.out_lock(out):
+        raise RuntimeError("boom")
+    assert not (tmp_path / "summary.json.lock").exists()
 
 
 def test_fire_staged_resumes_from_its_own_out_file(
@@ -743,12 +1045,97 @@ def test_fire_staged_resumes_from_its_own_out_file(
     different surface fingerprint is REFUSED, so a mid-run upgrade cannot land in the old grid."""
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "t")
+    monkeypatch.setattr(e1_grid, "resolve_cli_version", lambda: "9.9.9")
     _seqs, _tasks = corpus_one(tmp_path)
     out = tmp_path / "partial.json"
-    cell = _cell("R0", VARIANT_NECESSARY, calling=1)
-    summary = summarize([cell], model=MODEL, dry_run=False, repeats=5)
+    cell = _cell("R0", VARIANT_NECESSARY, calling=1, work_id="w-0")
+    summary = _identified([cell])
     out.write_text(json.dumps({**summary, "surface_fingerprint": "stale"}), encoding="utf-8")
     argv = ["--corpus-dir", str(tmp_path / "corpus"), "--fire-staged", "--model", MODEL]
     code = e1_grid.main([*argv, "--out", str(out)])
     assert code == e1_grid.EXIT_REFUSED
     assert "REFUSED" in capsys.readouterr().err
+
+
+def test_a_fire_publishes_the_grid_it_ran_and_the_legs_under_it(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """What --out holds when the fire finishes is what stdout printed. They diverged before: --out
+    was last written by the per-cell accumulator, so a resumed fire published the accumulator's
+    order and the reader of the file got a different grid from the reader of the pipe."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "t")
+    monkeypatch.setattr(e1_grid, "resolve_cli_version", lambda: "9.9.9")
+    monkeypatch.setattr(e1_grid, "STAGED_REPEATS", 1)
+    _seqs, tasks = corpus_one(tmp_path)
+    monkeypatch.setattr(e1_grid, "run_rung_cell", _fake_cells(tasks))
+    out = tmp_path / "summary.json"
+    code = e1_grid.main(
+        [
+            "--corpus-dir",
+            str(tmp_path / "corpus"),
+            "--fire-staged",
+            "--model",
+            MODEL,
+            "--out",
+            str(out),
+        ]
+    )
+    assert code == e1_grid.EXIT_OK
+    printed = json.loads(capsys.readouterr().out)
+    assert json.loads(out.read_text(encoding="utf-8")) == printed
+    assert printed["cli_version"] == "9.9.9"
+    _, twins = load_twin_corpus(tmp_path / "corpus")
+    assert printed["corpus_fingerprint"] == corpus_fingerprint(twins)
+    assert printed["rungs"] == ["R0", "R4"]
+    # Both halves of the twin, at both ends of the ladder: the grid the fire actually buys.
+    assert [(row["rung"], row["variant"]) for row in printed["cells"]] == [
+        (rung, variant)
+        for rung in ("R0", "R4")
+        for variant in (VARIANT_NECESSARY, VARIANT_UNNECESSARY)
+    ]
+    assert not (tmp_path / "summary.json.lock").exists()
+    legs = sorted(path.name for path in (tmp_path / "summary.json.legs").iterdir())
+    assert legs == sorted(
+        f"{rung}__{variant}__{tasks[0].work_id}__0.json"
+        for rung in ("R0", "R4")
+        for variant in (VARIANT_NECESSARY, VARIANT_UNNECESSARY)
+    )
+
+
+def test_a_quota_refusal_mid_fire_keeps_what_it_bought(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The second staged fire died here and lost the in-flight cell's paid legs. A quota halt is a
+    clean stop: the artifact holds every cell already bought, and the same command resumes."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "t")
+    monkeypatch.setattr(e1_grid, "resolve_cli_version", lambda: "9.9.9")
+    monkeypatch.setattr(e1_grid, "STAGED_REPEATS", 1)
+    _seqs, tasks = corpus_one(tmp_path)
+    made = _fake_cells(tasks)
+
+    def quota_on_the_second(task: Any, **kwargs: Any) -> RungCell:
+        if kwargs["rung"] == "R4":
+            raise e1_grid.QuotaHaltError("the account refused the call")
+        return made(task, **kwargs)
+
+    monkeypatch.setattr(e1_grid, "run_rung_cell", quota_on_the_second)
+    out = tmp_path / "summary.json"
+    code = e1_grid.main(
+        [
+            "--corpus-dir",
+            str(tmp_path / "corpus"),
+            "--fire-staged",
+            "--model",
+            MODEL,
+            "--out",
+            str(out),
+        ]
+    )
+    assert code == e1_grid.EXIT_HALT
+    assert "HALT" in capsys.readouterr().err
+    kept = json.loads(out.read_text(encoding="utf-8"))
+    assert [row["rung"] for row in kept["cells"]] == ["R0", "R0"]
+    assert kept["cli_version"] == "9.9.9"
+    assert not (tmp_path / "summary.json.lock").exists()
