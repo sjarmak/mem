@@ -87,8 +87,20 @@ def raw_argv(command: str) -> list[str]:
         ("bd memories rollback", verbs.SEARCH_READ),
         ("bd memories", verbs.BROWSE_READ),
         ("bd recall", verbs.BROWSE_READ),
-        ("bd remember deploy-runbook 'drain the queue first'", verbs.MEMORY_WRITE),
-        ("bd remember body 2>/dev/null", verbs.MEMORY_WRITE),
+        # Two positionals: the shipped usage line declares one, so the binary
+        # refuses it and nothing is stored (A1.8).
+        (
+            "bd remember deploy-runbook 'drain the queue first'",
+            verbs.REJECTED_BY_SHIPPED_GRAMMAR,
+        ),
+        # One positional, no key: content, or a bare key the shipped help says is
+        # RECALLED instead. Grammar cannot tell (A1.9).
+        ("bd remember body 2>/dev/null", verbs.BARE_KEY_AMBIGUOUS),
+        ("bd remember --key k body", verbs.MEMORY_WRITE),
+        # Arity is refused whether or not a key flag is present: the key says where
+        # to put it, not what to put.
+        ("bd remember --key k", verbs.REJECTED_BY_SHIPPED_GRAMMAR),
+        ("bd remember", verbs.REJECTED_BY_SHIPPED_GRAMMAR),
         (
             "bd remember --get deploy-runbook 2>/dev/null",
             verbs.ATTEMPTED_READ_VIA_WRITE_VERB,
@@ -174,8 +186,13 @@ def test_a_redirected_attempted_read_cannot_manufacture_a_join_hit() -> None:
 
 
 def test_only_an_explicit_key_flag_resolves_a_write_key() -> None:
-    """The shipped CLI auto-generates the key from content, so a positional is not one."""
-    result = verbs.classify(argv("bd remember deploy-runbook 'drain the queue first'"))
+    """The shipped CLI auto-generates the key from content, so a positional is not one.
+
+    The removal verb is used here because it is the write verb whose single
+    positional the shipped help does NOT document a recall clause for, so the
+    key-resolution rule can be exercised without the A1.9 ambiguity on top of it.
+    """
+    result = verbs.classify(argv("bd forget deploy-runbook"))
     assert result.bucket == verbs.MEMORY_WRITE
     assert result.unambiguous is False
     assert result.key is None
@@ -195,8 +212,19 @@ def test_whitespace_content_write_is_still_a_write() -> None:
     assert result.key == "deploy-runbook"
 
 
-def test_single_positional_write_is_ambiguous_and_supplies_no_key() -> None:
+def test_single_positional_capture_is_its_own_bucket_and_supplies_no_key() -> None:
+    """A1.9: the shipped help documents this shape as a RECALL when the argument
+    names an existing memory, so grammar cannot call it a write or a read."""
     result = verbs.classify(argv("bd remember 'drain the queue first'"))
+    assert result.bucket == verbs.BARE_KEY_AMBIGUOUS
+    assert result.unambiguous is False
+    assert result.key is None
+
+
+def test_the_removal_verb_has_no_bare_key_ambiguity() -> None:
+    """Its positional is unambiguously a key it deletes, so it stays a write - but
+    a removal can never be the WRITER half of a join, so it carries no key."""
+    result = verbs.classify(argv("bd forget deploy-runbook"))
     assert result.bucket == verbs.MEMORY_WRITE
     assert result.unambiguous is False
     assert result.key is None
@@ -207,7 +235,7 @@ def test_a_global_value_flag_does_not_hide_the_subcommand() -> None:
     result = verbs.classify(argv("bd --db /tmp/x.db remember --key k body"))
     assert result.bucket == verbs.MEMORY_WRITE
     assert result.key == "k"
-    assert verbs.classify(argv("bd -C /tmp/rig remember body")).bucket == verbs.MEMORY_WRITE
+    assert verbs.classify(argv("bd -C /tmp/rig remember body")).bucket == verbs.BARE_KEY_AMBIGUOUS
 
 
 def test_write_rate_is_published_as_a_band() -> None:
@@ -217,9 +245,16 @@ def test_write_rate_is_published_as_a_band() -> None:
     _feed(tally, "s1", "/rig/a", "2026-01-01T00:02:00Z", "bd ready")
     _feed(tally, "s1", "/rig/a", "2026-01-01T00:03:00Z", "bd ready")
     band = rates.write_band(tally)
-    assert band["counts"] == {"unambiguous": 1, "ambiguous": 1}
+    assert band["counts"] == {
+        "unambiguous": 1,
+        "ambiguous": 0,
+        "bare_key_ambiguous": 1,
+        "rejected_by_shipped_grammar": 0,
+    }
     assert band["unambiguous"]["session_averaged_share"] == pytest.approx(0.25)
-    assert band["ambiguity_band_high"]["session_averaged_share"] == pytest.approx(0.50)
+    assert band["ambiguity_band_high"]["session_averaged_share"] == pytest.approx(0.25)
+    # The OUTER band adds the bare capture, which may not be a write at all.
+    assert band["bare_key_band_high"]["session_averaged_share"] == pytest.approx(0.50)
 
 
 # --- the join -----------------------------------------------------------------
@@ -311,6 +346,8 @@ def test_verb_tokens_appear_only_in_the_verb_tables() -> None:
         'verbs.py: TARGETED_READ_VERBS = {"recall"}',
         'verbs.py: SEARCH_OR_BROWSE_VERBS = {"memories"}',
         'verbs.py: MEMORY_WRITE_VERBS = {"remember", "forget"}',
+        'verbs.py: WRITE_VERB_REQUIRED_POSITIONALS = {"remember": 1, "forget": 1}',
+        'verbs.py: BARE_KEY_RECALL_VERBS = {"remember"}',
     ]
 
 
@@ -359,8 +396,8 @@ def test_an_undeclared_flag_moves_a_write_verb_out_of_the_write_bucket() -> None
     assert result.bucket == verbs.ATTEMPTED_READ_VIA_WRITE_VERB
     assert result.key == "deploy-runbook"
     assert result.unambiguous is True
-    # A declared flag leaves the write a write.
-    assert verbs.classify(argv("bd remember --json body")).bucket == verbs.MEMORY_WRITE
+    # A declared flag leaves the invocation where the rest of the grammar puts it.
+    assert verbs.classify(argv("bd remember --json --key k body")).bucket == verbs.MEMORY_WRITE
 
 
 def test_an_undeclared_flag_without_a_key_still_leaves_the_write_bucket() -> None:
@@ -376,7 +413,12 @@ def test_attempted_reads_are_in_the_memory_share_but_not_in_the_write_band() -> 
     tally = rates.Tally()
     _feed(tally, "s1", "/rig/a", "2026-01-01T00:00:00Z", "bd remember --show k")
     _feed(tally, "s1", "/rig/a", "2026-01-01T00:01:00Z", "bd ready")
-    assert rates.write_band(tally)["counts"] == {"unambiguous": 0, "ambiguous": 0}
+    assert rates.write_band(tally)["counts"] == {
+        "unambiguous": 0,
+        "ambiguous": 0,
+        "bare_key_ambiguous": 0,
+        "rejected_by_shipped_grammar": 0,
+    }
     assert rates.session_rate(tally, verbs.MEMORY_BUCKETS)["session_averaged_share"] == 0.5
 
 
@@ -436,6 +478,116 @@ def test_an_undated_keyed_event_is_a_join_drop_not_an_exclusion() -> None:
     assert rates.join(tally)["join_eligibility_drops"] == {"keyed_event_without_timestamp": 1}
 
 
+# --- A1.7: the raw screen tests only what the strip erases ---------------------
+
+
+def test_the_raw_screen_catches_the_placeholder_the_strip_ate() -> None:
+    """The narrow rule still does A1.5's whole job: `<key>` never reaches a bucket."""
+    assert cligrammar.is_skippable_raw(["bd", "recall", "<key>"]) == "placeholder_or_template"
+    assert cligrammar.is_skippable_raw(["bd", "recall", "deploy-runbook"]) is None
+
+
+def test_the_raw_screen_does_not_judge_a_redirection_target() -> None:
+    """The defect A1.7 fixes: `$SP/out.txt` survives the raw tokenization but is gone
+    from the analysed argv, so screening the raw form for `^$` condemned invocations
+    for a token no bucket decision ever sees."""
+    command = "bd recall deploy-runbook > $SP/out.txt 2>&1"
+    assert raw_argv(command)[-3:] == [">", "$SP/out.txt", "2>&1"]
+    assert argv(command) == ["bd", "recall", "deploy-runbook"]
+    assert cligrammar.is_skippable_raw(raw_argv(command)) is None
+    # ...and the full alternation, which is correct on the ANALYSED form, would not be.
+    assert cligrammar.is_skippable(raw_argv(command)) == "placeholder_or_template"
+    tally = rates.Tally()
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:00:00Z", command)
+    assert tally.buckets[verbs.TARGETED_READ] == 1
+    assert tally.skipped["placeholder_or_template"] == 0
+
+
+def test_the_full_alternation_still_runs_on_the_analysed_argv() -> None:
+    """A1.7 narrows the RAW screen only. A template that survives the strip is
+    screened exactly as preregistered."""
+    tally = rates.Tally()
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:00:00Z", "bd recall $KEY")
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:01:00Z", "bd recall {{key}}")
+    assert tally.skipped["placeholder_or_template"] == 2
+    assert tally.invocations == 0
+
+
+# --- A1.8: positional arity, derived from the same captured help ---------------
+
+
+def test_the_required_positional_count_is_the_one_the_shipped_help_declares() -> None:
+    """Mirror of the flag-drift test: the pinned literal must equal what the
+    committed usage lines say, re-derived here and never from the live binary."""
+    derived = {}
+    for path in sorted(E0.glob("shipped-cli-help/*.help.txt")):
+        sub_name = path.name.split(".")[0]
+        derived[sub_name] = cligrammar.help_usage_positionals(
+            path.read_text(encoding="utf-8"), sub_name
+        )
+    assert derived == verbs.WRITE_VERB_REQUIRED_POSITIONALS
+    assert derived == {"remember": 1, "forget": 1}
+
+
+def test_help_usage_positionals_counts_required_words_only() -> None:
+    text = 'Usage:\n  bd remember "<insight>" [flags]\n\nFlags:\n  --key string\n'
+    assert cligrammar.help_usage_positionals(text, "remember") == 1
+    two = "Usage:\n  bd dep add <from> <to> [flags]\n"
+    assert cligrammar.help_usage_positionals(two, "dep") == 3
+    with pytest.raises(ValueError):
+        cligrammar.help_usage_positionals(text, "forget")
+
+
+def test_a_keyed_write_with_no_content_stores_nothing_and_leaves_the_write_bucket() -> None:
+    """The invocation A1.8 was written for. It is the one the corpus's only
+    apparent cross-session join hit was reading back."""
+    result = verbs.classify(argv("bd remember --key carried"))
+    assert result.bucket == verbs.REJECTED_BY_SHIPPED_GRAMMAR
+    assert result.key is None
+    assert result.unambiguous is False
+
+
+def test_a_rejected_write_never_supplies_a_prior_write_to_the_join() -> None:
+    tally = rates.Tally()
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:00:00Z", "bd remember --key carried")
+    _feed(tally, "s2", "/rig/b", "2026-01-02T00:00:00Z", "bd recall carried")
+    result = rates.join(tally)
+    assert result["keyed_targeted_reads"] == 1
+    assert result["hits"]["any"] == 0
+    assert result["denominator_choice"]["widened_result"]["hits"]["any"] == 0
+
+
+def test_the_refused_and_ambiguous_buckets_are_memory_verbs_but_not_reads() -> None:
+    """E0.5 counts reaches at the memory surface and is unmoved by A1.8 and A1.9."""
+    assert verbs.REJECTED_BY_SHIPPED_GRAMMAR in verbs.MEMORY_BUCKETS
+    assert verbs.BARE_KEY_AMBIGUOUS in verbs.MEMORY_BUCKETS
+    assert verbs.REJECTED_BY_SHIPPED_GRAMMAR not in verbs.READ_BUCKETS
+    assert verbs.BARE_KEY_AMBIGUOUS not in verbs.READ_BUCKETS
+    tally = rates.Tally()
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:00:00Z", "bd remember --key k")
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:01:00Z", "bd remember bare-key")
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:02:00Z", "bd ready")
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:03:00Z", "bd ready")
+    share = rates.session_rate(tally, verbs.MEMORY_BUCKETS)["session_averaged_share"]
+    assert share == pytest.approx(0.5)
+
+
+def test_a_bare_capture_bands_both_rates_and_is_inside_neither() -> None:
+    """A1.9's publication rule: the same 1 invocation is the outer end of the write
+    band and the outer end of the targeted-read rate, and neither point estimate."""
+    tally = rates.Tally()
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:00:00Z", "bd remember bare-key")
+    _feed(tally, "s1", "/rig/a", "2026-01-01T00:01:00Z", "bd ready")
+    band = rates.write_band(tally)
+    assert band["unambiguous"]["session_averaged_share"] == 0.0
+    assert band["ambiguity_band_high"]["session_averaged_share"] == 0.0
+    assert band["bare_key_band_high"]["session_averaged_share"] == pytest.approx(0.5)
+    assert rates.session_rate(tally, (verbs.TARGETED_READ,))["session_averaged_share"] == 0.0
+    banded = rates.session_rate(tally, (verbs.TARGETED_READ, verbs.BARE_KEY_AMBIGUOUS))
+    assert banded["session_averaged_share"] == pytest.approx(0.5)
+    assert rates.join(tally)["keyed_targeted_reads"] == 0
+
+
 # --- the CLI the acceptance criteria name -------------------------------------
 
 
@@ -464,7 +616,12 @@ def test_cli_emits_the_preregistered_statistics(tmp_path: Path) -> None:
     assert proc.returncode == 0, proc.stderr
     out = json.loads(proc.stdout)
     assert out["population"]["counted_invocations"] == 6
-    assert out["E0.1_memory_write_rate"]["counts"] == {"unambiguous": 1, "ambiguous": 0}
+    assert out["E0.1_memory_write_rate"]["counts"] == {
+        "unambiguous": 1,
+        "ambiguous": 0,
+        "bare_key_ambiguous": 0,
+        "rejected_by_shipped_grammar": 0,
+    }
     read = out["E0.2_memory_read_rates"]
     assert set(read) == {
         "targeted_read",
@@ -472,6 +629,11 @@ def test_cli_emits_the_preregistered_statistics(tmp_path: Path) -> None:
         "browse_read",
         "attempted_read_via_write_verb",
         "attempted_read_note",
+        "targeted_read_bare_key_band_high",
+        "bare_key_ambiguous",
+        "bare_key_ambiguous_note",
+        "rejected_by_shipped_grammar",
+        "rejected_by_shipped_grammar_note",
         "note",
     }
     assert out["E0.4_read_after_write"]["hits"]["cross_session"] == 1
@@ -483,14 +645,19 @@ def test_cli_emits_the_preregistered_statistics(tmp_path: Path) -> None:
     assert out["reference_buckets"]["injection"]["sessions_with_at_least_one"] == 2
     assert out["reference_buckets"]["dep_write"]["sessions_with_at_least_one"] == 1
     assert "INSTRUCTED-endogenous" in out["interpretation_label"]
-    assert set(out["exclusions"]) == {"drifting", "frozen_at_the_preregistration_lock"}
+    # A1.10: the frozen group is frozen against corpus GROWTH, not against attrition,
+    # and its published name now says so.
+    assert set(out["exclusions"]) == {
+        "drifting",
+        "frozen_against_corpus_growth",
+        "frozen_against_corpus_growth_note",
+    }
+    assert "ATTRITION" in out["exclusions"]["frozen_against_corpus_growth_note"]
     # a join drop is reported with the join, never with the screens
-    assert (
-        "keyed_event_without_timestamp"
-        not in out["exclusions"]["frozen_at_the_preregistration_lock"]
-    )
+    assert "keyed_event_without_timestamp" not in out["exclusions"]["frozen_against_corpus_growth"]
     assert "join_eligibility_drops" in out["E0.4_read_after_write"]
     assert out["preregistration_amendment_2_sha256"]
+    assert out["preregistration_amendment_3_sha256"]
 
 
 def _row(ts: str, session: str, cwd: str, command: str) -> dict[str, object]:

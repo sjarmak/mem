@@ -28,6 +28,24 @@ Buckets, and why the read class is split three ways:
     as writes made 38 of 59 published "writes" read attempts.
     Membership is decided by flag NAME against a set derived mechanically from the
     shipped ``--help`` text (``shipped-cli-help/``); no argument content is read.
+``REJECTED_BY_SHIPPED_GRAMMAR``
+    A write verb whose POSITIONAL COUNT the shipped binary refuses. Its usage line
+    declares exactly one positional for each of the two write verbs, so a
+    zero-positional form - including the keyed-but-contentless ``--key k`` with no
+    body - and a two-positional form are both refused before anything is stored.
+    Same argument as ``ATTEMPTED_READ_VIA_WRITE_VERB``, one layer down:
+    an invocation the binary rejects is not a write. Arity is argv grammar, so no
+    argument content is read; the required count is derived from the captured usage
+    line by ``cligrammar.help_usage_positionals``.
+``BARE_KEY_AMBIGUOUS``
+    The capture verb with one positional and no explicit key. The shipped help says
+    the positional is the memory CONTENT, and then says that if it is a bare key
+    naming an EXISTING memory it is RECALLED instead (and refused if it names
+    nothing). Which of the three happened depends on store state that no transcript
+    records, so grammar cannot decide it. Calling these writes - which is what the
+    first three runs did with all nine of them - assumes the reading that inflates
+    the write rate. They are published as their own bucket and as a band on E0.1
+    and on the targeted-read rate, never silently folded into either.
 ``INJECTION``
     Delivery INTO the agent, not capture. Reclassified out of the sealed profile's
     write kind; see preregistration.json.
@@ -79,6 +97,15 @@ WRITE_VERB_SUPPORTED_FLAGS = {
     "-q",
     "-v",
 }
+#: Required positional count per write verb, from each captured usage line
+#: (each declares one required word after the subcommand). Derived by
+#: ``cligrammar.help_usage_positionals`` and pinned as a literal for the same
+#: reason the flag set is: no published number may depend on whichever bd is on
+#: PATH. The test suite re-derives both from the committed help text.
+WRITE_VERB_REQUIRED_POSITIONALS = {"remember": 1, "forget": 1}
+#: The bare-key clause below is documented for the capture verb only; the removal
+#: verb's positional is unambiguously a key it deletes.
+BARE_KEY_RECALL_VERBS = {"remember"}
 # -----------------------------------------------------------------------------
 
 TARGETED_READ = "targeted_read"
@@ -86,6 +113,8 @@ SEARCH_READ = "search_read"
 BROWSE_READ = "browse_read"
 MEMORY_WRITE = "memory_write"
 ATTEMPTED_READ_VIA_WRITE_VERB = "attempted_read_via_write_verb"
+REJECTED_BY_SHIPPED_GRAMMAR = "rejected_by_shipped_grammar"
+BARE_KEY_AMBIGUOUS = "bare_key_ambiguous"
 INJECTION = "injection"
 DEP_WRITE = "dep_write"
 OTHER = "other"
@@ -96,10 +125,15 @@ MEMORY_BUCKETS = (
     BROWSE_READ,
     MEMORY_WRITE,
     ATTEMPTED_READ_VIA_WRITE_VERB,
+    REJECTED_BY_SHIPPED_GRAMMAR,
+    BARE_KEY_AMBIGUOUS,
 )
-#: The attempted-read bucket stays inside the memory-verb share (E0.5): the agent
-#: reached for the memory surface, and E0.5 counts reaches. It is kept out of the
-#: write rate (E0.1), because it stores nothing.
+#: The attempted-read, refused-grammar and ambiguous buckets all stay inside the
+#: memory-verb share (E0.5): the agent reached for the memory surface, and E0.5
+#: counts reaches. E0.5 is therefore unmoved by any of the three reclassifications,
+#: which is the point - they redistribute WITHIN the memory verbs and change no
+#: agent's behaviour. All three are kept out of the write rate's low end, because
+#: none of them can be shown to have stored anything.
 READ_BUCKETS = (TARGETED_READ, SEARCH_READ, BROWSE_READ, ATTEMPTED_READ_VIA_WRITE_VERB)
 ALL_BUCKETS = (*MEMORY_BUCKETS, INJECTION, DEP_WRITE, OTHER)
 
@@ -150,12 +184,27 @@ def classify(argv: list[str]) -> Classified:
             # flag NAME is inspected; the argument is never read.
             key = flag_key if flag_key is not None else (positionals[0] if n >= 1 else None)
             return Classified(ATTEMPTED_READ_VIA_WRITE_VERB, unambiguous=key is not None, key=key)
+        if n != WRITE_VERB_REQUIRED_POSITIONALS[sub]:
+            # The usage line the shipped binary prints declares exactly one
+            # positional. A zero-positional form stores nothing (the keyed
+            # keyed-but-bodiless form included: the key says where to put it, not
+            # what to put), and a two-positional form is refused before it gets
+            # that far. Rejecting on an undeclared FLAG and rejecting on positional
+            # ARITY are the same argument; leaving these in the write bucket after
+            # making the flag argument is the inconsistency that argument forbids.
+            return Classified(REJECTED_BY_SHIPPED_GRAMMAR, unambiguous=False, key=None)
         if flag_key is not None:
             return Classified(MEMORY_WRITE, unambiguous=True, key=flag_key)
-        # No explicit key flag: the shipped CLI auto-generates the key from the
-        # content, so no positional names the stored memory and none is taken as
-        # one. The invocation still counts as a write; it just supplies no key and
-        # therefore lands in the ambiguity band and never enters the join.
+        if sub in BARE_KEY_RECALL_VERBS:
+            # One positional, no explicit key: content to be stored under an
+            # auto-generated key, OR - per the shipped help - a bare key naming an
+            # existing memory, which is RECALLED instead. The transcript records the
+            # argv, not the store, so nothing here can tell those apart. Its own
+            # bucket, and a band on both rates it could belong to.
+            return Classified(BARE_KEY_AMBIGUOUS, unambiguous=False, key=None)
+        # The removal verb. Its positional is a key, but a removal can never be the
+        # WRITER half of a read-after-write join, so no key is carried and it stays
+        # in the write band's ambiguous end.
         return Classified(MEMORY_WRITE, unambiguous=False, key=None)
 
     if sub in INJECTION_VERBS:

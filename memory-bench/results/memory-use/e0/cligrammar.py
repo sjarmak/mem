@@ -57,6 +57,17 @@ WRAPPERS = {"rtk", "env", "time", "sudo", "nice", "command", "uv", "npx", "bunx"
 # classify.py:223-224
 PLACEHOLDER = re.compile(r"^<.+>$|^\$|\{\{|^\.\.\.$|^%s$")
 
+#: The ONLY placeholder shape the redirection strip can erase, and therefore the
+#: only one the pre-strip tokenization may be screened for (amendment A1.5, as
+#: corrected by A1.7). ``strip_redirections`` consumes ``<key>`` as an input
+#: redirection, so a documentation example reaches the classifier as a bare verb;
+#: re-screening the raw form restores the preregistered arm. Running the FULL
+#: alternation there instead screens a shape the strip never touched: a
+#: redirection TARGET survives in the raw tokenization, and ``^\$`` fires on
+#: ``$SP/allbeads.json``, throwing away 20 invocations - two of them executed
+#: keyed reads - that the strip had already removed the offending token from.
+RAW_PLACEHOLDER = re.compile(r"^<.+>$")
+
 # classify.py:56-65
 GLOBAL_VALUE_FLAGS = {
     "--actor",
@@ -303,6 +314,34 @@ def help_flag_names(text: str) -> set[str]:
     return names
 
 
+USAGE_HEADER = re.compile(r"^Usage:$")
+
+
+def help_usage_positionals(text: str, sub: str) -> int:
+    """How many positionals a captured ``--help`` text's usage line requires.
+
+    The usage section is a line ``Usage:`` followed by indented invocation lines;
+    the one for ``sub`` reads ``bd <sub> <arg>... [flags]``. Everything after the
+    subcommand that is not an optional ``[...]`` group is a required positional.
+    Only the SHAPE of the line is read, never any prose, so this is the arity
+    counterpart of :func:`help_flag_names` and stays on the mechanical side of the
+    ZFC boundary.
+    """
+    in_section = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not line[:1].isspace():
+            in_section = bool(USAGE_HEADER.match(stripped))
+            continue
+        if not in_section or not stripped:
+            continue
+        toks = stripped.split()
+        if len(toks) < 2 or os.path.basename(toks[0]) not in BD_EXECUTABLES or toks[1] != sub:
+            continue
+        return sum(1 for t in toks[2:] if not t.startswith("["))
+    raise ValueError(f"no usage line for {sub!r}")
+
+
 def is_skippable(argv: list[str]) -> str | None:
     """Name the preregistered exclusion this argv trips, or None.
 
@@ -312,6 +351,20 @@ def is_skippable(argv: list[str]) -> str | None:
         return "placeholder_or_template"
     if "--help" in argv or "-h" in argv:
         return "help_invocation"
+    return None
+
+
+def is_skippable_raw(raw_argv: list[str]) -> str | None:
+    """The same screen on the PRE-STRIP tokenization, narrowed to ``<...>``.
+
+    This exists only to catch what ``strip_redirections`` erased, so it tests only
+    the shape that strip erases. Everything else - ``$``, ``{{``, ``...``, ``%s``,
+    and the help flags - is unaffected by the strip and has already been decided on
+    the stripped argv by ``is_skippable``; re-deciding it here would judge tokens
+    (redirection targets) that the analysed form does not contain.
+    """
+    if any(RAW_PLACEHOLDER.search(t) for t in raw_argv):
+        return "placeholder_or_template"
     return None
 
 

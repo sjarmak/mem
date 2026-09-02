@@ -1,0 +1,62 @@
+{
+  "bead": "mem-e4fby",
+  "study": "E0a - memory-verb base rate over the pinned transcript corpus (offline)",
+  "amendment": 3,
+  "amends": "preregistration.json, as already amended by preregistration-amendment-1.json and preregistration-amendment-2.json",
+  "amends_sha256": "301f7917fe30df503271f2ac5b045fde20654a65021acdfb55efb65def75609c",
+  "amendment_1_sha256": "83214c5f2397f85e204f5a0f5d5409dbd54a48d88fbd1e57bcbd47efb7c9a7fa",
+  "amendment_2_sha256": "928e5912fe9b275d7b3be31c3211a7d8a2a93472182a9f73e61922686b0635ae",
+  "recorded_at_utc": "2026-09-02T00:40:00Z",
+  "form": "APPENDED, never a rewrite. preregistration.json and both prior amendments are left byte-identical and all three digests above still verify against their .sha256 files. Deviation ids continue the same sequence (A1.7 onward) because they amend the same locked clauses; analysis.json carries all four digests, so a published number names its exact rule set.",
+  "trigger": "Review of the amendment-2 run rejected on two independent defects, both moving published numbers. (1) A1.5 restored the placeholder screen by re-running it on the pre-strip tokenization, but ran the FULL alternation there. The pre-strip form still contains redirection TARGETS, so '^\\$' fired on shapes like '$SP/allbeads.json' and discarded 20 invocations the strip had already cleaned - two of them executed keyed reads, which is the E0.4 primary denominator and the headline bound computed over it. (2) A1.4 argued that an invocation the shipped binary REFUSES is not a write, applied it at the flag layer, and stopped there. The same commit shipped the help text that refuses invocations at the positional layer too, and documents a bare single-positional capture as a RECALL. That is last round's rejection - 'the argument that removed one removes the rest' - repeated one layer down, with the miss direction equal to the published finding.",
+  "deviations": [
+    {
+      "id": "A1.7",
+      "supersedes": "A1.5 (the rule applied to the pre-strip tokenization only)",
+      "locked_text": "invocations containing a template/placeholder token, or --help/-h, are excluded and counted.",
+      "amended_rule": "The placeholder screen runs on both tokenizations, but with different rules. On the analysed (redirection-stripped) argv it is the full preregistered alternation, unchanged. On the pre-strip tokenization it is narrowed to '^<.+>$' - the one shape strip_redirections erases, and therefore the only shape the analysed form can have lost. Implemented as cligrammar.RAW_PLACEHOLDER / is_skippable_raw.",
+      "reason": "The raw form exists for exactly one purpose: to see what the strip removed. Screening it for shapes the strip never touches judges tokens the analysed argv does not contain. A redirection target survives in the raw tokenization, so '^\\$' condemned invocations for a '$' that had already been stripped out of the form every bucket decision is made on.",
+      "measured": "Isolated revert on the pinned filelist, baseline and mutant run back to back so attrition cannot be mistaken for a rule effect. Of the 109 invocations A1.5 screened, 89 are '<...>' placeholders and 20 are not: 18 would have been bucketed 'other', 2 are executed keyed reads spelled 'bd recall <a real key> > $S/....txt 2>&1'. Reverting A1.7 (full alternation on the raw form) moves placeholder_or_template 2255 -> 2275, counted_invocations 35667 -> 35647, other 34642 -> 34624 and the E0.4 primary denominator 16 -> 14. A1.5's attribution text ('101 into other, 6 into dep_write, 2 into TARGETED_READ') described the over-wide screen and is superseded by this breakdown."
+    },
+    {
+      "id": "A1.8",
+      "supersedes": "A1.4 (its scope: which layer of the shipped grammar the rejection argument is applied at), and planned_statistics E0.1 and E0.4 by consequence",
+      "locked_text": "\"MEMORY_WRITE\": [\"remember\", \"forget\"]",
+      "amended_rule": "A write-verb invocation whose POSITIONAL COUNT its own usage line refuses is bucketed REJECTED_BY_SHIPPED_GRAMMAR: not a write, not a read. Both shipped write verbs declare exactly one positional, so this is the zero-positional form (the keyed-but-contentless 'bd remember --key k' included) and the two-or-more-positional form. These invocations leave E0.1 at both ends and leave the E0.4 writer set. They remain inside the E0.5 memory-verb share, which counts reaches for the surface.",
+      "arity_derivation": {
+        "source": "the same captured help text A1.4 used, shipped-cli-help/, digests unchanged",
+        "extraction": "cligrammar.help_usage_positionals() reads the usage section by line grammar - a line 'Usage:', then indented invocation lines - and counts the words after the subcommand that are not an optional '[...]' group. 'bd remember \"<insight>\" [flags]' yields 1; 'bd forget <key> [flags]' yields 1.",
+        "pinning": "pinned as a literal in verbs.WRITE_VERB_REQUIRED_POSITIONALS for the same reason the flag set is; the test suite re-derives it from the committed help text and fails on drift.",
+        "zfc": "Positional ARITY is argv grammar. No argument value is read, compared or scored; the classifier sees a count."
+      },
+      "reason": "A1.4's argument is that the binary rejects the invocation, so nothing was stored, so it is not a write. Nothing in that argument is about flags. Applying it only to flags left the identical shape at the positional layer inside the published write rate.",
+      "measured": "7 of the invocations previously published as E0.1 writes: 5 keyed with no content ('bd remember --key k'), 1 with two positionals, 1 with none. Isolated revert (arity test disabled, nothing else changed) moves memory_write 5 -> 10 and bare_key_ambiguous 9 -> 11, and - the reason this rule is not cosmetic - the E0.4 WIDENED join hit reappears, 0 -> 1. The corpus's only cross-session key recovery was a read against a write that stored nothing: 'bd remember --key k' with no content. Under A1.8 the read-after-write result is 0 hits over both denominators, 0/16 and 0/52, rather than 0/14 and 1/50."
+    },
+    {
+      "id": "A1.9",
+      "supersedes": "ambiguity_band.rule as already amended by A1.1 (which ends of the band mean what)",
+      "locked_text": "a write is UNAMBIGUOUS when it carries an explicit --key flag or at least two positionals. A single-positional write is AMBIGUOUS.",
+      "amended_rule": "'bd remember <one positional>' with no explicit key is bucketed BARE_KEY_AMBIGUOUS and published as its own bucket, as the OUTER end of the E0.1 band, and as the outer end of the targeted-read rate. It is inside neither point estimate and never enters the join. E0.1 therefore ships as two nested bands: the inner one over key resolvability (both ends accepted writes), the outer one over whether the invocation is a write at all.",
+      "reason": "The help text this study ships says the positional is the memory CONTENT, and then says that if it is a bare key naming an existing memory it is RECALLED instead - the same operation as 'bd recall' - and that a bare key naming nothing is refused. Three outcomes, selected by store state that no transcript records. Grammar cannot decide it, so the study does not pretend to: calling all nine writes assumes the reading that inflates the headline, and calling all nine reads assumes the one that deflates it.",
+      "measured": "9 invocations, all 'remember'. They are what A1.1 called the single-positional ambiguous band, less the arity-refused forms A1.8 removes. Isolated revert (bucket disabled) moves memory_write 5 -> 14 and the E0.1 ambiguous end 1 -> 10. Under A1.9 the E0.1 inner band is 4 to 5 and its outer end is 14; the targeted-read count is 16 with an outer end of 25."
+    },
+    {
+      "id": "A1.10",
+      "supersedes": "nothing in the locked text; withdraws a false claim made in the amendment-2 run's own emitted JSON",
+      "amended_rule": "The exclusion group formerly labelled 'frozen_at_the_preregistration_lock' is published as 'frozen_against_corpus_growth', with a note stating what lock-first ordering does and does not buy.",
+      "reason": "Screening the timestamp lock before every other exclusion freezes the other counts against corpus GROWTH. It does nothing against ATTRITION: a file named in the pinned filelist can be deleted or rotated away, taking its invocations out of every count. Re-running the analysis unchanged has moved help_invocation 962 -> 937 -> 922, dep_write 481 -> 477 -> 474 and files_in_filelist_no_longer_readable 37 -> 66 -> 191 across three reruns of the same pinned filelist. The claim that the after-lock exclusion is 'the only exclusion that can' drift was false in that direction.",
+      "consequence": "Reporting only. The pinned filelist and its digest fix the POPULATION a run is defined over; they cannot make the files persist, and a rerun months later will read a smaller corpus. Every count in analysis.json is as-of its run."
+    }
+  ],
+  "withdrawn": "Every number published under amendments 1 and 2 is withdrawn. analysis.json and report.md are regenerated under amendments 1, 2 and 3 together.",
+  "unchanged": [
+    "the population and its pinned filelist, byte-for-byte - E0b rebases onto this branch and the population definition must not move; filelist.txt and filelist.sha256 are untouched by this amendment",
+    "A1.4's flag-name mechanism, the captured help text and its digests, and the attempted-read bucket it created",
+    "A1.5's both-tokenizations principle; only the rule applied to the raw form is narrowed",
+    "the three-way read split and the verb tables themselves",
+    "the ZFC boundary: no argument body is inspected anywhere; A1.8 reads a positional COUNT only",
+    "E0.5, which counts reaches for the memory surface and is unmoved by every reclassification in this amendment",
+    "the decision rule"
+  ],
+  "sealed_package_untouched": "results/bdp/selector-expressibility/ is not modified. Its manifest digests still verify; the helpers used here are copies."
+}

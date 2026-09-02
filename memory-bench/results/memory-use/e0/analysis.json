@@ -4,78 +4,106 @@
   "preregistration_sha256": "301f7917fe30df503271f2ac5b045fde20654a65021acdfb55efb65def75609c",
   "preregistration_amendment_1_sha256": "83214c5f2397f85e204f5a0f5d5409dbd54a48d88fbd1e57bcbd47efb7c9a7fa",
   "preregistration_amendment_2_sha256": "928e5912fe9b275d7b3be31c3211a7d8a2a93472182a9f73e61922686b0635ae",
+  "preregistration_amendment_3_sha256": "d9a03f8763d0686dc46d89d3a3373b32e4adafd6dc5c32342592efab72753563",
   "filelist_sha256": "239820dc41d54108bb97e535fdc707df77769b3fb04601111c788bd27f66a312",
   "population": {
     "files_in_filelist": 12143,
-    "lines_scanned": 1698910,
-    "bash_blocks_mentioning_bd": 67522,
-    "counted_invocations": 35860,
-    "sessions_with_bd_traffic": 4418,
-    "files_in_filelist_no_longer_readable": 37
+    "lines_scanned": 1687975,
+    "bash_blocks_mentioning_bd": 67144,
+    "counted_invocations": 35667,
+    "sessions_with_bd_traffic": 4404,
+    "files_in_filelist_no_longer_readable": 191
   },
   "exclusions": {
     "drifting": {
-      "after_preregistration_lock": 66,
-      "note": "Grows as the corpus grows. It is the only exclusion that can, because it is screened before every other one."
+      "after_preregistration_lock": 88,
+      "note": "Screened before every other exclusion, so corpus GROWTH lands here and cannot move the counts below it."
     },
-    "frozen_at_the_preregistration_lock": {
-      "help_invocation": 962,
-      "placeholder_or_template": 2324
-    }
+    "frozen_against_corpus_growth": {
+      "help_invocation": 922,
+      "placeholder_or_template": 2255
+    },
+    "frozen_against_corpus_growth_note": "Lock-first ordering freezes these against corpus GROWTH only. It does not freeze them against ATTRITION: a transcript file named in the pinned filelist can be deleted or rotated away, and the invocations it held leave every count that is not the filelist itself. Re-running this analysis unchanged has moved help_invocation 962 -> 937 -> 922, dep_write 481 -> 477 -> 474 and files_in_filelist_no_longer_readable 37 -> 66 -> 191 across three reruns of the same pinned filelist. The earlier claim that the after-lock exclusion is 'the only exclusion that can drift' was false in the attrition direction and is withdrawn (amendment A1.10). The pinned filelist and its digest are what make a run reproducible in POPULATION; they cannot make the files persist."
   },
   "bucket_counts": {
-    "other": 34830,
+    "other": 34642,
     "attempted_read_via_write_verb": 38,
-    "dep_write": 481,
-    "memory_write": 21,
-    "targeted_read": 14,
+    "dep_write": 474,
+    "rejected_by_shipped_grammar": 7,
+    "bare_key_ambiguous": 9,
+    "targeted_read": 16,
     "search_read": 291,
     "browse_read": 138,
-    "injection": 47
+    "injection": 47,
+    "memory_write": 5
   },
   "E0.1_memory_write_rate": {
     "unambiguous": {
-      "session_averaged_share": 5.396581188939804e-05,
-      "sessions_with_at_least_one": 9,
-      "session_prevalence": 0.002037120869171571
+      "session_averaged_share": 7.614236727670203e-06,
+      "sessions_with_at_least_one": 4,
+      "session_prevalence": 0.0009082652134423251
     },
     "ambiguity_band_high": {
-      "session_averaged_share": 0.0003190241975483167,
-      "sessions_with_at_least_one": 17,
-      "session_prevalence": 0.003847894975101856
+      "session_averaged_share": 1.1980896407681382e-05,
+      "sessions_with_at_least_one": 5,
+      "session_prevalence": 0.0011353315168029065
+    },
+    "bare_key_band_high": {
+      "session_averaged_share": 0.0002644835483126974,
+      "sessions_with_at_least_one": 11,
+      "session_prevalence": 0.002497729336966394
     },
     "counts": {
-      "unambiguous": 9,
-      "ambiguous": 12
+      "unambiguous": 4,
+      "ambiguous": 1,
+      "bare_key_ambiguous": 9,
+      "rejected_by_shipped_grammar": 7
     },
-    "note": "The band's low end counts only writes that NAME the memory they store, which on the shipped CLI means an explicit key flag and nothing else: the positional argument is the content and the key is auto-generated from it. The high end adds every unkeyed write. Both ends are write counts; the band is over key resolvability, and only the low end can enter the join. Neither end contains an invocation carrying a flag the shipped binary does not declare; those are read attempts and are published beside this rate, in E0.2."
+    "note": "The inner band's low end counts only writes that NAME the memory they store, which on the shipped CLI means an explicit key flag and nothing else: the positional argument is the content and the key is auto-generated from it. Its high end adds the accepted writes that supply no key. Only the low end can enter the join. The OUTER end adds the bare single-positional captures, which the shipped help says are RECALLED rather than stored when the argument names an existing memory - a fact about the store, which no transcript records. No end contains an invocation the shipped binary refuses, whether on an undeclared flag (published in E0.2 as attempted reads) or on positional arity (published in its own bucket); an invocation that is rejected stored nothing."
   },
   "E0.2_memory_read_rates": {
     "targeted_read": {
-      "session_averaged_share": 4.476390309600837e-05,
+      "session_averaged_share": 4.799990637621022e-05,
       "sessions_with_at_least_one": 5,
-      "session_prevalence": 0.0011317338162064282
+      "session_prevalence": 0.0011353315168029065
     },
     "search_read": {
-      "session_averaged_share": 0.003418861282010963,
+      "session_averaged_share": 0.0034287566064000775,
       "sessions_with_at_least_one": 108,
-      "session_prevalence": 0.02444545043005885
+      "session_prevalence": 0.02452316076294278
     },
     "browse_read": {
-      "session_averaged_share": 0.001459364741136177,
+      "session_averaged_share": 0.0014582763004845943,
       "sessions_with_at_least_one": 67,
-      "session_prevalence": 0.015165233137166138
+      "session_prevalence": 0.015213442325158947
     },
     "attempted_read_via_write_verb": {
-      "session_averaged_share": 0.0004284315816027579,
+      "session_averaged_share": 0.0004297932440630808,
       "sessions_with_at_least_one": 36,
-      "session_prevalence": 0.008148483476686284
+      "session_prevalence": 0.008174386920980926
     },
+    "targeted_read_bare_key_band_high": {
+      "session_averaged_share": 0.0003005025582812263,
+      "sessions_with_at_least_one": 10,
+      "session_prevalence": 0.002270663033605813
+    },
+    "bare_key_ambiguous": {
+      "session_averaged_share": 0.000252502651905016,
+      "sessions_with_at_least_one": 7,
+      "session_prevalence": 0.001589464123524069
+    },
+    "bare_key_ambiguous_note": "A bare single-positional capture. The shipped help says such an argument is RECALLED, not stored, when it names an existing memory. The same count therefore bands E0.1 from above and the targeted-read rate from above; it is inside neither point estimate.",
+    "rejected_by_shipped_grammar": {
+      "session_averaged_share": 5.4608403875000124e-05,
+      "sessions_with_at_least_one": 7,
+      "session_prevalence": 0.001589464123524069
+    },
+    "rejected_by_shipped_grammar_note": "A write verb carrying a positional count its own usage line refuses (zero, including the keyed-but-contentless form, or two). Neither a write nor a read: nothing was stored and nothing was retrieved.",
     "attempted_read_note": "A write verb carrying a flag the shipped bd 1.3.0-rc.1 does not declare. The binary rejects these, so nothing was stored and nothing was retrieved: they are read ATTEMPTS, published beside E0.1 rather than inside it.",
     "note": "Never summed into one read rate. The list-all bucket carries no key and is join-ineligible by construction, so pooling it inflates apparent retrieval."
   },
   "E0.4_read_after_write": {
-    "keyed_targeted_reads": 14,
+    "keyed_targeted_reads": 16,
     "raw_any": 0.0,
     "raw_cross_session": 0.0,
     "raw_cross_working_directory": 0.0,
@@ -88,13 +116,13 @@
       "primary": "executed keyed reads only (preregistered): the keyed read verb",
       "widened": "primary plus keyed attempted reads spelled with a write verb, which the shipped binary rejects on the undeclared flag",
       "widened_result": {
-        "keyed_reads": 50,
-        "raw_any": 0.02,
-        "raw_cross_session": 0.02,
+        "keyed_reads": 52,
+        "raw_any": 0.0,
+        "raw_cross_session": 0.0,
         "raw_cross_working_directory": 0.0,
         "hits": {
-          "any": 1,
-          "cross_session": 1,
+          "any": 0,
+          "cross_session": 0,
           "cross_working_directory": 0
         }
       },
@@ -106,20 +134,20 @@
     "denominator_note": "The search and list-all buckets enter neither denominator. They carry no key and can never join, so folding them in would deflate RAW by construction."
   },
   "E0.5_memory_verb_share_of_bd_traffic": {
-    "session_averaged_share": 0.005670445705394222,
+    "session_averaged_share": 0.005683918009511661,
     "sessions_with_at_least_one": 129,
-    "session_prevalence": 0.029198732458125848
+    "session_prevalence": 0.029291553133514985
   },
   "reference_buckets": {
     "injection": {
-      "session_averaged_share": 0.0007342372660104866,
+      "session_averaged_share": 0.0007365713535954427,
       "sessions_with_at_least_one": 41,
-      "session_prevalence": 0.009280217292892712
+      "session_prevalence": 0.009309718437783833
     },
     "dep_write": {
-      "session_averaged_share": 0.003390727195260818,
-      "sessions_with_at_least_one": 173,
-      "session_prevalence": 0.03915799004074242
+      "session_averaged_share": 0.003343080148128291,
+      "sessions_with_at_least_one": 171,
+      "session_prevalence": 0.0388283378746594
     },
     "note": "Neither is a memory verb and neither enters E0.5. The dependency bucket is here because the shorthand form has been miscounted as a memory verb."
   },

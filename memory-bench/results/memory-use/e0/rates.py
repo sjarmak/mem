@@ -37,6 +37,7 @@ PREREG_PATH = HERE / "preregistration.json"
 #: both digests ship with every number so a published rate names its exact rule set.
 AMENDMENT_PATH = HERE / "preregistration-amendment-1.json"
 AMENDMENT_2_PATH = HERE / "preregistration-amendment-2.json"
+AMENDMENT_3_PATH = HERE / "preregistration-amendment-3.json"
 
 
 @dataclass(frozen=True)
@@ -138,14 +139,17 @@ def record_invocation(
         tally.excluded_after_prereg_lock += 1
         return
 
-    # The screen runs on BOTH forms. `strip_redirections` consumes `<key>` as an
-    # input redirection, so a documentation example reaches the classifier as a
-    # bare verb and lands in a real bucket - which is how the preregistered
-    # placeholder arm went quiet. Screening the pre-strip tokenization too
-    # restores it (amendment A1.5).
+    # The screen runs on BOTH forms, but not with the same rule. On the analysed
+    # argv it is the full preregistered alternation. On the pre-strip tokenization
+    # it is narrowed to `<...>`, the one shape `strip_redirections` erases and
+    # therefore the only one the stripped form can have lost (A1.5, as corrected by
+    # A1.7). Running the full alternation on the raw form judged tokens the
+    # analysed form does not contain: a redirection TARGET survives there, and
+    # `^\$` fired on `$SP/allbeads.json`, discarding 20 invocations - including two
+    # executed keyed reads - for carrying a `$` the strip had already removed.
     reason = cligrammar.is_skippable(argv)
     if reason is None and raw_argv is not None:
-        reason = cligrammar.is_skippable(raw_argv)
+        reason = cligrammar.is_skippable_raw(raw_argv)
     if reason is not None:
         tally.skipped[reason] += 1
         return
@@ -203,25 +207,43 @@ def session_rate(tally: Tally, numerator_keys: tuple[str, ...]) -> dict[str, flo
 
 
 def write_band(tally: Tally) -> dict[str, Any]:
-    """E0.1 as a band, never a point estimate (see preregistration ambiguity_band)."""
+    """E0.1 over TWO nested bands, never a point estimate.
+
+    The inner band is the preregistered one and is over KEY RESOLVABILITY: both of
+    its ends are invocations the shipped grammar accepts as writes, and they differ
+    only in whether the stored memory is named. The outer band is over WHETHER IT IS
+    A WRITE AT ALL, and it exists because the shipped help documents a bare
+    single-positional capture as a RECALL when the argument names an existing
+    memory. Nesting them keeps the two kinds of uncertainty from being read as one.
+    """
     low = session_rate(tally, ("write_unambiguous",))
     high = session_rate(tally, ("write_unambiguous", "write_ambiguous"))
+    outer = session_rate(tally, ("write_unambiguous", "write_ambiguous", verbs.BARE_KEY_AMBIGUOUS))
+    total = sum(c[verbs.BARE_KEY_AMBIGUOUS] for c in tally.per_session.values())
     return {
         "unambiguous": low,
         "ambiguity_band_high": high,
+        "bare_key_band_high": outer,
         "counts": {
             "unambiguous": sum(c["write_unambiguous"] for c in tally.per_session.values()),
             "ambiguous": sum(c["write_ambiguous"] for c in tally.per_session.values()),
+            "bare_key_ambiguous": total,
+            "rejected_by_shipped_grammar": sum(
+                c[verbs.REJECTED_BY_SHIPPED_GRAMMAR] for c in tally.per_session.values()
+            ),
         },
         "note": (
-            "The band's low end counts only writes that NAME the memory they store, "
-            "which on the shipped CLI means an explicit key flag and nothing else: the "
-            "positional argument is the content and the key is auto-generated from it. "
-            "The high end adds every unkeyed write. Both ends are write counts; the band "
-            "is over key resolvability, and only the low end can enter the join. "
-            "Neither end contains an invocation carrying a flag the shipped binary "
-            "does not declare; those are read attempts and are published beside "
-            "this rate, in E0.2."
+            "The inner band's low end counts only writes that NAME the memory they "
+            "store, which on the shipped CLI means an explicit key flag and nothing "
+            "else: the positional argument is the content and the key is auto-generated "
+            "from it. Its high end adds the accepted writes that supply no key. Only "
+            "the low end can enter the join. The OUTER end adds the bare "
+            "single-positional captures, which the shipped help says are RECALLED "
+            "rather than stored when the argument names an existing memory - a fact "
+            "about the store, which no transcript records. No end contains an "
+            "invocation the shipped binary refuses, whether on an undeclared flag "
+            "(published in E0.2 as attempted reads) or on positional arity (published "
+            "in its own bucket); an invocation that is rejected stored nothing."
         ),
     }
 
@@ -346,6 +368,9 @@ def analyse(filelist: pathlib.Path) -> dict[str, Any]:
         "preregistration_amendment_2_sha256": hashlib.sha256(
             AMENDMENT_2_PATH.read_bytes()
         ).hexdigest(),
+        "preregistration_amendment_3_sha256": hashlib.sha256(
+            AMENDMENT_3_PATH.read_bytes()
+        ).hexdigest(),
         "filelist_sha256": hashlib.sha256(filelist.read_bytes()).hexdigest(),
         "population": {
             "files_in_filelist": len(paths),
@@ -359,11 +384,24 @@ def analyse(filelist: pathlib.Path) -> dict[str, Any]:
             "drifting": {
                 "after_preregistration_lock": tally.excluded_after_prereg_lock,
                 "note": (
-                    "Grows as the corpus grows. It is the only exclusion that can, "
-                    "because it is screened before every other one."
+                    "Screened before every other exclusion, so corpus GROWTH lands "
+                    "here and cannot move the counts below it."
                 ),
             },
-            "frozen_at_the_preregistration_lock": dict(tally.skipped),
+            "frozen_against_corpus_growth": dict(tally.skipped),
+            "frozen_against_corpus_growth_note": (
+                "Lock-first ordering freezes these against corpus GROWTH only. It does "
+                "not freeze them against ATTRITION: a transcript file named in the "
+                "pinned filelist can be deleted or rotated away, and the invocations it "
+                "held leave every count that is not the filelist itself. Re-running this "
+                "analysis unchanged has moved help_invocation 962 -> 937 -> 922, "
+                "dep_write 481 -> 477 -> 474 and files_in_filelist_no_longer_readable "
+                "37 -> 66 -> 191 across three reruns of the same pinned filelist. The "
+                "earlier claim that the after-lock exclusion is 'the only exclusion "
+                "that can drift' was false in the attrition direction and is withdrawn "
+                "(amendment A1.10). The pinned filelist and its digest are what make a "
+                "run reproducible in POPULATION; they cannot make the files persist."
+            ),
         },
         "bucket_counts": dict(tally.buckets),
         "E0.1_memory_write_rate": write_band(tally),
@@ -373,6 +411,24 @@ def analyse(filelist: pathlib.Path) -> dict[str, Any]:
             "browse_read": session_rate(tally, (verbs.BROWSE_READ,)),
             "attempted_read_via_write_verb": session_rate(
                 tally, (verbs.ATTEMPTED_READ_VIA_WRITE_VERB,)
+            ),
+            "targeted_read_bare_key_band_high": session_rate(
+                tally, (verbs.TARGETED_READ, verbs.BARE_KEY_AMBIGUOUS)
+            ),
+            "bare_key_ambiguous": session_rate(tally, (verbs.BARE_KEY_AMBIGUOUS,)),
+            "bare_key_ambiguous_note": (
+                "A bare single-positional capture. The shipped help says such an "
+                "argument is RECALLED, not stored, when it names an existing memory. "
+                "The same count therefore bands E0.1 from above and the targeted-read "
+                "rate from above; it is inside neither point estimate."
+            ),
+            "rejected_by_shipped_grammar": session_rate(
+                tally, (verbs.REJECTED_BY_SHIPPED_GRAMMAR,)
+            ),
+            "rejected_by_shipped_grammar_note": (
+                "A write verb carrying a positional count its own usage line refuses "
+                "(zero, including the keyed-but-contentless form, or two). Neither a "
+                "write nor a read: nothing was stored and nothing was retrieved."
             ),
             "attempted_read_note": (
                 "A write verb carrying a flag the shipped bd 1.3.0-rc.1 does not "
