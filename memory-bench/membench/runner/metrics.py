@@ -13,6 +13,7 @@ from membench.metrics.scorers import (
     RetentionInputs,
     RetrievalInputs,
     SynthesisInputs,
+    content_recovered_write_ids,
     score_efficiency,
     score_retention,
     score_retrieval,
@@ -24,6 +25,7 @@ from membench.runner.tool_surface import (
     assert_recall_is_bounded,
     memory_invocations,
     observed_requested_ids,
+    observed_written_content,
     partition_memory_calls,
 )
 from membench.schemas.memory_event import MemoryEvent
@@ -140,7 +142,23 @@ def compute_metrics(
         )
     )
 
-    written_ids = [mid for ev in write_events for mid in ev.written_ids]
+    if step.write_is_endogenous:
+        # The agent chose where to put it, so there is no harness id to compare against: the
+        # write is credited when the step's AUTHORED literal is recoverable from what the agent
+        # stored, read off observed argv (never off `writes_performed`, which is the subject's own
+        # account). Keeping the id-exact path for every other step is what leaves the forced-loop
+        # arms — factorial_behavioral, synthetic_arms, memory_necessity_gate — unmoved.
+        #
+        # Noise is not measurable on this path and is not fabricated: under a self-chosen
+        # namespace an unexpected key is indistinguishable from a differently-named required one,
+        # so `written_ids` carries only the recovered ids and `over_retention_rate` reads 0.0 —
+        # an honest "not measured here", the same convention `RetrievalInputs` uses for an arm
+        # that seeds no distractors.
+        written_ids = content_recovered_write_ids(
+            observed_written_content(memory_calls), step.expected_memory_writes
+        )
+    else:
+        written_ids = [mid for ev in write_events for mid in ev.written_ids]
     retention = score_retention(
         RetentionInputs(
             written_ids=written_ids,

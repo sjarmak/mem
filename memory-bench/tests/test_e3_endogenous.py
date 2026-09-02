@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import pytest
 
-from membench.metrics.scorers import score_efficiency
+from membench.metrics.scorers import content_recovered_write_ids, score_efficiency
 from membench.report.e3_closure import ENDOGENOUS_READ_ARMS, _main
 from membench.runner.agent import AgentStepResult
 from membench.runner.metrics import compute_metrics
@@ -35,6 +35,7 @@ from membench.runner.tool_surface import (
     memory_invocations_in_command,
     observed_requested_ids,
 )
+from membench.schemas.memory_event import MemoryBackend, MemoryEvent, MemoryOperation
 from membench.schemas.sequence import OutcomeCheck, SequenceStep
 from membench.schemas.trace import ToolCall
 
@@ -65,6 +66,21 @@ def result(tool_calls: list[ToolCall], **overrides: object) -> AgentStepResult:
     }
     fields.update(overrides)
     return AgentStepResult(**fields)  # type: ignore[arg-type]
+
+
+def _harness_write_event(written_id: str) -> MemoryEvent:
+    """One harness-performed write event — the id-exact path's input."""
+    return MemoryEvent(
+        event_id="e1",
+        trial_id="t",
+        session_id="sess",
+        step_id="s1",
+        timestamp="2026-01-01T00:00:00Z",
+        concrete_tool="harness",
+        normalized_operation=MemoryOperation.WRITE,
+        backend=MemoryBackend.FILESYSTEM,
+        written_ids=[written_id],
+    )
 
 
 def test_tool_events_reach_trial() -> None:
@@ -259,3 +275,87 @@ def test_endogenous_read_halts_on_a_cued_arm() -> None:
             _main(["--seeds", "20", "--arm", arm, "--endogenous-read"])
         assert excinfo.value.code == 2
     assert "lexical" in ENDOGENOUS_READ_ARMS
+
+
+def test_endogenous_write_is_graded_on_content_not_id() -> None:
+    """A right fact under a self-chosen key is a HIT; a right key over a wrong fact is not.
+
+    The id-namespace half of this bead. The read side is keyed on ids, so an agent that picks its
+    own write id produces an id no harness-authored id set can name — grading the write by id
+    equality therefore scores ``write_hit_rate`` as id-naming discipline, and an agent that stored
+    exactly the required literal scores zero for choosing a different key. Both directions are
+    pinned because only one of them is a loosening: the second asserts the content grade did not
+    become a free pass for anything written under the expected name."""
+    expected = {"rotation-plan": "rotate on the 1st"}
+    endogenous = step(write_is_endogenous=True, expected_memory_writes=expected)
+
+    own_key = compute_metrics(
+        endogenous,
+        result([bash("bd remember my-own-note 'rotate on the 1st'")]),
+        None,
+        [],
+        reads_enabled=False,
+    )
+    assert own_key.retention.write_hit_rate == 1.0
+    assert own_key.retention.expected_memory_written is True
+
+    # Harness-named key, wrong content: the key is excluded from the graded text, so naming the
+    # id right earns nothing.
+    right_id_wrong_fact = compute_metrics(
+        endogenous,
+        result([bash("bd remember rotation-plan 'rotate on the 15th'")]),
+        None,
+        [],
+        reads_enabled=False,
+    )
+    assert right_id_wrong_fact.retention.write_hit_rate == 0.0
+    assert right_id_wrong_fact.retention.expected_memory_written is False
+    assert right_id_wrong_fact.retention.write_miss_rate == 1.0
+
+    # A key and nothing else stores no content, even when the key itself spells the literal: the
+    # chosen key is excluded from the graded text, so this is a miss rather than a hit earned by
+    # naming.
+    key_only = compute_metrics(
+        endogenous,
+        result([bash("bd remember 'rotate on the 1st'")]),
+        None,
+        [],
+        reads_enabled=False,
+    )
+    assert key_only.retention.write_hit_rate == 0.0
+
+    silent = compute_metrics(endogenous, result([]), None, [], reads_enabled=False)
+    assert silent.retention.write_hit_rate == 0.0
+
+
+def test_id_exact_write_grade_is_untouched_off_the_endogenous_path() -> None:
+    """The forced-loop arms keep id equality: a self-chosen key is a MISS when the flag is off.
+
+    factorial_behavioral / synthetic_arms / memory_necessity_gate all grade writes the harness
+    performed, and their expectations move the moment the content path leaks onto a default step.
+    """
+    expected = {"rotation-plan": "rotate on the 1st"}
+    forced = step(expected_memory_writes=expected)
+    calls = [bash("bd remember my-own-note 'rotate on the 1st'")]
+
+    hit = compute_metrics(
+        forced,
+        result(calls),
+        None,
+        [_harness_write_event("rotation-plan")],
+        reads_enabled=False,
+    )
+    assert hit.retention.write_hit_rate == 1.0
+
+    # Nothing recorded: observed argv is NOT consulted off the endogenous path, so the agent's own
+    # store of the literal does not rescue the score.
+    miss = compute_metrics(forced, result(calls), None, [], reads_enabled=False)
+    assert miss.retention.write_hit_rate == 0.0
+
+
+def test_empty_authored_literal_is_never_a_free_write() -> None:
+    """An empty literal must never be a hit: ``states_value`` matches it at any boundary."""
+    assert content_recovered_write_ids("rotate on the 1st!", {"blank": ""}) == []
+    assert content_recovered_write_ids("rotate on the 1st", {"k": "rotate on the 1st"}) == ["k"]
+    # Word-boundary anchored, like every other authored-literal match in scorers.py.
+    assert content_recovered_write_ids("checkout_v2 shipped", {"k": "v2"}) == []

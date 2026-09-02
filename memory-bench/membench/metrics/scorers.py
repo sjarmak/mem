@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 
 from membench.schemas.handoff import (
@@ -65,6 +65,28 @@ def states_value(text: str, value: str) -> bool:
     ``v2`` does not match ``checkout_v2``) — a format-anchored mechanical match on an
     authored ground-truth string, not a semantic heuristic (the ZFC boundary)."""
     return re.search(rf"(?<!\w){re.escape(value)}(?!\w)", text) is not None
+
+
+def content_recovered_write_ids(stored_text: str, expected_writes: Mapping[str, str]) -> list[str]:
+    """The expected write ids whose AUTHORED LITERAL is recoverable from ``stored_text``.
+
+    The endogenous-write grade (E3b): an agent that chooses its own key produces an id no
+    harness-authored id set can name, so grading the write by id equality measures id-naming
+    discipline and scores a correct fact stored under a self-chosen key as a miss. Here the id is
+    credited when the step's authored content for it is stated in what the agent actually stored,
+    word-boundary matched by ``states_value`` — the same mechanical authored-literal matcher used
+    everywhere else in this module, never a fuzzy or semantic one (anything fuzzier belongs to a
+    judge outside this file).
+
+    An empty authored literal is never a hit: ``states_value(text, "")`` is true of any text, so
+    crediting it would hand every endogenous step a free write.
+
+    Order follows ``expected_writes`` so the returned list is deterministic."""
+    return [
+        mid
+        for mid, literal in expected_writes.items()
+        if literal and states_value(stored_text, literal)
+    ]
 
 
 def _call_args_text(call: ToolCall) -> str:

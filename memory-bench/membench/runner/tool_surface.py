@@ -334,6 +334,18 @@ class MemoryInvocation:
         return self.verb == ENUMERATE_VERB and not self.operands
 
     @property
+    def stored_content(self) -> tuple[str, ...]:
+        """The operand words a WRITE stored, MINUS the key it stored them under.
+
+        ``bd remember <key> <content...>``: the first operand is the key the agent chose for
+        itself, and it is exactly what an endogenous write grade must not read — grading a write
+        by its key measures id-naming discipline, which is the one thing an endogenous write is
+        free to decide. Empty for a read: a read stores nothing."""
+        if not self.is_write:
+            return ()
+        return self.operands[1:]
+
+    @property
     def requested_ids(self) -> tuple[str, ...]:
         """The ids a KEYED read named. Empty for a search: its operand is a query, not an id."""
         return self.operands if self.verb == "recall" else ()
@@ -913,6 +925,19 @@ def observed_requested_ids(calls: Iterable[ToolCall]) -> list[str]:
             if memory_id not in seen:
                 seen.append(memory_id)
     return seen
+
+
+def observed_written_content(calls: Iterable[ToolCall]) -> str:
+    """Everything the agent STORED across ``calls``, as one text, chosen keys excluded.
+
+    The harness's own reading of argv (the write-side twin of ``observed_requested_ids``), so an
+    endogenous write can be graded on whether the required literal is recoverable from the stored
+    CONTENT under whatever key the agent chose, rather than on whether it guessed the harness's
+    id. Words are joined with newlines so two separate writes never fuse into a token run neither
+    of them stated."""
+    return "\n".join(
+        word for invocation in memory_invocations(calls) for word in invocation.stored_content
+    )
 
 
 def enumerate_invocations(calls: Iterable[ToolCall]) -> list[MemoryInvocation]:
