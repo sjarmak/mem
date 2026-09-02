@@ -33,7 +33,8 @@ is (see the constants below for the emitted text):
   fixture no retrieval field discriminates among arms that honor ``requested_ids``;
   only a NON-COMPLIANT read-everything arm moves any of them;
 - ``forbidden_write_rate`` is a channel no wired agent exercises
-  (``FORBIDDEN_WRITE_NOT_EXERCISED``);
+  (``FORBIDDEN_WRITE_NOT_EXERCISED``), decided on the WRITE COUNT on forbidden-bearing
+  steps rather than on the rate, which cannot tell "wrote nothing" from "wrote clean";
 - the floor is an ID-PRESENCE short-circuit, so non-id-keyed arms score 0 by
   construction (``FLOOR_IS_ID_PRESENCE``);
 - a control-condition arm performs zero writes, so its ceiling is not a closure
@@ -141,7 +142,7 @@ FORBIDDEN_WRITE_DENOMINATOR = (
     "rate toward zero if they were averaged in"
 )
 FORBIDDEN_WRITE_NOT_EXERCISED = (
-    "NOT EXERCISED: no wired agent writes on a step carrying forbidden ids "
+    "NOT EXERCISED: ZERO writes occurred on any step carrying forbidden ids "
     "(ScriptedAgent/NeverWritesAgent persist exactly expected_memory_writes, and the "
     "apply step expects none), so 0.0 is structural rather than a measured clean run"
 )
@@ -195,6 +196,11 @@ class ClosureCell:
     # From MetricsBundle.retention, summed over the sequence's write-bearing steps.
     write_hit_rate: float
     forbidden_write_rate: float
+    # How many ids the agent wrote on the steps that CARRY forbidden ids. A rate of
+    # 0.0 is ambiguous on its own — it reads the same whether the agent wrote nothing
+    # there or wrote only permitted ids — so the count is carried alongside it and is
+    # what "exercised" is decided on.
+    forbidden_step_write_count: int
 
 
 def _experiment(arm: str, agent_config_id: str) -> ExperimentConfig:
@@ -237,6 +243,11 @@ def score_closure_run(world: ClosureWorld, run: SequenceRun) -> ClosureCell:
     # defined, exactly as write_hit_rate is restricted to write-expecting steps.
     forbidden_steps = [s.step_id for s in world.sequence.steps if s.forbidden_memory_writes]
     forbidden = [trials[sid].metrics.retention.forbidden_write_rate for sid in forbidden_steps]
+    # _ratio(n_forbidden, len(written)) collapses "wrote nothing here" and "wrote only
+    # permitted ids here" to the same 0.0. The write COUNT on those steps separates
+    # them, so `exercised` can mean "a write actually happened on a forbidden-bearing
+    # step" rather than the weaker "the forbidden rate came out above zero".
+    forbidden_writes = sum(len(trials[sid].trace.files_written) for sid in forbidden_steps)
 
     return ClosureCell(
         seed=world.seed,
@@ -249,6 +260,7 @@ def score_closure_run(world: ClosureWorld, run: SequenceRun) -> ClosureCell:
         missed_required_memory_count=retrieval.missed_required_memory_count,
         write_hit_rate=mean(write_hits) if write_hits else 0.0,
         forbidden_write_rate=mean(forbidden) if forbidden else 0.0,
+        forbidden_step_write_count=forbidden_writes,
     )
 
 
@@ -281,7 +293,11 @@ def summarize_closure(
     is_ceiling_run = agent_name == "scripted" and arm in ID_EXACT_ARMS
     halt = is_ceiling_run and closure_rate != 1.0
     condition = _CONTROL_CONDITIONS.get(arm, Condition.MEMORY_ENABLED)
-    forbidden_exercised = any(c.forbidden_write_rate > 0.0 for c in cells)
+    # Exercised = a write actually OCCURRED on a forbidden-bearing step. Reading it
+    # off the rate instead would call the channel unexercised whenever an agent wrote
+    # there but happened to write only permitted ids - which is a measured clean run,
+    # the one case the "structural 0.0" caveat must NOT be attached to.
+    forbidden_exercised = any(c.forbidden_step_write_count > 0 for c in cells)
     return {
         "generator_version": GENERATOR_VERSION,
         "arm": arm,
@@ -309,6 +325,7 @@ def summarize_closure(
             "write_hit_rate": mean(c.write_hit_rate for c in cells) if cells else 0.0,
             "forbidden_write_rate": (mean(c.forbidden_write_rate for c in cells) if cells else 0.0),
             "forbidden_write_rate_exercised": forbidden_exercised,
+            "forbidden_step_write_count": sum(c.forbidden_step_write_count for c in cells),
             "forbidden_write_rate_denominator": FORBIDDEN_WRITE_DENOMINATOR,
             "forbidden_write_rate_note": (
                 FORBIDDEN_WRITE_DENOMINATOR
