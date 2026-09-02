@@ -122,3 +122,95 @@ def noop_cli_runner(argv: Sequence[str], **kwargs: object) -> subprocess.Complet
     """A ``claude -p`` stand-in that spawns nothing and says nothing (an empty stream parses to no
     tool calls and no result) — for tests that care only about WHICH invocations were recorded."""
     return subprocess.CompletedProcess(list(argv), returncode=0, stdout="", stderr="")
+
+
+# A SECOND subject for the multi-value shape (mem-9q8dg follow-up). One-value tasks are the only
+# thing the generator authors today, and every twin test ran on them — so the twin's block-building
+# at >1 value, where an ordering of the values first exists, was unexercised.
+SECOND_CURRENT = "hourly"
+SECOND_STALE = "weekly"
+
+
+def toolreq_seq_two_subjects(seq_id: str = "w-mv3") -> BenchmarkSequence:
+    """A tool-requiring sequence whose goal action scores TWO current values (each with its own
+    superseded predecessor), and whose subject list in the request is authored in the OPPOSITE
+    order to ``arg_values``.
+
+    That inversion is the point: it is the case where emitting the twin's context block in the
+    action's authored order would imply a positional pairing to the request's subject list that is
+    simply wrong. The single-value fixture cannot express it — with one value every order is the
+    same order.
+    """
+    subjects = ("the data retention window", "the backup cadence")
+    return BenchmarkSequence(
+        sequence_id=seq_id,
+        title=f"{seq_id} initiative: reconcile retention and cadence",
+        domain="data-infrastructure",
+        goal="Deliver the current initiative.",
+        steps=[
+            SequenceStep(
+                step_id=f"{seq_id}-s0",
+                user_request=f"Record the current value of {subjects[0]}.",
+                expected_memory_writes={"m-a1": f"{subjects[0]} is {STALE} — by A. Ree in #chat"},
+            ),
+            SequenceStep(
+                step_id=f"{seq_id}-s1",
+                user_request=f"Record the current value of {subjects[0]}.",
+                expected_memory_writes={
+                    "m-a2": f"{subjects[0]} is {CURRENT} — by B. Cee in #meeting"
+                },
+                superseded_memory_ids=["m-a1"],
+            ),
+            SequenceStep(
+                step_id=f"{seq_id}-s2",
+                user_request=f"Record the current value of {subjects[1]}.",
+                expected_memory_writes={
+                    "m-b1": f"{subjects[1]} is {SECOND_STALE} — by A. Ree in #chat"
+                },
+            ),
+            SequenceStep(
+                step_id=f"{seq_id}-s3",
+                user_request=f"Record the current value of {subjects[1]}.",
+                expected_memory_writes={
+                    "m-b2": f"{subjects[1]} is {SECOND_CURRENT} — by B. Cee in #meeting"
+                },
+                superseded_memory_ids=["m-b1"],
+            ),
+            SequenceStep(
+                step_id=f"{seq_id}-goal",
+                user_request=(
+                    "Deliver the current initiative. Using the tool `apply_config`, apply "
+                    # subjects reversed relative to arg_values below, on purpose
+                    f"the current value of: {subjects[1]}, {subjects[0]}."
+                ),
+                available_tools=["apply_config"],
+                expected_memory_reads=["m-a2", "m-b2"],
+                outcome_checks=[
+                    OutcomeCheck(
+                        check_id=f"{seq_id}-goal-check",
+                        description="goal requires apply_config carrying both current values",
+                        requires_memory=["m-a2", "m-b2"],
+                        requires_action=[
+                            ExpectedAction(
+                                tool="apply_config",
+                                arg_values=[CURRENT, SECOND_CURRENT],
+                                forbidden_values=[STALE, SECOND_STALE],
+                            )
+                        ],
+                    )
+                ],
+            ),
+        ],
+    )
+
+
+def multi_value_corpus(
+    tmp_path: Path, seq_id: str = "w-mv3"
+) -> tuple[list[BenchmarkSequence], list[ToolReqRealAgentTask]]:
+    """Seed and load a one-sequence frozen corpus whose single task scores TWO current values."""
+    corpus_dir = tmp_path / "corpus"
+    (corpus_dir / "0").mkdir(parents=True)
+    (corpus_dir / "0" / "sequences.json").write_text(
+        json.dumps([toolreq_seq_two_subjects(seq_id).model_dump()]), encoding="utf-8"
+    )
+    return load_corpus_with_sequences(corpus_dir)

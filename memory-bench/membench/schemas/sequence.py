@@ -106,6 +106,14 @@ class SequenceStep(BaseModel):
     # sequences, so existing fixtures stay valid.
     record_class: str | None = None
     disposition: str | None = None
+    # E1 discrimination label (mem-9q8dg). True => the step's goal cannot be reached without
+    # recalled memory (the value it must carry is stated nowhere in-context); False => the
+    # matched UNNECESSARY twin, whose goal states the same value in the request itself, so a
+    # no-memory arm can solve it. None => unlabelled (every pre-E1 fixture): the label is a
+    # claim about the step's information geometry, and defaulting it to True would assert that
+    # claim for steps nothing ever verified. The label is a LABEL — necessity is verified
+    # outcome-side by ``runner.e1_necessity_preflight``, never by this field.
+    memory_necessary: bool | None = None
 
 
 class BenchmarkSequence(BaseModel):
