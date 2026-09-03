@@ -159,15 +159,52 @@ NATIVE_MEMORY_SEGMENT = "memory"
 # nothing.
 NATIVE_MEMORY_BASH_TOOL = "Bash"
 
-# Commands that WRITE their target: `tee` writes every path operand; `cp`/`mv` write the LAST
-# operand and read the others (a copy OUT of the memory dir is a read of it); `sed` writes under
-# `-i`/`--in-place`. Every other command word reads the paths it names.
-NATIVE_MEMORY_BASH_WRITE_COMMANDS: tuple[str, ...] = ("tee", "cp", "mv")
+# Commands that WRITE their target. The first list writes EVERY operand it names (`tee` writes
+# each path; `rm`, `touch`, `chmod`, `chown`, `truncate`, `mkdir`, `rmdir` mutate each — a
+# command that deletes or re-modes the memory file is a mutation of it, never a read, review
+# G1). The second writes its LAST operand and reads the others (`cp`/`mv` out of the memory dir
+# read it; `ln`'s last operand is the link it creates). `sed` writes under `-i`/`--in-place`.
+# Every other command word reads the paths it names.
+NATIVE_MEMORY_BASH_WRITE_ALL_OPERANDS: tuple[str, ...] = (
+    "tee",
+    "rm",
+    "touch",
+    "chmod",
+    "chown",
+    "truncate",
+    "mkdir",
+    "rmdir",
+)
+NATIVE_MEMORY_BASH_WRITE_LAST_OPERAND: tuple[str, ...] = ("cp", "mv", "ln")
 NATIVE_MEMORY_BASH_SED_IN_PLACE_FLAGS: tuple[str, ...] = ("-i", "--in-place")
 
 # Wrapper words that precede the real command word without changing what it does to its paths.
 # Skipped, with their own option words (and `env`'s assignments), before the direction is read.
+# An option that takes a SEPARATE value word (`sudo -u me`, `nice -n 5`) consumes it too, or
+# the value would be read as the command word and `sudo -u me tee <path>` would score a read
+# (review G1). Attached forms (`--user=me`, `-n5`) are one word and need no entry.
 NATIVE_MEMORY_BASH_WRAPPERS: tuple[str, ...] = ("command", "sudo", "env", "time", "nice", "exec")
+NATIVE_MEMORY_BASH_WRAPPER_VALUE_FLAGS: tuple[tuple[str, str], ...] = (
+    ("sudo", "-u"),
+    ("sudo", "-g"),
+    ("sudo", "-h"),
+    ("sudo", "-p"),
+    ("sudo", "-U"),
+    ("sudo", "-C"),
+    ("sudo", "-D"),
+    ("sudo", "-r"),
+    ("sudo", "-t"),
+    ("sudo", "-T"),
+    ("env", "-u"),
+    ("env", "-C"),
+    ("env", "-S"),
+    ("nice", "-n"),
+    ("nice", "--adjustment"),
+    ("time", "-f"),
+    ("time", "-o"),
+    ("time", "--format"),
+    ("time", "--output"),
+)
 
 # Redirect operators, as `shlex` tokenises them with punctuation_chars. A write redirect's target
 # is written; `<`'s target is read. `<<`/`<<<` name a delimiter or a string, not a file.
@@ -1391,17 +1428,26 @@ def _is_assignment(word: str) -> bool:
     return "=" in word and not word.startswith("-")
 
 
+def _wrapper_value_flags(wrapper: str) -> frozenset[str]:
+    return frozenset(
+        flag for name, flag in NATIVE_MEMORY_BASH_WRAPPER_VALUE_FLAGS if name == wrapper
+    )
+
+
 def _unwrapped(words: Sequence[str]) -> list[str]:
     """``words`` with leading ``VAR=value`` assignments and wrapper words (each with its own
-    option words) removed, so the first word left is the command whose semantics decide the
-    direction."""
+    option words and their separate values) removed, so the first word left is the command
+    whose semantics decide the direction."""
     rest = list(words)
     while rest and _is_assignment(rest[0]):
         rest.pop(0)
     while rest and PurePosixPath(rest[0]).name in NATIVE_MEMORY_BASH_WRAPPERS:
         wrapper = PurePosixPath(rest.pop(0)).name
+        value_flags = _wrapper_value_flags(wrapper)
         while rest and (rest[0].startswith("-") or (wrapper == "env" and _is_assignment(rest[0]))):
-            rest.pop(0)
+            flag = rest.pop(0)
+            if flag in value_flags and rest:
+                rest.pop(0)
     return rest
 
 
@@ -1421,9 +1467,9 @@ def _command_path_uses(words: Sequence[str]) -> list[_BashPathUse]:
         for f in NATIVE_MEMORY_BASH_SED_IN_PLACE_FLAGS
     )
     written: set[str] = set()
-    if name == "tee" or in_place:
+    if name in NATIVE_MEMORY_BASH_WRITE_ALL_OPERANDS or in_place:
         written = set(rest)
-    elif name in NATIVE_MEMORY_BASH_WRITE_COMMANDS and len(operands) >= 2:
+    elif name in NATIVE_MEMORY_BASH_WRITE_LAST_OPERAND and len(operands) >= 2:
         written = {operands[-1]}
     return [
         _BashPathUse(word, is_write=word in written, anchorable=not word.startswith("-"))

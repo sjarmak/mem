@@ -1246,6 +1246,64 @@ def test_a_command_the_tokenizer_refuses_is_still_scanned_for_the_path(
     assert accesses[0].tokenizer_failed is True
 
 
+@pytest.mark.parametrize(
+    ("template", "name"),
+    [
+        ("rm {m}/MEMORY.md", "MEMORY.md"),
+        ("rm -rf {m}", "memory"),
+        ("touch {m}/MEMORY.md", "MEMORY.md"),
+        ("chmod 600 {m}/MEMORY.md", "MEMORY.md"),
+        ("chown me {m}/MEMORY.md", "MEMORY.md"),
+        ("truncate -s 0 {m}/MEMORY.md", "MEMORY.md"),
+        ("ln -s /tmp/notes.md {m}/MEMORY.md", "MEMORY.md"),
+        ("mkdir -p {m}/topics", "topics"),
+        ("rmdir {m}/topics", "topics"),
+    ],
+)
+def test_a_command_that_mutates_the_memory_file_is_a_native_write(
+    tmp_path: Path, template: str, name: str
+) -> None:
+    """Review G1: every command word outside the write list defaulted to READ, so deleting,
+    re-moding, truncating or creating a memory path scored as the agent reading it. A mutation
+    is a write; it never lands beside the reads."""
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses([_bash(template.format(m=memory))], config_dir=config)
+    assert [(a.verb, Path(a.path).name) for a in accesses] == [("native_write", name)], template
+
+
+def test_a_link_out_of_the_memory_dir_reads_it(tmp_path: Path) -> None:
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses(
+        [_bash(f"ln -s {memory}/MEMORY.md /tmp/link.md")], config_dir=config
+    )
+    assert [a.verb for a in accesses] == ["native_read"]
+
+
+@pytest.mark.parametrize(
+    ("template", "verb"),
+    [
+        ("sudo -u me tee {m}/MEMORY.md", "native_write"),
+        ("sudo -u me -g us tee {m}/MEMORY.md", "native_write"),
+        ("sudo -u me cat {m}/MEMORY.md", "native_read"),
+        ("sudo --user=me tee {m}/MEMORY.md", "native_write"),
+        ("env -i FOO=bar tee {m}/MEMORY.md", "native_write"),
+        ("env -u FOO tee {m}/MEMORY.md", "native_write"),
+        ("nice -n 5 tee {m}/MEMORY.md", "native_write"),
+        ("nice -n 5 rm {m}/MEMORY.md", "native_write"),
+        ("time -f '%e' tee {m}/MEMORY.md", "native_write"),
+        ("time -o /tmp/t.log cat {m}/MEMORY.md", "native_read"),
+    ],
+)
+def test_a_wrapper_option_value_is_not_read_as_the_command_word(
+    tmp_path: Path, template: str, verb: str
+) -> None:
+    """Review G1: `sudo -u me tee <path>` left `me` as the command word, and `me` reads. The
+    separate value of a wrapper option is consumed with the option."""
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses([_bash(template.format(m=memory))], config_dir=config)
+    assert [(a.verb, Path(a.path).name) for a in accesses] == [(verb, "MEMORY.md")], template
+
+
 def test_a_pinned_path_is_reported_once_per_token(tmp_path: Path) -> None:
     config, memory = _pinned(tmp_path)
     accesses = native_memory_accesses([_bash(f"cat {memory}/MEMORY.md")], config_dir=config)
@@ -1346,6 +1404,9 @@ def test_the_recognizer_policy_covers_every_constant_the_recognizers_read() -> N
         "MEMORY_COMMAND",
         "HOST_DENIED_TOOLS",
         "NATIVE_MEMORY_BASH_WRAPPERS",
+        "NATIVE_MEMORY_BASH_WRAPPER_VALUE_FLAGS",
+        "NATIVE_MEMORY_BASH_WRITE_ALL_OPERANDS",
+        "NATIVE_MEMORY_BASH_WRITE_LAST_OPERAND",
         "NATIVE_MEMORY_BASH_PATH_TERMINATORS",
         "CONFIG_DIR_ENV",
     } <= policy
