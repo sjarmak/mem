@@ -12,8 +12,12 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import replace
 from itertools import pairwise
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -55,7 +59,9 @@ from membench.runner.headless_agent import (
     assistant_event,
     result_event,
     serialize_stream,
+    tool_result_event,
 )
+from membench.runner.sandbox import CorpusReachableError
 from membench.runner.toolreq_corpus import load_twin_corpus
 from membench.runner.toolreq_realagent import VARIANT_NECESSARY, VARIANT_UNNECESSARY
 from membench.spawn import with_child
@@ -70,15 +76,29 @@ def _agent(**kwargs: Any) -> HeadlessClaudeAgent:
     return HeadlessClaudeAgent(model=MODEL, runner=noop_cli_runner, **kwargs)
 
 
-def _cell(rung: str, variant: str, *, calling: int, runs: int = 4, work_id: str = "") -> RungCell:
+def _cell(
+    rung: str,
+    variant: str,
+    *,
+    calling: int,
+    runs: int = 4,
+    work_id: str = "",
+    reading: int | None = None,
+    writing: int = 0,
+) -> RungCell:
+    """A cell whose calling legs each READ once unless ``reading`` says how many did, plus
+    ``writing`` legs that each made one acknowledged write."""
+    reading_runs = calling if reading is None else reading
     return RungCell(
         rung=rung,
         variant=variant,
         runs=runs,
         calling_runs=calling,
-        memory_calls=calling,
-        read_calls=calling,
-        write_calls=0,
+        memory_calls=max(calling, reading_runs + writing),
+        read_calls=reading_runs,
+        write_calls=writing,
+        reading_runs=reading_runs,
+        writing_runs=writing,
         paid=True,
         work_id=work_id,
     )
@@ -259,9 +279,18 @@ def test_primary_endpoint_is_the_margin_not_the_rate() -> None:
     summary = _summary_fixture()
     gates = summary["call_rate_gates"]
     assert gates["endpoint"] == "discrimination_margin"
+    assert gates["discrimination"]["counts"] == "reads"
     assert gates["discrimination"]["margin_by_rung"] == {
         "R0": pytest.approx(0.25),
         "R4": pytest.approx(0.75),
+    }
+    assert gates["discrimination"]["any_call_margin_by_rung"] == {
+        "R0": pytest.approx(0.25),
+        "R4": pytest.approx(0.75),
+    }
+    assert gates["write_rate"]["by_rung"] == {
+        VARIANT_NECESSARY: {"R0": 0.0, "R4": 0.0},
+        VARIANT_UNNECESSARY: {"R0": 0.0, "R4": 0.0},
     }
     assert gates["monotonicity"]["call_rate_by_rung"] == {
         "R0": pytest.approx(0.25),
@@ -271,6 +300,125 @@ def test_primary_endpoint_is_the_margin_not_the_rate() -> None:
     assert gates["guidance_token_adjustment"]["guidance_words_by_rung"]["R0"] == 0
     assert gates["tool_affordance_floor"]["rung"] == "R0"
     assert gates["tool_affordance_floor"]["call_rate"] == pytest.approx(0.25)
+
+
+def test_the_margin_is_on_reads_and_the_write_rate_is_reported_beside_it() -> None:
+    """mem-zfm0m item 2. Reads are what the twin corpus manipulates: the necessary half needs a
+    recall, the unnecessary half was handed the values. A WRITE is the same act in both halves
+    (the agent storing what it just learned), so writes on both sides dilute an any-call margin
+    toward zero without saying anything about discrimination. Fixture: reads on the necessary
+    half only, one accepted write per leg on BOTH halves. The any-call margin is 0.0 — every
+    leg on both halves called memory — while the read margin is 1.0, and the write rate is 1.0
+    on both halves, reported on its own."""
+    cells = [
+        _cell("R2", VARIANT_NECESSARY, calling=4, reading=4, writing=4),
+        _cell("R2", VARIANT_UNNECESSARY, calling=4, reading=0, writing=4),
+    ]
+    assert discrimination_margins(cells) == {"R2": pytest.approx(1.0)}
+    assert discrimination_margins(cells, kind="call") == {"R2": pytest.approx(0.0)}
+    assert pooled_rates(cells, VARIANT_NECESSARY, kind="read") == {"R2": pytest.approx(1.0)}
+    assert pooled_rates(cells, VARIANT_UNNECESSARY, kind="read") == {"R2": pytest.approx(0.0)}
+    assert pooled_rates(cells, VARIANT_UNNECESSARY, kind="write") == {"R2": pytest.approx(1.0)}
+    gates = call_rate_gates(cells)
+    assert gates["discrimination"]["margin_by_rung"] == {"R2": pytest.approx(1.0)}
+    assert gates["discrimination"]["any_call_margin_by_rung"] == {"R2": pytest.approx(0.0)}
+    assert gates["discrimination"]["read_rate_by_rung"] == {
+        VARIANT_NECESSARY: {"R2": pytest.approx(1.0)},
+        VARIANT_UNNECESSARY: {"R2": pytest.approx(0.0)},
+    }
+    assert gates["write_rate"]["by_rung"] == {
+        VARIANT_NECESSARY: {"R2": pytest.approx(1.0)},
+        VARIANT_UNNECESSARY: {"R2": pytest.approx(1.0)},
+    }
+    # The monotonicity gate and the affordance floor still read the ANY-call rate: they ask
+    # whether guidance recruits legs to the tool at all, not whether it discriminates.
+    assert gates["monotonicity"]["call_rate_by_rung"] == {"R2": pytest.approx(1.0)}
+
+
+def test_a_cell_cannot_claim_reads_without_a_leg_that_read() -> None:
+    """A read count with zero reading legs, or more reading legs than calling legs, is a cell
+    that could not have been counted from any stream."""
+    with pytest.raises(ValueError, match="read_calls 1 with reading_runs 0"):
+        RungCell(
+            rung="R1",
+            variant=VARIANT_NECESSARY,
+            runs=4,
+            calling_runs=2,
+            memory_calls=2,
+            read_calls=1,
+            write_calls=0,
+            reading_runs=0,
+            writing_runs=0,
+            paid=True,
+        )
+    with pytest.raises(ValueError, match="reading_runs 3 > calling_runs 2"):
+        RungCell(
+            rung="R1",
+            variant=VARIANT_NECESSARY,
+            runs=4,
+            calling_runs=2,
+            memory_calls=3,
+            read_calls=3,
+            write_calls=0,
+            reading_runs=3,
+            writing_runs=0,
+            paid=True,
+        )
+    with pytest.raises(ValueError, match="writing_runs 2 > write_calls 1"):
+        RungCell(
+            rung="R1",
+            variant=VARIANT_NECESSARY,
+            runs=4,
+            calling_runs=2,
+            memory_calls=3,
+            read_calls=0,
+            write_calls=1,
+            reading_runs=0,
+            writing_runs=2,
+            paid=True,
+        )
+
+
+def test_a_cell_row_without_per_direction_leg_counts_is_refused() -> None:
+    """An artifact written before the margin moved to reads has no ``reading_runs``; defaulting
+    it to zero would resume the cell with a fabricated read rate of 0.0."""
+    row = _cell("R0", VARIANT_NECESSARY, calling=2).row()
+    del row["metrics"]["reading_runs"]
+    with pytest.raises(ValueError, match="reading_runs"):
+        RungCell.from_row(row)
+
+
+def test_run_rung_cell_counts_reading_and_writing_legs_separately(tmp_path: Any) -> None:
+    """Through the cell path: the necessary half's legs recall AND store, the unnecessary half's
+    legs only store. Every leg on both halves is a calling leg; only the necessary half's read."""
+    corpus_one(tmp_path)
+    _, twins = load_twin_corpus(tmp_path / "corpus")
+    by_variant = {task.variant: task for task in twins}
+    necessary = e1_grid.run_rung_cell(
+        by_variant[VARIANT_NECESSARY],
+        rung="R2",
+        repeats=2,
+        model=MODEL,
+        dry_run=False,
+        runner=_calling_runner(("bd remember 'a value' --key k", REMEMBERED), "bd recall k"),
+    )
+    unnecessary = e1_grid.run_rung_cell(
+        by_variant[VARIANT_UNNECESSARY],
+        rung="R2",
+        repeats=2,
+        model=MODEL,
+        dry_run=False,
+        runner=_calling_runner(("bd remember 'a value' --key k", REMEMBERED)),
+    )
+    assert (necessary.reading_runs, necessary.writing_runs) == (2, 2)
+    assert (unnecessary.reading_runs, unnecessary.writing_runs) == (0, 2)
+    assert (necessary.calling_runs, unnecessary.calling_runs) == (2, 2)
+    cells = [necessary, unnecessary]
+    assert discrimination_margins(cells) == {"R2": pytest.approx(1.0)}
+    assert discrimination_margins(cells, kind="call") == {"R2": pytest.approx(0.0)}
+    assert necessary.metrics()["read_rate"] == pytest.approx(1.0)
+    assert necessary.metrics()["write_rate"] == pytest.approx(1.0)
+    assert unnecessary.metrics()["read_rate"] == pytest.approx(0.0)
 
 
 def test_margin_needs_both_halves() -> None:
@@ -291,6 +439,8 @@ def test_a_cell_cannot_claim_impossible_counts() -> None:
             memory_calls=1,
             read_calls=1,
             write_calls=0,
+            reading_runs=1,
+            writing_runs=0,
             paid=True,
         )
 
@@ -406,18 +556,41 @@ def test_cli_reports_a_missing_corpus_as_infrastructure_not_a_result(
 # --------------------------------------------------------------------------------------
 
 
-def _calling_runner(*commands: str) -> Any:
-    """A `claude -p` stand-in whose stream carries `commands` as Bash tool_use blocks.
+# bd's own acknowledgement of a stored memory, as bd 1.3.0-rc.1 prints it.
+REMEMBERED = "Remembered [k]: a value"
+
+# The exact tool_use / tool_result the 160-leg staged fire scored as its ONLY endogenous write
+# (R4 / unnecessary / world-seed2-task0, leg 1). `is_error` is FALSE on the real record: the
+# `2>&1 | head` pipe exits 0, so the refusal is visible in the content and nowhere else.
+REFUSED_REMEMBER_LIST = (
+    "cd /tmp/membench-memory-bsi54bav/store && /tmp/membench-memory-bsi54bav/bin/bd remember "
+    "list 2>&1 | head -100"
+)
+REFUSED_REMEMBER_LIST_RESULT = (
+    'Error: "list" looks like a command, not something to remember\n'
+    "Hint: Did you mean 'bd list'? To store \"list\" as a memory anyway, give it an explicit "
+    'key: bd remember "list" --key <key>\n'
+    "Shell cwd was reset to /tmp/e1-r4-5hy4nzs5"
+)
+
+
+def _calling_runner(*commands: str | tuple[str, str]) -> Any:
+    """A `claude -p` stand-in whose stream carries `commands` as Bash tool_use blocks, each
+    followed by its tool_result when given as ``(command, result)``.
 
     Deliberately UNCONDITIONAL: it emits the same calls at every rung, so it can prove the cell
     counts what the stream contains and can never reproduce a rung effect. `_silent_runner` is the
     zero end of the same fixture."""
 
     def runner(argv: Any, **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        events = [
-            assistant_event([("Bash", {"command": command}) for command in commands]),
-            result_event(),
-        ]
+        events: list[dict[str, object]] = []
+        for i, entry in enumerate(commands):
+            command, result = entry if isinstance(entry, tuple) else (entry, None)
+            call_id = f"toolu_{i}"
+            events.append(assistant_event([("Bash", {"command": command}, call_id)]))
+            if result is not None:
+                events.append(tool_result_event(call_id, result))
+        events.append(result_event())
         return subprocess.CompletedProcess(list(argv), 0, serialize_stream(events), "")
 
     return runner
@@ -437,7 +610,9 @@ def test_run_rung_cell_counts_the_memory_calls_its_stream_carries(tmp_path: Any)
         repeats=2,
         model=MODEL,
         dry_run=False,
-        runner=_calling_runner("bd remember --key k 'a value'", "bd recall k", "bd recall other"),
+        runner=_calling_runner(
+            ("bd remember 'a value' --key k", REMEMBERED), "bd recall k", "bd recall other"
+        ),
     )
     assert cell.runs == 2
     assert cell.calling_runs == 2
@@ -490,6 +665,85 @@ def test_a_native_memory_reach_counts_as_a_memory_call(tmp_path: Any) -> None:
     assert list(cell.verbs) == ["native_read"]
 
 
+def _bash_reach_runner(template: str) -> Any:
+    """mem-zfm0m item 3: the agent reaches the native memory file through a Bash command instead
+    of the Read/Write tools. ``template`` names the file as ``{m}``, resolved off the pinned
+    config dir the cell handed the runner."""
+
+    def runner(argv: Any, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        env = kwargs.get("env") or {}
+        config = env["CLAUDE_CONFIG_DIR"]  # type: ignore[index]
+        command = template.format(m=f"{config}/projects/-tmp/memory/MEMORY.md")
+        events = [assistant_event([("Bash", {"command": command})]), result_event()]
+        return subprocess.CompletedProcess(list(argv), 0, serialize_stream(events), "")
+
+    return runner
+
+
+@pytest.mark.parametrize(
+    ("template", "reads", "writes", "verbs"),
+    [
+        ("cat {m}", 1, 0, ["native_read"]),
+        ("head -40 {m} 2>/dev/null", 1, 0, ["native_read"]),
+        ("echo '- note' >> {m}", 0, 1, ["native_write"]),
+        ("printf x | tee -a {m}", 0, 1, ["native_write"]),
+    ],
+)
+def test_a_bash_reach_into_the_native_memory_file_counts_by_direction(
+    tmp_path: Any, template: str, reads: int, writes: int, verbs: list[str]
+) -> None:
+    """A `cat`/`head` of the pinned memory file is a read and a `>>`/`tee` into it is a write, by
+    path-prefix match on the config dir the harness pinned — the Bash door counts like the Read
+    tool door."""
+    _seqs, tasks = corpus_one(tmp_path)
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=_bash_reach_runner(template),
+    )
+    assert (cell.memory_calls, cell.calling_runs) == (1, 1)
+    assert (cell.read_calls, cell.write_calls) == (reads, writes)
+    assert list(cell.verbs) == verbs
+
+
+def test_a_bash_call_that_runs_bd_and_cats_the_memory_file_is_one_memory_call(
+    tmp_path: Any,
+) -> None:
+    """Memory calls are TOOL CALLS, not verbs: one Bash block that does `bd recall k` and then
+    cats MEMORY.md reached memory once, through two doors. Reads count per door."""
+    _seqs, tasks = corpus_one(tmp_path)
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=_bash_reach_runner("bd recall k; cat {m}"),
+    )
+    assert (cell.memory_calls, cell.calling_runs) == (1, 1)
+    assert (cell.read_calls, cell.write_calls) == (2, 0)
+    assert list(cell.verbs) == ["recall", "native_read"]
+
+
+def test_a_bash_command_that_mentions_memory_but_touches_no_pinned_path_is_not_a_call(
+    tmp_path: Any,
+) -> None:
+    _seqs, tasks = corpus_one(tmp_path)
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=_bash_reach_runner("echo 'checking memory first'  # memory: {m}"),
+    )
+    assert (cell.memory_calls, cell.calling_runs) == (0, 0)
+    assert (cell.read_calls, cell.write_calls) == (0, 0)
+
+
 def test_staged_cells_applies_the_task_cap_per_variant_not_across_the_list(tmp_path: Any) -> None:
     """The priced bill is len(rungs) * n_tasks * repeats * 2, so `n_tasks` is PER VARIANT. Capping
     the flat list instead would run half the grid and report a whole one."""
@@ -502,6 +756,7 @@ def test_staged_cells_applies_the_task_cap_per_variant_not_across_the_list(tmp_p
     cells = e1_grid.staged_cells(
         tasks * 4,
         model=MODEL,
+        corpus_dir=tmp_path / "corpus",
         rungs=("R0",),
         n_tasks=2,
         repeats=1,
@@ -537,18 +792,19 @@ def test_fire_staged_refuses_without_a_token(
 # --- timeouts are unmeasured legs, cells pool, and a dead fire resumes -----------------
 
 
-def _timeout_error() -> HeadlessAgentError:
+def _timeout_error(stdout: str | bytes | None = None) -> HeadlessAgentError:
     """The exact shape ``spawn.run_checked`` raises: a HeadlessAgentError CAUSED BY
-    TimeoutExpired."""
+    TimeoutExpired, carrying whatever the child wrote before the bound (``run_in_session`` hands
+    it over decoded; ``subprocess.run`` as bytes; a child that wrote nothing, None)."""
     try:
-        raise subprocess.TimeoutExpired(cmd=["claude", "-p"], timeout=600.0)
+        raise subprocess.TimeoutExpired(cmd=["claude", "-p"], timeout=600.0, output=stdout)
     except subprocess.TimeoutExpired as exc:
         err = HeadlessAgentError("claude -p did not finish within 600.0s")
         err.__cause__ = exc
         return err
 
 
-def _timing_out_runner(timeout_legs: set[int], *commands: str) -> Any:
+def _timing_out_runner(timeout_legs: set[int], *commands: str | tuple[str, str]) -> Any:
     """`_calling_runner`, except the legs numbered in ``timeout_legs`` (0-based, per cell) time out
     the way the first staged fire's cell 13 did."""
     leg = {"n": 0}
@@ -563,6 +819,189 @@ def _timing_out_runner(timeout_legs: set[int], *commands: str) -> Any:
         return result
 
     return runner
+
+
+def _partial_stream_runner(timeout_leg: int, partial: str | bytes) -> Any:
+    """`_calling_runner("bd recall k")` except leg ``timeout_leg`` times out AFTER writing
+    ``partial`` — the shape ``run_in_session`` raises when the bound fires mid-stream."""
+    leg = {"n": 0}
+    calling = _calling_runner("bd recall k")
+
+    def runner(argv: Any, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        i = leg["n"]
+        leg["n"] += 1
+        if i == timeout_leg:
+            raise _timeout_error(partial)
+        result: subprocess.CompletedProcess[str] = calling(argv, **kwargs)
+        return result
+
+    return runner
+
+
+@pytest.mark.parametrize("encode", [False, True], ids=["str", "bytes"])
+def test_a_timed_out_leg_is_scored_from_its_partial_stream_and_stays_unmeasured(
+    tmp_path: Any, encode: bool
+) -> None:
+    """mem-zfm0m item 4. A leg that timed out after two memory calls made two memory calls; the
+    first fire threw its partial stream away and persisted an empty one. The partial stream is
+    scored by the same arithmetic as a complete one and persisted with ``truncated=True`` — and
+    the leg stays OUT of the measured denominator and out of every cell numerator, because a
+    truncated stream bounds the count from below only."""
+    _seqs, tasks = corpus_one(tmp_path)
+    partial = serialize_stream(
+        [
+            assistant_event([("Bash", {"command": "bd recall k"})]),
+            assistant_event([("Bash", {"command": "bd recall other"})]),
+        ]
+    )
+    legs: list[e1_grid.LegRecord] = []
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=3,
+        model=MODEL,
+        dry_run=False,
+        runner=_partial_stream_runner(1, partial.encode() if encode else partial),
+        on_leg=legs.append,
+    )
+    # The cell: two measured legs, one call each. The timed-out leg's two calls are NOT in here.
+    assert (cell.runs, cell.timed_out_runs, cell.measured_runs) == (3, 1, 2)
+    assert (cell.calling_runs, cell.memory_calls, cell.read_calls) == (2, 2, 2)
+    assert cell.call_rate == pytest.approx(1.0)
+    # The leg: scored, persisted with its events, marked truncated.
+    truncated = legs[1]
+    assert truncated.status == "timeout"
+    assert truncated.truncated is True
+    assert (truncated.memory_calls, truncated.read_calls, truncated.write_calls) == (2, 2, 0)
+    assert list(truncated.verbs) == ["recall", "recall"]
+    assert "bd recall other" in truncated.stream
+    assert "did not finish" in truncated.detail
+    assert [leg.truncated for leg in legs] == [False, True, False]
+
+
+def test_a_leg_cannot_reach_the_corpus_from_its_env_or_its_cwd_tree(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """mem-zfm0m item 7. The corpus reaches the agent through the prompt and nowhere else. Read
+    off the spawn itself: no env value names the corpus root or anything under it, ``PWD`` is the
+    sandbox (the operator's shell, whose ``PWD`` is the checkout holding the corpus, must not leak
+    through the env merge), and the cwd tree holds nothing resolving into the corpus."""
+    _seqs, tasks = corpus_one(tmp_path)
+    corpus = (tmp_path / "corpus").resolve()
+    # The operator's shell: its cwd IS the tree the corpus lives in.
+    monkeypatch.setenv("PWD", str(tmp_path))
+    seen: list[dict[str, Any]] = []
+
+    def capturing(argv: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        cwd = Path(kwargs["cwd"])
+        env = dict(kwargs["env"])
+        seen.append(
+            {
+                "cwd": cwd,
+                "env": env,
+                "tree": [p.resolve() for p in cwd.rglob("*")],
+            }
+        )
+        return subprocess.CompletedProcess(list(argv), 0, serialize_stream([result_event()]), "")
+
+    e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=2,
+        model=MODEL,
+        dry_run=False,
+        runner=capturing,
+        corpus_dir=tmp_path / "corpus",
+    )
+    assert len(seen) == 2
+    for leg in seen:
+        assert leg["env"]["PWD"] == str(leg["cwd"])
+        for key, value in leg["env"].items():
+            for segment in value.split(os.pathsep):
+                if os.path.isabs(segment):
+                    resolved = Path(segment).resolve()
+                    assert resolved != corpus and corpus not in resolved.parents, (key, value)
+        assert not any(p == corpus or corpus in p.parents for p in leg["tree"])
+
+
+def test_a_leg_env_that_names_the_corpus_refuses_before_spending(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The guard runs BEFORE the spawn: a harness variable pointing at the corpus is a refusal
+    with nothing bought, not a leg to re-score."""
+    _seqs, tasks = corpus_one(tmp_path)
+    monkeypatch.setenv("MEMBENCH_CORPUS_HINT", str(tmp_path / "corpus" / "0"))
+    spawned: list[Any] = []
+
+    def counting(argv: Any, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        spawned.append(argv)
+        return subprocess.CompletedProcess(list(argv), 0, serialize_stream([result_event()]), "")
+
+    with pytest.raises(CorpusReachableError, match="MEMBENCH_CORPUS_HINT"):
+        e1_grid.run_rung_cell(
+            tasks[0],
+            rung="R4",
+            repeats=2,
+            model=MODEL,
+            dry_run=False,
+            runner=counting,
+            corpus_dir=tmp_path / "corpus",
+        )
+    assert spawned == []
+
+
+def test_a_sandbox_entry_pointing_into_the_corpus_refuses_before_spending(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A sandbox is minted empty; one that arrives with a link into the corpus (a future
+    "copy the task's files in" that symlinked instead) is refused with nothing bought."""
+    _seqs, tasks = corpus_one(tmp_path)
+    spawned: list[Any] = []
+
+    @contextmanager
+    def planted(prefix: str) -> Iterator[Path]:
+        with tempfile.TemporaryDirectory(prefix=prefix) as raw:
+            sandbox = Path(raw).resolve()
+            (sandbox / "fixtures").symlink_to(tmp_path / "corpus", target_is_directory=True)
+            yield sandbox
+
+    monkeypatch.setattr(e1_grid, "paid_sandbox", planted, raising=True)
+
+    def counting(argv: Any, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        spawned.append(argv)
+        return subprocess.CompletedProcess(list(argv), 0, serialize_stream([result_event()]), "")
+
+    with pytest.raises(CorpusReachableError, match="fixtures"):
+        e1_grid.run_rung_cell(
+            tasks[0],
+            rung="R4",
+            repeats=1,
+            model=MODEL,
+            dry_run=False,
+            runner=counting,
+            corpus_dir=tmp_path / "corpus",
+        )
+    assert spawned == []
+
+
+def test_the_paid_spawn_starts_the_child_in_its_own_session(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """mem-zfm0m item 8: with no runner injected and no dry run, the cell spawns through
+    ``run_in_session`` — the runner whose timeout kills the process group — not
+    ``subprocess.run``. Proven by substitution: the name the cell resolves is the one patched."""
+    _seqs, tasks = corpus_one(tmp_path)
+    seen: list[list[str]] = []
+
+    def fake(argv: Any, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        seen.append(list(argv))
+        return subprocess.CompletedProcess(list(argv), 0, serialize_stream([result_event()]), "")
+
+    monkeypatch.setattr(e1_grid, "run_in_session", fake, raising=True)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "t")
+    cell = e1_grid.run_rung_cell(tasks[0], rung="R0", repeats=1, model=MODEL, dry_run=False)
+    assert cell.paid is True
+    assert len(seen) == 1 and seen[0][0].endswith("claude")
 
 
 def test_a_timed_out_leg_is_unmeasured_not_a_non_calling_run(tmp_path: Any) -> None:
@@ -666,10 +1105,15 @@ def test_a_quota_refusal_halts_the_fire_and_is_read_off_the_stream_not_the_messa
     def refused(argv: Any, **_kwargs: object) -> subprocess.CompletedProcess[str]:
         raise with_child(HeadlessAgentError("claude -p failed (exit 1): <redacted>"), refusal)
 
-    with pytest.raises(e1_grid.QuotaHaltError, match="refused the call"):
+    with pytest.raises(e1_grid.QuotaHaltError, match="refused the call") as halted:
         e1_grid.run_rung_cell(
             tasks[0], rung="R0", repeats=5, model=MODEL, dry_run=False, runner=refused
         )
+    # Raised FROM the agent error (review G6): the cause chain reaches the CLI's own result
+    # event the refusal was classified on, and a wrapper lost it once.
+    cause = halted.value.__cause__
+    assert isinstance(cause, HeadlessAgentError)
+    assert e1_grid.is_quota_halt(cause) is True
     # The message says nothing about a quota; only the stream field does.
     assert e1_grid.is_quota_halt(HeadlessAgentError("You've hit your session limit")) is False
     served = subprocess.CompletedProcess(["claude"], 1, '{"type":"result","is_error":true}', "")
@@ -697,6 +1141,8 @@ def test_a_cell_whose_every_leg_timed_out_has_no_rate() -> None:
         memory_calls=0,
         read_calls=0,
         write_calls=0,
+        reading_runs=0,
+        writing_runs=0,
         paid=True,
         work_id="w-dead",
         timed_out_runs=5,
@@ -714,6 +1160,8 @@ def test_a_cell_whose_every_leg_timed_out_has_no_rate() -> None:
             memory_calls=0,
             read_calls=0,
             write_calls=0,
+            reading_runs=0,
+            writing_runs=0,
             paid=True,
             timed_out_runs=6,
         )
@@ -736,6 +1184,8 @@ def test_rates_pool_over_task_cells_not_last_wins_and_not_a_mean() -> None:
             memory_calls=1,
             read_calls=1,
             write_calls=0,
+            reading_runs=1,
+            writing_runs=0,
             paid=True,
             timed_out_runs=3,
         ),
@@ -759,6 +1209,8 @@ def test_a_cell_row_round_trips_through_the_artifact() -> None:
         memory_calls=7,
         read_calls=5,
         write_calls=2,
+        reading_runs=2,
+        writing_runs=1,
         paid=True,
         verbs=("native_read", "recall"),
         work_id="w-7",
@@ -787,12 +1239,15 @@ def test_staged_cells_keeps_landed_cells_and_buys_only_the_rest(tmp_path: Any) -
         memory_calls=9,
         read_calls=9,
         write_calls=0,
+        reading_runs=1,
+        writing_runs=0,
         paid=True,
         work_id=tasks[0].work_id,
     )
     cells = e1_grid.staged_cells(
         tasks,
         model=MODEL,
+        corpus_dir=tmp_path / "corpus",
         rungs=("R0", "R4"),
         n_tasks=1,
         repeats=1,
@@ -838,6 +1293,8 @@ def _fake_cells(tasks: Any) -> Any:
             memory_calls=int(kwargs["repeats"]),
             read_calls=int(kwargs["repeats"]),
             write_calls=0,
+            reading_runs=int(kwargs["repeats"]),
+            writing_runs=0,
             paid=True,
             work_id=task.work_id,
         )
@@ -866,6 +1323,8 @@ def test_resume_refuses_another_rigs_artifact_and_drops_unmeasured_cells() -> No
         memory_calls=0,
         read_calls=0,
         write_calls=0,
+        reading_runs=0,
+        writing_runs=0,
         paid=True,
         work_id="w-dead",
         timed_out_runs=5,
@@ -877,6 +1336,28 @@ def test_resume_refuses_another_rigs_artifact_and_drops_unmeasured_cells() -> No
         resume_cells(summary, model="claude-other-model-2", **IDENTITY)
     with pytest.raises(ResumeMismatchError, match="surface_fingerprint"):
         resume_cells({**summary, "surface_fingerprint": "stale"}, model=MODEL, **IDENTITY)
+
+
+def test_resume_refuses_an_artifact_from_another_execution_protocol() -> None:
+    """Review F4. The sandbox guard, the PWD pin, the session runner and the timeout scoring all
+    change what a leg MEASURES without moving the tool surface, the binary or the corpus. They
+    are versioned as one number, and a partial artifact that does not carry THIS number (an
+    older one, or none at all) is refused as loudly as a stale fingerprint."""
+    summary = _identified([_cell("R0", VARIANT_NECESSARY, calling=2, runs=5, work_id="w-0")])
+    assert summary["execution_protocol"] == e1_grid.EXECUTION_PROTOCOL_VERSION
+    assert e1_grid.EXECUTION_PROTOCOL_VERSION >= 1
+    with pytest.raises(ResumeMismatchError, match="execution_protocol"):
+        resume_cells(
+            {**summary, "execution_protocol": e1_grid.EXECUTION_PROTOCOL_VERSION + 1},
+            model=MODEL,
+            **IDENTITY,
+        )
+    with pytest.raises(ResumeMismatchError, match="execution_protocol"):
+        resume_cells(
+            {k: v for k, v in summary.items() if k != "execution_protocol"},
+            model=MODEL,
+            **IDENTITY,
+        )
 
 
 def test_resume_refuses_every_identity_field_it_cannot_match() -> None:
@@ -911,6 +1392,8 @@ def test_resume_drops_unpaid_and_unkeyed_rows_and_refuses_duplicates_and_strange
         memory_calls=5,
         read_calls=5,
         write_calls=0,
+        reading_runs=5,
+        writing_runs=0,
         paid=False,
         work_id="w-0",
     )
@@ -939,7 +1422,13 @@ def test_grid_keys_names_exactly_the_cells_the_fire_buys(tmp_path: Any) -> None:
         return _calling_runner()(argv, **kwargs)
 
     cells = e1_grid.staged_cells(
-        tasks, model=MODEL, rungs=("R0", "R4"), n_tasks=1, repeats=1, runner=counting
+        tasks,
+        model=MODEL,
+        corpus_dir=tmp_path / "corpus",
+        rungs=("R0", "R4"),
+        n_tasks=1,
+        repeats=1,
+        runner=counting,
     )
     assert [cell.key for cell in cells] == keys
 
@@ -976,7 +1465,7 @@ def test_every_leg_is_persisted_with_the_stream_it_was_counted_from(tmp_path: An
         repeats=3,
         model=MODEL,
         dry_run=False,
-        runner=_timing_out_runner({1}, "bd recall k", "bd remember k=v"),
+        runner=_timing_out_runner({1}, "bd recall k", ("bd remember k=v", "Remembered [k]: v")),
         on_leg=legs.append,
     )
     assert [leg.status for leg in legs] == ["ok", "timeout", "ok"]
@@ -991,7 +1480,94 @@ def test_every_leg_is_persisted_with_the_stream_it_was_counted_from(tmp_path: An
     assert all("bd recall k" in leg.stream for leg in ok)
     timed_out = next(leg for leg in legs if leg.status == "timeout")
     assert timed_out.stream == "" and timed_out.detail
+    assert timed_out.truncated is True
+    assert all(leg.truncated is False for leg in ok)
     assert legs[0].filename == f"R4__{tasks[0].variant}__{tasks[0].work_id}__0.json"
+
+
+def test_a_refused_bd_remember_is_a_memory_call_but_never_a_write(tmp_path: Any) -> None:
+    """mem-8fv4t. The 160-leg staged fire scored write_calls=1 from exactly this record: the agent
+    ran `bd remember list`, bd REFUSED it, and the verb-token counter scored the refusal as an
+    endogenous write. A write is scored only on bd's own acknowledgement in the persisted stream.
+    The reach still happened, so the leg stays a CALLING run; it just wrote nothing."""
+    _seqs, tasks = corpus_one(tmp_path)
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=_calling_runner((REFUSED_REMEMBER_LIST, REFUSED_REMEMBER_LIST_RESULT)),
+    )
+    assert (cell.memory_calls, cell.calling_runs) == (1, 1)
+    assert cell.write_calls == 0
+    assert cell.read_calls == 0
+
+
+def test_an_acknowledged_bd_remember_is_scored_a_write(tmp_path: Any) -> None:
+    """The positive twin of the refusal test: same verb, and bd's `Remembered [k]:` line in the
+    tool_result. The two tests differ ONLY in the result text, which is what the scorer must key
+    on, so a scorer that ignores results cannot pass both."""
+    _seqs, tasks = corpus_one(tmp_path)
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=_calling_runner(("bd remember 'a value' --key k", REMEMBERED)),
+    )
+    assert (cell.memory_calls, cell.calling_runs) == (1, 1)
+    assert cell.write_calls == 1
+    assert cell.read_calls == 0
+
+
+def test_a_bare_key_bd_remember_that_bd_recalled_is_scored_a_read(tmp_path: Any) -> None:
+    """`bd remember <existing-key>` READS: bd answers `(recalled "k" -- ...)` and stores nothing."""
+    _seqs, tasks = corpus_one(tmp_path)
+    recalled = (
+        '(recalled "k" -- a bare existing key READS. To overwrite: bd remember "..." --key k)\n'
+        "a value"
+    )
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=_calling_runner(("bd remember k", recalled)),
+    )
+    assert (cell.memory_calls, cell.read_calls, cell.write_calls) == (1, 1, 0)
+
+
+def test_a_bd_remember_with_no_tool_result_in_the_stream_is_not_a_write(tmp_path: Any) -> None:
+    """No acknowledgement, no write. A stream that lost its tool_result (a leg cut off mid-call)
+    must not be scored as if bd had accepted the memory."""
+    _seqs, tasks = corpus_one(tmp_path)
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=_calling_runner("bd remember 'a value' --key k"),
+    )
+    assert (cell.memory_calls, cell.write_calls) == (1, 0)
+
+
+def test_a_json_acknowledged_bd_remember_is_scored_a_write(tmp_path: Any) -> None:
+    """`bd remember --json` acknowledges as `{"action": "remembered"}`, not the prose line."""
+    _seqs, tasks = corpus_one(tmp_path)
+    ack = '{"action":"remembered","key":"k","content":"a value"}'
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=_calling_runner(("bd remember 'a value' --key k --json", ack)),
+    )
+    assert cell.write_calls == 1
 
 
 def test_a_secret_in_a_leg_stream_is_redacted_before_it_is_persisted(tmp_path: Any) -> None:
@@ -1432,7 +2008,14 @@ def test_the_unmeasured_streak_survives_a_cell_boundary(tmp_path: Any) -> None:
         raise HeadlessAgentError("claude -p failed (exit 1): transient")
 
     with pytest.raises(e1_grid.RigHaltError):
-        e1_grid.staged_cells(tasks, model=MODEL, n_tasks=1, repeats=2, runner=always_fails)
+        e1_grid.staged_cells(
+            tasks,
+            model=MODEL,
+            corpus_dir=tmp_path / "corpus",
+            n_tasks=1,
+            repeats=2,
+            runner=always_fails,
+        )
     # Two legs in the first cell, one in the second, then the halt: the streak crossed the
     # boundary. A per-cell counter would have spent every leg of every cell in the grid.
     assert attempts["n"] == 3
@@ -1503,12 +2086,14 @@ def test_the_preflight_row_carries_what_it_measured(tmp_path: Any, monkeypatch: 
         memory_calls=0,
         read_calls=0,
         write_calls=0,
+        reading_runs=0,
+        writing_runs=0,
         paid=True,
         work_id=tasks[0].work_id,
         timed_out_runs=1,
     )
     monkeypatch.setattr(e1_grid, "run_rung_cell", lambda *a, **k: timed_out, raising=True)
-    row = e1_grid.preflight(tasks[0], model=MODEL)
+    row = e1_grid.preflight(tasks[0], model=MODEL, corpus_dir=tmp_path / "corpus")
     assert row["runs"] == 1
     assert row["measured_runs"] == 0
     assert row["timed_out_runs"] == 1
@@ -1740,6 +2325,8 @@ def test_a_resume_keeps_the_provenance_the_prior_artifact_carried(
         memory_calls=1,
         read_calls=1,
         write_calls=0,
+        reading_runs=1,
+        writing_runs=0,
         paid=True,
         work_id=tasks[0].work_id,
     )
@@ -1808,6 +2395,8 @@ def test_a_halt_leaves_out_holding_the_grid_the_resume_will_start_from(
             memory_calls=runs,
             read_calls=runs,
             write_calls=0,
+            reading_runs=runs,
+            writing_runs=0,
             paid=True,
             work_id=work_id,
         )

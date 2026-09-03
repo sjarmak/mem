@@ -27,7 +27,6 @@ from membench.runner.headless_agent import (
     _render_only_runner,
     _stream_result_text,
     _stream_usage_tokens,
-    _tool_calls_from_stream,
     a_paid_run_carries_the_metered_api_key,
     a_paid_run_needs_a_model,
     assistant_event,
@@ -37,6 +36,8 @@ from membench.runner.headless_agent import (
     result_event,
     serialize_stream,
     stream_cli_version,
+    tool_calls_from_stream,
+    tool_result_event,
 )
 from membench.runner.trajectory_run import (
     run_arm_trajectories,
@@ -112,19 +113,72 @@ def test_serialized_stream_round_trips_through_every_parser() -> None:
             result_event("wrote it"),
         ]
     )
-    assert _tool_calls_from_stream(stream) == [
+    assert tool_calls_from_stream(stream) == [
         ToolCall(name="Write", arguments={"file_path": "config.json", "content": "v2"})
     ]
     assert _stream_usage_tokens(stream) == (7, 3)
     assert _stream_result_text(stream) == "wrote it"
 
 
+def test_a_tool_result_is_joined_to_its_tool_use_by_id() -> None:
+    """mem-8fv4t: the scorer keys a write on bd's acknowledgement, which lives in the tool_result
+    of the SAME call. The join is by id, not by position: the result of the first call must not
+    land on the second, and a call with no result stays `None`."""
+    stream = serialize_stream(
+        [
+            assistant_event(
+                [
+                    ("Bash", {"command": "bd remember list"}, "toolu_a"),
+                    ("Bash", {"command": "bd remember 'v' --key k"}, "toolu_b"),
+                    ("Bash", {"command": "bd recall k"}, "toolu_c"),
+                ]
+            ),
+            tool_result_event("toolu_b", "Remembered [k]: v"),
+            tool_result_event("toolu_a", 'Error: "list" looks like a command', is_error=False),
+            result_event(),
+        ]
+    )
+    assert [call.result for call in tool_calls_from_stream(stream)] == [
+        'Error: "list" looks like a command',
+        "Remembered [k]: v",
+        None,
+    ]
+
+
+def test_a_list_form_tool_result_is_joined_as_its_text_parts() -> None:
+    """The CLI emits tool_result content either as a string or as a list of text blocks."""
+    stream = serialize_stream(
+        [
+            assistant_event([("Bash", {"command": "bd remember 'v' --key k"}, "toolu_a")]),
+            {
+                "type": "user",
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "toolu_a",
+                            "content": [
+                                {"type": "text", "text": "Remembered [k]: v"},
+                                {"type": "text", "text": "second part"},
+                            ],
+                        }
+                    ],
+                },
+            },
+            result_event(),
+        ]
+    )
+    (call,) = tool_calls_from_stream(stream)
+    assert call.result == "Remembered [k]: v\nsecond part"
+
+
 def test_assistant_event_keeps_tool_uses_in_order() -> None:
-    """Stream ORDER is what `_tool_calls_from_stream` and `bbon.extract` both key on."""
+    """Stream ORDER is what `tool_calls_from_stream` and `bbon.extract` both key on."""
     stream = serialize_stream(
         [assistant_event([("Read", {"path": "a.py"}), ("Grep", {"q": "import"})]), result_event()]
     )
-    assert [call.name for call in _tool_calls_from_stream(stream)] == ["Read", "Grep"]
+    assert [call.name for call in tool_calls_from_stream(stream)] == ["Read", "Grep"]
 
 
 def test_assistant_event_without_usage_omits_the_key() -> None:

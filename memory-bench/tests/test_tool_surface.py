@@ -21,6 +21,7 @@ The invariants that make a zero call-rate MEAN something:
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -29,6 +30,7 @@ from pathlib import Path
 
 import pytest
 
+from membench.runner import tool_surface
 from membench.runner.agent import AgentStepResult
 from membench.runner.e1_smoke import (
     SMOKE_KEY,
@@ -54,17 +56,25 @@ from membench.runner.tool_surface import (
     MEMORY_ALLOWED_TOOLS,
     MEMORY_COMMAND,
     NATIVE_MEMORY_TOOL_NAMES,
+    MemoryInvocation,
     MemoryToolError,
+    NativeMemoryAccess,
     assert_store_outside,
     command_segments,
     endogenous_memory_tool_calls,
     endogenous_memory_verbs,
     harness_call,
+    memory_invocations,
+    memory_invocations_in_command,
+    memory_reaching_calls,
     memory_verbs_in_command,
     native_memory_accesses,
     native_memory_calls,
     partition_memory_calls,
     provision_memory_tool,
+    recognizer_policy,
+    remember_was_a_recall,
+    remember_was_accepted,
     resolve_bd_binary,
     settings_fingerprint,
     surface_fingerprint,
@@ -879,3 +889,688 @@ def test_the_native_tools_are_actually_allowed(tmp_path: Path) -> None:
     paid cycle, which is why the reach came back permission_denied."""
     assert "Read" in MEMORY_ALLOWED_TOOLS
     assert set(NATIVE_MEMORY_TOOL_NAMES) - {"NotebookEdit"} <= set(MEMORY_ALLOWED_TOOLS)
+
+
+# --------------------------------------------------------------------------- #
+# mem-8fv4t: a write is bd's acknowledgement, not the verb token
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    ("command", "key", "operands"),
+    [
+        ("bd remember 'a value' --key k", "k", ("a value",)),
+        ("bd remember --key=k 'a value'", "k", ("a value",)),
+        ("bd remember --key k 'a value'", "k", ("a value",)),
+        ("bd remember list", "", ("list",)),
+        ("bd remember", "", ()),
+        ("bd remember 'a value' --json", "", ("a value",)),
+    ],
+)
+def test_remember_argv_splits_key_from_content(
+    command: str, key: str, operands: tuple[str, ...]
+) -> None:
+    (invocation,) = memory_invocations_in_command(command)
+    assert (invocation.verb, invocation.key, invocation.operands) == ("remember", key, operands)
+
+
+@pytest.mark.parametrize(
+    ("result", "accepted", "recalled"),
+    [
+        ("Remembered [k]: a value", True, False),
+        ("Updated [k]: a value", True, False),
+        ('{"action":"remembered","key":"k"}', True, False),
+        ('{"action":"updated","key":"k"}', True, False),
+        ('(recalled "k" -- a bare existing key READS. To overwrite: ...)\na value', False, True),
+        ('{"action":"recalled","found":true,"key":"k"}', False, True),
+        ('Error: "list" looks like a command, not something to remember', False, False),
+        ("", False, False),
+        (None, False, False),
+        # An echo of the acknowledgement mid-line is not the acknowledgement: bd prints it at
+        # column 0.
+        ("note: Remembered [k]: a value", False, False),
+    ],
+)
+def test_bd_remember_acknowledgement_is_format_anchored(
+    result: str | None, accepted: bool, recalled: bool
+) -> None:
+    assert remember_was_accepted(result) is accepted
+    assert remember_was_a_recall(result) is recalled
+
+
+def test_an_accepted_write_needs_both_an_operand_and_an_acknowledgement() -> None:
+    ack = "Remembered [k]: a value"
+    assert MemoryInvocation("remember", ("a value",), "k", ack).is_accepted_write
+    assert MemoryInvocation("remember", ("a value",), "", ack).is_accepted_write
+    assert not MemoryInvocation("remember", ("list",), "", None).is_accepted_write
+    assert not MemoryInvocation("remember", (), "", ack).is_accepted_write
+    assert not MemoryInvocation("recall", ("k",), "", ack).is_accepted_write
+    # Verb-level `is_write` is untouched: E3b's endogenous-write metric still keys on the verb.
+    assert MemoryInvocation("remember", ("list",), "", None).is_write
+
+
+def test_memory_invocations_carry_each_calls_own_result() -> None:
+    """The result is joined per CALL, so two remembers in one leg score independently."""
+    calls = [
+        ToolCall(
+            name="Bash",
+            arguments={"command": "bd remember list 2>&1 | head -100"},
+            result='Error: "list" looks like a command, not something to remember',
+        ),
+        ToolCall(
+            name="Bash",
+            arguments={"command": "bd remember 'a value' --key k"},
+            result="Remembered [k]: a value",
+        ),
+        ToolCall(name="Bash", arguments={"command": "bd remember k"}, result='(recalled "k" -- x)'),
+    ]
+    invocations = memory_invocations(calls)
+    assert [inv.is_accepted_write for inv in invocations] == [False, True, False]
+    assert [inv.is_recall_by_result for inv in invocations] == [False, False, True]
+
+
+_REFUSAL = 'Error: "list" looks like a command, not something to remember'
+
+
+@pytest.mark.parametrize(
+    ("command", "result", "accepted", "recalled"),
+    [
+        # The review's shape: one refusal and one ack for two invocations in ONE Bash call.
+        # The whole-result join scored write_calls=2 here.
+        (
+            "bd remember list; bd remember 'ok' --key k",
+            f"{_REFUSAL}\nRemembered [k]: ok",
+            [False, True],
+            [False, False],
+        ),
+        # A keyed invocation takes the line carrying ITS key, not the first line.
+        (
+            "bd remember 'a' --key j && bd remember 'b' --key k",
+            "Remembered [k]: b",
+            [False, True],
+            [False, False],
+        ),
+        # Unkeyed invocations consume unmatched ack lines in stream order: one line, one write.
+        ("bd remember 'a'; bd remember 'b'", "Remembered [x]: a", [True, False], [False, False]),
+        # Both acknowledged: two lines, two writes.
+        (
+            "bd remember 'a' --key j; bd remember 'b' --key k",
+            "Remembered [j]: a\nUpdated [k]: b",
+            [True, True],
+            [False, False],
+        ),
+        # The recalled marker is attributed the same way and is never an acceptance.
+        (
+            "bd remember k; bd remember 'v' --key j",
+            '(recalled "k" -- a bare existing key READS)\nRemembered [j]: v',
+            [False, True],
+            [True, False],
+        ),
+        ("bd remember k; bd remember k", '(recalled "k" -- x)', [False, False], [True, False]),
+        # A refusal is never an ack: neither invocation stored anything.
+        (
+            "bd remember list; bd remember foo",
+            f"{_REFUSAL}\n{_REFUSAL}",
+            [False, False],
+            [False, False],
+        ),
+        # --json: one object per invocation, matched by key where the object carries one.
+        (
+            "bd remember 'a' --key j --json; bd remember 'b' --key k --json",
+            '{"action": "remembered", "key": "k"}',
+            [False, True],
+            [False, False],
+        ),
+    ],
+    ids=[
+        "refusal-then-ack",
+        "keyed-takes-its-own-line",
+        "unkeyed-stream-order",
+        "two-lines-two-writes",
+        "recalled-and-ack",
+        "recalled-once",
+        "two-refusals",
+        "json-keyed",
+    ],
+)
+def test_one_acknowledgement_line_acknowledges_at_most_one_invocation(
+    command: str, result: str, accepted: list[bool], recalled: list[bool]
+) -> None:
+    """Review F1: a Bash call chaining two bd invocations has ONE tool_result. Riding the whole
+    result on every invocation let one ``Remembered`` line acknowledge both, so a refused
+    ``bd remember list`` next to a real write scored as two writes."""
+    invocations = memory_invocations([_bash_call(command, result)])
+    assert [inv.is_accepted_write for inv in invocations] == accepted
+    assert [inv.is_recall_by_result for inv in invocations] == recalled
+
+
+def test_a_single_invocation_keeps_the_whole_result() -> None:
+    """The exact join for one invocation is unchanged: whatever bd printed is its result."""
+    (invocation,) = memory_invocations(
+        [_bash_call("bd remember 'ok' --key k", "noise\nRemembered [k]: ok")]
+    )
+    assert invocation.result == "noise\nRemembered [k]: ok"
+    truncated = memory_invocations([_bash_call("bd remember 'ok' --key k; bd recall k", None)])
+    assert [inv.result for inv in truncated] == [None, None]
+
+
+def test_score_leg_counts_one_write_for_a_refusal_and_an_ack_in_one_call() -> None:
+    from membench.runner.e1_grid import score_leg
+
+    call = _bash_call(
+        "bd remember list; bd remember 'ok' --key k", f"{_REFUSAL}\nRemembered [k]: ok"
+    )
+    assert score_leg([call], config_dir=None).write_calls == 1
+
+
+def _bash_call(command: str, result: str | None) -> ToolCall:
+    return ToolCall(name="Bash", arguments={"command": command}, result=result)
+
+
+# --------------------------------------------------------------------------- #
+# mem-zfm0m item 3: a Bash command that touches the pinned memory dir is a native access
+# --------------------------------------------------------------------------- #
+
+
+def _bash(command: str) -> ToolCall:
+    return ToolCall(name="Bash", arguments={"command": command})
+
+
+def _pinned(tmp_path: Path) -> tuple[Path, Path]:
+    config = tmp_path / "config"
+    memory = config / "projects" / "-tmp" / "memory"
+    memory.mkdir(parents=True)
+    return config, memory
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "cat {m}/MEMORY.md",
+        "head -50 {m}/MEMORY.md",
+        "tail -n 20 {m}/MEMORY.md",
+        "sed -n 1,40p {m}/MEMORY.md",
+        "grep -n retention {m}/MEMORY.md",
+        "less {m}/MEMORY.md",
+        "more {m}/MEMORY.md",
+        "cat < {m}/MEMORY.md",
+        "cat {m}/MEMORY.md 2>&1 | head -20",
+        "cd /tmp && cat {m}/MEMORY.md",
+        "/bin/cat {m}/MEMORY.md",
+        'cat "$CLAUDE_CONFIG_DIR/projects/-tmp/memory/MEMORY.md"',
+        "cat ${{CLAUDE_CONFIG_DIR}}/projects/-tmp/memory/MEMORY.md",
+        "cd {m} && cat MEMORY.md",
+        "cp {m}/MEMORY.md /tmp/copy.md",
+    ],
+)
+def test_a_bash_read_of_the_pinned_memory_dir_is_a_native_read(
+    tmp_path: Path, template: str
+) -> None:
+    """The recognizer keys on the ARGV SHAPE and the pinned path — the command word, its operands,
+    a `<` redirect, the `$CLAUDE_CONFIG_DIR` the harness itself pinned, or a `cd` earlier in the
+    same command — never on prose about memory."""
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses([_bash(template.format(m=memory))], config_dir=config)
+    assert [a.verb for a in accesses] == ["native_read"], template
+    assert accesses[0].tool == "Bash"
+    assert Path(accesses[0].path) == memory / "MEMORY.md"
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "echo '- note' > {m}/MEMORY.md",
+        "echo '- note' >> {m}/MEMORY.md",
+        "printf 'x' >| {m}/MEMORY.md",
+        "printf 'x' &> {m}/MEMORY.md",
+        "printf 'x' | tee {m}/MEMORY.md",
+        "printf 'x' | tee -a {m}/MEMORY.md",
+        "cp /tmp/notes.md {m}/MEMORY.md",
+        "mv /tmp/notes.md {m}/MEMORY.md",
+        "sed -i 's/a/b/' {m}/MEMORY.md",
+        "sed -i.bak 's/a/b/' {m}/MEMORY.md",
+        "sed --in-place 's/a/b/' {m}/MEMORY.md",
+        "cd {m} && echo x >> MEMORY.md",
+        'echo x >> "$CLAUDE_CONFIG_DIR/projects/-tmp/memory/MEMORY.md"',
+    ],
+)
+def test_a_bash_write_into_the_pinned_memory_dir_is_a_native_write(
+    tmp_path: Path, template: str
+) -> None:
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses([_bash(template.format(m=memory))], config_dir=config)
+    assert [a.verb for a in accesses] == ["native_write"], template
+    assert Path(accesses[0].path) == memory / "MEMORY.md"
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        # Prose about memory is not a path: the word appears and no pinned path is touched.
+        "echo 'let me check memory first'  # memory",
+        "grep -rn memory /tmp/notes",
+        "cat /tmp/notes/memory.md",
+        # Under the config dir but not under a `memory` segment.
+        "cat {c}/settings.json",
+        "echo x >> {c}/settings.json",
+        # A memory-looking path OUTSIDE the pinned config dir is the operator's, not the agent's.
+        "cat /home/someone/.claude/projects/-tmp/memory/MEMORY.md",
+        "echo x > /tmp/memory/MEMORY.md",
+        # A relative path with no `cd` to anchor it names nothing the harness owns.
+        "cat projects/-tmp/memory/MEMORY.md",
+        # A redirect to /dev/null beside a non-memory read.
+        "cat /etc/hostname 2>/dev/null",
+    ],
+)
+def test_bash_commands_that_touch_no_pinned_memory_path_are_not_native_accesses(
+    tmp_path: Path, template: str
+) -> None:
+    config, memory = _pinned(tmp_path)
+    command = template.format(c=config, m=memory)
+    assert native_memory_accesses([_bash(command)], config_dir=config) == []
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "rg retention {m}/MEMORY.md",
+        "awk '{{print}}' {m}/MEMORY.md",
+        "wc -l {m}/MEMORY.md",
+        "find {m}/MEMORY.md -newer /tmp/x",
+        "od -c {m}/MEMORY.md",
+        "dd if={m}/MEMORY.md bs=1 count=100",
+        "cut -c1-80 {m}/MEMORY.md",
+        "jq . {m}/MEMORY.md",
+        "stat {m}/MEMORY.md",
+        "command cat {m}/MEMORY.md",
+        "sudo -u me cat {m}/MEMORY.md",
+        "env FOO=bar cat {m}/MEMORY.md",
+        "time cat {m}/MEMORY.md",
+        "nice cat {m}/MEMORY.md",
+        "exec cat {m}/MEMORY.md",
+        "python3 -c \"print(open('{m}/MEMORY.md').read())\"",
+        "perl -ne 'print' {m}/MEMORY.md",
+        "node -e \"console.log(require('fs').readFileSync('{m}/MEMORY.md','utf8'))\"",
+        "bash -c 'cat {m}/MEMORY.md'",
+        "cat ${{CLAUDE_CONFIG_DIR:?}}/projects/-tmp/memory/MEMORY.md",
+        "cat ${{CLAUDE_CONFIG_DIR:-/nowhere}}/projects/-tmp/memory/MEMORY.md",
+        "cat --show-all {m}/MEMORY.md",
+        "some-tool --file={m}/MEMORY.md",
+    ],
+)
+def test_a_bash_read_is_decided_by_the_path_not_the_command_name(
+    tmp_path: Path, template: str
+) -> None:
+    """Review F2: the ACCESS is decided by any token resolving under the pinned memory path,
+    whatever the command word (the 7-name allowlist scored `rg`, `wc`, `jq`, an inline
+    interpreter, ... as zero); the command word and the redirect shape decide read vs write
+    only. Wrapper words are skipped; `${VAR:?}` and `${VAR:-x}` expand like `$VAR`."""
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses([_bash(template.format(m=memory))], config_dir=config)
+    assert [a.verb for a in accesses] == ["native_read"], template
+    assert Path(accesses[0].path) == memory / "MEMORY.md"
+    assert accesses[0].tokenizer_failed is False
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "sudo tee {m}/MEMORY.md",
+        "command cp /tmp/notes.md {m}/MEMORY.md",
+        "env -i sed -i 's/a/b/' {m}/MEMORY.md",
+        "printf x >> ${{CLAUDE_CONFIG_DIR:?}}/projects/-tmp/memory/MEMORY.md",
+    ],
+)
+def test_direction_is_read_from_the_unwrapped_command_word(tmp_path: Path, template: str) -> None:
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses([_bash(template.format(m=memory))], config_dir=config)
+    assert [a.verb for a in accesses] == ["native_write"], template
+    assert Path(accesses[0].path) == memory / "MEMORY.md"
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "cat 'unterminated {m}/MEMORY.md",
+        'grep "x {m}/MEMORY.md; echo done',
+    ],
+)
+def test_a_command_the_tokenizer_refuses_is_still_scanned_for_the_path(
+    tmp_path: Path, template: str
+) -> None:
+    """Review F2: an unterminated quote used to return [] — a miss on the exact kind of
+    command a model writes by accident. The path scan falls back to a whitespace split and the
+    access is flagged so a reader knows the tokenizer did not vouch for it."""
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses([_bash(template.format(m=memory))], config_dir=config)
+    assert [a.verb for a in accesses] == ["native_read"], template
+    assert Path(accesses[0].path) == memory / "MEMORY.md"
+    assert accesses[0].tokenizer_failed is True
+
+
+@pytest.mark.parametrize(
+    ("template", "name"),
+    [
+        ("rm {m}/MEMORY.md", "MEMORY.md"),
+        ("rm -rf {m}", "memory"),
+        ("touch {m}/MEMORY.md", "MEMORY.md"),
+        ("chmod 600 {m}/MEMORY.md", "MEMORY.md"),
+        ("chown me {m}/MEMORY.md", "MEMORY.md"),
+        ("truncate -s 0 {m}/MEMORY.md", "MEMORY.md"),
+        ("ln -s /tmp/notes.md {m}/MEMORY.md", "MEMORY.md"),
+        ("mkdir -p {m}/topics", "topics"),
+        ("rmdir {m}/topics", "topics"),
+    ],
+)
+def test_a_command_that_mutates_the_memory_file_is_a_native_write(
+    tmp_path: Path, template: str, name: str
+) -> None:
+    """Review G1: every command word outside the write list defaulted to READ, so deleting,
+    re-moding, truncating or creating a memory path scored as the agent reading it. A mutation
+    is a write; it never lands beside the reads."""
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses([_bash(template.format(m=memory))], config_dir=config)
+    assert [(a.verb, Path(a.path).name) for a in accesses] == [("native_write", name)], template
+
+
+def test_a_link_out_of_the_memory_dir_reads_it(tmp_path: Path) -> None:
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses(
+        [_bash(f"ln -s {memory}/MEMORY.md /tmp/link.md")], config_dir=config
+    )
+    assert [a.verb for a in accesses] == ["native_read"]
+
+
+@pytest.mark.parametrize(
+    ("template", "verb"),
+    [
+        ("sudo -u me tee {m}/MEMORY.md", "native_write"),
+        ("sudo -u me -g us tee {m}/MEMORY.md", "native_write"),
+        ("sudo -u me cat {m}/MEMORY.md", "native_read"),
+        ("sudo --user=me tee {m}/MEMORY.md", "native_write"),
+        ("env -i FOO=bar tee {m}/MEMORY.md", "native_write"),
+        ("env -u FOO tee {m}/MEMORY.md", "native_write"),
+        ("nice -n 5 tee {m}/MEMORY.md", "native_write"),
+        ("nice -n 5 rm {m}/MEMORY.md", "native_write"),
+        ("time -f '%e' tee {m}/MEMORY.md", "native_write"),
+        ("time -o /tmp/t.log cat {m}/MEMORY.md", "native_read"),
+    ],
+)
+def test_a_wrapper_option_value_is_not_read_as_the_command_word(
+    tmp_path: Path, template: str, verb: str
+) -> None:
+    """Review G1: `sudo -u me tee <path>` left `me` as the command word, and `me` reads. The
+    separate value of a wrapper option is consumed with the option."""
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses([_bash(template.format(m=memory))], config_dir=config)
+    assert [(a.verb, Path(a.path).name) for a in accesses] == [(verb, "MEMORY.md")], template
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "echo '$CLAUDE_CONFIG_DIR/projects/-tmp/memory/MEMORY.md'",
+        'echo "$CLAUDE_CONFIG_DIR/projects/-tmp/memory/MEMORY.md"',
+        "echo {m}/MEMORY.md",
+        "printf '%s\\n' {m}/MEMORY.md",
+        "echo reading {m}/MEMORY.md now",
+    ],
+)
+def test_an_echoed_path_is_not_an_access(tmp_path: Path, template: str) -> None:
+    """Review G3: `echo <path>` prints the path and opens nothing, quoted or not. The operands
+    of a non-accessing command attribute nothing; only a redirect beside them does."""
+    config, memory = _pinned(tmp_path)
+    assert native_memory_accesses([_bash(template.format(m=memory))], config_dir=config) == []
+
+
+def test_a_redirect_beside_a_non_accessing_command_still_counts(tmp_path: Path) -> None:
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses(
+        [_bash(f"echo {memory}/topic.md >> {memory}/MEMORY.md")], config_dir=config
+    )
+    assert [(a.verb, Path(a.path).name) for a in accesses] == [("native_write", "MEMORY.md")]
+
+
+@pytest.mark.parametrize(
+    ("template", "verb", "name"),
+    [
+        ('cd "$CLAUDE_CONFIG_DIR/projects/-tmp/memory" && cat MEMORY', "native_read", "MEMORY"),
+        ("cd {m} && cat MEMORY", "native_read", "MEMORY"),
+        ("cd {m}; rm MEMORY", "native_write", "MEMORY"),
+        ("cd {m} && cat < MEMORY", "native_read", "MEMORY"),
+        ("cd {c} && cd projects/-tmp/memory && cat MEMORY", "native_read", "MEMORY"),
+    ],
+)
+def test_inside_the_pinned_memory_dir_every_operand_is_a_path(
+    tmp_path: Path, template: str, verb: str, name: str
+) -> None:
+    """Review G2: the relative-path shape rule (a `/` or a `.`) kept `cd /tmp && grep x
+    memory/f` from scoring `x`, and also kept `cd <memory dir> && cat MEMORY` from scoring the
+    memory file. When the cd anchor resolves under the pin, every operand resolves against it."""
+    config, memory = _pinned(tmp_path)
+    command = template.format(m=memory, c=config)
+    accesses = native_memory_accesses([_bash(command)], config_dir=config)
+    assert [(a.verb, Path(a.path).name) for a in accesses] == [(verb, name)], command
+    assert Path(accesses[0].path) == memory / name
+
+
+@pytest.mark.parametrize(
+    ("template", "expected"),
+    [
+        ("cd {m} && chmod 600 MEMORY.md", [("native_write", "MEMORY.md")]),
+        ("cd {m} && chown me MEMORY.md", [("native_write", "MEMORY.md")]),
+        ("cd {m} && grep pattern", []),
+        ("cd {m} && grep pattern MEMORY.md", [("native_read", "MEMORY.md")]),
+        ("cd {m} && grep -e pat MEMORY.md", [("native_read", "MEMORY.md")]),
+        ("cd {m} && grep --regexp=pat MEMORY.md", [("native_read", "MEMORY.md")]),
+        ("cd {m} && grep -A 3 pat MEMORY.md", [("native_read", "MEMORY.md")]),
+        ("cd {m} && sed -n 1,40p MEMORY.md", [("native_read", "MEMORY.md")]),
+        ("cd {m} && sed -e 1,40p MEMORY.md", [("native_read", "MEMORY.md")]),
+        ("cd {m} && head -n 50 MEMORY.md", [("native_read", "MEMORY.md")]),
+        ("cd {m} && tail -n 20", []),
+        ("cd {m} && awk '{{print}}' MEMORY.md", [("native_read", "MEMORY.md")]),
+        ("cd {m} && find . -name MEMORY.md", [("native_read", "memory")]),
+        ("cd {m} && truncate -s 0 MEMORY.md", [("native_write", "MEMORY.md")]),
+        ("cd {m} && cut -d : -f 1 MEMORY.md", [("native_read", "MEMORY.md")]),
+        (
+            "cd {m} && ln -s MEMORY.md link",
+            [("native_read", "MEMORY.md"), ("native_write", "link")],
+        ),
+    ],
+)
+def test_inside_the_pinned_memory_dir_only_path_operands_anchor(
+    tmp_path: Path, template: str, expected: list[tuple[str, str]]
+) -> None:
+    """Review H1: the in-pin widening made EVERY non-flag word a path, so `chmod 600 MEMORY.md`
+    was two writes and `grep pattern` a read of `<memory>/pattern` — counters inflated per call
+    and a reading leg manufactured. A value word (a mode, a pattern, a script, a flag's value)
+    is policy-enumerated and never anchored; a command left with no path operand attributes
+    nothing."""
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses([_bash(template.format(m=memory))], config_dir=config)
+    assert [(a.verb, Path(a.path).name) for a in accesses] == expected, template
+    for access in accesses:
+        assert Path(access.path).is_relative_to(memory)
+
+
+def test_in_pin_value_words_do_not_inflate_the_per_call_counters(tmp_path: Path) -> None:
+    from membench.runner.e1_grid import score_leg
+
+    config, memory = _pinned(tmp_path)
+    chmod = _bash(f"cd {memory} && chmod 600 MEMORY.md")
+    assert score_leg([chmod], config_dir=config).write_calls == 1
+    grep = _bash(f"cd {memory} && grep pattern")
+    assert score_leg([grep], config_dir=config).read_calls == 0
+    sed = _bash(f"cd {memory} && sed -n 1,40p MEMORY.md")
+    assert score_leg([sed], config_dir=config).read_calls == 1
+
+
+def test_outside_the_pinned_memory_dir_a_bare_operand_is_still_not_a_path(tmp_path: Path) -> None:
+    config, memory = _pinned(tmp_path)
+    parent = memory.parent
+    accesses = native_memory_accesses(
+        [_bash(f"cd {parent} && cat memory/MEMORY")], config_dir=config
+    )
+    assert [Path(a.path).name for a in accesses] == ["MEMORY"]
+    assert native_memory_accesses([_bash(f"cd {parent} && cat memory")], config_dir=config) == []
+
+
+def test_a_pinned_path_is_reported_once_per_token(tmp_path: Path) -> None:
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses([_bash(f"cat {memory}/MEMORY.md")], config_dir=config)
+    assert len(accesses) == 1
+
+
+def test_one_bash_command_can_read_one_memory_file_and_write_another(tmp_path: Path) -> None:
+    """Direction is per PATH, so a copy from one memory file into another is one read and one
+    write — and it is ONE call, matching the block-not-verb rule for bd."""
+    config, memory = _pinned(tmp_path)
+    calls = [_bash(f"cat {memory}/MEMORY.md >> {memory}/topic.md")]
+    accesses = native_memory_accesses(calls, config_dir=config)
+    assert [(a.verb, Path(a.path).name) for a in accesses] == [
+        ("native_read", "MEMORY.md"),
+        ("native_write", "topic.md"),
+    ]
+    assert native_memory_calls(calls, config_dir=config) == 1
+
+
+def test_memory_reaching_calls_counts_a_call_once_across_both_affordances(tmp_path: Path) -> None:
+    """A Bash command that runs `bd recall` AND cats the native memory file reached memory ONCE
+    (one tool call), while a bd-only call and a native-only call each count on their own."""
+    config, memory = _pinned(tmp_path)
+    both = _bash(f"bd recall k; cat {memory}/MEMORY.md")
+    bd_only = _bash("bd recall k")
+    native_only = _read_call(str(memory / "MEMORY.md"))
+    neither = _bash("ls /tmp")
+    assert memory_reaching_calls([both], config_dir=config) == 1
+    assert memory_reaching_calls([both, bd_only, native_only, neither], config_dir=config) == 3
+    assert memory_reaching_calls([native_only], config_dir=None) == 0
+
+
+def test_a_bash_call_and_a_read_tool_call_carry_their_own_call_index(tmp_path: Path) -> None:
+    config, memory = _pinned(tmp_path)
+    calls = [
+        _bash("ls /tmp"),
+        _read_call(str(memory / "MEMORY.md")),
+        _bash(f"cat {memory}/MEMORY.md; cat {memory}/topic.md"),
+    ]
+    accesses = native_memory_accesses(calls, config_dir=config)
+    assert [a.call_index for a in accesses] == [1, 2, 2]
+    assert native_memory_calls(calls, config_dir=config) == 2
+    assert isinstance(accesses[0], NativeMemoryAccess)
+
+
+# --------------------------------------------------------------------------- #
+# mem-zfm0m item 6: the recognizer's constants are part of the surface policy
+# --------------------------------------------------------------------------- #
+
+
+def _mutated(value: object) -> object:
+    """A value of the same kind that differs from ``value``, so the mutation is one the constant's
+    readers could see rather than a type change."""
+    if isinstance(value, re.Pattern):
+        return re.compile(value.pattern + "x", value.flags)
+    if isinstance(value, bool):
+        return not value
+    if isinstance(value, int | float):
+        return value + 1
+    if isinstance(value, str):
+        return value + "x"
+    if isinstance(value, tuple):
+        return (*value, "x")
+    if isinstance(value, frozenset):
+        return value | {"x"}
+    raise TypeError(f"no mutation for a {type(value).__name__}")
+
+
+@pytest.mark.parametrize("name", sorted(recognizer_policy()))
+def test_surface_fingerprint_moves_when_any_recognizer_constant_changes(
+    monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    """mem-zfm0m item 6, review F4. The recognizers decide what a leg SCORES, so every constant
+    they read is surface policy: a resume against an artifact counted under a different recognizer
+    would pool two measurements under one identity. The list is ENUMERATED from the module (every
+    name under a stated prefix), not hand-written, so a constant added later cannot be left out."""
+    before = surface_fingerprint()
+    monkeypatch.setattr(tool_surface, name, _mutated(getattr(tool_surface, name)))
+    assert surface_fingerprint() != before
+
+
+def test_the_recognizer_implementation_version_is_policy() -> None:
+    """Review G5: the shape rule and the rest of the recognizer's logic live in code, outside
+    any constant, so a version number stands in for them in the fingerprint. It is an int, in
+    the policy, and at least 2 (G1-G3 changed the logic after the version-1 recognizer)."""
+    version = tool_surface.RECOGNIZER_IMPLEMENTATION_VERSION
+    assert isinstance(version, int) and version >= 3
+    assert recognizer_policy()["RECOGNIZER_IMPLEMENTATION_VERSION"] == version
+
+
+def test_the_recognizers_read_their_command_names_from_the_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review G5: `cd`, `sed` and the assignment-taking wrapper were literals in the matcher,
+    fingerprinted by nothing. Each is a policy constant the matcher READS: renaming it in the
+    policy renames what the matcher recognizes."""
+    config, memory = _pinned(tmp_path)
+
+    def verbs(command: str) -> list[tuple[str, str]]:
+        accesses = native_memory_accesses([_bash(command)], config_dir=config)
+        return [(a.verb, Path(a.path).name) for a in accesses]
+
+    assert verbs(f"cd {memory} && cat MEMORY.md") == [("native_read", "MEMORY.md")]
+    monkeypatch.setattr(tool_surface, "NATIVE_MEMORY_BASH_CD", "chdir")
+    assert verbs(f"chdir {memory} && cat MEMORY.md") == [("native_read", "MEMORY.md")]
+    # `cd` is now an ordinary command whose operand is the memory dir itself.
+    assert verbs(f"cd {memory} && cat MEMORY.md") == [("native_read", "memory")]
+
+    assert verbs(f"sed -i s/a/b/ {memory}/MEMORY.md") == [("native_write", "MEMORY.md")]
+    monkeypatch.setattr(tool_surface, "NATIVE_MEMORY_BASH_SED", "ssed")
+    assert verbs(f"ssed -i s/a/b/ {memory}/MEMORY.md") == [("native_write", "MEMORY.md")]
+    assert verbs(f"sed -i s/a/b/ {memory}/MEMORY.md") == [("native_read", "MEMORY.md")]
+
+    assert verbs(f"env FOO=bar tee {memory}/MEMORY.md") == [("native_write", "MEMORY.md")]
+    monkeypatch.setattr(tool_surface, "NATIVE_MEMORY_BASH_ASSIGNMENT_WRAPPERS", ())
+    assert verbs(f"env FOO=bar tee {memory}/MEMORY.md") == [("native_read", "MEMORY.md")]
+
+
+def test_the_recognizer_policy_covers_every_constant_the_recognizers_read() -> None:
+    """Review F4: the ack/recall grammar, the argv grammar and the native Bash recognizer's tables
+    are all in; the only module-level constants outside the policy are the ones that do not
+    change what a leg scores, named here so a new constant must be placed on one side or the
+    other."""
+    policy = set(recognizer_policy())
+    assert {
+        "_BD_REMEMBER_ACK",
+        "_BD_REMEMBER_RECALLED",
+        "_BD_REMEMBER_ACK_ACTIONS",
+        "_GRAMMAR_SEGMENT_BREAKS",
+        "_GRAMMAR_SHELL_KEYWORDS",
+        "_GRAMMAR_CONFIG_DIR_SPELLINGS",
+        "BD_KEY_FLAG",
+        "BD_VALUE_FLAGS",
+        "MEMORY_VERBS",
+        "MEMORY_COMMAND",
+        "HOST_DENIED_TOOLS",
+        "NATIVE_MEMORY_BASH_WRAPPERS",
+        "NATIVE_MEMORY_BASH_WRAPPER_VALUE_FLAGS",
+        "NATIVE_MEMORY_BASH_WRITE_ALL_OPERANDS",
+        "NATIVE_MEMORY_BASH_WRITE_LAST_OPERAND",
+        "NATIVE_MEMORY_BASH_NON_ACCESSING_COMMANDS",
+        "NATIVE_MEMORY_BASH_CD",
+        "NATIVE_MEMORY_BASH_SED",
+        "NATIVE_MEMORY_BASH_ASSIGNMENT_WRAPPERS",
+        "NATIVE_MEMORY_BASH_LEADING_VALUE_OPERANDS",
+        "NATIVE_MEMORY_BASH_COMMAND_VALUE_FLAGS",
+        "RECOGNIZER_IMPLEMENTATION_VERSION",
+        "NATIVE_MEMORY_BASH_PATH_TERMINATORS",
+        "CONFIG_DIR_ENV",
+    } <= policy
+    uppercase = {
+        name
+        for name, value in vars(tool_surface).items()
+        if re.fullmatch(r"_?[A-Z][A-Z0-9_]*", name) and not callable(value)
+    }
+    assert uppercase - policy == {
+        "PROVISION_TIMEOUT_S",
+        "CALL_TIMEOUT_S",
+        "ENV_BD_BINARY",
+        "_POLICY_PREFIXES",
+    }

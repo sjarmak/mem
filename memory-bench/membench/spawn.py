@@ -18,7 +18,10 @@ exception is raised, not raise-vs-return.
 
 from __future__ import annotations
 
+import contextlib
+import os
 import re
+import signal
 import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -67,6 +70,143 @@ _REDACTED = "<redacted-credential>"
 # Below it we accept the theoretical miss of an implausibly-short secret to protect the
 # diagnosis -- the same both-directions bar the `\b` word boundary holds for the shape pass.
 _MIN_REDACTABLE_SECRET_LEN = 8
+
+# How long ``run_in_session`` waits for the pipes to close after it has SIGKILLed the child's
+# group. A killed group closes its pipe ends at once, so anything still holding them past this
+# bound is a survivor (a kill that did nothing, a process the signal could not reach) and the
+# drain reports it rather than blocking the rig on it.
+DRAIN_TIMEOUT_S = 5.0
+
+
+def run_in_session(
+    argv: Sequence[str],
+    *,
+    capture_output: bool,
+    text: bool,
+    check: bool,
+    timeout: float | None,
+    cwd: str | Path | None = None,
+    env: Mapping[str, str] | None = None,
+    input: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """``subprocess.run`` for a child that may have children of its own.
+
+    ``subprocess.run`` kills the process it spawned on timeout and nothing else: a ``claude -p``
+    that outlives its bound leaves its own tool subprocesses running against a sandbox the next
+    leg is about to reuse. The child is started as a SESSION LEADER (``start_new_session``), so
+    the timeout can signal its whole process group, and the partial stdout is drained after the
+    kill and carried on the ``TimeoutExpired`` DECODED, so a scorer reads it the way it reads a
+    complete stream.
+
+    The keyword shape is ``run_checked``'s spawn shape and nothing wider: ``capture_output=True``,
+    ``text=True``, ``check=False`` are accepted so this drops in as its ``runner``, and any other
+    value is refused rather than silently served a different contract.
+    """
+    if not capture_output:
+        raise ValueError("run_in_session serves run_checked's shape: capture_output=True only")
+    if not text:
+        raise ValueError("run_in_session serves run_checked's shape: text=True only")
+    if check:
+        raise ValueError(
+            "run_in_session serves run_checked's shape: check=False only (the ladder diagnoses a "
+            "non-zero exit itself)"
+        )
+    proc = subprocess.Popen(
+        list(argv),
+        stdin=subprocess.PIPE if input is not None else None,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=cwd,
+        env=env,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = proc.communicate(input=input, timeout=timeout)
+    except subprocess.TimeoutExpired as first:
+        _kill_group(proc)
+        # The second communicate returns everything buffered before the bound plus whatever the
+        # kill flushed. It is bounded too: a pipe still open after the group was SIGKILLed is
+        # held by a survivor, and an unbounded drain would block the rig on it for as long as
+        # it lives. ``communicate`` only raises ``TimeoutExpired`` from a bounded call, and it
+        # raises it with the bound it was given (not a remaining slice), so ``first.timeout`` IS
+        # the caller's ``timeout`` and is the one value here that is typed as a bound.
+        try:
+            stdout, stderr = proc.communicate(timeout=DRAIN_TIMEOUT_S)
+        except subprocess.TimeoutExpired as drain:
+            reaped = _abandon(proc)
+            raise RuntimeError(
+                f"process group {proc.pid} survived SIGKILL: its pipes were still held open "
+                f"{DRAIN_TIMEOUT_S}s after the kill, so a child of {argv[0]!r} is still "
+                "running and the partial output could not be drained"
+                + (
+                    ""
+                    if reaped
+                    else (
+                        f"; the leader pid {proc.pid} had not exited {DRAIN_TIMEOUT_S}s after "
+                        "its own SIGKILL either, so it is left unreaped (a zombie is leaked "
+                        "rather than waited on unbounded)"
+                    )
+                )
+            ) from drain
+        raise subprocess.TimeoutExpired(
+            proc.args, first.timeout, output=stdout, stderr=stderr
+        ) from None
+    except BaseException:
+        _kill_group(proc)
+        proc.wait()
+        raise
+    return subprocess.CompletedProcess(proc.args, proc.returncode, stdout, stderr)
+
+
+def _abandon(proc: subprocess.Popen[str]) -> bool:
+    """Give up on a child whose group outlived its kill: close our pipe ends first so nothing
+    waits on the survivor again, SIGKILL the child itself, and wait for the leader for at most
+    ``DRAIN_TIMEOUT_S``. Returns whether the leader was reaped in that bound; a leader that is
+    not (a kernel-held exit, a stopped process) is LEAKED as a zombie rather than waited on
+    unbounded (review G4), and the caller says so."""
+    for stream in (proc.stdin, proc.stdout, proc.stderr):
+        if stream is not None:
+            stream.close()
+    with contextlib.suppress(ProcessLookupError):
+        proc.kill()
+    try:
+        proc.wait(timeout=DRAIN_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        return False
+    return True
+
+
+def _kill_group(proc: subprocess.Popen[str]) -> None:
+    """SIGKILL the session ``proc`` leads.
+
+    A group already gone is the outcome wanted, not an error. A group that does not exist while
+    ``proc`` is still running means ``proc`` was never made a session leader: the child would
+    outlive its bound and the drain behind this call would block on it, so that is refused
+    loudly rather than waited out."""
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError as exc:
+        if proc.poll() is None:
+            raise RuntimeError(
+                f"pid {proc.pid} is still running but leads no process group; it was not spawned "
+                "as a session leader, so its children cannot be killed with it"
+            ) from exc
+
+
+def timeout_partial_stdout(exc: subprocess.TimeoutExpired) -> str:
+    """What the child wrote before the bound fired, as text.
+
+    ``subprocess.run`` hands it over as BYTES even in text mode (it reads the pipes raw when it
+    kills); ``run_in_session`` hands it over decoded; a child that wrote nothing hands ``None``.
+    All three are the same partial stream to the scorer."""
+    partial = exc.stdout
+    if partial is None:
+        return ""
+    if isinstance(partial, bytes):
+        return partial.decode("utf-8", errors="replace")
+    return str(partial)
+
 
 # The window the child's own output gets in the diagnosis. HEAD AND TAIL, not head alone:
 # `claude -p --output-format stream-json` puts a whole event stream on stdout and the

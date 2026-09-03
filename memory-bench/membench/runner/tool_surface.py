@@ -87,14 +87,17 @@ judgment about what a memory MEANS.
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import shlex
 import shutil
 import stat
 import subprocess
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
+from typing import Literal
 
 from membench.runner.resume_cache import digest
 from membench.schemas.trace import ToolCall
@@ -141,6 +144,161 @@ NATIVE_MEMORY_PATH_ARGS: tuple[str, ...] = ("file_path", "path", "notebook_path"
 # (`<config>/projects/<slug>/memory/...`). Required IN ADDITION to containment in the pinned
 # config dir, so reading `settings.json` is not scored as a memory call.
 NATIVE_MEMORY_SEGMENT = "memory"
+
+# The THIRD door to the same files: a shell command (mem-zfm0m). `cat .../memory/MEMORY.md` and
+# `echo '- note' >> .../memory/MEMORY.md` reach the native memory exactly as `Read` and `Write`
+# do, and the argv recognizer above cannot see them because they carry no `bd` verb.
+#
+# The ACCESS is decided by the PATH alone (review F2): any token of the command that resolves
+# under the pinned config dir's memory segment — as a whole word, embedded in a `key=value` or
+# an inline interpreter string, spelled through `$CLAUDE_CONFIG_DIR`, or relative to a `cd`
+# earlier in the same command — is an access, whatever the command word is. A recognizer that
+# allowlisted command names scored `rg`, `wc`, `jq`, `dd if=`, `python3 -c "open(...)"` as
+# nothing at all, and the miss ran in the direction of the finding it was meant to measure. The
+# command word and the redirect shape decide READ vs WRITE only. Never the agent's prose about
+# memory — a command that mentions "memory" in a comment and touches no pinned path counts for
+# nothing.
+NATIVE_MEMORY_BASH_TOOL = "Bash"
+
+# Commands that WRITE their target. The first list writes EVERY operand it names (`tee` writes
+# each path; `rm`, `touch`, `chmod`, `chown`, `truncate`, `mkdir`, `rmdir` mutate each — a
+# command that deletes or re-modes the memory file is a mutation of it, never a read, review
+# G1). The second writes its LAST operand and reads the others (`cp`/`mv` out of the memory dir
+# read it; `ln`'s last operand is the link it creates). `sed` writes under `-i`/`--in-place`.
+# Every other command word reads the paths it names.
+NATIVE_MEMORY_BASH_WRITE_ALL_OPERANDS: tuple[str, ...] = (
+    "tee",
+    "rm",
+    "touch",
+    "chmod",
+    "chown",
+    "truncate",
+    "mkdir",
+    "rmdir",
+)
+NATIVE_MEMORY_BASH_WRITE_LAST_OPERAND: tuple[str, ...] = ("cp", "mv", "ln")
+NATIVE_MEMORY_BASH_SED = "sed"
+NATIVE_MEMORY_BASH_SED_IN_PLACE_FLAGS: tuple[str, ...] = ("-i", "--in-place")
+
+# The builtin that moves the cwd a later relative operand in the same command anchors on.
+NATIVE_MEMORY_BASH_CD = "cd"
+
+# Which operands are NOT paths, so the in-pin anchoring (review G2) reaches only the words a
+# command opens (review H1: `cd <memory> && chmod 600 MEMORY.md` scored `600` as a second write,
+# and `grep pattern` with no file operand scored a read of `<memory>/pattern` — a reading leg
+# manufactured by the recognizer). Two tables, both mechanical:
+#   (a) command -> how many LEADING operands are values (a mode, an owner, a pattern, a script),
+#       and the flags that SUPPLY that value instead (`grep -e pat FILE` has no leading value);
+#   (b) command -> flags whose next word is a value, never a path (`head -n 5`, `find -name X`).
+# `ln -t DIR` is absent from (b) on purpose: its value IS a path. A value word is still scanned
+# as an absolute or embedded pinned path (the access is path-decided); it is never ANCHORED on
+# the cwd. Outside the pin the relative-path shape rule applies to every operand as before.
+NATIVE_MEMORY_BASH_LEADING_VALUE_OPERANDS: tuple[tuple[str, int, tuple[str, ...]], ...] = (
+    ("chmod", 1, ()),
+    ("chown", 1, ()),
+    ("chgrp", 1, ()),
+    ("grep", 1, ("-e", "--regexp")),
+    ("rg", 1, ("-e", "--regexp")),
+    ("egrep", 1, ("-e", "--regexp")),
+    ("fgrep", 1, ("-e", "--regexp")),
+    ("sed", 1, ("-e", "--expression", "-f", "--file")),
+    ("awk", 1, ("-f",)),
+)
+NATIVE_MEMORY_BASH_COMMAND_VALUE_FLAGS: tuple[tuple[str, str], ...] = (
+    ("head", "-n"),
+    ("head", "-c"),
+    ("tail", "-n"),
+    ("tail", "-c"),
+    ("sed", "-e"),
+    ("sed", "--expression"),
+    ("grep", "-e"),
+    ("grep", "--regexp"),
+    ("grep", "-m"),
+    ("grep", "-A"),
+    ("grep", "-B"),
+    ("grep", "-C"),
+    ("rg", "-e"),
+    ("rg", "--regexp"),
+    ("rg", "-m"),
+    ("rg", "-A"),
+    ("rg", "-B"),
+    ("rg", "-C"),
+    ("egrep", "-e"),
+    ("fgrep", "-e"),
+    ("awk", "-F"),
+    ("awk", "-v"),
+    ("find", "-name"),
+    ("find", "-iname"),
+    ("find", "-path"),
+    ("find", "-maxdepth"),
+    ("find", "-mindepth"),
+    ("find", "-type"),
+    ("find", "-newer"),
+    ("cut", "-d"),
+    ("cut", "-f"),
+    ("truncate", "-s"),
+    ("sort", "-k"),
+    ("sort", "-t"),
+)
+
+# Commands whose OPERANDS never touch a file: `echo <path>` prints the path and opens nothing,
+# so an operand of these attributes no access however it resolves (review G3). Their REDIRECT
+# targets still count — `echo x > <path>` writes the path — because the redirect is the
+# shell's, not the command's. Named in policy, not inferred: the path rule is deliberately
+# quote-blind (no quote-aware expansion, review F2/G3), so a single-quoted literal
+# `'$CLAUDE_CONFIG_DIR/.../MEMORY.md'` under any OTHER command expands here as the shell would
+# NOT have expanded it, and attributes an access the shell never made. That limitation is
+# accepted: it errs toward counting a reach, the direction this series can afford.
+NATIVE_MEMORY_BASH_NON_ACCESSING_COMMANDS: tuple[str, ...] = ("echo", "printf")
+
+# Wrapper words that precede the real command word without changing what it does to its paths.
+# Skipped, with their own option words (and `env`'s assignments), before the direction is read.
+# An option that takes a SEPARATE value word (`sudo -u me`, `nice -n 5`) consumes it too, or
+# the value would be read as the command word and `sudo -u me tee <path>` would score a read
+# (review G1). Attached forms (`--user=me`, `-n5`) are one word and need no entry.
+NATIVE_MEMORY_BASH_WRAPPERS: tuple[str, ...] = ("command", "sudo", "env", "time", "nice", "exec")
+# The wrappers that also take leading `VAR=value` assignments of their own.
+NATIVE_MEMORY_BASH_ASSIGNMENT_WRAPPERS: tuple[str, ...] = ("env",)
+NATIVE_MEMORY_BASH_WRAPPER_VALUE_FLAGS: tuple[tuple[str, str], ...] = (
+    ("sudo", "-u"),
+    ("sudo", "-g"),
+    ("sudo", "-h"),
+    ("sudo", "-p"),
+    ("sudo", "-U"),
+    ("sudo", "-C"),
+    ("sudo", "-D"),
+    ("sudo", "-r"),
+    ("sudo", "-t"),
+    ("sudo", "-T"),
+    ("env", "-u"),
+    ("env", "-C"),
+    ("env", "-S"),
+    ("nice", "-n"),
+    ("nice", "--adjustment"),
+    ("time", "-f"),
+    ("time", "-o"),
+    ("time", "--format"),
+    ("time", "--output"),
+)
+
+# Redirect operators, as `shlex` tokenises them with punctuation_chars. A write redirect's target
+# is written; `<`'s target is read. `<<`/`<<<` name a delimiter or a string, not a file.
+NATIVE_MEMORY_BASH_WRITE_REDIRECTS: tuple[str, ...] = (">", ">>", ">|", "&>", "&>>")
+NATIVE_MEMORY_BASH_READ_REDIRECTS: tuple[str, ...] = ("<",)
+
+# Where one shell command ends and the next begins, as `shlex` tokenises them.
+NATIVE_MEMORY_BASH_SEGMENT_BREAKS: frozenset[str] = frozenset(
+    {"|", "||", "|&", "&&", ";", ";;", "&", "(", ")"}
+)
+
+# What ends a path embedded inside a larger token (`open('/cfg/.../MEMORY.md').read()`,
+# `if=/cfg/.../MEMORY.md`): the scan starts at the pinned config dir's own spelling and runs to
+# the first of these.
+NATIVE_MEMORY_BASH_PATH_TERMINATORS: frozenset[str] = frozenset(" \t\n'\"`()<>|&;,")
+
+# The env var the surface pins the config dir under. Named once: `env()` sets it, the Bash
+# recognizer expands `$CLAUDE_CONFIG_DIR` in a path against it, and the fingerprint carries it.
+CONFIG_DIR_ENV = "CLAUDE_CONFIG_DIR"
 
 # Passed as `--disallowedTools` wherever this surface is handed to a real agent. NOT a sandbox:
 # see the module docstring's host-exposure paragraph for what it does not cover. It exists because
@@ -194,7 +352,7 @@ CALL_TIMEOUT_S = 120.0
 # whose bd really executes. d9809a2 broke the segment on `$(` (via the `(`) but not on the
 # backtick form, so every backticked memory call was MISSED — the under-count direction, which is
 # the one that manufactures the near-zero null this series exists to rule out.
-_SEGMENT_BREAKS = frozenset(";&|()\n<>`")
+_GRAMMAR_SEGMENT_BREAKS = frozenset(";&|()\n<>`")
 
 # `{` and `}` break a segment only when they stand ALONE as shell grouping keywords.
 #
@@ -205,17 +363,17 @@ _SEGMENT_BREAKS = frozenset(";&|()\n<>`")
 # unconditional break actually did was fabricate segments the shell never makes, which is a
 # correctness problem in its own right — an attached brace is literal text — but not an under-count,
 # and this series' whole argument rests on being exact about which direction an instrument errs in.
-_BRACES = frozenset("{}")
+_GRAMMAR_BRACES = frozenset("{}")
 
 # `NAME=value` prefixes may precede the command word: `BEADS_ACTOR=bot bd recall k`.
-_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z_0-9]*=")
+_GRAMMAR_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z_0-9]*=")
 
 # Shell KEYWORDS that may stand in front of a segment's command word. `if bd recall k; then ...`
 # is a real memory call; d9809a2 read `if` as the command word and returned nothing. `for` /
 # `while` / `until` / `case` cover the HEADER segment (whose command word is a variable name, never
 # bd), and `do` / `then` / `else` / `elif` cover the BODY segments, which is where an agent's loop
 # actually calls bd.
-_SHELL_KEYWORDS: frozenset[str] = frozenset(
+_GRAMMAR_SHELL_KEYWORDS: frozenset[str] = frozenset(
     {
         "!",
         "case",
@@ -238,7 +396,7 @@ _SHELL_KEYWORDS: frozenset[str] = frozenset(
 # `sudo bd recall k`, `timeout 30 bd recall k`, `env bd recall k`. Each is skipped along with its
 # own option words, and the next non-option word must still be `bd` — `timeout 30 echo bd recall k`
 # stays a non-call because the scan stops at the first non-option word and it is `echo`.
-_TRANSPARENT_WRAPPERS: frozenset[str] = frozenset(
+_GRAMMAR_TRANSPARENT_WRAPPERS: frozenset[str] = frozenset(
     {
         "command",
         "doas",
@@ -259,23 +417,23 @@ _TRANSPARENT_WRAPPERS: frozenset[str] = frozenset(
 
 # Interpreters whose `-c` argument is a COMMAND STRING. `bash -c 'bd recall k'` executes bd, and
 # d9809a2 dropped the string silently. The string is re-tokenized and re-scanned.
-_SHELL_INTERPRETERS: frozenset[str] = frozenset(
+_GRAMMAR_SHELL_INTERPRETERS: frozenset[str] = frozenset(
     {"ash", "bash", "dash", "ksh", "script", "sh", "zsh"}
 )
 
 # `eval` joins its remaining words into one command string, so it is scanned with the whole tail
 # as that string.
-_EVAL = "eval"
+_GRAMMAR_EVAL = "eval"
 
 # A bare duration/count a transparent wrapper may take before the command word (`timeout 30`,
 # `timeout 1m`, `nice 10`).
-_DURATION = re.compile(r"^\d+(?:\.\d+)?[smhd]?$")
+_GRAMMAR_DURATION = re.compile(r"^\d+(?:\.\d+)?[smhd]?$")
 
 # Wrapper options that take a SPACE-separated value, so the value is not mistaken for the command
 # word: `sudo -u bot bd recall k`, `xargs -I ARG bd recall ARG`, `timeout -k 5 30 bd recall k`.
 # One flat set rather than per-wrapper tables: over-skipping a word can only ever cost a call whose
 # command word is itself the value of an option, which no real invocation has.
-_WRAPPER_VALUE_FLAGS: frozenset[str] = frozenset(
+_GRAMMAR_WRAPPER_VALUE_FLAGS: frozenset[str] = frozenset(
     {
         "--adjustment",
         "--kill-after",
@@ -307,10 +465,10 @@ _WRAPPER_VALUE_FLAGS: frozenset[str] = frozenset(
 
 # How deep a `-c` command string is followed. `bash -c "sh -c 'bd recall k'"` is already
 # pathological; the bound stops a crafted command from recursing without end.
-_MAX_NESTING = 4
+_GRAMMAR_MAX_NESTING = 4
 
 # Characters that terminate a heredoc DELIMITER word: `cat <<EOF` and `cat <<-'EOF' | tee f`.
-_DELIMITER_END = frozenset(" \t\n;&|()<>")
+_GRAMMAR_DELIMITER_END = frozenset(" \t\n;&|()<>")
 
 
 # The READ half of ``MEMORY_VERBS``, split out because E3b grades reads and writes as separate
@@ -329,17 +487,162 @@ MEMORY_WRITE_VERBS: tuple[str, ...] = ("remember",)
 # at all; it is keyed, so one invocation yields one memory by construction.
 ENUMERATE_VERB = "memories"
 
+# The flag under which ``bd remember`` takes an explicit key. Its value is consumed into
+# ``MemoryInvocation.key`` rather than left among the operands, because it is not content.
+BD_KEY_FLAG = "--key"
+
+# bd's OWN acknowledgement of a stored memory, as the shipped binary (1.3.0-rc.1) prints it:
+# ``Remembered [<key>]: <value>`` for a new key, ``Updated [<key>]: <value>`` for an existing one,
+# and ``{"action": "remembered"}`` / ``{"action": "updated"}`` under ``--json``. Format-anchored on
+# the tool's output line, the way ``parse/runners`` anchors on a test runner's summary line: this
+# is a match on a fixed acknowledgement shape, never a reading of what the memory says.
+#
+# Why the RESULT decides (mem-8fv4t): a verb token on the argv is not an operation. The 160-leg
+# staged fire scored ``bd remember list`` as its only endogenous write, and bd REFUSED it
+# (``Error: "list" looks like a command``); ``bd remember <bare-existing-key>`` is a RECALL by bd's
+# own documented convenience, and ``bd remember <bare-unknown-token>`` is refused. Argv shape
+# cannot separate those from a stored write; the acknowledgement can, and it is POSITIVE evidence:
+# an absent result (truncated stream), a refusal, a redirected-away stderr are each not a write.
+#
+# The key inside the brackets is captured so that ONE Bash call chaining two bd invocations
+# (one tool_result, review F1) can hand each invocation its own acknowledgement line: a line is
+# matched to the invocation that named its key with ``--key``, and an unkeyed invocation takes
+# the next line nobody claimed. One line acknowledges at most one invocation.
+_BD_REMEMBER_ACK = re.compile(r"^(?:Remembered|Updated) \[(?P<key>[^\]]*)\]", re.MULTILINE)
+_BD_REMEMBER_ACK_ACTIONS: frozenset[str] = frozenset({"remembered", "updated"})
+
+# bd's own marker for the bare-existing-key convenience: ``(recalled "<key>" -- a bare existing key
+# READS. ...)`` on the text path, ``{"action": "recalled"}`` under ``--json``.
+_BD_REMEMBER_RECALLED = re.compile(r'^\(recalled "(?P<key>[^"]*)"', re.MULTILINE)
+_BD_REMEMBER_RECALLED_ACTION = "recalled"
+
+
+def _bd_json_object(candidate: str) -> dict[str, object] | None:
+    try:
+        parsed = json.loads(candidate)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(parsed, dict) and isinstance(parsed.get("action"), str):
+        return dict(parsed)
+    return None
+
+
+def _bd_json_action(result: str) -> str | None:
+    """The ``action`` field of a ``--json`` bd result, or ``None`` when the result is not one.
+
+    The whole result is tried first (bd may pretty-print), then each line (a pipe may have
+    appended a cwd-reset notice after the object)."""
+    for candidate in (result, *result.splitlines()):
+        parsed = _bd_json_object(candidate)
+        if parsed is not None:
+            return str(parsed["action"])
+    return None
+
+
+@dataclass(frozen=True)
+class _BdAck:
+    """One acknowledgement (stored or recalled) bd printed, and the key it names ("" when the
+    line carries none)."""
+
+    text: str
+    key: str
+
+
+def _bd_acks(result: str) -> list[_BdAck]:
+    """Every acknowledgement line in ``result``, in stream order. A refusal is not one."""
+    whole = _bd_json_object(result)
+    if whole is not None and "\n" in result.strip():
+        # A pretty-printed single object: one acknowledgement for the whole result.
+        key = whole.get("key")
+        return [_BdAck(result, key if isinstance(key, str) else "")]
+    acks: list[_BdAck] = []
+    for line in result.splitlines():
+        matched = _BD_REMEMBER_ACK.match(line) or _BD_REMEMBER_RECALLED.match(line)
+        if matched:
+            acks.append(_BdAck(line, matched.group("key")))
+            continue
+        parsed = _bd_json_object(line)
+        if parsed is not None and (
+            parsed["action"] in _BD_REMEMBER_ACK_ACTIONS
+            or parsed["action"] == _BD_REMEMBER_RECALLED_ACTION
+        ):
+            key = parsed.get("key")
+            acks.append(_BdAck(line, key if isinstance(key, str) else ""))
+    return acks
+
+
+def _attribute_result(
+    invocations: Sequence[MemoryInvocation], result: str | None
+) -> list[MemoryInvocation]:
+    """Hand each invocation of ONE tool call the part of the call's result that is its own.
+
+    One invocation owns the whole result (the join is exact). Several share one result, and
+    each acknowledgement line in it is matched to at most one WRITE invocation: first by key,
+    to the invocation that named it with ``--key``; then in stream order, to the unkeyed
+    invocations, and last to keyed invocations whose key the line does not state (a ``--json``
+    object without a ``key`` field). A write nothing acknowledges gets an empty result, which is
+    not an acceptance. Read invocations keep the whole result; nothing grades them on it."""
+    if result is None or len(invocations) <= 1:
+        return [replace(invocation, result=result) for invocation in invocations]
+    acks = _bd_acks(result)
+    claimed: set[int] = set()
+    owned: dict[int, str] = {}
+
+    def _claim(index: int, wanted: str | None) -> None:
+        for position, ack in enumerate(acks):
+            if position in claimed or (wanted is not None and ack.key != wanted):
+                continue
+            claimed.add(position)
+            owned[index] = ack.text
+            return
+
+    writes = [(i, inv) for i, inv in enumerate(invocations) if inv.is_write]
+    for index, invocation in writes:
+        if invocation.key:
+            _claim(index, invocation.key)
+    for index, invocation in writes:
+        if index not in owned:
+            _claim(index, "" if invocation.key else None)
+    return [
+        replace(invocation, result=owned.get(i, "") if invocation.is_write else result)
+        for i, invocation in enumerate(invocations)
+    ]
+
+
+def remember_was_accepted(result: str | None) -> bool:
+    """Whether a ``bd remember`` result carries bd's acknowledgement that the memory was STORED.
+
+    ``None`` (no tool_result joined — the stream ended before the tool returned) is not an
+    acceptance: the evidence is positive or it is absent."""
+    if result is None:
+        return False
+    if _BD_REMEMBER_ACK.search(result):
+        return True
+    return _bd_json_action(result) in _BD_REMEMBER_ACK_ACTIONS
+
+
+def remember_was_a_recall(result: str | None) -> bool:
+    """Whether a ``bd remember`` result shows bd took the bare-existing-key path and READ."""
+    if result is None:
+        return False
+    if _BD_REMEMBER_RECALLED.search(result):
+        return True
+    return _bd_json_action(result) == _BD_REMEMBER_RECALLED_ACTION
+
 
 @dataclass(frozen=True)
 class MemoryInvocation:
-    """One observed ``bd`` memory call: the verb and the operands it was given.
+    """One observed ``bd`` memory call: the verb, the operands it was given, the explicit key (if
+    any), and the tool_result the stream answered it with.
 
-    Immutable and operand-carrying because the three endogenous questions are answered by argv
-    shape and nothing else — whether the call READ or WROTE, whether a read was bounded, and which
-    ids it named."""
+    Immutable and operand-carrying because the endogenous questions are answered by argv shape —
+    whether a read was bounded, which ids it named — and, for whether a WRITE happened, by the
+    tool's own acknowledgement (``result``), never by the verb alone."""
 
     verb: str
     operands: tuple[str, ...] = ()
+    key: str = ""
+    result: str | None = None
 
     @property
     def is_read(self) -> bool:
@@ -347,7 +650,24 @@ class MemoryInvocation:
 
     @property
     def is_write(self) -> bool:
+        """The verb is a write verb. This is the ARGV-level view E3b grades content under (a
+        write it cannot see the result of is still graded on what it stored); the E1 counter
+        uses ``is_accepted_write``, which requires the tool's acknowledgement."""
         return self.verb in MEMORY_WRITE_VERBS
+
+    @property
+    def is_accepted_write(self) -> bool:
+        """A write bd ACKNOWLEDGED: a write verb, content on the argv (an explicit key or at least
+        one operand), and a result carrying bd's own stored line. A refused, recalled, truncated
+        or silenced (``2>/dev/null``) remember is not one."""
+        return (
+            self.is_write and bool(self.key or self.operands) and remember_was_accepted(self.result)
+        )
+
+    @property
+    def is_recall_by_result(self) -> bool:
+        """A write verb bd answered as a READ: ``bd remember <bare-existing-key>``."""
+        return self.is_write and remember_was_a_recall(self.result)
 
     @property
     def is_enumerate(self) -> bool:
@@ -361,10 +681,11 @@ class MemoryInvocation:
         ``bd remember <key> <content...>``: the first operand is the key the agent chose for
         itself, and it is exactly what an endogenous write grade must not read — grading a write
         by its key measures id-naming discipline, which is the one thing an endogenous write is
-        free to decide. Empty for a read: a read stores nothing."""
+        free to decide. With an explicit ``--key`` the key is already out of the operands and
+        every operand is content. Empty for a read: a read stores nothing."""
         if not self.is_write:
             return ()
-        return self.operands[1:]
+        return self.operands if self.key else self.operands[1:]
 
     @property
     def requested_ids(self) -> tuple[str, ...]:
@@ -411,29 +732,81 @@ class MemoryToolSurface:
         harness owns and can see instead of somewhere it must not reach at all."""
         env = {"PATH": os.pathsep.join([str(self.bin_dir), os.environ.get("PATH", "")])}
         if self.config_dir is not None:
-            env["CLAUDE_CONFIG_DIR"] = str(self.config_dir)
+            env[CONFIG_DIR_ENV] = str(self.config_dir)
         return env
 
     def fingerprint(self) -> str:
         return surface_fingerprint(mcp_config=self.mcp_config)
 
 
+# Every module-level name under one of these prefixes is a constant a recognizer READS: the bd
+# argv grammar (`MEMORY_*`, `BD_*`, `ENUMERATE_*`, `_GRAMMAR_*`), the acknowledgement grammar
+# (`_BD_*`), the native recognizer (`NATIVE_MEMORY_*`, `CONFIG_DIR_*`), and the surface the agent
+# is handed (`HOST_*`, `STORE_*`). `recognizer_policy` enumerates them mechanically, so a constant
+# added under a prefix is in the fingerprint without anyone remembering to list it, and a constant
+# added OUTSIDE every prefix fails the test that names the few deliberate exceptions (timeouts, the
+# bd-binary env override), which do not change what a leg scores.
+_POLICY_PREFIXES: tuple[str, ...] = (
+    "MEMORY_",
+    "NATIVE_MEMORY_",
+    "BD_",
+    "_BD_",
+    "ENUMERATE_",
+    "CONFIG_DIR_",
+    "HOST_",
+    "STORE_",
+    "_GRAMMAR_",
+    "RECOGNIZER_",
+)
+
+# The recognizer LOGIC that is not a constant: the relative-path shape rule (`_path_shaped`),
+# the segment/redirect/wrapper walk, the whole-token-then-embedded-run scan, the in-place-flag
+# spelling rule, the assignment test. A constant change moves the fingerprint on its own; a
+# logic change moves nothing unless this number moves with it. BUMP IT ON ANY CHANGE TO
+# RECOGNIZER LOGIC THAT IS NOT A CONSTANT (review G5). History: 1 = the F2 path-decided
+# recognizer; 2 = G1 (mutating writes, wrapper option values), G2 (every operand anchors inside
+# the pin), G3 (non-accessing command operands); 3 = H1 (inside the pin only PATH operands
+# anchor: value words and leading value operands are policy-enumerated and never anchored).
+RECOGNIZER_IMPLEMENTATION_VERSION = 3
+
+
+def _policy_value(name: str, value: object) -> object:
+    """``value`` in the JSON shape `digest` hashes, deterministic for every kind a recognizer
+    constant takes. A kind not handled here is a loud error: hashing its repr would move the
+    fingerprint on an interpreter detail instead of on the policy."""
+    if isinstance(value, re.Pattern):
+        return {"pattern": value.pattern, "flags": int(value.flags)}
+    if isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, tuple | list):
+        return [_policy_value(name, item) for item in value]
+    if isinstance(value, frozenset | set):
+        return sorted(_policy_value(name, item) for item in value)  # type: ignore[type-var]
+    raise TypeError(
+        f"{name}: a {type(value).__name__} is not a recognizer policy value `_policy_value` can "
+        "hash; extend it, or name the constant outside the policy prefixes"
+    )
+
+
+def recognizer_policy() -> dict[str, object]:
+    """Every constant the recognizers read, by name, read at call time (a monkeypatched constant
+    moves the fingerprint). Enumerated from the module under `_POLICY_PREFIXES`, never listed by
+    hand."""
+    module = globals()
+    return {
+        name: _policy_value(name, module[name])
+        for name in sorted(module)
+        if name.startswith(_POLICY_PREFIXES)
+    }
+
+
 def surface_fingerprint(*, mcp_config: str | None = None) -> str:
     """The digest of the tool surface AS A POLICY. Moves when the command, the counted verbs, the
-    allowed or denied tools, the store scope or the MCP config path change; does NOT move when a
-    run mints its store in a different tempdir (see the module docstring)."""
-    return digest(
-        {
-            "command": MEMORY_COMMAND,
-            "verbs": list(MEMORY_VERBS),
-            "tool_names": list(MEMORY_TOOL_NAMES),
-            "allowed_tools": list(MEMORY_ALLOWED_TOOLS),
-            "denied_tools": list(HOST_DENIED_TOOLS),
-            "store_scope": STORE_SCOPE,
-            "store_prefix": STORE_PREFIX,
-            "mcp_config": mcp_config,
-        }
-    )
+    allowed or denied tools, the store scope, the MCP config path, or any constant a recognizer
+    reads changes (the recognizers decide what a leg SCORES, mem-zfm0m item 6: a resume against an
+    artifact counted under a different recognizer would pool two measurements under one identity);
+    does NOT move when a run mints its store in a different tempdir (see the module docstring)."""
+    return digest({"mcp_config": mcp_config, "policy": recognizer_policy()})
 
 
 def settings_fingerprint(settings: object, *, mcp_config: str | None = None) -> str:
@@ -711,7 +1084,7 @@ def command_segments(command: str) -> list[list[str]]:
             while i < n and command[i] in " \t":
                 i += 1
             delimiter: list[str] = []
-            while i < n and command[i] not in _DELIMITER_END:
+            while i < n and command[i] not in _GRAMMAR_DELIMITER_END:
                 if command[i] in ("'", '"'):
                     i += 1
                     continue
@@ -736,11 +1109,11 @@ def command_segments(command: str) -> list[list[str]]:
                 if line_end == -1:
                     break
             continue
-        if ch in _BRACES:
+        if ch in _GRAMMAR_BRACES:
             # Grouping keyword only when it stands alone (`{ bd recall k; }`). Attached to a word
             # it is literal text — `xargs -I{} bd recall {}` must stay one segment.
             standalone = not has_word and (
-                i + 1 >= n or command[i + 1].isspace() or command[i + 1] in _SEGMENT_BREAKS
+                i + 1 >= n or command[i + 1].isspace() or command[i + 1] in _GRAMMAR_SEGMENT_BREAKS
             )
             if standalone:
                 end_segment()
@@ -750,7 +1123,7 @@ def command_segments(command: str) -> list[list[str]]:
             has_word = True
             i += 1
             continue
-        if ch in _SEGMENT_BREAKS:
+        if ch in _GRAMMAR_SEGMENT_BREAKS:
             end_segment()
             i += 1
             continue
@@ -785,26 +1158,26 @@ def _skip_prefixes(words: Sequence[str], index: int) -> int:
     moved = True
     while moved and index < len(words):
         moved = False
-        while index < len(words) and _ASSIGNMENT.match(words[index]):
+        while index < len(words) and _GRAMMAR_ASSIGNMENT.match(words[index]):
             index += 1
             moved = True
-        if index < len(words) and words[index] in _SHELL_KEYWORDS:
+        if index < len(words) and words[index] in _GRAMMAR_SHELL_KEYWORDS:
             index += 1
             moved = True
             continue
-        if index < len(words) and PurePosixPath(words[index]).name in _TRANSPARENT_WRAPPERS:
+        if index < len(words) and PurePosixPath(words[index]).name in _GRAMMAR_TRANSPARENT_WRAPPERS:
             index += 1
             moved = True
             # The wrapper's own options, and a bare duration/count (`timeout 30`). The loop then
             # re-checks assignments and keywords, so `sudo env FOO=1 timeout 5 bd recall k` walks
             # all the way through.
             while index < len(words) and (
-                _is_option(words[index]) or _DURATION.match(words[index])
+                _is_option(words[index]) or _GRAMMAR_DURATION.match(words[index])
             ):
                 flag = words[index]
                 index += (
                     2
-                    if _is_option(flag) and "=" not in flag and flag in _WRAPPER_VALUE_FLAGS
+                    if _is_option(flag) and "=" not in flag and flag in _GRAMMAR_WRAPPER_VALUE_FLAGS
                     else 1
                 )
     return index
@@ -817,10 +1190,10 @@ def _interpreter_command_string(words: Sequence[str], index: int) -> str | None:
     yields its whole joined tail. Returning the string rather than a verb keeps the recursion in
     one place."""
     name = PurePosixPath(words[index]).name
-    if name == _EVAL:
+    if name == _GRAMMAR_EVAL:
         tail = " ".join(words[index + 1 :])
         return tail or None
-    if name not in _SHELL_INTERPRETERS:
+    if name not in _GRAMMAR_SHELL_INTERPRETERS:
         return None
     cursor = index + 1
     while cursor < len(words):
@@ -853,7 +1226,7 @@ def _invocations_of_segment(words: Sequence[str], depth: int = 0) -> list[Memory
     index = _skip_prefixes(words, 0)
     if index >= len(words):
         return []
-    if depth < _MAX_NESTING:
+    if depth < _GRAMMAR_MAX_NESTING:
         nested = _interpreter_command_string(words, index)
         if nested is not None:
             return [
@@ -870,8 +1243,22 @@ def _invocations_of_segment(words: Sequence[str], depth: int = 0) -> list[Memory
     if index >= len(words) or words[index] not in MEMORY_VERBS:
         return []
     verb = words[index]
-    operands = tuple(word for word in words[index + 1 :] if not _is_option(word))
-    return [MemoryInvocation(verb=verb, operands=operands)]
+    key = ""
+    operands: list[str] = []
+    tail = list(words[index + 1 :])
+    cursor = 0
+    while cursor < len(tail):
+        word = tail[cursor]
+        if word == BD_KEY_FLAG and cursor + 1 < len(tail):
+            key = tail[cursor + 1]
+            cursor += 2
+            continue
+        if word.startswith(f"{BD_KEY_FLAG}="):
+            key = word[len(BD_KEY_FLAG) + 1 :]
+        elif not _is_option(word):
+            operands.append(word)
+        cursor += 1
+    return [MemoryInvocation(verb=verb, operands=tuple(operands), key=key)]
 
 
 def _verbs_of_segment(words: Sequence[str], depth: int = 0) -> list[str]:
@@ -945,7 +1332,11 @@ def memory_invocations(calls: Iterable[ToolCall]) -> list[MemoryInvocation]:
     invocations: list[MemoryInvocation] = []
     for call in calls:
         if call.name in MEMORY_TOOL_NAMES:
-            invocations.extend(memory_invocations_in_command(_command_of(call)))
+            # One Bash call has one tool_result however many bd invocations it chained; each
+            # invocation gets the acknowledgement that is its own (``_attribute_result``).
+            invocations.extend(
+                _attribute_result(memory_invocations_in_command(_command_of(call)), call.result)
+            )
     return invocations
 
 
@@ -1018,6 +1409,14 @@ class NativeMemoryAccess:
     tool: str
     path: str
     is_write: bool
+    # Which tool call (index into the leg's call list) this access came from. One Bash command
+    # can touch several paths; the CALL count is over distinct indices, matching the
+    # block-not-verb rule ``endogenous_memory_tool_calls`` counts bd under.
+    call_index: int
+    # The shell tokenizer refused the command (an unterminated quote) and the path scan ran on
+    # a whitespace split instead. The access stands — the path is in the command — but a reader
+    # knows the direction and segment structure were not vouched for by the shell's own grammar.
+    tokenizer_failed: bool = False
 
     @property
     def is_read(self) -> bool:
@@ -1055,10 +1454,277 @@ def _is_native_memory_path(path: str, *, config_dir: Path) -> bool:
     return NATIVE_MEMORY_SEGMENT in relative.parts
 
 
+def _bash_tokens(command: str) -> tuple[list[str], bool]:
+    """The shell's own tokenisation, with operators as their own tokens, and whether it FAILED.
+
+    An unterminated quote is a command the shell would refuse too, but the path is still in the
+    text and a model writes such a command by accident: the scan falls back to a whitespace
+    split rather than attributing nothing, and the failure is flagged on every access found."""
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    try:
+        return list(lexer), False
+    except ValueError:
+        return command.split(), True
+
+
+def _bash_segments(tokens: Sequence[str]) -> list[list[str]]:
+    segments: list[list[str]] = [[]]
+    for token in tokens:
+        if token in NATIVE_MEMORY_BASH_SEGMENT_BREAKS:
+            segments.append([])
+        else:
+            segments[-1].append(token)
+    return [segment for segment in segments if segment]
+
+
+def _is_write_redirect(token: str) -> bool:
+    return token in NATIVE_MEMORY_BASH_WRITE_REDIRECTS
+
+
+@dataclass(frozen=True)
+class _BashPathUse:
+    """One token a shell segment may name a path in, whether the segment writes it, and whether
+    a RELATIVE spelling may be anchored on the segment's cwd (an operand or a redirect target
+    may; an option word never names a relative file)."""
+
+    token: str
+    is_write: bool
+    anchorable: bool = True
+
+
+def _split_redirects(segment: Sequence[str]) -> tuple[list[str], list[_BashPathUse]]:
+    """The segment's WORDS (command + operands) apart from its redirect targets."""
+    words: list[str] = []
+    uses: list[_BashPathUse] = []
+    i = 0
+    while i < len(segment):
+        token = segment[i]
+        if _is_write_redirect(token) or token in NATIVE_MEMORY_BASH_READ_REDIRECTS:
+            if i + 1 < len(segment):
+                uses.append(_BashPathUse(segment[i + 1], is_write=_is_write_redirect(token)))
+            i += 2
+            continue
+        words.append(token)
+        i += 1
+    return _unwrapped(words), uses
+
+
+def _is_assignment(word: str) -> bool:
+    return "=" in word and not word.startswith("-")
+
+
+def _wrapper_value_flags(wrapper: str) -> frozenset[str]:
+    return frozenset(
+        flag for name, flag in NATIVE_MEMORY_BASH_WRAPPER_VALUE_FLAGS if name == wrapper
+    )
+
+
+def _unwrapped(words: Sequence[str]) -> list[str]:
+    """``words`` with leading ``VAR=value`` assignments and wrapper words (each with its own
+    option words and their separate values) removed, so the first word left is the command
+    whose semantics decide the direction."""
+    rest = list(words)
+    while rest and _is_assignment(rest[0]):
+        rest.pop(0)
+    while rest and PurePosixPath(rest[0]).name in NATIVE_MEMORY_BASH_WRAPPERS:
+        wrapper = PurePosixPath(rest.pop(0)).name
+        value_flags = _wrapper_value_flags(wrapper)
+        takes_assignments = wrapper in NATIVE_MEMORY_BASH_ASSIGNMENT_WRAPPERS
+        while rest and (rest[0].startswith("-") or (takes_assignments and _is_assignment(rest[0]))):
+            flag = rest.pop(0)
+            if flag in value_flags and rest:
+                rest.pop(0)
+    return rest
+
+
+_WordKind = Literal["flag", "value", "operand"]
+
+
+def _flag_is(flag: str, names: Iterable[str]) -> bool:
+    """``flag`` is one of ``names``, separate (`-e`) or attached (`--regexp=x`)."""
+    return any(flag == name or flag.startswith(name + "=") for name in names)
+
+
+def _classified_words(name: str, rest: Sequence[str]) -> list[tuple[str, _WordKind]]:
+    """Each word after the command word as a flag, the VALUE a flag consumes, or an operand."""
+    value_flags = frozenset(
+        flag for command, flag in NATIVE_MEMORY_BASH_COMMAND_VALUE_FLAGS if command == name
+    )
+    classified: list[tuple[str, _WordKind]] = []
+    i = 0
+    while i < len(rest):
+        word = rest[i]
+        if not word.startswith("-"):
+            classified.append((word, "operand"))
+        elif word in value_flags and i + 1 < len(rest):
+            classified.append((word, "flag"))
+            classified.append((rest[i + 1], "value"))
+            i += 1
+        else:
+            classified.append((word, "flag"))
+        i += 1
+    return classified
+
+
+def _leading_value_operands(name: str, flags: Sequence[str]) -> int:
+    """How many of ``name``'s leading operands are values rather than paths, given the flags
+    seen (a flag that supplies the value makes every operand a path)."""
+    for command, count, supplying in NATIVE_MEMORY_BASH_LEADING_VALUE_OPERANDS:
+        if command == name:
+            return 0 if any(_flag_is(flag, supplying) for flag in flags) else count
+    return 0
+
+
+def _command_path_uses(words: Sequence[str]) -> list[_BashPathUse]:
+    """Every word after the command word, with the direction the command word gives it. The
+    words are all candidates — the access is decided by the path, not by the name — and only
+    the direction, and which words may be ANCHORED on the cwd as paths, is the command's
+    business."""
+    if len(words) < 2:
+        return []
+    name = PurePosixPath(words[0]).name
+    if name in NATIVE_MEMORY_BASH_NON_ACCESSING_COMMANDS:
+        return []
+    rest = words[1:]
+    classified = _classified_words(name, rest)
+    flags = [word for word, kind in classified if kind == "flag"]
+    operands = [word for word, kind in classified if kind == "operand"]
+    in_place = name == NATIVE_MEMORY_BASH_SED and any(
+        flag == f or flag.startswith(f + ("" if f == "-i" else "="))
+        for flag in flags
+        for f in NATIVE_MEMORY_BASH_SED_IN_PLACE_FLAGS
+    )
+    written: set[str] = set()
+    if name in NATIVE_MEMORY_BASH_WRITE_ALL_OPERANDS or in_place:
+        written = set(rest)
+    elif name in NATIVE_MEMORY_BASH_WRITE_LAST_OPERAND and len(operands) >= 2:
+        written = {operands[-1]}
+    leading = _leading_value_operands(name, flags)
+    uses: list[_BashPathUse] = []
+    seen = 0
+    for word, kind in classified:
+        anchorable = kind == "operand" and seen >= leading
+        seen += kind == "operand"
+        uses.append(_BashPathUse(word, is_write=word in written, anchorable=anchorable))
+    return uses
+
+
+_GRAMMAR_CONFIG_DIR_SPELLINGS = re.compile(
+    r"\$\{" + CONFIG_DIR_ENV + r"(?::[?\-=+][^}]*)?\}|\$" + CONFIG_DIR_ENV + r"(?![A-Za-z0-9_])"
+)
+
+
+def _expand_pinned(text: str, *, config_dir: Path) -> str:
+    """Substitute the ONE variable the harness itself pinned, in every spelling the shell gives
+    it (`$VAR`, `${VAR}`, `${VAR:?msg}`, `${VAR:-default}`). No other expansion: `~` and `$HOME`
+    name the operator's tree."""
+    return _GRAMMAR_CONFIG_DIR_SPELLINGS.sub(lambda _: str(config_dir), text)
+
+
+def _path_shaped(token: str) -> bool:
+    """A relative token is anchored on a ``cd`` OUTSIDE the pinned memory dir only when it
+    carries path syntax (a separator or a dot), so ``cd /tmp && grep x memory/notes`` reads
+    the path and not ``/tmp/x``. Inside the pinned dir the shape rule is off (review G2): a
+    bare ``MEMORY`` after ``cd <memory dir>`` IS the memory file, and the shape rule scored
+    ``cd <memory dir> && cat MEMORY`` as nothing."""
+    return "/" in token or "." in token
+
+
+def _whole_token_path(use: _BashPathUse, *, config_dir: Path, cwd: str, in_pin: bool) -> str:
+    """The path the whole token names, or "" when the token is not a path on its own. ``in_pin``
+    says ``cwd`` itself is under the pinned memory dir, where every anchorable operand
+    resolves against it whatever its shape."""
+    expanded = _expand_pinned(use.token, config_dir=config_dir)
+    if PurePosixPath(expanded).is_absolute():
+        return expanded
+    if cwd and use.anchorable and (in_pin or _path_shaped(expanded)):
+        return str(PurePosixPath(cwd) / expanded)
+    return ""
+
+
+def _embedded_runs(text: str, *, prefix: str) -> list[str]:
+    """Every run in ``text`` that starts at ``prefix`` and ends at a path terminator, once."""
+    runs: dict[str, None] = {}
+    position = text.find(prefix)
+    while position >= 0:
+        run_end = position
+        while run_end < len(text) and text[run_end] not in NATIVE_MEMORY_BASH_PATH_TERMINATORS:
+            run_end += 1
+        runs[text[position:run_end]] = None
+        position = text.find(prefix, run_end)
+    return list(runs)
+
+
+def _pinned_paths(
+    use: _BashPathUse, *, config_dir: Path, cwd: str, in_pin: bool, tokenizer_failed: bool
+) -> list[str]:
+    """Every path ``use.token`` names under the pinned config dir.
+
+    When the tokenizer vouched for the token and the whole token (anchored on ``cwd`` when
+    relative) is such a path, that is the one path it names. Otherwise every run inside the
+    token that starts at the config dir's own spelling and ends at a terminator is a candidate
+    (``if=<path>``, ``open('<path>')``, and every token of a whitespace-split fallback, whose
+    tokens still carry the quote and separator characters shlex would have consumed)."""
+    if not tokenizer_failed:
+        whole = _whole_token_path(use, config_dir=config_dir, cwd=cwd, in_pin=in_pin)
+        if whole and _is_native_memory_path(whole, config_dir=config_dir):
+            return [whole]
+    expanded = _expand_pinned(use.token, config_dir=config_dir)
+    return [
+        run
+        for run in _embedded_runs(expanded, prefix=str(config_dir))
+        if _is_native_memory_path(run, config_dir=config_dir)
+    ]
+
+
+def _bash_accesses(command: str, *, config_dir: Path, call_index: int) -> list[NativeMemoryAccess]:
+    """Every native-memory access one shell command makes, segment by segment.
+
+    Expansion is of the pinned variable only and is NOT quote-aware: `'$CLAUDE_CONFIG_DIR/...'`
+    in single quotes expands here although the shell would have passed it literally, so a
+    command other than one in ``NATIVE_MEMORY_BASH_NON_ACCESSING_COMMANDS`` that names the
+    pinned path inside single quotes is attributed an access the shell never made. Accepted:
+    the miss runs toward counting a reach, and quote tracking across every shell form is not a
+    rule this recognizer can keep mechanical."""
+    tokens, tokenizer_failed = _bash_tokens(command)
+    found: list[NativeMemoryAccess] = []
+    cwd = ""
+    in_pin = False
+    for segment in _bash_segments(tokens):
+        words, uses = _split_redirects(segment)
+        if words and words[0] == NATIVE_MEMORY_BASH_CD:
+            target = _expand_pinned(words[1], config_dir=config_dir) if len(words) > 1 else ""
+            if target and cwd and not PurePosixPath(target).is_absolute():
+                target = str(PurePosixPath(cwd) / target)
+            cwd = target
+            in_pin = _is_native_memory_path(cwd, config_dir=config_dir)
+            continue
+        for use in [*_command_path_uses(words), *uses]:
+            for path in _pinned_paths(
+                use,
+                config_dir=config_dir,
+                cwd=cwd,
+                in_pin=in_pin,
+                tokenizer_failed=tokenizer_failed,
+            ):
+                found.append(
+                    NativeMemoryAccess(
+                        tool=NATIVE_MEMORY_BASH_TOOL,
+                        path=path,
+                        is_write=use.is_write,
+                        call_index=call_index,
+                        tokenizer_failed=tokenizer_failed,
+                    )
+                )
+    return found
+
+
 def native_memory_accesses(
     calls: Iterable[ToolCall], *, config_dir: Path | None
 ) -> list[NativeMemoryAccess]:
-    """Every native-memory access across ``calls``, in stream order.
+    """Every native-memory access across ``calls``, in stream order — through the file tools
+    (``Read``/``Write``/``Edit``) and through a shell command that names the pinned path.
 
     ``config_dir=None`` means the surface pins no config dir, so there is no path the harness owns
     and nothing can be attributed — it returns nothing rather than guessing, because a recognizer
@@ -1067,7 +1733,10 @@ def native_memory_accesses(
     if config_dir is None:
         return []
     found: list[NativeMemoryAccess] = []
-    for call in calls:
+    for index, call in enumerate(calls):
+        if call.name == NATIVE_MEMORY_BASH_TOOL:
+            found.extend(_bash_accesses(_command_of(call), config_dir=config_dir, call_index=index))
+            continue
         if call.name not in NATIVE_MEMORY_TOOL_NAMES:
             continue
         path = _path_of(call)
@@ -1075,7 +1744,10 @@ def native_memory_accesses(
             continue
         found.append(
             NativeMemoryAccess(
-                tool=call.name, path=path, is_write=call.name in NATIVE_MEMORY_WRITE_TOOLS
+                tool=call.name,
+                path=path,
+                is_write=call.name in NATIVE_MEMORY_WRITE_TOOLS,
+                call_index=index,
             )
         )
     return found
@@ -1083,6 +1755,17 @@ def native_memory_accesses(
 
 def native_memory_calls(calls: Iterable[ToolCall], *, config_dir: Path | None) -> int:
     """How many tool calls reached the native memory surface. Calls, not paths: one Edit is one
-    call, matching ``endogenous_memory_tool_calls``'s block-not-verb rule so the two are summable.
+    call and one Bash command touching two files is one call, matching
+    ``endogenous_memory_tool_calls``'s block-not-verb rule so the two are summable.
     """
-    return len(native_memory_accesses(calls, config_dir=config_dir))
+    return len({a.call_index for a in native_memory_accesses(calls, config_dir=config_dir)})
+
+
+def memory_reaching_calls(calls: Sequence[ToolCall], *, config_dir: Path | None) -> int:
+    """Tool calls that reached EITHER affordance — the bd shim or the native memory files — each
+    counted ONCE. A Bash command that runs `bd recall` and cats MEMORY.md is one reach, not two:
+    the ladder's endpoint is whether the agent reached for memory, and one tool call is one
+    decision to."""
+    native = {a.call_index for a in native_memory_accesses(calls, config_dir=config_dir)}
+    bd = {index for index, call in enumerate(calls) if _is_memory_call(call)}
+    return len(native | bd)

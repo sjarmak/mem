@@ -49,7 +49,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from itertools import pairwise
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from membench.runner.headless_agent import (
     ENV_OAUTH,
@@ -65,15 +65,16 @@ from membench.runner.headless_agent import (
     result_event,
     serialize_stream,
     stream_cli_version,
+    tool_calls_from_stream,
 )
 from membench.runner.resume_cache import digest
-from membench.runner.sandbox import paid_sandbox
+from membench.runner.sandbox import assert_corpus_unreachable, paid_sandbox
 from membench.runner.tool_surface import (
     HOST_DENIED_TOOLS,
     MEMORY_ALLOWED_TOOLS,
-    endogenous_memory_tool_calls,
     endogenous_memory_verbs,
     memory_invocations,
+    memory_reaching_calls,
     native_memory_accesses,
     provision_memory_tool,
     surface_fingerprint,
@@ -88,10 +89,18 @@ from membench.runner.toolreq_realagent import (
 )
 from membench.runtime import StepContext
 from membench.schemas.sequence import SequenceStep
-from membench.spawn import child_of, redact_credentials
+from membench.schemas.trace import ToolCall
+from membench.spawn import (
+    Runner,
+    child_of,
+    redact_credentials,
+    run_in_session,
+    timeout_partial_stdout,
+)
 
 __all__ = [
     "CHANNEL",
+    "EXECUTION_PROTOCOL_VERSION",
     "GATE_KEY",
     "HALT_NO_CALL",
     "HALT_UNMEASURED",
@@ -103,6 +112,7 @@ __all__ = [
     "STAGED_TASKS",
     "SUMMARY_NAME",
     "LegRecord",
+    "LegScore",
     "MonotonicityViolation",
     "PreflightHaltError",
     "QuotaHaltError",
@@ -122,6 +132,7 @@ __all__ = [
     "preflight",
     "preflight_verdict",
     "rung_step",
+    "score_leg",
     "staged_plan",
     "stream_is_error",
     "summarize",
@@ -131,6 +142,15 @@ __all__ = [
 # The summary E1 emits. Named for the file the acceptance criterion reads with
 # `jq '.call_rate_gates' .../summary-e1.json`.
 SUMMARY_NAME = "summary-e1.json"
+
+# The version of everything that changes what a leg MEASURES without moving the tool surface, the
+# CLI binary or the corpus: the sandbox guard (`assert_corpus_unreachable` — what a leg is allowed
+# to reach), the PWD pin (the cwd the agent is spawned in and what a relative path resolves
+# against), the session runner (`run_in_session` — how a leg is spawned, timed out, killed and
+# drained), and the timeout scoring (what a leg that timed out contributes to its cell). It is one
+# number in the resume identity: bump it when any of those changes semantics, and a partial
+# artifact bought under the old number is refused rather than pooled with the new one.
+EXECUTION_PROTOCOL_VERSION = 1
 
 # The one trust framing E1 runs under. NOT a swept axis here — see the module docstring: a bare
 # arm surfaces no memory block, so both channels render the same bytes and a channel sweep would
@@ -232,7 +252,13 @@ class RungCell:
     ``calling_runs`` is the numerator of the call rate (repeats with at least one memory call);
     ``memory_calls`` is the raw call total, which can exceed ``runs``. Both are kept: a rung that
     doubles the calls per run without moving the fraction of runs that call at all is a different
-    finding from one that recruits new runs."""
+    finding from one that recruits new runs.
+
+    ``reading_runs`` / ``writing_runs`` are the same split by DIRECTION: legs with at least one
+    read, legs with at least one acknowledged write. The discrimination margin is computed on
+    ``reading_runs`` (mem-zfm0m item 2) — a read is what the twin corpus manipulates, while a
+    write is the same act on both halves and only dilutes an any-call margin — and the write
+    rate is reported on its own."""
 
     rung: str
     variant: str
@@ -241,6 +267,8 @@ class RungCell:
     memory_calls: int
     read_calls: int
     write_calls: int
+    reading_runs: int
+    writing_runs: int
     paid: bool
     verbs: tuple[str, ...] = ()
     # Which task this cell ran. Cells are keyed ``(rung, variant, work_id)``: with eight tasks per
@@ -286,6 +314,24 @@ class RungCell:
                 f"{self.rung}/{self.variant}: {self.memory_calls} memory call(s) cannot cover "
                 f"{self.calling_runs} run(s) that each made at least one"
             )
+        for legs_name, calls_name, legs, calls in (
+            ("reading_runs", "read_calls", self.reading_runs, self.read_calls),
+            ("writing_runs", "write_calls", self.writing_runs, self.write_calls),
+        ):
+            if not 0 <= legs <= self.calling_runs:
+                raise ValueError(
+                    f"{self.rung}/{self.variant}: {legs_name} {legs} > calling_runs "
+                    f"{self.calling_runs}"
+                )
+            if legs > calls:
+                raise ValueError(
+                    f"{self.rung}/{self.variant}: {legs_name} {legs} > {calls_name} {calls}"
+                )
+            if calls and not legs:
+                raise ValueError(
+                    f"{self.rung}/{self.variant}: {calls_name} {calls} with {legs_name} 0 — "
+                    "a call was counted that no leg made"
+                )
 
     @property
     def measured_runs(self) -> int:
@@ -301,6 +347,20 @@ class RungCell:
             raise ValueError(f"{self.rung}/{self.variant}/{self.work_id}: no leg returned a stream")
         return self.calling_runs / self.measured_runs
 
+    @property
+    def read_rate(self) -> float:
+        """P(read | measured leg) — the numerator of the discrimination margin."""
+        if self.measured_runs == 0:
+            raise ValueError(f"{self.rung}/{self.variant}/{self.work_id}: no leg returned a stream")
+        return self.reading_runs / self.measured_runs
+
+    @property
+    def write_rate(self) -> float:
+        """P(acknowledged write | measured leg) — reported beside the margin, never inside it."""
+        if self.measured_runs == 0:
+            raise ValueError(f"{self.rung}/{self.variant}/{self.work_id}: no leg returned a stream")
+        return self.writing_runs / self.measured_runs
+
     def metrics(self) -> dict[str, Any]:
         """The per-cell metric vector. The GATE BLOCK IS NOT IN HERE, and that is load-bearing:
         a validity verdict flattened into a per-cell metric vector gets averaged with the cells it
@@ -312,10 +372,14 @@ class RungCell:
             "errored_runs": self.errored_runs,
             "measured_runs": self.measured_runs,
             "calling_runs": self.calling_runs,
+            "reading_runs": self.reading_runs,
+            "writing_runs": self.writing_runs,
             "memory_calls": self.memory_calls,
             "read_calls": self.read_calls,
             "write_calls": self.write_calls,
             "call_rate": self.call_rate if self.measured_runs else None,
+            "read_rate": self.read_rate if self.measured_runs else None,
+            "write_rate": self.write_rate if self.measured_runs else None,
             "paid": self.paid,
         }
 
@@ -337,6 +401,15 @@ class RungCell:
     def from_row(cls, row: Mapping[str, Any]) -> RungCell:
         """The inverse of ``row`` — what a resume reads back from a partial artifact."""
         m = row["metrics"]
+        for key in ("reading_runs", "writing_runs"):
+            # No default: a row written before the margin moved to reads (mem-zfm0m item 2)
+            # would otherwise resume with a fabricated read rate of 0.0.
+            if key not in m:
+                raise ValueError(
+                    f"cell {row.get('rung')}/{row.get('variant')}/{row.get('work_id')} carries "
+                    f"no {key!r}: it was counted before per-direction leg counts existed and "
+                    "cannot be pooled into a read margin"
+                )
         return cls(
             rung=str(row["rung"]),
             variant=str(row["variant"]),
@@ -345,6 +418,8 @@ class RungCell:
             memory_calls=int(m["memory_calls"]),
             read_calls=int(m["read_calls"]),
             write_calls=int(m["write_calls"]),
+            reading_runs=int(m["reading_runs"]),
+            writing_runs=int(m["writing_runs"]),
             paid=bool(m["paid"]),
             verbs=tuple(str(v) for v in row.get("verbs", ())),
             work_id=str(row.get("work_id", "")),
@@ -378,7 +453,12 @@ class LegRecord:
 
     ``cli_version`` is the instrument THIS leg ran on, read off the stream's own init event rather
     than a pre-flight ``claude --version`` on a different process -- a binary that upgrades
-    mid-sweep is invisible to the latter."""
+    mid-sweep is invisible to the latter.
+
+    ``truncated`` marks a stream the bound cut short. Its counts are scored by the same arithmetic
+    as a complete stream's and are a LOWER BOUND on what the leg did, which is why a truncated leg
+    is persisted with them and still kept out of the cell: the cell pools rates over legs whose
+    streams ended, and this one did not."""
 
     rung: str
     variant: str
@@ -394,6 +474,7 @@ class LegRecord:
     stream: str = ""
     detail: str = ""
     cli_version: str = ""
+    truncated: bool = False
 
     def row(self) -> dict[str, Any]:
         return {
@@ -409,6 +490,7 @@ class LegRecord:
             "stream": self.stream,
             "detail": self.detail,
             "cli_version": self.cli_version,
+            "truncated": self.truncated,
         }
 
     @property
@@ -470,34 +552,64 @@ def monotonicity_violations(
     ]
 
 
-def pooled_rates(cells: Sequence[RungCell], variant: str) -> dict[str, float]:
-    """P(call | variant) per rung, POOLED over every task cell of that ``(rung, variant)``: the sum
-    of calling legs over the sum of measured legs.
+RateKind = Literal["call", "read", "write"]
+
+
+def _numerator(cell: RungCell, kind: RateKind) -> int:
+    if kind == "call":
+        return cell.calling_runs
+    if kind == "read":
+        return cell.reading_runs
+    if kind == "write":
+        return cell.writing_runs
+    raise ValueError(f"unknown rate kind {kind!r}")
+
+
+def pooled_rates(
+    cells: Sequence[RungCell], variant: str, *, kind: RateKind = "call"
+) -> dict[str, float]:
+    """P(``kind`` | variant) per rung, POOLED over every task cell of that ``(rung, variant)``:
+    the sum of legs that called / read / wrote over the sum of measured legs.
 
     Pooled, not last-wins and not a mean of per-cell rates. The first staged fire's gate block
     built ``{rung: cell.call_rate}`` over eight task cells per rung and reported the eighth
     cell's 4/5 as "R0 = 0.8" while the pooled rate was 16/40. A mean of cell rates would weight a
     cell with one measured leg the same as one with five. Rungs whose measured denominator is zero
     are omitted, never reported as 0.0."""
-    calling: dict[str, int] = {}
+    numerator: dict[str, int] = {}
     measured: dict[str, int] = {}
     for cell in cells:
         if cell.variant != variant:
             continue
-        calling[cell.rung] = calling.get(cell.rung, 0) + cell.calling_runs
+        numerator[cell.rung] = numerator.get(cell.rung, 0) + _numerator(cell, kind)
         measured[cell.rung] = measured.get(cell.rung, 0) + cell.measured_runs
-    return {rung: calling[rung] / measured[rung] for rung in measured if measured[rung]}
+    return {rung: numerator[rung] / measured[rung] for rung in measured if measured[rung]}
 
 
-def discrimination_margins(cells: Sequence[RungCell]) -> dict[str, float]:
-    """``d(rung) = P(call | necessary) - P(call | unnecessary)`` per rung — E1's PRIMARY endpoint.
+def discrimination_margins(
+    cells: Sequence[RungCell], *, kind: RateKind = "read"
+) -> dict[str, float]:
+    """``d(rung) = P(read | necessary) - P(read | unnecessary)`` per rung — E1's PRIMARY endpoint.
+
+    On READS by default (mem-zfm0m item 2). The twin corpus manipulates whether a recall is
+    needed; a write is the agent storing what it just learned, the same act on both halves, so
+    a write on each side moves both rates together and drags an any-call margin toward zero
+    without saying anything about discrimination. The any-call margin is still computed
+    (``kind="call"``) and reported beside the endpoint, never as it.
 
     Only rungs with BOTH halves measured get a margin: a margin computed against a missing half
-    would be a call rate wearing the endpoint's name, and E1's whole point is that those two
-    numbers can move independently."""
-    necessary = pooled_rates(cells, VARIANT_NECESSARY)
-    unnecessary = pooled_rates(cells, VARIANT_UNNECESSARY)
+    would be a rate wearing the endpoint's name, and E1's whole point is that those two numbers
+    can move independently."""
+    necessary = pooled_rates(cells, VARIANT_NECESSARY, kind=kind)
+    unnecessary = pooled_rates(cells, VARIANT_UNNECESSARY, kind=kind)
     return {rung: necessary[rung] - unnecessary[rung] for rung in necessary if rung in unnecessary}
+
+
+def _rates_by_variant(cells: Sequence[RungCell], kind: RateKind) -> dict[str, dict[str, float]]:
+    return {
+        VARIANT_NECESSARY: pooled_rates(cells, VARIANT_NECESSARY, kind=kind),
+        VARIANT_UNNECESSARY: pooled_rates(cells, VARIANT_UNNECESSARY, kind=kind),
+    }
 
 
 def call_rate_gates(cells: Sequence[RungCell], *, tolerance: float = 0.0) -> dict[str, Any]:
@@ -534,10 +646,23 @@ def call_rate_gates(cells: Sequence[RungCell], *, tolerance: float = 0.0) -> dic
         "discrimination": {
             # The PRIMARY endpoint, reported beside the raw rate precisely so a rate lift with a
             # flat margin cannot be read as the ladder working.
+            "counts": "reads",
             "margin_by_rung": margins,
+            "read_rate_by_rung": _rates_by_variant(cells, "read"),
+            "any_call_margin_by_rung": discrimination_margins(cells, kind="call"),
             "note": (
-                "d(rung) = P(call | necessary) - P(call | unnecessary). A rung that lifts the raw "
-                "call rate while d stays flat bought nothing."
+                "d(rung) = P(read | necessary) - P(read | unnecessary). A rung that lifts the raw "
+                "call rate while d stays flat bought nothing. Writes are excluded from d: the "
+                "agent storing what it learned is the same act on both halves, so it moves both "
+                "rates together (any_call_margin_by_rung shows the diluted number)."
+            ),
+        },
+        "write_rate": {
+            "by_rung": _rates_by_variant(cells, "write"),
+            "note": (
+                "P(acknowledged write | measured leg) per half, REPORTED beside the margin and "
+                "never inside it. A write counts only on bd's acknowledgement or a native "
+                "memory-file write (mem-8fv4t)."
             ),
         },
         "guidance_token_adjustment": {
@@ -616,6 +741,7 @@ def summarize(
         "channel": CHANNEL.value,
         "model": resolve_model(model) or "cli-default",
         "surface_fingerprint": surface_fingerprint(),
+        "execution_protocol": EXECUTION_PROTOCOL_VERSION,
         "cli_version": cli_version,
         "corpus_fingerprint": corpus,
         "dry_run": dry_run,
@@ -636,6 +762,55 @@ def summarize(
 # --------------------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class LegScore:
+    """What one leg's tool calls count for: memory calls (blocks), reads, acknowledged writes,
+    and the verbs reached for, in stream order."""
+
+    memory_calls: int = 0
+    read_calls: int = 0
+    write_calls: int = 0
+    verbs: tuple[str, ...] = ()
+
+
+# The score of a leg that produced no stream to count -- an errored leg's record.
+_NO_SCORE = LegScore()
+
+
+def score_leg(calls: Sequence[ToolCall], *, config_dir: Path | None) -> LegScore:
+    """Score one leg's tool calls — the pure half of ``run_rung_cell``, so a truncated leg's
+    partial stream is scored by the same arithmetic as a complete one.
+
+    BOTH affordances count. The bd shim is the one this rig provisions; the native memory file is
+    the one the model reaches for first (mem-gj0pc), and scoring only the former reported an agent
+    that said "let me check memory" and did as a ZERO. The question the rung ladder asks is
+    whether the agent reaches for memory AT ALL, not whether it picks the harness's preferred door.
+
+    A WRITE is counted only on bd's own acknowledgement (``MemoryInvocation.is_accepted_write``),
+    never on the verb: the 160-leg fire's single "endogenous write" was a REFUSED
+    ``bd remember list`` (mem-8fv4t). A ``bd remember <bare-existing-key>`` bd answered as a recall
+    counts as the READ it was. The refused call is still a memory CALL — the agent reached for
+    the tool, and that choice is the ladder's endpoint — it just stored nothing.
+
+    A memory CALL is a tool call that reached memory through EITHER door, counted once
+    (``memory_reaching_calls``): a Bash block that runs ``bd recall`` and then ``cat``s MEMORY.md
+    is one reach (mem-zfm0m item 3), while its reads and writes count per door."""
+    native = native_memory_accesses(calls, config_dir=config_dir)
+    invocations = memory_invocations(calls)
+    reads = sum(1 for inv in invocations if inv.is_read or inv.is_recall_by_result) + sum(
+        1 for access in native if access.is_read
+    )
+    writes = sum(1 for inv in invocations if inv.is_accepted_write) + sum(
+        1 for access in native if access.is_write
+    )
+    return LegScore(
+        memory_calls=memory_reaching_calls(calls, config_dir=config_dir),
+        read_calls=reads,
+        write_calls=writes,
+        verbs=(*endogenous_memory_verbs(calls), *(access.verb for access in native)),
+    )
+
+
 def _silent_runner(argv: Sequence[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
     """The dry-run stand-in: an agent that makes NO tool call.
 
@@ -646,6 +821,159 @@ def _silent_runner(argv: Sequence[str], **_kwargs: object) -> subprocess.Complet
     return subprocess.CompletedProcess(list(argv), 0, serialize_stream([result_event()]), "")
 
 
+def _bought(leg: int) -> str:
+    return (
+        f"{leg} leg(s) of this cell were already paid for; the cell is incomplete, so a resume "
+        "re-buys it and those legs are spent"
+    )
+
+
+LegStatus = Literal["ok", "timeout", "error"]
+
+
+@dataclass(frozen=True)
+class _LegOutcome:
+    """What ONE leg produced, before the cell decides what it means.
+
+    ``status`` is what the leg record will say; ``score`` and ``stream`` are the evidence (a
+    timed-out leg keeps what it wrote before the bound, ``truncated``); ``quota_refusal`` is
+    set when the account refused the call — an ``error`` the cell must HALT on rather than
+    tolerate, phrased as the reason the halt will quote — and ``cause`` is the exception the
+    refusal was read off, so the halt is raised FROM it and a reader of the halt's cause chain
+    reaches the CLI's own result event (review G6)."""
+
+    status: LegStatus
+    detail: str = ""
+    stream: str = ""
+    score: LegScore = _NO_SCORE
+    cli_version: str = ""
+    truncated: bool = False
+    quota_refusal: str = ""
+    cause: HeadlessAgentError | None = None
+
+
+def _run_leg(
+    task: ToolReqRealAgentTask,
+    step: SequenceStep,
+    *,
+    rung: str,
+    leg: int,
+    model: str,
+    dry_run: bool,
+    timeout_s: float,
+    runner: Runner | None,
+    expect_cli_version: str,
+    corpus_dir: Path | None,
+) -> _LegOutcome:
+    """Spend one leg: mint the sandbox and the store, refuse a reachable corpus, run the agent,
+    and classify what came back. Nothing here counts toward the cell or writes a record; the
+    caller owns accumulation and emission. Raises ``RigHaltError`` when the leg ran on a CLI
+    other than the one the fire is pinned to."""
+    with (
+        tempfile.TemporaryDirectory(prefix="membench-memory-") as root,
+        paid_sandbox(f"e1-{rung.lower()}-") as sandbox,
+    ):
+        surface = provision_memory_tool(Path(root), sandbox=sandbox)
+        # PWD pinned to the sandbox: the agent merges this over the operator's environment,
+        # whose PWD is the shell's cwd -- the checkout the corpus lives in. The kernel's cwd
+        # is the sandbox regardless; the variable is what a child shell reports and what
+        # this guard would otherwise refuse on every operator run.
+        env = {**surface.env(), "PWD": str(sandbox)}
+        if corpus_dir is not None:
+            assert_corpus_unreachable(
+                env={**os.environ, **env}, cwd=sandbox, corpus_root=corpus_dir
+            )
+        spawn = runner if runner is not None else (_silent_runner if dry_run else None)
+        agent = HeadlessClaudeAgent(
+            model=model,
+            runner=spawn if spawn is not None else run_in_session,
+            cwd=str(sandbox),
+            env=env,
+            memory_channel=CHANNEL,
+            disallowed_tools=HOST_DENIED_TOOLS,
+            timeout_s=timeout_s,
+        )
+        ctx = StepContext(
+            trial_id=f"e1-{rung}-{task.result_id}-{leg}",
+            session_id=f"e1-{rung}-{task.result_id}",
+            step_id=step.step_id,
+        )
+        try:
+            result = agent.run_step(step, {}, ctx)
+        except HeadlessAgentError as exc:
+            # THREE outcomes, and which one this is decides whether the fire continues:
+            #   quota   -> the account is out, every further leg would fail the same way and
+            #              be billed as nothing. Halt CLEANLY so the caller persists what it
+            #              bought (the second staged fire lost cell 21's legs to this).
+            #   timeout -> the leg is UNMEASURED, not silent. Scoring it as a non-calling run
+            #              biases the rate toward the null this series exists to refuse.
+            #   other   -> also unmeasured, tolerated per leg, but a rig that is simply broken
+            #              fails EVERY leg, so a run of them halts rather than filling the
+            #              grid with "errors" that read as measured zeros.
+            if is_quota_halt(exc):
+                return _LegOutcome(
+                    status="error",
+                    detail=str(exc),
+                    quota_refusal=f"the account refused the call ({exc})",
+                    cause=exc,
+                )
+            timeout = spawn_timeout_of(exc)
+            if timeout is None:
+                return _LegOutcome(status="error", detail=str(exc))
+            # The bound cut the stream, it did not erase it. What the agent did BEFORE the
+            # bound is scored and persisted (the first fire threw it away and a leg that had
+            # reached for memory twice was persisted as an empty stream, mem-zfm0m); the leg
+            # still stays out of the cell, whose rates pool only streams that ended.
+            partial = timeout_partial_stdout(timeout)
+            return _LegOutcome(
+                status="timeout",
+                detail=str(exc),
+                stream=partial,
+                score=score_leg(tool_calls_from_stream(partial), config_dir=surface.config_dir),
+                truncated=True,
+            )
+        # EXIT 0 IS NOT PROOF THE RUN HAPPENED. `run_checked` raises on a non-zero exit and
+        # nothing else, so a CLI that reports its own failure on the result event and still
+        # exits 0 arrives HERE, with an empty tool-call list, and counts as a measured leg on
+        # which the agent chose not to touch memory. That is the one reading this series
+        # exists to refuse, and it would be manufactured by the rig rather than the agent.
+        # Same structural field the raising path is classified on, read one line earlier.
+        stream = result.raw_stream or ""
+        if stream_api_error_status(stream) in QUOTA_STATUSES:
+            return _LegOutcome(
+                status="error",
+                detail=f"exit 0 with api_error_status={stream_api_error_status(stream)}",
+                stream=stream,
+                quota_refusal=(
+                    f"the account refused the call (api_error_status="
+                    f"{stream_api_error_status(stream)}) and the CLI still exited 0"
+                ),
+            )
+        if stream_is_error(stream):
+            return _LegOutcome(
+                status="error",
+                detail="the CLI exited 0 but declared its own run failed (is_error)",
+            )
+        # The instrument that ran THIS leg, not the one a pre-flight probe asked about. A
+        # binary upgraded mid-sweep measures the later cells on a different tool surface and
+        # pools both into one rate; the resume identity catches it BETWEEN fires and cannot
+        # see it within one.
+        leg_cli = stream_cli_version(stream) or ""
+        if expect_cli_version and leg_cli and leg_cli != expect_cli_version:
+            raise RigHaltError(
+                f"{rung}/{task.variant}/{task.work_id} leg {leg}: this leg ran on CLI "
+                f"{leg_cli!r}, the fire is pinned to {expect_cli_version!r}. The binary "
+                f"changed mid-sweep, so the cells bought and the cells still to buy are not "
+                f"the same measurement. {_bought(leg)}."
+            )
+        return _LegOutcome(
+            status="ok",
+            stream=stream,
+            score=score_leg(result.tool_calls, config_dir=surface.config_dir),
+            cli_version=leg_cli,
+        )
+
+
 def run_rung_cell(
     task: ToolReqRealAgentTask,
     *,
@@ -654,10 +982,11 @@ def run_rung_cell(
     model: str,
     dry_run: bool,
     timeout_s: float = 600.0,
-    runner: object | None = None,
+    runner: Runner | None = None,
     on_leg: Callable[[LegRecord], None] | None = None,
     streak: UnmeasuredStreak | None = None,
     expect_cli_version: str = "",
+    corpus_dir: Path | None = None,
 ) -> RungCell:
     """Run one ``(rung, task-variant)`` cell and count the memory calls the agent CHOSE to make.
 
@@ -666,10 +995,20 @@ def run_rung_cell(
     store and no memory is surfaced in the prompt: this measures DISPOSITION, so the arm must not
     hand the agent a reason to call that the rung did not give it.
 
+    The sandbox is minted EMPTY and stays that way: the task reaches the agent through the prompt
+    (``rung_step``), never through files, so nothing from the corpus is copied or linked into
+    the cwd. ``corpus_dir`` is the corpus the task was loaded from; when it is given, every leg
+    is checked BEFORE the spawn for a path into it in the child's env or cwd tree
+    (``sandbox.assert_corpus_unreachable``, mem-zfm0m item 7) and refused with nothing spent.
+    None means the caller has no corpus on disk (the harness-side fixtures that build tasks in
+    memory); the paid entry points require it.
+
     ``paid`` is false whenever a runner was substituted or ``dry_run`` is set — the same rule
     ``e1_smoke`` publishes rows under, and for the same reason: an injected runner's call rate is
     the fixture's, not an agent's."""
     calling = 0
+    reading = 0
+    writing = 0
     total = 0
     reads = 0
     writes = 0
@@ -683,16 +1022,14 @@ def run_rung_cell(
         if on_leg is not None:
             on_leg(record)
 
-    def _bought(leg: int) -> str:
-        return (
-            f"{leg} leg(s) of this cell were already paid for; the cell is incomplete, so a resume "
-            "re-buys it and those legs are spent"
-        )
+    def _unmeasured(leg: int, outcome: _LegOutcome) -> None:
+        """Record one leg the CELL cannot count, and halt if the rig has stopped working.
 
-    def _unmeasured(*, leg: int, status: str, detail: str) -> None:
-        """Record one leg that measured NOTHING, and halt if the rig has stopped working."""
+        A timed-out leg arrives with the stream it wrote before the bound and that stream's
+        score: the evidence is kept whole and counted on the record, and the leg stays out of
+        the cell, whose rates pool only legs whose streams ended."""
         print(
-            f"[{status}] {rung}/{task.variant}/{task.work_id} leg {leg}: {detail}",
+            f"[{outcome.status}] {rung}/{task.variant}/{task.work_id} leg {leg}: {outcome.detail}",
             file=sys.stderr,
             flush=True,
         )
@@ -702,141 +1039,68 @@ def run_rung_cell(
                 variant=task.variant,
                 work_id=task.work_id,
                 leg=leg,
-                status=status,
-                detail=detail,
+                status=outcome.status,
+                memory_calls=outcome.score.memory_calls,
+                read_calls=outcome.score.read_calls,
+                write_calls=outcome.score.write_calls,
+                verbs=outcome.score.verbs,
+                stream=redact_credentials(outcome.stream),
+                detail=outcome.detail,
+                truncated=outcome.truncated,
             )
         )
         if streak.unmeasured():
             raise RigHaltError(
                 f"{rung}/{task.variant}/{task.work_id}: {streak.count} consecutive legs measured "
                 f"NOTHING — this is a broken rig, not a flaky one, and tolerating it leg by leg "
-                f"buys a grid of unmeasured cells. {_bought(leg)}. Last: {detail}"
+                f"buys a grid of unmeasured cells. {_bought(leg)}. Last: {outcome.detail}"
             )
 
     for i in range(repeats):
-        with (
-            tempfile.TemporaryDirectory(prefix="membench-memory-") as root,
-            paid_sandbox(f"e1-{rung.lower()}-") as sandbox,
-        ):
-            surface = provision_memory_tool(Path(root), sandbox=sandbox)
-            spawn = runner if runner is not None else (_silent_runner if dry_run else None)
-            agent = HeadlessClaudeAgent(
-                model=model,
-                runner=spawn if spawn is not None else subprocess.run,  # type: ignore[arg-type]
-                cwd=str(sandbox),
-                env=surface.env(),
-                memory_channel=CHANNEL,
-                disallowed_tools=HOST_DENIED_TOOLS,
-                timeout_s=timeout_s,
-            )
-            ctx = StepContext(
-                trial_id=f"e1-{rung}-{task.result_id}-{i}",
-                session_id=f"e1-{rung}-{task.result_id}",
-                step_id=step.step_id,
-            )
-            try:
-                result = agent.run_step(step, {}, ctx)
-            except HeadlessAgentError as exc:
-                # THREE outcomes, and which one this is decides whether the fire continues:
-                #   quota   -> the account is out, every further leg would fail the same way and
-                #              be billed as nothing. Halt CLEANLY so the caller persists what it
-                #              bought (the second staged fire lost cell 21's legs to this).
-                #   timeout -> the leg is UNMEASURED, not silent. Scoring it as a non-calling run
-                #              biases the rate toward the null this series exists to refuse.
-                #   other   -> also unmeasured, tolerated per leg, but a rig that is simply broken
-                #              fails EVERY leg, so a run of them halts rather than filling the
-                #              grid with "errors" that read as measured zeros.
-                if is_quota_halt(exc):
-                    _emit(
-                        LegRecord(
-                            rung=rung,
-                            variant=task.variant,
-                            work_id=task.work_id,
-                            leg=i,
-                            status="error",
-                            detail=str(exc),
-                        )
-                    )
-                    raise QuotaHaltError(
-                        f"{rung}/{task.variant}/{task.work_id} leg {i}: the account refused the "
-                        f"call ({exc}). Nothing further can be measured; resume when it resets. "
-                        f"{_bought(i)}."
-                    ) from exc
-                if is_spawn_timeout(exc):
-                    timed_out += 1
-                    status = "timeout"
-                else:
-                    errored += 1
-                    status = "error"
-                _unmeasured(leg=i, status=status, detail=str(exc))
-                continue
-            # EXIT 0 IS NOT PROOF THE RUN HAPPENED. `run_checked` raises on a non-zero exit and
-            # nothing else, so a CLI that reports its own failure on the result event and still
-            # exits 0 arrives HERE, with an empty tool-call list, and counts as a measured leg on
-            # which the agent chose not to touch memory. That is the one reading this series
-            # exists to refuse, and it would be manufactured by the rig rather than the agent.
-            # Same structural field the raising path is classified on, read one line earlier.
-            stream = result.raw_stream or ""
-            if stream_api_error_status(stream) in QUOTA_STATUSES:
-                _emit(
-                    LegRecord(
-                        rung=rung,
-                        variant=task.variant,
-                        work_id=task.work_id,
-                        leg=i,
-                        status="error",
-                        detail=f"exit 0 with api_error_status={stream_api_error_status(stream)}",
-                        stream=redact_credentials(stream),
-                    )
-                )
-                raise QuotaHaltError(
-                    f"{rung}/{task.variant}/{task.work_id} leg {i}: the account refused the call "
-                    f"(api_error_status={stream_api_error_status(stream)}) and the CLI still "
-                    f"exited 0. Nothing further can be measured; resume when it resets. "
-                    f"{_bought(i)}."
-                )
-            if stream_is_error(stream):
-                errored += 1
-                _unmeasured(
+        outcome = _run_leg(
+            task,
+            step,
+            rung=rung,
+            leg=i,
+            model=model,
+            dry_run=dry_run,
+            timeout_s=timeout_s,
+            runner=runner,
+            expect_cli_version=expect_cli_version,
+            corpus_dir=corpus_dir,
+        )
+        if outcome.quota_refusal:
+            _emit(
+                LegRecord(
+                    rung=rung,
+                    variant=task.variant,
+                    work_id=task.work_id,
                     leg=i,
-                    status="error",
-                    detail="the CLI exited 0 but declared its own run failed (is_error)",
+                    status=outcome.status,
+                    detail=outcome.detail,
+                    stream=redact_credentials(outcome.stream),
                 )
-                continue
-            # The instrument that ran THIS leg, not the one a pre-flight probe asked about. A
-            # binary upgraded mid-sweep measures the later cells on a different tool surface and
-            # pools both into one rate; the resume identity catches it BETWEEN fires and cannot
-            # see it within one.
-            leg_cli = stream_cli_version(stream) or ""
-            if expect_cli_version and leg_cli and leg_cli != expect_cli_version:
-                raise RigHaltError(
-                    f"{rung}/{task.variant}/{task.work_id} leg {i}: this leg ran on CLI "
-                    f"{leg_cli!r}, the fire is pinned to {expect_cli_version!r}. The binary "
-                    f"changed mid-sweep, so the cells bought and the cells still to buy are not "
-                    f"the same measurement. {_bought(i)}."
-                )
+            )
+            raise QuotaHaltError(
+                f"{rung}/{task.variant}/{task.work_id} leg {i}: {outcome.quota_refusal}. "
+                f"Nothing further can be measured; resume when it resets. {_bought(i)}."
+            ) from outcome.cause
+        if outcome.status != "ok":
+            if outcome.status == "timeout":
+                timed_out += 1
+            else:
+                errored += 1
+            _unmeasured(i, outcome)
+            continue
         streak.measured()
-        calls = list(result.tool_calls)
-        # BOTH affordances count. The bd shim is the one this rig provisions; the native memory
-        # file is the one the model reaches for first (mem-gj0pc), and scoring only the former
-        # reported an agent that said "let me check memory" and did as a ZERO. The question the
-        # rung ladder asks is whether the agent reaches for memory AT ALL, not whether it picks
-        # the harness's preferred door.
-        native = native_memory_accesses(calls, config_dir=surface.config_dir)
-        n = endogenous_memory_tool_calls(calls) + len(native)
-        total += n
-        calling += 1 if n else 0
-        invocations = memory_invocations(calls)
-        leg_reads = sum(1 for inv in invocations if inv.is_read) + sum(
-            1 for access in native if access.is_read
-        )
-        leg_writes = sum(1 for inv in invocations if inv.is_write) + sum(
-            1 for access in native if access.is_write
-        )
-        reads += leg_reads
-        writes += leg_writes
-        leg_verbs = [*endogenous_memory_verbs(calls), *(access.verb for access in native)]
-        verbs.extend(leg_verbs)
+        score = outcome.score
+        total += score.memory_calls
+        calling += 1 if score.memory_calls else 0
+        reading += 1 if score.read_calls else 0
+        writing += 1 if score.write_calls else 0
+        reads += score.read_calls
+        writes += score.write_calls
+        verbs.extend(score.verbs)
         _emit(
             LegRecord(
                 rung=rung,
@@ -844,12 +1108,12 @@ def run_rung_cell(
                 work_id=task.work_id,
                 leg=i,
                 status="ok",
-                memory_calls=n,
-                read_calls=leg_reads,
-                write_calls=leg_writes,
-                verbs=tuple(leg_verbs),
-                stream=redact_credentials(result.raw_stream or ""),
-                cli_version=leg_cli,
+                memory_calls=score.memory_calls,
+                read_calls=score.read_calls,
+                write_calls=score.write_calls,
+                verbs=score.verbs,
+                stream=redact_credentials(outcome.stream),
+                cli_version=outcome.cli_version,
             )
         )
     return RungCell(
@@ -860,6 +1124,8 @@ def run_rung_cell(
         memory_calls=total,
         read_calls=reads,
         write_calls=writes,
+        reading_runs=reading,
+        writing_runs=writing,
         paid=not dry_run and runner is None,
         verbs=tuple(verbs),
         work_id=task.work_id,
@@ -969,14 +1235,21 @@ def is_quota_halt(exc: HeadlessAgentError) -> bool:
     return stream_api_error_status(child.stdout or "") in QUOTA_STATUSES
 
 
-def is_spawn_timeout(exc: HeadlessAgentError) -> bool:
-    """Whether a ``HeadlessAgentError`` is the spawn timeout and nothing else.
+def spawn_timeout_of(exc: HeadlessAgentError) -> subprocess.TimeoutExpired | None:
+    """The spawn timeout under a ``HeadlessAgentError``, or None when it is anything else.
 
     Decided on the CAUSE CHAIN (``spawn.run_checked`` raises ``from subprocess.TimeoutExpired``),
     not on the message. Only the timeout is tolerated per leg: a missing CLI, a refused token, or
     a non-zero exit is a broken rig, and a broken rig tolerated leg by leg is a cell full of
-    "timeouts" that reads as a measured zero."""
-    return isinstance(exc.__cause__, subprocess.TimeoutExpired)
+    "timeouts" that reads as a measured zero. The cause itself is returned, not a bool, because
+    it carries the partial stdout the leg is scored from."""
+    cause = exc.__cause__
+    return cause if isinstance(cause, subprocess.TimeoutExpired) else None
+
+
+def is_spawn_timeout(exc: HeadlessAgentError) -> bool:
+    """Whether a ``HeadlessAgentError`` is the spawn timeout and nothing else."""
+    return spawn_timeout_of(exc) is not None
 
 
 # --------------------------------------------------------------------------------------
@@ -1078,11 +1351,12 @@ def staged_cells(
     tasks: Sequence[ToolReqRealAgentTask],
     *,
     model: str,
+    corpus_dir: Path,
     rungs: Sequence[str] = STAGED_RUNGS,
     n_tasks: int = STAGED_TASKS,
     repeats: int = STAGED_REPEATS,
     timeout_s: float = 600.0,
-    runner: object | None = None,
+    runner: Runner | None = None,
     on_cell: Callable[[RungCell], None] | None = None,
     on_leg: Callable[[LegRecord], None] | None = None,
     landed: Sequence[RungCell] = (),
@@ -1101,7 +1375,10 @@ def staged_cells(
 
     ONE ``UnmeasuredStreak`` spans the whole fire. A rig that fails every leg fails them across
     cell boundaries too, and a per-cell counter restarted at each cell never reaches its limit —
-    it buys the entire grid one unmeasured cell at a time."""
+    it buys the entire grid one unmeasured cell at a time.
+
+    ``corpus_dir`` is required, not defaulted: this is a paid path, and the corpus-reach guard
+    it feeds (``run_rung_cell``) must not be skippable by omission."""
     streak = UnmeasuredStreak()
     by_variant: dict[str, list[ToolReqRealAgentTask]] = {}
     for task in tasks:
@@ -1126,6 +1403,7 @@ def staged_cells(
                     on_leg=on_leg,
                     streak=streak,
                     expect_cli_version=expect_cli_version,
+                    corpus_dir=corpus_dir,
                 )
                 cells.append(cell)
                 if on_cell is not None:
@@ -1172,7 +1450,12 @@ def preflight_verdict(result: Mapping[str, Any]) -> tuple[str, str]:
 
 
 def preflight(
-    task: ToolReqRealAgentTask, *, model: str, rung: str = PREFLIGHT_RUNG, timeout_s: float = 600.0
+    task: ToolReqRealAgentTask,
+    *,
+    model: str,
+    corpus_dir: Path,
+    rung: str = PREFLIGHT_RUNG,
+    timeout_s: float = 600.0,
 ) -> dict[str, Any]:
     """ONE REAL ``claude -p`` cycle at the top rung, before any interior rung is paid for.
 
@@ -1181,7 +1464,13 @@ def preflight(
     reason — there is no free path through this function, and a caller that wants one is asking for
     a different (and worthless) measurement."""
     cell = run_rung_cell(
-        task, rung=rung, repeats=1, model=model, dry_run=False, timeout_s=timeout_s
+        task,
+        rung=rung,
+        repeats=1,
+        model=model,
+        dry_run=False,
+        timeout_s=timeout_s,
+        corpus_dir=corpus_dir,
     )
     return {
         "rung": rung,
@@ -1258,10 +1547,10 @@ def resume_cells(
     """The cells a partial ``--out`` artifact contributes to a resumed fire.
 
     Admissible only when EVERY identity field matches the rig now running — the model, the tool
-    surface, the CLI binary, the corpus, and the repeat count. Each of them changes what a leg
-    measures, so a mismatch on any one would land two measurements in one grid and report them as
-    one. A blank field is a mismatch, not a pass: an artifact that cannot say what produced it
-    cannot be shown to have been produced by this.
+    surface, the execution protocol, the CLI binary, the corpus, and the repeat count. Each of
+    them changes what a leg measures, so a mismatch on any one would land two measurements in one
+    grid and report them as one. A blank field is a mismatch, not a pass: an artifact that cannot
+    say what produced it cannot be shown to have been produced by this.
 
     Rows are then filtered to what is admissible AS EVIDENCE:
 
@@ -1274,9 +1563,10 @@ def resume_cells(
       same artifact, and silently picking one publishes half of each
     * rows outside ``grid`` (when given) are a refusal for the same reason — a cell the current
       fire will not run cannot be pooled into its rates"""
-    want = {
+    want: dict[str, object] = {
         "model": resolve_model(model) or "cli-default",
         "surface_fingerprint": surface_fingerprint(),
+        "execution_protocol": EXECUTION_PROTOCOL_VERSION,
         "cli_version": cli_version,
         "corpus_fingerprint": corpus,
     }
@@ -1501,6 +1791,7 @@ def _fire_staged(args: argparse.Namespace, tasks: Sequence[ToolReqRealAgentTask]
             cells = staged_cells(
                 tasks,
                 model=args.model,
+                corpus_dir=args.corpus_dir,
                 n_tasks=int(plan["n_tasks"]),
                 repeats=repeats,
                 on_cell=_record,
@@ -1586,7 +1877,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.preflight:
         anchor = next((t for t in tasks if t.variant == VARIANT_NECESSARY), tasks[0])
-        result = preflight(anchor, model=args.model, rung=args.rung)
+        result = preflight(anchor, model=args.model, corpus_dir=args.corpus_dir, rung=args.rung)
         try:
             gated = preflight_gate(result)
         except PreflightHaltError as exc:

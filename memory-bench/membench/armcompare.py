@@ -247,9 +247,9 @@ def fork_boundary_for(
 # --- per-axis extraction ----------------------------------------------------------------
 
 
-def _iter_tool_use_blocks(stream: str) -> Iterable[Mapping[str, Any]]:
-    """Every ``tool_use`` block in stream order -- the same tolerant event walk
-    as `project_claude_stream` (non-JSON lines and shapeless events skipped)."""
+def _iter_content_blocks(stream: str, block_type: str) -> Iterable[Mapping[str, Any]]:
+    """Every message content block of ``block_type`` in stream order -- the same tolerant
+    event walk as `project_claude_stream` (non-JSON lines and shapeless events skipped)."""
     for line in stream.splitlines():
         line = line.strip()
         if not line:
@@ -263,8 +263,19 @@ def _iter_tool_use_blocks(stream: str) -> Iterable[Mapping[str, Any]]:
         if not isinstance(content, list):
             continue
         for block in content:
-            if isinstance(block, Mapping) and block.get("type") == "tool_use":
+            if isinstance(block, Mapping) and block.get("type") == block_type:
                 yield block
+
+
+def _iter_tool_use_blocks(stream: str) -> Iterable[Mapping[str, Any]]:
+    """Every ``tool_use`` block in stream order."""
+    return _iter_content_blocks(stream, "tool_use")
+
+
+def _iter_tool_result_blocks(stream: str) -> Iterable[Mapping[str, Any]]:
+    """Every ``tool_result`` block in stream order -- the ``user`` events Claude Code prints
+    when a tool returns, each keyed to its call by ``tool_use_id``."""
+    return _iter_content_blocks(stream, "tool_result")
 
 
 def tool_calls_before_first_edit(stream: str) -> int | None:

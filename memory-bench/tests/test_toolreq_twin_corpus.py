@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from membench.generators.enterprise_workflow import _SUBJECTS, materialize_world
 from membench.grading.paired_ci import paired_delta_ci
 from membench.metrics.scorers import states_value
 from membench.runner import e1_necessity_preflight, toolreq_corpus
@@ -32,8 +33,12 @@ from membench.runner.toolreq_corpus import (
 from membench.runner.toolreq_realagent import (
     VARIANT_NECESSARY,
     VARIANT_UNNECESSARY,
+    ToolReqRealAgentTask,
+    adapt_sequence,
     task_fingerprint,
 )
+from membench.schemas.sequence import BenchmarkSequence
+from membench.schemas.world import Channel, EnterpriseWorld, Persona, Project, Team
 from tests.toolreq_helpers import corpus, multi_value_corpus
 
 
@@ -368,3 +373,90 @@ def test_an_empty_corpus_directory_is_not_a_rejection(tmp_path: Path) -> None:
         e1_necessity_preflight.main(["--corpus-dir", str(tmp_path / "empty"), "--json"])
         == EXIT_NO_CORPUS
     )
+
+
+# --------------------------------------------------------------------------- #
+# mem-zfm0m item 1: the twin inlines EVERY named subject's value, not just the scored one
+# --------------------------------------------------------------------------- #
+
+
+def _generated_necessary_tasks(seed: int) -> list[tuple[BenchmarkSequence, ToolReqRealAgentTask]]:
+    """The real generator's tool-requiring shape (three subjects named per request, ONE scored),
+    adapted the way the frozen corpus is."""
+    world = EnterpriseWorld(
+        world_id=f"world-seed{seed}",
+        domain="cuda-engineering",
+        org_name="Acme",
+        teams=[Team(team_id="t1", name="Kernels")],
+        personas=[
+            Persona(persona_id="p1", name="Ada Lovelace", role="staff-engineer", team_id="t1"),
+            Persona(persona_id="p2", name="Grace Hopper", role="sre", team_id="t1"),
+        ],
+        channels=[Channel(channel_id="c1", name="kernels", kind="chat")],
+        seed=seed,
+    )
+    project = Project(
+        project_id=f"world-seed{seed}-project",
+        world_id=f"world-seed{seed}",
+        name="Acme initiative",
+        goal="Reconcile the launch config.",
+    )
+    seqs = materialize_world(world, project, n_tasks=3, facts_per_task=3, tool_requiring=True)
+    return [(seq, adapt_sequence(seq)) for seq in seqs]
+
+
+def _authored_required_contents(seq: BenchmarkSequence, task: ToolReqRealAgentTask) -> list[str]:
+    """The AUTHORED (pre-opaque) content of every memory the goal requires: ``oracle_memory`` is
+    keyed by exactly the required ids, and the sequence's own writes carry the realistic text."""
+    writes = {k: v for step in seq.steps for k, v in step.expected_memory_writes.items()}
+    return [writes[memory_id] for memory_id in task.oracle_memory]
+
+
+def _authored_scored_values(seq: BenchmarkSequence) -> set[str]:
+    return {
+        value
+        for step in seq.steps
+        for check in step.outcome_checks
+        for action in check.requires_action
+        if action.tool == "apply_config"
+        for value in action.arg_values
+    }
+
+
+@pytest.mark.parametrize("seed", [1, 2, 3, 5, 8])
+def test_the_generated_twin_states_the_current_value_of_every_named_subject(seed: int) -> None:
+    """mem-zfm0m item 1. The generator names THREE subjects in the goal request ("apply the current
+    value of: <p1>, <p2>, <p3>") and scores ONE; the adapter opaquifies only the scored value, so
+    the other two subjects' current values live only in ``oracle_memory``. A twin that inlined
+    ``current_opaque_values`` alone handed the agent one value and a request naming three: the
+    "memory-unnecessary" half still needed memory for two of its subjects, and the contrast was
+    not the one it claimed. Every required fact's value is inlined now: the opaque token for the
+    scored subject, the realistic value for the rest, and never a stale or distractor value."""
+    for seq, necessary in _generated_necessary_tasks(seed):
+        scored = _authored_scored_values(seq)
+        twin = unnecessary_twin(necessary)
+        request = twin.goal_step.user_request
+        named = [s for s in _SUBJECTS if s.prompt in necessary.goal_step.user_request]
+        assert len(named) == 3, "the generator names every fact's subject in the request"
+        contents = _authored_required_contents(seq, necessary)
+        for subject in named:
+            (content,) = [c for c in contents if c.startswith(f"{subject.prompt} is ")]
+            (current,) = [v for v in subject.values if states_value(content, v)]
+            if current in scored:
+                # The scored subject is stated as its OPAQUE token (the adapter's substitution),
+                # never as the guessable authored value.
+                assert not states_value(request, current)
+            else:
+                assert states_value(request, current), (
+                    f"{seq.sequence_id}: twin names {subject.prompt!r} but does not state its "
+                    f"current value {current!r}"
+                )
+                assert not states_value(necessary.goal_step.user_request, current)
+            for other in subject.values:
+                if other != current:
+                    assert not states_value(request, other), (
+                        f"{seq.sequence_id}: twin states non-current {other!r} for "
+                        f"{subject.prompt!r}"
+                    )
+        for value in necessary.current_opaque_values:
+            assert states_value(request, value)
