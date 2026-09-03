@@ -14,12 +14,23 @@ chmod 0o644 binary) at the trust boundary. That is wiring, not rung semantics,
 and it is exactly what a shared helper cannot prove on a caller's behalf.
 """
 
+import contextlib
 import errno
+import os
 import subprocess
+import sys
+import time
+from pathlib import Path
 
 import pytest
 
-from membench.spawn import _MIN_REDACTABLE_SECRET_LEN, redact_secret, run_checked
+from membench.spawn import (
+    _MIN_REDACTABLE_SECRET_LEN,
+    redact_secret,
+    run_checked,
+    run_in_session,
+    timeout_partial_stdout,
+)
 
 
 class _BoomError(RuntimeError):
@@ -368,3 +379,144 @@ def test_redact_secret_removes_every_occurrence() -> None:
     token = "sgp_" + "e" * 36
     out = redact_secret(f"{token} retried then {token} again", token)
     assert token not in out
+
+
+# --------------------------------------------------------------------------- #
+# mem-zfm0m item 8: the child runs in its own session and a timeout kills the whole group
+# --------------------------------------------------------------------------- #
+
+# A child that forks two grandchildren and then outlives the bound. Their pids come FIRST so the
+# partial stdout carries them; "partial" is the line a scorer must still see. One grandchild
+# detaches from the pipes and one holds stdout open: the holder is what makes a child-only kill
+# visible (the drain behind it blocks until the holder dies), the detached one is what a
+# child-only kill leaves running. 600s outlives every bound below by three orders.
+_FORKING = [
+    "sh",
+    "-c",
+    "sleep 600 >/dev/null 2>&1 & echo $!; sleep 600 & echo $!; echo partial; wait",
+]
+_LINUX_ONLY = pytest.mark.skipif(sys.platform != "linux", reason="reads /proc")
+
+
+def _gone(pid: int) -> bool:
+    """Dead or reaped: no /proc entry (or one that vanished between open and read, which the
+    kernel reports as ESRCH), or a zombie waiting on nobody."""
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
+    except (FileNotFoundError, ProcessLookupError):
+        return True
+    return state == "Z"
+
+
+def _wait_gone(pid: int, seconds: float = 3.0) -> bool:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if _gone(pid):
+            return True
+        time.sleep(0.05)
+    return _gone(pid)
+
+
+def _reap(*pids: int) -> None:
+    for pid in pids:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(pid, 9)
+
+
+def _grandchildren(partial: str) -> tuple[int, int]:
+    detached, holder = (int(line) for line in partial.splitlines()[:2])
+    return detached, holder
+
+
+@_LINUX_ONLY
+def test_run_in_session_kills_the_grandchild_on_timeout() -> None:
+    """`subprocess.run` kills the child it spawned and nothing else: a `claude -p` that timed out
+    left its own children running against the next leg's sandbox. The child is started as a
+    session leader and the timeout signals the GROUP."""
+    with pytest.raises(subprocess.TimeoutExpired) as info:
+        run_in_session(_FORKING, capture_output=True, text=True, check=False, timeout=0.5)
+    grandchildren = _grandchildren(info.value.stdout)
+    try:
+        for pid in grandchildren:
+            assert _wait_gone(pid), f"grandchild {pid} survived the timeout"
+    finally:
+        _reap(*grandchildren)
+
+
+@_LINUX_ONLY
+def test_a_plain_run_leaves_the_grandchild_alive() -> None:
+    """The control for the test above — the behaviour item 8 replaces, kept so the contrast is
+    measured rather than assumed. Cleaned up by hand because nothing else will."""
+    with pytest.raises(subprocess.TimeoutExpired) as info:
+        subprocess.run(_FORKING, capture_output=True, text=True, check=False, timeout=0.5)
+    grandchildren = _grandchildren(timeout_partial_stdout(info.value))
+    try:
+        assert not any(_gone(pid) for pid in grandchildren)
+    finally:
+        _reap(*grandchildren)
+
+
+@_LINUX_ONLY
+def test_run_in_session_carries_the_partial_stdout_on_the_timeout() -> None:
+    """mem-zfm0m item 4: what the child wrote before the bound is on the exception, DECODED, so
+    a scorer can count the calls the partial stream carries."""
+    with pytest.raises(subprocess.TimeoutExpired) as info:
+        run_in_session(_FORKING, capture_output=True, text=True, check=False, timeout=0.5)
+    assert isinstance(info.value.stdout, str)
+    assert "partial" in info.value.stdout
+    assert info.value.timeout == 0.5
+    assert timeout_partial_stdout(info.value) == info.value.stdout
+
+
+@_LINUX_ONLY
+def test_run_in_session_reaches_run_checked_as_the_timeout_rung() -> None:
+    """Through the ladder: the caller's error type, CAUSED BY the TimeoutExpired that carries the
+    partial stdout — the shape ``e1_grid`` classifies and scores."""
+    with pytest.raises(_BoomError, match=r"did not finish within 0\.5s") as info:
+        run_checked(
+            _FORKING,
+            what="the thing",
+            not_found_hint="install it",
+            timeout_s=0.5,
+            error=_BoomError,
+            runner=run_in_session,
+        )
+    cause = info.value.__cause__
+    assert isinstance(cause, subprocess.TimeoutExpired)
+    assert "partial" in timeout_partial_stdout(cause)
+    _reap(*_grandchildren(timeout_partial_stdout(cause)))
+
+
+def test_run_in_session_returns_a_completed_process_with_cwd_env_and_input(tmp_path) -> None:
+    completed = run_in_session(
+        ["sh", "-c", "pwd; echo $MARK; cat"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10.0,
+        cwd=tmp_path,
+        env={"MARK": "here", "PATH": os.environ["PATH"]},
+        input="from-stdin\n",
+    )
+    assert completed.returncode == 0
+    assert completed.stdout.splitlines() == [str(tmp_path.resolve()), "here", "from-stdin"]
+    assert completed.stderr == ""
+
+
+def test_run_in_session_refuses_a_shape_run_checked_never_asks_for() -> None:
+    """It serves ``run_checked``'s spawn shape and nothing wider — a silent ``check=True`` would
+    raise CalledProcessError past the ladder's own non-zero rung."""
+    with pytest.raises(ValueError, match="check=False"):
+        run_in_session(["true"], capture_output=True, text=True, check=True, timeout=1.0)
+    with pytest.raises(ValueError, match="capture_output=True"):
+        run_in_session(["true"], capture_output=False, text=True, check=False, timeout=1.0)
+
+
+def test_timeout_partial_stdout_decodes_bytes_and_tolerates_none() -> None:
+    """``subprocess.run`` hands the partial stdout over as BYTES even in text mode; a runner that
+    produced nothing before the bound hands ``None``."""
+    as_bytes = subprocess.TimeoutExpired(cmd=["x"], timeout=1.0, output=b"partial \xff")
+    assert timeout_partial_stdout(as_bytes) == "partial \ufffd"
+    as_str = subprocess.TimeoutExpired(cmd=["x"], timeout=1.0, output="partial")
+    assert timeout_partial_stdout(as_str) == "partial"
+    assert timeout_partial_stdout(subprocess.TimeoutExpired(cmd=["x"], timeout=1.0)) == ""

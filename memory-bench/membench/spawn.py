@@ -18,7 +18,9 @@ exception is raised, not raise-vs-return.
 
 from __future__ import annotations
 
+import os
 import re
+import signal
 import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -67,6 +69,98 @@ _REDACTED = "<redacted-credential>"
 # Below it we accept the theoretical miss of an implausibly-short secret to protect the
 # diagnosis -- the same both-directions bar the `\b` word boundary holds for the shape pass.
 _MIN_REDACTABLE_SECRET_LEN = 8
+
+
+def run_in_session(
+    argv: Sequence[str],
+    *,
+    capture_output: bool,
+    text: bool,
+    check: bool,
+    timeout: float | None,
+    cwd: str | Path | None = None,
+    env: Mapping[str, str] | None = None,
+    input: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """``subprocess.run`` for a child that may have children of its own.
+
+    ``subprocess.run`` kills the process it spawned on timeout and nothing else: a ``claude -p``
+    that outlives its bound leaves its own tool subprocesses running against a sandbox the next
+    leg is about to reuse. The child is started as a SESSION LEADER (``start_new_session``), so
+    the timeout can signal its whole process group, and the partial stdout is drained after the
+    kill and carried on the ``TimeoutExpired`` DECODED, so a scorer reads it the way it reads a
+    complete stream.
+
+    The keyword shape is ``run_checked``'s spawn shape and nothing wider: ``capture_output=True``,
+    ``text=True``, ``check=False`` are accepted so this drops in as its ``runner``, and any other
+    value is refused rather than silently served a different contract.
+    """
+    if not capture_output:
+        raise ValueError("run_in_session serves run_checked's shape: capture_output=True only")
+    if not text:
+        raise ValueError("run_in_session serves run_checked's shape: text=True only")
+    if check:
+        raise ValueError(
+            "run_in_session serves run_checked's shape: check=False only (the ladder diagnoses a "
+            "non-zero exit itself)"
+        )
+    proc = subprocess.Popen(
+        list(argv),
+        stdin=subprocess.PIPE if input is not None else None,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=cwd,
+        env=env,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = proc.communicate(input=input, timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        _kill_group(proc)
+        # The second communicate returns everything buffered before the bound plus whatever the
+        # kill flushed; ``communicate`` only raises ``TimeoutExpired`` from a bounded call, so the
+        # bound is quoted as the caller gave it, not as the remaining slice ``exc`` reports.
+        stdout, stderr = proc.communicate()
+        bound = exc.timeout if timeout is None else timeout
+        raise subprocess.TimeoutExpired(proc.args, bound, output=stdout, stderr=stderr) from None
+    except BaseException:
+        _kill_group(proc)
+        proc.wait()
+        raise
+    return subprocess.CompletedProcess(proc.args, proc.returncode, stdout, stderr)
+
+
+def _kill_group(proc: subprocess.Popen[str]) -> None:
+    """SIGKILL the session ``proc`` leads.
+
+    A group already gone is the outcome wanted, not an error. A group that does not exist while
+    ``proc`` is still running means ``proc`` was never made a session leader: the child would
+    outlive its bound and the drain behind this call would block on it, so that is refused
+    loudly rather than waited out."""
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError as exc:
+        if proc.poll() is None:
+            raise RuntimeError(
+                f"pid {proc.pid} is still running but leads no process group; it was not spawned "
+                "as a session leader, so its children cannot be killed with it"
+            ) from exc
+
+
+def timeout_partial_stdout(exc: subprocess.TimeoutExpired) -> str:
+    """What the child wrote before the bound fired, as text.
+
+    ``subprocess.run`` hands it over as BYTES even in text mode (it reads the pipes raw when it
+    kills); ``run_in_session`` hands it over decoded; a child that wrote nothing hands ``None``.
+    All three are the same partial stream to the scorer."""
+    partial = exc.stdout
+    if partial is None:
+        return ""
+    if isinstance(partial, bytes):
+        return partial.decode("utf-8", errors="replace")
+    return str(partial)
+
 
 # The window the child's own output gets in the diagnosis. HEAD AND TAIL, not head alone:
 # `claude -p --output-format stream-json` puts a whole event stream on stdout and the

@@ -786,11 +786,12 @@ def test_fire_staged_refuses_without_a_token(
 # --- timeouts are unmeasured legs, cells pool, and a dead fire resumes -----------------
 
 
-def _timeout_error() -> HeadlessAgentError:
+def _timeout_error(stdout: str | bytes | None = None) -> HeadlessAgentError:
     """The exact shape ``spawn.run_checked`` raises: a HeadlessAgentError CAUSED BY
-    TimeoutExpired."""
+    TimeoutExpired, carrying whatever the child wrote before the bound (``run_in_session`` hands
+    it over decoded; ``subprocess.run`` as bytes; a child that wrote nothing, None)."""
     try:
-        raise subprocess.TimeoutExpired(cmd=["claude", "-p"], timeout=600.0)
+        raise subprocess.TimeoutExpired(cmd=["claude", "-p"], timeout=600.0, output=stdout)
     except subprocess.TimeoutExpired as exc:
         err = HeadlessAgentError("claude -p did not finish within 600.0s")
         err.__cause__ = exc
@@ -812,6 +813,84 @@ def _timing_out_runner(timeout_legs: set[int], *commands: str | tuple[str, str])
         return result
 
     return runner
+
+
+def _partial_stream_runner(timeout_leg: int, partial: str | bytes) -> Any:
+    """`_calling_runner("bd recall k")` except leg ``timeout_leg`` times out AFTER writing
+    ``partial`` — the shape ``run_in_session`` raises when the bound fires mid-stream."""
+    leg = {"n": 0}
+    calling = _calling_runner("bd recall k")
+
+    def runner(argv: Any, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        i = leg["n"]
+        leg["n"] += 1
+        if i == timeout_leg:
+            raise _timeout_error(partial)
+        result: subprocess.CompletedProcess[str] = calling(argv, **kwargs)
+        return result
+
+    return runner
+
+
+@pytest.mark.parametrize("encode", [False, True], ids=["str", "bytes"])
+def test_a_timed_out_leg_is_scored_from_its_partial_stream_and_stays_unmeasured(
+    tmp_path: Any, encode: bool
+) -> None:
+    """mem-zfm0m item 4. A leg that timed out after two memory calls made two memory calls; the
+    first fire threw its partial stream away and persisted an empty one. The partial stream is
+    scored by the same arithmetic as a complete one and persisted with ``truncated=True`` — and
+    the leg stays OUT of the measured denominator and out of every cell numerator, because a
+    truncated stream bounds the count from below only."""
+    _seqs, tasks = corpus_one(tmp_path)
+    partial = serialize_stream(
+        [
+            assistant_event([("Bash", {"command": "bd recall k"})]),
+            assistant_event([("Bash", {"command": "bd recall other"})]),
+        ]
+    )
+    legs: list[e1_grid.LegRecord] = []
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=3,
+        model=MODEL,
+        dry_run=False,
+        runner=_partial_stream_runner(1, partial.encode() if encode else partial),
+        on_leg=legs.append,
+    )
+    # The cell: two measured legs, one call each. The timed-out leg's two calls are NOT in here.
+    assert (cell.runs, cell.timed_out_runs, cell.measured_runs) == (3, 1, 2)
+    assert (cell.calling_runs, cell.memory_calls, cell.read_calls) == (2, 2, 2)
+    assert cell.call_rate == pytest.approx(1.0)
+    # The leg: scored, persisted with its events, marked truncated.
+    truncated = legs[1]
+    assert truncated.status == "timeout"
+    assert truncated.truncated is True
+    assert (truncated.memory_calls, truncated.read_calls, truncated.write_calls) == (2, 2, 0)
+    assert list(truncated.verbs) == ["recall", "recall"]
+    assert "bd recall other" in truncated.stream
+    assert "did not finish" in truncated.detail
+    assert [leg.truncated for leg in legs] == [False, True, False]
+
+
+def test_the_paid_spawn_starts_the_child_in_its_own_session(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """mem-zfm0m item 8: with no runner injected and no dry run, the cell spawns through
+    ``run_in_session`` — the runner whose timeout kills the process group — not
+    ``subprocess.run``. Proven by substitution: the name the cell resolves is the one patched."""
+    _seqs, tasks = corpus_one(tmp_path)
+    seen: list[list[str]] = []
+
+    def fake(argv: Any, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        seen.append(list(argv))
+        return subprocess.CompletedProcess(list(argv), 0, serialize_stream([result_event()]), "")
+
+    monkeypatch.setattr(e1_grid, "run_in_session", fake, raising=True)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "t")
+    cell = e1_grid.run_rung_cell(tasks[0], rung="R0", repeats=1, model=MODEL, dry_run=False)
+    assert cell.paid is True
+    assert len(seen) == 1 and seen[0][0].endswith("claude")
 
 
 def test_a_timed_out_leg_is_unmeasured_not_a_non_calling_run(tmp_path: Any) -> None:
@@ -1256,6 +1335,8 @@ def test_every_leg_is_persisted_with_the_stream_it_was_counted_from(tmp_path: An
     assert all("bd recall k" in leg.stream for leg in ok)
     timed_out = next(leg for leg in legs if leg.status == "timeout")
     assert timed_out.stream == "" and timed_out.detail
+    assert timed_out.truncated is True
+    assert all(leg.truncated is False for leg in ok)
     assert legs[0].filename == f"R4__{tasks[0].variant}__{tasks[0].work_id}__0.json"
 
 

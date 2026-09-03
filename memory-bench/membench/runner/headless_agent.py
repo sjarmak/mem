@@ -536,7 +536,7 @@ def serialize_stream(events: Sequence[dict[str, object]]) -> str:
     object per line.
 
     The INVERSE of this module's three parsers (``_stream_usage_tokens`` / ``_stream_result_text``
-    / ``_tool_calls_from_stream``), and it lives beside them for that reason: every dry-run
+    / ``tool_calls_from_stream``), and it lives beside them for that reason: every dry-run
     simulator and test double that fakes a `claude -p` writes this format, and one fitted to its
     own idea of it proves nothing about the real one (that is how a MEMORY.md-only glob survived a
     green dry-run — ``toolreq_builtin.simulated_builtin_runner``). One writer against this module's
@@ -606,7 +606,7 @@ def _tool_result_text(block: Mapping[str, Any]) -> str:
     return ""
 
 
-def _tool_calls_from_stream(stream_text: str) -> list[ToolCall]:
+def tool_calls_from_stream(stream_text: str) -> list[ToolCall]:
     """One `ToolCall` per ``tool_use`` block, in stream order — the same tolerant walk
     `bbon.extract.steps_from_stream` uses, so the structured tool_calls and the derived
     AttemptStep trajectory agree by construction.
@@ -756,7 +756,7 @@ class HeadlessClaudeAgent:
 
         stream_text = completed.stdout or ""
         input_tokens, output_tokens = _stream_usage_tokens(stream_text)
-        tool_calls = _tool_calls_from_stream(stream_text)
+        tool_calls = tool_calls_from_stream(stream_text)
         return AgentStepResult(
             final_answer=_stream_result_text(stream_text),
             check_results={},  # a real agent does not self-grade; scored externally

@@ -65,6 +65,7 @@ from membench.runner.headless_agent import (
     result_event,
     serialize_stream,
     stream_cli_version,
+    tool_calls_from_stream,
 )
 from membench.runner.resume_cache import digest
 from membench.runner.sandbox import paid_sandbox
@@ -89,7 +90,13 @@ from membench.runner.toolreq_realagent import (
 from membench.runtime import StepContext
 from membench.schemas.sequence import SequenceStep
 from membench.schemas.trace import ToolCall
-from membench.spawn import child_of, redact_credentials
+from membench.spawn import (
+    Runner,
+    child_of,
+    redact_credentials,
+    run_in_session,
+    timeout_partial_stdout,
+)
 
 __all__ = [
     "CHANNEL",
@@ -436,7 +443,12 @@ class LegRecord:
 
     ``cli_version`` is the instrument THIS leg ran on, read off the stream's own init event rather
     than a pre-flight ``claude --version`` on a different process -- a binary that upgrades
-    mid-sweep is invisible to the latter."""
+    mid-sweep is invisible to the latter.
+
+    ``truncated`` marks a stream the bound cut short. Its counts are scored by the same arithmetic
+    as a complete stream's and are a LOWER BOUND on what the leg did, which is why a truncated leg
+    is persisted with them and still kept out of the cell: the cell pools rates over legs whose
+    streams ended, and this one did not."""
 
     rung: str
     variant: str
@@ -452,6 +464,7 @@ class LegRecord:
     stream: str = ""
     detail: str = ""
     cli_version: str = ""
+    truncated: bool = False
 
     def row(self) -> dict[str, Any]:
         return {
@@ -467,6 +480,7 @@ class LegRecord:
             "stream": self.stream,
             "detail": self.detail,
             "cli_version": self.cli_version,
+            "truncated": self.truncated,
         }
 
     @property
@@ -748,6 +762,10 @@ class LegScore:
     verbs: tuple[str, ...] = ()
 
 
+# The score of a leg that produced no stream to count -- an errored leg's record.
+_NO_SCORE = LegScore()
+
+
 def score_leg(calls: Sequence[ToolCall], *, config_dir: Path | None) -> LegScore:
     """Score one leg's tool calls — the pure half of ``run_rung_cell``, so a truncated leg's
     partial stream is scored by the same arithmetic as a complete one.
@@ -800,7 +818,7 @@ def run_rung_cell(
     model: str,
     dry_run: bool,
     timeout_s: float = 600.0,
-    runner: object | None = None,
+    runner: Runner | None = None,
     on_leg: Callable[[LegRecord], None] | None = None,
     streak: UnmeasuredStreak | None = None,
     expect_cli_version: str = "",
@@ -837,8 +855,20 @@ def run_rung_cell(
             "re-buys it and those legs are spent"
         )
 
-    def _unmeasured(*, leg: int, status: str, detail: str) -> None:
-        """Record one leg that measured NOTHING, and halt if the rig has stopped working."""
+    def _unmeasured(
+        *,
+        leg: int,
+        status: str,
+        detail: str,
+        stream: str = "",
+        score: LegScore = _NO_SCORE,
+        truncated: bool = False,
+    ) -> None:
+        """Record one leg the CELL cannot count, and halt if the rig has stopped working.
+
+        A timed-out leg arrives with the stream it wrote before the bound and that stream's
+        score: the evidence is kept whole and counted on the record, and the leg stays out of
+        the cell, whose rates pool only legs whose streams ended."""
         print(
             f"[{status}] {rung}/{task.variant}/{task.work_id} leg {leg}: {detail}",
             file=sys.stderr,
@@ -851,7 +881,13 @@ def run_rung_cell(
                 work_id=task.work_id,
                 leg=leg,
                 status=status,
+                memory_calls=score.memory_calls,
+                read_calls=score.read_calls,
+                write_calls=score.write_calls,
+                verbs=score.verbs,
+                stream=redact_credentials(stream),
                 detail=detail,
+                truncated=truncated,
             )
         )
         if streak.unmeasured():
@@ -870,7 +906,7 @@ def run_rung_cell(
             spawn = runner if runner is not None else (_silent_runner if dry_run else None)
             agent = HeadlessClaudeAgent(
                 model=model,
-                runner=spawn if spawn is not None else subprocess.run,  # type: ignore[arg-type]
+                runner=spawn if spawn is not None else run_in_session,
                 cwd=str(sandbox),
                 env=surface.env(),
                 memory_channel=CHANNEL,
@@ -910,13 +946,25 @@ def run_rung_cell(
                         f"call ({exc}). Nothing further can be measured; resume when it resets. "
                         f"{_bought(i)}."
                     ) from exc
-                if is_spawn_timeout(exc):
-                    timed_out += 1
-                    status = "timeout"
-                else:
+                timeout = spawn_timeout_of(exc)
+                if timeout is None:
                     errored += 1
-                    status = "error"
-                _unmeasured(leg=i, status=status, detail=str(exc))
+                    _unmeasured(leg=i, status="error", detail=str(exc))
+                    continue
+                # The bound cut the stream, it did not erase it. What the agent did BEFORE the
+                # bound is scored and persisted (the first fire threw it away and a leg that had
+                # reached for memory twice was persisted as an empty stream, mem-zfm0m); the leg
+                # still stays out of the cell, whose rates pool only streams that ended.
+                timed_out += 1
+                partial = timeout_partial_stdout(timeout)
+                _unmeasured(
+                    leg=i,
+                    status="timeout",
+                    detail=str(exc),
+                    stream=partial,
+                    score=score_leg(tool_calls_from_stream(partial), config_dir=surface.config_dir),
+                    truncated=True,
+                )
                 continue
             # EXIT 0 IS NOT PROOF THE RUN HAPPENED. `run_checked` raises on a non-zero exit and
             # nothing else, so a CLI that reports its own failure on the result event and still
@@ -1106,14 +1154,21 @@ def is_quota_halt(exc: HeadlessAgentError) -> bool:
     return stream_api_error_status(child.stdout or "") in QUOTA_STATUSES
 
 
-def is_spawn_timeout(exc: HeadlessAgentError) -> bool:
-    """Whether a ``HeadlessAgentError`` is the spawn timeout and nothing else.
+def spawn_timeout_of(exc: HeadlessAgentError) -> subprocess.TimeoutExpired | None:
+    """The spawn timeout under a ``HeadlessAgentError``, or None when it is anything else.
 
     Decided on the CAUSE CHAIN (``spawn.run_checked`` raises ``from subprocess.TimeoutExpired``),
     not on the message. Only the timeout is tolerated per leg: a missing CLI, a refused token, or
     a non-zero exit is a broken rig, and a broken rig tolerated leg by leg is a cell full of
-    "timeouts" that reads as a measured zero."""
-    return isinstance(exc.__cause__, subprocess.TimeoutExpired)
+    "timeouts" that reads as a measured zero. The cause itself is returned, not a bool, because
+    it carries the partial stdout the leg is scored from."""
+    cause = exc.__cause__
+    return cause if isinstance(cause, subprocess.TimeoutExpired) else None
+
+
+def is_spawn_timeout(exc: HeadlessAgentError) -> bool:
+    """Whether a ``HeadlessAgentError`` is the spawn timeout and nothing else."""
+    return spawn_timeout_of(exc) is not None
 
 
 # --------------------------------------------------------------------------------------
@@ -1219,7 +1274,7 @@ def staged_cells(
     n_tasks: int = STAGED_TASKS,
     repeats: int = STAGED_REPEATS,
     timeout_s: float = 600.0,
-    runner: object | None = None,
+    runner: Runner | None = None,
     on_cell: Callable[[RungCell], None] | None = None,
     on_leg: Callable[[LegRecord], None] | None = None,
     landed: Sequence[RungCell] = (),
