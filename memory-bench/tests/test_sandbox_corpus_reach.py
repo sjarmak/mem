@@ -72,11 +72,29 @@ def test_an_env_value_naming_an_ancestor_of_the_corpus_is_not_a_reach(tmp_path: 
     assert_corpus_unreachable(env=env, cwd=cwd, corpus_root=corpus)
 
 
+def test_a_relative_env_value_reaching_the_corpus_from_the_leg_cwd_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review F3: a relative value resolves against the LEG's cwd. A sandbox that is a sibling
+    of the corpus tree puts ``../fixtures/corpus/...`` one ``cat`` away, and a guard that
+    skipped relative segments passed it."""
+    corpus = _corpus(tmp_path)
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    elsewhere = tmp_path / "elsewhere" / "deep"  # from HERE the value reaches nothing
+    elsewhere.mkdir(parents=True)
+    monkeypatch.chdir(elsewhere)
+    env = {**_clean_env(tmp_path), "RELATIVE": "../fixtures/corpus/0/sequences.json"}
+    with pytest.raises(CorpusReachableError, match="RELATIVE"):
+        assert_corpus_unreachable(env=env, cwd=cwd, corpus_root=corpus)
+
+
 def test_a_relative_env_value_is_not_resolved_against_the_harness_cwd(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A relative value resolves against the LEG's cwd, the sandbox, where it reaches nothing;
-    resolving it against the harness process's cwd would refuse on the operator's shell."""
+    """Resolving against the harness process's cwd would refuse on the operator's shell: run
+    from inside the corpus, ``0/sequences.json`` names the answer file there and nothing under
+    the leg's cwd."""
     corpus = _corpus(tmp_path)
     cwd = tmp_path / "cwd"
     cwd.mkdir()
@@ -115,6 +133,20 @@ def test_a_cwd_inside_the_corpus_is_refused(tmp_path: Path) -> None:
     inside.mkdir()
     with pytest.raises(CorpusReachableError, match=r"the leg's cwd .* is inside the corpus"):
         assert_corpus_unreachable(env=_clean_env(tmp_path), cwd=inside, corpus_root=corpus)
+
+
+@pytest.mark.parametrize("target", ["fixtures", ""], ids=["parent", "tmp-root"])
+def test_a_cwd_entry_resolving_to_an_ancestor_of_the_corpus_is_refused(
+    tmp_path: Path, target: str
+) -> None:
+    """Review F3: a sandbox link to a directory ABOVE the corpus reaches it in one ``ls``; the
+    walk used to accept it because the link's target is not UNDER the corpus."""
+    corpus = _corpus(tmp_path)
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    (cwd / "up").symlink_to(tmp_path / target if target else tmp_path, target_is_directory=True)
+    with pytest.raises(CorpusReachableError, match="up"):
+        assert_corpus_unreachable(env=_clean_env(tmp_path), cwd=cwd, corpus_root=corpus)
 
 
 def test_a_copied_file_is_not_a_reach(tmp_path: Path) -> None:

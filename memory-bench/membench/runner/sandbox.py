@@ -79,27 +79,39 @@ def _under(path: Path, root: Path) -> bool:
     return resolved == root or root in resolved.parents
 
 
+def _reaches(path: Path, root: Path) -> bool:
+    """Under the corpus, the corpus itself, or a directory ABOVE it — one ``ls`` away."""
+    resolved = path.resolve()
+    return _under(path, root) or resolved in root.parents
+
+
 def assert_corpus_unreachable(*, env: Mapping[str, str], cwd: Path, corpus_root: Path) -> None:
-    """Refuse a leg whose env or cwd tree names the corpus root or anything under it.
+    """Refuse a leg whose env or cwd tree puts the corpus one command away.
 
     ``env`` is the whole environment the child will see (the operator's, merged with the
     surface's). Every value is split on ``os.pathsep`` so a ``PATH``-shaped entry is checked
-    like a bare path; only ABSOLUTE segments are checked, because a relative one resolves
-    against the leg's own cwd (the sandbox) where it reaches nothing, and resolving it here
-    would read it against the harness process's cwd instead. A value ABOVE the corpus (``HOME``
-    contains everything) names no corpus path and is not a reach.
+    like a bare path, and a RELATIVE segment is resolved against ``cwd`` — the leg's cwd, the
+    directory the child will actually resolve it in — never against the harness process's
+    own cwd (which would refuse on the operator's shell). An env value is refused when it
+    names the corpus root or anything under it. An env value naming an ANCESTOR of the corpus
+    is NOT refused: ``HOME`` and ``TMPDIR`` name an ancestor of every path on the machine, so
+    that rule would refuse every leg, and the corpus's location is never disclosed to the
+    agent — an ancestor in the env is a starting point for a search, not a path to the answer.
 
-    ``cwd`` is refused if it is itself inside the corpus, and every entry under it is resolved
-    (a symlink is the reach this catches; a COPY of a file is not a path into the corpus).
-    Resolution sees through a symlinked corpus root the same way ``assert_neutral_ancestry``
-    sees through a symlinked ``TMPDIR``.
+    ``cwd`` is refused if it is itself inside the corpus. Every entry under it is resolved and
+    refused when it resolves INTO the corpus or to an ANCESTOR of it: a symlink is the reach
+    this catches (a COPY of a file is not a path into the corpus), and unlike the env case a
+    sandbox entry pointing above the corpus is a real reach — it sits in the one directory
+    the agent is told to work in, and ``ls`` follows it straight down. Resolution sees through
+    a symlinked corpus root the same way ``assert_neutral_ancestry`` sees through a symlinked
+    ``TMPDIR``.
 
     mem-zfm0m item 7. Filesystem and string plumbing only: no judgment about what the values
     mean, only where they point."""
     root = corpus_root.resolve()
     for key in sorted(env):
         for segment in env[key].split(os.pathsep):
-            if os.path.isabs(segment) and _under(Path(segment), root):
+            if segment and _under(Path(cwd, segment), root):
                 raise CorpusReachableError(
                     f"env {key}={env[key]!r} names a path inside the corpus {root}; the corpus "
                     f"reaches the agent through the prompt only. Refusing to spend."
@@ -109,10 +121,11 @@ def assert_corpus_unreachable(*, env: Mapping[str, str], cwd: Path, corpus_root:
             f"the leg's cwd {cwd} is inside the corpus {root}. Refusing to spend."
         )
     for entry in cwd.rglob("*"):
-        if _under(entry, root):
+        if _reaches(entry, root):
             raise CorpusReachableError(
-                f"{entry} in the leg's cwd tree resolves into the corpus {root}; a task's files "
-                f"may be COPIED into a sandbox, never linked from the corpus. Refusing to spend."
+                f"{entry} in the leg's cwd tree resolves into or above the corpus {root}; a "
+                f"task's files may be COPIED into a sandbox, never linked from the corpus. "
+                f"Refusing to spend."
             )
 
 
