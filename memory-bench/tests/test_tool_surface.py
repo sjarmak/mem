@@ -1329,6 +1329,39 @@ def test_a_redirect_beside_a_non_accessing_command_still_counts(tmp_path: Path) 
     assert [(a.verb, Path(a.path).name) for a in accesses] == [("native_write", "MEMORY.md")]
 
 
+@pytest.mark.parametrize(
+    ("template", "verb", "name"),
+    [
+        ('cd "$CLAUDE_CONFIG_DIR/projects/-tmp/memory" && cat MEMORY', "native_read", "MEMORY"),
+        ("cd {m} && cat MEMORY", "native_read", "MEMORY"),
+        ("cd {m}; rm MEMORY", "native_write", "MEMORY"),
+        ("cd {m} && cat < MEMORY", "native_read", "MEMORY"),
+        ("cd {c} && cd projects/-tmp/memory && cat MEMORY", "native_read", "MEMORY"),
+    ],
+)
+def test_inside_the_pinned_memory_dir_every_operand_is_a_path(
+    tmp_path: Path, template: str, verb: str, name: str
+) -> None:
+    """Review G2: the relative-path shape rule (a `/` or a `.`) kept `cd /tmp && grep x
+    memory/f` from scoring `x`, and also kept `cd <memory dir> && cat MEMORY` from scoring the
+    memory file. When the cd anchor resolves under the pin, every operand resolves against it."""
+    config, memory = _pinned(tmp_path)
+    command = template.format(m=memory, c=config)
+    accesses = native_memory_accesses([_bash(command)], config_dir=config)
+    assert [(a.verb, Path(a.path).name) for a in accesses] == [(verb, name)], command
+    assert Path(accesses[0].path) == memory / name
+
+
+def test_outside_the_pinned_memory_dir_a_bare_operand_is_still_not_a_path(tmp_path: Path) -> None:
+    config, memory = _pinned(tmp_path)
+    parent = memory.parent
+    accesses = native_memory_accesses(
+        [_bash(f"cd {parent} && cat memory/MEMORY")], config_dir=config
+    )
+    assert [Path(a.path).name for a in accesses] == ["MEMORY"]
+    assert native_memory_accesses([_bash(f"cd {parent} && cat memory")], config_dir=config) == []
+
+
 def test_a_pinned_path_is_reported_once_per_token(tmp_path: Path) -> None:
     config, memory = _pinned(tmp_path)
     accesses = native_memory_accesses([_bash(f"cat {memory}/MEMORY.md")], config_dir=config)

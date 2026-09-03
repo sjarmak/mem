@@ -1502,18 +1502,22 @@ def _expand_pinned(text: str, *, config_dir: Path) -> str:
 
 
 def _path_shaped(token: str) -> bool:
-    """A relative token is anchored on a ``cd`` only when it carries path syntax (a separator
-    or a dot): after ``cd <memory dir>`` every operand of every command would otherwise resolve
-    under the memory dir, and ``echo x`` is not a read of ``memory/x``."""
+    """A relative token is anchored on a ``cd`` OUTSIDE the pinned memory dir only when it
+    carries path syntax (a separator or a dot), so ``cd /tmp && grep x memory/notes`` reads
+    the path and not ``/tmp/x``. Inside the pinned dir the shape rule is off (review G2): a
+    bare ``MEMORY`` after ``cd <memory dir>`` IS the memory file, and the shape rule scored
+    ``cd <memory dir> && cat MEMORY`` as nothing."""
     return "/" in token or "." in token
 
 
-def _whole_token_path(use: _BashPathUse, *, config_dir: Path, cwd: str) -> str:
-    """The path the whole token names, or "" when the token is not a path on its own."""
+def _whole_token_path(use: _BashPathUse, *, config_dir: Path, cwd: str, in_pin: bool) -> str:
+    """The path the whole token names, or "" when the token is not a path on its own. ``in_pin``
+    says ``cwd`` itself is under the pinned memory dir, where every anchorable operand
+    resolves against it whatever its shape."""
     expanded = _expand_pinned(use.token, config_dir=config_dir)
     if PurePosixPath(expanded).is_absolute():
         return expanded
-    if cwd and use.anchorable and _path_shaped(expanded):
+    if cwd and use.anchorable and (in_pin or _path_shaped(expanded)):
         return str(PurePosixPath(cwd) / expanded)
     return ""
 
@@ -1532,7 +1536,7 @@ def _embedded_runs(text: str, *, prefix: str) -> list[str]:
 
 
 def _pinned_paths(
-    use: _BashPathUse, *, config_dir: Path, cwd: str, tokenizer_failed: bool
+    use: _BashPathUse, *, config_dir: Path, cwd: str, in_pin: bool, tokenizer_failed: bool
 ) -> list[str]:
     """Every path ``use.token`` names under the pinned config dir.
 
@@ -1542,7 +1546,7 @@ def _pinned_paths(
     (``if=<path>``, ``open('<path>')``, and every token of a whitespace-split fallback, whose
     tokens still carry the quote and separator characters shlex would have consumed)."""
     if not tokenizer_failed:
-        whole = _whole_token_path(use, config_dir=config_dir, cwd=cwd)
+        whole = _whole_token_path(use, config_dir=config_dir, cwd=cwd, in_pin=in_pin)
         if whole and _is_native_memory_path(whole, config_dir=config_dir):
             return [whole]
     expanded = _expand_pinned(use.token, config_dir=config_dir)
@@ -1565,6 +1569,7 @@ def _bash_accesses(command: str, *, config_dir: Path, call_index: int) -> list[N
     tokens, tokenizer_failed = _bash_tokens(command)
     found: list[NativeMemoryAccess] = []
     cwd = ""
+    in_pin = False
     for segment in _bash_segments(tokens):
         words, uses = _split_redirects(segment)
         if words and words[0] == "cd":
@@ -1572,10 +1577,15 @@ def _bash_accesses(command: str, *, config_dir: Path, call_index: int) -> list[N
             if target and cwd and not PurePosixPath(target).is_absolute():
                 target = str(PurePosixPath(cwd) / target)
             cwd = target
+            in_pin = _is_native_memory_path(cwd, config_dir=config_dir)
             continue
         for use in [*_command_path_uses(words), *uses]:
             for path in _pinned_paths(
-                use, config_dir=config_dir, cwd=cwd, tokenizer_failed=tokenizer_failed
+                use,
+                config_dir=config_dir,
+                cwd=cwd,
+                in_pin=in_pin,
+                tokenizer_failed=tokenizer_failed,
             ):
                 found.append(
                     NativeMemoryAccess(
