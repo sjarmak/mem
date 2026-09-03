@@ -97,6 +97,7 @@ import subprocess
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
+from typing import Literal
 
 from membench.runner.resume_cache import digest
 from membench.schemas.trace import ToolCall
@@ -181,6 +182,64 @@ NATIVE_MEMORY_BASH_SED_IN_PLACE_FLAGS: tuple[str, ...] = ("-i", "--in-place")
 
 # The builtin that moves the cwd a later relative operand in the same command anchors on.
 NATIVE_MEMORY_BASH_CD = "cd"
+
+# Which operands are NOT paths, so the in-pin anchoring (review G2) reaches only the words a
+# command opens (review H1: `cd <memory> && chmod 600 MEMORY.md` scored `600` as a second write,
+# and `grep pattern` with no file operand scored a read of `<memory>/pattern` — a reading leg
+# manufactured by the recognizer). Two tables, both mechanical:
+#   (a) command -> how many LEADING operands are values (a mode, an owner, a pattern, a script),
+#       and the flags that SUPPLY that value instead (`grep -e pat FILE` has no leading value);
+#   (b) command -> flags whose next word is a value, never a path (`head -n 5`, `find -name X`).
+# `ln -t DIR` is absent from (b) on purpose: its value IS a path. A value word is still scanned
+# as an absolute or embedded pinned path (the access is path-decided); it is never ANCHORED on
+# the cwd. Outside the pin the relative-path shape rule applies to every operand as before.
+NATIVE_MEMORY_BASH_LEADING_VALUE_OPERANDS: tuple[tuple[str, int, tuple[str, ...]], ...] = (
+    ("chmod", 1, ()),
+    ("chown", 1, ()),
+    ("chgrp", 1, ()),
+    ("grep", 1, ("-e", "--regexp")),
+    ("rg", 1, ("-e", "--regexp")),
+    ("egrep", 1, ("-e", "--regexp")),
+    ("fgrep", 1, ("-e", "--regexp")),
+    ("sed", 1, ("-e", "--expression", "-f", "--file")),
+    ("awk", 1, ("-f",)),
+)
+NATIVE_MEMORY_BASH_COMMAND_VALUE_FLAGS: tuple[tuple[str, str], ...] = (
+    ("head", "-n"),
+    ("head", "-c"),
+    ("tail", "-n"),
+    ("tail", "-c"),
+    ("sed", "-e"),
+    ("sed", "--expression"),
+    ("grep", "-e"),
+    ("grep", "--regexp"),
+    ("grep", "-m"),
+    ("grep", "-A"),
+    ("grep", "-B"),
+    ("grep", "-C"),
+    ("rg", "-e"),
+    ("rg", "--regexp"),
+    ("rg", "-m"),
+    ("rg", "-A"),
+    ("rg", "-B"),
+    ("rg", "-C"),
+    ("egrep", "-e"),
+    ("fgrep", "-e"),
+    ("awk", "-F"),
+    ("awk", "-v"),
+    ("find", "-name"),
+    ("find", "-iname"),
+    ("find", "-path"),
+    ("find", "-maxdepth"),
+    ("find", "-mindepth"),
+    ("find", "-type"),
+    ("find", "-newer"),
+    ("cut", "-d"),
+    ("cut", "-f"),
+    ("truncate", "-s"),
+    ("sort", "-k"),
+    ("sort", "-t"),
+)
 
 # Commands whose OPERANDS never touch a file: `echo <path>` prints the path and opens nothing,
 # so an operand of these attributes no access however it resolves (review G3). Their REDIRECT
@@ -706,8 +765,9 @@ _POLICY_PREFIXES: tuple[str, ...] = (
 # logic change moves nothing unless this number moves with it. BUMP IT ON ANY CHANGE TO
 # RECOGNIZER LOGIC THAT IS NOT A CONSTANT (review G5). History: 1 = the F2 path-decided
 # recognizer; 2 = G1 (mutating writes, wrapper option values), G2 (every operand anchors inside
-# the pin), G3 (non-accessing command operands).
-RECOGNIZER_IMPLEMENTATION_VERSION = 2
+# the pin), G3 (non-accessing command operands); 3 = H1 (inside the pin only PATH operands
+# anchor: value words and leading value operands are policy-enumerated and never anchored).
+RECOGNIZER_IMPLEMENTATION_VERSION = 3
 
 
 def _policy_value(name: str, value: object) -> object:
@@ -1478,18 +1538,58 @@ def _unwrapped(words: Sequence[str]) -> list[str]:
     return rest
 
 
+_WordKind = Literal["flag", "value", "operand"]
+
+
+def _flag_is(flag: str, names: Iterable[str]) -> bool:
+    """``flag`` is one of ``names``, separate (`-e`) or attached (`--regexp=x`)."""
+    return any(flag == name or flag.startswith(name + "=") for name in names)
+
+
+def _classified_words(name: str, rest: Sequence[str]) -> list[tuple[str, _WordKind]]:
+    """Each word after the command word as a flag, the VALUE a flag consumes, or an operand."""
+    value_flags = frozenset(
+        flag for command, flag in NATIVE_MEMORY_BASH_COMMAND_VALUE_FLAGS if command == name
+    )
+    classified: list[tuple[str, _WordKind]] = []
+    i = 0
+    while i < len(rest):
+        word = rest[i]
+        if not word.startswith("-"):
+            classified.append((word, "operand"))
+        elif word in value_flags and i + 1 < len(rest):
+            classified.append((word, "flag"))
+            classified.append((rest[i + 1], "value"))
+            i += 1
+        else:
+            classified.append((word, "flag"))
+        i += 1
+    return classified
+
+
+def _leading_value_operands(name: str, flags: Sequence[str]) -> int:
+    """How many of ``name``'s leading operands are values rather than paths, given the flags
+    seen (a flag that supplies the value makes every operand a path)."""
+    for command, count, supplying in NATIVE_MEMORY_BASH_LEADING_VALUE_OPERANDS:
+        if command == name:
+            return 0 if any(_flag_is(flag, supplying) for flag in flags) else count
+    return 0
+
+
 def _command_path_uses(words: Sequence[str]) -> list[_BashPathUse]:
     """Every word after the command word, with the direction the command word gives it. The
     words are all candidates — the access is decided by the path, not by the name — and only
-    the direction is the command's business."""
+    the direction, and which words may be ANCHORED on the cwd as paths, is the command's
+    business."""
     if len(words) < 2:
         return []
     name = PurePosixPath(words[0]).name
     if name in NATIVE_MEMORY_BASH_NON_ACCESSING_COMMANDS:
         return []
     rest = words[1:]
-    flags = [w for w in rest if w.startswith("-")]
-    operands = [w for w in rest if not w.startswith("-")]
+    classified = _classified_words(name, rest)
+    flags = [word for word, kind in classified if kind == "flag"]
+    operands = [word for word, kind in classified if kind == "operand"]
     in_place = name == NATIVE_MEMORY_BASH_SED and any(
         flag == f or flag.startswith(f + ("" if f == "-i" else "="))
         for flag in flags
@@ -1500,10 +1600,14 @@ def _command_path_uses(words: Sequence[str]) -> list[_BashPathUse]:
         written = set(rest)
     elif name in NATIVE_MEMORY_BASH_WRITE_LAST_OPERAND and len(operands) >= 2:
         written = {operands[-1]}
-    return [
-        _BashPathUse(word, is_write=word in written, anchorable=not word.startswith("-"))
-        for word in rest
-    ]
+    leading = _leading_value_operands(name, flags)
+    uses: list[_BashPathUse] = []
+    seen = 0
+    for word, kind in classified:
+        anchorable = kind == "operand" and seen >= leading
+        seen += kind == "operand"
+        uses.append(_BashPathUse(word, is_write=word in written, anchorable=anchorable))
+    return uses
 
 
 _GRAMMAR_CONFIG_DIR_SPELLINGS = re.compile(

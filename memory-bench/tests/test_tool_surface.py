@@ -1352,6 +1352,57 @@ def test_inside_the_pinned_memory_dir_every_operand_is_a_path(
     assert Path(accesses[0].path) == memory / name
 
 
+@pytest.mark.parametrize(
+    ("template", "expected"),
+    [
+        ("cd {m} && chmod 600 MEMORY.md", [("native_write", "MEMORY.md")]),
+        ("cd {m} && chown me MEMORY.md", [("native_write", "MEMORY.md")]),
+        ("cd {m} && grep pattern", []),
+        ("cd {m} && grep pattern MEMORY.md", [("native_read", "MEMORY.md")]),
+        ("cd {m} && grep -e pat MEMORY.md", [("native_read", "MEMORY.md")]),
+        ("cd {m} && grep --regexp=pat MEMORY.md", [("native_read", "MEMORY.md")]),
+        ("cd {m} && grep -A 3 pat MEMORY.md", [("native_read", "MEMORY.md")]),
+        ("cd {m} && sed -n 1,40p MEMORY.md", [("native_read", "MEMORY.md")]),
+        ("cd {m} && sed -e 1,40p MEMORY.md", [("native_read", "MEMORY.md")]),
+        ("cd {m} && head -n 50 MEMORY.md", [("native_read", "MEMORY.md")]),
+        ("cd {m} && tail -n 20", []),
+        ("cd {m} && awk '{{print}}' MEMORY.md", [("native_read", "MEMORY.md")]),
+        ("cd {m} && find . -name MEMORY.md", [("native_read", "memory")]),
+        ("cd {m} && truncate -s 0 MEMORY.md", [("native_write", "MEMORY.md")]),
+        ("cd {m} && cut -d : -f 1 MEMORY.md", [("native_read", "MEMORY.md")]),
+        (
+            "cd {m} && ln -s MEMORY.md link",
+            [("native_read", "MEMORY.md"), ("native_write", "link")],
+        ),
+    ],
+)
+def test_inside_the_pinned_memory_dir_only_path_operands_anchor(
+    tmp_path: Path, template: str, expected: list[tuple[str, str]]
+) -> None:
+    """Review H1: the in-pin widening made EVERY non-flag word a path, so `chmod 600 MEMORY.md`
+    was two writes and `grep pattern` a read of `<memory>/pattern` — counters inflated per call
+    and a reading leg manufactured. A value word (a mode, a pattern, a script, a flag's value)
+    is policy-enumerated and never anchored; a command left with no path operand attributes
+    nothing."""
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses([_bash(template.format(m=memory))], config_dir=config)
+    assert [(a.verb, Path(a.path).name) for a in accesses] == expected, template
+    for access in accesses:
+        assert Path(access.path).is_relative_to(memory)
+
+
+def test_in_pin_value_words_do_not_inflate_the_per_call_counters(tmp_path: Path) -> None:
+    from membench.runner.e1_grid import score_leg
+
+    config, memory = _pinned(tmp_path)
+    chmod = _bash(f"cd {memory} && chmod 600 MEMORY.md")
+    assert score_leg([chmod], config_dir=config).write_calls == 1
+    grep = _bash(f"cd {memory} && grep pattern")
+    assert score_leg([grep], config_dir=config).read_calls == 0
+    sed = _bash(f"cd {memory} && sed -n 1,40p MEMORY.md")
+    assert score_leg([sed], config_dir=config).read_calls == 1
+
+
 def test_outside_the_pinned_memory_dir_a_bare_operand_is_still_not_a_path(tmp_path: Path) -> None:
     config, memory = _pinned(tmp_path)
     parent = memory.parent
@@ -1448,7 +1499,7 @@ def test_the_recognizer_implementation_version_is_policy() -> None:
     any constant, so a version number stands in for them in the fingerprint. It is an int, in
     the policy, and at least 2 (G1-G3 changed the logic after the version-1 recognizer)."""
     version = tool_surface.RECOGNIZER_IMPLEMENTATION_VERSION
-    assert isinstance(version, int) and version >= 2
+    assert isinstance(version, int) and version >= 3
     assert recognizer_policy()["RECOGNIZER_IMPLEMENTATION_VERSION"] == version
 
 
@@ -1506,6 +1557,8 @@ def test_the_recognizer_policy_covers_every_constant_the_recognizers_read() -> N
         "NATIVE_MEMORY_BASH_CD",
         "NATIVE_MEMORY_BASH_SED",
         "NATIVE_MEMORY_BASH_ASSIGNMENT_WRAPPERS",
+        "NATIVE_MEMORY_BASH_LEADING_VALUE_OPERANDS",
+        "NATIVE_MEMORY_BASH_COMMAND_VALUE_FLAGS",
         "RECOGNIZER_IMPLEMENTATION_VERSION",
         "NATIVE_MEMORY_BASH_PATH_TERMINATORS",
         "CONFIG_DIR_ENV",
