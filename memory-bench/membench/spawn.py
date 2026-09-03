@@ -123,23 +123,26 @@ def run_in_session(
     )
     try:
         stdout, stderr = proc.communicate(input=input, timeout=timeout)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as first:
         _kill_group(proc)
         # The second communicate returns everything buffered before the bound plus whatever the
         # kill flushed. It is bounded too: a pipe still open after the group was SIGKILLed is
         # held by a survivor, and an unbounded drain would block the rig on it for as long as
-        # it lives. ``communicate`` only raises ``TimeoutExpired`` from a bounded call, so the
-        # bound quoted is the caller's ``timeout``, not the remaining slice the first raise reports.
+        # it lives. ``communicate`` only raises ``TimeoutExpired`` from a bounded call, and it
+        # raises it with the bound it was given (not a remaining slice), so ``first.timeout`` IS
+        # the caller's ``timeout`` and is the one value here that is typed as a bound.
         try:
             stdout, stderr = proc.communicate(timeout=DRAIN_TIMEOUT_S)
         except subprocess.TimeoutExpired as drain:
             _abandon(proc)
             raise RuntimeError(
                 f"process group {proc.pid} survived SIGKILL: its pipes were still held open "
-                f"{DRAIN_TIMEOUT_S}s after the kill, so a child of {proc.args[0]!r} is still "
+                f"{DRAIN_TIMEOUT_S}s after the kill, so a child of {argv[0]!r} is still "
                 "running and the partial output could not be drained"
             ) from drain
-        raise subprocess.TimeoutExpired(proc.args, timeout, output=stdout, stderr=stderr) from None
+        raise subprocess.TimeoutExpired(
+            proc.args, first.timeout, output=stdout, stderr=stderr
+        ) from None
     except BaseException:
         _kill_group(proc)
         proc.wait()
