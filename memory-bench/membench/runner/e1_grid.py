@@ -64,6 +64,7 @@ from membench.runner.headless_agent import (
     resolve_model,
     result_event,
     serialize_stream,
+    stream_cli_version,
 )
 from membench.runner.resume_cache import digest
 from membench.runner.sandbox import paid_sandbox
@@ -87,12 +88,13 @@ from membench.runner.toolreq_realagent import (
 )
 from membench.runtime import StepContext
 from membench.schemas.sequence import SequenceStep
-from membench.spawn import child_of, sanitised_child_output
+from membench.spawn import child_of, redact_credentials
 
 __all__ = [
     "CHANNEL",
     "GATE_KEY",
     "HALT_NO_CALL",
+    "HALT_UNMEASURED",
     "OK_FIRED",
     "RUNG_IDS",
     "RUNG_TEXT",
@@ -106,6 +108,7 @@ __all__ = [
     "QuotaHaltError",
     "RigHaltError",
     "RungCell",
+    "UnmeasuredStreak",
     "assert_gates_ride_outside_metrics",
     "call_rate_gates",
     "corpus_fingerprint",
@@ -114,12 +117,15 @@ __all__ = [
     "guidance_block",
     "guidance_words",
     "monotonicity_violations",
+    "per_variant_task_count",
     "planned_call_count",
     "preflight",
     "preflight_verdict",
     "rung_step",
     "staged_plan",
+    "stream_is_error",
     "summarize",
+    "write_json_new",
 ]
 
 # The summary E1 emits. Named for the file the acceptance criterion reads with
@@ -362,9 +368,17 @@ class LegRecord:
     re-score against costs the whole grid again in real money. A leg persisted here can be
     re-counted for free; a leg that was only counted cannot.
 
-    ``stream`` is redacted and bounded by ``sanitised_child_output`` before it is ever written: the
-    env this runs under carries an OAuth token, and an evidence file is exactly the artifact that
-    outlives the reason it was kept."""
+    ``stream`` is REDACTED before it is ever written -- the env this runs under carries an OAuth
+    token, and an evidence file is exactly the artifact that outlives the reason it was kept -- but
+    deliberately NOT truncated. ``sanitised_child_output`` bounds a diagnosis to a 4000-char head
+    and tail, which is right for an exception message and wrong for the one artifact whose whole
+    purpose is to be re-counted: a 15k-char stream lands with its middle excised, and the memory
+    call that lived there re-counts as a zero. The re-score that costs nothing is the reason this
+    record exists, so the evidence is stored whole and the truncation stays where it belongs.
+
+    ``cli_version`` is the instrument THIS leg ran on, read off the stream's own init event rather
+    than a pre-flight ``claude --version`` on a different process -- a binary that upgrades
+    mid-sweep is invisible to the latter."""
 
     rung: str
     variant: str
@@ -379,6 +393,7 @@ class LegRecord:
     verbs: tuple[str, ...] = ()
     stream: str = ""
     detail: str = ""
+    cli_version: str = ""
 
     def row(self) -> dict[str, Any]:
         return {
@@ -393,6 +408,7 @@ class LegRecord:
             "verbs": list(self.verbs),
             "stream": self.stream,
             "detail": self.detail,
+            "cli_version": self.cli_version,
         }
 
     @property
@@ -484,14 +500,10 @@ def discrimination_margins(cells: Sequence[RungCell]) -> dict[str, float]:
     return {rung: necessary[rung] - unnecessary[rung] for rung in necessary if rung in unnecessary}
 
 
-def _rates_on(cells: Sequence[RungCell], variant: str) -> dict[str, float]:
-    return pooled_rates(cells, variant)
-
-
 def call_rate_gates(cells: Sequence[RungCell], *, tolerance: float = 0.0) -> dict[str, Any]:
     """The gate block E1's summary carries — ALWAYS non-empty, including on a run that measured
     nothing, because "no gate block" and "the gates passed" must not look alike to a reader."""
-    necessary = _rates_on(cells, VARIANT_NECESSARY)
+    necessary = pooled_rates(cells, VARIANT_NECESSARY)
     violations = monotonicity_violations(necessary, tolerance=tolerance)
     margins = discrimination_margins(cells)
     floor = necessary.get(RUNG_IDS[0])
@@ -504,10 +516,19 @@ def call_rate_gates(cells: Sequence[RungCell], *, tolerance: float = 0.0) -> dic
             "violations": [asdict(v) | {"drop": v.drop} for v in violations],
             "violation_pairs": [f"{v.lower}->{v.upper}" for v in violations],
             "monotone": not violations,
+            # A grid whose every leg went unmeasured has no rungs, hence no adjacent pairs, hence
+            # no violations — and would otherwise publish `monotone: true` under a reason that
+            # reads as a passing gate. Untested is not passed.
+            "comparable": len(necessary) >= 2,
             "reason": (
-                "call rate is non-decreasing across every adjacent measured rung"
-                if not violations
-                else "; ".join(v.describe() for v in violations)
+                "; ".join(v.describe() for v in violations)
+                if violations
+                else (
+                    "call rate is non-decreasing across every adjacent measured rung"
+                    if len(necessary) >= 2
+                    else f"monotonicity is UNTESTED: {len(necessary)} rung(s) measured, so there "
+                    "is no adjacent pair to compare. Not a pass"
+                )
             ),
         },
         "discrimination": {
@@ -635,7 +656,8 @@ def run_rung_cell(
     timeout_s: float = 600.0,
     runner: object | None = None,
     on_leg: Callable[[LegRecord], None] | None = None,
-    halt_after_consecutive_errors: int = 3,
+    streak: UnmeasuredStreak | None = None,
+    expect_cli_version: str = "",
 ) -> RungCell:
     """Run one ``(rung, task-variant)`` cell and count the memory calls the agent CHOSE to make.
 
@@ -653,13 +675,43 @@ def run_rung_cell(
     writes = 0
     timed_out = 0
     errored = 0
-    consecutive_errors = 0
+    streak = UnmeasuredStreak() if streak is None else streak
     verbs: list[str] = []
     step = rung_step(task, rung)
 
     def _emit(record: LegRecord) -> None:
         if on_leg is not None:
             on_leg(record)
+
+    def _bought(leg: int) -> str:
+        return (
+            f"{leg} leg(s) of this cell were already paid for; the cell is incomplete, so a resume "
+            "re-buys it and those legs are spent"
+        )
+
+    def _unmeasured(*, leg: int, status: str, detail: str) -> None:
+        """Record one leg that measured NOTHING, and halt if the rig has stopped working."""
+        print(
+            f"[{status}] {rung}/{task.variant}/{task.work_id} leg {leg}: {detail}",
+            file=sys.stderr,
+            flush=True,
+        )
+        _emit(
+            LegRecord(
+                rung=rung,
+                variant=task.variant,
+                work_id=task.work_id,
+                leg=leg,
+                status=status,
+                detail=detail,
+            )
+        )
+        if streak.unmeasured():
+            raise RigHaltError(
+                f"{rung}/{task.variant}/{task.work_id}: {streak.count} consecutive legs measured "
+                f"NOTHING — this is a broken rig, not a flaky one, and tolerating it leg by leg "
+                f"buys a grid of unmeasured cells. {_bought(leg)}. Last: {detail}"
+            )
 
     for i in range(repeats):
         with (
@@ -707,39 +759,63 @@ def run_rung_cell(
                     )
                     raise QuotaHaltError(
                         f"{rung}/{task.variant}/{task.work_id} leg {i}: the account refused the "
-                        f"call ({exc}). Nothing further can be measured; resume when it resets."
+                        f"call ({exc}). Nothing further can be measured; resume when it resets. "
+                        f"{_bought(i)}."
                     ) from exc
                 if is_spawn_timeout(exc):
                     timed_out += 1
-                    consecutive_errors = 0
                     status = "timeout"
                 else:
                     errored += 1
-                    consecutive_errors += 1
                     status = "error"
-                print(
-                    f"[{status}] {rung}/{task.variant}/{task.work_id} leg {i}: {exc}",
-                    file=sys.stderr,
-                    flush=True,
-                )
+                _unmeasured(leg=i, status=status, detail=str(exc))
+                continue
+            # EXIT 0 IS NOT PROOF THE RUN HAPPENED. `run_checked` raises on a non-zero exit and
+            # nothing else, so a CLI that reports its own failure on the result event and still
+            # exits 0 arrives HERE, with an empty tool-call list, and counts as a measured leg on
+            # which the agent chose not to touch memory. That is the one reading this series
+            # exists to refuse, and it would be manufactured by the rig rather than the agent.
+            # Same structural field the raising path is classified on, read one line earlier.
+            stream = result.raw_stream or ""
+            if stream_api_error_status(stream) in QUOTA_STATUSES:
                 _emit(
                     LegRecord(
                         rung=rung,
                         variant=task.variant,
                         work_id=task.work_id,
                         leg=i,
-                        status=status,
-                        detail=str(exc),
+                        status="error",
+                        detail=f"exit 0 with api_error_status={stream_api_error_status(stream)}",
+                        stream=redact_credentials(stream),
                     )
                 )
-                if consecutive_errors >= halt_after_consecutive_errors:
-                    raise RigHaltError(
-                        f"{rung}/{task.variant}/{task.work_id}: {consecutive_errors} consecutive "
-                        f"failed legs — this is a broken rig, not a flaky one, and tolerating it "
-                        f"leg by leg buys a grid of unmeasured cells. Last: {exc}"
-                    ) from exc
+                raise QuotaHaltError(
+                    f"{rung}/{task.variant}/{task.work_id} leg {i}: the account refused the call "
+                    f"(api_error_status={stream_api_error_status(stream)}) and the CLI still "
+                    f"exited 0. Nothing further can be measured; resume when it resets. "
+                    f"{_bought(i)}."
+                )
+            if stream_is_error(stream):
+                errored += 1
+                _unmeasured(
+                    leg=i,
+                    status="error",
+                    detail="the CLI exited 0 but declared its own run failed (is_error)",
+                )
                 continue
-        consecutive_errors = 0
+            # The instrument that ran THIS leg, not the one a pre-flight probe asked about. A
+            # binary upgraded mid-sweep measures the later cells on a different tool surface and
+            # pools both into one rate; the resume identity catches it BETWEEN fires and cannot
+            # see it within one.
+            leg_cli = stream_cli_version(stream) or ""
+            if expect_cli_version and leg_cli and leg_cli != expect_cli_version:
+                raise RigHaltError(
+                    f"{rung}/{task.variant}/{task.work_id} leg {i}: this leg ran on CLI "
+                    f"{leg_cli!r}, the fire is pinned to {expect_cli_version!r}. The binary "
+                    f"changed mid-sweep, so the cells bought and the cells still to buy are not "
+                    f"the same measurement. {_bought(i)}."
+                )
+        streak.measured()
         calls = list(result.tool_calls)
         # BOTH affordances count. The bd shim is the one this rig provisions; the native memory
         # file is the one the model reaches for first (mem-gj0pc), and scoring only the former
@@ -772,7 +848,8 @@ def run_rung_cell(
                 read_calls=leg_reads,
                 write_calls=leg_writes,
                 verbs=tuple(leg_verbs),
-                stream=sanitised_child_output(result.raw_stream or ""),
+                stream=redact_credentials(result.raw_stream or ""),
+                cli_version=leg_cli,
             )
         )
     return RungCell(
@@ -798,9 +875,37 @@ class QuotaHaltError(RuntimeError):
 
 
 class RigHaltError(RuntimeError):
-    """Consecutive legs failed — the rig is broken, not flaky. A halt, for the reason the per-leg
-    tolerance exists at all: an error tolerated everywhere is a grid of cells that measured
-    nothing while reporting a rate."""
+    """Consecutive legs went UNMEASURED — the rig is broken, not flaky. A halt, for the reason the
+    per-leg tolerance exists at all: a failure tolerated everywhere is a grid of cells that
+    measured nothing while reporting a rate."""
+
+
+@dataclass
+class UnmeasuredStreak:
+    """Consecutive legs that returned no measurement, counted ACROSS cell boundaries.
+
+    Mutable and shared on purpose, and it counts TIMEOUTS TOO. Both properties are fixes for the
+    same hole: a per-cell counter that resets on a timeout cannot see the two rigs that actually
+    burn a budget. An account whose every spawn times out fills every cell with five unmeasured
+    legs and never trips a limit that only counts errors; a rig that fails on alternating causes,
+    or across a cell boundary, never reaches three of either kind in one place. Both spend the
+    whole authorization at up to ``timeout_s`` a leg and leave a grid of cells the next resume
+    drops and re-buys.
+
+    The distinction the counters keep (``timed_out_runs`` vs ``errored_runs``) is about what a leg
+    MEANS and stays. This is about whether the rig is still worth spending on, and for that
+    question the two are the same answer: nothing was measured."""
+
+    limit: int = 3
+    count: int = 0
+
+    def measured(self) -> None:
+        self.count = 0
+
+    def unmeasured(self) -> bool:
+        """Record an unmeasured leg; True once the rig has failed ``limit`` times in a row."""
+        self.count += 1
+        return self.count >= self.limit
 
 
 # The api_error_status values that mean "the account will not serve this call": rate limit /
@@ -811,11 +916,13 @@ class RigHaltError(RuntimeError):
 QUOTA_STATUSES: frozenset[int] = frozenset({401, 403, 429, 529})
 
 
-def stream_api_error_status(stream: str) -> int | None:
-    """The ``api_error_status`` the CLI stamped on its own result event, or ``None``.
+def stream_result_events(stream: str) -> list[dict[str, Any]]:
+    """The ``type=result`` events in a stream, in order.
 
-    One field, one event type. Scanning every event for anything status-shaped would pick up a
-    tool result that happens to carry an HTTP status and halt a fire on a web fetch."""
+    ONE scanner, because both things read off a result event -- the api status and the error flag
+    -- must agree about which events count. Scanning every event instead would pick up a tool
+    result that happens to carry an HTTP status and halt a fire on a web fetch."""
+    events: list[dict[str, Any]] = []
     for line in stream.splitlines():
         line = line.strip()
         if not line.startswith("{"):
@@ -824,12 +931,30 @@ def stream_api_error_status(stream: str) -> int | None:
             event = json.loads(line)
         except ValueError:
             continue
-        if not isinstance(event, dict) or event.get("type") != "result":
-            continue
+        if isinstance(event, dict) and event.get("type") == "result":
+            events.append(event)
+    return events
+
+
+def stream_api_error_status(stream: str) -> int | None:
+    """The ``api_error_status`` the CLI stamped on its own result event, or ``None``."""
+    for event in stream_result_events(stream):
         status = event.get("api_error_status")
         if isinstance(status, int):
             return status
     return None
+
+
+def stream_is_error(stream: str) -> bool:
+    """Whether the CLI declared its OWN run failed, on the stream's result event.
+
+    The field, not the prose. It exists because ``is_error`` and the process exit code are
+    SEPARATE claims: every refusal observed so far (429 session limit, 401 bad token) also exits
+    non-zero, so ``run_checked`` raises and the caller classifies it on the way past -- but nothing
+    in the contract makes that so, and the arm that reads a stream for memory calls is reached by
+    a leg that exited 0. A dead run counted as a measured silent one is scored as evidence the
+    agent chose not to call memory, which is the exact reading this experiment exists to refuse."""
+    return any(event.get("is_error") is True for event in stream_result_events(stream))
 
 
 def is_quota_halt(exc: HeadlessAgentError) -> bool:
@@ -861,6 +986,7 @@ def is_spawn_timeout(exc: HeadlessAgentError) -> bool:
 OK_FIRED = "FIRED"
 HALT_NO_CALL = "NO-MEMORY-CALL"
 HALT_UNPAID = "UNPAID"
+HALT_UNMEASURED = "UNMEASURED"
 
 # The rung the preflight runs at. The TOP one, on purpose: if the STRONGEST guidance cannot get a
 # single memory call out of the agent, no interior rung can, and every interior cell would buy an
@@ -895,8 +1021,23 @@ def planned_call_count(
     return len(rungs) * n_tasks * repeats * n_variants
 
 
+def per_variant_task_count(tasks: Sequence[ToolReqRealAgentTask]) -> int:
+    """The tasks the staged slice takes FROM EACH VARIANT — the smaller half, when they differ.
+
+    ``staged_cells`` slices ``[:n_tasks]`` per variant, so a plan priced off the combined list
+    over-counts whenever a variant is short: 6 twin tasks is 3 per variant, and a plan that read
+    ``min(6, 8) = 6`` would promise twice the grid it runs."""
+    by_variant: dict[str, int] = {}
+    for task in tasks:
+        by_variant[task.variant] = by_variant.get(task.variant, 0) + 1
+    return min(by_variant.values()) if by_variant else 0
+
+
 def staged_plan(n_tasks: int) -> dict[str, Any]:
-    """What the staged fire WOULD spend, priced before anything runs."""
+    """What the staged fire WOULD spend, priced before anything runs.
+
+    ``n_tasks`` is PER VARIANT (``per_variant_task_count``), because that is the slice
+    ``staged_cells`` takes."""
     tasks = min(n_tasks, STAGED_TASKS)
     return {
         "rungs": list(STAGED_RUNGS),
@@ -945,6 +1086,7 @@ def staged_cells(
     on_cell: Callable[[RungCell], None] | None = None,
     on_leg: Callable[[LegRecord], None] | None = None,
     landed: Sequence[RungCell] = (),
+    expect_cli_version: str = "",
 ) -> list[RungCell]:
     """Execute the staged fire: every ``(rung, variant, task)`` cell, ``repeats`` legs each.
 
@@ -955,7 +1097,12 @@ def staged_cells(
     ``on_cell`` is called with each completed cell as it lands; ``landed`` is the resume cache
     (mem-78gwf): cells already paid for, keyed ``(rung, variant, work_id)``, are returned in
     place and not re-run. The caller decides whether a prior artifact is admissible against the
-    current rig (``resume_cells``); this function only honours the keys it is handed."""
+    current rig (``resume_cells``); this function only honours the keys it is handed.
+
+    ONE ``UnmeasuredStreak`` spans the whole fire. A rig that fails every leg fails them across
+    cell boundaries too, and a per-cell counter restarted at each cell never reaches its limit —
+    it buys the entire grid one unmeasured cell at a time."""
+    streak = UnmeasuredStreak()
     by_variant: dict[str, list[ToolReqRealAgentTask]] = {}
     for task in tasks:
         by_variant.setdefault(task.variant, []).append(task)
@@ -977,6 +1124,8 @@ def staged_cells(
                     timeout_s=timeout_s,
                     runner=runner,
                     on_leg=on_leg,
+                    streak=streak,
+                    expect_cli_version=expect_cli_version,
                 )
                 cells.append(cell)
                 if on_cell is not None:
@@ -993,7 +1142,20 @@ def preflight_verdict(result: Mapping[str, Any]) -> tuple[str, str]:
 
     An UNPAID row halts too, however many calls it shows: the mechanism claim is only ever about a
     real ``claude -p``, and a fixture runner's calls are the fixture's
-    (``e1_smoke.halt_reason``)."""
+    (``e1_smoke.halt_reason``).
+
+    The UNMEASURED test runs FIRST, and it is the whole reason this gate is not just a
+    ``memory_calls`` test. The preflight is one leg: a single spawn timeout returns a row with
+    zero calls because nothing ran, and read as NO-MEMORY-CALL that row terminates the experiment
+    on the strongest verdict it can reach. A row that measured nothing supports NO verdict."""
+    measured = result.get("measured_runs")
+    if measured is not None and int(measured) <= 0:
+        return HALT_UNMEASURED, (
+            f"the preflight leg at {result.get('rung')} measured NOTHING "
+            f"({int(result.get('timed_out_runs') or 0)} timed out, "
+            f"{int(result.get('errored_runs') or 0)} errored) — no stream came back, so this row "
+            "is not evidence the mechanism failed to fire. Re-run it; do not read it as a null"
+        )
     calls = int(result.get("memory_calls") or 0)
     if not calls:
         return HALT_NO_CALL, (
@@ -1026,6 +1188,13 @@ def preflight(
         "work_id": task.work_id,
         "variant": task.variant,
         "paid": cell.paid,
+        # Carried so `preflight_verdict` can tell "the agent did not call" from "nothing ran".
+        # Without them a timed-out leg is a zero-call row, and a zero-call row at the TOP rung is
+        # the verdict that ends the experiment.
+        "runs": cell.runs,
+        "measured_runs": cell.measured_runs,
+        "timed_out_runs": cell.timed_out_runs,
+        "errored_runs": cell.errored_runs,
         "memory_calls": cell.memory_calls,
         "verbs": list(cell.verbs),
         "model": resolve_model(model) or "cli-default",
@@ -1147,6 +1316,12 @@ def resume_cells(
                 f"partial artifact carries {cell.key}, which is not a cell of the grid this fire "
                 "runs; it cannot be pooled into these rates"
             )
+        if cell.runs != repeats:
+            # Not poolable and not completable: a cell of 3 legs weights differently from one of
+            # 5, and a fire halted mid-cell writes no cell at all, so a row like this came from a
+            # different fire or a hand edit. Dropped, which re-buys it — the legs it did pay for
+            # survive as leg evidence.
+            continue
         if not cell.paid or not cell.work_id or cell.measured_runs <= 0:
             continue
         admissible.append(cell)
@@ -1164,6 +1339,28 @@ def atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
     os.replace(tmp, path)
 
 
+def write_json_new(path: Path, payload: Mapping[str, Any]) -> Path:
+    """Write ``payload`` to ``path``, or to the next free ``.attemptN`` beside it. Never over it.
+
+    A leg file is keyed ``(rung, variant, work_id, leg)``, and a fire halted MID-CELL re-runs that
+    cell from leg 0 on resume — same key, different paid leg. An overwrite there destroys the
+    evidence for a leg that was bought with real money, which is precisely the artifact this
+    directory exists to keep. Mode 0600: the stream is redacted, but an evidence file written into
+    a shared /tmp should not also be world-readable."""
+    candidate = path
+    attempt = 1
+    while True:
+        try:
+            fd = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            candidate = path.with_name(f"{path.stem}.attempt{attempt}{path.suffix}")
+            attempt += 1
+            continue
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, indent=2))
+        return candidate
+
+
 @contextmanager
 def out_lock(path: Path) -> Iterator[None]:
     """Hold an exclusive lock beside ``path`` for the life of a fire.
@@ -1175,9 +1372,17 @@ def out_lock(path: Path) -> Iterator[None]:
     try:
         fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     except FileExistsError as exc:
+        # The pid it was written with, so a lock left behind by a killed fire is distinguishable
+        # from one a live fire holds. A stale lock and a real collision refuse identically
+        # otherwise, and the operator's only move is to delete a lock they cannot check.
+        try:
+            holder = lock.read_text(encoding="utf-8").strip() or "unknown"
+        except OSError:
+            holder = "unreadable"
         raise ResumeMismatchError(
-            f"{lock} exists: another fire holds {path}. Wait for it, or remove the lock if you "
-            "have confirmed no fire is running."
+            f"{lock} exists: another fire holds {path} (written by pid {holder}). Check whether "
+            f"that process is alive (`ps -p {holder}`); if it is not, the lock is stale and safe "
+            "to remove."
         ) from exc
     try:
         os.write(fd, f"{os.getpid()}\n".encode())
@@ -1192,8 +1397,22 @@ def _fire_staged(args: argparse.Namespace, tasks: Sequence[ToolReqRealAgentTask]
 
     Split out of ``main`` because it is the only path in this module that spends money and it is
     the only one with a resume, a lock, an evidence directory and three distinct halts. Reading
-    the refusal ladder of a paid path should not mean reading an argument parser first."""
-    plan = staged_plan(len(tasks))
+    the refusal ladder of a paid path should not mean reading an argument parser first.
+
+    ``--out`` is REQUIRED. Without it this path spends the whole authorization and persists
+    nothing: no resume, no leg evidence, no lock, and a summary that exists only on a terminal
+    someone has to keep open. A paid run whose result cannot outlive the shell is not a cheaper
+    run, it is the same money for no artifact."""
+    if args.out is None:
+        print(
+            "REFUSING to spend: --fire-staged requires --out. It is the resume artifact, the "
+            "lock, and the parent of the leg evidence directory; without it a halt loses every "
+            "cell bought so far and a re-run re-buys the whole grid.",
+            file=sys.stderr,
+        )
+        return EXIT_REFUSED
+    out = args.out
+    plan = staged_plan(per_variant_task_count(tasks))
     repeats = int(plan["repeats"])
     corpus = corpus_fingerprint(tasks)
     try:
@@ -1203,9 +1422,16 @@ def _fire_staged(args: argparse.Namespace, tasks: Sequence[ToolReqRealAgentTask]
         return EXIT_REFUSED
 
     landed: list[RungCell] = []
-    if args.out is not None and args.out.exists():
+    # Anything the prior artifact carries that `summarize` does not produce — the identity
+    # backfill block that documents WHY a pre-hardening artifact is admissible, most of all.
+    # `_persist` rewrites the file from `landed`, so without this the first resumed cell erases
+    # the provenance the resume itself depends on.
+    carried: dict[str, Any] = {}
+    if out.exists():
         try:
-            prior = json.loads(args.out.read_text(encoding="utf-8"))
+            prior = json.loads(out.read_text(encoding="utf-8"))
+            produced = set(summarize([], model=args.model, dry_run=False, repeats=repeats))
+            carried = {k: v for k, v in prior.items() if k not in produced}
             landed.extend(
                 resume_cells(
                     prior,
@@ -1219,8 +1445,8 @@ def _fire_staged(args: argparse.Namespace, tasks: Sequence[ToolReqRealAgentTask]
         except ResumeMismatchError as exc:
             print(f"REFUSED: {exc}", file=sys.stderr)
             return EXIT_REFUSED
-        except (ValueError, KeyError, TypeError) as exc:
-            print(f"{args.out}: not a readable partial artifact: {exc}", file=sys.stderr)
+        except (ValueError, KeyError, TypeError, AttributeError) as exc:
+            print(f"{out}: not a readable partial artifact: {exc}", file=sys.stderr)
             return EXIT_REFUSED
     print(
         json.dumps(
@@ -1235,13 +1461,12 @@ def _fire_staged(args: argparse.Namespace, tasks: Sequence[ToolReqRealAgentTask]
         file=sys.stderr,
     )
 
-    legs_dir = args.out.with_name(f"{args.out.name}.legs") if args.out is not None else None
-    if legs_dir is not None:
-        legs_dir.mkdir(parents=True, exist_ok=True)
+    legs_dir = out.with_name(f"{out.name}.legs")
+    legs_dir.mkdir(parents=True, exist_ok=True)
 
-    def _snapshot() -> dict[str, Any]:
-        return summarize(
-            landed,
+    def _summary(cells: Sequence[RungCell]) -> dict[str, Any]:
+        return carried | summarize(
+            cells,
             model=args.model,
             dry_run=False,
             repeats=repeats,
@@ -1250,12 +1475,11 @@ def _fire_staged(args: argparse.Namespace, tasks: Sequence[ToolReqRealAgentTask]
         )
 
     def _persist() -> None:
-        if args.out is not None:
-            # Partial evidence, written as it is paid for: a fire that dies at cell 21 leaves the
-            # 20 cells it bought, and the next --fire-staged with the same --out resumes from them
-            # (mem-78gwf). Atomic, because the file that makes the resume possible is the file a
-            # kill mid-write would truncate.
-            atomic_write_json(args.out, _snapshot())
+        # Partial evidence, written as it is paid for: a fire that dies at cell 21 leaves the
+        # 20 cells it bought, and the next --fire-staged with the same --out resumes from them
+        # (mem-78gwf). Atomic, because the file that makes the resume possible is the file a
+        # kill mid-write would truncate.
+        atomic_write_json(out, _summary(landed))
 
     def _record(cell: RungCell) -> None:
         landed.append(cell)
@@ -1270,8 +1494,7 @@ def _fire_staged(args: argparse.Namespace, tasks: Sequence[ToolReqRealAgentTask]
         _persist()
 
     def _record_leg(leg: LegRecord) -> None:
-        if legs_dir is not None:
-            atomic_write_json(legs_dir / leg.filename, leg.row())
+        write_json_new(legs_dir / leg.filename, leg.row())
 
     def _run() -> int:
         try:
@@ -1283,34 +1506,25 @@ def _fire_staged(args: argparse.Namespace, tasks: Sequence[ToolReqRealAgentTask]
                 on_cell=_record,
                 on_leg=_record_leg,
                 landed=list(landed),
+                expect_cli_version=cli_version,
             )
         except (QuotaHaltError, RigHaltError) as exc:
             _persist()
             print(f"HALT: {exc}", file=sys.stderr)
             print(
-                f"{len(landed)} cell(s) kept in {args.out}; re-run the same command to resume.",
+                f"{len(landed)} cell(s) kept in {out}; re-run the same command to resume.",
                 file=sys.stderr,
             )
             return EXIT_HALT
         # The final artifact is the GRID, not the accumulator: the two diverge whenever a resume
         # reorders cells, and a caller reading --out must get what stdout printed.
-        summary = summarize(
-            cells,
-            model=args.model,
-            dry_run=False,
-            repeats=repeats,
-            cli_version=cli_version,
-            corpus=corpus,
-        )
-        if args.out is not None:
-            atomic_write_json(args.out, summary)
+        summary = _summary(cells)
+        atomic_write_json(out, summary)
         print(json.dumps(summary, indent=2))
         return EXIT_OK
 
-    if args.out is None:
-        return _run()
     try:
-        with out_lock(args.out):
+        with out_lock(out):
             return _run()
     except ResumeMismatchError as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)

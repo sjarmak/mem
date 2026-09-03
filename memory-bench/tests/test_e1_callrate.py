@@ -10,6 +10,7 @@ and the priced plan they disclose.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from dataclasses import replace
 from itertools import pairwise
@@ -1254,3 +1255,599 @@ def test_a_quota_refusal_mid_fire_keeps_what_it_bought(
     assert [row["rung"] for row in kept["cells"]] == ["R0", "R0"]
     assert kept["cli_version"] == "9.9.9"
     assert not (tmp_path / "summary.json.lock").exists()
+
+
+# --------------------------------------------------------------------------------------
+# the dead-run family: a leg that exited 0 without running
+#
+# `run_checked` raises on a NON-ZERO exit and nothing else, so the whole classification ladder
+# above — quota, timeout, error — is reached only when the CLI exits non-zero. Everything that
+# exits 0 arrives at the counter, which asks the stream how many memory calls it carries and gets
+# the honest answer: none, because nothing ran. That leg is then scored as a MEASURED run on which
+# the agent chose not to touch memory, which is the exact reading this experiment exists to
+# refuse, manufactured by the rig rather than produced by the agent.
+# --------------------------------------------------------------------------------------
+
+
+def _dead_runner(**result_fields: Any) -> Any:
+    """A `claude -p` stand-in that EXITS 0 while its own result event reports the run failed.
+
+    Zero tool calls, because a refused run makes none. The fields are the CLI's own — the same
+    `api_error_status` / `is_error` the raising path is classified on."""
+
+    def runner(argv: Any, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        events = [{"type": "result", "result": "", **result_fields}]
+        return subprocess.CompletedProcess(list(argv), 0, serialize_stream(events), "")
+
+    return runner
+
+
+def test_a_leg_that_exits_zero_carrying_a_quota_status_halts_instead_of_scoring_a_zero(
+    tmp_path: Any,
+) -> None:
+    """An exhausted account, if it ever exits 0, must not buy the rest of the grid.
+
+    Without this the whole authorization is spent against a dead account, every cell reads 0.0,
+    and the gate block publishes a manufactured null over it. The refusal is read off the stream's
+    own `api_error_status`, the same field and the same `QUOTA_STATUSES` set the raising path
+    uses — one classifier, reached from both sides."""
+    _seqs, tasks = corpus_one(tmp_path)
+    with pytest.raises(e1_grid.QuotaHaltError) as excinfo:
+        e1_grid.run_rung_cell(
+            tasks[0],
+            rung="R4",
+            repeats=5,
+            model=MODEL,
+            dry_run=False,
+            runner=_dead_runner(is_error=True, api_error_status=429),
+        )
+    assert "429" in str(excinfo.value)
+
+
+def test_a_leg_that_exits_zero_declaring_its_own_failure_is_unmeasured_not_silent(
+    tmp_path: Any,
+) -> None:
+    """`is_error` with no api status — a failed run that is not the account's fault.
+
+    It leaves the DENOMINATOR, exactly as a timeout does. Two of the three legs return normally,
+    so the rate is 2/2 and not 2/3: a dead leg scored as a non-calling one drags the measured rate
+    toward zero, and zero at the top rung is the verdict that ends the experiment."""
+    _seqs, tasks = corpus_one(tmp_path)
+    calling = _calling_runner("bd recall k")
+    dead = _dead_runner(is_error=True)
+    legs = {"n": 0}
+
+    def mixed(argv: Any, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        i = legs["n"]
+        legs["n"] += 1
+        result: subprocess.CompletedProcess[str] = (dead if i == 1 else calling)(argv, **kwargs)
+        return result
+
+    cell = e1_grid.run_rung_cell(
+        tasks[0], rung="R0", repeats=3, model=MODEL, dry_run=False, runner=mixed
+    )
+    assert cell.runs == 3
+    assert cell.errored_runs == 1
+    assert cell.timed_out_runs == 0
+    assert cell.measured_runs == 2
+    assert cell.calling_runs == 2
+    assert cell.call_rate == pytest.approx(1.0)
+
+
+def test_a_result_event_without_the_error_flag_is_a_measured_leg(tmp_path: Any) -> None:
+    """The negative half: `is_error` ABSENT, and `is_error: false`, are both ordinary legs.
+
+    A detector that treated a missing field as a failure would score every healthy leg unmeasured
+    and report a grid of zeros as an infrastructure problem."""
+    assert e1_grid.stream_is_error(serialize_stream([result_event()])) is False
+    ok = serialize_stream([{"type": "result", "is_error": False}])
+    assert e1_grid.stream_is_error(ok) is False
+    assert e1_grid.stream_is_error(serialize_stream([{"type": "result", "is_error": True}])) is True
+    # Not any event that carries the flag — a TOOL result that failed is not a failed RUN.
+    assert e1_grid.stream_is_error(serialize_stream([{"type": "user", "is_error": True}])) is False
+
+
+# --------------------------------------------------------------------------------------
+# the halt budget: what "the rig is broken" counts
+# --------------------------------------------------------------------------------------
+
+
+def test_a_rig_whose_every_leg_times_out_halts_rather_than_burning_the_grid(
+    tmp_path: Any,
+) -> None:
+    """Timeouts count toward the halt. They did not, and that is the shape that actually burns a
+    budget: an account whose every spawn hangs fills each cell with five unmeasured legs at up to
+    `timeout_s` apiece, trips no limit that counts only errors, and leaves a grid the next resume
+    drops and re-buys."""
+    _seqs, tasks = corpus_one(tmp_path)
+    with pytest.raises(e1_grid.RigHaltError):
+        e1_grid.run_rung_cell(
+            tasks[0],
+            rung="R0",
+            repeats=5,
+            model=MODEL,
+            dry_run=False,
+            runner=_timing_out_runner({0, 1, 2, 3, 4}, "bd recall k"),
+        )
+
+
+def test_alternating_failures_halt_even_though_neither_kind_repeats(tmp_path: Any) -> None:
+    """timeout, error, timeout: three consecutive UNMEASURED legs and never two of a kind.
+
+    A counter that tracked errors and timeouts separately saw one of each and tolerated all of
+    them. The question the budget asks is not which way the leg failed, it is whether anything is
+    still being measured."""
+    _seqs, tasks = corpus_one(tmp_path)
+    legs = {"n": 0}
+
+    def alternating(argv: Any, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        i = legs["n"]
+        legs["n"] += 1
+        if i % 2 == 0:
+            raise _timeout_error()
+        raise HeadlessAgentError("claude -p failed (exit 1): transient")
+
+    with pytest.raises(e1_grid.RigHaltError):
+        e1_grid.run_rung_cell(
+            tasks[0], rung="R0", repeats=5, model=MODEL, dry_run=False, runner=alternating
+        )
+
+
+def test_a_measured_leg_clears_the_streak(tmp_path: Any) -> None:
+    """Two failures, a good leg, two more failures: five legs, four unmeasured, no halt.
+
+    The limit is CONSECUTIVE, and a rig that still returns streams is flaky, not broken. Without
+    the reset a merely flaky account halts a fire that was working."""
+    _seqs, tasks = corpus_one(tmp_path)
+    calling = _calling_runner("bd recall k")
+    legs = {"n": 0}
+
+    def flaky(argv: Any, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        i = legs["n"]
+        legs["n"] += 1
+        if i == 2:
+            result: subprocess.CompletedProcess[str] = calling(argv, **kwargs)
+            return result
+        raise HeadlessAgentError("claude -p failed (exit 1): transient")
+
+    cell = e1_grid.run_rung_cell(
+        tasks[0], rung="R0", repeats=5, model=MODEL, dry_run=False, runner=flaky
+    )
+    assert cell.errored_runs == 4
+    assert cell.measured_runs == 1
+    assert cell.calling_runs == 1
+
+
+def test_the_unmeasured_streak_survives_a_cell_boundary(tmp_path: Any) -> None:
+    """Two failures at the end of one cell and one at the start of the next is a broken rig.
+
+    A counter local to `run_rung_cell` restarts at every cell, so a rig failing two legs per cell
+    never reaches three in one place and buys the ENTIRE grid one unmeasured cell at a time. The
+    streak is threaded through `staged_cells` for exactly this."""
+    _seqs, tasks = corpus_one(tmp_path)
+    attempts = {"n": 0}
+
+    def always_fails(argv: Any, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        attempts["n"] += 1
+        raise HeadlessAgentError("claude -p failed (exit 1): transient")
+
+    with pytest.raises(e1_grid.RigHaltError):
+        e1_grid.staged_cells(tasks, model=MODEL, n_tasks=1, repeats=2, runner=always_fails)
+    # Two legs in the first cell, one in the second, then the halt: the streak crossed the
+    # boundary. A per-cell counter would have spent every leg of every cell in the grid.
+    assert attempts["n"] == 3
+
+
+def test_the_streak_counts_both_kinds_and_resets_only_on_a_measurement() -> None:
+    """The budget itself, as a unit: three of ANY mix trips it, and a measurement clears it."""
+    streak = e1_grid.UnmeasuredStreak(limit=3)
+    assert streak.unmeasured() is False
+    assert streak.unmeasured() is False
+    streak.measured()
+    assert streak.unmeasured() is False
+    assert streak.unmeasured() is False
+    assert streak.unmeasured() is True
+
+
+# --------------------------------------------------------------------------------------
+# the preflight: one leg, and the verdict that ends the experiment
+# --------------------------------------------------------------------------------------
+
+
+def test_a_preflight_leg_that_measured_nothing_is_not_a_null() -> None:
+    """The preflight runs ONE leg. A single spawn timeout returns a row with zero memory calls
+    because nothing ran, and read as NO-MEMORY-CALL that row terminates E1 on its strongest
+    verdict — the interior rungs are never bought and the null is published.
+
+    UNMEASURED is a distinct kind, and it is tested BEFORE the call count."""
+    kind, line = preflight_verdict(
+        {
+            "rung": "R4",
+            "paid": True,
+            "runs": 1,
+            "measured_runs": 0,
+            "timed_out_runs": 1,
+            "errored_runs": 0,
+            "memory_calls": 0,
+        }
+    )
+    assert kind == e1_grid.HALT_UNMEASURED
+    assert kind != HALT_NO_CALL
+    assert "timed out" in line
+    with pytest.raises(PreflightHaltError):
+        preflight_gate({"rung": "R4", "paid": True, "measured_runs": 0, "memory_calls": 0})
+
+
+def test_a_measured_preflight_leg_with_no_calls_is_still_the_null() -> None:
+    """The other side: nothing here weakens the verdict the gate exists to reach. A leg that RAN
+    and made no memory call is the halt it always was."""
+    kind, _line = preflight_verdict(
+        {"rung": "R4", "paid": True, "runs": 1, "measured_runs": 1, "memory_calls": 0}
+    )
+    assert kind == HALT_NO_CALL
+
+
+def test_the_preflight_row_carries_what_it_measured(tmp_path: Any, monkeypatch: Any) -> None:
+    """The producer's half: the row `preflight` returns has the fields the verdict reads.
+
+    The defect was in neither piece on its own — the verdict grew an UNMEASURED branch and the row
+    omitted the counters it reads, so on a real preflight that branch could never fire however
+    correct it was. `preflight` takes no runner ON PURPOSE (there is no free path through a
+    mechanism check), so the cell it builds is stubbed rather than a spawn being simulated."""
+    _seqs, tasks = corpus_one(tmp_path)
+    timed_out = RungCell(
+        rung="R4",
+        variant=tasks[0].variant,
+        runs=1,
+        calling_runs=0,
+        memory_calls=0,
+        read_calls=0,
+        write_calls=0,
+        paid=True,
+        work_id=tasks[0].work_id,
+        timed_out_runs=1,
+    )
+    monkeypatch.setattr(e1_grid, "run_rung_cell", lambda *a, **k: timed_out, raising=True)
+    row = e1_grid.preflight(tasks[0], model=MODEL)
+    assert row["runs"] == 1
+    assert row["measured_runs"] == 0
+    assert row["timed_out_runs"] == 1
+    assert row["errored_runs"] == 0
+    # End to end: the row this producer emits reaches the UNMEASURED verdict, not the null.
+    assert preflight_verdict(row)[0] == e1_grid.HALT_UNMEASURED
+
+
+# --------------------------------------------------------------------------------------
+# the evidence: what a paid leg leaves behind
+# --------------------------------------------------------------------------------------
+
+
+def test_leg_evidence_keeps_the_whole_stream_not_a_head_and_tail(tmp_path: Any) -> None:
+    """Leg streams were stored through the TRUNCATING redactor, which keeps a head and a tail and
+    drops the middle. A `claude -p` stream is long and the tool calls are in the middle, so the
+    stored evidence excised exactly the thing it exists to prove — and a re-count from the archive
+    disagrees with the counter that ran, with no way to tell which is right.
+
+    The bulk here is deliberate: enough that a head+tail window cannot reach the call."""
+    _seqs, tasks = corpus_one(tmp_path)
+    filler = [
+        {"type": "assistant", "message": {"content": [{"type": "text", "text": "x" * 400}]}}
+        for _ in range(60)
+    ]
+    events = [
+        *filler,
+        assistant_event([("Bash", {"command": "bd recall k"})]),
+        *filler,
+        result_event(),
+    ]
+    stream = serialize_stream(events)
+    assert len(stream) > 12000
+
+    def runner(argv: Any, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(list(argv), 0, stream, "")
+
+    legs: list[LegRecord] = []
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R0",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=runner,
+        on_leg=legs.append,
+    )
+    assert cell.memory_calls == 1
+    kept = legs[0].stream
+    assert "bd recall k" in kept
+    # The whole stream, so a re-count off the archive reproduces the counter that ran.
+    assert len(kept) == len(stream)
+
+
+def test_leg_evidence_never_overwrites_a_leg_that_was_paid_for(tmp_path: Any) -> None:
+    """A fire halted MID-CELL re-runs that cell from leg 0, so the resumed leg 0 has the same
+    ``(rung, variant, work_id, leg)`` filename as the one already bought. An overwrite there
+    destroys evidence for a leg spent with real money; the second write lands beside the first."""
+    path = tmp_path / "R0__necessary__w-0__0.json"
+    first = e1_grid.write_json_new(path, {"leg": 0, "attempt": "before the halt"})
+    second = e1_grid.write_json_new(path, {"leg": 0, "attempt": "after the resume"})
+    third = e1_grid.write_json_new(path, {"leg": 0, "attempt": "and again"})
+    assert first == path
+    assert second == tmp_path / "R0__necessary__w-0__0.attempt1.json"
+    assert third == tmp_path / "R0__necessary__w-0__0.attempt2.json"
+    assert json.loads(first.read_text(encoding="utf-8"))["attempt"] == "before the halt"
+
+
+def test_leg_evidence_is_owner_only(tmp_path: Any) -> None:
+    """The stream is redacted, not clean: it carries the agent's prompts and outputs, and these
+    files are written under a shared /tmp."""
+    path = e1_grid.write_json_new(tmp_path / "leg.json", {"leg": 0})
+    assert path.stat().st_mode & 0o077 == 0
+
+
+def test_a_stale_lock_names_the_process_that_wrote_it(tmp_path: Any) -> None:
+    """A lock left by a killed fire and a lock a LIVE fire holds refuse identically, and the
+    operator's only move is then to delete a lock they cannot check. Carrying the pid makes the
+    difference checkable (`ps -p`) instead of guessed."""
+    out = tmp_path / "summary.json"
+    with e1_grid.out_lock(out):
+        holder = (tmp_path / "summary.json.lock").read_text(encoding="utf-8").strip()
+        assert holder == str(os.getpid())
+        with pytest.raises(RuntimeError) as excinfo, e1_grid.out_lock(out):
+            pass
+    assert holder in str(excinfo.value)
+    assert "ps -p" in str(excinfo.value)
+    # And released, so the next fire is not locked out by a fire that finished.
+    assert not (tmp_path / "summary.json.lock").exists()
+
+
+# --------------------------------------------------------------------------------------
+# what the fire refuses, and what the grid may claim
+# --------------------------------------------------------------------------------------
+
+
+def test_a_binary_that_changes_mid_sweep_halts(tmp_path: Any) -> None:
+    """The resume identity pins the CLI BETWEEN fires and is blind WITHIN one. A binary upgraded
+    while a sweep runs measures the later cells on a different tool surface, and the fire pools
+    both into one rate — the exact confound the identity check exists to refuse, arriving through
+    the one door it does not watch."""
+    _seqs, tasks = corpus_one(tmp_path)
+
+    def upgraded(argv: Any, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        events = [
+            {"type": "system", "subtype": "init", "claude_code_version": "2.1.300"},
+            result_event(),
+        ]
+        return subprocess.CompletedProcess(list(argv), 0, serialize_stream(events), "")
+
+    with pytest.raises(e1_grid.RigHaltError) as excinfo:
+        e1_grid.run_rung_cell(
+            tasks[0],
+            rung="R0",
+            repeats=5,
+            model=MODEL,
+            dry_run=False,
+            runner=upgraded,
+            expect_cli_version="2.1.258",
+        )
+    assert "2.1.300" in str(excinfo.value)
+    # A leg that does not state its version is not a mismatch: the check is for a version that
+    # DISAGREES, and treating silence as drift would halt a healthy fire.
+    quiet = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R0",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=_calling_runner("bd recall k"),
+        expect_cli_version="2.1.258",
+    )
+    assert quiet.measured_runs == 1
+
+
+def test_a_grid_that_measured_one_rung_does_not_publish_a_passing_monotonicity() -> None:
+    """With one rung there is no adjacent pair, hence no violation, hence `monotone: true` — a
+    passing-looking gate over a grid that tested nothing. Untested is not passed."""
+    one = call_rate_gates([_cell("R4", VARIANT_NECESSARY, calling=5, runs=5)])["monotonicity"]
+    assert one["monotone"] is True
+    assert one["comparable"] is False
+    assert "UNTESTED" in one["reason"]
+    assert "Not a pass" in one["reason"]
+    two = call_rate_gates(
+        [
+            _cell("R0", VARIANT_NECESSARY, calling=2, runs=5),
+            _cell("R4", VARIANT_NECESSARY, calling=5, runs=5),
+        ]
+    )["monotonicity"]
+    assert two["comparable"] is True
+    assert "UNTESTED" not in two["reason"]
+
+
+def test_resume_drops_a_cell_that_ran_a_different_number_of_legs() -> None:
+    """A 3-leg row in a 5-leg grid weights wrong when pooled and cannot be completed in place.
+
+    The artifact-level `repeats` check does not catch it: that compares one field, and a row can
+    disagree with the very artifact that carries it (a hand edit, or a merge of two fires). Dropped
+    means re-bought, and the legs already paid for survive as leg evidence."""
+    short = _cell("R0", VARIANT_NECESSARY, calling=2, runs=3, work_id="w-0")
+    full = _cell("R4", VARIANT_NECESSARY, calling=5, runs=5, work_id="w-0")
+    summary = _identified([short, full])
+    assert summary["repeats"] == 5
+    assert resume_cells(summary, model=MODEL, **IDENTITY) == [full]
+
+
+def test_the_plan_prices_the_smaller_variant_half() -> None:
+    """`staged_cells` slices `[:n_tasks]` PER VARIANT, so a plan priced off the combined list
+    promises twice the grid it runs whenever the twin halves are uneven."""
+
+    class _T:
+        def __init__(self, variant: str) -> None:
+            self.variant = variant
+
+    even = [_T(VARIANT_NECESSARY), _T(VARIANT_UNNECESSARY), _T(VARIANT_NECESSARY)]
+    assert e1_grid.per_variant_task_count(even) == 1
+    assert e1_grid.per_variant_task_count([]) == 0
+    assert e1_grid.per_variant_task_count([_T(VARIANT_NECESSARY), _T(VARIANT_UNNECESSARY)]) == 1
+    # Priced per variant, and the plan doubles it back for the two halves.
+    assert staged_plan(1)["calls"] == len(STAGED_RUNGS) * 1 * STAGED_REPEATS * 2
+
+
+def test_fire_staged_without_an_out_refuses_before_it_spends(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without ``--out`` this path spends the whole authorization and persists nothing: no resume,
+    no leg evidence, no lock, and a summary that lives only in a terminal someone has to keep
+    open. It refuses BEFORE the first leg, which is the only point at which refusing is free."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "t")
+    monkeypatch.setattr(e1_grid, "resolve_cli_version", lambda: "9.9.9")
+    monkeypatch.setattr(e1_grid, "STAGED_REPEATS", 1)
+    _seqs, tasks = corpus_one(tmp_path)
+    spent = {"legs": 0}
+
+    def counting(task: Any, **kwargs: Any) -> RungCell:
+        spent["legs"] += int(kwargs["repeats"])
+        return _fake_cells(tasks)(task, **kwargs)
+
+    monkeypatch.setattr(e1_grid, "run_rung_cell", counting)
+    code = e1_grid.main(
+        ["--corpus-dir", str(tmp_path / "corpus"), "--fire-staged", "--model", MODEL]
+    )
+    assert code == e1_grid.EXIT_REFUSED
+    assert spent["legs"] == 0
+
+
+def test_a_resume_keeps_the_provenance_the_prior_artifact_carried(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--out`` is rewritten from the resumed cells after every paid cell, so anything the prior
+    artifact carried that ``summarize`` does not re-derive is erased by the first resumed cell.
+
+    The block that matters is ``identity_backfilled``: the record of WHY a pre-hardening artifact
+    was admissible into this grid. Losing it leaves a grid whose provenance is unstateable and
+    whose paid cells therefore cannot be defended."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "t")
+    monkeypatch.setattr(e1_grid, "resolve_cli_version", lambda: "9.9.9")
+    monkeypatch.setattr(e1_grid, "STAGED_REPEATS", 1)
+    _seqs, tasks = corpus_one(tmp_path)
+    monkeypatch.setattr(e1_grid, "run_rung_cell", _fake_cells(tasks))
+    _, twins = load_twin_corpus(tmp_path / "corpus")
+    landed = RungCell(
+        rung="R0",
+        variant=tasks[0].variant,
+        runs=1,
+        calling_runs=1,
+        memory_calls=1,
+        read_calls=1,
+        write_calls=0,
+        paid=True,
+        work_id=tasks[0].work_id,
+    )
+    note = {"reason": "produced before the exit-0 classifier landed", "reviewed": "mem-1qmoo"}
+    out = tmp_path / "summary.json"
+    out.write_text(
+        json.dumps(
+            summarize(
+                [landed],
+                model=MODEL,
+                dry_run=False,
+                repeats=1,
+                cli_version="9.9.9",
+                corpus=corpus_fingerprint(twins),
+            )
+            | {"identity_backfilled": note}
+        ),
+        encoding="utf-8",
+    )
+    code = e1_grid.main(
+        [
+            "--corpus-dir",
+            str(tmp_path / "corpus"),
+            "--fire-staged",
+            "--model",
+            MODEL,
+            "--out",
+            str(out),
+        ]
+    )
+    assert code == e1_grid.EXIT_OK
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["identity_backfilled"] == note
+    assert json.loads(out.read_text(encoding="utf-8"))["identity_backfilled"] == note
+    # And the carry does not fabricate the fields `summarize` owns.
+    assert printed["cli_version"] == "9.9.9"
+    assert len(printed["cells"]) == len(STAGED_RUNGS) * 2
+
+
+def test_a_halt_leaves_out_holding_the_grid_the_resume_will_start_from(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """After a halt, ``--out`` states the cells that will actually be resumed from, not the cells
+    that happened to be in the file when the fire opened it.
+
+    On a fresh fire the halt's write is indistinguishable from the per-cell one, because every
+    COMPLETED cell has already been persisted by the time a mid-cell halt raises (an isolated-
+    revert mutant that deleted the halt's persist survived the fresh-fire test for that reason).
+    What separates them is a RESUME that drops a row: the prior artifact carries a cell this grid
+    will re-buy, the fire halts before completing anything, and without the halt's write ``--out``
+    still advertises the dropped cell as bought."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "t")
+    monkeypatch.setattr(e1_grid, "resolve_cli_version", lambda: "9.9.9")
+    monkeypatch.setattr(e1_grid, "STAGED_REPEATS", 1)
+    _seqs, tasks = corpus_one(tmp_path)
+    _, twins = load_twin_corpus(tmp_path / "corpus")
+    work_id = tasks[0].work_id
+
+    def _row(rung: str, variant: str, runs: int) -> RungCell:
+        return RungCell(
+            rung=rung,
+            variant=variant,
+            runs=runs,
+            calling_runs=runs,
+            memory_calls=runs,
+            read_calls=runs,
+            write_calls=0,
+            paid=True,
+            work_id=work_id,
+        )
+
+    keep = _row("R0", VARIANT_NECESSARY, 1)
+    # A cell of the right key but the wrong leg count: in the grid, so not a stranger, and
+    # dropped by the resume because a 2-leg cell cannot be pooled with 1-leg cells.
+    drop = _row("R4", VARIANT_UNNECESSARY, 2)
+    out = tmp_path / "summary.json"
+    out.write_text(
+        json.dumps(
+            summarize(
+                [keep, drop],
+                model=MODEL,
+                dry_run=False,
+                repeats=1,
+                cli_version="9.9.9",
+                corpus=corpus_fingerprint(twins),
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    def halts(task: Any, **kwargs: Any) -> RungCell:
+        raise e1_grid.RigHaltError("three consecutive legs measured nothing")
+
+    monkeypatch.setattr(e1_grid, "run_rung_cell", halts)
+    code = e1_grid.main(
+        [
+            "--corpus-dir",
+            str(tmp_path / "corpus"),
+            "--fire-staged",
+            "--model",
+            MODEL,
+            "--out",
+            str(out),
+        ]
+    )
+    assert code == e1_grid.EXIT_HALT
+    kept = json.loads(out.read_text(encoding="utf-8"))
+    assert [(c["rung"], c["variant"], c["metrics"]["runs"]) for c in kept["cells"]] == [
+        ("R0", VARIANT_NECESSARY, 1)
+    ]
