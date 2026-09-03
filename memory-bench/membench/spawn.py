@@ -134,11 +134,20 @@ def run_in_session(
         try:
             stdout, stderr = proc.communicate(timeout=DRAIN_TIMEOUT_S)
         except subprocess.TimeoutExpired as drain:
-            _abandon(proc)
+            reaped = _abandon(proc)
             raise RuntimeError(
                 f"process group {proc.pid} survived SIGKILL: its pipes were still held open "
                 f"{DRAIN_TIMEOUT_S}s after the kill, so a child of {argv[0]!r} is still "
                 "running and the partial output could not be drained"
+                + (
+                    ""
+                    if reaped
+                    else (
+                        f"; the leader pid {proc.pid} had not exited {DRAIN_TIMEOUT_S}s after "
+                        "its own SIGKILL either, so it is left unreaped (a zombie is leaked "
+                        "rather than waited on unbounded)"
+                    )
+                )
             ) from drain
         raise subprocess.TimeoutExpired(
             proc.args, first.timeout, output=stdout, stderr=stderr
@@ -150,15 +159,22 @@ def run_in_session(
     return subprocess.CompletedProcess(proc.args, proc.returncode, stdout, stderr)
 
 
-def _abandon(proc: subprocess.Popen[str]) -> None:
-    """Give up on a child whose group outlived its kill: SIGKILL the child itself so at least
-    the leader is reaped, and close our pipe ends so nothing waits on the survivor again."""
-    with contextlib.suppress(ProcessLookupError):
-        proc.kill()
-    proc.wait()
+def _abandon(proc: subprocess.Popen[str]) -> bool:
+    """Give up on a child whose group outlived its kill: close our pipe ends first so nothing
+    waits on the survivor again, SIGKILL the child itself, and wait for the leader for at most
+    ``DRAIN_TIMEOUT_S``. Returns whether the leader was reaped in that bound; a leader that is
+    not (a kernel-held exit, a stopped process) is LEAKED as a zombie rather than waited on
+    unbounded (review G4), and the caller says so."""
     for stream in (proc.stdin, proc.stdout, proc.stderr):
         if stream is not None:
             stream.close()
+    with contextlib.suppress(ProcessLookupError):
+        proc.kill()
+    try:
+        proc.wait(timeout=DRAIN_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        return False
+    return True
 
 
 def _kill_group(proc: subprocess.Popen[str]) -> None:

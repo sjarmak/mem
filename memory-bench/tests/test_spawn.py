@@ -521,6 +521,47 @@ def test_run_in_session_drain_does_not_hang_when_the_kill_is_a_no_op(tmp_path, m
         thread.join(5.0)
 
 
+@_LINUX_ONLY
+def test_run_in_session_abandon_does_not_wait_unbounded_for_a_leader_that_will_not_die(
+    tmp_path, monkeypatch
+) -> None:
+    """Review G4: after the bounded drain, ``_abandon`` waited on the leader UNBOUNDED, so a
+    leader that outlives its own SIGKILL held the rig exactly as the drain used to. The wait
+    is bounded by the same DRAIN_TIMEOUT_S; on expiry the error still names the surviving
+    group and says the zombie is leaked."""
+    pidfile = tmp_path / "holder.pid"
+    holder = ["sh", "-c", f"sleep 600 & echo $! > {pidfile}; wait"]
+    leaders: list[int] = []
+
+    def _no_kill(self: subprocess.Popen[str]) -> None:
+        leaders.append(self.pid)
+
+    monkeypatch.setattr(spawn, "_kill_group", lambda proc: None)
+    monkeypatch.setattr(subprocess.Popen, "kill", _no_kill)
+    monkeypatch.setattr(spawn, "DRAIN_TIMEOUT_S", 1.0)
+    outcome: list[BaseException] = []
+
+    def _run() -> None:
+        try:
+            run_in_session(holder, capture_output=True, text=True, check=False, timeout=0.5)
+        except BaseException as exc:
+            outcome.append(exc)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    thread.join(15.0)
+    try:
+        assert not thread.is_alive(), "_abandon waited unbounded on the surviving leader"
+        assert len(outcome) == 1
+        assert isinstance(outcome[0], RuntimeError)
+        assert re.search(r"process group \d+ survived", str(outcome[0]))
+        assert "left unreaped" in str(outcome[0])
+        assert str(leaders[0]) in str(outcome[0])
+    finally:
+        _reap(int(pidfile.read_text()), *leaders)
+        thread.join(5.0)
+
+
 def test_run_in_session_returns_a_completed_process_with_cwd_env_and_input(tmp_path) -> None:
     completed = run_in_session(
         ["sh", "-c", "pwd; echo $MARK; cat"],
