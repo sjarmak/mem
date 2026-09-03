@@ -178,6 +178,16 @@ NATIVE_MEMORY_BASH_WRITE_ALL_OPERANDS: tuple[str, ...] = (
 NATIVE_MEMORY_BASH_WRITE_LAST_OPERAND: tuple[str, ...] = ("cp", "mv", "ln")
 NATIVE_MEMORY_BASH_SED_IN_PLACE_FLAGS: tuple[str, ...] = ("-i", "--in-place")
 
+# Commands whose OPERANDS never touch a file: `echo <path>` prints the path and opens nothing,
+# so an operand of these attributes no access however it resolves (review G3). Their REDIRECT
+# targets still count — `echo x > <path>` writes the path — because the redirect is the
+# shell's, not the command's. Named in policy, not inferred: the path rule is deliberately
+# quote-blind (no quote-aware expansion, review F2/G3), so a single-quoted literal
+# `'$CLAUDE_CONFIG_DIR/.../MEMORY.md'` under any OTHER command expands here as the shell would
+# NOT have expanded it, and attributes an access the shell never made. That limitation is
+# accepted: it errs toward counting a reach, the direction this series can afford.
+NATIVE_MEMORY_BASH_NON_ACCESSING_COMMANDS: tuple[str, ...] = ("echo", "printf")
+
 # Wrapper words that precede the real command word without changing what it does to its paths.
 # Skipped, with their own option words (and `env`'s assignments), before the direction is read.
 # An option that takes a SEPARATE value word (`sudo -u me`, `nice -n 5`) consumes it too, or
@@ -1458,6 +1468,8 @@ def _command_path_uses(words: Sequence[str]) -> list[_BashPathUse]:
     if len(words) < 2:
         return []
     name = PurePosixPath(words[0]).name
+    if name in NATIVE_MEMORY_BASH_NON_ACCESSING_COMMANDS:
+        return []
     rest = words[1:]
     flags = [w for w in rest if w.startswith("-")]
     operands = [w for w in rest if not w.startswith("-")]
@@ -1542,6 +1554,14 @@ def _pinned_paths(
 
 
 def _bash_accesses(command: str, *, config_dir: Path, call_index: int) -> list[NativeMemoryAccess]:
+    """Every native-memory access one shell command makes, segment by segment.
+
+    Expansion is of the pinned variable only and is NOT quote-aware: `'$CLAUDE_CONFIG_DIR/...'`
+    in single quotes expands here although the shell would have passed it literally, so a
+    command other than one in ``NATIVE_MEMORY_BASH_NON_ACCESSING_COMMANDS`` that names the
+    pinned path inside single quotes is attributed an access the shell never made. Accepted:
+    the miss runs toward counting a reach, and quote tracking across every shell form is not a
+    rule this recognizer can keep mechanical."""
     tokens, tokenizer_failed = _bash_tokens(command)
     found: list[NativeMemoryAccess] = []
     cwd = ""

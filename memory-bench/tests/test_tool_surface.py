@@ -1304,6 +1304,31 @@ def test_a_wrapper_option_value_is_not_read_as_the_command_word(
     assert [(a.verb, Path(a.path).name) for a in accesses] == [(verb, "MEMORY.md")], template
 
 
+@pytest.mark.parametrize(
+    "template",
+    [
+        "echo '$CLAUDE_CONFIG_DIR/projects/-tmp/memory/MEMORY.md'",
+        'echo "$CLAUDE_CONFIG_DIR/projects/-tmp/memory/MEMORY.md"',
+        "echo {m}/MEMORY.md",
+        "printf '%s\\n' {m}/MEMORY.md",
+        "echo reading {m}/MEMORY.md now",
+    ],
+)
+def test_an_echoed_path_is_not_an_access(tmp_path: Path, template: str) -> None:
+    """Review G3: `echo <path>` prints the path and opens nothing, quoted or not. The operands
+    of a non-accessing command attribute nothing; only a redirect beside them does."""
+    config, memory = _pinned(tmp_path)
+    assert native_memory_accesses([_bash(template.format(m=memory))], config_dir=config) == []
+
+
+def test_a_redirect_beside_a_non_accessing_command_still_counts(tmp_path: Path) -> None:
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses(
+        [_bash(f"echo {memory}/topic.md >> {memory}/MEMORY.md")], config_dir=config
+    )
+    assert [(a.verb, Path(a.path).name) for a in accesses] == [("native_write", "MEMORY.md")]
+
+
 def test_a_pinned_path_is_reported_once_per_token(tmp_path: Path) -> None:
     config, memory = _pinned(tmp_path)
     accesses = native_memory_accesses([_bash(f"cat {memory}/MEMORY.md")], config_dir=config)
@@ -1407,6 +1432,7 @@ def test_the_recognizer_policy_covers_every_constant_the_recognizers_read() -> N
         "NATIVE_MEMORY_BASH_WRAPPER_VALUE_FLAGS",
         "NATIVE_MEMORY_BASH_WRITE_ALL_OPERANDS",
         "NATIVE_MEMORY_BASH_WRITE_LAST_OPERAND",
+        "NATIVE_MEMORY_BASH_NON_ACCESSING_COMMANDS",
         "NATIVE_MEMORY_BASH_PATH_TERMINATORS",
         "CONFIG_DIR_ENV",
     } <= policy
