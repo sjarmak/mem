@@ -150,11 +150,9 @@ total order on the selected set, the order is deterministic for a given selected
 set, it is stable across the pages of one snapshot, and the baseline order is
 **ascending canonical URI of the record `id`, in code-unit order**, advertised
 in discovery and checked as a conformance row. Query-relevance ranking stays
-consumer policy and is not what these files record. The issue as first proposed
-leaves the choice of order to the implementation, under which an authority
-documenting "descending insertion ordinal" would have been conformant while
-returning none of the sequences in these files. The closed issue removes that
-latitude.
+consumer policy and is not what these files record. An authority advertising
+"descending insertion ordinal" returns none of the sequences in these files and
+is not conformant.
 
 `ordering.json` records two things a harness may assert independently of the
 sequence itself:

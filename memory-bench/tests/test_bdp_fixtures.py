@@ -940,7 +940,9 @@ def test_readme_states_the_boundaries_it_has_to_state() -> None:
         "authored to exercise a consumer policy",
         "not measured field frequencies",
         "deliberately not in the reference order",
-        "leaves the choice of order to the implementation",
+        "ascending canonical URI of the record `id`, in code-unit order",
+        "Query-relevance ranking stays consumer policy",
+        "make no claim about continuation across requests",
         "does not discriminate `endpoint` from `source`",
     ):
         assert claim in text, claim

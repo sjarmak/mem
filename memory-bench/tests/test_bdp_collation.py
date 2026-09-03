@@ -203,9 +203,9 @@ def test_case_folding_and_normalization_tie_ids_the_recorded_order_separates(
     """A rule that ties two distinct ids is not a total order at all.
 
     Recorded apart from the rules that merely return a different order, because
-    the two findings differ in kind. A different total order is conformant under
-    bdp#8 as proposed, which leaves the choice to the implementation; a tie fails
-    the first clause whatever order the authority documents.
+    the two findings differ in kind. A different total order is not the baseline
+    bdp#8 settled on (ascending canonical URI, code-unit order) but is still an
+    order; a tie fails the first clause whatever order the authority documents.
     """
 
     report = {
