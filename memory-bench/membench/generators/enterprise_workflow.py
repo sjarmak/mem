@@ -33,6 +33,7 @@ the point.
 from __future__ import annotations
 
 import random
+import re
 from dataclasses import dataclass
 
 from membench.generators.opaque_ids import opaque_memory_id
@@ -126,6 +127,27 @@ def _fact(prompt: str, value: str, persona: Persona, channel: str | None) -> str
     entries so no verb tense or attribution shape separates the classes; only the
     value (and the drawn attribution) differs (mem-z3gi)."""
     return f"{prompt} is {value} — by {_attribution(persona, channel)}"
+
+
+# The inverse of ``_fact``, anchored on the template's own two fixed separators. Non-greedy on
+# the prompt so a value may itself contain " is " ("the rollback command is deploy rollback is
+# not ..." would still split at the FIRST " is ", which is the prompt/value boundary because no
+# authored prompt contains one); non-greedy on the value so the attribution is everything after
+# the FIRST " — by ", which no authored value contains. This is a format-anchored parse of a
+# string this module minted, not a heuristic over prose.
+_FACT_RE = re.compile(r"^(?P<prompt>.+?) is (?P<value>.+?) — by (?P<attribution>.+)$", re.DOTALL)
+
+
+def fact_value(content: str) -> str:
+    """The VALUE a ``_fact``-shaped memory content states (mem-zfm0m).
+
+    The twin corpus inlines the value of every fact a task requires, and the realistic (unscored)
+    facts reach it only as ``_fact`` prose. Raises ``ValueError`` on content this template did not
+    produce rather than guessing at it."""
+    match = _FACT_RE.fullmatch(content)
+    if match is None:
+        raise ValueError(f"not a fact-shaped memory content: {content!r}")
+    return match.group("value")
 
 
 def _assert_no_forbidden_value_leak(

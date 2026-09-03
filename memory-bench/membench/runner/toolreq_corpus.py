@@ -44,6 +44,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from membench.generators.enterprise_workflow import fact_value
 from membench.metrics.scorers import states_value
 from membench.runner.toolreq_realagent import (
     DEFAULT_CORPUS,
@@ -86,11 +87,18 @@ def _goal_action(step: SequenceStep) -> ExpectedAction:
 def unnecessary_twin(task: ToolReqRealAgentTask) -> ToolReqRealAgentTask:
     """The memory-UNNECESSARY twin of an adapted (necessary) task, under the SAME ``work_id``.
 
-    The twin appends ``task.current_opaque_values`` — exactly the values a passing ``Write`` must
-    carry, and nothing else — under a neutral heading, and drops the memory requirement
+    The twin appends the VALUE of every fact the necessary half requires — the opaque
+    ``current_opaque_values`` a passing ``Write`` must carry, and the realistic value of each
+    other ``oracle_memory`` fact — under a neutral heading, and drops the memory requirement
     (``requires_memory`` / ``expected_memory_reads`` empty, ``oracle_memory`` empty: there is
     nothing left for an arm to surface). Scoring is byte-identical: the same ``arg_values`` and
     ``forbidden_values``, so a twin passes only by writing the current value and never a stale one.
+
+    EVERY required fact, not only the scored one (mem-zfm0m). The generator names three subjects
+    in the goal request and scores one; a twin that inlined the scored value alone handed the
+    agent one value against a request naming three, so the "memory-unnecessary" half still needed
+    memory for two of its subjects and the contrast under-measured itself. The unscored values
+    are parsed off the fact template (``fact_value``), never typed here.
 
     It appends the VALUES, not ``oracle_memory``'s facts, and that is the whole correction of the
     first cut. Those facts carry authored provenance prose (``— by B. Cee in #meeting``) that the
@@ -103,8 +111,7 @@ def unnecessary_twin(task: ToolReqRealAgentTask) -> ToolReqRealAgentTask:
     if task.variant != VARIANT_NECESSARY:
         raise ValueError(f"{task.work_id}: can only twin a {VARIANT_NECESSARY!r} task")
     action = _goal_action(task.goal_step)
-    values = list(task.current_opaque_values)
-    if not values:
+    if not task.current_opaque_values:
         raise ValueError(
             f"{task.work_id}: necessary task scores no current value, so its unnecessary "
             "twin would withhold the same value it is supposed to state"
@@ -121,8 +128,16 @@ def unnecessary_twin(task: ToolReqRealAgentTask) -> ToolReqRealAgentTask:
     # No mapping is NEEDED to solve the twin: the bridged instruction asks for "the required
     # current value(s)" in one file, and ``score_goal_action`` tests membership of every
     # ``arg_values`` entry, never their order or their attachment to a subject.
-    block = "\n".join([CONTEXT_HEADING, *(f"- {value}" for value in sorted(values))])
+    values = sorted(
+        {*task.current_opaque_values, *(fact_value(c) for c in task.oracle_memory.values())}
+    )
+    block = "\n".join([CONTEXT_HEADING, *(f"- {value}" for value in values)])
     request = task.goal_step.user_request + CONTEXT_SEPARATOR + block
+    for value in values:
+        if not states_value(request, value):
+            raise ValueError(
+                f"{task.work_id}: unnecessary twin does not state required fact value {value!r}"
+            )
     for value in task.current_opaque_values:
         if not states_value(request, value):
             raise ValueError(

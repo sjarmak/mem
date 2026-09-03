@@ -11,7 +11,13 @@ from __future__ import annotations
 
 import pytest
 
-from membench.generators.enterprise_workflow import SUPERSESSION_DEPTH, materialize_world
+from membench.generators.enterprise_workflow import (
+    _SUBJECTS,
+    SUPERSESSION_DEPTH,
+    _fact,
+    fact_value,
+    materialize_world,
+)
 from membench.generators.memory_necessity_gate import memory_necessity_gate
 from membench.report.comparison import EPSILON
 from membench.runner.agent import ScriptedAgent
@@ -185,3 +191,34 @@ def test_default_variant_stays_text_answer() -> None:
     assert goal.available_tools == []
     assert goal.outcome_checks[0].requires_action == []
     assert goal.outcome_checks[0].forbidden_values  # text staleness still enforced
+
+
+# --------------------------------------------------------------------------- #
+# mem-zfm0m item 1: the fact template has a format-anchored inverse
+# --------------------------------------------------------------------------- #
+
+
+def test_fact_value_inverts_the_fact_template_for_every_authored_subject() -> None:
+    """``fact_value`` is the inverse of ``_fact`` and nothing looser: for every authored subject,
+    value, and attribution shape (with and without a role, with and without a channel) the value
+    round-trips exactly. The twin corpus relies on this to inline each required fact's value."""
+    personas = [
+        Persona(persona_id="p1", name="Ada Lovelace", role="staff-engineer", team_id="t1"),
+        Persona(persona_id="p2", name="B. Cee", role="", team_id="t1"),
+    ]
+    for subject in _SUBJECTS:
+        for value in subject.values:
+            for persona in personas:
+                for channel in (None, "kernels"):
+                    assert fact_value(_fact(subject.prompt, value, persona, channel)) == value
+    persona = personas[0]
+    assert fact_value(_fact("the project charter decision", "freeze scope", persona, None)) == (
+        "freeze scope"
+    )
+
+
+def test_fact_value_refuses_content_that_is_not_fact_shaped() -> None:
+    with pytest.raises(ValueError, match="not a fact-shaped"):
+        fact_value("the deploy timeout was changed by Ada")
+    with pytest.raises(ValueError, match="not a fact-shaped"):
+        fact_value("")
