@@ -838,7 +838,9 @@ class _LegOutcome:
     ``status`` is what the leg record will say; ``score`` and ``stream`` are the evidence (a
     timed-out leg keeps what it wrote before the bound, ``truncated``); ``quota_refusal`` is
     set when the account refused the call — an ``error`` the cell must HALT on rather than
-    tolerate, phrased as the reason the halt will quote."""
+    tolerate, phrased as the reason the halt will quote — and ``cause`` is the exception the
+    refusal was read off, so the halt is raised FROM it and a reader of the halt's cause chain
+    reaches the CLI's own result event (review G6)."""
 
     status: LegStatus
     detail: str = ""
@@ -847,6 +849,7 @@ class _LegOutcome:
     cli_version: str = ""
     truncated: bool = False
     quota_refusal: str = ""
+    cause: HeadlessAgentError | None = None
 
 
 def _run_leg(
@@ -912,6 +915,7 @@ def _run_leg(
                     status="error",
                     detail=str(exc),
                     quota_refusal=f"the account refused the call ({exc})",
+                    cause=exc,
                 )
             timeout = spawn_timeout_of(exc)
             if timeout is None:
@@ -1080,7 +1084,7 @@ def run_rung_cell(
             raise QuotaHaltError(
                 f"{rung}/{task.variant}/{task.work_id} leg {i}: {outcome.quota_refusal}. "
                 f"Nothing further can be measured; resume when it resets. {_bought(i)}."
-            )
+            ) from outcome.cause
         if outcome.status != "ok":
             if outcome.status == "timeout":
                 timed_out += 1

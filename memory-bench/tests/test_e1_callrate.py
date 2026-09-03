@@ -1105,10 +1105,15 @@ def test_a_quota_refusal_halts_the_fire_and_is_read_off_the_stream_not_the_messa
     def refused(argv: Any, **_kwargs: object) -> subprocess.CompletedProcess[str]:
         raise with_child(HeadlessAgentError("claude -p failed (exit 1): <redacted>"), refusal)
 
-    with pytest.raises(e1_grid.QuotaHaltError, match="refused the call"):
+    with pytest.raises(e1_grid.QuotaHaltError, match="refused the call") as halted:
         e1_grid.run_rung_cell(
             tasks[0], rung="R0", repeats=5, model=MODEL, dry_run=False, runner=refused
         )
+    # Raised FROM the agent error (review G6): the cause chain reaches the CLI's own result
+    # event the refusal was classified on, and a wrapper lost it once.
+    cause = halted.value.__cause__
+    assert isinstance(cause, HeadlessAgentError)
+    assert e1_grid.is_quota_halt(cause) is True
     # The message says nothing about a quota; only the stream field does.
     assert e1_grid.is_quota_halt(HeadlessAgentError("You've hit your session limit")) is False
     served = subprocess.CompletedProcess(["claude"], 1, '{"type":"result","is_error":true}', "")
