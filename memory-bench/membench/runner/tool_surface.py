@@ -384,13 +384,28 @@ BD_KEY_FLAG = "--key"
 # own documented convenience, and ``bd remember <bare-unknown-token>`` is refused. Argv shape
 # cannot separate those from a stored write; the acknowledgement can, and it is POSITIVE evidence:
 # an absent result (truncated stream), a refusal, a redirected-away stderr are each not a write.
-_BD_REMEMBER_ACK = re.compile(r"^(?:Remembered|Updated) \[", re.MULTILINE)
+#
+# The key inside the brackets is captured so that ONE Bash call chaining two bd invocations
+# (one tool_result, review F1) can hand each invocation its own acknowledgement line: a line is
+# matched to the invocation that named its key with ``--key``, and an unkeyed invocation takes
+# the next line nobody claimed. One line acknowledges at most one invocation.
+_BD_REMEMBER_ACK = re.compile(r"^(?:Remembered|Updated) \[(?P<key>[^\]]*)\]", re.MULTILINE)
 _BD_REMEMBER_ACK_ACTIONS: frozenset[str] = frozenset({"remembered", "updated"})
 
 # bd's own marker for the bare-existing-key convenience: ``(recalled "<key>" -- a bare existing key
 # READS. ...)`` on the text path, ``{"action": "recalled"}`` under ``--json``.
-_BD_REMEMBER_RECALLED = re.compile(r'^\(recalled "', re.MULTILINE)
+_BD_REMEMBER_RECALLED = re.compile(r'^\(recalled "(?P<key>[^"]*)"', re.MULTILINE)
 _BD_REMEMBER_RECALLED_ACTION = "recalled"
+
+
+def _bd_json_object(candidate: str) -> dict[str, object] | None:
+    try:
+        parsed = json.loads(candidate)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(parsed, dict) and isinstance(parsed.get("action"), str):
+        return dict(parsed)
+    return None
 
 
 def _bd_json_action(result: str) -> str | None:
@@ -398,15 +413,81 @@ def _bd_json_action(result: str) -> str | None:
 
     The whole result is tried first (bd may pretty-print), then each line (a pipe may have
     appended a cwd-reset notice after the object)."""
-    candidates = [result, *result.splitlines()]
-    for candidate in candidates:
-        try:
-            parsed = json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(parsed, dict) and isinstance(parsed.get("action"), str):
+    for candidate in (result, *result.splitlines()):
+        parsed = _bd_json_object(candidate)
+        if parsed is not None:
             return str(parsed["action"])
     return None
+
+
+@dataclass(frozen=True)
+class _BdAck:
+    """One acknowledgement (stored or recalled) bd printed, and the key it names ("" when the
+    line carries none)."""
+
+    text: str
+    key: str
+
+
+def _bd_acks(result: str) -> list[_BdAck]:
+    """Every acknowledgement line in ``result``, in stream order. A refusal is not one."""
+    whole = _bd_json_object(result)
+    if whole is not None and "\n" in result.strip():
+        # A pretty-printed single object: one acknowledgement for the whole result.
+        key = whole.get("key")
+        return [_BdAck(result, key if isinstance(key, str) else "")]
+    acks: list[_BdAck] = []
+    for line in result.splitlines():
+        matched = _BD_REMEMBER_ACK.match(line) or _BD_REMEMBER_RECALLED.match(line)
+        if matched:
+            acks.append(_BdAck(line, matched.group("key")))
+            continue
+        parsed = _bd_json_object(line)
+        if parsed is not None and (
+            parsed["action"] in _BD_REMEMBER_ACK_ACTIONS
+            or parsed["action"] == _BD_REMEMBER_RECALLED_ACTION
+        ):
+            key = parsed.get("key")
+            acks.append(_BdAck(line, key if isinstance(key, str) else ""))
+    return acks
+
+
+def _attribute_result(
+    invocations: Sequence[MemoryInvocation], result: str | None
+) -> list[MemoryInvocation]:
+    """Hand each invocation of ONE tool call the part of the call's result that is its own.
+
+    One invocation owns the whole result (the join is exact). Several share one result, and
+    each acknowledgement line in it is matched to at most one WRITE invocation: first by key,
+    to the invocation that named it with ``--key``; then in stream order, to the unkeyed
+    invocations, and last to keyed invocations whose key the line does not state (a ``--json``
+    object without a ``key`` field). A write nothing acknowledges gets an empty result, which is
+    not an acceptance. Read invocations keep the whole result; nothing grades them on it."""
+    if result is None or len(invocations) <= 1:
+        return [replace(invocation, result=result) for invocation in invocations]
+    acks = _bd_acks(result)
+    claimed: set[int] = set()
+    owned: dict[int, str] = {}
+
+    def _claim(index: int, wanted: str | None) -> None:
+        for position, ack in enumerate(acks):
+            if position in claimed or (wanted is not None and ack.key != wanted):
+                continue
+            claimed.add(position)
+            owned[index] = ack.text
+            return
+
+    writes = [(i, inv) for i, inv in enumerate(invocations) if inv.is_write]
+    for index, invocation in writes:
+        if invocation.key:
+            _claim(index, invocation.key)
+    for index, invocation in writes:
+        if index not in owned:
+            _claim(index, "" if invocation.key else None)
+    return [
+        replace(invocation, result=owned.get(i, "") if invocation.is_write else result)
+        for i, invocation in enumerate(invocations)
+    ]
 
 
 def remember_was_accepted(result: str | None) -> bool:
@@ -1095,12 +1176,10 @@ def memory_invocations(calls: Iterable[ToolCall]) -> list[MemoryInvocation]:
     invocations: list[MemoryInvocation] = []
     for call in calls:
         if call.name in MEMORY_TOOL_NAMES:
-            # The call's tool_result rides on every invocation the command made. One Bash call
-            # chaining two bd invocations has one result; each acknowledgement line in it is
-            # still bd's own, so the join is exact for one invocation and conservative for two.
+            # One Bash call has one tool_result however many bd invocations it chained; each
+            # invocation gets the acknowledgement that is its own (``_attribute_result``).
             invocations.extend(
-                replace(invocation, result=call.result)
-                for invocation in memory_invocations_in_command(_command_of(call))
+                _attribute_result(memory_invocations_in_command(_command_of(call)), call.result)
             )
     return invocations
 

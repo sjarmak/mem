@@ -965,6 +965,104 @@ def test_memory_invocations_carry_each_calls_own_result() -> None:
     assert [inv.is_recall_by_result for inv in invocations] == [False, False, True]
 
 
+_REFUSAL = 'Error: "list" looks like a command, not something to remember'
+
+
+@pytest.mark.parametrize(
+    ("command", "result", "accepted", "recalled"),
+    [
+        # The review's shape: one refusal and one ack for two invocations in ONE Bash call.
+        # The whole-result join scored write_calls=2 here.
+        (
+            "bd remember list; bd remember 'ok' --key k",
+            f"{_REFUSAL}\nRemembered [k]: ok",
+            [False, True],
+            [False, False],
+        ),
+        # A keyed invocation takes the line carrying ITS key, not the first line.
+        (
+            "bd remember 'a' --key j && bd remember 'b' --key k",
+            "Remembered [k]: b",
+            [False, True],
+            [False, False],
+        ),
+        # Unkeyed invocations consume unmatched ack lines in stream order: one line, one write.
+        ("bd remember 'a'; bd remember 'b'", "Remembered [x]: a", [True, False], [False, False]),
+        # Both acknowledged: two lines, two writes.
+        (
+            "bd remember 'a' --key j; bd remember 'b' --key k",
+            "Remembered [j]: a\nUpdated [k]: b",
+            [True, True],
+            [False, False],
+        ),
+        # The recalled marker is attributed the same way and is never an acceptance.
+        (
+            "bd remember k; bd remember 'v' --key j",
+            '(recalled "k" -- a bare existing key READS)\nRemembered [j]: v',
+            [False, True],
+            [True, False],
+        ),
+        ("bd remember k; bd remember k", '(recalled "k" -- x)', [False, False], [True, False]),
+        # A refusal is never an ack: neither invocation stored anything.
+        (
+            "bd remember list; bd remember foo",
+            f"{_REFUSAL}\n{_REFUSAL}",
+            [False, False],
+            [False, False],
+        ),
+        # --json: one object per invocation, matched by key where the object carries one.
+        (
+            "bd remember 'a' --key j --json; bd remember 'b' --key k --json",
+            '{"action": "remembered", "key": "k"}',
+            [False, True],
+            [False, False],
+        ),
+    ],
+    ids=[
+        "refusal-then-ack",
+        "keyed-takes-its-own-line",
+        "unkeyed-stream-order",
+        "two-lines-two-writes",
+        "recalled-and-ack",
+        "recalled-once",
+        "two-refusals",
+        "json-keyed",
+    ],
+)
+def test_one_acknowledgement_line_acknowledges_at_most_one_invocation(
+    command: str, result: str, accepted: list[bool], recalled: list[bool]
+) -> None:
+    """Review F1: a Bash call chaining two bd invocations has ONE tool_result. Riding the whole
+    result on every invocation let one ``Remembered`` line acknowledge both, so a refused
+    ``bd remember list`` next to a real write scored as two writes."""
+    invocations = memory_invocations([_bash_call(command, result)])
+    assert [inv.is_accepted_write for inv in invocations] == accepted
+    assert [inv.is_recall_by_result for inv in invocations] == recalled
+
+
+def test_a_single_invocation_keeps_the_whole_result() -> None:
+    """The exact join for one invocation is unchanged: whatever bd printed is its result."""
+    (invocation,) = memory_invocations(
+        [_bash_call("bd remember 'ok' --key k", "noise\nRemembered [k]: ok")]
+    )
+    assert invocation.result == "noise\nRemembered [k]: ok"
+    truncated = memory_invocations([_bash_call("bd remember 'ok' --key k; bd recall k", None)])
+    assert [inv.result for inv in truncated] == [None, None]
+
+
+def test_score_leg_counts_one_write_for_a_refusal_and_an_ack_in_one_call() -> None:
+    from membench.runner.e1_grid import score_leg
+
+    call = _bash_call(
+        "bd remember list; bd remember 'ok' --key k", f"{_REFUSAL}\nRemembered [k]: ok"
+    )
+    assert score_leg([call], config_dir=None).write_calls == 1
+
+
+def _bash_call(command: str, result: str | None) -> ToolCall:
+    return ToolCall(name="Bash", arguments={"command": command}, result=result)
+
+
 # --------------------------------------------------------------------------- #
 # mem-zfm0m item 3: a Bash command that touches the pinned memory dir is a native access
 # --------------------------------------------------------------------------- #
