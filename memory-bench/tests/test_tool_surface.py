@@ -1154,8 +1154,6 @@ def test_a_bash_write_into_the_pinned_memory_dir_is_a_native_write(
         "echo x > /tmp/memory/MEMORY.md",
         # A relative path with no `cd` to anchor it names nothing the harness owns.
         "cat projects/-tmp/memory/MEMORY.md",
-        # A quote the shell itself would refuse attributes nothing rather than raising.
-        "cat 'unterminated {m}/MEMORY.md",
         # A redirect to /dev/null beside a non-memory read.
         "cat /etc/hostname 2>/dev/null",
     ],
@@ -1166,6 +1164,90 @@ def test_bash_commands_that_touch_no_pinned_memory_path_are_not_native_accesses(
     config, memory = _pinned(tmp_path)
     command = template.format(c=config, m=memory)
     assert native_memory_accesses([_bash(command)], config_dir=config) == []
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "rg retention {m}/MEMORY.md",
+        "awk '{{print}}' {m}/MEMORY.md",
+        "wc -l {m}/MEMORY.md",
+        "find {m}/MEMORY.md -newer /tmp/x",
+        "od -c {m}/MEMORY.md",
+        "dd if={m}/MEMORY.md bs=1 count=100",
+        "cut -c1-80 {m}/MEMORY.md",
+        "jq . {m}/MEMORY.md",
+        "stat {m}/MEMORY.md",
+        "command cat {m}/MEMORY.md",
+        "sudo -u me cat {m}/MEMORY.md",
+        "env FOO=bar cat {m}/MEMORY.md",
+        "time cat {m}/MEMORY.md",
+        "nice cat {m}/MEMORY.md",
+        "exec cat {m}/MEMORY.md",
+        "python3 -c \"print(open('{m}/MEMORY.md').read())\"",
+        "perl -ne 'print' {m}/MEMORY.md",
+        "node -e \"console.log(require('fs').readFileSync('{m}/MEMORY.md','utf8'))\"",
+        "bash -c 'cat {m}/MEMORY.md'",
+        "cat ${{CLAUDE_CONFIG_DIR:?}}/projects/-tmp/memory/MEMORY.md",
+        "cat ${{CLAUDE_CONFIG_DIR:-/nowhere}}/projects/-tmp/memory/MEMORY.md",
+        "cat --show-all {m}/MEMORY.md",
+        "some-tool --file={m}/MEMORY.md",
+    ],
+)
+def test_a_bash_read_is_decided_by_the_path_not_the_command_name(
+    tmp_path: Path, template: str
+) -> None:
+    """Review F2: the ACCESS is decided by any token resolving under the pinned memory path,
+    whatever the command word (the 7-name allowlist scored `rg`, `wc`, `jq`, an inline
+    interpreter, ... as zero); the command word and the redirect shape decide read vs write
+    only. Wrapper words are skipped; `${VAR:?}` and `${VAR:-x}` expand like `$VAR`."""
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses([_bash(template.format(m=memory))], config_dir=config)
+    assert [a.verb for a in accesses] == ["native_read"], template
+    assert Path(accesses[0].path) == memory / "MEMORY.md"
+    assert accesses[0].tokenizer_failed is False
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "sudo tee {m}/MEMORY.md",
+        "command cp /tmp/notes.md {m}/MEMORY.md",
+        "env -i sed -i 's/a/b/' {m}/MEMORY.md",
+        "printf x >> ${{CLAUDE_CONFIG_DIR:?}}/projects/-tmp/memory/MEMORY.md",
+    ],
+)
+def test_direction_is_read_from_the_unwrapped_command_word(tmp_path: Path, template: str) -> None:
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses([_bash(template.format(m=memory))], config_dir=config)
+    assert [a.verb for a in accesses] == ["native_write"], template
+    assert Path(accesses[0].path) == memory / "MEMORY.md"
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "cat 'unterminated {m}/MEMORY.md",
+        'grep "x {m}/MEMORY.md; echo done',
+    ],
+)
+def test_a_command_the_tokenizer_refuses_is_still_scanned_for_the_path(
+    tmp_path: Path, template: str
+) -> None:
+    """Review F2: an unterminated quote used to return [] — a miss on the exact kind of
+    command a model writes by accident. The path scan falls back to a whitespace split and the
+    access is flagged so a reader knows the tokenizer did not vouch for it."""
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses([_bash(template.format(m=memory))], config_dir=config)
+    assert [a.verb for a in accesses] == ["native_read"], template
+    assert Path(accesses[0].path) == memory / "MEMORY.md"
+    assert accesses[0].tokenizer_failed is True
+
+
+def test_a_pinned_path_is_reported_once_per_token(tmp_path: Path) -> None:
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses([_bash(f"cat {memory}/MEMORY.md")], config_dir=config)
+    assert len(accesses) == 1
 
 
 def test_one_bash_command_can_read_one_memory_file_and_write_another(tmp_path: Path) -> None:
@@ -1220,7 +1302,10 @@ def test_a_bash_call_and_a_read_tool_call_carry_their_own_call_index(tmp_path: P
         ("NATIVE_MEMORY_PATH_ARGS", ("file_path",)),
         ("NATIVE_MEMORY_SEGMENT", "memories"),
         ("NATIVE_MEMORY_BASH_TOOL", "Shell"),
-        ("NATIVE_MEMORY_BASH_READ_COMMANDS", ("cat",)),
+        ("NATIVE_MEMORY_BASH_SED_IN_PLACE_FLAGS", ("-i",)),
+        ("NATIVE_MEMORY_BASH_WRAPPERS", ("sudo",)),
+        ("NATIVE_MEMORY_BASH_SEGMENT_BREAKS", frozenset({";"})),
+        ("NATIVE_MEMORY_BASH_PATH_TERMINATORS", frozenset(" ")),
         ("NATIVE_MEMORY_BASH_WRITE_COMMANDS", ("tee",)),
         ("NATIVE_MEMORY_BASH_WRITE_REDIRECTS", (">",)),
         ("NATIVE_MEMORY_BASH_READ_REDIRECTS", ()),

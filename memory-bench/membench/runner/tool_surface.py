@@ -146,40 +146,47 @@ NATIVE_MEMORY_SEGMENT = "memory"
 
 # The THIRD door to the same files: a shell command (mem-zfm0m). `cat .../memory/MEMORY.md` and
 # `echo '- note' >> .../memory/MEMORY.md` reach the native memory exactly as `Read` and `Write`
-# do, and the argv recognizer above cannot see them because they carry no `bd` verb. The rules
-# here are the same kind as everywhere else in this module: the COMMAND WORD, its OPERANDS, the
-# shell's REDIRECT operators and a `cd` earlier in the same command, resolved against the pinned
-# config dir. Never the agent's prose about memory — a command that mentions "memory" in a
-# comment and touches no pinned path counts for nothing.
+# do, and the argv recognizer above cannot see them because they carry no `bd` verb.
+#
+# The ACCESS is decided by the PATH alone (review F2): any token of the command that resolves
+# under the pinned config dir's memory segment — as a whole word, embedded in a `key=value` or
+# an inline interpreter string, spelled through `$CLAUDE_CONFIG_DIR`, or relative to a `cd`
+# earlier in the same command — is an access, whatever the command word is. A recognizer that
+# allowlisted command names scored `rg`, `wc`, `jq`, `dd if=`, `python3 -c "open(...)"` as
+# nothing at all, and the miss ran in the direction of the finding it was meant to measure. The
+# command word and the redirect shape decide READ vs WRITE only. Never the agent's prose about
+# memory — a command that mentions "memory" in a comment and touches no pinned path counts for
+# nothing.
 NATIVE_MEMORY_BASH_TOOL = "Bash"
 
-# Commands whose path operands are READ. `sed` flips to a write under `-i`/`--in-place`.
-NATIVE_MEMORY_BASH_READ_COMMANDS: tuple[str, ...] = (
-    "cat",
-    "head",
-    "tail",
-    "sed",
-    "grep",
-    "less",
-    "more",
-)
-
 # Commands that WRITE their target: `tee` writes every path operand; `cp`/`mv` write the LAST
-# operand and read the others (a copy OUT of the memory dir is a read of it).
+# operand and read the others (a copy OUT of the memory dir is a read of it); `sed` writes under
+# `-i`/`--in-place`. Every other command word reads the paths it names.
 NATIVE_MEMORY_BASH_WRITE_COMMANDS: tuple[str, ...] = ("tee", "cp", "mv")
+NATIVE_MEMORY_BASH_SED_IN_PLACE_FLAGS: tuple[str, ...] = ("-i", "--in-place")
+
+# Wrapper words that precede the real command word without changing what it does to its paths.
+# Skipped, with their own option words (and `env`'s assignments), before the direction is read.
+NATIVE_MEMORY_BASH_WRAPPERS: tuple[str, ...] = ("command", "sudo", "env", "time", "nice", "exec")
 
 # Redirect operators, as `shlex` tokenises them with punctuation_chars. A write redirect's target
 # is written; `<`'s target is read. `<<`/`<<<` name a delimiter or a string, not a file.
 NATIVE_MEMORY_BASH_WRITE_REDIRECTS: tuple[str, ...] = (">", ">>", ">|", "&>", "&>>")
 NATIVE_MEMORY_BASH_READ_REDIRECTS: tuple[str, ...] = ("<",)
 
+# Where one shell command ends and the next begins, as `shlex` tokenises them.
+NATIVE_MEMORY_BASH_SEGMENT_BREAKS: frozenset[str] = frozenset(
+    {"|", "||", "|&", "&&", ";", ";;", "&", "(", ")"}
+)
+
+# What ends a path embedded inside a larger token (`open('/cfg/.../MEMORY.md').read()`,
+# `if=/cfg/.../MEMORY.md`): the scan starts at the pinned config dir's own spelling and runs to
+# the first of these.
+NATIVE_MEMORY_BASH_PATH_TERMINATORS: frozenset[str] = frozenset(" \t\n'\"`()<>|&;,")
+
 # The env var the surface pins the config dir under. Named once: `env()` sets it, the Bash
 # recognizer expands `$CLAUDE_CONFIG_DIR` in a path against it, and the fingerprint carries it.
 CONFIG_DIR_ENV = "CLAUDE_CONFIG_DIR"
-
-# Where one shell command ends and the next begins, as `shlex` tokenises them.
-_BASH_SEGMENT_BREAKS: frozenset[str] = frozenset({"|", "||", "|&", "&&", ";", ";;", "&", "(", ")"})
-_SED_IN_PLACE_FLAGS: tuple[str, ...] = ("-i", "--in-place")
 
 # Passed as `--disallowedTools` wherever this surface is handed to a real agent. NOT a sandbox:
 # see the module docstring's host-exposure paragraph for what it does not cover. It exists because
@@ -643,7 +650,10 @@ def surface_fingerprint(*, mcp_config: str | None = None) -> str:
                 "path_args": list(NATIVE_MEMORY_PATH_ARGS),
                 "segment": NATIVE_MEMORY_SEGMENT,
                 "bash_tool": NATIVE_MEMORY_BASH_TOOL,
-                "bash_read_commands": list(NATIVE_MEMORY_BASH_READ_COMMANDS),
+                "bash_sed_in_place_flags": list(NATIVE_MEMORY_BASH_SED_IN_PLACE_FLAGS),
+                "bash_wrappers": list(NATIVE_MEMORY_BASH_WRAPPERS),
+                "bash_segment_breaks": sorted(NATIVE_MEMORY_BASH_SEGMENT_BREAKS),
+                "bash_path_terminators": sorted(NATIVE_MEMORY_BASH_PATH_TERMINATORS),
                 "bash_write_commands": list(NATIVE_MEMORY_BASH_WRITE_COMMANDS),
                 "bash_write_redirects": list(NATIVE_MEMORY_BASH_WRITE_REDIRECTS),
                 "bash_read_redirects": list(NATIVE_MEMORY_BASH_READ_REDIRECTS),
@@ -1257,6 +1267,10 @@ class NativeMemoryAccess:
     # can touch several paths; the CALL count is over distinct indices, matching the
     # block-not-verb rule ``endogenous_memory_tool_calls`` counts bd under.
     call_index: int
+    # The shell tokenizer refused the command (an unterminated quote) and the path scan ran on
+    # a whitespace split instead. The access stands — the path is in the command — but a reader
+    # knows the direction and segment structure were not vouched for by the shell's own grammar.
+    tokenizer_failed: bool = False
 
     @property
     def is_read(self) -> bool:
@@ -1294,21 +1308,24 @@ def _is_native_memory_path(path: str, *, config_dir: Path) -> bool:
     return NATIVE_MEMORY_SEGMENT in relative.parts
 
 
-def _bash_tokens(command: str) -> list[str]:
-    """The shell's own tokenisation, with operators as their own tokens. An unterminated quote is
-    a command the shell would refuse too: nothing to attribute, so nothing is."""
+def _bash_tokens(command: str) -> tuple[list[str], bool]:
+    """The shell's own tokenisation, with operators as their own tokens, and whether it FAILED.
+
+    An unterminated quote is a command the shell would refuse too, but the path is still in the
+    text and a model writes such a command by accident: the scan falls back to a whitespace
+    split rather than attributing nothing, and the failure is flagged on every access found."""
     lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
     lexer.whitespace_split = True
     try:
-        return list(lexer)
+        return list(lexer), False
     except ValueError:
-        return []
+        return command.split(), True
 
 
 def _bash_segments(tokens: Sequence[str]) -> list[list[str]]:
     segments: list[list[str]] = [[]]
     for token in tokens:
-        if token in _BASH_SEGMENT_BREAKS:
+        if token in NATIVE_MEMORY_BASH_SEGMENT_BREAKS:
             segments.append([])
         else:
             segments[-1].append(token)
@@ -1321,10 +1338,13 @@ def _is_write_redirect(token: str) -> bool:
 
 @dataclass(frozen=True)
 class _BashPathUse:
-    """One path a shell segment names, and whether the segment writes it."""
+    """One token a shell segment may name a path in, whether the segment writes it, and whether
+    a RELATIVE spelling may be anchored on the segment's cwd (an operand or a redirect target
+    may; an option word never names a relative file)."""
 
-    path: str
+    token: str
     is_write: bool
+    anchorable: bool = True
 
 
 def _split_redirects(segment: Sequence[str]) -> tuple[list[str], list[_BashPathUse]]:
@@ -1341,66 +1361,140 @@ def _split_redirects(segment: Sequence[str]) -> tuple[list[str], list[_BashPathU
             continue
         words.append(token)
         i += 1
-    # Leading `VAR=value` assignments precede the command word.
-    while words and "=" in words[0] and not words[0].startswith("-"):
-        words.pop(0)
-    return words, uses
+    return _unwrapped(words), uses
+
+
+def _is_assignment(word: str) -> bool:
+    return "=" in word and not word.startswith("-")
+
+
+def _unwrapped(words: Sequence[str]) -> list[str]:
+    """``words`` with leading ``VAR=value`` assignments and wrapper words (each with its own
+    option words) removed, so the first word left is the command whose semantics decide the
+    direction."""
+    rest = list(words)
+    while rest and _is_assignment(rest[0]):
+        rest.pop(0)
+    while rest and PurePosixPath(rest[0]).name in NATIVE_MEMORY_BASH_WRAPPERS:
+        wrapper = PurePosixPath(rest.pop(0)).name
+        while rest and (rest[0].startswith("-") or (wrapper == "env" and _is_assignment(rest[0]))):
+            rest.pop(0)
+    return rest
 
 
 def _command_path_uses(words: Sequence[str]) -> list[_BashPathUse]:
-    """The paths a command word's OPERANDS name, with direction by the command's own semantics."""
-    if not words:
+    """Every word after the command word, with the direction the command word gives it. The
+    words are all candidates — the access is decided by the path, not by the name — and only
+    the direction is the command's business."""
+    if len(words) < 2:
         return []
     name = PurePosixPath(words[0]).name
-    flags = [w for w in words[1:] if w.startswith("-")]
-    operands = [w for w in words[1:] if not w.startswith("-")]
-    if name in NATIVE_MEMORY_BASH_READ_COMMANDS:
-        in_place = name == "sed" and any(
-            flag == f or flag.startswith(f + ("" if f == "-i" else "="))
-            for flag in flags
-            for f in _SED_IN_PLACE_FLAGS
-        )
-        return [_BashPathUse(operand, is_write=in_place) for operand in operands]
-    if name == "tee":
-        return [_BashPathUse(operand, is_write=True) for operand in operands]
-    if name in NATIVE_MEMORY_BASH_WRITE_COMMANDS and len(operands) >= 2:
-        return [
-            *(_BashPathUse(source, is_write=False) for source in operands[:-1]),
-            _BashPathUse(operands[-1], is_write=True),
-        ]
-    return []
+    rest = words[1:]
+    flags = [w for w in rest if w.startswith("-")]
+    operands = [w for w in rest if not w.startswith("-")]
+    in_place = name == "sed" and any(
+        flag == f or flag.startswith(f + ("" if f == "-i" else "="))
+        for flag in flags
+        for f in NATIVE_MEMORY_BASH_SED_IN_PLACE_FLAGS
+    )
+    written: set[str] = set()
+    if name == "tee" or in_place:
+        written = set(rest)
+    elif name in NATIVE_MEMORY_BASH_WRITE_COMMANDS and len(operands) >= 2:
+        written = {operands[-1]}
+    return [
+        _BashPathUse(word, is_write=word in written, anchorable=not word.startswith("-"))
+        for word in rest
+    ]
 
 
-def _expand_pinned(path: str, *, config_dir: Path, cwd: str) -> str:
-    """Substitute the ONE variable the harness itself pinned, and anchor a relative path on the
-    `cd` the same command made. No other expansion: `~` and `$HOME` name the operator's tree."""
-    for spelling in (f"${{{CONFIG_DIR_ENV}}}", f"${CONFIG_DIR_ENV}"):
-        if path == spelling or path.startswith(spelling + "/"):
-            path = str(config_dir) + path[len(spelling) :]
-            break
-    if cwd and not PurePosixPath(path).is_absolute():
-        return str(PurePosixPath(cwd) / path)
-    return path
+_CONFIG_DIR_SPELLINGS = re.compile(
+    r"\$\{" + CONFIG_DIR_ENV + r"(?::[?\-=+][^}]*)?\}|\$" + CONFIG_DIR_ENV + r"(?![A-Za-z0-9_])"
+)
+
+
+def _expand_pinned(text: str, *, config_dir: Path) -> str:
+    """Substitute the ONE variable the harness itself pinned, in every spelling the shell gives
+    it (`$VAR`, `${VAR}`, `${VAR:?msg}`, `${VAR:-default}`). No other expansion: `~` and `$HOME`
+    name the operator's tree."""
+    return _CONFIG_DIR_SPELLINGS.sub(lambda _: str(config_dir), text)
+
+
+def _path_shaped(token: str) -> bool:
+    """A relative token is anchored on a ``cd`` only when it carries path syntax (a separator
+    or a dot): after ``cd <memory dir>`` every operand of every command would otherwise resolve
+    under the memory dir, and ``echo x`` is not a read of ``memory/x``."""
+    return "/" in token or "." in token
+
+
+def _whole_token_path(use: _BashPathUse, *, config_dir: Path, cwd: str) -> str:
+    """The path the whole token names, or "" when the token is not a path on its own."""
+    expanded = _expand_pinned(use.token, config_dir=config_dir)
+    if PurePosixPath(expanded).is_absolute():
+        return expanded
+    if cwd and use.anchorable and _path_shaped(expanded):
+        return str(PurePosixPath(cwd) / expanded)
+    return ""
+
+
+def _embedded_runs(text: str, *, prefix: str) -> list[str]:
+    """Every run in ``text`` that starts at ``prefix`` and ends at a path terminator, once."""
+    runs: dict[str, None] = {}
+    position = text.find(prefix)
+    while position >= 0:
+        run_end = position
+        while run_end < len(text) and text[run_end] not in NATIVE_MEMORY_BASH_PATH_TERMINATORS:
+            run_end += 1
+        runs[text[position:run_end]] = None
+        position = text.find(prefix, run_end)
+    return list(runs)
+
+
+def _pinned_paths(
+    use: _BashPathUse, *, config_dir: Path, cwd: str, tokenizer_failed: bool
+) -> list[str]:
+    """Every path ``use.token`` names under the pinned config dir.
+
+    When the tokenizer vouched for the token and the whole token (anchored on ``cwd`` when
+    relative) is such a path, that is the one path it names. Otherwise every run inside the
+    token that starts at the config dir's own spelling and ends at a terminator is a candidate
+    (``if=<path>``, ``open('<path>')``, and every token of a whitespace-split fallback, whose
+    tokens still carry the quote and separator characters shlex would have consumed)."""
+    if not tokenizer_failed:
+        whole = _whole_token_path(use, config_dir=config_dir, cwd=cwd)
+        if whole and _is_native_memory_path(whole, config_dir=config_dir):
+            return [whole]
+    expanded = _expand_pinned(use.token, config_dir=config_dir)
+    return [
+        run
+        for run in _embedded_runs(expanded, prefix=str(config_dir))
+        if _is_native_memory_path(run, config_dir=config_dir)
+    ]
 
 
 def _bash_accesses(command: str, *, config_dir: Path, call_index: int) -> list[NativeMemoryAccess]:
+    tokens, tokenizer_failed = _bash_tokens(command)
     found: list[NativeMemoryAccess] = []
     cwd = ""
-    for segment in _bash_segments(_bash_tokens(command)):
+    for segment in _bash_segments(tokens):
         words, uses = _split_redirects(segment)
         if words and words[0] == "cd":
-            target = words[1] if len(words) > 1 else ""
-            cwd = _expand_pinned(target, config_dir=config_dir, cwd=cwd) if target else ""
+            target = _expand_pinned(words[1], config_dir=config_dir) if len(words) > 1 else ""
+            if target and cwd and not PurePosixPath(target).is_absolute():
+                target = str(PurePosixPath(cwd) / target)
+            cwd = target
             continue
         for use in [*_command_path_uses(words), *uses]:
-            path = _expand_pinned(use.path, config_dir=config_dir, cwd=cwd)
-            if _is_native_memory_path(path, config_dir=config_dir):
+            for path in _pinned_paths(
+                use, config_dir=config_dir, cwd=cwd, tokenizer_failed=tokenizer_failed
+            ):
                 found.append(
                     NativeMemoryAccess(
                         tool=NATIVE_MEMORY_BASH_TOOL,
                         path=path,
                         is_write=use.is_write,
                         call_index=call_index,
+                        tokenizer_failed=tokenizer_failed,
                     )
                 )
     return found
