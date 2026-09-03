@@ -68,7 +68,7 @@ from membench.runner.headless_agent import (
     tool_calls_from_stream,
 )
 from membench.runner.resume_cache import digest
-from membench.runner.sandbox import paid_sandbox
+from membench.runner.sandbox import assert_corpus_unreachable, paid_sandbox
 from membench.runner.tool_surface import (
     HOST_DENIED_TOOLS,
     MEMORY_ALLOWED_TOOLS,
@@ -822,6 +822,7 @@ def run_rung_cell(
     on_leg: Callable[[LegRecord], None] | None = None,
     streak: UnmeasuredStreak | None = None,
     expect_cli_version: str = "",
+    corpus_dir: Path | None = None,
 ) -> RungCell:
     """Run one ``(rung, task-variant)`` cell and count the memory calls the agent CHOSE to make.
 
@@ -829,6 +830,14 @@ def run_rung_cell(
     cwd wipe cannot reach, ``tool_surface.provision_memory_tool``). Nothing is seeded into the
     store and no memory is surfaced in the prompt: this measures DISPOSITION, so the arm must not
     hand the agent a reason to call that the rung did not give it.
+
+    The sandbox is minted EMPTY and stays that way: the task reaches the agent through the prompt
+    (``rung_step``), never through files, so nothing from the corpus is copied or linked into
+    the cwd. ``corpus_dir`` is the corpus the task was loaded from; when it is given, every leg
+    is checked BEFORE the spawn for a path into it in the child's env or cwd tree
+    (``sandbox.assert_corpus_unreachable``, mem-zfm0m item 7) and refused with nothing spent.
+    None means the caller has no corpus on disk (the harness-side fixtures that build tasks in
+    memory); the paid entry points require it.
 
     ``paid`` is false whenever a runner was substituted or ``dry_run`` is set — the same rule
     ``e1_smoke`` publishes rows under, and for the same reason: an injected runner's call rate is
@@ -903,12 +912,21 @@ def run_rung_cell(
             paid_sandbox(f"e1-{rung.lower()}-") as sandbox,
         ):
             surface = provision_memory_tool(Path(root), sandbox=sandbox)
+            # PWD pinned to the sandbox: the agent merges this over the operator's environment,
+            # whose PWD is the shell's cwd -- the checkout the corpus lives in. The kernel's cwd
+            # is the sandbox regardless; the variable is what a child shell reports and what
+            # this guard would otherwise refuse on every operator run.
+            env = {**surface.env(), "PWD": str(sandbox)}
+            if corpus_dir is not None:
+                assert_corpus_unreachable(
+                    env={**os.environ, **env}, cwd=sandbox, corpus_root=corpus_dir
+                )
             spawn = runner if runner is not None else (_silent_runner if dry_run else None)
             agent = HeadlessClaudeAgent(
                 model=model,
                 runner=spawn if spawn is not None else run_in_session,
                 cwd=str(sandbox),
-                env=surface.env(),
+                env=env,
                 memory_channel=CHANNEL,
                 disallowed_tools=HOST_DENIED_TOOLS,
                 timeout_s=timeout_s,
@@ -1270,6 +1288,7 @@ def staged_cells(
     tasks: Sequence[ToolReqRealAgentTask],
     *,
     model: str,
+    corpus_dir: Path,
     rungs: Sequence[str] = STAGED_RUNGS,
     n_tasks: int = STAGED_TASKS,
     repeats: int = STAGED_REPEATS,
@@ -1293,7 +1312,10 @@ def staged_cells(
 
     ONE ``UnmeasuredStreak`` spans the whole fire. A rig that fails every leg fails them across
     cell boundaries too, and a per-cell counter restarted at each cell never reaches its limit —
-    it buys the entire grid one unmeasured cell at a time."""
+    it buys the entire grid one unmeasured cell at a time.
+
+    ``corpus_dir`` is required, not defaulted: this is a paid path, and the corpus-reach guard
+    it feeds (``run_rung_cell``) must not be skippable by omission."""
     streak = UnmeasuredStreak()
     by_variant: dict[str, list[ToolReqRealAgentTask]] = {}
     for task in tasks:
@@ -1318,6 +1340,7 @@ def staged_cells(
                     on_leg=on_leg,
                     streak=streak,
                     expect_cli_version=expect_cli_version,
+                    corpus_dir=corpus_dir,
                 )
                 cells.append(cell)
                 if on_cell is not None:
@@ -1364,7 +1387,12 @@ def preflight_verdict(result: Mapping[str, Any]) -> tuple[str, str]:
 
 
 def preflight(
-    task: ToolReqRealAgentTask, *, model: str, rung: str = PREFLIGHT_RUNG, timeout_s: float = 600.0
+    task: ToolReqRealAgentTask,
+    *,
+    model: str,
+    corpus_dir: Path,
+    rung: str = PREFLIGHT_RUNG,
+    timeout_s: float = 600.0,
 ) -> dict[str, Any]:
     """ONE REAL ``claude -p`` cycle at the top rung, before any interior rung is paid for.
 
@@ -1373,7 +1401,13 @@ def preflight(
     reason — there is no free path through this function, and a caller that wants one is asking for
     a different (and worthless) measurement."""
     cell = run_rung_cell(
-        task, rung=rung, repeats=1, model=model, dry_run=False, timeout_s=timeout_s
+        task,
+        rung=rung,
+        repeats=1,
+        model=model,
+        dry_run=False,
+        timeout_s=timeout_s,
+        corpus_dir=corpus_dir,
     )
     return {
         "rung": rung,
@@ -1693,6 +1727,7 @@ def _fire_staged(args: argparse.Namespace, tasks: Sequence[ToolReqRealAgentTask]
             cells = staged_cells(
                 tasks,
                 model=args.model,
+                corpus_dir=args.corpus_dir,
                 n_tasks=int(plan["n_tasks"]),
                 repeats=repeats,
                 on_cell=_record,
@@ -1778,7 +1813,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.preflight:
         anchor = next((t for t in tasks if t.variant == VARIANT_NECESSARY), tasks[0])
-        result = preflight(anchor, model=args.model, rung=args.rung)
+        result = preflight(anchor, model=args.model, corpus_dir=args.corpus_dir, rung=args.rung)
         try:
             gated = preflight_gate(result)
         except PreflightHaltError as exc:

@@ -12,8 +12,12 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import replace
 from itertools import pairwise
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -57,6 +61,7 @@ from membench.runner.headless_agent import (
     serialize_stream,
     tool_result_event,
 )
+from membench.runner.sandbox import CorpusReachableError
 from membench.runner.toolreq_corpus import load_twin_corpus
 from membench.runner.toolreq_realagent import VARIANT_NECESSARY, VARIANT_UNNECESSARY
 from membench.spawn import with_child
@@ -751,6 +756,7 @@ def test_staged_cells_applies_the_task_cap_per_variant_not_across_the_list(tmp_p
     cells = e1_grid.staged_cells(
         tasks * 4,
         model=MODEL,
+        corpus_dir=tmp_path / "corpus",
         rungs=("R0",),
         n_tasks=2,
         repeats=1,
@@ -871,6 +877,111 @@ def test_a_timed_out_leg_is_scored_from_its_partial_stream_and_stays_unmeasured(
     assert "bd recall other" in truncated.stream
     assert "did not finish" in truncated.detail
     assert [leg.truncated for leg in legs] == [False, True, False]
+
+
+def test_a_leg_cannot_reach_the_corpus_from_its_env_or_its_cwd_tree(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """mem-zfm0m item 7. The corpus reaches the agent through the prompt and nowhere else. Read
+    off the spawn itself: no env value names the corpus root or anything under it, ``PWD`` is the
+    sandbox (the operator's shell, whose ``PWD`` is the checkout holding the corpus, must not leak
+    through the env merge), and the cwd tree holds nothing resolving into the corpus."""
+    _seqs, tasks = corpus_one(tmp_path)
+    corpus = (tmp_path / "corpus").resolve()
+    # The operator's shell: its cwd IS the tree the corpus lives in.
+    monkeypatch.setenv("PWD", str(tmp_path))
+    seen: list[dict[str, Any]] = []
+
+    def capturing(argv: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        cwd = Path(kwargs["cwd"])
+        env = dict(kwargs["env"])
+        seen.append(
+            {
+                "cwd": cwd,
+                "env": env,
+                "tree": [p.resolve() for p in cwd.rglob("*")],
+            }
+        )
+        return subprocess.CompletedProcess(list(argv), 0, serialize_stream([result_event()]), "")
+
+    e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=2,
+        model=MODEL,
+        dry_run=False,
+        runner=capturing,
+        corpus_dir=tmp_path / "corpus",
+    )
+    assert len(seen) == 2
+    for leg in seen:
+        assert leg["env"]["PWD"] == str(leg["cwd"])
+        for key, value in leg["env"].items():
+            for segment in value.split(os.pathsep):
+                if os.path.isabs(segment):
+                    resolved = Path(segment).resolve()
+                    assert resolved != corpus and corpus not in resolved.parents, (key, value)
+        assert not any(p == corpus or corpus in p.parents for p in leg["tree"])
+
+
+def test_a_leg_env_that_names_the_corpus_refuses_before_spending(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The guard runs BEFORE the spawn: a harness variable pointing at the corpus is a refusal
+    with nothing bought, not a leg to re-score."""
+    _seqs, tasks = corpus_one(tmp_path)
+    monkeypatch.setenv("MEMBENCH_CORPUS_HINT", str(tmp_path / "corpus" / "0"))
+    spawned: list[Any] = []
+
+    def counting(argv: Any, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        spawned.append(argv)
+        return subprocess.CompletedProcess(list(argv), 0, serialize_stream([result_event()]), "")
+
+    with pytest.raises(CorpusReachableError, match="MEMBENCH_CORPUS_HINT"):
+        e1_grid.run_rung_cell(
+            tasks[0],
+            rung="R4",
+            repeats=2,
+            model=MODEL,
+            dry_run=False,
+            runner=counting,
+            corpus_dir=tmp_path / "corpus",
+        )
+    assert spawned == []
+
+
+def test_a_sandbox_entry_pointing_into_the_corpus_refuses_before_spending(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A sandbox is minted empty; one that arrives with a link into the corpus (a future
+    "copy the task's files in" that symlinked instead) is refused with nothing bought."""
+    _seqs, tasks = corpus_one(tmp_path)
+    spawned: list[Any] = []
+
+    @contextmanager
+    def planted(prefix: str) -> Iterator[Path]:
+        with tempfile.TemporaryDirectory(prefix=prefix) as raw:
+            sandbox = Path(raw).resolve()
+            (sandbox / "fixtures").symlink_to(tmp_path / "corpus", target_is_directory=True)
+            yield sandbox
+
+    monkeypatch.setattr(e1_grid, "paid_sandbox", planted, raising=True)
+
+    def counting(argv: Any, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        spawned.append(argv)
+        return subprocess.CompletedProcess(list(argv), 0, serialize_stream([result_event()]), "")
+
+    with pytest.raises(CorpusReachableError, match="fixtures"):
+        e1_grid.run_rung_cell(
+            tasks[0],
+            rung="R4",
+            repeats=1,
+            model=MODEL,
+            dry_run=False,
+            runner=counting,
+            corpus_dir=tmp_path / "corpus",
+        )
+    assert spawned == []
 
 
 def test_the_paid_spawn_starts_the_child_in_its_own_session(
@@ -1131,6 +1242,7 @@ def test_staged_cells_keeps_landed_cells_and_buys_only_the_rest(tmp_path: Any) -
     cells = e1_grid.staged_cells(
         tasks,
         model=MODEL,
+        corpus_dir=tmp_path / "corpus",
         rungs=("R0", "R4"),
         n_tasks=1,
         repeats=1,
@@ -1283,7 +1395,13 @@ def test_grid_keys_names_exactly_the_cells_the_fire_buys(tmp_path: Any) -> None:
         return _calling_runner()(argv, **kwargs)
 
     cells = e1_grid.staged_cells(
-        tasks, model=MODEL, rungs=("R0", "R4"), n_tasks=1, repeats=1, runner=counting
+        tasks,
+        model=MODEL,
+        corpus_dir=tmp_path / "corpus",
+        rungs=("R0", "R4"),
+        n_tasks=1,
+        repeats=1,
+        runner=counting,
     )
     assert [cell.key for cell in cells] == keys
 
@@ -1863,7 +1981,14 @@ def test_the_unmeasured_streak_survives_a_cell_boundary(tmp_path: Any) -> None:
         raise HeadlessAgentError("claude -p failed (exit 1): transient")
 
     with pytest.raises(e1_grid.RigHaltError):
-        e1_grid.staged_cells(tasks, model=MODEL, n_tasks=1, repeats=2, runner=always_fails)
+        e1_grid.staged_cells(
+            tasks,
+            model=MODEL,
+            corpus_dir=tmp_path / "corpus",
+            n_tasks=1,
+            repeats=2,
+            runner=always_fails,
+        )
     # Two legs in the first cell, one in the second, then the halt: the streak crossed the
     # boundary. A per-cell counter would have spent every leg of every cell in the grid.
     assert attempts["n"] == 3
@@ -1941,7 +2066,7 @@ def test_the_preflight_row_carries_what_it_measured(tmp_path: Any, monkeypatch: 
         timed_out_runs=1,
     )
     monkeypatch.setattr(e1_grid, "run_rung_cell", lambda *a, **k: timed_out, raising=True)
-    row = e1_grid.preflight(tasks[0], model=MODEL)
+    row = e1_grid.preflight(tasks[0], model=MODEL, corpus_dir=tmp_path / "corpus")
     assert row["runs"] == 1
     assert row["measured_runs"] == 0
     assert row["timed_out_runs"] == 1
