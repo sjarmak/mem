@@ -240,7 +240,7 @@ CALL_TIMEOUT_S = 120.0
 # whose bd really executes. d9809a2 broke the segment on `$(` (via the `(`) but not on the
 # backtick form, so every backticked memory call was MISSED — the under-count direction, which is
 # the one that manufactures the near-zero null this series exists to rule out.
-_SEGMENT_BREAKS = frozenset(";&|()\n<>`")
+_GRAMMAR_SEGMENT_BREAKS = frozenset(";&|()\n<>`")
 
 # `{` and `}` break a segment only when they stand ALONE as shell grouping keywords.
 #
@@ -251,17 +251,17 @@ _SEGMENT_BREAKS = frozenset(";&|()\n<>`")
 # unconditional break actually did was fabricate segments the shell never makes, which is a
 # correctness problem in its own right — an attached brace is literal text — but not an under-count,
 # and this series' whole argument rests on being exact about which direction an instrument errs in.
-_BRACES = frozenset("{}")
+_GRAMMAR_BRACES = frozenset("{}")
 
 # `NAME=value` prefixes may precede the command word: `BEADS_ACTOR=bot bd recall k`.
-_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z_0-9]*=")
+_GRAMMAR_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z_0-9]*=")
 
 # Shell KEYWORDS that may stand in front of a segment's command word. `if bd recall k; then ...`
 # is a real memory call; d9809a2 read `if` as the command word and returned nothing. `for` /
 # `while` / `until` / `case` cover the HEADER segment (whose command word is a variable name, never
 # bd), and `do` / `then` / `else` / `elif` cover the BODY segments, which is where an agent's loop
 # actually calls bd.
-_SHELL_KEYWORDS: frozenset[str] = frozenset(
+_GRAMMAR_SHELL_KEYWORDS: frozenset[str] = frozenset(
     {
         "!",
         "case",
@@ -284,7 +284,7 @@ _SHELL_KEYWORDS: frozenset[str] = frozenset(
 # `sudo bd recall k`, `timeout 30 bd recall k`, `env bd recall k`. Each is skipped along with its
 # own option words, and the next non-option word must still be `bd` — `timeout 30 echo bd recall k`
 # stays a non-call because the scan stops at the first non-option word and it is `echo`.
-_TRANSPARENT_WRAPPERS: frozenset[str] = frozenset(
+_GRAMMAR_TRANSPARENT_WRAPPERS: frozenset[str] = frozenset(
     {
         "command",
         "doas",
@@ -305,23 +305,23 @@ _TRANSPARENT_WRAPPERS: frozenset[str] = frozenset(
 
 # Interpreters whose `-c` argument is a COMMAND STRING. `bash -c 'bd recall k'` executes bd, and
 # d9809a2 dropped the string silently. The string is re-tokenized and re-scanned.
-_SHELL_INTERPRETERS: frozenset[str] = frozenset(
+_GRAMMAR_SHELL_INTERPRETERS: frozenset[str] = frozenset(
     {"ash", "bash", "dash", "ksh", "script", "sh", "zsh"}
 )
 
 # `eval` joins its remaining words into one command string, so it is scanned with the whole tail
 # as that string.
-_EVAL = "eval"
+_GRAMMAR_EVAL = "eval"
 
 # A bare duration/count a transparent wrapper may take before the command word (`timeout 30`,
 # `timeout 1m`, `nice 10`).
-_DURATION = re.compile(r"^\d+(?:\.\d+)?[smhd]?$")
+_GRAMMAR_DURATION = re.compile(r"^\d+(?:\.\d+)?[smhd]?$")
 
 # Wrapper options that take a SPACE-separated value, so the value is not mistaken for the command
 # word: `sudo -u bot bd recall k`, `xargs -I ARG bd recall ARG`, `timeout -k 5 30 bd recall k`.
 # One flat set rather than per-wrapper tables: over-skipping a word can only ever cost a call whose
 # command word is itself the value of an option, which no real invocation has.
-_WRAPPER_VALUE_FLAGS: frozenset[str] = frozenset(
+_GRAMMAR_WRAPPER_VALUE_FLAGS: frozenset[str] = frozenset(
     {
         "--adjustment",
         "--kill-after",
@@ -353,10 +353,10 @@ _WRAPPER_VALUE_FLAGS: frozenset[str] = frozenset(
 
 # How deep a `-c` command string is followed. `bash -c "sh -c 'bd recall k'"` is already
 # pathological; the bound stops a crafted command from recursing without end.
-_MAX_NESTING = 4
+_GRAMMAR_MAX_NESTING = 4
 
 # Characters that terminate a heredoc DELIMITER word: `cat <<EOF` and `cat <<-'EOF' | tee f`.
-_DELIMITER_END = frozenset(" \t\n;&|()<>")
+_GRAMMAR_DELIMITER_END = frozenset(" \t\n;&|()<>")
 
 
 # The READ half of ``MEMORY_VERBS``, split out because E3b grades reads and writes as separate
@@ -627,40 +627,63 @@ class MemoryToolSurface:
         return surface_fingerprint(mcp_config=self.mcp_config)
 
 
+# Every module-level name under one of these prefixes is a constant a recognizer READS: the bd
+# argv grammar (`MEMORY_*`, `BD_*`, `ENUMERATE_*`, `_GRAMMAR_*`), the acknowledgement grammar
+# (`_BD_*`), the native recognizer (`NATIVE_MEMORY_*`, `CONFIG_DIR_*`), and the surface the agent
+# is handed (`HOST_*`, `STORE_*`). `recognizer_policy` enumerates them mechanically, so a constant
+# added under a prefix is in the fingerprint without anyone remembering to list it, and a constant
+# added OUTSIDE every prefix fails the test that names the few deliberate exceptions (timeouts, the
+# bd-binary env override), which do not change what a leg scores.
+_POLICY_PREFIXES: tuple[str, ...] = (
+    "MEMORY_",
+    "NATIVE_MEMORY_",
+    "BD_",
+    "_BD_",
+    "ENUMERATE_",
+    "CONFIG_DIR_",
+    "HOST_",
+    "STORE_",
+    "_GRAMMAR_",
+)
+
+
+def _policy_value(name: str, value: object) -> object:
+    """``value`` in the JSON shape `digest` hashes, deterministic for every kind a recognizer
+    constant takes. A kind not handled here is a loud error: hashing its repr would move the
+    fingerprint on an interpreter detail instead of on the policy."""
+    if isinstance(value, re.Pattern):
+        return {"pattern": value.pattern, "flags": int(value.flags)}
+    if isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, tuple | list):
+        return [_policy_value(name, item) for item in value]
+    if isinstance(value, frozenset | set):
+        return sorted(_policy_value(name, item) for item in value)  # type: ignore[type-var]
+    raise TypeError(
+        f"{name}: a {type(value).__name__} is not a recognizer policy value `_policy_value` can "
+        "hash; extend it, or name the constant outside the policy prefixes"
+    )
+
+
+def recognizer_policy() -> dict[str, object]:
+    """Every constant the recognizers read, by name, read at call time (a monkeypatched constant
+    moves the fingerprint). Enumerated from the module under `_POLICY_PREFIXES`, never listed by
+    hand."""
+    module = globals()
+    return {
+        name: _policy_value(name, module[name])
+        for name in sorted(module)
+        if name.startswith(_POLICY_PREFIXES)
+    }
+
+
 def surface_fingerprint(*, mcp_config: str | None = None) -> str:
     """The digest of the tool surface AS A POLICY. Moves when the command, the counted verbs, the
-    allowed or denied tools, the store scope or the MCP config path change; does NOT move when a
-    run mints its store in a different tempdir (see the module docstring)."""
-    return digest(
-        {
-            "command": MEMORY_COMMAND,
-            "verbs": list(MEMORY_VERBS),
-            "tool_names": list(MEMORY_TOOL_NAMES),
-            "allowed_tools": list(MEMORY_ALLOWED_TOOLS),
-            "denied_tools": list(HOST_DENIED_TOOLS),
-            "store_scope": STORE_SCOPE,
-            "store_prefix": STORE_PREFIX,
-            "mcp_config": mcp_config,
-            # The native recognizer decides what a leg SCORES (mem-zfm0m item 6): a resume
-            # against an artifact counted under a different recognizer would pool two
-            # measurements under one identity. Read at call time, so a changed constant moves it.
-            "native": {
-                "tool_names": list(NATIVE_MEMORY_TOOL_NAMES),
-                "write_tools": sorted(NATIVE_MEMORY_WRITE_TOOLS),
-                "path_args": list(NATIVE_MEMORY_PATH_ARGS),
-                "segment": NATIVE_MEMORY_SEGMENT,
-                "bash_tool": NATIVE_MEMORY_BASH_TOOL,
-                "bash_sed_in_place_flags": list(NATIVE_MEMORY_BASH_SED_IN_PLACE_FLAGS),
-                "bash_wrappers": list(NATIVE_MEMORY_BASH_WRAPPERS),
-                "bash_segment_breaks": sorted(NATIVE_MEMORY_BASH_SEGMENT_BREAKS),
-                "bash_path_terminators": sorted(NATIVE_MEMORY_BASH_PATH_TERMINATORS),
-                "bash_write_commands": list(NATIVE_MEMORY_BASH_WRITE_COMMANDS),
-                "bash_write_redirects": list(NATIVE_MEMORY_BASH_WRITE_REDIRECTS),
-                "bash_read_redirects": list(NATIVE_MEMORY_BASH_READ_REDIRECTS),
-                "config_dir_env": CONFIG_DIR_ENV,
-            },
-        }
-    )
+    allowed or denied tools, the store scope, the MCP config path, or any constant a recognizer
+    reads changes (the recognizers decide what a leg SCORES, mem-zfm0m item 6: a resume against an
+    artifact counted under a different recognizer would pool two measurements under one identity);
+    does NOT move when a run mints its store in a different tempdir (see the module docstring)."""
+    return digest({"mcp_config": mcp_config, "policy": recognizer_policy()})
 
 
 def settings_fingerprint(settings: object, *, mcp_config: str | None = None) -> str:
@@ -938,7 +961,7 @@ def command_segments(command: str) -> list[list[str]]:
             while i < n and command[i] in " \t":
                 i += 1
             delimiter: list[str] = []
-            while i < n and command[i] not in _DELIMITER_END:
+            while i < n and command[i] not in _GRAMMAR_DELIMITER_END:
                 if command[i] in ("'", '"'):
                     i += 1
                     continue
@@ -963,11 +986,11 @@ def command_segments(command: str) -> list[list[str]]:
                 if line_end == -1:
                     break
             continue
-        if ch in _BRACES:
+        if ch in _GRAMMAR_BRACES:
             # Grouping keyword only when it stands alone (`{ bd recall k; }`). Attached to a word
             # it is literal text — `xargs -I{} bd recall {}` must stay one segment.
             standalone = not has_word and (
-                i + 1 >= n or command[i + 1].isspace() or command[i + 1] in _SEGMENT_BREAKS
+                i + 1 >= n or command[i + 1].isspace() or command[i + 1] in _GRAMMAR_SEGMENT_BREAKS
             )
             if standalone:
                 end_segment()
@@ -977,7 +1000,7 @@ def command_segments(command: str) -> list[list[str]]:
             has_word = True
             i += 1
             continue
-        if ch in _SEGMENT_BREAKS:
+        if ch in _GRAMMAR_SEGMENT_BREAKS:
             end_segment()
             i += 1
             continue
@@ -1012,26 +1035,26 @@ def _skip_prefixes(words: Sequence[str], index: int) -> int:
     moved = True
     while moved and index < len(words):
         moved = False
-        while index < len(words) and _ASSIGNMENT.match(words[index]):
+        while index < len(words) and _GRAMMAR_ASSIGNMENT.match(words[index]):
             index += 1
             moved = True
-        if index < len(words) and words[index] in _SHELL_KEYWORDS:
+        if index < len(words) and words[index] in _GRAMMAR_SHELL_KEYWORDS:
             index += 1
             moved = True
             continue
-        if index < len(words) and PurePosixPath(words[index]).name in _TRANSPARENT_WRAPPERS:
+        if index < len(words) and PurePosixPath(words[index]).name in _GRAMMAR_TRANSPARENT_WRAPPERS:
             index += 1
             moved = True
             # The wrapper's own options, and a bare duration/count (`timeout 30`). The loop then
             # re-checks assignments and keywords, so `sudo env FOO=1 timeout 5 bd recall k` walks
             # all the way through.
             while index < len(words) and (
-                _is_option(words[index]) or _DURATION.match(words[index])
+                _is_option(words[index]) or _GRAMMAR_DURATION.match(words[index])
             ):
                 flag = words[index]
                 index += (
                     2
-                    if _is_option(flag) and "=" not in flag and flag in _WRAPPER_VALUE_FLAGS
+                    if _is_option(flag) and "=" not in flag and flag in _GRAMMAR_WRAPPER_VALUE_FLAGS
                     else 1
                 )
     return index
@@ -1044,10 +1067,10 @@ def _interpreter_command_string(words: Sequence[str], index: int) -> str | None:
     yields its whole joined tail. Returning the string rather than a verb keeps the recursion in
     one place."""
     name = PurePosixPath(words[index]).name
-    if name == _EVAL:
+    if name == _GRAMMAR_EVAL:
         tail = " ".join(words[index + 1 :])
         return tail or None
-    if name not in _SHELL_INTERPRETERS:
+    if name not in _GRAMMAR_SHELL_INTERPRETERS:
         return None
     cursor = index + 1
     while cursor < len(words):
@@ -1080,7 +1103,7 @@ def _invocations_of_segment(words: Sequence[str], depth: int = 0) -> list[Memory
     index = _skip_prefixes(words, 0)
     if index >= len(words):
         return []
-    if depth < _MAX_NESTING:
+    if depth < _GRAMMAR_MAX_NESTING:
         nested = _interpreter_command_string(words, index)
         if nested is not None:
             return [
@@ -1408,7 +1431,7 @@ def _command_path_uses(words: Sequence[str]) -> list[_BashPathUse]:
     ]
 
 
-_CONFIG_DIR_SPELLINGS = re.compile(
+_GRAMMAR_CONFIG_DIR_SPELLINGS = re.compile(
     r"\$\{" + CONFIG_DIR_ENV + r"(?::[?\-=+][^}]*)?\}|\$" + CONFIG_DIR_ENV + r"(?![A-Za-z0-9_])"
 )
 
@@ -1417,7 +1440,7 @@ def _expand_pinned(text: str, *, config_dir: Path) -> str:
     """Substitute the ONE variable the harness itself pinned, in every spelling the shell gives
     it (`$VAR`, `${VAR}`, `${VAR:?msg}`, `${VAR:-default}`). No other expansion: `~` and `$HOME`
     name the operator's tree."""
-    return _CONFIG_DIR_SPELLINGS.sub(lambda _: str(config_dir), text)
+    return _GRAMMAR_CONFIG_DIR_SPELLINGS.sub(lambda _: str(config_dir), text)
 
 
 def _path_shaped(token: str) -> bool:

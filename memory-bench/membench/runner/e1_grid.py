@@ -100,6 +100,7 @@ from membench.spawn import (
 
 __all__ = [
     "CHANNEL",
+    "EXECUTION_PROTOCOL_VERSION",
     "GATE_KEY",
     "HALT_NO_CALL",
     "HALT_UNMEASURED",
@@ -141,6 +142,15 @@ __all__ = [
 # The summary E1 emits. Named for the file the acceptance criterion reads with
 # `jq '.call_rate_gates' .../summary-e1.json`.
 SUMMARY_NAME = "summary-e1.json"
+
+# The version of everything that changes what a leg MEASURES without moving the tool surface, the
+# CLI binary or the corpus: the sandbox guard (`assert_corpus_unreachable` — what a leg is allowed
+# to reach), the PWD pin (the cwd the agent is spawned in and what a relative path resolves
+# against), the session runner (`run_in_session` — how a leg is spawned, timed out, killed and
+# drained), and the timeout scoring (what a leg that timed out contributes to its cell). It is one
+# number in the resume identity: bump it when any of those changes semantics, and a partial
+# artifact bought under the old number is refused rather than pooled with the new one.
+EXECUTION_PROTOCOL_VERSION = 1
 
 # The one trust framing E1 runs under. NOT a swept axis here — see the module docstring: a bare
 # arm surfaces no memory block, so both channels render the same bytes and a channel sweep would
@@ -731,6 +741,7 @@ def summarize(
         "channel": CHANNEL.value,
         "model": resolve_model(model) or "cli-default",
         "surface_fingerprint": surface_fingerprint(),
+        "execution_protocol": EXECUTION_PROTOCOL_VERSION,
         "cli_version": cli_version,
         "corpus_fingerprint": corpus,
         "dry_run": dry_run,
@@ -1484,10 +1495,10 @@ def resume_cells(
     """The cells a partial ``--out`` artifact contributes to a resumed fire.
 
     Admissible only when EVERY identity field matches the rig now running — the model, the tool
-    surface, the CLI binary, the corpus, and the repeat count. Each of them changes what a leg
-    measures, so a mismatch on any one would land two measurements in one grid and report them as
-    one. A blank field is a mismatch, not a pass: an artifact that cannot say what produced it
-    cannot be shown to have been produced by this.
+    surface, the execution protocol, the CLI binary, the corpus, and the repeat count. Each of
+    them changes what a leg measures, so a mismatch on any one would land two measurements in one
+    grid and report them as one. A blank field is a mismatch, not a pass: an artifact that cannot
+    say what produced it cannot be shown to have been produced by this.
 
     Rows are then filtered to what is admissible AS EVIDENCE:
 
@@ -1500,9 +1511,10 @@ def resume_cells(
       same artifact, and silently picking one publishes half of each
     * rows outside ``grid`` (when given) are a refusal for the same reason — a cell the current
       fire will not run cannot be pooled into its rates"""
-    want = {
+    want: dict[str, object] = {
         "model": resolve_model(model) or "cli-default",
         "surface_fingerprint": surface_fingerprint(),
+        "execution_protocol": EXECUTION_PROTOCOL_VERSION,
         "cli_version": cli_version,
         "corpus_fingerprint": corpus,
     }

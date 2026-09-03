@@ -21,6 +21,7 @@ The invariants that make a zero call-rate MEAN something:
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -71,6 +72,7 @@ from membench.runner.tool_surface import (
     native_memory_calls,
     partition_memory_calls,
     provision_memory_tool,
+    recognizer_policy,
     remember_was_a_recall,
     remember_was_accepted,
     resolve_bd_binary,
@@ -1294,31 +1296,67 @@ def test_a_bash_call_and_a_read_tool_call_carry_their_own_call_index(tmp_path: P
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize(
-    ("name", "mutated"),
-    [
-        ("NATIVE_MEMORY_TOOL_NAMES", ("Read", "Write", "Edit")),
-        ("NATIVE_MEMORY_WRITE_TOOLS", frozenset({"Write", "Edit"})),
-        ("NATIVE_MEMORY_PATH_ARGS", ("file_path",)),
-        ("NATIVE_MEMORY_SEGMENT", "memories"),
-        ("NATIVE_MEMORY_BASH_TOOL", "Shell"),
-        ("NATIVE_MEMORY_BASH_SED_IN_PLACE_FLAGS", ("-i",)),
-        ("NATIVE_MEMORY_BASH_WRAPPERS", ("sudo",)),
-        ("NATIVE_MEMORY_BASH_SEGMENT_BREAKS", frozenset({";"})),
-        ("NATIVE_MEMORY_BASH_PATH_TERMINATORS", frozenset(" ")),
-        ("NATIVE_MEMORY_BASH_WRITE_COMMANDS", ("tee",)),
-        ("NATIVE_MEMORY_BASH_WRITE_REDIRECTS", (">",)),
-        ("NATIVE_MEMORY_BASH_READ_REDIRECTS", ()),
-        ("CONFIG_DIR_ENV", "CLAUDE_HOME"),
-    ],
-)
-def test_surface_fingerprint_moves_when_a_native_recognizer_constant_changes(
-    monkeypatch: pytest.MonkeyPatch, name: str, mutated: object
+def _mutated(value: object) -> object:
+    """A value of the same kind that differs from ``value``, so the mutation is one the constant's
+    readers could see rather than a type change."""
+    if isinstance(value, re.Pattern):
+        return re.compile(value.pattern + "x", value.flags)
+    if isinstance(value, bool):
+        return not value
+    if isinstance(value, int | float):
+        return value + 1
+    if isinstance(value, str):
+        return value + "x"
+    if isinstance(value, tuple):
+        return (*value, "x")
+    if isinstance(value, frozenset):
+        return value | {"x"}
+    raise TypeError(f"no mutation for a {type(value).__name__}")
+
+
+@pytest.mark.parametrize("name", sorted(recognizer_policy()))
+def test_surface_fingerprint_moves_when_any_recognizer_constant_changes(
+    monkeypatch: pytest.MonkeyPatch, name: str
 ) -> None:
-    """mem-zfm0m item 6. The native recognizer decides what a leg SCORES, so it is surface
-    policy: a resume against an artifact counted under a different recognizer would pool two
-    measurements under one identity. Every constant it reads is folded in, read at call time."""
+    """mem-zfm0m item 6, review F4. The recognizers decide what a leg SCORES, so every constant
+    they read is surface policy: a resume against an artifact counted under a different recognizer
+    would pool two measurements under one identity. The list is ENUMERATED from the module (every
+    name under a stated prefix), not hand-written, so a constant added later cannot be left out."""
     before = surface_fingerprint()
-    assert getattr(tool_surface, name) != mutated
-    monkeypatch.setattr(tool_surface, name, mutated)
+    monkeypatch.setattr(tool_surface, name, _mutated(getattr(tool_surface, name)))
     assert surface_fingerprint() != before
+
+
+def test_the_recognizer_policy_covers_every_constant_the_recognizers_read() -> None:
+    """Review F4: the ack/recall grammar, the argv grammar and the native Bash recognizer's tables
+    are all in; the only module-level constants outside the policy are the ones that do not
+    change what a leg scores, named here so a new constant must be placed on one side or the
+    other."""
+    policy = set(recognizer_policy())
+    assert {
+        "_BD_REMEMBER_ACK",
+        "_BD_REMEMBER_RECALLED",
+        "_BD_REMEMBER_ACK_ACTIONS",
+        "_GRAMMAR_SEGMENT_BREAKS",
+        "_GRAMMAR_SHELL_KEYWORDS",
+        "_GRAMMAR_CONFIG_DIR_SPELLINGS",
+        "BD_KEY_FLAG",
+        "BD_VALUE_FLAGS",
+        "MEMORY_VERBS",
+        "MEMORY_COMMAND",
+        "HOST_DENIED_TOOLS",
+        "NATIVE_MEMORY_BASH_WRAPPERS",
+        "NATIVE_MEMORY_BASH_PATH_TERMINATORS",
+        "CONFIG_DIR_ENV",
+    } <= policy
+    uppercase = {
+        name
+        for name, value in vars(tool_surface).items()
+        if re.fullmatch(r"_?[A-Z][A-Z0-9_]*", name) and not callable(value)
+    }
+    assert uppercase - policy == {
+        "PROVISION_TIMEOUT_S",
+        "CALL_TIMEOUT_S",
+        "ENV_BD_BINARY",
+        "_POLICY_PREFIXES",
+    }

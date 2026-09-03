@@ -1333,6 +1333,28 @@ def test_resume_refuses_another_rigs_artifact_and_drops_unmeasured_cells() -> No
         resume_cells({**summary, "surface_fingerprint": "stale"}, model=MODEL, **IDENTITY)
 
 
+def test_resume_refuses_an_artifact_from_another_execution_protocol() -> None:
+    """Review F4. The sandbox guard, the PWD pin, the session runner and the timeout scoring all
+    change what a leg MEASURES without moving the tool surface, the binary or the corpus. They
+    are versioned as one number, and a partial artifact that does not carry THIS number (an
+    older one, or none at all) is refused as loudly as a stale fingerprint."""
+    summary = _identified([_cell("R0", VARIANT_NECESSARY, calling=2, runs=5, work_id="w-0")])
+    assert summary["execution_protocol"] == e1_grid.EXECUTION_PROTOCOL_VERSION
+    assert e1_grid.EXECUTION_PROTOCOL_VERSION >= 1
+    with pytest.raises(ResumeMismatchError, match="execution_protocol"):
+        resume_cells(
+            {**summary, "execution_protocol": e1_grid.EXECUTION_PROTOCOL_VERSION + 1},
+            model=MODEL,
+            **IDENTITY,
+        )
+    with pytest.raises(ResumeMismatchError, match="execution_protocol"):
+        resume_cells(
+            {k: v for k, v in summary.items() if k != "execution_protocol"},
+            model=MODEL,
+            **IDENTITY,
+        )
+
+
 def test_resume_refuses_every_identity_field_it_cannot_match() -> None:
     """Each field names something that changes what a leg MEASURES, so each one alone is enough to
     refuse: a different binary, a different corpus, a different number of legs per cell."""
