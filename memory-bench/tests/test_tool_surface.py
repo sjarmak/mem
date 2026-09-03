@@ -29,6 +29,7 @@ from pathlib import Path
 
 import pytest
 
+from membench.runner import tool_surface
 from membench.runner.agent import AgentStepResult
 from membench.runner.e1_smoke import (
     SMOKE_KEY,
@@ -56,6 +57,7 @@ from membench.runner.tool_surface import (
     NATIVE_MEMORY_TOOL_NAMES,
     MemoryInvocation,
     MemoryToolError,
+    NativeMemoryAccess,
     assert_store_outside,
     command_segments,
     endogenous_memory_tool_calls,
@@ -63,6 +65,7 @@ from membench.runner.tool_surface import (
     harness_call,
     memory_invocations,
     memory_invocations_in_command,
+    memory_reaching_calls,
     memory_verbs_in_command,
     native_memory_accesses,
     native_memory_calls,
@@ -960,3 +963,179 @@ def test_memory_invocations_carry_each_calls_own_result() -> None:
     invocations = memory_invocations(calls)
     assert [inv.is_accepted_write for inv in invocations] == [False, True, False]
     assert [inv.is_recall_by_result for inv in invocations] == [False, False, True]
+
+
+# --------------------------------------------------------------------------- #
+# mem-zfm0m item 3: a Bash command that touches the pinned memory dir is a native access
+# --------------------------------------------------------------------------- #
+
+
+def _bash(command: str) -> ToolCall:
+    return ToolCall(name="Bash", arguments={"command": command})
+
+
+def _pinned(tmp_path: Path) -> tuple[Path, Path]:
+    config = tmp_path / "config"
+    memory = config / "projects" / "-tmp" / "memory"
+    memory.mkdir(parents=True)
+    return config, memory
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "cat {m}/MEMORY.md",
+        "head -50 {m}/MEMORY.md",
+        "tail -n 20 {m}/MEMORY.md",
+        "sed -n 1,40p {m}/MEMORY.md",
+        "grep -n retention {m}/MEMORY.md",
+        "less {m}/MEMORY.md",
+        "more {m}/MEMORY.md",
+        "cat < {m}/MEMORY.md",
+        "cat {m}/MEMORY.md 2>&1 | head -20",
+        "cd /tmp && cat {m}/MEMORY.md",
+        "/bin/cat {m}/MEMORY.md",
+        'cat "$CLAUDE_CONFIG_DIR/projects/-tmp/memory/MEMORY.md"',
+        "cat ${{CLAUDE_CONFIG_DIR}}/projects/-tmp/memory/MEMORY.md",
+        "cd {m} && cat MEMORY.md",
+        "cp {m}/MEMORY.md /tmp/copy.md",
+    ],
+)
+def test_a_bash_read_of_the_pinned_memory_dir_is_a_native_read(
+    tmp_path: Path, template: str
+) -> None:
+    """The recognizer keys on the ARGV SHAPE and the pinned path — the command word, its operands,
+    a `<` redirect, the `$CLAUDE_CONFIG_DIR` the harness itself pinned, or a `cd` earlier in the
+    same command — never on prose about memory."""
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses([_bash(template.format(m=memory))], config_dir=config)
+    assert [a.verb for a in accesses] == ["native_read"], template
+    assert accesses[0].tool == "Bash"
+    assert Path(accesses[0].path) == memory / "MEMORY.md"
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "echo '- note' > {m}/MEMORY.md",
+        "echo '- note' >> {m}/MEMORY.md",
+        "printf 'x' >| {m}/MEMORY.md",
+        "printf 'x' &> {m}/MEMORY.md",
+        "printf 'x' | tee {m}/MEMORY.md",
+        "printf 'x' | tee -a {m}/MEMORY.md",
+        "cp /tmp/notes.md {m}/MEMORY.md",
+        "mv /tmp/notes.md {m}/MEMORY.md",
+        "sed -i 's/a/b/' {m}/MEMORY.md",
+        "sed -i.bak 's/a/b/' {m}/MEMORY.md",
+        "sed --in-place 's/a/b/' {m}/MEMORY.md",
+        "cd {m} && echo x >> MEMORY.md",
+        'echo x >> "$CLAUDE_CONFIG_DIR/projects/-tmp/memory/MEMORY.md"',
+    ],
+)
+def test_a_bash_write_into_the_pinned_memory_dir_is_a_native_write(
+    tmp_path: Path, template: str
+) -> None:
+    config, memory = _pinned(tmp_path)
+    accesses = native_memory_accesses([_bash(template.format(m=memory))], config_dir=config)
+    assert [a.verb for a in accesses] == ["native_write"], template
+    assert Path(accesses[0].path) == memory / "MEMORY.md"
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        # Prose about memory is not a path: the word appears and no pinned path is touched.
+        "echo 'let me check memory first'  # memory",
+        "grep -rn memory /tmp/notes",
+        "cat /tmp/notes/memory.md",
+        # Under the config dir but not under a `memory` segment.
+        "cat {c}/settings.json",
+        "echo x >> {c}/settings.json",
+        # A memory-looking path OUTSIDE the pinned config dir is the operator's, not the agent's.
+        "cat /home/someone/.claude/projects/-tmp/memory/MEMORY.md",
+        "echo x > /tmp/memory/MEMORY.md",
+        # A relative path with no `cd` to anchor it names nothing the harness owns.
+        "cat projects/-tmp/memory/MEMORY.md",
+        # A quote the shell itself would refuse attributes nothing rather than raising.
+        "cat 'unterminated {m}/MEMORY.md",
+        # A redirect to /dev/null beside a non-memory read.
+        "cat /etc/hostname 2>/dev/null",
+    ],
+)
+def test_bash_commands_that_touch_no_pinned_memory_path_are_not_native_accesses(
+    tmp_path: Path, template: str
+) -> None:
+    config, memory = _pinned(tmp_path)
+    command = template.format(c=config, m=memory)
+    assert native_memory_accesses([_bash(command)], config_dir=config) == []
+
+
+def test_one_bash_command_can_read_one_memory_file_and_write_another(tmp_path: Path) -> None:
+    """Direction is per PATH, so a copy from one memory file into another is one read and one
+    write — and it is ONE call, matching the block-not-verb rule for bd."""
+    config, memory = _pinned(tmp_path)
+    calls = [_bash(f"cat {memory}/MEMORY.md >> {memory}/topic.md")]
+    accesses = native_memory_accesses(calls, config_dir=config)
+    assert [(a.verb, Path(a.path).name) for a in accesses] == [
+        ("native_read", "MEMORY.md"),
+        ("native_write", "topic.md"),
+    ]
+    assert native_memory_calls(calls, config_dir=config) == 1
+
+
+def test_memory_reaching_calls_counts_a_call_once_across_both_affordances(tmp_path: Path) -> None:
+    """A Bash command that runs `bd recall` AND cats the native memory file reached memory ONCE
+    (one tool call), while a bd-only call and a native-only call each count on their own."""
+    config, memory = _pinned(tmp_path)
+    both = _bash(f"bd recall k; cat {memory}/MEMORY.md")
+    bd_only = _bash("bd recall k")
+    native_only = _read_call(str(memory / "MEMORY.md"))
+    neither = _bash("ls /tmp")
+    assert memory_reaching_calls([both], config_dir=config) == 1
+    assert memory_reaching_calls([both, bd_only, native_only, neither], config_dir=config) == 3
+    assert memory_reaching_calls([native_only], config_dir=None) == 0
+
+
+def test_a_bash_call_and_a_read_tool_call_carry_their_own_call_index(tmp_path: Path) -> None:
+    config, memory = _pinned(tmp_path)
+    calls = [
+        _bash("ls /tmp"),
+        _read_call(str(memory / "MEMORY.md")),
+        _bash(f"cat {memory}/MEMORY.md; cat {memory}/topic.md"),
+    ]
+    accesses = native_memory_accesses(calls, config_dir=config)
+    assert [a.call_index for a in accesses] == [1, 2, 2]
+    assert native_memory_calls(calls, config_dir=config) == 2
+    assert isinstance(accesses[0], NativeMemoryAccess)
+
+
+# --------------------------------------------------------------------------- #
+# mem-zfm0m item 6: the recognizer's constants are part of the surface policy
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    ("name", "mutated"),
+    [
+        ("NATIVE_MEMORY_TOOL_NAMES", ("Read", "Write", "Edit")),
+        ("NATIVE_MEMORY_WRITE_TOOLS", frozenset({"Write", "Edit"})),
+        ("NATIVE_MEMORY_PATH_ARGS", ("file_path",)),
+        ("NATIVE_MEMORY_SEGMENT", "memories"),
+        ("NATIVE_MEMORY_BASH_TOOL", "Shell"),
+        ("NATIVE_MEMORY_BASH_READ_COMMANDS", ("cat",)),
+        ("NATIVE_MEMORY_BASH_WRITE_COMMANDS", ("tee",)),
+        ("NATIVE_MEMORY_BASH_WRITE_REDIRECTS", (">",)),
+        ("NATIVE_MEMORY_BASH_READ_REDIRECTS", ()),
+        ("CONFIG_DIR_ENV", "CLAUDE_HOME"),
+    ],
+)
+def test_surface_fingerprint_moves_when_a_native_recognizer_constant_changes(
+    monkeypatch: pytest.MonkeyPatch, name: str, mutated: object
+) -> None:
+    """mem-zfm0m item 6. The native recognizer decides what a leg SCORES, so it is surface
+    policy: a resume against an artifact counted under a different recognizer would pool two
+    measurements under one identity. Every constant it reads is folded in, read at call time."""
+    before = surface_fingerprint()
+    assert getattr(tool_surface, name) != mutated
+    monkeypatch.setattr(tool_surface, name, mutated)
+    assert surface_fingerprint() != before

@@ -516,6 +516,85 @@ def test_a_native_memory_reach_counts_as_a_memory_call(tmp_path: Any) -> None:
     assert list(cell.verbs) == ["native_read"]
 
 
+def _bash_reach_runner(template: str) -> Any:
+    """mem-zfm0m item 3: the agent reaches the native memory file through a Bash command instead
+    of the Read/Write tools. ``template`` names the file as ``{m}``, resolved off the pinned
+    config dir the cell handed the runner."""
+
+    def runner(argv: Any, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        env = kwargs.get("env") or {}
+        config = env["CLAUDE_CONFIG_DIR"]  # type: ignore[index]
+        command = template.format(m=f"{config}/projects/-tmp/memory/MEMORY.md")
+        events = [assistant_event([("Bash", {"command": command})]), result_event()]
+        return subprocess.CompletedProcess(list(argv), 0, serialize_stream(events), "")
+
+    return runner
+
+
+@pytest.mark.parametrize(
+    ("template", "reads", "writes", "verbs"),
+    [
+        ("cat {m}", 1, 0, ["native_read"]),
+        ("head -40 {m} 2>/dev/null", 1, 0, ["native_read"]),
+        ("echo '- note' >> {m}", 0, 1, ["native_write"]),
+        ("printf x | tee -a {m}", 0, 1, ["native_write"]),
+    ],
+)
+def test_a_bash_reach_into_the_native_memory_file_counts_by_direction(
+    tmp_path: Any, template: str, reads: int, writes: int, verbs: list[str]
+) -> None:
+    """A `cat`/`head` of the pinned memory file is a read and a `>>`/`tee` into it is a write, by
+    path-prefix match on the config dir the harness pinned — the Bash door counts like the Read
+    tool door."""
+    _seqs, tasks = corpus_one(tmp_path)
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=_bash_reach_runner(template),
+    )
+    assert (cell.memory_calls, cell.calling_runs) == (1, 1)
+    assert (cell.read_calls, cell.write_calls) == (reads, writes)
+    assert list(cell.verbs) == verbs
+
+
+def test_a_bash_call_that_runs_bd_and_cats_the_memory_file_is_one_memory_call(
+    tmp_path: Any,
+) -> None:
+    """Memory calls are TOOL CALLS, not verbs: one Bash block that does `bd recall k` and then
+    cats MEMORY.md reached memory once, through two doors. Reads count per door."""
+    _seqs, tasks = corpus_one(tmp_path)
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=_bash_reach_runner("bd recall k; cat {m}"),
+    )
+    assert (cell.memory_calls, cell.calling_runs) == (1, 1)
+    assert (cell.read_calls, cell.write_calls) == (2, 0)
+    assert list(cell.verbs) == ["recall", "native_read"]
+
+
+def test_a_bash_command_that_mentions_memory_but_touches_no_pinned_path_is_not_a_call(
+    tmp_path: Any,
+) -> None:
+    _seqs, tasks = corpus_one(tmp_path)
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=_bash_reach_runner("echo 'checking memory first'  # memory: {m}"),
+    )
+    assert (cell.memory_calls, cell.calling_runs) == (0, 0)
+    assert (cell.read_calls, cell.write_calls) == (0, 0)
+
+
 def test_staged_cells_applies_the_task_cap_per_variant_not_across_the_list(tmp_path: Any) -> None:
     """The priced bill is len(rungs) * n_tasks * repeats * 2, so `n_tasks` is PER VARIANT. Capping
     the flat list instead would run half the grid and report a whole one."""

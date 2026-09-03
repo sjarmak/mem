@@ -71,9 +71,9 @@ from membench.runner.sandbox import paid_sandbox
 from membench.runner.tool_surface import (
     HOST_DENIED_TOOLS,
     MEMORY_ALLOWED_TOOLS,
-    endogenous_memory_tool_calls,
     endogenous_memory_verbs,
     memory_invocations,
+    memory_reaching_calls,
     native_memory_accesses,
     provision_memory_tool,
     surface_fingerprint,
@@ -663,7 +663,11 @@ def score_leg(calls: Sequence[ToolCall], *, config_dir: Path | None) -> LegScore
     never on the verb: the 160-leg fire's single "endogenous write" was a REFUSED
     ``bd remember list`` (mem-8fv4t). A ``bd remember <bare-existing-key>`` bd answered as a recall
     counts as the READ it was. The refused call is still a memory CALL — the agent reached for
-    the tool, and that choice is the ladder's endpoint — it just stored nothing."""
+    the tool, and that choice is the ladder's endpoint — it just stored nothing.
+
+    A memory CALL is a tool call that reached memory through EITHER door, counted once
+    (``memory_reaching_calls``): a Bash block that runs ``bd recall`` and then ``cat``s MEMORY.md
+    is one reach (mem-zfm0m item 3), while its reads and writes count per door."""
     native = native_memory_accesses(calls, config_dir=config_dir)
     invocations = memory_invocations(calls)
     reads = sum(1 for inv in invocations if inv.is_read or inv.is_recall_by_result) + sum(
@@ -673,7 +677,7 @@ def score_leg(calls: Sequence[ToolCall], *, config_dir: Path | None) -> LegScore
         1 for access in native if access.is_write
     )
     return LegScore(
-        memory_calls=endogenous_memory_tool_calls(calls) + len(native),
+        memory_calls=memory_reaching_calls(calls, config_dir=config_dir),
         read_calls=reads,
         write_calls=writes,
         verbs=(*endogenous_memory_verbs(calls), *(access.verb for access in native)),

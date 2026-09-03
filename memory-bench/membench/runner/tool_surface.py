@@ -90,6 +90,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -142,6 +143,43 @@ NATIVE_MEMORY_PATH_ARGS: tuple[str, ...] = ("file_path", "path", "notebook_path"
 # (`<config>/projects/<slug>/memory/...`). Required IN ADDITION to containment in the pinned
 # config dir, so reading `settings.json` is not scored as a memory call.
 NATIVE_MEMORY_SEGMENT = "memory"
+
+# The THIRD door to the same files: a shell command (mem-zfm0m). `cat .../memory/MEMORY.md` and
+# `echo '- note' >> .../memory/MEMORY.md` reach the native memory exactly as `Read` and `Write`
+# do, and the argv recognizer above cannot see them because they carry no `bd` verb. The rules
+# here are the same kind as everywhere else in this module: the COMMAND WORD, its OPERANDS, the
+# shell's REDIRECT operators and a `cd` earlier in the same command, resolved against the pinned
+# config dir. Never the agent's prose about memory — a command that mentions "memory" in a
+# comment and touches no pinned path counts for nothing.
+NATIVE_MEMORY_BASH_TOOL = "Bash"
+
+# Commands whose path operands are READ. `sed` flips to a write under `-i`/`--in-place`.
+NATIVE_MEMORY_BASH_READ_COMMANDS: tuple[str, ...] = (
+    "cat",
+    "head",
+    "tail",
+    "sed",
+    "grep",
+    "less",
+    "more",
+)
+
+# Commands that WRITE their target: `tee` writes every path operand; `cp`/`mv` write the LAST
+# operand and read the others (a copy OUT of the memory dir is a read of it).
+NATIVE_MEMORY_BASH_WRITE_COMMANDS: tuple[str, ...] = ("tee", "cp", "mv")
+
+# Redirect operators, as `shlex` tokenises them with punctuation_chars. A write redirect's target
+# is written; `<`'s target is read. `<<`/`<<<` name a delimiter or a string, not a file.
+NATIVE_MEMORY_BASH_WRITE_REDIRECTS: tuple[str, ...] = (">", ">>", ">|", "&>", "&>>")
+NATIVE_MEMORY_BASH_READ_REDIRECTS: tuple[str, ...] = ("<",)
+
+# The env var the surface pins the config dir under. Named once: `env()` sets it, the Bash
+# recognizer expands `$CLAUDE_CONFIG_DIR` in a path against it, and the fingerprint carries it.
+CONFIG_DIR_ENV = "CLAUDE_CONFIG_DIR"
+
+# Where one shell command ends and the next begins, as `shlex` tokenises them.
+_BASH_SEGMENT_BREAKS: frozenset[str] = frozenset({"|", "||", "|&", "&&", ";", ";;", "&", "(", ")"})
+_SED_IN_PLACE_FLAGS: tuple[str, ...] = ("-i", "--in-place")
 
 # Passed as `--disallowedTools` wherever this surface is handed to a real agent. NOT a sandbox:
 # see the module docstring's host-exposure paragraph for what it does not cover. It exists because
@@ -494,7 +532,7 @@ class MemoryToolSurface:
         harness owns and can see instead of somewhere it must not reach at all."""
         env = {"PATH": os.pathsep.join([str(self.bin_dir), os.environ.get("PATH", "")])}
         if self.config_dir is not None:
-            env["CLAUDE_CONFIG_DIR"] = str(self.config_dir)
+            env[CONFIG_DIR_ENV] = str(self.config_dir)
         return env
 
     def fingerprint(self) -> str:
@@ -515,6 +553,21 @@ def surface_fingerprint(*, mcp_config: str | None = None) -> str:
             "store_scope": STORE_SCOPE,
             "store_prefix": STORE_PREFIX,
             "mcp_config": mcp_config,
+            # The native recognizer decides what a leg SCORES (mem-zfm0m item 6): a resume
+            # against an artifact counted under a different recognizer would pool two
+            # measurements under one identity. Read at call time, so a changed constant moves it.
+            "native": {
+                "tool_names": list(NATIVE_MEMORY_TOOL_NAMES),
+                "write_tools": sorted(NATIVE_MEMORY_WRITE_TOOLS),
+                "path_args": list(NATIVE_MEMORY_PATH_ARGS),
+                "segment": NATIVE_MEMORY_SEGMENT,
+                "bash_tool": NATIVE_MEMORY_BASH_TOOL,
+                "bash_read_commands": list(NATIVE_MEMORY_BASH_READ_COMMANDS),
+                "bash_write_commands": list(NATIVE_MEMORY_BASH_WRITE_COMMANDS),
+                "bash_write_redirects": list(NATIVE_MEMORY_BASH_WRITE_REDIRECTS),
+                "bash_read_redirects": list(NATIVE_MEMORY_BASH_READ_REDIRECTS),
+                "config_dir_env": CONFIG_DIR_ENV,
+            },
         }
     )
 
@@ -1121,6 +1174,10 @@ class NativeMemoryAccess:
     tool: str
     path: str
     is_write: bool
+    # Which tool call (index into the leg's call list) this access came from. One Bash command
+    # can touch several paths; the CALL count is over distinct indices, matching the
+    # block-not-verb rule ``endogenous_memory_tool_calls`` counts bd under.
+    call_index: int
 
     @property
     def is_read(self) -> bool:
@@ -1158,10 +1215,123 @@ def _is_native_memory_path(path: str, *, config_dir: Path) -> bool:
     return NATIVE_MEMORY_SEGMENT in relative.parts
 
 
+def _bash_tokens(command: str) -> list[str]:
+    """The shell's own tokenisation, with operators as their own tokens. An unterminated quote is
+    a command the shell would refuse too: nothing to attribute, so nothing is."""
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    try:
+        return list(lexer)
+    except ValueError:
+        return []
+
+
+def _bash_segments(tokens: Sequence[str]) -> list[list[str]]:
+    segments: list[list[str]] = [[]]
+    for token in tokens:
+        if token in _BASH_SEGMENT_BREAKS:
+            segments.append([])
+        else:
+            segments[-1].append(token)
+    return [segment for segment in segments if segment]
+
+
+def _is_write_redirect(token: str) -> bool:
+    return token in NATIVE_MEMORY_BASH_WRITE_REDIRECTS
+
+
+@dataclass(frozen=True)
+class _BashPathUse:
+    """One path a shell segment names, and whether the segment writes it."""
+
+    path: str
+    is_write: bool
+
+
+def _split_redirects(segment: Sequence[str]) -> tuple[list[str], list[_BashPathUse]]:
+    """The segment's WORDS (command + operands) apart from its redirect targets."""
+    words: list[str] = []
+    uses: list[_BashPathUse] = []
+    i = 0
+    while i < len(segment):
+        token = segment[i]
+        if _is_write_redirect(token) or token in NATIVE_MEMORY_BASH_READ_REDIRECTS:
+            if i + 1 < len(segment):
+                uses.append(_BashPathUse(segment[i + 1], is_write=_is_write_redirect(token)))
+            i += 2
+            continue
+        words.append(token)
+        i += 1
+    # Leading `VAR=value` assignments precede the command word.
+    while words and "=" in words[0] and not words[0].startswith("-"):
+        words.pop(0)
+    return words, uses
+
+
+def _command_path_uses(words: Sequence[str]) -> list[_BashPathUse]:
+    """The paths a command word's OPERANDS name, with direction by the command's own semantics."""
+    if not words:
+        return []
+    name = PurePosixPath(words[0]).name
+    flags = [w for w in words[1:] if w.startswith("-")]
+    operands = [w for w in words[1:] if not w.startswith("-")]
+    if name in NATIVE_MEMORY_BASH_READ_COMMANDS:
+        in_place = name == "sed" and any(
+            flag == f or flag.startswith(f + ("" if f == "-i" else "="))
+            for flag in flags
+            for f in _SED_IN_PLACE_FLAGS
+        )
+        return [_BashPathUse(operand, is_write=in_place) for operand in operands]
+    if name == "tee":
+        return [_BashPathUse(operand, is_write=True) for operand in operands]
+    if name in NATIVE_MEMORY_BASH_WRITE_COMMANDS and len(operands) >= 2:
+        return [
+            *(_BashPathUse(source, is_write=False) for source in operands[:-1]),
+            _BashPathUse(operands[-1], is_write=True),
+        ]
+    return []
+
+
+def _expand_pinned(path: str, *, config_dir: Path, cwd: str) -> str:
+    """Substitute the ONE variable the harness itself pinned, and anchor a relative path on the
+    `cd` the same command made. No other expansion: `~` and `$HOME` name the operator's tree."""
+    for spelling in (f"${{{CONFIG_DIR_ENV}}}", f"${CONFIG_DIR_ENV}"):
+        if path == spelling or path.startswith(spelling + "/"):
+            path = str(config_dir) + path[len(spelling) :]
+            break
+    if cwd and not PurePosixPath(path).is_absolute():
+        return str(PurePosixPath(cwd) / path)
+    return path
+
+
+def _bash_accesses(command: str, *, config_dir: Path, call_index: int) -> list[NativeMemoryAccess]:
+    found: list[NativeMemoryAccess] = []
+    cwd = ""
+    for segment in _bash_segments(_bash_tokens(command)):
+        words, uses = _split_redirects(segment)
+        if words and words[0] == "cd":
+            target = words[1] if len(words) > 1 else ""
+            cwd = _expand_pinned(target, config_dir=config_dir, cwd=cwd) if target else ""
+            continue
+        for use in [*_command_path_uses(words), *uses]:
+            path = _expand_pinned(use.path, config_dir=config_dir, cwd=cwd)
+            if _is_native_memory_path(path, config_dir=config_dir):
+                found.append(
+                    NativeMemoryAccess(
+                        tool=NATIVE_MEMORY_BASH_TOOL,
+                        path=path,
+                        is_write=use.is_write,
+                        call_index=call_index,
+                    )
+                )
+    return found
+
+
 def native_memory_accesses(
     calls: Iterable[ToolCall], *, config_dir: Path | None
 ) -> list[NativeMemoryAccess]:
-    """Every native-memory access across ``calls``, in stream order.
+    """Every native-memory access across ``calls``, in stream order — through the file tools
+    (``Read``/``Write``/``Edit``) and through a shell command that names the pinned path.
 
     ``config_dir=None`` means the surface pins no config dir, so there is no path the harness owns
     and nothing can be attributed — it returns nothing rather than guessing, because a recognizer
@@ -1170,7 +1340,10 @@ def native_memory_accesses(
     if config_dir is None:
         return []
     found: list[NativeMemoryAccess] = []
-    for call in calls:
+    for index, call in enumerate(calls):
+        if call.name == NATIVE_MEMORY_BASH_TOOL:
+            found.extend(_bash_accesses(_command_of(call), config_dir=config_dir, call_index=index))
+            continue
         if call.name not in NATIVE_MEMORY_TOOL_NAMES:
             continue
         path = _path_of(call)
@@ -1178,7 +1351,10 @@ def native_memory_accesses(
             continue
         found.append(
             NativeMemoryAccess(
-                tool=call.name, path=path, is_write=call.name in NATIVE_MEMORY_WRITE_TOOLS
+                tool=call.name,
+                path=path,
+                is_write=call.name in NATIVE_MEMORY_WRITE_TOOLS,
+                call_index=index,
             )
         )
     return found
@@ -1186,6 +1362,17 @@ def native_memory_accesses(
 
 def native_memory_calls(calls: Iterable[ToolCall], *, config_dir: Path | None) -> int:
     """How many tool calls reached the native memory surface. Calls, not paths: one Edit is one
-    call, matching ``endogenous_memory_tool_calls``'s block-not-verb rule so the two are summable.
+    call and one Bash command touching two files is one call, matching
+    ``endogenous_memory_tool_calls``'s block-not-verb rule so the two are summable.
     """
-    return len(native_memory_accesses(calls, config_dir=config_dir))
+    return len({a.call_index for a in native_memory_accesses(calls, config_dir=config_dir)})
+
+
+def memory_reaching_calls(calls: Sequence[ToolCall], *, config_dir: Path | None) -> int:
+    """Tool calls that reached EITHER affordance — the bd shim or the native memory files — each
+    counted ONCE. A Bash command that runs `bd recall` and cats MEMORY.md is one reach, not two:
+    the ladder's endpoint is whether the agent reached for memory, and one tool call is one
+    decision to."""
+    native = {a.call_index for a in native_memory_accesses(calls, config_dir=config_dir)}
+    bd = {index for index, call in enumerate(calls) if _is_memory_call(call)}
+    return len(native | bd)
