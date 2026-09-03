@@ -11,7 +11,8 @@ identifier spellings, which is a question the seven cannot ask. See
 
 Offered on [gastownhall/beads#6051](https://github.com/gastownhall/beads/issues/6051)
 after the ordering gap was accepted on
-[gastownhall/bdp#8](https://github.com/gastownhall/bdp/issues/8). Bead:
+[gastownhall/bdp#8](https://github.com/gastownhall/bdp/issues/8), closed on
+2026-08-29 with ascending canonical URI as the baseline order. Bead:
 `mem-vn4ek`.
 
 ## Generated, not projected
@@ -51,15 +52,15 @@ rather than sitting in prose.
 
 ## The families
 
-| Family | Links | Max outdegree | Max indegree | Repeated endpoint tuples |
-|---|---:|---:|---:|---:|
-| `data-schema-dependency-dag` | 885 | 3 | 7 | 0 |
-| `distributed-system-clustered-components` | 275 | 11 | 1 | 0 |
-| `incident-runbook-sparse-authority` | 467 | 13 | 63 | 0 |
-| `migration-correction-temporal-chain` | 524 | 40 | 4 | 0 |
-| `platform-documentation-hub-spoke` | 416 | 380 | 6 | 0 |
-| `release-engineering-branching-playbooks` | 469 | 31 | 4 | 5 |
-| `security-policy-cross-team-network` | 862 | 6 | 15 | 0 |
+| Family                                    | Links | Max outdegree | Max indegree | Repeated endpoint tuples |
+| ----------------------------------------- | ----: | ------------: | -----------: | -----------------------: |
+| `data-schema-dependency-dag`              |   885 |             3 |            7 |                        0 |
+| `distributed-system-clustered-components` |   275 |            11 |            1 |                        0 |
+| `incident-runbook-sparse-authority`       |   467 |            13 |           63 |                        0 |
+| `migration-correction-temporal-chain`     |   524 |            40 |            4 |                        0 |
+| `platform-documentation-hub-spoke`        |   416 |           380 |            6 |                        0 |
+| `release-engineering-branching-playbooks` |   469 |            31 |            4 |                        5 |
+| `security-policy-cross-team-network`      |   862 |             6 |           15 |                        0 |
 
 Every family holds 500 Beads and declares the same 2 Types. What each shape is
 for:
@@ -144,15 +145,19 @@ revision.
 
 ## What ordering.json asserts
 
-bdp#8 as proposed has four clauses: an authority imposes a total order on the
-selected set, the order is deterministic for a given selected set, it is stable
-across the pages of one snapshot, and the authority documents the order it uses.
-The proposal **leaves the choice of order to the implementation**. An authority
-documenting "descending insertion ordinal" is conformant and returns none of the
-sequences in these files.
+bdp#8, closed on 2026-08-29, settles the baseline: an authority imposes a
+total order on the selected set, the order is deterministic for a given selected
+set, it is stable across the pages of one snapshot, and the baseline order is
+**ascending canonical URI of the record `id`, in code-unit order**, advertised
+in discovery and checked as a conformance row. Query-relevance ranking stays
+consumer policy and is not what these files record. The issue as first proposed
+leaves the choice of order to the implementation, under which an authority
+documenting "descending insertion ordinal" would have been conformant while
+returning none of the sequences in these files. The closed issue removes that
+latitude.
 
-So `ordering.json` records two things a harness may assert against any
-conformant authority, whichever order it documents:
+`ordering.json` records two things a harness may assert independently of the
+sequence itself:
 
 1. **Membership.** `selected_set` is the set the predicate selects.
    Concatenating every page of one snapshot must yield exactly these ids, each
@@ -161,17 +166,24 @@ conformant authority, whichever order it documents:
    200, with `spans_multiple_pages` saying whether a case forces a continuation
    at all.
 
-`selected_set` is written in ascending canonical URI of the record id so two
-runs can be diffed. That is a spelling choice. It is also the expected sequence,
-but only for an authority that documents `ascending-canonical-uri` as its order;
-asserting it against one that documents something else tests the harness
-author's preference rather than conformance. The order is carried under a name
-so that adopting, renaming or rejecting it is a one-line change rather than a
-silent reinterpretation of the data.
+`selected_set` is written in ascending canonical URI of the record id, in
+code-unit order, which is the baseline bdp#8 settled on and the order a
+conformant authority advertises in discovery. It is therefore also the expected
+sequence, and two runs can be diffed. The order is still carried under a name so
+that a revision to the baseline is a one-line change rather than a silent
+reinterpretation of the data.
 
 Earlier revisions recorded the first id of each page instead of the item counts.
 First ids pin the boundaries only under one particular order, which made the
 page arithmetic unusable against any other.
+
+Each recorded page is the content of one request against a quiescent store.
+[gastownhall/beads#6154](https://github.com/gastownhall/beads/pull/6154) fixes
+the P1 read contract as one role call, one transaction: a page is a snapshot of
+that single request, and cursor continuation across requests is deferred to a
+P2 architecture decision. These files make no claim about continuation across
+requests, and a continuation family is deliberately absent until that decision
+lands.
 
 The five selections, per family:
 
@@ -213,28 +225,31 @@ answer a question nobody asked. It is recorded under `collation_family` instead.
 The seven exist to vary graph shape, which means holding the identifier spelling
 fixed: their ids are **zero-padded, lowercase and ASCII** so that the order is
 never in question while the shape varies. That is the right choice for them and
-it is exactly what makes them blind here. "Ascending canonical URI" does not say
-whether the comparison decodes percent-escapes, normalizes Unicode, folds case or
-parses digit runs first. Over padded lowercase ASCII every one of those readings
-returns the same sequence, so a conformant-looking authority that sorts
-numerically, case-insensitively, or over unnormalized Unicode passes all seven.
+it is exactly what makes them blind here. "Ascending canonical URI" on its own
+does not say whether the comparison decodes percent-escapes, normalizes Unicode,
+folds case or parses digit runs first; bdp#8 settles it as code-unit order. Over
+padded lowercase ASCII every one of those readings returns the same sequence, so
+a conformant-looking authority that sorts numerically, case-insensitively, or
+over unnormalized Unicode passes all seven.
 
 This family is built out of the identifiers on which those readings diverge, so
 it names its comparison rule in the order id: `ascending-canonical-uri-codepoint`,
 ascending by Unicode code point over the canonical URI as written, with no
 decoding, normalization, folding or numeric parsing. Every identifier here is
-still ASCII, so a bytewise UTF-8 comparison and a codepoint comparison agree; the
+still ASCII, so a bytewise UTF-8 comparison, a code-unit comparison and a
+codepoint comparison agree, and this family's order is the advertised baseline
+under its own name; the
 non-ASCII lives inside percent-encoding, because a raw non-ASCII id would be an
 IRI rather than a URI.
 
 ### The four groups
 
-| Group | Ids | Separates |
-|---|---|---|
-| `unpadded-ordinals` | `1`, `2`, `9`, `10`, `11`, `100`, `101`, `2000` | `numeric-aware` |
-| `mixed-case` | `GAMMA`, `Gamma`, `gamma`, `Delta`, `delta`, `Zeta` | `casefold`, `punctuation-ignoring` |
-| `punctuation` | `alpha`, `alpha-two`, `alpha_one`, `alphathree` | `punctuation-ignoring` |
-| `normalization` | `cafe`, `caf%C3%A9`, `cafe%CC%81`, `r%C3%A9sume`, `re%CC%81sume` | `percent-decoding`, `nfc-normalizing` |
+| Group               | Ids                                                              | Separates                             |
+| ------------------- | ---------------------------------------------------------------- | ------------------------------------- |
+| `unpadded-ordinals` | `1`, `2`, `9`, `10`, `11`, `100`, `101`, `2000`                  | `numeric-aware`                       |
+| `mixed-case`        | `GAMMA`, `Gamma`, `gamma`, `Delta`, `delta`, `Zeta`              | `casefold`, `punctuation-ignoring`    |
+| `punctuation`       | `alpha`, `alpha-two`, `alpha_one`, `alphathree`                  | `punctuation-ignoring`                |
+| `normalization`     | `cafe`, `caf%C3%A9`, `cafe%CC%81`, `r%C3%A9sume`, `re%CC%81sume` | `percent-decoding`, `nfc-normalizing` |
 
 `caf%C3%A9` is U+00E9 percent-encoded; `cafe%CC%81` is `e` followed by the
 encoded combining acute accent. The two spell one label and decode to the same
@@ -270,11 +285,9 @@ finding:
   drops `cafe%CC%81` and `re%CC%81sume`. An authority sorting by the recorded
   order serves every set intact.
 - `numeric-aware` and `percent-decoding` are total orders, just different ones.
-  Under bdp#8 as proposed, which leaves the choice of order to the
-  implementation, an authority documenting either is conformant. They are
-  detectable only against an authority that documents this family's order, and
-  they are recorded so a harness can report which rule an authority appears to
-  have used rather than only that the sequence was wrong.
+  Neither is the baseline bdp#8 settled on. They are recorded so a harness can
+  report which rule an authority appears to have used rather than only that the
+  sequence was wrong.
 
 A rule that ties gets no recorded `sequence`. With a tie, what a sort returns
 depends on the order the items went in, so writing one down would publish this
@@ -294,7 +307,8 @@ but never served. An authority that re-sorts between pages, or restarts the
 snapshot on continuation, passes anyway. Determinism across two reads is
 likewise something a harness gets by reading twice rather than from anything in
 these files, and the documentation duty is a property of an authority rather
-than of a fixture. Tracked as `mem-31sg8`.
+than of a fixture. Tracked as `mem-31sg8`, and held until the beads#6154 P2
+continuation decision lands.
 
 **Collation, in the seven graph families.** Their Link ids are zero-padded to a
 fixed width and their Bead ids are lowercase hex, so codepoint order, numeric
