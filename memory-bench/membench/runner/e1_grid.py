@@ -821,6 +821,155 @@ def _silent_runner(argv: Sequence[str], **_kwargs: object) -> subprocess.Complet
     return subprocess.CompletedProcess(list(argv), 0, serialize_stream([result_event()]), "")
 
 
+def _bought(leg: int) -> str:
+    return (
+        f"{leg} leg(s) of this cell were already paid for; the cell is incomplete, so a resume "
+        "re-buys it and those legs are spent"
+    )
+
+
+LegStatus = Literal["ok", "timeout", "error"]
+
+
+@dataclass(frozen=True)
+class _LegOutcome:
+    """What ONE leg produced, before the cell decides what it means.
+
+    ``status`` is what the leg record will say; ``score`` and ``stream`` are the evidence (a
+    timed-out leg keeps what it wrote before the bound, ``truncated``); ``quota_refusal`` is
+    set when the account refused the call — an ``error`` the cell must HALT on rather than
+    tolerate, phrased as the reason the halt will quote."""
+
+    status: LegStatus
+    detail: str = ""
+    stream: str = ""
+    score: LegScore = _NO_SCORE
+    cli_version: str = ""
+    truncated: bool = False
+    quota_refusal: str = ""
+
+
+def _run_leg(
+    task: ToolReqRealAgentTask,
+    step: SequenceStep,
+    *,
+    rung: str,
+    leg: int,
+    model: str,
+    dry_run: bool,
+    timeout_s: float,
+    runner: Runner | None,
+    expect_cli_version: str,
+    corpus_dir: Path | None,
+) -> _LegOutcome:
+    """Spend one leg: mint the sandbox and the store, refuse a reachable corpus, run the agent,
+    and classify what came back. Nothing here counts toward the cell or writes a record; the
+    caller owns accumulation and emission. Raises ``RigHaltError`` when the leg ran on a CLI
+    other than the one the fire is pinned to."""
+    with (
+        tempfile.TemporaryDirectory(prefix="membench-memory-") as root,
+        paid_sandbox(f"e1-{rung.lower()}-") as sandbox,
+    ):
+        surface = provision_memory_tool(Path(root), sandbox=sandbox)
+        # PWD pinned to the sandbox: the agent merges this over the operator's environment,
+        # whose PWD is the shell's cwd -- the checkout the corpus lives in. The kernel's cwd
+        # is the sandbox regardless; the variable is what a child shell reports and what
+        # this guard would otherwise refuse on every operator run.
+        env = {**surface.env(), "PWD": str(sandbox)}
+        if corpus_dir is not None:
+            assert_corpus_unreachable(
+                env={**os.environ, **env}, cwd=sandbox, corpus_root=corpus_dir
+            )
+        spawn = runner if runner is not None else (_silent_runner if dry_run else None)
+        agent = HeadlessClaudeAgent(
+            model=model,
+            runner=spawn if spawn is not None else run_in_session,
+            cwd=str(sandbox),
+            env=env,
+            memory_channel=CHANNEL,
+            disallowed_tools=HOST_DENIED_TOOLS,
+            timeout_s=timeout_s,
+        )
+        ctx = StepContext(
+            trial_id=f"e1-{rung}-{task.result_id}-{leg}",
+            session_id=f"e1-{rung}-{task.result_id}",
+            step_id=step.step_id,
+        )
+        try:
+            result = agent.run_step(step, {}, ctx)
+        except HeadlessAgentError as exc:
+            # THREE outcomes, and which one this is decides whether the fire continues:
+            #   quota   -> the account is out, every further leg would fail the same way and
+            #              be billed as nothing. Halt CLEANLY so the caller persists what it
+            #              bought (the second staged fire lost cell 21's legs to this).
+            #   timeout -> the leg is UNMEASURED, not silent. Scoring it as a non-calling run
+            #              biases the rate toward the null this series exists to refuse.
+            #   other   -> also unmeasured, tolerated per leg, but a rig that is simply broken
+            #              fails EVERY leg, so a run of them halts rather than filling the
+            #              grid with "errors" that read as measured zeros.
+            if is_quota_halt(exc):
+                return _LegOutcome(
+                    status="error",
+                    detail=str(exc),
+                    quota_refusal=f"the account refused the call ({exc})",
+                )
+            timeout = spawn_timeout_of(exc)
+            if timeout is None:
+                return _LegOutcome(status="error", detail=str(exc))
+            # The bound cut the stream, it did not erase it. What the agent did BEFORE the
+            # bound is scored and persisted (the first fire threw it away and a leg that had
+            # reached for memory twice was persisted as an empty stream, mem-zfm0m); the leg
+            # still stays out of the cell, whose rates pool only streams that ended.
+            partial = timeout_partial_stdout(timeout)
+            return _LegOutcome(
+                status="timeout",
+                detail=str(exc),
+                stream=partial,
+                score=score_leg(tool_calls_from_stream(partial), config_dir=surface.config_dir),
+                truncated=True,
+            )
+        # EXIT 0 IS NOT PROOF THE RUN HAPPENED. `run_checked` raises on a non-zero exit and
+        # nothing else, so a CLI that reports its own failure on the result event and still
+        # exits 0 arrives HERE, with an empty tool-call list, and counts as a measured leg on
+        # which the agent chose not to touch memory. That is the one reading this series
+        # exists to refuse, and it would be manufactured by the rig rather than the agent.
+        # Same structural field the raising path is classified on, read one line earlier.
+        stream = result.raw_stream or ""
+        if stream_api_error_status(stream) in QUOTA_STATUSES:
+            return _LegOutcome(
+                status="error",
+                detail=f"exit 0 with api_error_status={stream_api_error_status(stream)}",
+                stream=stream,
+                quota_refusal=(
+                    f"the account refused the call (api_error_status="
+                    f"{stream_api_error_status(stream)}) and the CLI still exited 0"
+                ),
+            )
+        if stream_is_error(stream):
+            return _LegOutcome(
+                status="error",
+                detail="the CLI exited 0 but declared its own run failed (is_error)",
+            )
+        # The instrument that ran THIS leg, not the one a pre-flight probe asked about. A
+        # binary upgraded mid-sweep measures the later cells on a different tool surface and
+        # pools both into one rate; the resume identity catches it BETWEEN fires and cannot
+        # see it within one.
+        leg_cli = stream_cli_version(stream) or ""
+        if expect_cli_version and leg_cli and leg_cli != expect_cli_version:
+            raise RigHaltError(
+                f"{rung}/{task.variant}/{task.work_id} leg {leg}: this leg ran on CLI "
+                f"{leg_cli!r}, the fire is pinned to {expect_cli_version!r}. The binary "
+                f"changed mid-sweep, so the cells bought and the cells still to buy are not "
+                f"the same measurement. {_bought(leg)}."
+            )
+        return _LegOutcome(
+            status="ok",
+            stream=stream,
+            score=score_leg(result.tool_calls, config_dir=surface.config_dir),
+            cli_version=leg_cli,
+        )
+
+
 def run_rung_cell(
     task: ToolReqRealAgentTask,
     *,
@@ -869,28 +1018,14 @@ def run_rung_cell(
         if on_leg is not None:
             on_leg(record)
 
-    def _bought(leg: int) -> str:
-        return (
-            f"{leg} leg(s) of this cell were already paid for; the cell is incomplete, so a resume "
-            "re-buys it and those legs are spent"
-        )
-
-    def _unmeasured(
-        *,
-        leg: int,
-        status: str,
-        detail: str,
-        stream: str = "",
-        score: LegScore = _NO_SCORE,
-        truncated: bool = False,
-    ) -> None:
+    def _unmeasured(leg: int, outcome: _LegOutcome) -> None:
         """Record one leg the CELL cannot count, and halt if the rig has stopped working.
 
         A timed-out leg arrives with the stream it wrote before the bound and that stream's
         score: the evidence is kept whole and counted on the record, and the leg stays out of
         the cell, whose rates pool only legs whose streams ended."""
         print(
-            f"[{status}] {rung}/{task.variant}/{task.work_id} leg {leg}: {detail}",
+            f"[{outcome.status}] {rung}/{task.variant}/{task.work_id} leg {leg}: {outcome.detail}",
             file=sys.stderr,
             flush=True,
         )
@@ -900,148 +1035,61 @@ def run_rung_cell(
                 variant=task.variant,
                 work_id=task.work_id,
                 leg=leg,
-                status=status,
-                memory_calls=score.memory_calls,
-                read_calls=score.read_calls,
-                write_calls=score.write_calls,
-                verbs=score.verbs,
-                stream=redact_credentials(stream),
-                detail=detail,
-                truncated=truncated,
+                status=outcome.status,
+                memory_calls=outcome.score.memory_calls,
+                read_calls=outcome.score.read_calls,
+                write_calls=outcome.score.write_calls,
+                verbs=outcome.score.verbs,
+                stream=redact_credentials(outcome.stream),
+                detail=outcome.detail,
+                truncated=outcome.truncated,
             )
         )
         if streak.unmeasured():
             raise RigHaltError(
                 f"{rung}/{task.variant}/{task.work_id}: {streak.count} consecutive legs measured "
                 f"NOTHING — this is a broken rig, not a flaky one, and tolerating it leg by leg "
-                f"buys a grid of unmeasured cells. {_bought(leg)}. Last: {detail}"
+                f"buys a grid of unmeasured cells. {_bought(leg)}. Last: {outcome.detail}"
             )
 
     for i in range(repeats):
-        with (
-            tempfile.TemporaryDirectory(prefix="membench-memory-") as root,
-            paid_sandbox(f"e1-{rung.lower()}-") as sandbox,
-        ):
-            surface = provision_memory_tool(Path(root), sandbox=sandbox)
-            # PWD pinned to the sandbox: the agent merges this over the operator's environment,
-            # whose PWD is the shell's cwd -- the checkout the corpus lives in. The kernel's cwd
-            # is the sandbox regardless; the variable is what a child shell reports and what
-            # this guard would otherwise refuse on every operator run.
-            env = {**surface.env(), "PWD": str(sandbox)}
-            if corpus_dir is not None:
-                assert_corpus_unreachable(
-                    env={**os.environ, **env}, cwd=sandbox, corpus_root=corpus_dir
+        outcome = _run_leg(
+            task,
+            step,
+            rung=rung,
+            leg=i,
+            model=model,
+            dry_run=dry_run,
+            timeout_s=timeout_s,
+            runner=runner,
+            expect_cli_version=expect_cli_version,
+            corpus_dir=corpus_dir,
+        )
+        if outcome.quota_refusal:
+            _emit(
+                LegRecord(
+                    rung=rung,
+                    variant=task.variant,
+                    work_id=task.work_id,
+                    leg=i,
+                    status=outcome.status,
+                    detail=outcome.detail,
+                    stream=redact_credentials(outcome.stream),
                 )
-            spawn = runner if runner is not None else (_silent_runner if dry_run else None)
-            agent = HeadlessClaudeAgent(
-                model=model,
-                runner=spawn if spawn is not None else run_in_session,
-                cwd=str(sandbox),
-                env=env,
-                memory_channel=CHANNEL,
-                disallowed_tools=HOST_DENIED_TOOLS,
-                timeout_s=timeout_s,
             )
-            ctx = StepContext(
-                trial_id=f"e1-{rung}-{task.result_id}-{i}",
-                session_id=f"e1-{rung}-{task.result_id}",
-                step_id=step.step_id,
+            raise QuotaHaltError(
+                f"{rung}/{task.variant}/{task.work_id} leg {i}: {outcome.quota_refusal}. "
+                f"Nothing further can be measured; resume when it resets. {_bought(i)}."
             )
-            try:
-                result = agent.run_step(step, {}, ctx)
-            except HeadlessAgentError as exc:
-                # THREE outcomes, and which one this is decides whether the fire continues:
-                #   quota   -> the account is out, every further leg would fail the same way and
-                #              be billed as nothing. Halt CLEANLY so the caller persists what it
-                #              bought (the second staged fire lost cell 21's legs to this).
-                #   timeout -> the leg is UNMEASURED, not silent. Scoring it as a non-calling run
-                #              biases the rate toward the null this series exists to refuse.
-                #   other   -> also unmeasured, tolerated per leg, but a rig that is simply broken
-                #              fails EVERY leg, so a run of them halts rather than filling the
-                #              grid with "errors" that read as measured zeros.
-                if is_quota_halt(exc):
-                    _emit(
-                        LegRecord(
-                            rung=rung,
-                            variant=task.variant,
-                            work_id=task.work_id,
-                            leg=i,
-                            status="error",
-                            detail=str(exc),
-                        )
-                    )
-                    raise QuotaHaltError(
-                        f"{rung}/{task.variant}/{task.work_id} leg {i}: the account refused the "
-                        f"call ({exc}). Nothing further can be measured; resume when it resets. "
-                        f"{_bought(i)}."
-                    ) from exc
-                timeout = spawn_timeout_of(exc)
-                if timeout is None:
-                    errored += 1
-                    _unmeasured(leg=i, status="error", detail=str(exc))
-                    continue
-                # The bound cut the stream, it did not erase it. What the agent did BEFORE the
-                # bound is scored and persisted (the first fire threw it away and a leg that had
-                # reached for memory twice was persisted as an empty stream, mem-zfm0m); the leg
-                # still stays out of the cell, whose rates pool only streams that ended.
+        if outcome.status != "ok":
+            if outcome.status == "timeout":
                 timed_out += 1
-                partial = timeout_partial_stdout(timeout)
-                _unmeasured(
-                    leg=i,
-                    status="timeout",
-                    detail=str(exc),
-                    stream=partial,
-                    score=score_leg(tool_calls_from_stream(partial), config_dir=surface.config_dir),
-                    truncated=True,
-                )
-                continue
-            # EXIT 0 IS NOT PROOF THE RUN HAPPENED. `run_checked` raises on a non-zero exit and
-            # nothing else, so a CLI that reports its own failure on the result event and still
-            # exits 0 arrives HERE, with an empty tool-call list, and counts as a measured leg on
-            # which the agent chose not to touch memory. That is the one reading this series
-            # exists to refuse, and it would be manufactured by the rig rather than the agent.
-            # Same structural field the raising path is classified on, read one line earlier.
-            stream = result.raw_stream or ""
-            if stream_api_error_status(stream) in QUOTA_STATUSES:
-                _emit(
-                    LegRecord(
-                        rung=rung,
-                        variant=task.variant,
-                        work_id=task.work_id,
-                        leg=i,
-                        status="error",
-                        detail=f"exit 0 with api_error_status={stream_api_error_status(stream)}",
-                        stream=redact_credentials(stream),
-                    )
-                )
-                raise QuotaHaltError(
-                    f"{rung}/{task.variant}/{task.work_id} leg {i}: the account refused the call "
-                    f"(api_error_status={stream_api_error_status(stream)}) and the CLI still "
-                    f"exited 0. Nothing further can be measured; resume when it resets. "
-                    f"{_bought(i)}."
-                )
-            if stream_is_error(stream):
+            else:
                 errored += 1
-                _unmeasured(
-                    leg=i,
-                    status="error",
-                    detail="the CLI exited 0 but declared its own run failed (is_error)",
-                )
-                continue
-            # The instrument that ran THIS leg, not the one a pre-flight probe asked about. A
-            # binary upgraded mid-sweep measures the later cells on a different tool surface and
-            # pools both into one rate; the resume identity catches it BETWEEN fires and cannot
-            # see it within one.
-            leg_cli = stream_cli_version(stream) or ""
-            if expect_cli_version and leg_cli and leg_cli != expect_cli_version:
-                raise RigHaltError(
-                    f"{rung}/{task.variant}/{task.work_id} leg {i}: this leg ran on CLI "
-                    f"{leg_cli!r}, the fire is pinned to {expect_cli_version!r}. The binary "
-                    f"changed mid-sweep, so the cells bought and the cells still to buy are not "
-                    f"the same measurement. {_bought(i)}."
-                )
+            _unmeasured(i, outcome)
+            continue
         streak.measured()
-        score = score_leg(result.tool_calls, config_dir=surface.config_dir)
+        score = outcome.score
         total += score.memory_calls
         calling += 1 if score.memory_calls else 0
         reading += 1 if score.read_calls else 0
@@ -1060,8 +1108,8 @@ def run_rung_cell(
                 read_calls=score.read_calls,
                 write_calls=score.write_calls,
                 verbs=score.verbs,
-                stream=redact_credentials(result.raw_stream or ""),
-                cli_version=leg_cli,
+                stream=redact_credentials(outcome.stream),
+                cli_version=outcome.cli_version,
             )
         )
     return RungCell(
