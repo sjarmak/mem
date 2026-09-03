@@ -71,15 +71,29 @@ def _agent(**kwargs: Any) -> HeadlessClaudeAgent:
     return HeadlessClaudeAgent(model=MODEL, runner=noop_cli_runner, **kwargs)
 
 
-def _cell(rung: str, variant: str, *, calling: int, runs: int = 4, work_id: str = "") -> RungCell:
+def _cell(
+    rung: str,
+    variant: str,
+    *,
+    calling: int,
+    runs: int = 4,
+    work_id: str = "",
+    reading: int | None = None,
+    writing: int = 0,
+) -> RungCell:
+    """A cell whose calling legs each READ once unless ``reading`` says how many did, plus
+    ``writing`` legs that each made one acknowledged write."""
+    reading_runs = calling if reading is None else reading
     return RungCell(
         rung=rung,
         variant=variant,
         runs=runs,
         calling_runs=calling,
-        memory_calls=calling,
-        read_calls=calling,
-        write_calls=0,
+        memory_calls=max(calling, reading_runs + writing),
+        read_calls=reading_runs,
+        write_calls=writing,
+        reading_runs=reading_runs,
+        writing_runs=writing,
         paid=True,
         work_id=work_id,
     )
@@ -260,9 +274,18 @@ def test_primary_endpoint_is_the_margin_not_the_rate() -> None:
     summary = _summary_fixture()
     gates = summary["call_rate_gates"]
     assert gates["endpoint"] == "discrimination_margin"
+    assert gates["discrimination"]["counts"] == "reads"
     assert gates["discrimination"]["margin_by_rung"] == {
         "R0": pytest.approx(0.25),
         "R4": pytest.approx(0.75),
+    }
+    assert gates["discrimination"]["any_call_margin_by_rung"] == {
+        "R0": pytest.approx(0.25),
+        "R4": pytest.approx(0.75),
+    }
+    assert gates["write_rate"]["by_rung"] == {
+        VARIANT_NECESSARY: {"R0": 0.0, "R4": 0.0},
+        VARIANT_UNNECESSARY: {"R0": 0.0, "R4": 0.0},
     }
     assert gates["monotonicity"]["call_rate_by_rung"] == {
         "R0": pytest.approx(0.25),
@@ -272,6 +295,125 @@ def test_primary_endpoint_is_the_margin_not_the_rate() -> None:
     assert gates["guidance_token_adjustment"]["guidance_words_by_rung"]["R0"] == 0
     assert gates["tool_affordance_floor"]["rung"] == "R0"
     assert gates["tool_affordance_floor"]["call_rate"] == pytest.approx(0.25)
+
+
+def test_the_margin_is_on_reads_and_the_write_rate_is_reported_beside_it() -> None:
+    """mem-zfm0m item 2. Reads are what the twin corpus manipulates: the necessary half needs a
+    recall, the unnecessary half was handed the values. A WRITE is the same act in both halves
+    (the agent storing what it just learned), so writes on both sides dilute an any-call margin
+    toward zero without saying anything about discrimination. Fixture: reads on the necessary
+    half only, one accepted write per leg on BOTH halves. The any-call margin is 0.0 — every
+    leg on both halves called memory — while the read margin is 1.0, and the write rate is 1.0
+    on both halves, reported on its own."""
+    cells = [
+        _cell("R2", VARIANT_NECESSARY, calling=4, reading=4, writing=4),
+        _cell("R2", VARIANT_UNNECESSARY, calling=4, reading=0, writing=4),
+    ]
+    assert discrimination_margins(cells) == {"R2": pytest.approx(1.0)}
+    assert discrimination_margins(cells, kind="call") == {"R2": pytest.approx(0.0)}
+    assert pooled_rates(cells, VARIANT_NECESSARY, kind="read") == {"R2": pytest.approx(1.0)}
+    assert pooled_rates(cells, VARIANT_UNNECESSARY, kind="read") == {"R2": pytest.approx(0.0)}
+    assert pooled_rates(cells, VARIANT_UNNECESSARY, kind="write") == {"R2": pytest.approx(1.0)}
+    gates = call_rate_gates(cells)
+    assert gates["discrimination"]["margin_by_rung"] == {"R2": pytest.approx(1.0)}
+    assert gates["discrimination"]["any_call_margin_by_rung"] == {"R2": pytest.approx(0.0)}
+    assert gates["discrimination"]["read_rate_by_rung"] == {
+        VARIANT_NECESSARY: {"R2": pytest.approx(1.0)},
+        VARIANT_UNNECESSARY: {"R2": pytest.approx(0.0)},
+    }
+    assert gates["write_rate"]["by_rung"] == {
+        VARIANT_NECESSARY: {"R2": pytest.approx(1.0)},
+        VARIANT_UNNECESSARY: {"R2": pytest.approx(1.0)},
+    }
+    # The monotonicity gate and the affordance floor still read the ANY-call rate: they ask
+    # whether guidance recruits legs to the tool at all, not whether it discriminates.
+    assert gates["monotonicity"]["call_rate_by_rung"] == {"R2": pytest.approx(1.0)}
+
+
+def test_a_cell_cannot_claim_reads_without_a_leg_that_read() -> None:
+    """A read count with zero reading legs, or more reading legs than calling legs, is a cell
+    that could not have been counted from any stream."""
+    with pytest.raises(ValueError, match="read_calls 1 with reading_runs 0"):
+        RungCell(
+            rung="R1",
+            variant=VARIANT_NECESSARY,
+            runs=4,
+            calling_runs=2,
+            memory_calls=2,
+            read_calls=1,
+            write_calls=0,
+            reading_runs=0,
+            writing_runs=0,
+            paid=True,
+        )
+    with pytest.raises(ValueError, match="reading_runs 3 > calling_runs 2"):
+        RungCell(
+            rung="R1",
+            variant=VARIANT_NECESSARY,
+            runs=4,
+            calling_runs=2,
+            memory_calls=3,
+            read_calls=3,
+            write_calls=0,
+            reading_runs=3,
+            writing_runs=0,
+            paid=True,
+        )
+    with pytest.raises(ValueError, match="writing_runs 2 > write_calls 1"):
+        RungCell(
+            rung="R1",
+            variant=VARIANT_NECESSARY,
+            runs=4,
+            calling_runs=2,
+            memory_calls=3,
+            read_calls=0,
+            write_calls=1,
+            reading_runs=0,
+            writing_runs=2,
+            paid=True,
+        )
+
+
+def test_a_cell_row_without_per_direction_leg_counts_is_refused() -> None:
+    """An artifact written before the margin moved to reads has no ``reading_runs``; defaulting
+    it to zero would resume the cell with a fabricated read rate of 0.0."""
+    row = _cell("R0", VARIANT_NECESSARY, calling=2).row()
+    del row["metrics"]["reading_runs"]
+    with pytest.raises(ValueError, match="reading_runs"):
+        RungCell.from_row(row)
+
+
+def test_run_rung_cell_counts_reading_and_writing_legs_separately(tmp_path: Any) -> None:
+    """Through the cell path: the necessary half's legs recall AND store, the unnecessary half's
+    legs only store. Every leg on both halves is a calling leg; only the necessary half's read."""
+    corpus_one(tmp_path)
+    _, twins = load_twin_corpus(tmp_path / "corpus")
+    by_variant = {task.variant: task for task in twins}
+    necessary = e1_grid.run_rung_cell(
+        by_variant[VARIANT_NECESSARY],
+        rung="R2",
+        repeats=2,
+        model=MODEL,
+        dry_run=False,
+        runner=_calling_runner(("bd remember 'a value' --key k", REMEMBERED), "bd recall k"),
+    )
+    unnecessary = e1_grid.run_rung_cell(
+        by_variant[VARIANT_UNNECESSARY],
+        rung="R2",
+        repeats=2,
+        model=MODEL,
+        dry_run=False,
+        runner=_calling_runner(("bd remember 'a value' --key k", REMEMBERED)),
+    )
+    assert (necessary.reading_runs, necessary.writing_runs) == (2, 2)
+    assert (unnecessary.reading_runs, unnecessary.writing_runs) == (0, 2)
+    assert (necessary.calling_runs, unnecessary.calling_runs) == (2, 2)
+    cells = [necessary, unnecessary]
+    assert discrimination_margins(cells) == {"R2": pytest.approx(1.0)}
+    assert discrimination_margins(cells, kind="call") == {"R2": pytest.approx(0.0)}
+    assert necessary.metrics()["read_rate"] == pytest.approx(1.0)
+    assert necessary.metrics()["write_rate"] == pytest.approx(1.0)
+    assert unnecessary.metrics()["read_rate"] == pytest.approx(0.0)
 
 
 def test_margin_needs_both_halves() -> None:
@@ -292,6 +434,8 @@ def test_a_cell_cannot_claim_impossible_counts() -> None:
             memory_calls=1,
             read_calls=1,
             write_calls=0,
+            reading_runs=1,
+            writing_runs=0,
             paid=True,
         )
 
@@ -802,6 +946,8 @@ def test_a_cell_whose_every_leg_timed_out_has_no_rate() -> None:
         memory_calls=0,
         read_calls=0,
         write_calls=0,
+        reading_runs=0,
+        writing_runs=0,
         paid=True,
         work_id="w-dead",
         timed_out_runs=5,
@@ -819,6 +965,8 @@ def test_a_cell_whose_every_leg_timed_out_has_no_rate() -> None:
             memory_calls=0,
             read_calls=0,
             write_calls=0,
+            reading_runs=0,
+            writing_runs=0,
             paid=True,
             timed_out_runs=6,
         )
@@ -841,6 +989,8 @@ def test_rates_pool_over_task_cells_not_last_wins_and_not_a_mean() -> None:
             memory_calls=1,
             read_calls=1,
             write_calls=0,
+            reading_runs=1,
+            writing_runs=0,
             paid=True,
             timed_out_runs=3,
         ),
@@ -864,6 +1014,8 @@ def test_a_cell_row_round_trips_through_the_artifact() -> None:
         memory_calls=7,
         read_calls=5,
         write_calls=2,
+        reading_runs=2,
+        writing_runs=1,
         paid=True,
         verbs=("native_read", "recall"),
         work_id="w-7",
@@ -892,6 +1044,8 @@ def test_staged_cells_keeps_landed_cells_and_buys_only_the_rest(tmp_path: Any) -
         memory_calls=9,
         read_calls=9,
         write_calls=0,
+        reading_runs=1,
+        writing_runs=0,
         paid=True,
         work_id=tasks[0].work_id,
     )
@@ -943,6 +1097,8 @@ def _fake_cells(tasks: Any) -> Any:
             memory_calls=int(kwargs["repeats"]),
             read_calls=int(kwargs["repeats"]),
             write_calls=0,
+            reading_runs=int(kwargs["repeats"]),
+            writing_runs=0,
             paid=True,
             work_id=task.work_id,
         )
@@ -971,6 +1127,8 @@ def test_resume_refuses_another_rigs_artifact_and_drops_unmeasured_cells() -> No
         memory_calls=0,
         read_calls=0,
         write_calls=0,
+        reading_runs=0,
+        writing_runs=0,
         paid=True,
         work_id="w-dead",
         timed_out_runs=5,
@@ -1016,6 +1174,8 @@ def test_resume_drops_unpaid_and_unkeyed_rows_and_refuses_duplicates_and_strange
         memory_calls=5,
         read_calls=5,
         write_calls=0,
+        reading_runs=5,
+        writing_runs=0,
         paid=False,
         work_id="w-0",
     )
@@ -1693,6 +1853,8 @@ def test_the_preflight_row_carries_what_it_measured(tmp_path: Any, monkeypatch: 
         memory_calls=0,
         read_calls=0,
         write_calls=0,
+        reading_runs=0,
+        writing_runs=0,
         paid=True,
         work_id=tasks[0].work_id,
         timed_out_runs=1,
@@ -1930,6 +2092,8 @@ def test_a_resume_keeps_the_provenance_the_prior_artifact_carried(
         memory_calls=1,
         read_calls=1,
         write_calls=0,
+        reading_runs=1,
+        writing_runs=0,
         paid=True,
         work_id=tasks[0].work_id,
     )
@@ -1998,6 +2162,8 @@ def test_a_halt_leaves_out_holding_the_grid_the_resume_will_start_from(
             memory_calls=runs,
             read_calls=runs,
             write_calls=0,
+            reading_runs=runs,
+            writing_runs=0,
             paid=True,
             work_id=work_id,
         )

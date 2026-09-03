@@ -49,7 +49,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from itertools import pairwise
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from membench.runner.headless_agent import (
     ENV_OAUTH,
@@ -235,7 +235,13 @@ class RungCell:
     ``calling_runs`` is the numerator of the call rate (repeats with at least one memory call);
     ``memory_calls`` is the raw call total, which can exceed ``runs``. Both are kept: a rung that
     doubles the calls per run without moving the fraction of runs that call at all is a different
-    finding from one that recruits new runs."""
+    finding from one that recruits new runs.
+
+    ``reading_runs`` / ``writing_runs`` are the same split by DIRECTION: legs with at least one
+    read, legs with at least one acknowledged write. The discrimination margin is computed on
+    ``reading_runs`` (mem-zfm0m item 2) — a read is what the twin corpus manipulates, while a
+    write is the same act on both halves and only dilutes an any-call margin — and the write
+    rate is reported on its own."""
 
     rung: str
     variant: str
@@ -244,6 +250,8 @@ class RungCell:
     memory_calls: int
     read_calls: int
     write_calls: int
+    reading_runs: int
+    writing_runs: int
     paid: bool
     verbs: tuple[str, ...] = ()
     # Which task this cell ran. Cells are keyed ``(rung, variant, work_id)``: with eight tasks per
@@ -289,6 +297,24 @@ class RungCell:
                 f"{self.rung}/{self.variant}: {self.memory_calls} memory call(s) cannot cover "
                 f"{self.calling_runs} run(s) that each made at least one"
             )
+        for legs_name, calls_name, legs, calls in (
+            ("reading_runs", "read_calls", self.reading_runs, self.read_calls),
+            ("writing_runs", "write_calls", self.writing_runs, self.write_calls),
+        ):
+            if not 0 <= legs <= self.calling_runs:
+                raise ValueError(
+                    f"{self.rung}/{self.variant}: {legs_name} {legs} > calling_runs "
+                    f"{self.calling_runs}"
+                )
+            if legs > calls:
+                raise ValueError(
+                    f"{self.rung}/{self.variant}: {legs_name} {legs} > {calls_name} {calls}"
+                )
+            if calls and not legs:
+                raise ValueError(
+                    f"{self.rung}/{self.variant}: {calls_name} {calls} with {legs_name} 0 — "
+                    "a call was counted that no leg made"
+                )
 
     @property
     def measured_runs(self) -> int:
@@ -304,6 +330,20 @@ class RungCell:
             raise ValueError(f"{self.rung}/{self.variant}/{self.work_id}: no leg returned a stream")
         return self.calling_runs / self.measured_runs
 
+    @property
+    def read_rate(self) -> float:
+        """P(read | measured leg) — the numerator of the discrimination margin."""
+        if self.measured_runs == 0:
+            raise ValueError(f"{self.rung}/{self.variant}/{self.work_id}: no leg returned a stream")
+        return self.reading_runs / self.measured_runs
+
+    @property
+    def write_rate(self) -> float:
+        """P(acknowledged write | measured leg) — reported beside the margin, never inside it."""
+        if self.measured_runs == 0:
+            raise ValueError(f"{self.rung}/{self.variant}/{self.work_id}: no leg returned a stream")
+        return self.writing_runs / self.measured_runs
+
     def metrics(self) -> dict[str, Any]:
         """The per-cell metric vector. The GATE BLOCK IS NOT IN HERE, and that is load-bearing:
         a validity verdict flattened into a per-cell metric vector gets averaged with the cells it
@@ -315,10 +355,14 @@ class RungCell:
             "errored_runs": self.errored_runs,
             "measured_runs": self.measured_runs,
             "calling_runs": self.calling_runs,
+            "reading_runs": self.reading_runs,
+            "writing_runs": self.writing_runs,
             "memory_calls": self.memory_calls,
             "read_calls": self.read_calls,
             "write_calls": self.write_calls,
             "call_rate": self.call_rate if self.measured_runs else None,
+            "read_rate": self.read_rate if self.measured_runs else None,
+            "write_rate": self.write_rate if self.measured_runs else None,
             "paid": self.paid,
         }
 
@@ -340,6 +384,15 @@ class RungCell:
     def from_row(cls, row: Mapping[str, Any]) -> RungCell:
         """The inverse of ``row`` — what a resume reads back from a partial artifact."""
         m = row["metrics"]
+        for key in ("reading_runs", "writing_runs"):
+            # No default: a row written before the margin moved to reads (mem-zfm0m item 2)
+            # would otherwise resume with a fabricated read rate of 0.0.
+            if key not in m:
+                raise ValueError(
+                    f"cell {row.get('rung')}/{row.get('variant')}/{row.get('work_id')} carries "
+                    f"no {key!r}: it was counted before per-direction leg counts existed and "
+                    "cannot be pooled into a read margin"
+                )
         return cls(
             rung=str(row["rung"]),
             variant=str(row["variant"]),
@@ -348,6 +401,8 @@ class RungCell:
             memory_calls=int(m["memory_calls"]),
             read_calls=int(m["read_calls"]),
             write_calls=int(m["write_calls"]),
+            reading_runs=int(m["reading_runs"]),
+            writing_runs=int(m["writing_runs"]),
             paid=bool(m["paid"]),
             verbs=tuple(str(v) for v in row.get("verbs", ())),
             work_id=str(row.get("work_id", "")),
@@ -473,34 +528,64 @@ def monotonicity_violations(
     ]
 
 
-def pooled_rates(cells: Sequence[RungCell], variant: str) -> dict[str, float]:
-    """P(call | variant) per rung, POOLED over every task cell of that ``(rung, variant)``: the sum
-    of calling legs over the sum of measured legs.
+RateKind = Literal["call", "read", "write"]
+
+
+def _numerator(cell: RungCell, kind: RateKind) -> int:
+    if kind == "call":
+        return cell.calling_runs
+    if kind == "read":
+        return cell.reading_runs
+    if kind == "write":
+        return cell.writing_runs
+    raise ValueError(f"unknown rate kind {kind!r}")
+
+
+def pooled_rates(
+    cells: Sequence[RungCell], variant: str, *, kind: RateKind = "call"
+) -> dict[str, float]:
+    """P(``kind`` | variant) per rung, POOLED over every task cell of that ``(rung, variant)``:
+    the sum of legs that called / read / wrote over the sum of measured legs.
 
     Pooled, not last-wins and not a mean of per-cell rates. The first staged fire's gate block
     built ``{rung: cell.call_rate}`` over eight task cells per rung and reported the eighth
     cell's 4/5 as "R0 = 0.8" while the pooled rate was 16/40. A mean of cell rates would weight a
     cell with one measured leg the same as one with five. Rungs whose measured denominator is zero
     are omitted, never reported as 0.0."""
-    calling: dict[str, int] = {}
+    numerator: dict[str, int] = {}
     measured: dict[str, int] = {}
     for cell in cells:
         if cell.variant != variant:
             continue
-        calling[cell.rung] = calling.get(cell.rung, 0) + cell.calling_runs
+        numerator[cell.rung] = numerator.get(cell.rung, 0) + _numerator(cell, kind)
         measured[cell.rung] = measured.get(cell.rung, 0) + cell.measured_runs
-    return {rung: calling[rung] / measured[rung] for rung in measured if measured[rung]}
+    return {rung: numerator[rung] / measured[rung] for rung in measured if measured[rung]}
 
 
-def discrimination_margins(cells: Sequence[RungCell]) -> dict[str, float]:
-    """``d(rung) = P(call | necessary) - P(call | unnecessary)`` per rung — E1's PRIMARY endpoint.
+def discrimination_margins(
+    cells: Sequence[RungCell], *, kind: RateKind = "read"
+) -> dict[str, float]:
+    """``d(rung) = P(read | necessary) - P(read | unnecessary)`` per rung — E1's PRIMARY endpoint.
+
+    On READS by default (mem-zfm0m item 2). The twin corpus manipulates whether a recall is
+    needed; a write is the agent storing what it just learned, the same act on both halves, so
+    a write on each side moves both rates together and drags an any-call margin toward zero
+    without saying anything about discrimination. The any-call margin is still computed
+    (``kind="call"``) and reported beside the endpoint, never as it.
 
     Only rungs with BOTH halves measured get a margin: a margin computed against a missing half
-    would be a call rate wearing the endpoint's name, and E1's whole point is that those two
-    numbers can move independently."""
-    necessary = pooled_rates(cells, VARIANT_NECESSARY)
-    unnecessary = pooled_rates(cells, VARIANT_UNNECESSARY)
+    would be a rate wearing the endpoint's name, and E1's whole point is that those two numbers
+    can move independently."""
+    necessary = pooled_rates(cells, VARIANT_NECESSARY, kind=kind)
+    unnecessary = pooled_rates(cells, VARIANT_UNNECESSARY, kind=kind)
     return {rung: necessary[rung] - unnecessary[rung] for rung in necessary if rung in unnecessary}
+
+
+def _rates_by_variant(cells: Sequence[RungCell], kind: RateKind) -> dict[str, dict[str, float]]:
+    return {
+        VARIANT_NECESSARY: pooled_rates(cells, VARIANT_NECESSARY, kind=kind),
+        VARIANT_UNNECESSARY: pooled_rates(cells, VARIANT_UNNECESSARY, kind=kind),
+    }
 
 
 def call_rate_gates(cells: Sequence[RungCell], *, tolerance: float = 0.0) -> dict[str, Any]:
@@ -537,10 +622,23 @@ def call_rate_gates(cells: Sequence[RungCell], *, tolerance: float = 0.0) -> dic
         "discrimination": {
             # The PRIMARY endpoint, reported beside the raw rate precisely so a rate lift with a
             # flat margin cannot be read as the ladder working.
+            "counts": "reads",
             "margin_by_rung": margins,
+            "read_rate_by_rung": _rates_by_variant(cells, "read"),
+            "any_call_margin_by_rung": discrimination_margins(cells, kind="call"),
             "note": (
-                "d(rung) = P(call | necessary) - P(call | unnecessary). A rung that lifts the raw "
-                "call rate while d stays flat bought nothing."
+                "d(rung) = P(read | necessary) - P(read | unnecessary). A rung that lifts the raw "
+                "call rate while d stays flat bought nothing. Writes are excluded from d: the "
+                "agent storing what it learned is the same act on both halves, so it moves both "
+                "rates together (any_call_margin_by_rung shows the diluted number)."
+            ),
+        },
+        "write_rate": {
+            "by_rung": _rates_by_variant(cells, "write"),
+            "note": (
+                "P(acknowledged write | measured leg) per half, REPORTED beside the margin and "
+                "never inside it. A write counts only on bd's acknowledgement or a native "
+                "memory-file write (mem-8fv4t)."
             ),
         },
         "guidance_token_adjustment": {
@@ -718,6 +816,8 @@ def run_rung_cell(
     ``e1_smoke`` publishes rows under, and for the same reason: an injected runner's call rate is
     the fixture's, not an agent's."""
     calling = 0
+    reading = 0
+    writing = 0
     total = 0
     reads = 0
     writes = 0
@@ -867,6 +967,8 @@ def run_rung_cell(
         score = score_leg(result.tool_calls, config_dir=surface.config_dir)
         total += score.memory_calls
         calling += 1 if score.memory_calls else 0
+        reading += 1 if score.read_calls else 0
+        writing += 1 if score.write_calls else 0
         reads += score.read_calls
         writes += score.write_calls
         verbs.extend(score.verbs)
@@ -893,6 +995,8 @@ def run_rung_cell(
         memory_calls=total,
         read_calls=reads,
         write_calls=writes,
+        reading_runs=reading,
+        writing_runs=writing,
         paid=not dry_run and runner is None,
         verbs=tuple(verbs),
         work_id=task.work_id,
