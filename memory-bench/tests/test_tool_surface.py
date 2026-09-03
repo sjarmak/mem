@@ -1443,6 +1443,43 @@ def test_surface_fingerprint_moves_when_any_recognizer_constant_changes(
     assert surface_fingerprint() != before
 
 
+def test_the_recognizer_implementation_version_is_policy() -> None:
+    """Review G5: the shape rule and the rest of the recognizer's logic live in code, outside
+    any constant, so a version number stands in for them in the fingerprint. It is an int, in
+    the policy, and at least 2 (G1-G3 changed the logic after the version-1 recognizer)."""
+    version = tool_surface.RECOGNIZER_IMPLEMENTATION_VERSION
+    assert isinstance(version, int) and version >= 2
+    assert recognizer_policy()["RECOGNIZER_IMPLEMENTATION_VERSION"] == version
+
+
+def test_the_recognizers_read_their_command_names_from_the_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review G5: `cd`, `sed` and the assignment-taking wrapper were literals in the matcher,
+    fingerprinted by nothing. Each is a policy constant the matcher READS: renaming it in the
+    policy renames what the matcher recognizes."""
+    config, memory = _pinned(tmp_path)
+
+    def verbs(command: str) -> list[tuple[str, str]]:
+        accesses = native_memory_accesses([_bash(command)], config_dir=config)
+        return [(a.verb, Path(a.path).name) for a in accesses]
+
+    assert verbs(f"cd {memory} && cat MEMORY.md") == [("native_read", "MEMORY.md")]
+    monkeypatch.setattr(tool_surface, "NATIVE_MEMORY_BASH_CD", "chdir")
+    assert verbs(f"chdir {memory} && cat MEMORY.md") == [("native_read", "MEMORY.md")]
+    # `cd` is now an ordinary command whose operand is the memory dir itself.
+    assert verbs(f"cd {memory} && cat MEMORY.md") == [("native_read", "memory")]
+
+    assert verbs(f"sed -i s/a/b/ {memory}/MEMORY.md") == [("native_write", "MEMORY.md")]
+    monkeypatch.setattr(tool_surface, "NATIVE_MEMORY_BASH_SED", "ssed")
+    assert verbs(f"ssed -i s/a/b/ {memory}/MEMORY.md") == [("native_write", "MEMORY.md")]
+    assert verbs(f"sed -i s/a/b/ {memory}/MEMORY.md") == [("native_read", "MEMORY.md")]
+
+    assert verbs(f"env FOO=bar tee {memory}/MEMORY.md") == [("native_write", "MEMORY.md")]
+    monkeypatch.setattr(tool_surface, "NATIVE_MEMORY_BASH_ASSIGNMENT_WRAPPERS", ())
+    assert verbs(f"env FOO=bar tee {memory}/MEMORY.md") == [("native_read", "MEMORY.md")]
+
+
 def test_the_recognizer_policy_covers_every_constant_the_recognizers_read() -> None:
     """Review F4: the ack/recall grammar, the argv grammar and the native Bash recognizer's tables
     are all in; the only module-level constants outside the policy are the ones that do not
@@ -1466,6 +1503,10 @@ def test_the_recognizer_policy_covers_every_constant_the_recognizers_read() -> N
         "NATIVE_MEMORY_BASH_WRITE_ALL_OPERANDS",
         "NATIVE_MEMORY_BASH_WRITE_LAST_OPERAND",
         "NATIVE_MEMORY_BASH_NON_ACCESSING_COMMANDS",
+        "NATIVE_MEMORY_BASH_CD",
+        "NATIVE_MEMORY_BASH_SED",
+        "NATIVE_MEMORY_BASH_ASSIGNMENT_WRAPPERS",
+        "RECOGNIZER_IMPLEMENTATION_VERSION",
         "NATIVE_MEMORY_BASH_PATH_TERMINATORS",
         "CONFIG_DIR_ENV",
     } <= policy

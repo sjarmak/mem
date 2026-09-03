@@ -176,7 +176,11 @@ NATIVE_MEMORY_BASH_WRITE_ALL_OPERANDS: tuple[str, ...] = (
     "rmdir",
 )
 NATIVE_MEMORY_BASH_WRITE_LAST_OPERAND: tuple[str, ...] = ("cp", "mv", "ln")
+NATIVE_MEMORY_BASH_SED = "sed"
 NATIVE_MEMORY_BASH_SED_IN_PLACE_FLAGS: tuple[str, ...] = ("-i", "--in-place")
+
+# The builtin that moves the cwd a later relative operand in the same command anchors on.
+NATIVE_MEMORY_BASH_CD = "cd"
 
 # Commands whose OPERANDS never touch a file: `echo <path>` prints the path and opens nothing,
 # so an operand of these attributes no access however it resolves (review G3). Their REDIRECT
@@ -194,6 +198,8 @@ NATIVE_MEMORY_BASH_NON_ACCESSING_COMMANDS: tuple[str, ...] = ("echo", "printf")
 # the value would be read as the command word and `sudo -u me tee <path>` would score a read
 # (review G1). Attached forms (`--user=me`, `-n5`) are one word and need no entry.
 NATIVE_MEMORY_BASH_WRAPPERS: tuple[str, ...] = ("command", "sudo", "env", "time", "nice", "exec")
+# The wrappers that also take leading `VAR=value` assignments of their own.
+NATIVE_MEMORY_BASH_ASSIGNMENT_WRAPPERS: tuple[str, ...] = ("env",)
 NATIVE_MEMORY_BASH_WRAPPER_VALUE_FLAGS: tuple[tuple[str, str], ...] = (
     ("sudo", "-u"),
     ("sudo", "-g"),
@@ -691,7 +697,17 @@ _POLICY_PREFIXES: tuple[str, ...] = (
     "HOST_",
     "STORE_",
     "_GRAMMAR_",
+    "RECOGNIZER_",
 )
+
+# The recognizer LOGIC that is not a constant: the relative-path shape rule (`_path_shaped`),
+# the segment/redirect/wrapper walk, the whole-token-then-embedded-run scan, the in-place-flag
+# spelling rule, the assignment test. A constant change moves the fingerprint on its own; a
+# logic change moves nothing unless this number moves with it. BUMP IT ON ANY CHANGE TO
+# RECOGNIZER LOGIC THAT IS NOT A CONSTANT (review G5). History: 1 = the F2 path-decided
+# recognizer; 2 = G1 (mutating writes, wrapper option values), G2 (every operand anchors inside
+# the pin), G3 (non-accessing command operands).
+RECOGNIZER_IMPLEMENTATION_VERSION = 2
 
 
 def _policy_value(name: str, value: object) -> object:
@@ -1454,7 +1470,8 @@ def _unwrapped(words: Sequence[str]) -> list[str]:
     while rest and PurePosixPath(rest[0]).name in NATIVE_MEMORY_BASH_WRAPPERS:
         wrapper = PurePosixPath(rest.pop(0)).name
         value_flags = _wrapper_value_flags(wrapper)
-        while rest and (rest[0].startswith("-") or (wrapper == "env" and _is_assignment(rest[0]))):
+        takes_assignments = wrapper in NATIVE_MEMORY_BASH_ASSIGNMENT_WRAPPERS
+        while rest and (rest[0].startswith("-") or (takes_assignments and _is_assignment(rest[0]))):
             flag = rest.pop(0)
             if flag in value_flags and rest:
                 rest.pop(0)
@@ -1473,7 +1490,7 @@ def _command_path_uses(words: Sequence[str]) -> list[_BashPathUse]:
     rest = words[1:]
     flags = [w for w in rest if w.startswith("-")]
     operands = [w for w in rest if not w.startswith("-")]
-    in_place = name == "sed" and any(
+    in_place = name == NATIVE_MEMORY_BASH_SED and any(
         flag == f or flag.startswith(f + ("" if f == "-i" else "="))
         for flag in flags
         for f in NATIVE_MEMORY_BASH_SED_IN_PLACE_FLAGS
@@ -1572,7 +1589,7 @@ def _bash_accesses(command: str, *, config_dir: Path, call_index: int) -> list[N
     in_pin = False
     for segment in _bash_segments(tokens):
         words, uses = _split_redirects(segment)
-        if words and words[0] == "cd":
+        if words and words[0] == NATIVE_MEMORY_BASH_CD:
             target = _expand_pinned(words[1], config_dir=config_dir) if len(words) > 1 else ""
             if target and cwd and not PurePosixPath(target).is_absolute():
                 target = str(PurePosixPath(cwd) / target)
