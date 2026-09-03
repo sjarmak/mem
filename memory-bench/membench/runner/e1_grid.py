@@ -88,6 +88,7 @@ from membench.runner.toolreq_realagent import (
 )
 from membench.runtime import StepContext
 from membench.schemas.sequence import SequenceStep
+from membench.schemas.trace import ToolCall
 from membench.spawn import child_of, redact_credentials
 
 __all__ = [
@@ -103,6 +104,7 @@ __all__ = [
     "STAGED_TASKS",
     "SUMMARY_NAME",
     "LegRecord",
+    "LegScore",
     "MonotonicityViolation",
     "PreflightHaltError",
     "QuotaHaltError",
@@ -122,6 +124,7 @@ __all__ = [
     "preflight",
     "preflight_verdict",
     "rung_step",
+    "score_leg",
     "staged_plan",
     "stream_is_error",
     "summarize",
@@ -636,6 +639,47 @@ def summarize(
 # --------------------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class LegScore:
+    """What one leg's tool calls count for: memory calls (blocks), reads, acknowledged writes,
+    and the verbs reached for, in stream order."""
+
+    memory_calls: int = 0
+    read_calls: int = 0
+    write_calls: int = 0
+    verbs: tuple[str, ...] = ()
+
+
+def score_leg(calls: Sequence[ToolCall], *, config_dir: Path | None) -> LegScore:
+    """Score one leg's tool calls — the pure half of ``run_rung_cell``, so a truncated leg's
+    partial stream is scored by the same arithmetic as a complete one.
+
+    BOTH affordances count. The bd shim is the one this rig provisions; the native memory file is
+    the one the model reaches for first (mem-gj0pc), and scoring only the former reported an agent
+    that said "let me check memory" and did as a ZERO. The question the rung ladder asks is
+    whether the agent reaches for memory AT ALL, not whether it picks the harness's preferred door.
+
+    A WRITE is counted only on bd's own acknowledgement (``MemoryInvocation.is_accepted_write``),
+    never on the verb: the 160-leg fire's single "endogenous write" was a REFUSED
+    ``bd remember list`` (mem-8fv4t). A ``bd remember <bare-existing-key>`` bd answered as a recall
+    counts as the READ it was. The refused call is still a memory CALL — the agent reached for
+    the tool, and that choice is the ladder's endpoint — it just stored nothing."""
+    native = native_memory_accesses(calls, config_dir=config_dir)
+    invocations = memory_invocations(calls)
+    reads = sum(1 for inv in invocations if inv.is_read or inv.is_recall_by_result) + sum(
+        1 for access in native if access.is_read
+    )
+    writes = sum(1 for inv in invocations if inv.is_accepted_write) + sum(
+        1 for access in native if access.is_write
+    )
+    return LegScore(
+        memory_calls=endogenous_memory_tool_calls(calls) + len(native),
+        read_calls=reads,
+        write_calls=writes,
+        verbs=(*endogenous_memory_verbs(calls), *(access.verb for access in native)),
+    )
+
+
 def _silent_runner(argv: Sequence[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
     """The dry-run stand-in: an agent that makes NO tool call.
 
@@ -816,27 +860,12 @@ def run_rung_cell(
                     f"the same measurement. {_bought(i)}."
                 )
         streak.measured()
-        calls = list(result.tool_calls)
-        # BOTH affordances count. The bd shim is the one this rig provisions; the native memory
-        # file is the one the model reaches for first (mem-gj0pc), and scoring only the former
-        # reported an agent that said "let me check memory" and did as a ZERO. The question the
-        # rung ladder asks is whether the agent reaches for memory AT ALL, not whether it picks
-        # the harness's preferred door.
-        native = native_memory_accesses(calls, config_dir=surface.config_dir)
-        n = endogenous_memory_tool_calls(calls) + len(native)
-        total += n
-        calling += 1 if n else 0
-        invocations = memory_invocations(calls)
-        leg_reads = sum(1 for inv in invocations if inv.is_read) + sum(
-            1 for access in native if access.is_read
-        )
-        leg_writes = sum(1 for inv in invocations if inv.is_write) + sum(
-            1 for access in native if access.is_write
-        )
-        reads += leg_reads
-        writes += leg_writes
-        leg_verbs = [*endogenous_memory_verbs(calls), *(access.verb for access in native)]
-        verbs.extend(leg_verbs)
+        score = score_leg(result.tool_calls, config_dir=surface.config_dir)
+        total += score.memory_calls
+        calling += 1 if score.memory_calls else 0
+        reads += score.read_calls
+        writes += score.write_calls
+        verbs.extend(score.verbs)
         _emit(
             LegRecord(
                 rung=rung,
@@ -844,10 +873,10 @@ def run_rung_cell(
                 work_id=task.work_id,
                 leg=i,
                 status="ok",
-                memory_calls=n,
-                read_calls=leg_reads,
-                write_calls=leg_writes,
-                verbs=tuple(leg_verbs),
+                memory_calls=score.memory_calls,
+                read_calls=score.read_calls,
+                write_calls=score.write_calls,
+                verbs=score.verbs,
                 stream=redact_credentials(result.raw_stream or ""),
                 cli_version=leg_cli,
             )

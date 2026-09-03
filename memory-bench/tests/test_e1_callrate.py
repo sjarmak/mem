@@ -55,6 +55,7 @@ from membench.runner.headless_agent import (
     assistant_event,
     result_event,
     serialize_stream,
+    tool_result_event,
 )
 from membench.runner.toolreq_corpus import load_twin_corpus
 from membench.runner.toolreq_realagent import VARIANT_NECESSARY, VARIANT_UNNECESSARY
@@ -406,18 +407,41 @@ def test_cli_reports_a_missing_corpus_as_infrastructure_not_a_result(
 # --------------------------------------------------------------------------------------
 
 
-def _calling_runner(*commands: str) -> Any:
-    """A `claude -p` stand-in whose stream carries `commands` as Bash tool_use blocks.
+# bd's own acknowledgement of a stored memory, as bd 1.3.0-rc.1 prints it.
+REMEMBERED = "Remembered [k]: a value"
+
+# The exact tool_use / tool_result the 160-leg staged fire scored as its ONLY endogenous write
+# (R4 / unnecessary / world-seed2-task0, leg 1). `is_error` is FALSE on the real record: the
+# `2>&1 | head` pipe exits 0, so the refusal is visible in the content and nowhere else.
+REFUSED_REMEMBER_LIST = (
+    "cd /tmp/membench-memory-bsi54bav/store && /tmp/membench-memory-bsi54bav/bin/bd remember "
+    "list 2>&1 | head -100"
+)
+REFUSED_REMEMBER_LIST_RESULT = (
+    'Error: "list" looks like a command, not something to remember\n'
+    "Hint: Did you mean 'bd list'? To store \"list\" as a memory anyway, give it an explicit "
+    'key: bd remember "list" --key <key>\n'
+    "Shell cwd was reset to /tmp/e1-r4-5hy4nzs5"
+)
+
+
+def _calling_runner(*commands: str | tuple[str, str]) -> Any:
+    """A `claude -p` stand-in whose stream carries `commands` as Bash tool_use blocks, each
+    followed by its tool_result when given as ``(command, result)``.
 
     Deliberately UNCONDITIONAL: it emits the same calls at every rung, so it can prove the cell
     counts what the stream contains and can never reproduce a rung effect. `_silent_runner` is the
     zero end of the same fixture."""
 
     def runner(argv: Any, **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        events = [
-            assistant_event([("Bash", {"command": command}) for command in commands]),
-            result_event(),
-        ]
+        events: list[dict[str, object]] = []
+        for i, entry in enumerate(commands):
+            command, result = entry if isinstance(entry, tuple) else (entry, None)
+            call_id = f"toolu_{i}"
+            events.append(assistant_event([("Bash", {"command": command}, call_id)]))
+            if result is not None:
+                events.append(tool_result_event(call_id, result))
+        events.append(result_event())
         return subprocess.CompletedProcess(list(argv), 0, serialize_stream(events), "")
 
     return runner
@@ -437,7 +461,9 @@ def test_run_rung_cell_counts_the_memory_calls_its_stream_carries(tmp_path: Any)
         repeats=2,
         model=MODEL,
         dry_run=False,
-        runner=_calling_runner("bd remember --key k 'a value'", "bd recall k", "bd recall other"),
+        runner=_calling_runner(
+            ("bd remember 'a value' --key k", REMEMBERED), "bd recall k", "bd recall other"
+        ),
     )
     assert cell.runs == 2
     assert cell.calling_runs == 2
@@ -548,7 +574,7 @@ def _timeout_error() -> HeadlessAgentError:
         return err
 
 
-def _timing_out_runner(timeout_legs: set[int], *commands: str) -> Any:
+def _timing_out_runner(timeout_legs: set[int], *commands: str | tuple[str, str]) -> Any:
     """`_calling_runner`, except the legs numbered in ``timeout_legs`` (0-based, per cell) time out
     the way the first staged fire's cell 13 did."""
     leg = {"n": 0}
@@ -976,7 +1002,7 @@ def test_every_leg_is_persisted_with_the_stream_it_was_counted_from(tmp_path: An
         repeats=3,
         model=MODEL,
         dry_run=False,
-        runner=_timing_out_runner({1}, "bd recall k", "bd remember k=v"),
+        runner=_timing_out_runner({1}, "bd recall k", ("bd remember k=v", "Remembered [k]: v")),
         on_leg=legs.append,
     )
     assert [leg.status for leg in legs] == ["ok", "timeout", "ok"]
@@ -992,6 +1018,91 @@ def test_every_leg_is_persisted_with_the_stream_it_was_counted_from(tmp_path: An
     timed_out = next(leg for leg in legs if leg.status == "timeout")
     assert timed_out.stream == "" and timed_out.detail
     assert legs[0].filename == f"R4__{tasks[0].variant}__{tasks[0].work_id}__0.json"
+
+
+def test_a_refused_bd_remember_is_a_memory_call_but_never_a_write(tmp_path: Any) -> None:
+    """mem-8fv4t. The 160-leg staged fire scored write_calls=1 from exactly this record: the agent
+    ran `bd remember list`, bd REFUSED it, and the verb-token counter scored the refusal as an
+    endogenous write. A write is scored only on bd's own acknowledgement in the persisted stream.
+    The reach still happened, so the leg stays a CALLING run; it just wrote nothing."""
+    _seqs, tasks = corpus_one(tmp_path)
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=_calling_runner((REFUSED_REMEMBER_LIST, REFUSED_REMEMBER_LIST_RESULT)),
+    )
+    assert (cell.memory_calls, cell.calling_runs) == (1, 1)
+    assert cell.write_calls == 0
+    assert cell.read_calls == 0
+
+
+def test_an_acknowledged_bd_remember_is_scored_a_write(tmp_path: Any) -> None:
+    """The positive twin of the refusal test: same verb, and bd's `Remembered [k]:` line in the
+    tool_result. The two tests differ ONLY in the result text, which is what the scorer must key
+    on, so a scorer that ignores results cannot pass both."""
+    _seqs, tasks = corpus_one(tmp_path)
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=_calling_runner(("bd remember 'a value' --key k", REMEMBERED)),
+    )
+    assert (cell.memory_calls, cell.calling_runs) == (1, 1)
+    assert cell.write_calls == 1
+    assert cell.read_calls == 0
+
+
+def test_a_bare_key_bd_remember_that_bd_recalled_is_scored_a_read(tmp_path: Any) -> None:
+    """`bd remember <existing-key>` READS: bd answers `(recalled "k" -- ...)` and stores nothing."""
+    _seqs, tasks = corpus_one(tmp_path)
+    recalled = (
+        '(recalled "k" -- a bare existing key READS. To overwrite: bd remember "..." --key k)\n'
+        "a value"
+    )
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=_calling_runner(("bd remember k", recalled)),
+    )
+    assert (cell.memory_calls, cell.read_calls, cell.write_calls) == (1, 1, 0)
+
+
+def test_a_bd_remember_with_no_tool_result_in_the_stream_is_not_a_write(tmp_path: Any) -> None:
+    """No acknowledgement, no write. A stream that lost its tool_result (a leg cut off mid-call)
+    must not be scored as if bd had accepted the memory."""
+    _seqs, tasks = corpus_one(tmp_path)
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=_calling_runner("bd remember 'a value' --key k"),
+    )
+    assert (cell.memory_calls, cell.write_calls) == (1, 0)
+
+
+def test_a_json_acknowledged_bd_remember_is_scored_a_write(tmp_path: Any) -> None:
+    """`bd remember --json` acknowledges as `{"action": "remembered"}`, not the prose line."""
+    _seqs, tasks = corpus_one(tmp_path)
+    ack = '{"action":"remembered","key":"k","content":"a value"}'
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=_calling_runner(("bd remember 'a value' --key k --json", ack)),
+    )
+    assert cell.write_calls == 1
 
 
 def test_a_secret_in_a_leg_stream_is_redacted_before_it_is_persisted(tmp_path: Any) -> None:

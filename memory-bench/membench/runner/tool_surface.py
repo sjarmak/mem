@@ -87,13 +87,14 @@ judgment about what a memory MEANS.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
 import stat
 import subprocess
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 
 from membench.runner.resume_cache import digest
@@ -329,17 +330,81 @@ MEMORY_WRITE_VERBS: tuple[str, ...] = ("remember",)
 # at all; it is keyed, so one invocation yields one memory by construction.
 ENUMERATE_VERB = "memories"
 
+# The flag under which ``bd remember`` takes an explicit key. Its value is consumed into
+# ``MemoryInvocation.key`` rather than left among the operands, because it is not content.
+BD_KEY_FLAG = "--key"
+
+# bd's OWN acknowledgement of a stored memory, as the shipped binary (1.3.0-rc.1) prints it:
+# ``Remembered [<key>]: <value>`` for a new key, ``Updated [<key>]: <value>`` for an existing one,
+# and ``{"action": "remembered"}`` / ``{"action": "updated"}`` under ``--json``. Format-anchored on
+# the tool's output line, the way ``parse/runners`` anchors on a test runner's summary line: this
+# is a match on a fixed acknowledgement shape, never a reading of what the memory says.
+#
+# Why the RESULT decides (mem-8fv4t): a verb token on the argv is not an operation. The 160-leg
+# staged fire scored ``bd remember list`` as its only endogenous write, and bd REFUSED it
+# (``Error: "list" looks like a command``); ``bd remember <bare-existing-key>`` is a RECALL by bd's
+# own documented convenience, and ``bd remember <bare-unknown-token>`` is refused. Argv shape
+# cannot separate those from a stored write; the acknowledgement can, and it is POSITIVE evidence:
+# an absent result (truncated stream), a refusal, a redirected-away stderr are each not a write.
+_BD_REMEMBER_ACK = re.compile(r"^(?:Remembered|Updated) \[", re.MULTILINE)
+_BD_REMEMBER_ACK_ACTIONS: frozenset[str] = frozenset({"remembered", "updated"})
+
+# bd's own marker for the bare-existing-key convenience: ``(recalled "<key>" -- a bare existing key
+# READS. ...)`` on the text path, ``{"action": "recalled"}`` under ``--json``.
+_BD_REMEMBER_RECALLED = re.compile(r'^\(recalled "', re.MULTILINE)
+_BD_REMEMBER_RECALLED_ACTION = "recalled"
+
+
+def _bd_json_action(result: str) -> str | None:
+    """The ``action`` field of a ``--json`` bd result, or ``None`` when the result is not one.
+
+    The whole result is tried first (bd may pretty-print), then each line (a pipe may have
+    appended a cwd-reset notice after the object)."""
+    candidates = [result, *result.splitlines()]
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict) and isinstance(parsed.get("action"), str):
+            return str(parsed["action"])
+    return None
+
+
+def remember_was_accepted(result: str | None) -> bool:
+    """Whether a ``bd remember`` result carries bd's acknowledgement that the memory was STORED.
+
+    ``None`` (no tool_result joined — the stream ended before the tool returned) is not an
+    acceptance: the evidence is positive or it is absent."""
+    if result is None:
+        return False
+    if _BD_REMEMBER_ACK.search(result):
+        return True
+    return _bd_json_action(result) in _BD_REMEMBER_ACK_ACTIONS
+
+
+def remember_was_a_recall(result: str | None) -> bool:
+    """Whether a ``bd remember`` result shows bd took the bare-existing-key path and READ."""
+    if result is None:
+        return False
+    if _BD_REMEMBER_RECALLED.search(result):
+        return True
+    return _bd_json_action(result) == _BD_REMEMBER_RECALLED_ACTION
+
 
 @dataclass(frozen=True)
 class MemoryInvocation:
-    """One observed ``bd`` memory call: the verb and the operands it was given.
+    """One observed ``bd`` memory call: the verb, the operands it was given, the explicit key (if
+    any), and the tool_result the stream answered it with.
 
-    Immutable and operand-carrying because the three endogenous questions are answered by argv
-    shape and nothing else — whether the call READ or WROTE, whether a read was bounded, and which
-    ids it named."""
+    Immutable and operand-carrying because the endogenous questions are answered by argv shape —
+    whether a read was bounded, which ids it named — and, for whether a WRITE happened, by the
+    tool's own acknowledgement (``result``), never by the verb alone."""
 
     verb: str
     operands: tuple[str, ...] = ()
+    key: str = ""
+    result: str | None = None
 
     @property
     def is_read(self) -> bool:
@@ -347,7 +412,24 @@ class MemoryInvocation:
 
     @property
     def is_write(self) -> bool:
+        """The verb is a write verb. This is the ARGV-level view E3b grades content under (a
+        write it cannot see the result of is still graded on what it stored); the E1 counter
+        uses ``is_accepted_write``, which requires the tool's acknowledgement."""
         return self.verb in MEMORY_WRITE_VERBS
+
+    @property
+    def is_accepted_write(self) -> bool:
+        """A write bd ACKNOWLEDGED: a write verb, content on the argv (an explicit key or at least
+        one operand), and a result carrying bd's own stored line. A refused, recalled, truncated
+        or silenced (``2>/dev/null``) remember is not one."""
+        return (
+            self.is_write and bool(self.key or self.operands) and remember_was_accepted(self.result)
+        )
+
+    @property
+    def is_recall_by_result(self) -> bool:
+        """A write verb bd answered as a READ: ``bd remember <bare-existing-key>``."""
+        return self.is_write and remember_was_a_recall(self.result)
 
     @property
     def is_enumerate(self) -> bool:
@@ -361,10 +443,11 @@ class MemoryInvocation:
         ``bd remember <key> <content...>``: the first operand is the key the agent chose for
         itself, and it is exactly what an endogenous write grade must not read — grading a write
         by its key measures id-naming discipline, which is the one thing an endogenous write is
-        free to decide. Empty for a read: a read stores nothing."""
+        free to decide. With an explicit ``--key`` the key is already out of the operands and
+        every operand is content. Empty for a read: a read stores nothing."""
         if not self.is_write:
             return ()
-        return self.operands[1:]
+        return self.operands if self.key else self.operands[1:]
 
     @property
     def requested_ids(self) -> tuple[str, ...]:
@@ -870,8 +953,22 @@ def _invocations_of_segment(words: Sequence[str], depth: int = 0) -> list[Memory
     if index >= len(words) or words[index] not in MEMORY_VERBS:
         return []
     verb = words[index]
-    operands = tuple(word for word in words[index + 1 :] if not _is_option(word))
-    return [MemoryInvocation(verb=verb, operands=operands)]
+    key = ""
+    operands: list[str] = []
+    tail = list(words[index + 1 :])
+    cursor = 0
+    while cursor < len(tail):
+        word = tail[cursor]
+        if word == BD_KEY_FLAG and cursor + 1 < len(tail):
+            key = tail[cursor + 1]
+            cursor += 2
+            continue
+        if word.startswith(f"{BD_KEY_FLAG}="):
+            key = word[len(BD_KEY_FLAG) + 1 :]
+        elif not _is_option(word):
+            operands.append(word)
+        cursor += 1
+    return [MemoryInvocation(verb=verb, operands=tuple(operands), key=key)]
 
 
 def _verbs_of_segment(words: Sequence[str], depth: int = 0) -> list[str]:
@@ -945,7 +1042,13 @@ def memory_invocations(calls: Iterable[ToolCall]) -> list[MemoryInvocation]:
     invocations: list[MemoryInvocation] = []
     for call in calls:
         if call.name in MEMORY_TOOL_NAMES:
-            invocations.extend(memory_invocations_in_command(_command_of(call)))
+            # The call's tool_result rides on every invocation the command made. One Bash call
+            # chaining two bd invocations has one result; each acknowledgement line in it is
+            # still bd's own, so the join is exact for one invocation and conservative for two.
+            invocations.extend(
+                replace(invocation, result=call.result)
+                for invocation in memory_invocations_in_command(_command_of(call))
+            )
     return invocations
 
 

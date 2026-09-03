@@ -39,9 +39,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import MISSING, dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import NoReturn
+from typing import Any, NoReturn
 
-from membench.armcompare import _iter_tool_use_blocks
+from membench.armcompare import _iter_tool_result_blocks, _iter_tool_use_blocks
 from membench.runner.agent import AgentStepResult
 from membench.runtime import StepContext
 from membench.schemas.sequence import SequenceStep
@@ -473,21 +473,56 @@ class CellRecorder:
 
 
 def assistant_event(
-    tool_uses: Sequence[tuple[str, Mapping[str, object]]] = (),
+    tool_uses: Sequence[
+        tuple[str, Mapping[str, object]] | tuple[str, Mapping[str, object], str]
+    ] = (),
     *,
     usage: tuple[int, int] | None = (0, 0),
 ) -> dict[str, object]:
     """One Claude Code ``assistant`` event whose content carries ``tool_uses`` as ``tool_use``
-    blocks, in order. ``usage=None`` omits the key entirely — the shape that exercises the
-    parsers' honest-unmeasured (0, 0) branch, which a hardcoded zero would silently skip."""
-    content = [
-        {"type": "tool_use", "name": name, "input": dict(arguments)}
-        for name, arguments in tool_uses
-    ]
+    blocks, in order. A three-tuple ``(name, input, id)`` stamps the block's ``id``, which is
+    what a later ``tool_result_event`` joins back to. ``usage=None`` omits the key entirely —
+    the shape that exercises the parsers' honest-unmeasured (0, 0) branch, which a hardcoded
+    zero would silently skip."""
+    content: list[dict[str, object]] = []
+    for tool_use in tool_uses:
+        block: dict[str, object] = {
+            "type": "tool_use",
+            "name": tool_use[0],
+            "input": dict(tool_use[1]),
+        }
+        if len(tool_use) == 3:
+            block["id"] = tool_use[2]
+        content.append(block)
     message: dict[str, object] = {"role": "assistant", "content": content}
     if usage is not None:
         message["usage"] = {"input_tokens": usage[0], "output_tokens": usage[1]}
     return {"type": "assistant", "message": message}
+
+
+def tool_result_event(
+    tool_use_id: str, content: str, *, is_error: bool = False
+) -> dict[str, object]:
+    """The ``user`` event Claude Code prints when a tool returns: one ``tool_result`` block
+    carrying the tool's output under the ``tool_use_id`` of the call it answers.
+
+    ``is_error`` is the CLI's own flag and it is NOT the refusal signal a scorer can rely on: a
+    command like ``bd remember list 2>&1 | head`` exits 0 through the pipe, so its refusal arrives
+    with ``is_error=false`` (mem-8fv4t). The evidence of acceptance or refusal is the CONTENT."""
+    return {
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": tool_use_id,
+                    "content": content,
+                    "is_error": is_error,
+                }
+            ],
+        },
+    }
 
 
 def result_event(result: str = "done") -> dict[str, object]:
@@ -556,18 +591,46 @@ def _stream_result_text(stream_text: str) -> str:
     return final
 
 
+def _tool_result_text(block: Mapping[str, Any]) -> str:
+    """The text of one ``tool_result`` block. The CLI prints ``content`` either as a string or as
+    a list of ``text`` blocks; both are read, and anything else contributes nothing."""
+    content = block.get("content")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(
+            part["text"]
+            for part in content
+            if isinstance(part, Mapping) and isinstance(part.get("text"), str)
+        )
+    return ""
+
+
 def _tool_calls_from_stream(stream_text: str) -> list[ToolCall]:
     """One `ToolCall` per ``tool_use`` block, in stream order — the same tolerant walk
     `bbon.extract.steps_from_stream` uses, so the structured tool_calls and the derived
-    AttemptStep trajectory agree by construction."""
+    AttemptStep trajectory agree by construction.
+
+    Each call carries the ``tool_result`` the stream answered it with, joined by ``tool_use_id``
+    (``ToolCall.result``; ``None`` when the stream carries no answer — a stream truncated before
+    the tool returned). The join exists because a verb on the argv is not an operation: the
+    160-leg staged fire's only "endogenous write" was a ``bd remember list`` that bd REFUSED, and
+    only the result can say so (mem-8fv4t)."""
+    results = {
+        block["tool_use_id"]: _tool_result_text(block)
+        for block in _iter_tool_result_blocks(stream_text)
+        if isinstance(block.get("tool_use_id"), str)
+    }
     calls: list[ToolCall] = []
     for block in _iter_tool_use_blocks(stream_text):
         name = block.get("name")
         raw_input = block.get("input")
+        block_id = block.get("id")
         calls.append(
             ToolCall(
                 name=name if isinstance(name, str) and name else "unknown",
                 arguments=dict(raw_input) if isinstance(raw_input, dict) else {},
+                result=results.get(block_id) if isinstance(block_id, str) else None,
             )
         )
     return calls

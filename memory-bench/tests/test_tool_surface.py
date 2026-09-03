@@ -54,17 +54,22 @@ from membench.runner.tool_surface import (
     MEMORY_ALLOWED_TOOLS,
     MEMORY_COMMAND,
     NATIVE_MEMORY_TOOL_NAMES,
+    MemoryInvocation,
     MemoryToolError,
     assert_store_outside,
     command_segments,
     endogenous_memory_tool_calls,
     endogenous_memory_verbs,
     harness_call,
+    memory_invocations,
+    memory_invocations_in_command,
     memory_verbs_in_command,
     native_memory_accesses,
     native_memory_calls,
     partition_memory_calls,
     provision_memory_tool,
+    remember_was_a_recall,
+    remember_was_accepted,
     resolve_bd_binary,
     settings_fingerprint,
     surface_fingerprint,
@@ -879,3 +884,79 @@ def test_the_native_tools_are_actually_allowed(tmp_path: Path) -> None:
     paid cycle, which is why the reach came back permission_denied."""
     assert "Read" in MEMORY_ALLOWED_TOOLS
     assert set(NATIVE_MEMORY_TOOL_NAMES) - {"NotebookEdit"} <= set(MEMORY_ALLOWED_TOOLS)
+
+
+# --------------------------------------------------------------------------- #
+# mem-8fv4t: a write is bd's acknowledgement, not the verb token
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    ("command", "key", "operands"),
+    [
+        ("bd remember 'a value' --key k", "k", ("a value",)),
+        ("bd remember --key=k 'a value'", "k", ("a value",)),
+        ("bd remember --key k 'a value'", "k", ("a value",)),
+        ("bd remember list", "", ("list",)),
+        ("bd remember", "", ()),
+        ("bd remember 'a value' --json", "", ("a value",)),
+    ],
+)
+def test_remember_argv_splits_key_from_content(
+    command: str, key: str, operands: tuple[str, ...]
+) -> None:
+    (invocation,) = memory_invocations_in_command(command)
+    assert (invocation.verb, invocation.key, invocation.operands) == ("remember", key, operands)
+
+
+@pytest.mark.parametrize(
+    ("result", "accepted", "recalled"),
+    [
+        ("Remembered [k]: a value", True, False),
+        ("Updated [k]: a value", True, False),
+        ('{"action":"remembered","key":"k"}', True, False),
+        ('{"action":"updated","key":"k"}', True, False),
+        ('(recalled "k" -- a bare existing key READS. To overwrite: ...)\na value', False, True),
+        ('{"action":"recalled","found":true,"key":"k"}', False, True),
+        ('Error: "list" looks like a command, not something to remember', False, False),
+        ("", False, False),
+        (None, False, False),
+        # An echo of the acknowledgement mid-line is not the acknowledgement: bd prints it at
+        # column 0.
+        ("note: Remembered [k]: a value", False, False),
+    ],
+)
+def test_bd_remember_acknowledgement_is_format_anchored(
+    result: str | None, accepted: bool, recalled: bool
+) -> None:
+    assert remember_was_accepted(result) is accepted
+    assert remember_was_a_recall(result) is recalled
+
+
+def test_an_accepted_write_needs_both_an_operand_and_an_acknowledgement() -> None:
+    ack = "Remembered [k]: a value"
+    assert MemoryInvocation("remember", ("a value",), "k", ack).is_accepted_write
+    assert MemoryInvocation("remember", ("a value",), "", ack).is_accepted_write
+    assert not MemoryInvocation("remember", ("list",), "", None).is_accepted_write
+    assert not MemoryInvocation("remember", (), "", ack).is_accepted_write
+    assert not MemoryInvocation("recall", ("k",), "", ack).is_accepted_write
+    # Verb-level `is_write` is untouched: E3b's endogenous-write metric still keys on the verb.
+    assert MemoryInvocation("remember", ("list",), "", None).is_write
+
+
+def test_memory_invocations_carry_each_calls_own_result() -> None:
+    """The result is joined per CALL, so two remembers in one leg score independently."""
+    calls = [
+        ToolCall(
+            name="Bash",
+            arguments={"command": "bd remember list 2>&1 | head -100"},
+            result='Error: "list" looks like a command, not something to remember',
+        ),
+        ToolCall(
+            name="Bash",
+            arguments={"command": "bd remember 'a value' --key k"},
+            result="Remembered [k]: a value",
+        ),
+        ToolCall(name="Bash", arguments={"command": "bd remember k"}, result='(recalled "k" -- x)'),
+    ]
+    invocations = memory_invocations(calls)
+    assert [inv.is_accepted_write for inv in invocations] == [False, True, False]
+    assert [inv.is_recall_by_result for inv in invocations] == [False, False, True]
