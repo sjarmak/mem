@@ -1,0 +1,834 @@
+{
+  "identity_backfilled": {
+    "why": "the resume identity gained cli_version and corpus_fingerprint AFTER these 20 cells were bought; without them the hardened resume refuses its own artifact",
+    "cli_version_evidence": "the fire's own stream stamped claude_code_version=2.1.258, and 2.1.259 did not exist on disk (mtime 2026-09-02 17:34 EDT) until 3 minutes after the fire died at 17:31 EDT; 2.1.258 had been the active build since 2026-09-01 18:34 EDT, so both fires are inside its window",
+    "corpus_evidence": "corpus_fingerprint(load_twin_corpus(fixtures/worlds-tool)) computed from the committed corpus, which has not changed since the first fire",
+    "pin": "the remaining cells are bought on /tmp/e1-pin/claude -> versions/2.1.258",
+    "backfilled_at": "2026-09-02",
+    "pre_backfill_copy": "/tmp/e1-staged-summary.pre-identity-backfill.json"
+  },
+  "experiment": "e1-guidance-ladder",
+  "channel": "recalled",
+  "model": "claude-sonnet-4-6",
+  "surface_fingerprint": "c09cd475f30bb545",
+  "cli_version": "2.1.258",
+  "corpus_fingerprint": "f78c508a7886fd56",
+  "dry_run": false,
+  "repeats": 5,
+  "paid": true,
+  "rungs": [
+    "R0",
+    "R4"
+  ],
+  "cells": [
+    {
+      "rung": "R0",
+      "variant": "necessary",
+      "work_id": "world-seed0-task0",
+      "guidance_words": 0,
+      "verbs": [
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 1,
+        "memory_calls": 1,
+        "read_calls": 1,
+        "write_calls": 0,
+        "call_rate": 0.2,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R0",
+      "variant": "necessary",
+      "work_id": "world-seed0-task1",
+      "guidance_words": 0,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 4,
+        "memory_calls": 4,
+        "read_calls": 4,
+        "write_calls": 0,
+        "call_rate": 0.8,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R0",
+      "variant": "necessary",
+      "work_id": "world-seed1-task0",
+      "guidance_words": 0,
+      "verbs": [],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 0,
+        "memory_calls": 0,
+        "read_calls": 0,
+        "write_calls": 0,
+        "call_rate": 0.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R0",
+      "variant": "necessary",
+      "work_id": "world-seed1-task1",
+      "guidance_words": 0,
+      "verbs": [
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 1,
+        "memory_calls": 1,
+        "read_calls": 1,
+        "write_calls": 0,
+        "call_rate": 0.2,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R0",
+      "variant": "necessary",
+      "work_id": "world-seed2-task0",
+      "guidance_words": 0,
+      "verbs": [
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 1,
+        "memory_calls": 1,
+        "read_calls": 1,
+        "write_calls": 0,
+        "call_rate": 0.2,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R0",
+      "variant": "necessary",
+      "work_id": "world-seed2-task1",
+      "guidance_words": 0,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 5,
+        "memory_calls": 5,
+        "read_calls": 5,
+        "write_calls": 0,
+        "call_rate": 1.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R0",
+      "variant": "necessary",
+      "work_id": "world-seed3-task0",
+      "guidance_words": 0,
+      "verbs": [],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 0,
+        "memory_calls": 0,
+        "read_calls": 0,
+        "write_calls": 0,
+        "call_rate": 0.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R0",
+      "variant": "necessary",
+      "work_id": "world-seed3-task1",
+      "guidance_words": 0,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 4,
+        "memory_calls": 4,
+        "read_calls": 4,
+        "write_calls": 0,
+        "call_rate": 0.8,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R0",
+      "variant": "unnecessary",
+      "work_id": "world-seed0-task0",
+      "guidance_words": 0,
+      "verbs": [],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 0,
+        "memory_calls": 0,
+        "read_calls": 0,
+        "write_calls": 0,
+        "call_rate": 0.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R0",
+      "variant": "unnecessary",
+      "work_id": "world-seed0-task1",
+      "guidance_words": 0,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 3,
+        "memory_calls": 3,
+        "read_calls": 3,
+        "write_calls": 0,
+        "call_rate": 0.6,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R0",
+      "variant": "unnecessary",
+      "work_id": "world-seed1-task0",
+      "guidance_words": 0,
+      "verbs": [],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 0,
+        "memory_calls": 0,
+        "read_calls": 0,
+        "write_calls": 0,
+        "call_rate": 0.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R0",
+      "variant": "unnecessary",
+      "work_id": "world-seed1-task1",
+      "guidance_words": 0,
+      "verbs": [
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 1,
+        "memory_calls": 1,
+        "read_calls": 1,
+        "write_calls": 0,
+        "call_rate": 0.2,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R0",
+      "variant": "unnecessary",
+      "work_id": "world-seed2-task0",
+      "guidance_words": 0,
+      "verbs": [
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "native_read",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "memories"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 2,
+        "memory_calls": 7,
+        "read_calls": 19,
+        "write_calls": 0,
+        "call_rate": 0.4,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R0",
+      "variant": "unnecessary",
+      "work_id": "world-seed2-task1",
+      "guidance_words": 0,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 3,
+        "memory_calls": 3,
+        "read_calls": 3,
+        "write_calls": 0,
+        "call_rate": 0.6,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R0",
+      "variant": "unnecessary",
+      "work_id": "world-seed3-task0",
+      "guidance_words": 0,
+      "verbs": [],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 0,
+        "memory_calls": 0,
+        "read_calls": 0,
+        "write_calls": 0,
+        "call_rate": 0.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R0",
+      "variant": "unnecessary",
+      "work_id": "world-seed3-task1",
+      "guidance_words": 0,
+      "verbs": [],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 0,
+        "memory_calls": 0,
+        "read_calls": 0,
+        "write_calls": 0,
+        "call_rate": 0.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R4",
+      "variant": "necessary",
+      "work_id": "world-seed0-task0",
+      "guidance_words": 54,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 5,
+        "memory_calls": 5,
+        "read_calls": 5,
+        "write_calls": 0,
+        "call_rate": 1.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R4",
+      "variant": "necessary",
+      "work_id": "world-seed0-task1",
+      "guidance_words": 54,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 5,
+        "memory_calls": 5,
+        "read_calls": 5,
+        "write_calls": 0,
+        "call_rate": 1.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R4",
+      "variant": "necessary",
+      "work_id": "world-seed1-task0",
+      "guidance_words": 54,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 5,
+        "memory_calls": 5,
+        "read_calls": 5,
+        "write_calls": 0,
+        "call_rate": 1.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R4",
+      "variant": "necessary",
+      "work_id": "world-seed1-task1",
+      "guidance_words": 54,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 5,
+        "memory_calls": 5,
+        "read_calls": 5,
+        "write_calls": 0,
+        "call_rate": 1.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R4",
+      "variant": "necessary",
+      "work_id": "world-seed2-task0",
+      "guidance_words": 54,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 5,
+        "memory_calls": 5,
+        "read_calls": 5,
+        "write_calls": 0,
+        "call_rate": 1.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R4",
+      "variant": "necessary",
+      "work_id": "world-seed2-task1",
+      "guidance_words": 54,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 5,
+        "memory_calls": 5,
+        "read_calls": 5,
+        "write_calls": 0,
+        "call_rate": 1.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R4",
+      "variant": "necessary",
+      "work_id": "world-seed3-task0",
+      "guidance_words": 54,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 5,
+        "memory_calls": 5,
+        "read_calls": 5,
+        "write_calls": 0,
+        "call_rate": 1.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R4",
+      "variant": "necessary",
+      "work_id": "world-seed3-task1",
+      "guidance_words": 54,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 5,
+        "memory_calls": 5,
+        "read_calls": 5,
+        "write_calls": 0,
+        "call_rate": 1.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R4",
+      "variant": "unnecessary",
+      "work_id": "world-seed0-task0",
+      "guidance_words": 54,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 5,
+        "memory_calls": 5,
+        "read_calls": 5,
+        "write_calls": 0,
+        "call_rate": 1.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R4",
+      "variant": "unnecessary",
+      "work_id": "world-seed0-task1",
+      "guidance_words": 54,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 5,
+        "memory_calls": 5,
+        "read_calls": 5,
+        "write_calls": 0,
+        "call_rate": 1.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R4",
+      "variant": "unnecessary",
+      "work_id": "world-seed1-task0",
+      "guidance_words": 54,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 5,
+        "memory_calls": 5,
+        "read_calls": 5,
+        "write_calls": 0,
+        "call_rate": 1.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R4",
+      "variant": "unnecessary",
+      "work_id": "world-seed1-task1",
+      "guidance_words": 54,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 5,
+        "memory_calls": 5,
+        "read_calls": 5,
+        "write_calls": 0,
+        "call_rate": 1.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R4",
+      "variant": "unnecessary",
+      "work_id": "world-seed2-task0",
+      "guidance_words": 54,
+      "verbs": [
+        "remember",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "memories",
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 4,
+        "memory_calls": 8,
+        "read_calls": 16,
+        "write_calls": 1,
+        "call_rate": 0.8,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R4",
+      "variant": "unnecessary",
+      "work_id": "world-seed2-task1",
+      "guidance_words": 54,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 5,
+        "memory_calls": 5,
+        "read_calls": 5,
+        "write_calls": 0,
+        "call_rate": 1.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R4",
+      "variant": "unnecessary",
+      "work_id": "world-seed3-task0",
+      "guidance_words": 54,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 5,
+        "memory_calls": 5,
+        "read_calls": 5,
+        "write_calls": 0,
+        "call_rate": 1.0,
+        "paid": true
+      }
+    },
+    {
+      "rung": "R4",
+      "variant": "unnecessary",
+      "work_id": "world-seed3-task1",
+      "guidance_words": 54,
+      "verbs": [
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read",
+        "native_read"
+      ],
+      "metrics": {
+        "runs": 5,
+        "timed_out_runs": 0,
+        "errored_runs": 0,
+        "measured_runs": 5,
+        "calling_runs": 5,
+        "memory_calls": 5,
+        "read_calls": 5,
+        "write_calls": 0,
+        "call_rate": 1.0,
+        "paid": true
+      }
+    }
+  ],
+  "call_rate_gates": {
+    "endpoint": "discrimination_margin",
+    "monotonicity": {
+      "rungs_measured": [
+        "R0",
+        "R4"
+      ],
+      "call_rate_by_rung": {
+        "R0": 0.4,
+        "R4": 1.0
+      },
+      "tolerance": 0.0,
+      "violations": [],
+      "violation_pairs": [],
+      "monotone": true,
+      "comparable": true,
+      "reason": "call rate is non-decreasing across every adjacent measured rung"
+    },
+    "discrimination": {
+      "margin_by_rung": {
+        "R0": 0.17500000000000002,
+        "R4": 0.025000000000000022
+      },
+      "note": "d(rung) = P(call | necessary) - P(call | unnecessary). A rung that lifts the raw call rate while d stays flat bought nothing."
+    },
+    "guidance_token_adjustment": {
+      "guidance_words_by_rung": {
+        "R0": 0,
+        "R1": 10,
+        "R2": 23,
+        "R3": 38,
+        "R4": 54
+      },
+      "note": "REPORTED, never subtracted here: the guidance block is longer at every higher rung by construction, so a per-rung token cost carries the treatment's own length. Subtract these words explicitly before comparing cost across rungs."
+    },
+    "tool_affordance_floor": {
+      "rung": "R0",
+      "call_rate": 0.4,
+      "note": "R0 carries NO guidance text; the agent still sees an allowlisted memory tool. A high R0 rate means the tool's NAME is the treatment, so R0 is the affordance FLOOR and not a zero. The tool is deliberately not renamed: a rename moves the argv and invalidates every cached cell."
+    }
+  }
+}

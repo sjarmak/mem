@@ -1,0 +1,17 @@
+{
+  "kind": "FIRED",
+  "line": "the memory mechanism fired at R4: 1 call(s)",
+  "rung": "R4",
+  "work_id": "world-seed0-task0",
+  "variant": "necessary",
+  "paid": true,
+  "runs": 1,
+  "measured_runs": 1,
+  "timed_out_runs": 0,
+  "errored_runs": 0,
+  "memory_calls": 1,
+  "verbs": [
+    "native_read"
+  ],
+  "model": "claude-sonnet-4-6"
+}
