@@ -18,6 +18,7 @@ exception is raised, not raise-vs-return.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import signal
@@ -70,6 +71,12 @@ _REDACTED = "<redacted-credential>"
 # diagnosis -- the same both-directions bar the `\b` word boundary holds for the shape pass.
 _MIN_REDACTABLE_SECRET_LEN = 8
 
+# How long ``run_in_session`` waits for the pipes to close after it has SIGKILLed the child's
+# group. A killed group closes its pipe ends at once, so anything still holding them past this
+# bound is a survivor (a kill that did nothing, a process the signal could not reach) and the
+# drain reports it rather than blocking the rig on it.
+DRAIN_TIMEOUT_S = 5.0
+
 
 def run_in_session(
     argv: Sequence[str],
@@ -116,19 +123,39 @@ def run_in_session(
     )
     try:
         stdout, stderr = proc.communicate(input=input, timeout=timeout)
-    except subprocess.TimeoutExpired as exc:
+    except subprocess.TimeoutExpired:
         _kill_group(proc)
         # The second communicate returns everything buffered before the bound plus whatever the
-        # kill flushed; ``communicate`` only raises ``TimeoutExpired`` from a bounded call, so the
-        # bound is quoted as the caller gave it, not as the remaining slice ``exc`` reports.
-        stdout, stderr = proc.communicate()
-        bound = exc.timeout if timeout is None else timeout
-        raise subprocess.TimeoutExpired(proc.args, bound, output=stdout, stderr=stderr) from None
+        # kill flushed. It is bounded too: a pipe still open after the group was SIGKILLed is
+        # held by a survivor, and an unbounded drain would block the rig on it for as long as
+        # it lives. ``communicate`` only raises ``TimeoutExpired`` from a bounded call, so the
+        # bound quoted is the caller's ``timeout``, not the remaining slice the first raise reports.
+        try:
+            stdout, stderr = proc.communicate(timeout=DRAIN_TIMEOUT_S)
+        except subprocess.TimeoutExpired as drain:
+            _abandon(proc)
+            raise RuntimeError(
+                f"process group {proc.pid} survived SIGKILL: its pipes were still held open "
+                f"{DRAIN_TIMEOUT_S}s after the kill, so a child of {proc.args[0]!r} is still "
+                "running and the partial output could not be drained"
+            ) from drain
+        raise subprocess.TimeoutExpired(proc.args, timeout, output=stdout, stderr=stderr) from None
     except BaseException:
         _kill_group(proc)
         proc.wait()
         raise
     return subprocess.CompletedProcess(proc.args, proc.returncode, stdout, stderr)
+
+
+def _abandon(proc: subprocess.Popen[str]) -> None:
+    """Give up on a child whose group outlived its kill: SIGKILL the child itself so at least
+    the leader is reaped, and close our pipe ends so nothing waits on the survivor again."""
+    with contextlib.suppress(ProcessLookupError):
+        proc.kill()
+    proc.wait()
+    for stream in (proc.stdin, proc.stdout, proc.stderr):
+        if stream is not None:
+            stream.close()
 
 
 def _kill_group(proc: subprocess.Popen[str]) -> None:

@@ -17,13 +17,16 @@ and it is exactly what a shared helper cannot prove on a caller's behalf.
 import contextlib
 import errno
 import os
+import re
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
 import pytest
 
+from membench import spawn
 from membench.spawn import (
     _MIN_REDACTABLE_SECRET_LEN,
     redact_secret,
@@ -485,6 +488,37 @@ def test_run_in_session_reaches_run_checked_as_the_timeout_rung() -> None:
     assert isinstance(cause, subprocess.TimeoutExpired)
     assert "partial" in timeout_partial_stdout(cause)
     _reap(*_grandchildren(timeout_partial_stdout(cause)))
+
+
+@_LINUX_ONLY
+def test_run_in_session_drain_does_not_hang_when_the_kill_is_a_no_op(tmp_path, monkeypatch) -> None:
+    """Review F7: after a group kill that did nothing, the drain behind it used to be an unbounded
+    ``communicate()`` — a grandchild holding stdout held the whole rig with it. The drain is
+    bounded and a group that survives is reported by name, never waited out."""
+    pidfile = tmp_path / "holder.pid"
+    holder = ["sh", "-c", f"sleep 600 & echo $! > {pidfile}; wait"]
+    monkeypatch.setattr(spawn, "_kill_group", lambda proc: None)
+    monkeypatch.setattr(spawn, "DRAIN_TIMEOUT_S", 1.0)
+    outcome: list[BaseException] = []
+
+    def _run() -> None:
+        try:
+            run_in_session(holder, capture_output=True, text=True, check=False, timeout=0.5)
+        except BaseException as exc:
+            outcome.append(exc)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    thread.join(15.0)
+    try:
+        assert not thread.is_alive(), "the drain blocked on the grandchild holding stdout"
+        assert len(outcome) == 1
+        assert isinstance(outcome[0], RuntimeError)
+        assert re.search(r"process group \d+ survived", str(outcome[0]))
+        assert "1.0s" in str(outcome[0])
+    finally:
+        _reap(int(pidfile.read_text()))
+        thread.join(5.0)
 
 
 def test_run_in_session_returns_a_completed_process_with_cwd_env_and_input(tmp_path) -> None:
