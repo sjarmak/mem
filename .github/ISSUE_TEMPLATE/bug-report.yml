@@ -1,0 +1,70 @@
+name: Bug report
+description: Something in mem, the CLI, or the bd adoption harness behaved incorrectly.
+title: '[Bug]: '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Plain description is fine; there is no methodology to fill in here. For a vulnerability, use the private advisory link on the new-issue page instead of this form. Remove secrets, private traces, and identifying details before posting.
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened
+      description: What you ran, and what it did.
+      placeholder: |
+        Ran: ./bin/mem retrieve --json --error-class build
+        Got: exit 0 with an empty result list
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce it
+      description: Number the steps if you can. Say so if it only happens sometimes, or only after something else.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Versions
+      description: Anything you cannot find, write unknown.
+      value: |
+        mem commit or version:
+        bd version:
+        OS:
+        agent CLI and model (if an agent was involved):
+    validations:
+      required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      options:
+        [
+          Minor friction,
+          Material rework,
+          Blocks a workflow,
+          Produces wrong results or numbers,
+          Unknown,
+        ]
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Error output, logs, or artifacts
+      description: Paste the failure text, or link a sanitized run directory. Redact paths and tokens you cannot share.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Public-data check
+      options:
+        - label: I removed secrets, private traces, private infrastructure details, and identifying information I do not have permission to share.
+          required: true

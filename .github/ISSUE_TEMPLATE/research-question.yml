@@ -3,72 +3,74 @@ description: Frame a community or engineering signal as a falsifiable, decision-
 title: '[Research]: '
 labels: ['research-question']
 body:
+  - type: markdown
+    attributes:
+      value: |
+        You do not have to be a researcher to file this. Answer the first four boxes in your own words and stop there. Everything below them is optional, and maintainers fill in what you leave blank when the question is registered as an experiment.
   - type: textarea
     id: decision
     attributes:
-      label: Decision this research could change
-      description: Name the concrete adopt, reject, defer, design, or upstream choice.
+      label: What decision would the answer change?
+      description: What would we do differently depending on how this comes out?
+      placeholder: If memory costs more time than it saves, pause the rollout until the cost is fixed.
     validations:
       required: true
   - type: textarea
     id: question
     attributes:
-      label: Falsifiable question or hypothesis
-      description: State the population, intervention, comparator, and expected outcome where possible.
-    validations:
-      required: true
-  - type: textarea
-    id: signals
-    attributes:
-      label: Linked community or engineering signals
-      description: Link source issues/discussions and explain deduplication; do not copy private reports.
-    validations:
-      required: true
-  - type: dropdown
-    id: task_source
-    attributes:
-      label: Intended task source
-      options: [Sanitized real, Authored operational, Synthetic stress, Replay, Mixed, Unknown]
-    validations:
-      required: true
-  - type: textarea
-    id: gates
-    attributes:
-      label: Affected and neutral-task gates
-      description: Name metrics, baselines, minimum acceptable effect, regression ceiling, and cost ceiling.
+      label: The question, stated so that the answer could be no
+      description: What you expect to be true, and what result would prove you wrong. Comparing two things ("with memory" against "without") is what makes it answerable.
+      placeholder: An agent with memory finishes the same task in less wall-clock time than an agent without it.
     validations:
       required: true
   - type: textarea
     id: design
     attributes:
-      label: Proposed design and analysis
-      description: Include sampling, controls, repeats, uncertainty, stopping rule, and contamination controls.
+      label: How would you test it?
+      description: A sketch is enough. What to run, what to measure, what to compare it against.
     validations:
       required: true
+  - type: dropdown
+    id: task_source
+    attributes:
+      label: What should it run on?
+      description: Pick Unknown if you have no preference.
+      options: [Sanitized real, Authored operational, Synthetic stress, Replay, Mixed, Unknown]
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: |
+        ### Optional from here down
+
+        These are the fields we have to settle before a run can be trusted. Fill in any you have an opinion about; leave the rest blank and we will complete them at registration and post what we chose.
+  - type: textarea
+    id: signals
+    attributes:
+      label: What prompted this?
+      description: Link any issue, discussion, or run that made you ask, and say whether it overlaps something already filed. A hunch is a valid answer. Do not paste private reports.
+  - type: textarea
+    id: gates
+    attributes:
+      label: How big an effect would be worth having?
+      description: The smallest improvement that would change the decision, and how much of a regression elsewhere, or extra cost, would be too much to accept for it.
   - type: textarea
     id: contamination
     attributes:
-      label: Contamination and answer-leakage controls
-      description: State public exposure risk, holdout/post-cutoff/private/synthetic controls, and what the harness could reveal.
-    validations:
-      required: true
+      label: Ways the result could be misleading
+      description: Anything that could let the agent see the answer in advance, or make the numbers look good for a reason other than the one being tested.
   - type: textarea
     id: precision
     attributes:
-      label: Precision or power plan
-      description: Explain whether the sample and repeats can resolve the registered decision threshold and how an inconclusive result will be reported.
-    validations:
-      required: true
+      label: How many runs would it take to settle?
+      description: Whether one run could answer this or it needs repeats to separate a real effect from noise, and what we should publish if it comes out inconclusive.
   - type: textarea
     id: provenance
     attributes:
-      label: Provenance and reproducibility plan
-      description: Identify versions, fixtures/corpora, configurations, seeds/schedules, and privacy-safe artifacts to preserve.
-    validations:
-      required: true
+      label: What has to be pinned to reproduce it?
+      description: Versions, corpora, configurations, seeds, and which artifacts to keep.
   - type: textarea
     id: risks
     attributes:
-      label: Threats, limitations, and privacy risks
-    validations:
-      required: true
+      label: Limits, risks, and privacy concerns
+      description: What this design would not establish even if it works, and anything sensitive it would touch.
