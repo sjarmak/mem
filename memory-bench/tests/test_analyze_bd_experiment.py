@@ -8,6 +8,8 @@ from typing import Any
 import pytest
 
 from membench.runner.bd_experiment import _pair_dir
+from membench.runner.e1_reliability import RELIABILITY_VERSION
+from membench.runner.leg_plans import PAIR_ROLES, TRIAL_ROLES
 from membench.runner.resume_cache import digest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "analyze_bd_experiment.py"
@@ -21,7 +23,9 @@ def analyzer() -> Any:
     return module
 
 
-def fixture(root: Path, *, tasks: int = 2) -> dict[str, Any]:
+def fixture(
+    root: Path, *, tasks: int = 2, leg_plan: tuple[str, ...] | None = None
+) -> dict[str, Any]:
     schedule = [
         {"condition": c, "work_id": str(t), "variant": v, "repeat": r}
         for t in range(tasks)
@@ -34,9 +38,30 @@ def fixture(root: Path, *, tasks: int = 2) -> dict[str, Any]:
         "conditions": {c: {} for c in ("generic", "explicit", "redirect")},
         "planned_pairs": len(schedule),
         "model": "fixture",
+        **({"leg_plan": list(leg_plan)} if leg_plan is not None else {}),
     }
     (root / "manifest.json").write_text(json.dumps(manifest))
     return manifest
+
+
+def _call(position: int, verb: str, outcome: str, *values: str) -> dict[str, Any]:
+    return {
+        "position": position,
+        "tool_use_index": position,
+        "verb": verb,
+        "key": "k",
+        "outcome": outcome,
+        "current_values": [v for v in values if v == "current"],
+        "superseded_values": [v for v in values if v == "previous"],
+    }
+
+
+TRIAL_CALLS: dict[str, list[dict[str, Any]]] = {
+    "establish": [_call(0, "remember", "remembered", "previous")],
+    "revise": [_call(0, "remember", "updated", "current")],
+    "goal": [_call(0, "recall", "returned", "current")],
+    "stale_writer": [_call(0, "remember", "updated", "previous")],
+}
 
 
 def save_pair(
@@ -46,12 +71,15 @@ def save_pair(
     *,
     success: bool,
     unknown: bool = False,
+    calls: dict[str, list[dict[str, Any]]] | None = None,
 ) -> None:
     directory = _pair_dir(root, pair)
     (directory / "legs").mkdir(parents=True)
     evidence = []
-    for index, role in enumerate(("establish", "goal")):
+    plan = tuple(manifest.get("leg_plan") or PAIR_ROLES)
+    for index, role in enumerate(plan):
         ev = {
+            "scoring_version": RELIABILITY_VERSION,
             "role": role,
             "leg": index,
             "status": "ok",
@@ -65,6 +93,7 @@ def save_pair(
             "bd_accepted_writes": int(success),
             "native_read_attempts": 1,
             "native_write_attempts": 0,
+            "bd_calls": (calls or {}).get(role, []),
         }
         evidence.append(ev)
         result = {
@@ -279,3 +308,75 @@ def test_redirect_increment_is_paired_against_explicit(tmp_path: Path) -> None:
     assert generic["difference"] == 1.0
     assert "redirect minus explicit" in mod.markdown(report)
     assert "redirect minus generic" in mod.markdown(report)
+
+
+def test_a_trial_manifest_is_read_with_four_legs_and_capture_comes_from_the_revise_leg(
+    tmp_path: Path,
+) -> None:
+    """The leg immediately before the goal is the one that was shown the current values: the
+    establish leg in a pair, the revise leg in a trial. Capture is read from that leg."""
+    manifest = fixture(tmp_path, leg_plan=TRIAL_ROLES)
+    pair = manifest["schedule"][0]
+    save_pair(tmp_path, manifest, pair, success=True, calls=TRIAL_CALLS)
+    directory = _pair_dir(tmp_path, pair)
+    establish_path = directory / "legs" / "0.json"
+    establish = json.loads(establish_path.read_text())
+    establish["bd_evidence"] = {**establish["bd_evidence"], "bd_capture_complete": False}
+    establish_path.write_text(json.dumps(establish))
+    saved = json.loads((directory / "cell.json").read_text())
+    saved["cell"]["bd_evidence"][0] = establish["bd_evidence"]
+    (directory / "cell.json").write_text(json.dumps(saved))
+
+    mod = analyzer()
+    report = mod.analyze(tmp_path, bootstrap_samples=30)
+    assert report["leg_plan"] == list(TRIAL_ROLES)
+    row = report["pairs"][0]
+    assert [leg["role"] for leg in row["legs"]] == list(TRIAL_ROLES)
+    assert row["recorded_legs"] == 4
+    assert row["metrics"]["capture"] is True
+    assert row["metrics"]["handoff"] is True
+    assert row["trial"] == {
+        "capture_superseded": True,
+        "revision": "updated_in_place",
+        "revision_captured_current": True,
+        "retrieval_current_only": True,
+        "retrieval_states_superseded": False,
+        "goal_action_success": True,
+        "stale_write": "updated_in_place",
+        "after_rejection": None,
+    }
+    group = next(
+        g for g in report["groups"] if g["condition"] == "generic" and g["variant"] == "necessary"
+    )
+    assert group["missing_legs"] == 4 * 3
+    assert group["trial"]["stale_write"] == {"updated_in_place": 1, "unknown": 3, "scheduled": 4}
+    assert group["trial"]["revision"] == {"updated_in_place": 1, "unknown": 3, "scheduled": 4}
+    assert group["trial"]["after_rejection"] == {"unknown": 4, "scheduled": 4}
+    assert group["trial"]["retrieval_current_only"]["success"] == 1
+    assert group["trial"]["capture_superseded"]["success"] == 1
+    text = mod.markdown(report)
+    assert "Stale write" in text and "updated_in_place" in text
+    # Hook reaches are cumulative across the whole store, so every later leg is differenced
+    # against the leg before it, not against establish.
+    assert [leg["counters"]["hook_reaches"] for leg in row["legs"]] == [1, 0, 0, 0]
+
+
+def test_a_pair_manifest_reports_no_trial_block(tmp_path: Path) -> None:
+    manifest = fixture(tmp_path)
+    save_pair(tmp_path, manifest, manifest["schedule"][0], success=True)
+    report = analyzer().analyze(tmp_path, bootstrap_samples=30)
+    assert report["leg_plan"] == list(PAIR_ROLES)
+    assert "trial" not in report["pairs"][0]
+    assert "trial" not in report["groups"][0]
+    assert "Stale write" not in analyzer().markdown(report)
+
+
+def test_a_trial_leg_saved_at_a_pair_position_is_refused(tmp_path: Path) -> None:
+    manifest = fixture(tmp_path, leg_plan=TRIAL_ROLES)
+    pair = manifest["schedule"][0]
+    save_pair(tmp_path, manifest, pair, success=True, calls=TRIAL_CALLS)
+    path = _pair_dir(tmp_path, pair) / "legs" / "2.json"
+    goal = json.loads(path.read_text())
+    path.write_text(json.dumps({**goal, "leg": 1}))
+    with pytest.raises(ValueError, match="index"):
+        analyzer().analyze(tmp_path, bootstrap_samples=30)

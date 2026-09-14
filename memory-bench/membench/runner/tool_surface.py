@@ -692,25 +692,39 @@ def _attribute_result(
     ]
 
 
+def remember_ack_action(result: str | None) -> str | None:
+    """Which of bd's three ``remember`` answers ``result`` carries, lower-cased as bd's own
+    ``--json`` ``action`` field spells them: ``"remembered"`` (a fresh key), ``"updated"`` (an
+    EXISTING key overwritten in place), ``"recalled"`` (a bare existing key READ instead), or
+    ``None`` for a refusal, a truncated stream, or anything that is not one of the three.
+
+    ``remember_was_accepted`` and ``remember_was_a_recall`` are projections of this; the
+    version-history trial needs the finer reading because an ``Updated`` on a stale value is
+    the overwrite it exists to observe, and today's bd prints the same acceptance for both."""
+    if result is None:
+        return None
+    matched = _BD_REMEMBER_ACK.search(result)
+    if matched:
+        return matched.group(0).split(" ", 1)[0].lower()
+    if _BD_REMEMBER_RECALLED.search(result):
+        return _BD_REMEMBER_RECALLED_ACTION
+    action = _bd_json_action(result)
+    if action in _BD_REMEMBER_ACK_ACTIONS or action == _BD_REMEMBER_RECALLED_ACTION:
+        return action
+    return None
+
+
 def remember_was_accepted(result: str | None) -> bool:
     """Whether a ``bd remember`` result carries bd's acknowledgement that the memory was STORED.
 
     ``None`` (no tool_result joined — the stream ended before the tool returned) is not an
     acceptance: the evidence is positive or it is absent."""
-    if result is None:
-        return False
-    if _BD_REMEMBER_ACK.search(result):
-        return True
-    return _bd_json_action(result) in _BD_REMEMBER_ACK_ACTIONS
+    return remember_ack_action(result) in _BD_REMEMBER_ACK_ACTIONS
 
 
 def remember_was_a_recall(result: str | None) -> bool:
     """Whether a ``bd remember`` result shows bd took the bare-existing-key path and READ."""
-    if result is None:
-        return False
-    if _BD_REMEMBER_RECALLED.search(result):
-        return True
-    return _bd_json_action(result) == _BD_REMEMBER_RECALLED_ACTION
+    return remember_ack_action(result) == _BD_REMEMBER_RECALLED_ACTION
 
 
 @dataclass(frozen=True)
@@ -1571,15 +1585,117 @@ def memory_invocations(calls: Iterable[ToolCall]) -> list[MemoryInvocation]:
     return invocations
 
 
-def memory_result_is_attributable(call: ToolCall) -> bool:
-    """Whether one answered, successful tool call runs exactly one direct bd memory command.
+def _copy_heredoc_bodies(command: str, i: int, out: list[str], pending: list[str]) -> int:
+    """Copy each pending heredoc body, delimiter line included, through verbatim."""
+    for delimiter in pending:
+        while i < len(command):
+            end = command.find("\n", i)
+            end = len(command) if end == -1 else end
+            line = command[i:end]
+            out.append(command[i : end + 1])
+            i = end + 1
+            if line.strip() == delimiter:
+                break
+    return i
 
-    Compound commands and wrappers can print text that looks like bd output. Their results
-    remain unattributed even when they contain a successful bd operation; this conservative
-    boundary may undercount complex commands, but cannot credit another command's echo."""
-    if call.name not in MEMORY_TOOL_NAMES or call.is_error or call.result is None:
+
+def strip_redirections(command: str) -> str | None:
+    """``command`` with its redirections removed, or ``None`` when one of them sends stdout
+    somewhere other than back to the caller.
+
+    ``command_segments`` starts a new segment at ``<`` and ``>`` so a redirection target can
+    never be read as a command word. That is the right shape for COUNTING invocations and the
+    wrong one for asking whether a line is ONE command: ``bd recall k 2>&1`` is one command whose
+    tool_result is still bd's own output, and every bd call in the first paid four-leg trial was
+    spelled that way, so every one of them scored as a compound command. ``bd recall k > out``
+    is one command too, but its output went to the file, so the tool_result is not bd's and the
+    caller gets ``None``. Redirections that only move stderr or feed stdin are dropped; quoted
+    text and heredoc bodies are copied through untouched.
+
+    Mechanical throughout: this reads operator shape, never what a memory says."""
+    out: list[str] = []
+    pending: list[str] = []
+    i = 0
+    n = len(command)
+    while i < n:
+        ch = command[i]
+        if ch in ("'", '"'):
+            j = i + 1
+            while j < n and command[j] != ch:
+                j += 2 if ch == '"' and command[j] == "\\" else 1
+            out.append(command[i : j + 1])
+            i = j + 1
+            continue
+        if ch == "\\":
+            out.append(command[i : i + 2])
+            i += 2
+            continue
+        if ch == "\n" and pending:
+            out.append(ch)
+            i = _copy_heredoc_bodies(command, i + 1, out, pending)
+            pending = []
+            continue
+        if command[i : i + 2] == "<<":
+            j = i + 2 + (1 if command[i + 2 : i + 3] == "-" else 0)
+            while j < n and command[j] in " \t":
+                j += 1
+            delimiter: list[str] = []
+            while j < n and command[j] not in _GRAMMAR_DELIMITER_END:
+                if command[j] not in ("'", '"'):
+                    delimiter.append(command[j])
+                j += 1
+            pending.append("".join(delimiter))
+            out.append(command[i:j])
+            i = j
+            continue
+        redirects_output = ch == ">" or command[i : i + 2] == "&>"
+        if ch != "<" and not redirects_output:
+            out.append(ch)
+            i += 1
+            continue
+        # The fd prefix is the run of digits glued to the operator: ``2>&1``, ``1>file``. A word
+        # ending in a digit (``k2>x``) is a word; the shell reads it that way too.
+        j = len(out)
+        while j > 0 and out[j - 1].isdigit():
+            j -= 1
+        glued = j < len(out) and (j == 0 or out[j - 1] in _GRAMMAR_DELIMITER_END)
+        fd = "".join(out[j:]) if glued else ""
+        if glued:
+            del out[j:]
+        if ch == "&":  # ``&>`` and ``&>>`` send both streams to the target
+            fd = "1"
+            i += 1
+        i += 1
+        while i < n and command[i] in ">&|":  # ``>>``, ``>&``, ``>|``, ``<&``, ``<>``
+            i += 1
+        while i < n and command[i] in " \t":
+            i += 1
+        if i < n and command[i] in ("'", '"'):
+            quote = command[i]
+            i = command.find(quote, i + 1)
+            i = n if i == -1 else i + 1
+        else:
+            while i < n and command[i] not in _GRAMMAR_DELIMITER_END:
+                i += 1
+        if redirects_output and fd in ("", "1"):
+            return None
+        out.append(" ")
+    return "".join(out)
+
+
+def memory_command_is_direct(call: ToolCall) -> bool:
+    """Whether one tool call runs exactly one direct bd memory command and nothing else.
+
+    The shape half of ``memory_result_is_attributable``: it says whose output the tool_result
+    is, not whether that command succeeded. A refused or unanswered direct call is still
+    direct, so its refusal can be observed as bd's own. A redirection that only moves stderr or
+    feeds stdin leaves the command direct; one that sends stdout elsewhere, a pipe, or a second
+    command means the tool_result is not bd's alone."""
+    if call.name not in MEMORY_TOOL_NAMES:
         return False
-    command = _command_of(call)
+    command = strip_redirections(_command_of(call))
+    if command is None:
+        return False
     segments = command_segments(command)
     return (
         len(segments) == 1
@@ -1587,6 +1703,15 @@ def memory_result_is_attributable(call: ToolCall) -> bool:
         and PurePosixPath(segments[0][0]).name == MEMORY_COMMAND
         and len(memory_invocations_in_command(command)) == 1
     )
+
+
+def memory_result_is_attributable(call: ToolCall) -> bool:
+    """Whether one answered, successful tool call runs exactly one direct bd memory command.
+
+    Compound commands and wrappers can print text that looks like bd output. Their results
+    remain unattributed even when they contain a successful bd operation; this conservative
+    boundary may undercount complex commands, but cannot credit another command's echo."""
+    return not call.is_error and call.result is not None and memory_command_is_direct(call)
 
 
 def observed_requested_ids(calls: Iterable[ToolCall]) -> list[str]:

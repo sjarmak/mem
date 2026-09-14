@@ -36,6 +36,35 @@ Every task ships as twins:
 The `unnecessary` twin is the control. Without it, a condition could score well on
 adoption purely by making the agent read memory constantly.
 
+### The four-session trial (`--legs trial`)
+
+The pair asks whether a fact survives a handoff. The trial asks what happens when the
+fact *changes*: it spends four sessions on one store instead of two.
+
+1. **Establish.** As above, but the token the agent encounters is the *previous*
+   version of the fact.
+2. **Revise.** A fresh agent is shown the previous version and the current one, in that
+   order, and told the fact changed. Whether it overwrites what the first session
+   stored, writes beside it, or writes nothing is recorded per bd call, from bd's own
+   acknowledgement (`Updated [key]` is an in-place overwrite, `Remembered [key]` a new
+   entry).
+3. **Goal.** A fresh agent needs the current version. Beyond the pair's endpoints, the
+   trial records whether what it read back states only the current version or still
+   carries the superseded one.
+4. **Stale writer.** A fresh agent primed on the *previous* version, as if resuming
+   after the revision landed, is asked to record what it knows. Whether its write
+   overwrites the current version, lands beside it, or is rejected, and what it does
+   after a rejection (stop, re-read, retry), is the observation a CLI test cannot
+   make on its own.
+
+Every verdict is read from recorded bd output, never inferred from the command line.
+A call whose output cannot be pinned on one direct `bd` command (a pipe, a second
+command on the same line, a wrapper) is reported as unattributed rather than scored. A
+redirection that leaves stdout alone (`2>&1`, `2>/dev/null`) does not make a command
+compound: agents append one to nearly every bd call, and scorer versions before 5 read
+every such call as unattributed. The audit below rescores saved sessions with the
+current scorer, so a run scored under an older version need not be bought again.
+
 ## The three conditions
 
 All three run the same tasks, the same tools, the same isolated store lifecycle, and
@@ -193,9 +222,14 @@ PYTHONPATH=. uv run python -m membench.runner.bd_experiment \
 ```
 
 The manifest holds the full randomized schedule, the model, the CLI version, the bd
-identity, a hash of every harness source file, and the corpus fingerprint. Read it
-before spending anything. `--tasks 8 --repeats 2` is the shape of our published run:
-96 pairs, 192 sessions.
+identity, a hash of every harness source file, the corpus fingerprint, and the leg
+plan. Read it before spending anything. `--tasks 8 --repeats 2` is the shape of our
+published run: 96 pairs, 192 sessions.
+
+Add `--legs trial` to freeze the four-session version-history trial instead. The plan
+is part of the frozen identity, so a directory planned as pairs cannot later be run as
+trials, or the reverse; each schedule entry then spends four sessions on one store, and
+`--max-pairs` still counts schedule entries.
 
 ## Run it
 
@@ -211,7 +245,9 @@ PYTHONPATH=. uv run python -m membench.runner.bd_experiment \
 `--max-pairs` bounds how many *new* pairs this invocation may buy. It defaults to 1, so
 the obvious first command buys one pair and stops. Re-run with a larger `--max-pairs` to
 continue; already-completed pairs are reused, never repurchased. Budget roughly **$0.14
-per pair** at the rates our run saw, so a full 96-pair replication is around $13.
+per pair** at the rates our run saw, so a full 96-pair replication is around $13. A
+trial runs twice the sessions of a pair, so budget roughly twice that per entry; pass
+the same `--legs trial` on every invocation against a trial directory.
 
 Start with one pair and read its output before scaling up.
 
@@ -235,7 +271,10 @@ That writes `analysis.json` and a human-readable `report.md`; the pair from our 
 is in [`reference-run/`](reference-run/report.md) if you want to see the shape before you
 spend anything. Denominators come from the *schedule*, not from whatever completed, so a
 missing or unmeasured pair stays visible in the counts instead of quietly shrinking the
-sample.
+sample. The analyzer reads the leg plan from the manifest: a trial run gets a second
+table tallying the revision, stale-write and after-rejection verdicts per condition,
+with unknowns (missing legs, unattributable calls) counted beside the observed
+categories rather than dropped.
 
 A transcript audit rechecks acknowledged `Write` calls against the expected
 `config.json` path and JSON string values, and checks recall/action ordering:
@@ -253,6 +292,30 @@ the same `bd_actions.write_reason` validator, so agreement is not independent ev
 of correctness. The audit remains useful for inspecting individual writes, timing,
 missing evidence, and discrepancies with historical saved scores.
 
+The same audit rescores every saved session with today's scorer, from its transcript
+and bd receipts, and for a trial run derives the trial verdicts again. `audit.json`
+carries the saved and the rescored verdicts per pair (`trial_saved`, `trial_rescored`)
+and the rescored evidence per session (`rescored_legs`); `report.md` shows the two side
+by side, and lists the pairs whose verdicts moved. A moved verdict is a scorer change,
+not new agent behaviour. Rescoring passes no config directory, so the native-memory
+counters are not compared.
+
+### Replay a session as a recording
+
+Every saved session can be replayed as an asciinema recording, and as a GIF and MP4
+when `agg` and `ffmpeg` are installed. Nothing is re-run: every command, result and
+receipt shown is the recorded one, paced for reading.
+
+```bash
+PYTHONPATH=. uv run python scripts/render_leg_cast.py runs/my-first-run \
+  --out runs/my-first-run-recordings --video \
+  --audit runs/my-first-run-audit/audit.json
+```
+
+The closing block of each recording shows the score saved at run time. With `--audit`,
+the rescored evidence is shown above it, each block labelled with the scorer version
+that produced it.
+
 ### Layout of a run directory
 
 ```
@@ -261,9 +324,14 @@ runs/my-first-run/
   pairs/<condition>/<task-hash>/<repeat>/
     started.json                     pair identity, written before any spend
     legs/                            one row per session: argv, exit status, receipts
+                                     (two rows for a pair, four for a trial)
     cell.json                        scored outcome, written last
     halt.json                        present only if the pair failed
 ```
+
+Each leg row names its role (`establish`, `goal`, and for a trial `revise` and
+`stale_writer`) and its position in the plan; the analyzer and the audit refuse a row
+filed under a role at the wrong position.
 
 Every bd invocation inside a session is wrapped so that its actual argv, exit status
 and per-stream output are recorded. A verb on a command line is not an operation: in

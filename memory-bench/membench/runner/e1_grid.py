@@ -81,6 +81,7 @@ from membench.runner.headless_agent import (
     stream_cli_version,
     tool_calls_from_stream,
 )
+from membench.runner.leg_plans import LEG_PLANS, PAIR_ROLES, TRIAL_ROLES
 from membench.runner.native_memory_hook import hook_reaches as read_hook_reaches
 from membench.runner.native_memory_hook import install_native_memory_hook
 from membench.runner.resume_cache import digest
@@ -99,7 +100,12 @@ from membench.runner.tool_surface import (
     surface_fingerprint,
 )
 from membench.runner.toolreq_builtin import wipe_cwd_contents
-from membench.runner.toolreq_corpus import established_context, load_twin_corpus
+from membench.runner.toolreq_corpus import (
+    PREVIOUS_HEADING,
+    established_context,
+    load_twin_corpus,
+    prior_context,
+)
 from membench.runner.toolreq_realagent import (
     DEFAULT_CORPUS,
     VARIANT_NECESSARY,
@@ -662,10 +668,13 @@ def rung_step(task: ToolReqRealAgentTask, rung: str) -> SequenceStep:
     )
 
 
-# The two legs one cell spends, in order. A PAIR and not a loop: the store is minted before the
-# first and survives into the second, the cwd is wiped BETWEEN them, and their order is the whole
-# hypothesis — swapped, the cell establishes into a session that has already been asked to act.
-LEG_ROLES: tuple[str, ...] = ("establish", "goal")
+# The two legs one LADDER cell spends, in order. A PAIR and not a loop: the store is minted before
+# the first and survives into the second, the cwd is wiped BETWEEN them, and their order is the
+# whole hypothesis — swapped, the cell establishes into a session that has already been asked to
+# act. The pair plan by identity (``leg_plans.PAIR_ROLES``): the ladder's price, its artifacts and
+# its reliability report all count in pairs, and a plan with more legs is a per-call argument
+# (``run_rung_cell(leg_plan=...)``) rather than an edit here.
+LEG_ROLES: tuple[str, ...] = PAIR_ROLES
 LEGS_PER_CELL = len(LEG_ROLES)
 
 # The establish leg's own instruction, and everything it must not say. It discloses the CELL'S
@@ -679,10 +688,37 @@ ESTABLISH_INSTRUCTION = (
 )
 
 
-def establish_step(task: ToolReqRealAgentTask, rung: str) -> SequenceStep:
+# The trial's two extra legs (``leg_plans.TRIAL_ROLES``), under the same rule as the establish
+# instruction: each discloses the cell's shape and the session's own situation, and says nothing
+# about memory, recording, remembering or durability. The REVISE leg is told the state changed and
+# is shown both versions; the STALE WRITER is a session that only ever knew the previous version
+# and is resuming after the revision landed without having been told.
+REVISE_INSTRUCTION = (
+    "You are picking up work in this session. The state of the system has changed since it was "
+    "last stated. The previous state and the current state are both below; where they differ, "
+    "the current state replaces the previous one. Acknowledge the change; a separate session in "
+    "this project will ask you to act on it."
+)
+STALE_WRITER_INSTRUCTION = (
+    "You are resuming work in this session after time away. The state of the system as you last "
+    "knew it is below. Acknowledge it; a separate session in this project will ask you to act on "
+    "it."
+)
+
+
+def _guided(rung: str, body: str) -> str:
+    block = guidance_block(rung)
+    return f"{block}\n\n{body}" if block else body
+
+
+def establish_step(
+    task: ToolReqRealAgentTask, rung: str, *, context: str | None = None
+) -> SequenceStep:
     """The cell's FIRST leg: the rung's guidance, a neutral instruction, and the values the goal
     leg will need — for BOTH halves of the twin, byte-identical off the values themselves
-    (``toolreq_corpus.established_context``).
+    (``toolreq_corpus.established_context``). ``context`` substitutes a different block under the
+    same instruction; the trial passes the PREVIOUS version's block, so its first session knows
+    the fact as it stood before the revision.
 
     This is what makes a write payable. Until it existed, a cell minted a store, ran one leg and
     destroyed the store, so an agent that recorded a durable fact was recording into a directory
@@ -695,19 +731,65 @@ def establish_step(task: ToolReqRealAgentTask, rung: str) -> SequenceStep:
     the session's own context, which is what the agent establishing them means: they are being
     stated now, not recalled, and the ladder alone decides whether the agent does anything durable
     with them."""
-    block = guidance_block(rung)
-    body = f"{ESTABLISH_INSTRUCTION}\n\n{established_context(task)}"
+    stated = established_context(task) if context is None else context
     return SequenceStep(
         step_id=f"{task.goal_step.step_id}-{rung}-establish",
-        user_request=f"{block}\n\n{body}" if block else body,
+        user_request=_guided(rung, f"{ESTABLISH_INSTRUCTION}\n\n{stated}"),
         available_tools=list(MEMORY_ALLOWED_TOOLS),
     )
 
 
-def cell_steps(task: ToolReqRealAgentTask, rung: str) -> tuple[SequenceStep, SequenceStep]:
-    """The two steps one cell sends, paired in the order it sends them. THE definition: the fire
-    executes these and nothing else renders them a second time."""
-    return (establish_step(task, rung), rung_step(task, rung))
+def revise_step(task: ToolReqRealAgentTask, rung: str) -> SequenceStep:
+    """The trial's SECOND leg: the session that learns the fact changed. It is shown the previous
+    version under ``PREVIOUS_HEADING`` and the current one under ``CONTEXT_HEADING``, in that
+    order, and nothing else. Whether it revises what the first session stored, overwrites it,
+    writes beside it, or does nothing is the observation (``trial_outcomes``), and the ladder's
+    clause is the only thing that may suggest any of those."""
+    body = (
+        f"{REVISE_INSTRUCTION}\n\n"
+        f"{prior_context(task, heading=PREVIOUS_HEADING)}\n\n{established_context(task)}"
+    )
+    return SequenceStep(
+        step_id=f"{task.goal_step.step_id}-{rung}-revise",
+        user_request=_guided(rung, body),
+        available_tools=list(MEMORY_ALLOWED_TOOLS),
+    )
+
+
+def stale_writer_step(task: ToolReqRealAgentTask, rung: str) -> SequenceStep:
+    """The trial's LAST leg: a session primed on the PREVIOUS version, resuming after the
+    revision landed. It shares the store the goal leg just read the current version from. What a
+    write from here does — overwrite the current version, land beside it, get rejected, and what
+    the agent does after a rejection — is the observation the CLI cannot make on its own."""
+    body = f"{STALE_WRITER_INSTRUCTION}\n\n{prior_context(task)}"
+    return SequenceStep(
+        step_id=f"{task.goal_step.step_id}-{rung}-stale-writer",
+        user_request=_guided(rung, body),
+        available_tools=list(MEMORY_ALLOWED_TOOLS),
+    )
+
+
+def cell_steps(
+    task: ToolReqRealAgentTask, rung: str, plan: Sequence[str] = LEG_ROLES
+) -> tuple[SequenceStep, ...]:
+    """The steps one cell sends, in the order it sends them, one per role of ``plan``. THE
+    definition: the fire executes these and nothing else renders them a second time.
+
+    The pair establishes the CURRENT version and acts on it. The trial establishes the PREVIOUS
+    version, revises it to the current one, acts on it, and then lets a session that never saw
+    the revision try to write. The goal step is the same object in both plans, so a trial's goal
+    outcome is comparable to a pair's."""
+    roles = tuple(plan)
+    if roles == PAIR_ROLES:
+        return (establish_step(task, rung), rung_step(task, rung))
+    if roles == TRIAL_ROLES:
+        return (
+            establish_step(task, rung, context=prior_context(task)),
+            revise_step(task, rung),
+            rung_step(task, rung),
+            stale_writer_step(task, rung),
+        )
+    raise ValueError(f"unknown leg plan {roles!r}; the plans are {sorted(LEG_PLANS)}")
 
 
 # --------------------------------------------------------------------------------------
@@ -762,6 +844,10 @@ class RungCell:
     # Compact, role-specific evidence survives resume without re-reading every stream.
     # Empty on legacy cells means unmeasured, never a bd failure.
     bd_evidence: tuple[BdLegEvidence, ...] = ()
+    # The roles each repeat spent, in order (``leg_plans``). Defaults to the pair because every
+    # cell written before plans existed WAS a pair; a reader that needs the leg count per repeat
+    # divides ``runs`` by this length rather than by a literal two.
+    leg_plan: tuple[str, ...] = LEG_ROLES
 
     def __post_init__(self) -> None:
         if self.runs <= 0:
@@ -875,6 +961,7 @@ class RungCell:
             "verbs": list(self.verbs),
             "metrics": self.metrics(),
             "bd_evidence": [leg.model_dump() for leg in self.bd_evidence],
+            "leg_plan": list(self.leg_plan),
         }
 
     @property
@@ -922,6 +1009,7 @@ class RungCell:
             bd_evidence=tuple(
                 BdLegEvidence.model_validate(leg) for leg in row.get("bd_evidence", ())
             ),
+            leg_plan=tuple(str(role) for role in row.get("leg_plan", LEG_ROLES)),
         )
 
 
@@ -1685,15 +1773,18 @@ def run_rung_cell(
     bd_context: bool = BD_CONTEXT_DEFAULT,
     native_memory_hook_mode: str = NATIVE_MEMORY_HOOK_MODE_DEFAULT,
     instrument_bd: bool = False,
+    leg_plan: Sequence[str] = LEG_ROLES,
 ) -> RungCell:
     """Run one ``(rung, task-variant)`` cell and count the memory calls the agent CHOSE to make.
 
-    Each repeat is a TWO-LEG pair — establish, then goal — sharing one neutral sandbox and one
-    memory store minted OUTSIDE it (the store the cwd wipe cannot reach,
+    Each repeat is a TWO-LEG pair by default — establish, then goal — sharing one neutral sandbox
+    and one memory store minted OUTSIDE it (the store the cwd wipe cannot reach,
     ``tool_surface.provision_memory_tool``), with the cwd emptied between the legs so the store is
     the only channel left. That pairing is what makes a write mean anything: a single-leg cell
     destroyed the store on the way out, so an agent that recorded a durable fact recorded it where
     nothing would ever read, and a write rate of zero was the only number the rig could produce.
+    ``leg_plan`` names a longer sequence of roles on the same store (``leg_plans.TRIAL_ROLES``);
+    the store, the sandbox and the wipe between neighbours are the same whatever the length.
 
     Nothing is seeded into the store and no memory is surfaced in either prompt: this measures
     DISPOSITION, so the arm must not hand the agent a reason to call that the rung did not give it.
@@ -1731,7 +1822,8 @@ def run_rung_cell(
     pinned: set[bool] = set()
     streak = UnmeasuredStreak() if streak is None else streak
     verbs: list[str] = []
-    steps = cell_steps(task, rung)
+    plan = tuple(leg_plan)
+    steps = cell_steps(task, rung, plan)
 
     # Every leg this cell PAYS FOR must leave a record. Counted rather than trusted: the emit
     # sites are three (ok, unmeasured, quota) and a fourth outcome added without one would drop
@@ -1817,12 +1909,12 @@ def run_rung_cell(
             bd_context=bd_context,
             native_memory_hook_mode=native_memory_hook_mode,
         ) as store:
-            for role_index, (role, step) in enumerate(zip(LEG_ROLES, steps, strict=True)):
+            for role_index, (role, step) in enumerate(zip(plan, steps, strict=True)):
                 if role_index:
                     # BETWEEN the legs, never around them: the establish leg is unclamped by
-                    # design and the goal leg must not read what it dropped in the cwd.
+                    # design and no later leg may read what an earlier one dropped in the cwd.
                     close_cwd_channel(store)
-                i = repeat * LEGS_PER_CELL + role_index
+                i = repeat * len(plan) + role_index
                 if instrument_bd:
                     prepare_receipt_leg(store.surface, leg=i)
                 outcome = _run_leg(
@@ -1894,9 +1986,9 @@ def run_rung_cell(
                         pin_precedence_fingerprint=outcome.pin_precedence_fingerprint,
                     )
                 )
-    if len(emitted) != repeats * LEGS_PER_CELL:
+    if len(emitted) != repeats * len(plan):
         raise RigHaltError(
-            f"{rung}/{task.variant}/{task.work_id}: {repeats * LEGS_PER_CELL} leg(s) paid for but "
+            f"{rung}/{task.variant}/{task.work_id}: {repeats * len(plan)} leg(s) paid for but "
             f"{len(emitted)} recorded ({emitted}). A leg with no record cannot be re-scored, and "
             "re-scoring is the only thing that makes a paid grid answerable to a question it was "
             "not fired to answer."
@@ -1904,7 +1996,7 @@ def run_rung_cell(
     return RungCell(
         rung=rung,
         variant=task.variant,
-        runs=repeats * LEGS_PER_CELL,
+        runs=repeats * len(plan),
         calling_runs=calling,
         memory_calls=total,
         read_calls=reads,
@@ -1918,6 +2010,7 @@ def run_rung_cell(
         errored_runs=errored,
         native_memory_pinned_off=_one_pin(pinned, rung=rung, task=task),
         bd_evidence=tuple(bd_evidence),
+        leg_plan=plan,
     )
 
 

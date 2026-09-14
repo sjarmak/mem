@@ -4,6 +4,11 @@
 Run from memory-bench: python scripts/analyze_bd_experiment.py EXPERIMENT --out ANALYSIS.
 The schedule, not completed artifacts, supplies every denominator. Bootstrap units are
 work IDs, retaining their repeats, twins and conditions; incomplete observations stay visible.
+
+A run's manifest names its leg plan: the two-leg pair (establish, goal) or the four-leg
+version-history trial (establish, revise, goal, stale_writer). The pair endpoints are read the
+same way under both; a trial run additionally reports the trial verdicts
+(``membench.runner.e1_reliability.trial_outcomes``) per pair and tallied per group.
 """
 
 from __future__ import annotations
@@ -19,9 +24,16 @@ from statistics import fmean
 from typing import Any
 
 from membench.runner.bd_experiment import _pair_dir
+from membench.runner.e1_reliability import (
+    TRIAL_CATEGORICAL,
+    TRIAL_VERDICTS,
+    BdLegEvidence,
+    trial_outcomes,
+)
+from membench.runner.leg_plans import GOAL_ROLE, PAIR_ROLES, TRIAL_ROLES, plan_name
 from membench.runner.resume_cache import digest
 
-ROLES = ("establish", "goal")
+ROLES = PAIR_ROLES
 ENDPOINTS = ("capture", "observed_recall", "recall_before_action", "handoff", "goal_action_success")
 COUNTERS = (
     "bd_read_attempts",
@@ -40,6 +52,7 @@ COSTS = (
     "estimated_usd",
 )
 SMALL_CLUSTER_COUNT = 10  # Reporting caution, not a significance or quality gate.
+ANALYSIS_VERSION = 2
 
 
 def read_object(path: Path) -> dict[str, Any]:
@@ -57,6 +70,18 @@ def number(value: Any) -> float | None:
     if not math.isfinite(value) or value < 0:
         raise ValueError(f"Invalid numeric evidence: {value!r}")
     return float(value)
+
+
+def leg_plan(manifest: Mapping[str, Any]) -> tuple[str, ...]:
+    """The manifest's leg plan; a manifest frozen before plans existed ran the pair."""
+    plan = tuple(str(role) for role in manifest.get("leg_plan") or ROLES)
+    plan_name(plan)
+    return plan
+
+
+def capture_role(plan: Sequence[str]) -> str:
+    """The leg that was shown the current values: the one immediately before the goal."""
+    return plan[plan.index(GOAL_ROLE) - 1]
 
 
 def leg_costs(leg: Mapping[str, Any]) -> dict[str, float | None]:
@@ -94,17 +119,17 @@ def endpoint(leg: Mapping[str, Any] | None, key: str) -> bool | None:
 
 
 def load_legs(
-    directory: Path, pair: Mapping[str, Any], cell: Mapping[str, Any]
+    directory: Path, pair: Mapping[str, Any], cell: Mapping[str, Any], plan: Sequence[str]
 ) -> list[dict[str, Any]]:
     legs: list[dict[str, Any]] = []
     for path in sorted((directory / "legs").glob("*.json")):
         leg = read_object(path)
         role = leg.get("role")
-        if role not in ROLES or any(old["role"] == role for old in legs):
+        if role not in plan or any(old["role"] == role for old in legs):
             raise ValueError(f"Unexpected or duplicate leg role: {path}")
         if any(leg.get(key) != pair[key] for key in ("work_id", "variant")):
             raise ValueError(f"Leg identity mismatch: {path}")
-        if leg.get("leg") != ROLES.index(role):
+        if leg.get("leg") != plan.index(role):
             raise ValueError(f"Leg index mismatch: {path}")
         ev = leg.get("bd_evidence")
         if ev is not None and any(ev.get(key) != leg.get(key) for key in ("role", "leg", "status")):
@@ -120,12 +145,16 @@ def load_legs(
     return legs
 
 
-def hook_delta(leg: Mapping[str, Any], by_role: Mapping[str, Mapping[str, Any]]) -> float | None:
-    """The stored hook log spans both legs; the goal's recorded count is cumulative."""
+def hook_delta(
+    leg: Mapping[str, Any], by_role: Mapping[str, Mapping[str, Any]], plan: Sequence[str]
+) -> float | None:
+    """The stored hook log spans the whole store, so every leg after the first records a
+    cumulative count; each is differenced against the leg before it."""
     count = number(leg.get("hook_reaches"))
-    if leg["role"] == "establish" or count is None:
+    position = plan.index(str(leg["role"]))
+    if position == 0 or count is None:
         return count
-    previous = number(by_role.get("establish", {}).get("hook_reaches"))
+    previous = number(by_role.get(plan[position - 1], {}).get("hook_reaches"))
     if previous is None:
         return None
     if count < previous:
@@ -133,7 +162,16 @@ def hook_delta(leg: Mapping[str, Any], by_role: Mapping[str, Mapping[str, Any]])
     return count - previous
 
 
+def trial_evidence(legs: Sequence[Mapping[str, Any]]) -> dict[str, BdLegEvidence]:
+    return {
+        str(leg["role"]): BdLegEvidence.model_validate(leg["bd_evidence"])
+        for leg in legs
+        if isinstance(leg.get("bd_evidence"), dict)
+    }
+
+
 def load_pair(root: Path, manifest: Mapping[str, Any], pair: Mapping[str, Any]) -> dict[str, Any]:
+    plan = leg_plan(manifest)
     directory = _pair_dir(root, pair)
     cell_path = directory / "cell.json"
     cell: dict[str, Any] = {}
@@ -144,10 +182,10 @@ def load_pair(root: Path, manifest: Mapping[str, Any], pair: Mapping[str, Any]) 
                 raise ValueError(f"Pair identity mismatch: {path}")
             if path == cell_path:
                 cell = saved["cell"]
-    legs = load_legs(directory, pair, cell)
+    legs = load_legs(directory, pair, cell, plan)
     by_role = {leg["role"]: leg for leg in legs}
-    capture = endpoint(by_role.get("establish"), "bd_capture_complete")
-    goal = by_role.get("goal")
+    capture = endpoint(by_role.get(capture_role(plan)), "bd_capture_complete")
+    goal = by_role.get(GOAL_ROLE)
     metrics = {
         "capture": capture,
         "observed_recall": endpoint(goal, "bd_recall_complete"),
@@ -162,6 +200,7 @@ def load_pair(root: Path, manifest: Mapping[str, Any], pair: Mapping[str, Any]) 
         "recorded_legs": len(legs),
         "measured_legs": sum(leg.get("status") == "ok" for leg in legs),
         "metrics": metrics,
+        **({"trial": trial_outcomes(trial_evidence(legs))} if plan == TRIAL_ROLES else {}),
         "legs": [
             {
                 "role": leg["role"],
@@ -169,7 +208,7 @@ def load_pair(root: Path, manifest: Mapping[str, Any], pair: Mapping[str, Any]) 
                 "costs": leg_costs(leg),
                 "counters": {
                     key: (
-                        hook_delta(leg, by_role)
+                        hook_delta(leg, by_role, plan)
                         if key == "hook_reaches"
                         else number((leg.get("bd_evidence") or {}).get(key))
                     )
@@ -200,6 +239,19 @@ def binary_summary(values: Sequence[bool | None]) -> dict[str, Any]:
     }
 
 
+def categorical_summary(values: Sequence[str | None]) -> dict[str, Any]:
+    """Counts per observed category, with the unknowns and the schedule beside them."""
+    counts: dict[str, int] = {}
+    for value in values:
+        if value is not None:
+            counts[value] = counts.get(value, 0) + 1
+    return {
+        **dict(sorted(counts.items())),
+        "unknown": sum(value is None for value in values),
+        "scheduled": len(values),
+    }
+
+
 def numeric_summary(values: Sequence[float | None], scheduled: int) -> dict[str, Any]:
     known = [v for v in values if v is not None]
     return {
@@ -210,14 +262,27 @@ def numeric_summary(values: Sequence[float | None], scheduled: int) -> dict[str,
     }
 
 
-def group_summary(rows: Sequence[dict[str, Any]], condition: str, variant: str) -> dict[str, Any]:
+def trial_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    return {
+        key: (
+            categorical_summary([row["trial"][key] for row in rows])
+            if key in TRIAL_CATEGORICAL
+            else binary_summary([row["trial"][key] for row in rows])
+        )
+        for key in TRIAL_VERDICTS
+    }
+
+
+def group_summary(
+    rows: Sequence[dict[str, Any]], condition: str, variant: str, plan: Sequence[str]
+) -> dict[str, Any]:
     selected = [
         r
         for r in rows
         if r["condition"] == condition and (variant == "all" or r["variant"] == variant)
     ]
     legs = [leg for row in selected for leg in row["legs"]]
-    scheduled_legs = 2 * len(selected)
+    scheduled_legs = len(plan) * len(selected)
     return {
         "condition": condition,
         "variant": variant,
@@ -229,6 +294,7 @@ def group_summary(rows: Sequence[dict[str, Any]], condition: str, variant: str) 
         "metrics": {
             key: binary_summary([r["metrics"][key] for r in selected]) for key in ENDPOINTS
         },
+        **({"trial": trial_summary(selected)} if tuple(plan) == TRIAL_ROLES else {}),
         "counters": {
             key: numeric_summary([leg["counters"][key] for leg in legs], scheduled_legs)
             for key in COUNTERS
@@ -239,7 +305,7 @@ def group_summary(rows: Sequence[dict[str, Any]], condition: str, variant: str) 
                 for row in selected
                 if row["variant"] == "unnecessary"
                 for leg in row["legs"]
-                if leg["role"] == "goal"
+                if leg["role"] == GOAL_ROLE
             ],
             sum(row["variant"] == "unnecessary" for row in selected),
         ),
@@ -318,6 +384,7 @@ def analyze(root: Path, *, bootstrap_samples: int = 2000, seed: int = 20260904) 
     if bootstrap_samples < 1:
         raise ValueError("bootstrap_samples must be positive")
     manifest = read_object(root / "manifest.json")
+    plan = leg_plan(manifest)
     schedule = manifest["schedule"]
     conditions = list(manifest["conditions"])
     if "generic" not in conditions or len({digest(pair) for pair in schedule}) != len(schedule):
@@ -336,7 +403,9 @@ def analyze(root: Path, *, bootstrap_samples: int = 2000, seed: int = 20260904) 
         raise ValueError("Scheduled pair count disagrees with manifest")
     rows = [load_pair(root, manifest, pair) for pair in schedule]
     groups = [
-        group_summary(rows, c, v) for c in conditions for v in ("necessary", "unnecessary", "all")
+        group_summary(rows, c, v, plan)
+        for c in conditions
+        for v in ("necessary", "unnecessary", "all")
     ]
     comparisons = [(c, "generic") for c in conditions if c != "generic"]
     if "redirect" in conditions and "explicit" in conditions:
@@ -348,10 +417,11 @@ def analyze(root: Path, *, bootstrap_samples: int = 2000, seed: int = 20260904) 
         for metric in ("handoff", "goal_action_success")
     ]
     return {
-        "analysis_version": 1,
+        "analysis_version": ANALYSIS_VERSION,
         "analysis_source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "manifest_digest": digest(manifest),
         "manifest": manifest,
+        "leg_plan": list(plan),
         "scheduled_pairs": len(rows),
         "bootstrap_samples": bootstrap_samples,
         "bootstrap_seed": seed,
@@ -364,7 +434,16 @@ def analyze(root: Path, *, bootstrap_samples: int = 2000, seed: int = 20260904) 
             "Duration is CLI-reported session duration, not independent wall-clock measurement.",
             "Counters include partial legs as observed lower bounds "
             "when transcripts are incomplete.",
-            "Hook reaches are differenced within pairs because their saved counts are cumulative.",
+            "Hook reaches are differenced leg to leg because their saved counts are cumulative.",
+            f"Capture is read from the {capture_role(plan)} leg, the one shown the current values.",
+            *(
+                [
+                    "Trial verdicts read bd's own acknowledgements per call; "
+                    "an unknown verdict is a missing or unattributable observation, not a failure."
+                ]
+                if plan == TRIAL_ROLES
+                else []
+            ),
         ],
         "groups": groups,
         "contrasts": contrasts,
@@ -372,12 +451,43 @@ def analyze(root: Path, *, bootstrap_samples: int = 2000, seed: int = 20260904) 
     }
 
 
+def _categories(summary: Mapping[str, Any]) -> str:
+    named = ", ".join(
+        f"{key} {value}" for key, value in summary.items() if key not in ("unknown", "scheduled")
+    )
+    return f"{named or 'none'}; unknown {summary['unknown']}"
+
+
+def _trial_lines(report: Mapping[str, Any]) -> list[str]:
+    lines = [
+        "",
+        "| Condition | Variant | Revision | Stale write | After rejection "
+        "| Retrieval current-only yes / no / unknown | Stale recall yes / no / unknown |",
+        "|---|---|---|---|---|---:|---:|",
+    ]
+    for group in report["groups"]:
+        if group["variant"] == "all":
+            continue
+        trial = group["trial"]
+        booleans = [
+            " / ".join(str(trial[key][part]) for part in ("success", "failure", "unknown"))
+            for key in ("retrieval_current_only", "retrieval_states_superseded")
+        ]
+        lines.append(
+            f"| {group['condition']} | {group['variant']} | {_categories(trial['revision'])} | "
+            f"{_categories(trial['stale_write'])} | {_categories(trial['after_rejection'])} | "
+            f"{booleans[0]} | {booleans[1]} |"
+        )
+    return lines
+
+
 def markdown(report: Mapping[str, Any]) -> str:
     lines = [
         "# bd memory experiment",
         "",
         f"Scheduled pairs: {report['scheduled_pairs']}. "
-        f"Manifest: `{report['manifest_digest']}`.",
+        f"Manifest: `{report['manifest_digest']}`. "
+        f"Leg plan: {', '.join(report['leg_plan'])}.",
         "",
         "| Condition | Variant | Complete / scheduled | Handoff yes / no / unknown "
         "| Goal yes / no / unknown |",
@@ -396,6 +506,8 @@ def markdown(report: Mapping[str, Any]) -> str:
             f"| {group['condition']} | {group['variant']} | {group['completed_pairs']} / "
             f"{group['scheduled_pairs']} | {counts[0]} | {counts[1]} |"
         )
+    if tuple(report["leg_plan"]) == TRIAL_ROLES:
+        lines += _trial_lines(report)
     lines += [
         "",
         "Unknown outcomes are retained in the JSON scheduled-denominator bounds.",

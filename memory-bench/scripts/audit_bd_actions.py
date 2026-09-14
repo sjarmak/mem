@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Post hoc mechanical audit of acknowledged config.json Write events; no agent calls.
+"""Post hoc mechanical audit of saved sessions; no agent calls.
 
-This supplements frozen scores. It does not replay later filesystem mutations or
-judge whether all requested fields retain their meaning. Paths are lexical, not resolved
-through the vanished sandbox's symlinks. Run with EXPERIMENT --out AUDIT_DIRECTORY.
+Two jobs, both from the saved transcripts and bd receipts. The strict Write audit checks the
+acknowledged config.json Write events of every goal session. The rescore runs today's scorer
+over every saved session and, for a four-leg trial, derives the trial verdicts again, so a
+scorer fix reaches paid sessions without re-buying them and the saved verdicts can be compared
+with the rescored ones side by side.
+
+This supplements frozen scores. It does not replay later filesystem mutations or judge whether
+all requested fields retain their meaning. Paths are lexical, not resolved through the vanished
+sandbox's symlinks. Run with EXPERIMENT --out AUDIT_DIRECTORY.
 """
 
 from __future__ import annotations
@@ -20,11 +26,27 @@ from membench.runner.bd_actions import valid_write as valid_write
 from membench.runner.bd_actions import write_reason
 from membench.runner.bd_experiment import _pair_dir, source_fingerprint
 from membench.runner.e1_grid import corpus_fingerprint
-from membench.runner.e1_reliability import score_bd_leg
+from membench.runner.e1_reliability import (
+    TRIAL_CATEGORICAL,
+    TRIAL_VERDICTS,
+    BdLegEvidence,
+    score_bd_leg,
+    trial_outcomes,
+)
 from membench.runner.headless_agent import tool_calls_from_stream
+from membench.runner.leg_plans import GOAL_ROLE, PAIR_ROLES, TRIAL_ROLES, plan_name
 from membench.runner.resume_cache import digest
 from membench.runner.toolreq_corpus import load_twin_corpus
 from membench.runner.toolreq_realagent import DEFAULT_CORPUS, ToolReqRealAgentTask
+
+AUDIT_VERSION = 4
+
+
+def leg_plan(manifest: Mapping[str, Any]) -> tuple[str, ...]:
+    """The manifest's leg plan; a manifest frozen before plans existed ran the pair."""
+    plan = tuple(str(role) for role in manifest.get("leg_plan") or PAIR_ROLES)
+    plan_name(plan)
+    return plan
 
 
 def stream_cwd(stream: str) -> str | None:
@@ -59,7 +81,38 @@ def evidence_value(leg: Mapping[str, Any] | None, key: str) -> bool | None:
     )
 
 
-def goal_audit(task: ToolReqRealAgentTask, goal: Mapping[str, Any] | None) -> dict[str, Any]:
+def rescore_leg(
+    task: ToolReqRealAgentTask, row: Mapping[str, Any] | None, *, leg: int, role: str
+) -> BdLegEvidence | None:
+    """The saved session scored again by today's scorer, from its transcript and receipts.
+    ``None`` when the session did not finish, names no single working directory, or lacks the
+    receipt identity that receipt scoring needs; the caller reads ``None`` as unknown."""
+    if row is None or row.get("status") != "ok":
+        return None
+    stream = str(row.get("stream", ""))
+    cwd = stream_cwd(stream)
+    receipts, leg_id = row.get("bd_receipts"), row.get("bd_receipt_leg_id")
+    if cwd is None or not isinstance(receipts, list) or not isinstance(leg_id, str) or not leg_id:
+        return None
+    return score_bd_leg(
+        task,
+        tool_calls_from_stream(stream),
+        leg=leg,
+        role=role,
+        status="ok",
+        config_dir=None,
+        cwd=cwd,
+        receipts=receipts,
+        expected_leg_id=leg_id,
+    )
+
+
+def goal_audit(
+    task: ToolReqRealAgentTask,
+    goal: Mapping[str, Any] | None,
+    *,
+    rescored: BdLegEvidence | None,
+) -> dict[str, Any]:
     result: dict[str, Any] = {
         "strict_artifact_success": None,
         "strict_observed_recall": None,
@@ -103,22 +156,9 @@ def goal_audit(task: ToolReqRealAgentTask, goal: Mapping[str, Any] | None) -> di
             for index, reason in reasons.items()
         ],
     }
-    receipts, leg_id = goal.get("bd_receipts"), goal.get("bd_receipt_leg_id")
-    if not isinstance(receipts, list) or not isinstance(leg_id, str) or not leg_id:
+    if rescored is None:
         return {**result, "audit_unknown_reasons": ["missing_receipt_observation_identity"]}
-    rescored = score_bd_leg(
-        task,
-        calls,
-        leg=1,
-        role="goal",
-        status="ok",
-        config_dir=None,
-        cwd=cwd,
-        receipts=receipts,
-        expected_leg_id=leg_id,
-    )
-    observed = rescored.model_dump()
-    observed_leg = {"status": "ok", "bd_evidence": observed}
+    observed_leg = {"status": "ok", "bd_evidence": rescored.model_dump()}
     return {
         **result,
         "strict_observed_recall": evidence_value(observed_leg, "bd_recall_complete"),
@@ -126,6 +166,15 @@ def goal_audit(task: ToolReqRealAgentTask, goal: Mapping[str, Any] | None) -> di
             evidence_value(observed_leg, "bd_recall_before_action") if qualifying else False
         ),
         "audit_unknown_reasons": list(rescored.bd_evidence_unknown_reasons),
+    }
+
+
+def saved_evidence(legs: Mapping[str, Mapping[str, Any]]) -> dict[str, BdLegEvidence]:
+    """The scores the runner saved beside each session, as the analyzer reads them."""
+    return {
+        role: BdLegEvidence.model_validate(leg["bd_evidence"])
+        for role, leg in legs.items()
+        if isinstance(leg.get("bd_evidence"), dict)
     }
 
 
@@ -139,7 +188,11 @@ def read_object(path: Path, hashes: dict[str, str], root: Path) -> dict[str, Any
 
 
 def load_pair(
-    root: Path, pair: Mapping[str, Any], manifest: Mapping[str, Any], hashes: dict[str, str]
+    root: Path,
+    pair: Mapping[str, Any],
+    manifest: Mapping[str, Any],
+    hashes: dict[str, str],
+    plan: Sequence[str],
 ) -> dict[str, dict[str, Any]]:
     directory = _pair_dir(root, pair)
     for name in ("started.json", "cell.json"):
@@ -152,9 +205,9 @@ def load_pair(
     for path in sorted((directory / "legs").glob("*.json")):
         leg = read_object(path, hashes, root)
         role = leg.get("role")
-        if role not in ("establish", "goal") or role in legs:
+        if not isinstance(role, str) or role not in plan or role in legs:
             raise ValueError(f"Unexpected or duplicate leg: {path}")
-        if leg.get("leg") != (0 if role == "establish" else 1) or any(
+        if leg.get("leg") != plan.index(role) or any(
             leg.get(key) != pair[key] for key in ("work_id", "variant")
         ):
             raise ValueError(f"Leg identity mismatch: {path}")
@@ -176,6 +229,52 @@ def summarize(values: Sequence[bool | None]) -> dict[str, Any]:
     }
 
 
+def categorize(values: Sequence[str | None]) -> dict[str, Any]:
+    counts: dict[str, int] = {}
+    for value in values:
+        if value is not None:
+            counts[value] = counts.get(value, 0) + 1
+    return {
+        **dict(sorted(counts.items())),
+        "unknown": sum(value is None for value in values),
+        "scheduled": len(values),
+    }
+
+
+def trial_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Every trial verdict, saved beside rescored, over ``rows``."""
+    return {
+        key: {
+            source: (
+                categorize([row[f"trial_{source}"][key] for row in rows])
+                if key in TRIAL_CATEGORICAL
+                else summarize([row[f"trial_{source}"][key] for row in rows])
+            )
+            for source in ("saved", "rescored")
+        }
+        for key in TRIAL_VERDICTS
+    }
+
+
+def trial_disagreements(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Pairs whose rescored trial verdicts differ from the saved ones, and on which verdicts."""
+    out = []
+    for row in rows:
+        moved = {
+            key: {"saved": row["trial_saved"][key], "rescored": row["trial_rescored"][key]}
+            for key in TRIAL_VERDICTS
+            if row["trial_saved"][key] != row["trial_rescored"][key]
+        }
+        if moved:
+            out.append(
+                {
+                    **{k: row[k] for k in ("condition", "work_id", "variant", "repeat")},
+                    "moved": moved,
+                }
+            )
+    return out
+
+
 def disagreements(rows: Sequence[dict[str, Any]], saved: str, strict: str) -> list[dict[str, Any]]:
     return [
         row
@@ -187,6 +286,9 @@ def disagreements(rows: Sequence[dict[str, Any]], saved: str, strict: str) -> li
 def audit(root: Path, *, corpus_dir: Path = DEFAULT_CORPUS) -> dict[str, Any]:
     hashes: dict[str, str] = {}
     manifest = read_object(root / "manifest.json", hashes, root)
+    plan = leg_plan(manifest)
+    # Capture is read from the leg shown the current values: the one just before the goal.
+    capture_role = plan[plan.index(GOAL_ROLE) - 1]
     schedule = manifest["schedule"]
     if len({digest(pair) for pair in schedule}) != len(schedule):
         raise ValueError("Duplicate scheduled pair")
@@ -198,10 +300,16 @@ def audit(root: Path, *, corpus_dir: Path = DEFAULT_CORPUS) -> dict[str, Any]:
     indexed = {(task.work_id, task.variant): task for task in tasks}
     rows = []
     for pair in schedule:
-        legs = load_pair(root, pair, manifest, hashes)
-        goal = legs.get("goal")
-        observed = goal_audit(indexed[(pair["work_id"], pair["variant"])], goal)
-        capture = evidence_value(legs.get("establish"), "bd_capture_complete")
+        legs = load_pair(root, pair, manifest, hashes, plan)
+        task = indexed[(pair["work_id"], pair["variant"])]
+        rescored = {
+            role: evidence
+            for index, role in enumerate(plan)
+            if (evidence := rescore_leg(task, legs.get(role), leg=index, role=role)) is not None
+        }
+        goal = legs.get(GOAL_ROLE)
+        observed = goal_audit(task, goal, rescored=rescored.get(GOAL_ROLE))
+        capture = evidence_value(legs.get(capture_role), "bd_capture_complete")
         parts = [
             capture,
             observed["strict_artifact_success"],
@@ -224,33 +332,45 @@ def audit(root: Path, *, corpus_dir: Path = DEFAULT_CORPUS) -> dict[str, Any]:
                 "saved_handoff": (
                     False if False in saved_parts else (True if all(saved_parts) else None)
                 ),
-                "establish_capture": capture,
+                "capture_role": capture_role,
+                "capture": capture,
                 "strict_handoff": False if False in parts else (True if all(parts) else None),
+                "legs_rescored": list(rescored),
+                "rescored_legs": {role: ev.model_dump() for role, ev in rescored.items()},
+                **(
+                    {
+                        "trial_saved": trial_outcomes(saved_evidence(legs)),
+                        "trial_rescored": trial_outcomes(rescored),
+                    }
+                    if plan == TRIAL_ROLES
+                    else {}
+                ),
             }
         )
-    groups = [
-        {
-            "condition": condition,
-            "variant": variant,
-            **{
-                key: summarize(
-                    [
-                        row[key]
-                        for row in rows
-                        if row["condition"] == condition and row["variant"] == variant
-                    ]
-                )
-                for key in ("strict_artifact_success", "strict_handoff")
-            },
-        }
-        for condition, variant in sorted({(row["condition"], row["variant"]) for row in rows})
-    ]
+    trial = plan == TRIAL_ROLES
+    groups = []
+    for condition, variant in sorted({(row["condition"], row["variant"]) for row in rows}):
+        selected = [r for r in rows if r["condition"] == condition and r["variant"] == variant]
+        groups.append(
+            {
+                "condition": condition,
+                "variant": variant,
+                **{
+                    key: summarize([row[key] for row in selected])
+                    for key in ("strict_artifact_success", "strict_handoff")
+                },
+                "legs_rescored": sum(len(row["legs_rescored"]) for row in selected),
+                "legs_scheduled": len(plan) * len(selected),
+                **({"trial": trial_summary(selected)} if trial else {}),
+            }
+        )
     return {
-        "audit_version": 2,
+        "audit_version": AUDIT_VERSION,
         "audit_source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "scoring_source_fingerprint": source_fingerprint(),
         "manifest_digest": digest(manifest),
         "manifest": manifest,
+        "leg_plan": list(plan),
         "artifact_sha256": hashes,
         "scheduled_pairs": len(rows),
         "groups": groups,
@@ -262,8 +382,13 @@ def audit(root: Path, *, corpus_dir: Path = DEFAULT_CORPUS) -> dict[str, Any]:
             rows, "saved_recall_before_action", "strict_recall_before_action"
         ),
         "handoff_discrepancies": disagreements(rows, "saved_handoff", "strict_handoff"),
+        **({"trial_discrepancies": trial_disagreements(rows)} if trial else {}),
         "limitations": [
             "Post hoc mechanical audit, not the frozen primary endpoint.",
+            "Rescored evidence is today's scorer over the saved transcript and receipts; "
+            "it passes no config dir, so native-memory counters are not compared.",
+            "Trial verdicts: saved reads the scores written at run time, rescored reads today's "
+            "scorer; a moved verdict is a scorer change, not new agent behaviour.",
             "Success witnesses a qualifying acknowledged Write, "
             "not final on-disk state after later mutations.",
             "JSON string values must contain required tokens; keys/filenames do not qualify.",
@@ -271,6 +396,39 @@ def audit(root: Path, *, corpus_dir: Path = DEFAULT_CORPUS) -> dict[str, Any]:
             "Unknown/missing goals remain in full-schedule bounds; original evidence is unchanged.",
         ],
     }
+
+
+def _shown(summary: Mapping[str, Any], key: str) -> str:
+    if key in TRIAL_CATEGORICAL:
+        named = ", ".join(
+            f"{name} {count}"
+            for name, count in summary.items()
+            if name not in ("unknown", "scheduled")
+        )
+        return f"{named or 'none'}; unknown {summary['unknown']}"
+    return " / ".join(str(summary[name]) for name in ("success", "failure", "unknown"))
+
+
+def _trial_lines(report: Mapping[str, Any]) -> list[str]:
+    """One row per group and verdict: the verdict as saved at run time beside the rescore."""
+    lines = [
+        "",
+        f"Trial verdicts, saved at run time beside rescored by today's scorer. "
+        f"Sessions rescored: "
+        f"{sum(g['legs_rescored'] for g in report['groups'])} of "
+        f"{sum(g['legs_scheduled'] for g in report['groups'])}. "
+        f"Pairs whose verdicts moved: {len(report['trial_discrepancies'])}.",
+        "",
+        "| Condition | Variant | Verdict | Saved | Rescored |",
+        "|---|---|---|---|---|",
+    ]
+    for group in report["groups"]:
+        for key in TRIAL_VERDICTS:
+            saved, rescored = (_shown(group["trial"][key][s], key) for s in ("saved", "rescored"))
+            lines.append(
+                f"| {group['condition']} | {group['variant']} | {key} | {saved} | {rescored} |"
+            )
+    return lines
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -297,6 +455,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             for key in ("strict_artifact_success", "strict_handoff")
         ]
         lines.append(f"| {group['condition']} | {group['variant']} | {values[0]} | {values[1]} |")
+    if tuple(report["leg_plan"]) == TRIAL_ROLES:
+        lines += _trial_lines(report)
     (args.out / "report.md").write_text("\n".join([*lines, "", *report["limitations"], ""]))
     return 0
 

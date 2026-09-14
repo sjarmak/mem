@@ -68,6 +68,7 @@ from membench.runner.tool_surface import (
     endogenous_memory_tool_calls,
     endogenous_memory_verbs,
     harness_call,
+    memory_command_is_direct,
     memory_invocations,
     memory_invocations_in_command,
     memory_reaching_calls,
@@ -80,6 +81,7 @@ from membench.runner.tool_surface import (
     partition_memory_calls,
     provision_memory_tool,
     recognizer_policy,
+    remember_ack_action,
     remember_was_a_recall,
     remember_was_accepted,
     resolve_bd_binary,
@@ -1202,6 +1204,75 @@ def test_result_attribution_requires_an_answered_successful_memory_tool_call() -
         assert not memory_result_is_attributable(call)
 
 
+def test_a_direct_bd_command_stays_direct_when_it_is_refused_or_unanswered() -> None:
+    """Shape and success are separate questions: a refused direct call is bd's own refusal,
+    while a compound command's refusal cannot be pinned on any one segment."""
+    refused = ToolCall(
+        name="Bash", arguments={"command": "bd remember list"}, result="Error", is_error=True
+    )
+    assert memory_command_is_direct(refused)
+    assert not memory_result_is_attributable(refused)
+    unanswered = _bash_call("bd remember 'a value'", None)
+    assert memory_command_is_direct(unanswered)
+    assert not memory_result_is_attributable(unanswered)
+    for command in ("bd recall k; cat MEMORY.md", "bd recall k && bd remember 'v'", "bd ready"):
+        assert not memory_command_is_direct(_bash_call(command, "output"))
+    assert not memory_command_is_direct(
+        ToolCall(name="Read", arguments={"command": "bd recall k"}, result="output")
+    )
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "bd remember 'required value' --key expected 2>&1",
+        "bd recall expected 2>/dev/null",
+        "bd recall expected 2>>errors.log",
+        "bd memories query < /dev/null",
+        "bd remember 'a > b' --key expected",
+        'bd remember "see a\\">b" --key expected',
+        "bd --json recall expected 2>&1",
+        "bd recall expected <<EOF 2>&1\nprose > here\nEOF",
+    ],
+)
+def test_a_redirection_that_leaves_stdout_alone_keeps_a_bd_command_direct(command: str) -> None:
+    """Every bd call in the first paid four-leg trial ended in ``2>&1`` and every one scored as
+    a compound command, so the whole trial read as unattributed. A redirection is not a second
+    command; only one that takes stdout away makes the tool_result somebody else's."""
+    call = _bash_call(command, "returned output")
+    assert tool_surface.memory_command_is_direct(call)
+    assert tool_surface.memory_result_is_attributable(call)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "bd recall expected > out.txt",
+        "bd recall expected >> out.txt",
+        "bd recall expected >/dev/null 2>&1",
+        "bd recall expected &> log",
+        "bd recall expected 1>&2",
+        "bd recall expected >&2",
+        "bd recall expected 2>&1 | head -30",
+        "bd recall expected 2>&1; bd memories q",
+        "bd remember k2>x",
+    ],
+)
+def test_a_redirection_that_moves_stdout_or_a_second_command_is_not_direct(command: str) -> None:
+    assert not tool_surface.memory_command_is_direct(_bash_call(command, "output"))
+
+
+def test_strip_redirections_reads_shell_shape_and_leaves_quoted_text_alone() -> None:
+    strip = tool_surface.strip_redirections
+    assert strip("bd recall k 2>&1") == "bd recall k  "
+    assert strip("bd recall k 2>&1 && bd memories q") == "bd recall k   && bd memories q"
+    assert strip("bd remember 'x 2>&1' --key k") == "bd remember 'x 2>&1' --key k"
+    assert strip("bd remember k2>x") is None  # k2 is a word, so the > moves stdout
+    assert strip("bd recall k >&2") is None
+    heredoc = "bd recall k <<'EOF' 2>&1\nprose > here\nEOF\nbd memories q 2>/dev/null"
+    assert strip(heredoc) == "bd recall k <<'EOF'  \nprose > here\nEOF\nbd memories q  "
+
+
 @pytest.mark.parametrize(
     ("result", "accepted", "recalled"),
     [
@@ -1224,6 +1295,33 @@ def test_bd_remember_acknowledgement_is_format_anchored(
 ) -> None:
     assert remember_was_accepted(result) is accepted
     assert remember_was_a_recall(result) is recalled
+
+
+@pytest.mark.parametrize(
+    ("result", "action"),
+    [
+        ("Remembered [k]: a value", "remembered"),
+        ("Updated [k]: a value", "updated"),
+        ('{"action":"remembered","key":"k"}', "remembered"),
+        ('{"action":"updated","key":"k"}', "updated"),
+        ('{\n  "action": "updated",\n  "key": "k"\n}', "updated"),
+        ('(recalled "k" -- a bare existing key READS. To overwrite: ...)\na value', "recalled"),
+        ('{"action":"recalled","found":true,"key":"k"}', "recalled"),
+        ('Error: "list" looks like a command, not something to remember', None),
+        ("note: Updated [k]: a value", None),
+        ("", None),
+        (None, None),
+    ],
+)
+def test_bd_remember_ack_action_separates_a_fresh_write_from_an_overwrite(
+    result: str | None, action: str | None
+) -> None:
+    """``Remembered`` and ``Updated`` are both acceptances, and the version-history trial
+    needs them apart: the second means bd overwrote an EXISTING key in place, which is the
+    stale-writer hazard the trial exists to observe."""
+    assert remember_ack_action(result) == action
+    assert (action in ("remembered", "updated")) is remember_was_accepted(result)
+    assert (action == "recalled") is remember_was_a_recall(result)
 
 
 def test_an_accepted_write_needs_both_an_operand_and_an_acknowledgement() -> None:

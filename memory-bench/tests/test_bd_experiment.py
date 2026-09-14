@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from membench.runner import bd_experiment as exp
+from membench.runner.leg_plans import PAIR_ROLES, TRIAL_ROLES
 from membench.runner.toolreq_corpus import load_twin_corpus
 from tests.toolreq_helpers import corpus
 
@@ -222,3 +223,97 @@ def test_binary_drift_refuses_before_next_pair(tmp_path: Path, corpus_dir: Path)
         )
     assert len(calls) == 1
     assert len(list(tmp_path.glob("pairs/**/started.json"))) == 1
+
+
+# --------------------------------------------------------------------------------------
+# the four-leg trial plan (mem-605zn)
+# --------------------------------------------------------------------------------------
+
+
+def _manifest(corpus_dir: Path, **overrides: Any) -> tuple[list[Any], dict[str, Any]]:
+    _, tasks = load_twin_corpus(corpus_dir)
+    tasks = exp.select_tasks(tasks, n_tasks=2)
+    kwargs: dict[str, Any] = {
+        "model": "pinned-model",
+        "cli_version": "1.2.3",
+        "bd_identity": BD_IDENTITY,
+        "source_fingerprint": "source",
+        "repeats": 1,
+        "seed": 17,
+        "timeout_s": 600,
+        **overrides,
+    }
+    return tasks, exp.build_manifest(tasks, **kwargs)
+
+
+def test_a_trial_manifest_plans_four_calls_per_schedule_entry(corpus_dir: Path) -> None:
+    """The number a human authorizes money against counts every leg of the plan, and the plan is
+    frozen into the manifest so a resume runs the legs the fire was priced for."""
+    _, pair = _manifest(corpus_dir)
+    assert pair["leg_plan"] == list(PAIR_ROLES)
+    assert pair["planned_calls"] == 2 * len(pair["schedule"])
+    _, trial = _manifest(corpus_dir, leg_plan=TRIAL_ROLES)
+    assert trial["leg_plan"] == list(TRIAL_ROLES)
+    assert trial["planned_calls"] == 4 * len(trial["schedule"])
+    assert trial["schema_version"] == pair["schema_version"] == 4
+    assert trial["schedule"] == pair["schedule"], "the plan must not reshuffle the schedule"
+    with pytest.raises(ValueError, match="plan"):
+        _manifest(corpus_dir, leg_plan=("establish", "bogus"))
+
+
+def test_execute_hands_the_frozen_plan_to_every_cell(tmp_path: Path, corpus_dir: Path) -> None:
+    tasks, manifest = _manifest(corpus_dir, leg_plan=TRIAL_ROLES)
+    calls: list[dict[str, Any]] = []
+
+    def run(task: Any, **kwargs: Any) -> Cell:
+        calls.append(kwargs)
+        return Cell()
+
+    execute(tmp_path, manifest, tasks, max_pairs=2, cell_runner=run)
+    assert [c["leg_plan"] for c in calls] == [TRIAL_ROLES, TRIAL_ROLES]
+
+
+def test_a_legacy_manifest_without_a_plan_executes_pairs(tmp_path: Path, corpus_dir: Path) -> None:
+    """Frozen artifacts predate the plan field; they were priced and fired as pairs."""
+    tasks, manifest = _manifest(corpus_dir)
+    legacy = {key: value for key, value in manifest.items() if key != "leg_plan"}
+    calls: list[dict[str, Any]] = []
+
+    def run(task: Any, **kwargs: Any) -> Cell:
+        calls.append(kwargs)
+        return Cell()
+
+    execute(tmp_path, legacy, tasks, max_pairs=1, cell_runner=run)
+    assert calls[0]["leg_plan"] == PAIR_ROLES
+
+
+def test_cli_legs_flag_selects_the_trial_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, corpus_dir: Path
+) -> None:
+    import json
+    import subprocess
+
+    monkeypatch.setattr(exp, "resolve_cli_version", lambda: "1.2.3")
+    monkeypatch.setattr(exp, "resolve_bd_identity", lambda: BD_IDENTITY)
+    monkeypatch.setattr(exp, "_refusal", lambda **kwargs: None)
+    monkeypatch.setattr(
+        exp.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess([], 0, "bd 0.1")
+    )
+    args = [
+        "--out",
+        str(tmp_path / "trial"),
+        "--model",
+        "pinned-model",
+        "--expect-cli-version",
+        "1.2.3",
+        "--corpus-dir",
+        str(corpus_dir),
+        "--legs",
+        "trial",
+    ]
+    assert exp.main(args) == 0
+    frozen = json.loads((tmp_path / "trial" / "manifest.json").read_text())
+    assert frozen["leg_plan"] == list(TRIAL_ROLES)
+    assert frozen["planned_calls"] == 4 * len(frozen["schedule"])
+    with pytest.raises(SystemExit):
+        exp.main([*args[:-1], "bogus"])

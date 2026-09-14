@@ -28,6 +28,7 @@ from membench.runner.e1_grid import (
     write_json_new,
 )
 from membench.runner.headless_agent import resolve_cli_version
+from membench.runner.leg_plans import LEG_PLANS, PAIR_ROLES, plan_name
 from membench.runner.resume_cache import digest
 from membench.runner.tool_surface import resolve_bd_binary
 from membench.runner.toolreq_corpus import load_twin_corpus
@@ -69,6 +70,7 @@ def build_manifest(
     repeats: int,
     seed: int,
     timeout_s: float,
+    leg_plan: Sequence[str] = PAIR_ROLES,
 ) -> dict[str, Any]:
     if (
         repeats < 1
@@ -77,6 +79,10 @@ def build_manifest(
         or not all(bd_identity.get(key) for key in ("path", "sha256", "version"))
     ):
         raise ValueError("Pinned identities and positive repeats/timeout are required")
+    # The plan is part of the frozen identity: every schedule entry spends len(plan) legs on one
+    # store, and the price, the leg files and the scorer all read that length from here.
+    plan = tuple(leg_plan)
+    plan_name(plan)
     rng = random.Random(seed)
     blocks = [(task, repeat) for repeat in range(repeats) for task in tasks]
     rng.shuffle(blocks)
@@ -94,7 +100,8 @@ def build_manifest(
                 }
             )
     return {
-        "schema_version": 3,
+        "schema_version": 4,
+        "leg_plan": list(plan),
         "instrument_bd": True,
         "model": model,
         "cli_version": cli_version,
@@ -108,7 +115,7 @@ def build_manifest(
         "seed": seed,
         "timeout_s": timeout_s,
         "planned_pairs": len(schedule),
-        "planned_calls": 2 * len(schedule),
+        "planned_calls": len(plan) * len(schedule),
         "schedule": schedule,
         "tasks": [{"work_id": t.work_id, "variant": t.variant} for t in tasks],
     }
@@ -185,6 +192,8 @@ def _execute_pair(
             streak=streak,
             expect_cli_version=manifest["cli_version"],
             corpus_dir=corpus_dir,
+            # A manifest frozen before plans existed ran pairs; it says so by saying nothing.
+            leg_plan=tuple(manifest.get("leg_plan") or PAIR_ROLES),
         )
         write_json_new(
             directory / "cell.json",
@@ -266,6 +275,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=20260904)
     parser.add_argument("--timeout-s", type=float, default=600)
     parser.add_argument("--max-pairs", type=int, default=1)
+    parser.add_argument(
+        "--legs",
+        choices=sorted(LEG_PLANS),
+        default="pair",
+        help="the sessions each schedule entry spends on one store: a pair establishes a fact "
+        "and acts on it; a trial establishes the previous version, revises it, acts on the "
+        "current one, then lets a session primed on the previous version try to write",
+    )
     parser.add_argument("--fire", action="store_true")
     args = parser.parse_args(argv)
     refusal = _refusal(dry_run=not args.fire, model=args.model)
@@ -289,6 +306,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             repeats=args.repeats,
             seed=args.seed,
             timeout_s=args.timeout_s,
+            leg_plan=LEG_PLANS[args.legs],
         )
         if args.fire:
             result: Mapping[str, Any] = execute(

@@ -17,19 +17,66 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from membench.metrics.scorers import states_value
 from membench.runner.bd_actions import UNKNOWN_DESTINATION, write_reason
+from membench.runner.leg_plans import PAIR_ROLES
 from membench.runner.realagent_probe import REAL_TOOL
 from membench.runner.tool_surface import (
     MemoryInvocation,
     command_segments,
+    memory_command_is_direct,
     memory_invocations,
     memory_result_is_attributable,
     native_memory_accesses,
+    remember_ack_action,
 )
+from membench.runner.toolreq_corpus import superseded_values
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask
 from membench.schemas.trace import ToolCall
 
-RELIABILITY_VERSION = 3
-ROLES = ("establish", "goal")
+RELIABILITY_VERSION = 5
+# Action and ordering scores (``goal_action_success``, ``bd_recall_before_action``) have been
+# sound since v3. v4 added the per-call observations (``bd_calls``) and the stale-recall flag,
+# but attributed a tool_result to bd only when the command carried no redirection at all, so
+# ``bd recall k 2>&1`` (the spelling of every bd call in the first paid four-leg trial) scored
+# as a compound command; v5 reads redirections the way the shell does
+# (``tool_surface.strip_redirections``). Observations scored at v4 are therefore not read;
+# action scores from v3 on still are. Recall flags from any earlier version may undercount.
+ACTION_SCORING_SINCE = 3
+CALL_OBSERVATION_SINCE = 5
+ROLES = PAIR_ROLES
+
+CallOutcome = Literal[
+    "remembered",  # bd stored the write under a fresh key
+    "updated",  # bd overwrote an EXISTING key in place
+    "recalled",  # bd answered a bare-existing-key ``remember`` as a read
+    "refused",  # the tool returned an error
+    "unacknowledged",  # a write bd neither acknowledged nor refused (truncated, silenced)
+    "returned",  # a read returned payload
+    "empty",  # a read returned no payload
+    "unattributed",  # part of a compound shell command; the tool_result is nobody's
+]
+
+
+class BdCallObservation(BaseModel):
+    """One bd memory invocation as the agent saw it: what it asked, how bd answered, and which
+    of the task's versions the exchange stated.
+
+    ``outcome`` is bd's own acknowledgement, the tool's error flag, or the absence of either.
+    ``current_values`` / ``superseded_values`` are the task's authored tokens matched in the
+    content the call offered (a write) or the payload it received (a read), word-bounded. A
+    refused write keeps the values it TRIED to state, because that is the observation a
+    rejected stale write leaves behind."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    # Ordinal among the leg's memory invocations, in stream order.
+    position: int = Field(ge=0)
+    # The Bash call's position in the stream; several invocations share one when chained.
+    tool_use_index: int | None = Field(default=None, ge=0)
+    verb: str
+    key: str = ""
+    outcome: CallOutcome
+    current_values: tuple[str, ...] = ()
+    superseded_values: tuple[str, ...] = ()
 
 
 class BdLegEvidence(BaseModel):
@@ -40,7 +87,9 @@ class BdLegEvidence(BaseModel):
     # Zero identifies historical artifacts that did not persist their scorer version.
     scoring_version: int = Field(default=0, ge=0)
     leg: int = Field(ge=0)
-    role: Literal["establish", "goal"]
+    # The pair's two roles and the trial's two extra ones (``leg_plans``). Action scoring stays
+    # gated on the goal role; the others carry attempts, acknowledgements and payloads only.
+    role: Literal["establish", "revise", "goal", "stale_writer"]
     status: Literal["ok", "timeout", "error"]
     bd_read_attempts: int = Field(default=0, ge=0)
     bd_write_attempts: int = Field(default=0, ge=0)
@@ -50,12 +99,16 @@ class BdLegEvidence(BaseModel):
     bd_capture_complete: bool = False
     bd_recall_complete: bool = False
     bd_recall_before_action: bool | None = False
+    # Any attributed read payload states a value the goal action FORBIDS (v4+).
+    bd_recall_states_superseded: bool = False
     native_read_attempts: int = Field(default=0, ge=0)
     native_write_attempts: int = Field(default=0, ge=0)
     native_answered_reads: int = Field(default=0, ge=0)
     goal_action_success: bool | None = None
     bd_evidence_unknown: bool = False
     bd_evidence_unknown_reasons: tuple[str, ...] = ()
+    # Every bd invocation in stream order (v4+); empty on legacy artifacts.
+    bd_calls: tuple[BdCallObservation, ...] = ()
 
 
 def _read_content(invocation: MemoryInvocation, call: ToolCall) -> list[str]:
@@ -111,6 +164,68 @@ def _contains_all(payloads: Sequence[str], values: Sequence[str]) -> bool:
     return bool(values) and all(
         any(states_value(payload, value) for payload in payloads) for value in values
     )
+
+
+def _stated(text: str, values: Sequence[str]) -> tuple[str, ...]:
+    return tuple(value for value in values if states_value(text, value))
+
+
+def _write_outcome(call: ToolCall, invocation: MemoryInvocation) -> CallOutcome:
+    if call.is_error:
+        return "refused"
+    action = remember_ack_action(invocation.result)
+    if action == "recalled":
+        return "recalled"
+    if action in ("remembered", "updated") and invocation.is_accepted_write:
+        return "remembered" if action == "remembered" else "updated"
+    return "unacknowledged"
+
+
+def _observe_call(
+    call: ToolCall, invocation: MemoryInvocation, *, direct: bool
+) -> tuple[CallOutcome, str]:
+    """The outcome of one invocation and the text that carries the versions it stated.
+
+    Only a direct, single bd command owns its tool_result; inside a compound command every
+    invocation is unattributed, though a write still reports the values it offered."""
+    if invocation.is_write:
+        outcome = _write_outcome(call, invocation) if direct else "unattributed"
+        if outcome == "recalled":
+            return outcome, "\n".join(_read_content(invocation, call))
+        return outcome, " ".join(invocation.stored_content)
+    if not direct:
+        return "unattributed", ""
+    if invocation.is_read:
+        if call.is_error:
+            return "refused", ""
+        payloads = _read_content(invocation, call)
+        return ("returned" if payloads else "empty"), "\n".join(payloads)
+    return ("refused" if call.is_error else "returned"), ""
+
+
+def _observe_calls(
+    task: ToolReqRealAgentTask, calls: Sequence[ToolCall]
+) -> tuple[BdCallObservation, ...]:
+    """Every bd invocation in ``calls`` as the agent saw it, in stream order."""
+    current = tuple(task.current_opaque_values)
+    superseded = superseded_values(task)
+    observations: list[BdCallObservation] = []
+    for call in calls:
+        direct = memory_command_is_direct(call)
+        for invocation in memory_invocations([call]):
+            outcome, text = _observe_call(call, invocation, direct=direct)
+            observations.append(
+                BdCallObservation(
+                    position=len(observations),
+                    tool_use_index=call.tool_use_index,
+                    verb=invocation.verb,
+                    key=invocation.key,
+                    outcome=outcome,
+                    current_values=_stated(text, current),
+                    superseded_values=_stated(text, superseded),
+                )
+            )
+    return tuple(observations)
 
 
 def _goal_writes(
@@ -349,12 +464,17 @@ def score_bd_leg(
     ]
     payloads, unattributed = _read_payloads(calls)
     native = native_memory_accesses(calls, config_dir=config_dir)
+    superseded = superseded_values(task)
     return BdLegEvidence.model_validate(
         {
             "scoring_version": RELIABILITY_VERSION,
             "leg": leg,
             "role": role,
             "status": status,
+            "bd_calls": _observe_calls(task, calls),
+            "bd_recall_states_superseded": any(
+                states_value(payload, value) for payload in payloads for value in superseded
+            ),
             "bd_read_attempts": sum(inv.is_read or inv.is_recall_by_result for inv in invocations),
             "bd_write_attempts": sum(inv.is_write for inv in invocations),
             "bd_accepted_writes": len(accepted),
@@ -425,11 +545,11 @@ def _role_report(evidence: Sequence[BdLegEvidence], *, scheduled: int) -> dict[s
         "native_write_attempt_legs": sum(leg.native_write_attempts > 0 for leg in measured),
         "native_answered_read_legs": sum(leg.native_answered_reads > 0 for leg in measured),
         "goal_action_success_legs": sum(
-            leg.goal_action_success is True and leg.scoring_version == RELIABILITY_VERSION
+            leg.goal_action_success is True and leg.scoring_version >= ACTION_SCORING_SINCE
             for leg in measured
         ),
         "legacy_goal_action_success_legs": sum(
-            leg.goal_action_success is True and leg.scoring_version != RELIABILITY_VERSION
+            leg.goal_action_success is True and leg.scoring_version < ACTION_SCORING_SINCE
             for leg in measured
         ),
         "legacy_evidence_legs": sum(leg.scoring_version != RELIABILITY_VERSION for leg in evidence),
@@ -456,7 +576,7 @@ def _bd_component(
 ) -> bool | None:
     if leg is None or leg.status != "ok":
         return None
-    if field == "bd_recall_before_action" and leg.scoring_version != RELIABILITY_VERSION:
+    if field == "bd_recall_before_action" and leg.scoring_version < ACTION_SCORING_SINCE:
         return None
     if getattr(leg, field) is None:
         return None
@@ -475,7 +595,7 @@ def _pair_report(indexed: Mapping[int, BdLegEvidence], *, runs: int) -> dict[str
                 goal.goal_action_success
                 if goal is not None
                 and goal.status == "ok"
-                and goal.scoring_version == RELIABILITY_VERSION
+                and goal.scoring_version >= ACTION_SCORING_SINCE
                 else None
             ),
             _bd_component(goal, "bd_recall_before_action"),
@@ -492,7 +612,7 @@ def _pair_report(indexed: Mapping[int, BdLegEvidence], *, runs: int) -> dict[str
         and first.status == goal.status == "ok"
         and goal.goal_action_success is not None
         and goal.bd_recall_before_action is not None
-        and first.scoring_version == goal.scoring_version == RELIABILITY_VERSION
+        and min(first.scoring_version, goal.scoring_version) >= ACTION_SCORING_SINCE
         and not first.bd_evidence_unknown
         and not goal.bd_evidence_unknown
         for first, goal in pairs
@@ -518,6 +638,12 @@ def _bounds(pairs: Mapping[str, Any]) -> list[float]:
 
 
 def _task_report(row: Mapping[str, Any]) -> dict[str, Any]:
+    plan = tuple(str(role) for role in row.get("leg_plan", ROLES))
+    if plan != ROLES:
+        raise ValueError(
+            f"bd reliability reports pairs; cell {row.get('rung')}/{row.get('variant')}/"
+            f"{row.get('work_id')} ran the plan {plan!r}"
+        )
     runs = int(row["metrics"]["runs"])
     indexed = _index_legs(row.get("bd_evidence", ()), runs=runs)
     return {
@@ -606,4 +732,133 @@ def reliability_report(cells: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             "support paired, task-clustered analysis; repeat legs are not "
             "independent tasks. Native answered reads only mean the tool returned without an error."
         ),
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Four-leg trial verdicts (establish, revise, goal, stale_writer)
+# --------------------------------------------------------------------------- #
+
+TRIAL_VERDICTS: tuple[str, ...] = (
+    "capture_superseded",
+    "revision",
+    "revision_captured_current",
+    "retrieval_current_only",
+    "retrieval_states_superseded",
+    "goal_action_success",
+    "stale_write",
+    "after_rejection",
+)
+# The verdicts that name a category rather than answer yes/no.
+TRIAL_CATEGORICAL: tuple[str, ...] = ("revision", "stale_write", "after_rejection")
+
+_ACCEPTED: frozenset[str] = frozenset({"remembered", "updated"})
+
+
+def _observed_leg(
+    by_role: Mapping[str, BdLegEvidence], role: str, *, since: int
+) -> BdLegEvidence | None:
+    """The leg for ``role`` when it ran to completion under a scorer that recorded what the
+    verdict reads; ``None`` (unknown) otherwise."""
+    leg = by_role.get(role)
+    if leg is None:
+        return None
+    if leg.role != role:
+        raise ValueError(f"trial leg filed under role {role!r} was scored as {leg.role!r}")
+    if leg.status != "ok" or leg.scoring_version < since:
+        return None
+    return leg
+
+
+def _writes(leg: BdLegEvidence) -> list[BdCallObservation]:
+    """The leg's write ATTEMPTS: a bare-existing-key ``remember`` that bd answered as a read is
+    not one."""
+    return [call for call in leg.bd_calls if call.verb == "remember" and call.outcome != "recalled"]
+
+
+def _placement(call: BdCallObservation) -> str:
+    return "updated_in_place" if call.outcome == "updated" else "wrote_beside"
+
+
+def _revision(leg: BdLegEvidence | None) -> str | None:
+    """How the REVISE leg recorded the current version, off its first accepted write that states
+    a current value."""
+    if leg is None:
+        return None
+    writes = _writes(leg)
+    accepted = [call for call in writes if call.outcome in _ACCEPTED]
+    for call in accepted:
+        if call.current_values:
+            return _placement(call)
+    if accepted:
+        return "wrote_without_current"
+    if any(call.outcome == "unattributed" for call in writes):
+        return None
+    return "no_write"
+
+
+def _stale_write(leg: BdLegEvidence | None) -> str | None:
+    """What became of the STALE WRITER's first write attempt."""
+    if leg is None:
+        return None
+    writes = _writes(leg)
+    if not writes:
+        return "no_write"
+    first = writes[0]
+    if first.outcome == "unattributed":
+        return None
+    if first.outcome == "refused":
+        return "rejected"
+    if first.outcome == "unacknowledged":
+        return "unacknowledged"
+    return _placement(first) if first.superseded_values else "wrote_without_superseded"
+
+
+def _after_rejection(leg: BdLegEvidence | None) -> str | None:
+    """After a REJECTED first write: did the agent read before writing again (``reread``), write
+    again without reading (``retried``), or make no further memory call (``stopped``)?"""
+    if leg is None or _stale_write(leg) != "rejected":
+        return None
+    rejected = _writes(leg)[0]
+    for call in leg.bd_calls:
+        if call.position <= rejected.position:
+            continue
+        if call.verb in ("recall", "memories") or call.outcome == "recalled":
+            return "reread"
+        if call.verb == "remember":
+            return "retried"
+    return "stopped"
+
+
+def trial_outcomes(by_role: Mapping[str, BdLegEvidence]) -> dict[str, Any]:
+    """The four-leg trial's verdicts, read mechanically off the per-leg observations.
+
+    Every verdict is ``None`` (unknown) when the leg it reads is missing, did not finish, or was
+    scored before its evidence existed; a missing verdict is never a failure. Refuses a leg
+    filed under a role it was not scored as."""
+    establish = _observed_leg(by_role, "establish", since=CALL_OBSERVATION_SINCE)
+    revise = _observed_leg(by_role, "revise", since=CALL_OBSERVATION_SINCE)
+    revise_any = _observed_leg(by_role, "revise", since=0)
+    goal = _observed_leg(by_role, "goal", since=CALL_OBSERVATION_SINCE)
+    goal_action = _observed_leg(by_role, "goal", since=ACTION_SCORING_SINCE)
+    stale_writer = _observed_leg(by_role, "stale_writer", since=CALL_OBSERVATION_SINCE)
+    return {
+        "capture_superseded": (
+            None
+            if establish is None
+            else any(
+                call.outcome in _ACCEPTED and call.superseded_values for call in _writes(establish)
+            )
+        ),
+        "revision": _revision(revise),
+        "revision_captured_current": None if revise_any is None else revise_any.bd_capture_complete,
+        "retrieval_current_only": (
+            None
+            if goal is None
+            else goal.bd_recall_complete and not goal.bd_recall_states_superseded
+        ),
+        "retrieval_states_superseded": None if goal is None else goal.bd_recall_states_superseded,
+        "goal_action_success": None if goal_action is None else goal_action.goal_action_success,
+        "stale_write": _stale_write(stale_writer),
+        "after_rejection": _after_rejection(stale_writer),
     }

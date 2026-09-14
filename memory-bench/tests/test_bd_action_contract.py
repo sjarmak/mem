@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from membench.runner.e1_reliability import reliability_report, score_bd_leg
+from membench.runner.e1_reliability import RELIABILITY_VERSION, reliability_report, score_bd_leg
 from membench.schemas.trace import ToolCall
 from tests.test_e1_reliability import _identified, _receipt, _row
 from tests.toolreq_helpers import corpus_one
@@ -180,7 +180,7 @@ def test_unversioned_cached_action_scores_are_not_upgraded_to_strict_success(tmp
     }
     original = json.dumps(old, sort_keys=True)
     report = reliability_report([strict, old])
-    assert report["evidence_versions"] == [0, 3]
+    assert report["evidence_versions"] == [0, RELIABILITY_VERSION]
     assert report["groups"][0]["pairs"]["rate_bounds"] == [0.5, 1]
     assert report["groups"][0]["roles"]["goal"]["legacy_goal_action_success_legs"] == 1
     assert report["groups"][0]["roles"]["goal"]["goal_action_success_legs"] == 1

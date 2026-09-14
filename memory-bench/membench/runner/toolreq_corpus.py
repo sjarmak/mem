@@ -73,6 +73,11 @@ CONTEXT_HEADING = "Current state:"
 # behaviour-directing heading reds the suite instead of moving quietly with the constant.
 CONTEXT_SEPARATOR = "\n\n"
 
+# The heading the four-leg trial's REVISE leg puts over the version that just stopped being true,
+# beside a ``CONTEXT_HEADING`` block carrying the version that replaced it. Names the block and
+# says nothing about what to do with it, for the reason ``CONTEXT_HEADING`` says nothing.
+PREVIOUS_HEADING = "Previous state:"
+
 
 def _goal_action(step: SequenceStep) -> ExpectedAction:
     """The bridged goal's required real-tool action — the source of the values the twin must
@@ -136,6 +141,83 @@ def established_context(task: ToolReqRealAgentTask) -> str:
             "establish leg of a two-leg cell has nothing to state and would not match its twin's"
         )
     return CONTEXT_HEADING + tail
+
+
+def superseded_values(task: ToolReqRealAgentTask) -> tuple[str, ...]:
+    """Every value the goal action forbids: the supersession chain minus its current head."""
+    return tuple(_goal_action(task.goal_step).forbidden_values)
+
+
+def prior_values(task: ToolReqRealAgentTask) -> dict[str, str]:
+    """Each current value mapped to the version it REPLACED — the value a session primed before
+    the revision would still hold, and the value a stale write would carry.
+
+    Read positionally off the goal action, because that is the only place the corpus states the
+    chain. ``enterprise_workflow`` lays ``forbidden_values`` out as the chain minus its head, in
+    chain order, for each current value in turn (``chain_values[:-1]`` per subject), so the last
+    forbidden value under each current one is its immediate predecessor. ``oracle_memory`` cannot
+    serve here: it carries the facts the goal REQUIRES, which are the current ones only, so a
+    subject lookup on a stale token finds nothing.
+
+    Refuses a task with no superseded value — there is no version to be stale on, and a trial run
+    on it would report a stale write that could not have happened — and a chain that does not
+    divide evenly over the current values, where no positional predecessor exists."""
+    action = _goal_action(task.goal_step)
+    currents = list(action.arg_values)
+    forbidden = list(action.forbidden_values)
+    if not currents:
+        raise ValueError(f"{task.work_id}: goal action scores no current value")
+    if not forbidden:
+        raise ValueError(
+            f"{task.work_id}: goal action forbids no superseded value, so no session can be "
+            "primed on a previous version"
+        )
+    if len(forbidden) % len(currents):
+        raise ValueError(
+            f"{task.work_id}: {len(forbidden)} superseded value(s) over {len(currents)} current "
+            "value(s) is a ragged chain; no positional predecessor exists"
+        )
+    depth = len(forbidden) // len(currents)
+    return {current: forbidden[(k + 1) * depth - 1] for k, current in enumerate(currents)}
+
+
+def prior_context(task: ToolReqRealAgentTask, *, heading: str = CONTEXT_HEADING) -> str:
+    """``established_context`` with every scored value moved back one version: the same lines,
+    the same labels, the same order, and the predecessor where the current value stood.
+
+    This is what a session that ran BEFORE the revision knew. Derived from the block the goal
+    leg's twin is established from rather than rendered afresh, so the two halves of a twin pair
+    receive byte-identical text here for the same reason they do in ``established_context``.
+
+    Refuses to return a block that still states a current value, or one in which some current
+    value was not found to replace: either would make the trial's establish leg an ordinary pair
+    establish and the stale writer a session primed on the truth."""
+    block = established_context(task)
+    replacements = prior_values(task)
+    first, *rest = block.splitlines()
+    if first != CONTEXT_HEADING:
+        raise ValueError(f"{task.work_id}: context block does not open with {CONTEXT_HEADING!r}")
+    lines: list[str] = []
+    replaced: set[str] = set()
+    for line in rest:
+        for current, previous in replacements.items():
+            if line == f"- {current}" or line.endswith(f" is {current}"):
+                line = line[: -len(current)] + previous
+                replaced.add(current)
+        lines.append(line)
+    missing = set(replacements) - replaced
+    if missing:
+        raise ValueError(
+            f"{task.work_id}: current value(s) {sorted(missing)} not stated in the context block, "
+            "so no previous version can stand in for them"
+        )
+    prior = "\n".join([heading, *lines])
+    for current in replacements:
+        if states_value(prior, current):
+            raise ValueError(
+                f"{task.work_id}: previous-state block still states current value {current!r}"
+            )
+    return prior
 
 
 def unnecessary_twin(task: ToolReqRealAgentTask) -> ToolReqRealAgentTask:
