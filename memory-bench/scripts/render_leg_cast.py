@@ -61,6 +61,12 @@ class Frame:
     typed: bool = False
 
 
+# Something to print ABOVE a tool exchange, given the call and the finishing receipts of every bd
+# invocation it made (empty for a call that ran no bd). ``None`` prints nothing. The per-session
+# replay prints none; a composed recording (``render_trial_video``) supplies the labels.
+Captioner = Callable[[ToolCall, Sequence[Mapping[str, Any]]], Frame | None]
+
+
 def read_object(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text())
     if not isinstance(value, dict):
@@ -92,18 +98,19 @@ def _clip(lines: Sequence[str], limit: int) -> list[str]:
     return [*lines[:limit], f"{DIM}… (+{len(lines) - limit} lines){RESET}"]
 
 
-def _receipts_by_use(leg: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
-    """The finishing receipt of every bd invocation, keyed by the tool call that made it."""
-    finished: dict[str, dict[str, Any]] = {}
+def receipts_by_use(leg: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """The finishing receipts of every bd invocation, keyed by the tool call that made them, in
+    receipt order. One shell command that chains three ``bd remember`` calls has three."""
+    finished: dict[str, list[dict[str, Any]]] = {}
     for receipt in leg.get("bd_receipts") or ():
         if isinstance(receipt, dict) and receipt.get("event") == "finish":
             use = receipt.get("tool_use_id")
             if isinstance(use, str):
-                finished[use] = receipt
+                finished.setdefault(use, []).append(receipt)
     return finished
 
 
-def _identity(leg: Mapping[str, Any], path: Path | None) -> dict[str, str]:
+def leg_identity(leg: Mapping[str, Any], path: Path | None) -> dict[str, str]:
     """What the banner names. Condition and repeat live in the run layout
     (``pairs/<condition>/<hash>/<repeat>/legs/<leg>.json``), not in the row."""
     parts = path.resolve().parts if path is not None else ()
@@ -151,9 +158,7 @@ def _call_body(call: ToolCall, limit: int) -> list[str]:
     return []
 
 
-def _receipt_line(receipt: Mapping[str, Any] | None) -> str | None:
-    if receipt is None:
-        return None
+def _receipt_line(receipt: Mapping[str, Any]) -> str:
     argv = receipt.get("operation_argv")
     code = receipt.get("returncode")
     colour = GREEN if code == 0 else RED
@@ -161,16 +166,14 @@ def _receipt_line(receipt: Mapping[str, Any] | None) -> str | None:
     return f"{DIM}  bd receipt:{RESET} {colour}exit {code}{RESET}  {DIM}bd {shown}{RESET}"
 
 
-def _result_frame(call: ToolCall, receipt: Mapping[str, Any] | None, limit: int) -> Frame:
+def _result_frame(call: ToolCall, receipts: Sequence[Mapping[str, Any]], limit: int) -> Frame:
     if call.result is None:
         lines = [f"{DIM}  (no result recorded: the stream ended before the tool returned){RESET}"]
     else:
         colour = RED if call.is_error else ""
         lines = _clip(_wrap(call.result, indent="  "), limit)
         lines = [f"{colour}{line}{RESET}" if colour else line for line in lines]
-    receipt_line = _receipt_line(receipt)
-    if receipt_line:
-        lines.append(receipt_line)
+    lines.extend(_receipt_line(receipt) for receipt in receipts)
     return Frame("\n".join([*lines, ""]), hold=0.9 + 0.08 * len(lines))
 
 
@@ -249,12 +252,14 @@ def frames(
     path: Path | None = None,
     limit: int,
     rescored: Mapping[str, Any] | None = None,
+    caption: Captioner | None = None,
 ) -> list[Frame]:
-    """The replay, in wire order: banner, each assistant turn and tool exchange, the score."""
+    """The replay, in wire order: banner, each assistant turn and tool exchange, the score.
+    ``caption`` may put a label above any tool exchange; by default none is printed."""
     stream = str(leg.get("stream", ""))
     calls = {c.tool_use_id: c for c in tool_calls_from_stream(stream) if c.tool_use_id}
-    receipts = _receipts_by_use(leg)
-    identity = _identity(leg, path)
+    receipts = receipts_by_use(leg)
+    identity = leg_identity(leg, path)
     out = [_banner(identity)]
     summary = ""
     for event in _events(stream):
@@ -269,37 +274,24 @@ def frames(
                 out.append(_say_frame(str(block["text"])))
             elif block.get("type") == "tool_use" and block.get("id") in calls:
                 call = calls[str(block["id"])]
+                own_receipts = receipts.get(call.tool_use_id or "", [])
+                label = caption(call, own_receipts) if caption is not None else None
+                if label is not None:
+                    out.append(label)
                 body = _call_body(call, limit)
                 out.append(Frame(_call_line(call), hold=0.4, typed=True))
                 if body:
                     out.append(Frame("\n".join(body), hold=0.3))
-                out.append(_result_frame(call, receipts.get(call.tool_use_id or ""), limit))
+                out.append(_result_frame(call, own_receipts, limit))
     out.append(_closing(leg, identity, summary, rescored))
     return out
 
 
-def cast_lines(
-    leg: Mapping[str, Any],
-    *,
-    path: Path | None = None,
-    speed: float = 1.0,
-    limit: int,
-    rescored: Mapping[str, Any] | None = None,
-) -> list[str]:
-    """An asciinema v2 recording: a header line, then ``[time, "o", text]`` events."""
+def cast_from_frames(shown: Sequence[Frame], *, title: str, speed: float = 1.0) -> list[str]:
+    """An asciinema v2 recording of ``shown`` in order: a header line, then ``[time, "o", text]``
+    events. Typed frames are emitted one character at a time."""
     if speed <= 0:
         raise ValueError("speed must be positive")
-    identity = _identity(leg, path)
-    title = " ".join(
-        part
-        for part in (
-            identity["condition"],
-            identity["role"],
-            identity["work_id"],
-            identity["variant"],
-        )
-        if part
-    )
     header = {
         "version": 2,
         "width": COLS,
@@ -315,7 +307,7 @@ def cast_lines(
         lines.append(json.dumps([round(clock, 3), "o", text.replace("\n", "\r\n")]))
         clock += hold / speed
 
-    for frame in frames(leg, path=path, limit=limit, rescored=rescored):
+    for frame in shown:
         if frame.typed:
             step = min(0.03, 1.5 / max(1, len(frame.text)))
             for char in frame.text:
@@ -326,6 +318,24 @@ def cast_lines(
     return lines
 
 
+def cast_title(identity: Mapping[str, str]) -> str:
+    names = ("condition", "role", "work_id", "variant")
+    return " ".join(identity[name] for name in names if identity[name])
+
+
+def cast_lines(
+    leg: Mapping[str, Any],
+    *,
+    path: Path | None = None,
+    speed: float = 1.0,
+    limit: int,
+    rescored: Mapping[str, Any] | None = None,
+) -> list[str]:
+    """One session as an asciinema v2 recording."""
+    shown = frames(leg, path=path, limit=limit, rescored=rescored)
+    return cast_from_frames(shown, title=cast_title(leg_identity(leg, path)), speed=speed)
+
+
 def _checked(run: Runner, argv: Sequence[str]) -> None:
     completed = run(list(argv), capture_output=True, text=True, timeout=TOOL_TIMEOUT_S)
     if completed.returncode != 0:
@@ -333,11 +343,18 @@ def _checked(run: Runner, argv: Sequence[str]) -> None:
         raise RuntimeError(f"{argv[0]} exited {completed.returncode}: {' | '.join(tail)}")
 
 
-def write_video(cast: Path, *, run: Runner = subprocess.run) -> tuple[Path, Path]:
-    """Render ``cast`` to a GIF beside it with agg, then to an H.264 MP4 with ffmpeg."""
+def write_video(
+    cast: Path, *, run: Runner = subprocess.run, idle_limit: float = 2.0
+) -> tuple[Path, Path]:
+    """Render ``cast`` to a GIF beside it with agg, then to an H.264 MP4 with ffmpeg.
+
+    ``idle_limit`` caps any pause in seconds; a composed recording whose cards hold longer than
+    the default passes its longest hold so agg does not cut them short."""
     for tool in ("agg", "ffmpeg"):
         if shutil.which(tool) is None:
             raise RuntimeError(f"{tool} is not installed; cannot render video")
+    if idle_limit <= 0:
+        raise ValueError("idle_limit must be positive")
     gif = cast.with_suffix(".gif")
     mp4 = cast.with_suffix(".mp4")
     _checked(
@@ -346,7 +363,7 @@ def write_video(cast: Path, *, run: Runner = subprocess.run) -> tuple[Path, Path
             "agg",
             *("--cols", str(COLS), "--rows", str(ROWS)),
             *("--font-size", "24", "--theme", "monokai"),
-            *("--idle-time-limit", "2", "--last-frame-duration", "2"),
+            *("--idle-time-limit", f"{idle_limit:g}", "--last-frame-duration", "2"),
             str(cast),
             str(gif),
         ],
@@ -385,16 +402,25 @@ def load_audit(path: Path) -> AuditOverlay:
         for role, evidence in legs.items():
             if not isinstance(evidence, dict):
                 raise ValueError(f"Rescored evidence for {role} is not an object: {path}")
-            key = tuple(str(pair[name]) for name in ("condition", "work_id", "variant", "repeat"))
-            overlay[(*key, str(role))] = evidence
+            overlay[overlay_key({**pair, "role": role})] = evidence
     return overlay
+
+
+def overlay_key(fields: Mapping[str, Any]) -> tuple[str, str, str, str, str]:
+    """The overlay's key for one leg: its pair identity and role, as strings."""
+    return (
+        str(fields["condition"]),
+        str(fields["work_id"]),
+        str(fields["variant"]),
+        str(fields["repeat"]),
+        str(fields["role"]),
+    )
 
 
 def _rescored(identity: Mapping[str, str], audit: AuditOverlay | None) -> dict[str, Any] | None:
     if audit is None:
         return None
-    names = ("condition", "work_id", "variant", "repeat", "role")
-    return audit.get(tuple(identity[name] for name in names))
+    return audit.get(overlay_key(identity))
 
 
 def render_leg(
@@ -407,7 +433,7 @@ def render_leg(
     audit: AuditOverlay | None = None,
 ) -> Path:
     leg = read_object(source)
-    rescored = _rescored(_identity(leg, source), audit)
+    rescored = _rescored(leg_identity(leg, source), audit)
     out.parent.mkdir(parents=True, exist_ok=True)
     lines = cast_lines(leg, path=source, speed=speed, limit=limit, rescored=rescored)
     out.write_text("\n".join(lines) + "\n")
@@ -421,7 +447,7 @@ def run_legs(run_dir: Path) -> list[Path]:
 
 
 def _cast_name(leg_path: Path) -> str:
-    identity = _identity(read_object(leg_path), leg_path)
+    identity = leg_identity(read_object(leg_path), leg_path)
     return (
         "__".join(
             [

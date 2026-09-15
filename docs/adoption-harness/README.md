@@ -316,6 +316,25 @@ The closing block of each recording shows the score saved at run time. With `--a
 the rescored evidence is shown above it, each block labelled with the scorer version
 that produced it.
 
+To watch a whole run as one video, stitch every session into a single captioned
+recording instead:
+
+```bash
+PYTHONPATH=. uv run python scripts/render_trial_video.py runs/my-first-run \
+  --out runs/my-first-run-recordings/demo.cast --video \
+  --audit runs/my-first-run-audit/audit.json
+```
+
+The recording opens with a card naming the run, then plays each trial in the
+manifest's condition order: a chapter card saying what the condition set (rung, bd
+context, hook mode) and quoting the memory guidance verbatim, every session of the
+trial in plan order, and a closing card with the trial's verdicts. A yellow bar above
+each tool exchange says what the agent did, read off the tool name, the path shape, the
+bd verb and key on the receipt, bd's own acknowledgement text and the exit code. No bar
+is a judgment about the agent. The verdicts are the audit's rescoring when `--audit` is
+given, otherwise the ones derived from the scores saved at run time, and the card says
+which. `--speed 1.5` shortens the video without dropping anything.
+
 ### Layout of a run directory
 
 ```

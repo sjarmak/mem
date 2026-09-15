@@ -119,6 +119,33 @@ def test_the_cast_replays_every_exchange_with_its_receipt_and_score() -> None:
     assert "\n" not in text.replace("\r\n", "")
 
 
+def test_a_captioner_labels_the_exchange_it_names_and_sees_every_receipt_of_the_call() -> None:
+    """A composed recording puts a label above a tool exchange. The label is the captioner's;
+    the replay only places it, directly above the command it describes, and hands the captioner
+    every finishing receipt the call produced, so a chained command is labelled once per bd call."""
+    mod = render_module()
+    leg = _leg()
+    leg["bd_receipts"] = _receipt("u1", ["remember", "--key", "window", "toolreq-current"], 0)
+    leg["bd_receipts"] += _receipt("u1", ["remember", "--key", "region", "eu-west-1"], 0)
+    seen: list[tuple[str, int]] = []
+
+    def caption(call: Any, receipts: list[dict[str, Any]]) -> Any:
+        seen.append((call.name, len(receipts)))
+        if not receipts:
+            return None
+        return mod.Frame(f"LABEL {receipts[-1]['operation_argv'][2]}", hold=1.0)
+
+    shown = mod.frames(leg, limit=12, caption=caption)
+    text = "\n".join(frame.text for frame in shown)
+    assert seen == [("Bash", 2), ("Bash", 0), ("Write", 0)]
+    assert text.count("LABEL") == 1
+    assert text.index("LABEL region") < text.index("bd remember --key window")
+    result = next(frame for frame in shown if "bd receipt" in frame.text)
+    assert result.text.count("bd receipt") == 2
+    without = "\n".join(frame.text for frame in mod.frames(leg, limit=12))
+    assert "LABEL" not in without
+
+
 def test_typed_commands_are_emitted_one_character_at_a_time() -> None:
     mod = render_module()
     _, events, _ = _output(mod.cast_lines(_leg(), limit=12))
@@ -233,6 +260,11 @@ def test_video_rendering_runs_agg_then_ffmpeg_and_surfaces_a_failure(
     assert [argv[0] for argv in seen] == ["agg", "ffmpeg"]
     assert seen[0][-2:] == [str(cast), str(gif)] and seen[1][-1] == str(mp4)
     assert gif.suffix == ".gif" and mp4.suffix == ".mp4"
+    assert seen[0][seen[0].index("--idle-time-limit") + 1] == "2"
+    mod.write_video(cast, run=ok, idle_limit=14.0)
+    assert seen[2][seen[2].index("--idle-time-limit") + 1] == "14"
+    with pytest.raises(ValueError, match="positive"):
+        mod.write_video(cast, run=ok, idle_limit=0)
 
     def broken(argv: list[str], **_: object) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(argv, 1, "", "boom\nfont missing")
