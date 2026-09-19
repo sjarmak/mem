@@ -23,6 +23,15 @@ between sessions and restores only condition-specific harness guidance.
 - **Redirect:** the explicit condition plus a hook that blocks native-memory accesses
   and directs the agent to bd.
 
+The harness has since gained a second axis: each of the three guidance conditions can
+also run with the CLI's own memory system pinned off (`autoMemoryEnabled: false` seeded
+into the minted config directory and read back off disk per leg), giving
+`generic_native_off`, `explicit_native_off` and `redirect_native_off`. Nothing reported
+in this document was bought under it. Every pair below ran with native memory on, which
+is the contrast a user faces; the pinned arms exist to ask a narrower question, whether
+the interception hook still buys anything once there is no native memory path left to
+reach for. See [README.md](README.md) for the full condition table.
+
 Execution uses Claude Sonnet 4.6 (`claude-sonnet-4-6`), Claude Code 2.1.261, and the
 bd executable identified by absolute path, SHA-256, and version in each manifest.
 Account1 subscription OAuth supplies authentication. No API key is used. CLI-reported

@@ -65,21 +65,39 @@ compound: agents append one to nearly every bd call, and scorer versions before 
 every such call as unattributed. The audit below rescores saved sessions with the
 current scorer, so a run scored under an older version need not be bought again.
 
-## The three conditions
+## The six conditions
 
-All three run the same tasks, the same tools, the same isolated store lifecycle, and
-the same default native-memory settings. Only the guidance differs.
+Every condition runs the same tasks, the same tools and the same isolated store
+lifecycle. Two things vary: what the agent is told about bd, and whether the CLI's own
+memory system is left switched on.
 
 | Condition | What the agent is told | Native memory |
 |---|---|---|
-| `generic` | general persistent-memory guidance, bd never named | observed |
-| `explicit` | bd deployment context plus working `remember` / `recall` / `memories` examples | observed |
-| `redirect` | the explicit context, plus a hook that blocks a native-memory access and answers it by naming the bd commands | intercepted |
+| `generic` | general persistent-memory guidance, bd never named | on, observed |
+| `explicit` | bd deployment context plus working `remember` / `recall` / `memories` examples | on, observed |
+| `redirect` | the explicit context, plus a hook that blocks a native-memory access and answers it by naming the bd commands | on, intercepted |
+| `generic_native_off` | as `generic` | pinned off, observed |
+| `explicit_native_off` | as `explicit` | pinned off, observed |
+| `redirect_native_off` | as `redirect` | pinned off, intercepted |
 
 "Observed" means a `PreToolUse` hook records the reach and lets it through.
 "Intercepted" means the same hook refuses the call and returns a message pointing at
 bd. The recognizer that decides what counts as a native-memory access is shared with
 the scoring path, so the hook and the scorer cannot drift apart.
+
+"Pinned off" means `autoMemoryEnabled: false` is seeded into the minted config
+directory, which is where the CLI reads it from, and then read back off disk onto every
+leg and onto the cell (`native_memory_pinned_off`). The hook is still installed on the
+pinned arms: `redirect_native_off` minus `explicit_native_off` is the point of the
+second axis. The hook exists to catch a reach at the native memory path and answer it
+with bd; if there is no native path to reach for, that interception may buy nothing,
+and the increment it still shows with native memory on would be measuring the absence
+of the alternative rather than any pull toward bd.
+
+The analyzer compares each arm against `generic`, and reports the designed contrasts
+named in `CONDITION_CONTRASTS`. A contrast is dropped when the run's frozen manifest
+does not carry both of its conditions, so runs bought under the earlier three-condition
+design re-analyze to exactly the comparisons they always had.
 
 ## What we measured with it
 
@@ -223,8 +241,14 @@ PYTHONPATH=. uv run python -m membench.runner.bd_experiment \
 
 The manifest holds the full randomized schedule, the model, the CLI version, the bd
 identity, a hash of every harness source file, the corpus fingerprint, and the leg
-plan. Read it before spending anything. `--tasks 8 --repeats 2` is the shape of our
-published run: 96 pairs, 192 sessions.
+plan. Read it before spending anything.
+
+Every schedule entry is one condition, so a plan is `tasks x 2 variants x repeats x 6
+conditions` pairs. `--tasks 8 --repeats 2` freezes 192 pairs, 384 sessions. Our
+published run has the same task shape but predates the native-memory axis, so it bought
+the three native-memory-on arms only: 96 pairs, 192 sessions. A six-condition plan is a
+superset of it, so `generic`, `explicit` and `redirect` remain directly comparable with
+the table above.
 
 Add `--legs trial` to freeze the four-session version-history trial instead. The plan
 is part of the frozen identity, so a directory planned as pairs cannot later be run as
@@ -245,9 +269,10 @@ PYTHONPATH=. uv run python -m membench.runner.bd_experiment \
 `--max-pairs` bounds how many *new* pairs this invocation may buy. It defaults to 1, so
 the obvious first command buys one pair and stops. Re-run with a larger `--max-pairs` to
 continue; already-completed pairs are reused, never repurchased. Budget roughly **$0.14
-per pair** at the rates our run saw, so a full 96-pair replication is around $13. A
-trial runs twice the sessions of a pair, so budget roughly twice that per entry; pass
-the same `--legs trial` on every invocation against a trial directory.
+per pair** at the rates our run saw, so the full 192-pair plan above is around $27, and
+the 96 pairs behind the published table are around $13. A trial runs twice the sessions
+of a pair, so budget roughly twice that per entry; pass the same `--legs trial` on every
+invocation against a trial directory.
 
 Start with one pair and read its output before scaling up.
 

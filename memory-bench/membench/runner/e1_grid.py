@@ -163,6 +163,7 @@ __all__ = [
     "call_rate_gates",
     "cell_steps",
     "child_env_after_scrub",
+    "condition_settings",
     "corpus_fingerprint",
     "discrimination_margins",
     "env_inlets_present",
@@ -267,6 +268,26 @@ def rung_settings_fingerprint() -> str:
     dir's CONTENTS, and ``EXECUTION_PROTOCOL_VERSION`` is a hand-bumped integer — so before this
     field the two artifacts hashed identical."""
     return digest({rung: dict(settings) for rung, settings in RUNG_SETTINGS.items()})
+
+
+def condition_settings(rung: str, *, native_memory_off: bool = False) -> Mapping[str, object]:
+    """The settings.json a cell actually seeds: the rung's table, plus the pin when the ARM asks
+    for it.
+
+    The ladder pins by RUNG (only the R0 floor), because there the pin is part of what the rung
+    measures. An arm that varies the CLI's own memory system while holding the rung fixed needs
+    the same key on a second axis — the adoption comparison runs every condition at R4, so
+    ``rung_settings`` alone can only ever produce native-memory-ON legs and the question "is the
+    interception hook still needed once the CLI's own memory is off" has no cell to be asked in.
+
+    ADDITIVE, never subtractive: ``native_memory_off=False`` does not turn the pin back ON at a
+    rung whose table carries it, so R0 stays pinned however it is called. What a leg RAN under is
+    never read back from this function anyway — ``native_memory_pinned_off`` reads the minted dir
+    off disk, and that read is what the leg and the cell publish."""
+    settings = rung_settings(rung)
+    if not native_memory_off:
+        return settings
+    return types.MappingProxyType({**settings, NATIVE_MEMORY_SETTING: False})
 
 
 def native_memory_pinned_off(config_dir: Path) -> bool:
@@ -1520,6 +1541,7 @@ def cell_store(
     rung: str,
     bd_context: bool = BD_CONTEXT_DEFAULT,
     native_memory_hook_mode: str = NATIVE_MEMORY_HOOK_MODE_DEFAULT,
+    native_memory_off: bool = False,
 ) -> Iterator[_CellStore]:
     """Mint one repeat's store + sandbox, seed the rung, install the observer, and tear the whole
     thing down when both legs have run.
@@ -1544,7 +1566,7 @@ def cell_store(
         # BEFORE any agent is spawned -- `provision_memory_tool` mints it empty for every arm, so
         # the pin belongs to the rung, not to the surface. Read straight back off disk: what the
         # cell reports having run under is the file the agent would have read.
-        settings = rung_settings(rung)
+        settings = condition_settings(rung, native_memory_off=native_memory_off)
         if settings:
             seed_config_dir(config_dir, settings)
         # AFTER the seed, and merging into it rather than replacing it: the hook is an instrument
@@ -1778,6 +1800,7 @@ def run_rung_cell(
     corpus_dir: Path | None = None,
     bd_context: bool = BD_CONTEXT_DEFAULT,
     native_memory_hook_mode: str = NATIVE_MEMORY_HOOK_MODE_DEFAULT,
+    native_memory_off: bool = False,
     instrument_bd: bool = False,
     leg_plan: Sequence[str] = LEG_ROLES,
 ) -> RungCell:
@@ -1914,6 +1937,7 @@ def run_rung_cell(
             rung=rung,
             bd_context=bd_context,
             native_memory_hook_mode=native_memory_hook_mode,
+            native_memory_off=native_memory_off,
         ) as store:
             for role_index, (role, step) in enumerate(zip(plan, steps, strict=True)):
                 if role_index:

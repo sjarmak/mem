@@ -46,7 +46,21 @@ dropping the pin.
 
 ## What this does NOT settle
 
-`redirect` mode has never been fired against a real agent. What is verified is the mechanism: the
-script the CLI would run, driven with the payload the CLI would send, blocks the call and puts the
-bd verbs in front of the model. Whether an agent so redirected then calls `bd` is the experiment,
-and it costs a slice of grid.
+`redirect` has since been fired against real agents, outside E1: the adoption comparison
+(`bd_experiment`) ran it as its third condition, and redirected agents did reach for bd
+(`docs/adoption-harness/RESULTS.md`). So the mechanism works and the behaviour follows.
+
+What that does not say is whether the interception is what produced the behaviour. Every pair in
+that run had the CLI's own memory system ON, which is the condition the hook was designed for and
+also the only condition it has ever been measured in. An increment bought there is consistent with
+two different stories: the redirect pulled the agent toward bd, or it merely took away the
+alternative the agent would otherwise have used. The two stories predict different things once
+native memory is gone, and nothing distinguishes them yet.
+
+The adoption harness now carries the cell that does: `native_memory_off` pins `autoMemoryEnabled:
+false` into the same minted config dir the rung seeds, read back off disk onto every leg, giving
+`redirect_native_off` against `explicit_native_off`. If the hook still adds an increment with no
+native path to reach for, it is guidance; if the increment collapses to zero, the hook was standing
+in for the absence of the alternative and E1's `observe` default is the only mode worth keeping.
+That contrast has not been bought. Priced at the version-history trial's shape (2 work IDs, both
+variants, one repeat, four-leg trials), the full six-condition plan is 24 pairs / 96 sessions.

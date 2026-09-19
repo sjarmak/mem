@@ -48,15 +48,61 @@ class Cell:
 def test_schedule_balances_and_freezes_treatments(corpus_dir: Path) -> None:
     tasks, manifest = setup_plan(corpus_dir)
     assert len(tasks) == 4
-    assert len(manifest["schedule"]) == 12
+    assert len(manifest["schedule"]) == 24
     assert manifest == setup_plan(corpus_dir)[1]
-    for offset in range(0, 12, 3):
-        block = manifest["schedule"][offset : offset + 3]
+    # Every block is one task/variant carrying the WHOLE 3x2, so the second axis is balanced
+    # against the first inside each block rather than across the run: a run stopped early still
+    # has both native-memory states for each arm it bought.
+    for offset in range(0, 24, 6):
+        block = manifest["schedule"][offset : offset + 6]
         assert len({p["work_id"] for p in block}) == 1
         assert len({p["variant"] for p in block}) == 1
-        assert {p["condition"] for p in block} == {"generic", "explicit", "redirect"}
+        assert {p["condition"] for p in block} == set(exp.CONDITIONS)
     assert manifest["conditions"]["generic"]["bd_context"] is False
-    assert manifest["native_memory_settings"] == {}
+
+
+def test_the_frozen_identity_states_the_pin_per_condition(corpus_dir: Path) -> None:
+    """The pin is a second axis of the design, so the frozen manifest has to say which arms
+    carry it. It is resolved through the same function the runner seeds the config dir with, so
+    the manifest cannot describe one pin and the cell mint another."""
+    _tasks, manifest = setup_plan(corpus_dir)
+    assert manifest["native_memory_settings"] == {
+        "generic": {},
+        "explicit": {},
+        "redirect": {},
+        "generic_native_off": {"autoMemoryEnabled": False},
+        "explicit_native_off": {"autoMemoryEnabled": False},
+        "redirect_native_off": {"autoMemoryEnabled": False},
+    }
+    assert set(manifest["native_memory_settings"]) == set(manifest["conditions"])
+    # A contrast can only be read if both its sides were bought in the same run.
+    assert all(
+        treatment in exp.CONDITIONS and baseline in exp.CONDITIONS
+        for treatment, baseline in exp.CONDITION_CONTRASTS
+    )
+
+
+def test_every_arm_reaches_the_runner_with_its_own_pin(tmp_path: Path, corpus_dir: Path) -> None:
+    """`_execute_pair` splats the frozen condition straight into `run_rung_cell`, so the pin
+    arrives as a runner keyword rather than as a note about the arm. Six pairs is the whole 3x2
+    for one task/variant: each hook mode appears both pinned and unpinned."""
+    tasks, manifest = setup_plan(corpus_dir)
+    calls: list[dict[str, Any]] = []
+
+    def run(task: Any, **kwargs: Any) -> Cell:
+        calls.append(kwargs)
+        return Cell()
+
+    execute(tmp_path, manifest, tasks, max_pairs=6, cell_runner=run)
+    seen = {(c["bd_context"], c["native_memory_hook_mode"], c["native_memory_off"]) for c in calls}
+    assert seen == {
+        (False, "observe", False),
+        (True, "observe", False),
+        (True, "redirect", False),
+        (False, "observe", True),
+        (True, "observe", True),
+        (True, "redirect", True),
+    }
 
 
 def test_resume_and_pair_bound(tmp_path: Path, corpus_dir: Path) -> None:
@@ -71,7 +117,12 @@ def test_resume_and_pair_bound(tmp_path: Path, corpus_dir: Path) -> None:
     assert len(calls) == 2
     assert execute(tmp_path, manifest, tasks, max_pairs=1, cell_runner=run)["completed"] == 3
     assert len(calls) == 3
-    assert {c["native_memory_hook_mode"] for c in calls} == {"observe", "redirect"}
+    # A resumed run picks up at the schedule position it stopped at, so what was bought is the
+    # schedule PREFIX, arm for arm -- not merely the right number of pairs.
+    keys = set(exp.CONDITIONS["generic"])
+    assert [{k: v for k, v in c.items() if k in keys} for c in calls] == [
+        exp.CONDITIONS[p["condition"]] for p in manifest["schedule"][:3]
+    ]
     assert all(c["repeats"] == 1 and c["rung"] == "R4" for c in calls)
 
 
@@ -255,7 +306,7 @@ def test_a_trial_manifest_plans_four_calls_per_schedule_entry(corpus_dir: Path) 
     _, trial = _manifest(corpus_dir, leg_plan=TRIAL_ROLES)
     assert trial["leg_plan"] == list(TRIAL_ROLES)
     assert trial["planned_calls"] == 4 * len(trial["schedule"])
-    assert trial["schema_version"] == pair["schema_version"] == 4
+    assert trial["schema_version"] == pair["schema_version"] == 5
     assert trial["schedule"] == pair["schedule"], "the plan must not reshuffle the schedule"
     with pytest.raises(ValueError, match="plan"):
         _manifest(corpus_dir, leg_plan=("establish", "bogus"))

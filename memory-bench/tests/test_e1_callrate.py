@@ -2606,6 +2606,62 @@ def test_rung_settings_pins_only_the_floor_and_is_frozen() -> None:
         e1_grid.rung_settings("R9")
 
 
+def test_condition_settings_adds_the_pin_without_ever_removing_it() -> None:
+    """The ladder pins by RUNG, and only at the floor. An arm that varies the CLI's own memory
+    system while holding the rung fixed needs the same key on a SECOND axis: the adoption
+    comparison runs every condition at R4, so ``rung_settings`` alone could only ever mint
+    native-memory-ON legs, and the question the hook exists to answer would have no cell.
+
+    The merge runs one way only. Asking for the pin at a rung whose table lacks it adds the key;
+    NOT asking for it at R0 cannot take the key away, because the floor rung's pin is part of
+    what R0 measures rather than a default a caller may override."""
+    assert dict(e1_grid.condition_settings("R4")) == {}
+    assert dict(e1_grid.condition_settings("R4", native_memory_off=True)) == {
+        e1_grid.NATIVE_MEMORY_SETTING: False
+    }
+    assert dict(e1_grid.condition_settings("R0", native_memory_off=False)) == {
+        e1_grid.NATIVE_MEMORY_SETTING: False
+    }
+    assert dict(e1_grid.condition_settings("R0", native_memory_off=True)) == {
+        e1_grid.NATIVE_MEMORY_SETTING: False
+    }
+    # Frozen for the same reason the rung table is: a mutated mapping would diverge what is
+    # WRITTEN into the config dir from what the frozen manifest hashes as the condition.
+    with pytest.raises(TypeError):
+        e1_grid.condition_settings("R4", native_memory_off=True)[  # type: ignore[index]
+            e1_grid.NATIVE_MEMORY_SETTING
+        ] = True
+    with pytest.raises(ValueError, match="unknown rung"):
+        e1_grid.condition_settings("R9", native_memory_off=True)
+
+
+def test_a_guided_rung_can_be_run_with_native_memory_pinned_off(tmp_path: Any) -> None:
+    """The second axis, end to end: R4 asked to pin the CLI's own memory off seeds the key into
+    the minted dir, keeps the interception hook alongside it, and reads the pin BACK off disk
+    onto every leg and onto the cell.
+
+    The hook surviving the pin is the load-bearing half. This arm exists to ask whether the hook
+    still buys anything once the native path is gone, and a cell that dropped either half would
+    answer a different question while reporting this one."""
+    _seqs, tasks = corpus_one(tmp_path)
+    runner, seen = _config_dir_witness()
+    legs: list[LegRecord] = []
+    cell = e1_grid.run_rung_cell(
+        tasks[0],
+        rung="R4",
+        repeats=1,
+        model=MODEL,
+        dry_run=False,
+        runner=runner,
+        on_leg=legs.append,
+        native_memory_off=True,
+    )
+    assert [s["settings"][e1_grid.NATIVE_MEMORY_SETTING] for s in seen] == [False] * 2
+    assert [s["entries"] for s in seen] == [["native-memory-hook.py", "settings.json"]] * 2
+    assert cell.native_memory_pinned_off is True
+    assert [leg.native_memory_pinned_off for leg in legs] == [True] * 2
+
+
 def test_legs_that_disagree_about_the_pin_halt_and_keep_what_was_paid_for(
     tmp_path: Any, monkeypatch: Any
 ) -> None:

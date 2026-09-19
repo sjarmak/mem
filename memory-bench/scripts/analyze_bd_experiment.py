@@ -23,7 +23,7 @@ from pathlib import Path
 from statistics import fmean
 from typing import Any
 
-from membench.runner.bd_experiment import _pair_dir
+from membench.runner.bd_experiment import CONDITION_CONTRASTS, _pair_dir
 from membench.runner.e1_reliability import (
     TRIAL_CATEGORICAL,
     TRIAL_VERDICTS,
@@ -52,7 +52,7 @@ COSTS = (
     "estimated_usd",
 )
 SMALL_CLUSTER_COUNT = 10  # Reporting caution, not a significance or quality gate.
-ANALYSIS_VERSION = 2
+ANALYSIS_VERSION = 3
 
 
 def read_object(path: Path) -> dict[str, Any]:
@@ -170,6 +170,33 @@ def trial_evidence(legs: Sequence[Mapping[str, Any]]) -> dict[str, BdLegEvidence
     }
 
 
+def assert_pin_as_designed(
+    manifest: Mapping[str, Any], pair: Mapping[str, Any], legs: Sequence[Mapping[str, Any]]
+) -> None:
+    """Every leg must have RUN under the native-memory state its arm names.
+
+    The pin is the second axis of the design, and intent is not evidence. The runner reads it
+    back off the minted config dir onto each leg; this is where that read is checked against the
+    frozen condition. A leg that ran unpinned inside a `*_native_off` arm is not a weaker result,
+    it is a different experiment wearing that arm name, and averaged in it would answer the
+    hook question with cells that still had a native memory path to reach for.
+
+    Artifacts frozen before the axis existed carry no `native_memory_off` key, and the oldest
+    carry no leg field either. Absent and unpinned agree, so those analyze unchanged."""
+    condition = manifest["conditions"].get(str(pair["condition"]), {})
+    intended = bool(condition.get("native_memory_off", False))
+    for leg in legs:
+        recorded = leg.get("native_memory_pinned_off")
+        if recorded is None and not intended:
+            continue
+        if bool(recorded) is not intended:
+            raise ValueError(
+                f"Leg {leg.get('leg')} of condition {pair['condition']!r} recorded "
+                f"native_memory_pinned_off={recorded!r}, but its frozen condition asks for "
+                f"{intended}"
+            )
+
+
 def load_pair(root: Path, manifest: Mapping[str, Any], pair: Mapping[str, Any]) -> dict[str, Any]:
     plan = leg_plan(manifest)
     directory = _pair_dir(root, pair)
@@ -183,6 +210,7 @@ def load_pair(root: Path, manifest: Mapping[str, Any], pair: Mapping[str, Any]) 
             if path == cell_path:
                 cell = saved["cell"]
     legs = load_legs(directory, pair, cell, plan)
+    assert_pin_as_designed(manifest, pair, legs)
     by_role = {leg["role"]: leg for leg in legs}
     capture = endpoint(by_role.get(capture_role(plan)), "bd_capture_complete")
     goal = by_role.get(GOAL_ROLE)
@@ -407,14 +435,26 @@ def analyze(root: Path, *, bootstrap_samples: int = 2000, seed: int = 20260904) 
         for c in conditions
         for v in ("necessary", "unnecessary", "all")
     ]
+    # Every arm against the floor, then the designed contrasts (`CONDITION_CONTRASTS`), skipping
+    # any whose two conditions this manifest did not both freeze — a three-condition artifact
+    # from before the native-memory axis re-analyzes to the same comparisons it always had.
     comparisons = [(c, "generic") for c in conditions if c != "generic"]
-    if "redirect" in conditions and "explicit" in conditions:
-        comparisons.append(("redirect", "explicit"))
+    comparisons += [
+        pair
+        for pair in CONDITION_CONTRASTS
+        if all(name in conditions for name in pair) and pair not in comparisons
+    ]
+    # Every endpoint, not just the two outcome ones: the native-memory axis asks whether bd is
+    # USED at all when the CLI's own memory is gone, and `capture` / `observed_recall` /
+    # `recall_before_action` are where that shows. Measured rather than assumed cheap: a full
+    # six-condition run (192 pairs, 135 contrasts) analyzes in 1.1s at the default 2000
+    # bootstrap samples, against 0.4s for the 45 contrasts of the published three-condition
+    # shape.
     contrasts = [
         contrast(rows, c, v, metric, samples=bootstrap_samples, seed=seed, baseline=base)
         for c, base in comparisons
         for v in ("necessary", "unnecessary", "all")
-        for metric in ("handoff", "goal_action_success")
+        for metric in ENDPOINTS
     ]
     return {
         "analysis_version": ANALYSIS_VERSION,

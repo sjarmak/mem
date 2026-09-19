@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from membench.runner import bd_experiment as exp
 from membench.runner.bd_experiment import _pair_dir
 from membench.runner.e1_reliability import RELIABILITY_VERSION
 from membench.runner.leg_plans import PAIR_ROLES, TRIAL_ROLES
@@ -23,19 +24,26 @@ def analyzer() -> Any:
     return module
 
 
+THREE_CONDITIONS = ("generic", "explicit", "redirect")
+
+
 def fixture(
-    root: Path, *, tasks: int = 2, leg_plan: tuple[str, ...] | None = None
+    root: Path,
+    *,
+    tasks: int = 2,
+    leg_plan: tuple[str, ...] | None = None,
+    conditions: tuple[str, ...] = THREE_CONDITIONS,
 ) -> dict[str, Any]:
     schedule = [
         {"condition": c, "work_id": str(t), "variant": v, "repeat": r}
         for t in range(tasks)
         for v in ("necessary", "unnecessary")
         for r in range(2)
-        for c in ("generic", "explicit", "redirect")
+        for c in conditions
     ]
     manifest = {
         "schedule": schedule,
-        "conditions": {c: {} for c in ("generic", "explicit", "redirect")},
+        "conditions": {c: dict(exp.CONDITIONS[c]) for c in conditions},
         "planned_pairs": len(schedule),
         "model": "fixture",
         **({"leg_plan": list(leg_plan)} if leg_plan is not None else {}),
@@ -114,6 +122,10 @@ def save_pair(
             "status": "ok",
             "bd_evidence": ev,
             "hook_reaches": 1,
+            # As the runner records it: read back off the minted config dir, not copied from
+            # the condition. The fixture spells the arm honestly so the analyzer's pin gate is
+            # exercised by every test here rather than only by the one that asserts it.
+            "native_memory_pinned_off": str(pair["condition"]).endswith("_native_off"),
             "stream": json.dumps(result),
         }
         (directory / "legs" / f"{index}.json").write_text(json.dumps(leg))
@@ -380,3 +392,82 @@ def test_a_trial_leg_saved_at_a_pair_position_is_refused(tmp_path: Path) -> None
     path.write_text(json.dumps({**goal, "leg": 1}))
     with pytest.raises(ValueError, match="index"):
         analyzer().analyze(tmp_path, bootstrap_samples=30)
+
+
+def test_the_native_memory_axis_is_read_as_its_designed_contrasts(tmp_path: Path) -> None:
+    """The question the second axis exists for is `redirect_native_off` minus
+    `explicit_native_off`: does the interception hook still buy anything once the CLI's own
+    memory is pinned off and there is no native reach left to intercept?
+
+    The contrast table is shared with the scheduler, so the analyzer cannot drift into comparing
+    an arm against something the design never paired it with. Here the hook increment is real
+    with native memory on and exactly zero with it off, which is the shape that would retire the
+    hook — and the analyzer has to be able to report it as a difference, not as two rates a
+    reader subtracts by eye."""
+    manifest = fixture(tmp_path, conditions=tuple(exp.CONDITIONS))
+    for pair in manifest["schedule"]:
+        success = pair["condition"] in ("redirect", "explicit_native_off", "redirect_native_off")
+        save_pair(tmp_path, manifest, pair, success=success)
+    mod = analyzer()
+    report = mod.analyze(tmp_path, bootstrap_samples=200, seed=5)
+
+    def difference(condition: str, baseline: str) -> float:
+        row = next(
+            c
+            for c in report["contrasts"]
+            if c["condition"] == condition
+            and c["baseline"] == baseline
+            and c["variant"] == "all"
+            and c["metric"] == "handoff"
+        )
+        assert row["matched_pairs"] == 8
+        return float(row["difference"])
+
+    assert difference("redirect", "explicit") == 1.0
+    assert difference("redirect_native_off", "explicit_native_off") == 0.0
+    assert difference("explicit_native_off", "explicit") == 1.0
+    text = mod.markdown(report)
+    assert "redirect_native_off minus explicit_native_off" in text
+
+
+def test_a_three_condition_artifact_keeps_exactly_its_old_comparisons(tmp_path: Path) -> None:
+    """Runs already bought froze three conditions. Widening the design must not invent a
+    contrast their artifacts have no cells for, so each designed pair is dropped unless the
+    manifest froze BOTH of its sides."""
+    manifest = fixture(tmp_path)
+    for pair in manifest["schedule"]:
+        save_pair(tmp_path, manifest, pair, success=True)
+    report = analyzer().analyze(tmp_path, bootstrap_samples=30, seed=5)
+    pairs = {(c["condition"], c["baseline"]) for c in report["contrasts"]}
+    assert pairs == {("explicit", "generic"), ("redirect", "generic"), ("redirect", "explicit")}
+
+
+def test_a_leg_that_ran_unpinned_inside_a_pinned_arm_is_refused(tmp_path: Path) -> None:
+    """The arm name is intent; `native_memory_pinned_off` is what the leg read off disk. When
+    they disagree the run did not happen as designed, and the pair is refused rather than
+    averaged into a contrast whose whole point is the pin."""
+    manifest = fixture(tmp_path, conditions=tuple(exp.CONDITIONS))
+    pair = next(p for p in manifest["schedule"] if p["condition"] == "redirect_native_off")
+    save_pair(tmp_path, manifest, pair, success=True)
+    path = _pair_dir(tmp_path, pair) / "legs" / "1.json"
+    leg = json.loads(path.read_text())
+    path.write_text(json.dumps({**leg, "native_memory_pinned_off": False}))
+    with pytest.raises(ValueError, match="native_memory_pinned_off"):
+        analyzer().analyze(tmp_path, bootstrap_samples=30)
+
+
+def test_legs_from_before_the_axis_are_not_read_as_unpinned_failures(tmp_path: Path) -> None:
+    """A three-condition artifact has no `native_memory_off` key and its oldest legs have no
+    read-back field. Absent and unpinned agree, so the gate stays silent on them."""
+    manifest = fixture(tmp_path)
+    for condition in manifest["conditions"].values():
+        condition.pop("native_memory_off")
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    pair = manifest["schedule"][0]
+    save_pair(tmp_path, manifest, pair, success=True)
+    for index in range(len(PAIR_ROLES)):
+        path = _pair_dir(tmp_path, pair) / "legs" / f"{index}.json"
+        leg = json.loads(path.read_text())
+        leg.pop("native_memory_pinned_off")
+        path.write_text(json.dumps(leg))
+    assert analyzer().analyze(tmp_path, bootstrap_samples=30)["pairs"][0]["completed"] is True

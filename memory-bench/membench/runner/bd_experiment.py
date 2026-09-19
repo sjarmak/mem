@@ -22,6 +22,7 @@ from membench.runner.e1_grid import (
     UnmeasuredStreak,
     _refusal,
     assert_scoreable_corpus,
+    condition_settings,
     corpus_fingerprint,
     out_lock,
     run_rung_cell,
@@ -34,11 +35,90 @@ from membench.runner.tool_surface import resolve_bd_binary
 from membench.runner.toolreq_corpus import load_twin_corpus
 from membench.runner.toolreq_realagent import DEFAULT_CORPUS, ToolReqRealAgentTask
 
+# The comparison is a 3x2: how bd is offered (nothing beyond the R4 block / a deployment
+# CLAUDE.md / that plus the interception hook) crossed with whether the CLI's OWN memory system
+# is left on.
+#
+# The second axis is not a control, it is the question. Every number this harness has published
+# was bought with native memory ON, which is deliberate — the contrast a user actually faces is
+# bd against the memory the CLI already ships. But it leaves the hook's job stated and untested:
+# the hook exists to catch a reach at the native path and answer it with the bd verbs, and if the
+# native path is simply absent, the reach has nowhere else to go and the hook may buy nothing.
+# `redirect_native_off` vs `explicit_native_off` is that question with one cell; the `*_native_off`
+# vs native-on twins say what turning the CLI's memory off does on its own.
+#
+# Every key here is a `run_rung_cell` keyword: `_execute_pair` splats the frozen condition
+# straight into the runner, so a condition cannot describe one arm and run another.
 CONDITIONS: dict[str, dict[str, Any]] = {
-    "generic": {"rung": "R4", "bd_context": False, "native_memory_hook_mode": "observe"},
-    "explicit": {"rung": "R4", "bd_context": True, "native_memory_hook_mode": "observe"},
-    "redirect": {"rung": "R4", "bd_context": True, "native_memory_hook_mode": "redirect"},
+    "generic": {
+        "rung": "R4",
+        "bd_context": False,
+        "native_memory_hook_mode": "observe",
+        "native_memory_off": False,
+    },
+    "explicit": {
+        "rung": "R4",
+        "bd_context": True,
+        "native_memory_hook_mode": "observe",
+        "native_memory_off": False,
+    },
+    "redirect": {
+        "rung": "R4",
+        "bd_context": True,
+        "native_memory_hook_mode": "redirect",
+        "native_memory_off": False,
+    },
+    "generic_native_off": {
+        "rung": "R4",
+        "bd_context": False,
+        "native_memory_hook_mode": "observe",
+        "native_memory_off": True,
+    },
+    "explicit_native_off": {
+        "rung": "R4",
+        "bd_context": True,
+        "native_memory_hook_mode": "observe",
+        "native_memory_off": True,
+    },
+    "redirect_native_off": {
+        "rung": "R4",
+        "bd_context": True,
+        "native_memory_hook_mode": "redirect",
+        "native_memory_off": True,
+    },
 }
+
+# The contrasts the design is FOR, as (treatment, baseline) pairs, named once here so the
+# scheduler and the analyzer cannot drift into comparing different things. The analyzer keeps
+# every condition against `generic` on top of these; these are the ones that carry the design's
+# questions, and each is dropped silently when a run's manifest froze without both of its
+# conditions (an older three-condition artifact re-analyzes unchanged).
+CONDITION_CONTRASTS: tuple[tuple[str, str], ...] = (
+    # Does the interception hook add anything over deployment context alone? Once with the CLI's
+    # own memory on, once with it off — the same question either side of the second axis.
+    ("redirect", "explicit"),
+    ("redirect_native_off", "explicit_native_off"),
+    # What does turning the CLI's own memory off do to each arm on its own?
+    ("generic_native_off", "generic"),
+    ("explicit_native_off", "explicit"),
+    ("redirect_native_off", "redirect"),
+)
+
+
+def native_memory_settings() -> dict[str, dict[str, Any]]:
+    """What each condition SEEDS into its config dir, resolved through the same function the
+    runner seeds with. Recorded in the manifest so the frozen identity states the pin per
+    condition rather than the empty dict a single-axis design could get away with. It remains a
+    statement of intent: what a leg RAN under is the disk read-back on its own record
+    (``native_memory_pinned_off``)."""
+    return {
+        name: dict(
+            condition_settings(
+                str(condition["rung"]), native_memory_off=bool(condition["native_memory_off"])
+            )
+        )
+        for name, condition in CONDITIONS.items()
+    }
 
 
 class IncompletePairError(RuntimeError):
@@ -100,7 +180,7 @@ def build_manifest(
                 }
             )
     return {
-        "schema_version": 4,
+        "schema_version": 5,
         "leg_plan": list(plan),
         "instrument_bd": True,
         "model": model,
@@ -110,7 +190,7 @@ def build_manifest(
         "source_fingerprint": source_fingerprint,
         "corpus_fingerprint": corpus_fingerprint(tasks),
         "conditions": CONDITIONS,
-        "native_memory_settings": {},
+        "native_memory_settings": native_memory_settings(),
         "repeats": repeats,
         "seed": seed,
         "timeout_s": timeout_s,
