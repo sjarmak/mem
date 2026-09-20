@@ -14,6 +14,26 @@ import pytest
 from membench.runner.bd_real_runtime import wrap_agent_runner
 
 
+def _harness_python() -> Path:
+    """The interpreter that can import this harness's dependencies inside the sandbox.
+
+    `sys.executable` is not always it. Launched through `uv run`, this suite can run on
+    `/usr/bin/python3` with the venv's site-packages reachable only from the PARENT process, so a
+    sandboxed child started from `sys.executable` is a bare system Python -- it imports neither
+    `membench` nor `pydantic`, and the dependency test below fails for a reason that has nothing
+    to do with the isolation it is testing. The sandbox mounts a venv it is handed
+    (`_python_mount`), so hand it one."""
+    prefix = os.environ.get("VIRTUAL_ENV")
+    if prefix:
+        candidate = Path(prefix) / "bin" / "python3"
+        if candidate.is_file():
+            return candidate
+    return Path(sys.executable)
+
+
+HARNESS_PYTHON = _harness_python()
+
+
 @pytest.fixture
 def runtime(tmp_path):
     root = tmp_path / "pair"
@@ -29,7 +49,7 @@ def wrapper(runtime, inner=subprocess.run, **changes):
         "pair_root": root,
         "cwd": cwd,
         "config_dir": config,
-        "agent_python": Path(sys.executable),
+        "agent_python": HARNESS_PYTHON,
         "bd_binary": Path("/usr/bin/true"),
         "record_path": record,
     }
@@ -172,7 +192,9 @@ result=subprocess.run([bd,'-C',{str(store)!r},'recall','runtime-check'],check=Tr
 assert 'runtime verified fact' in result.stdout
 print('bd-and-hooks-ok')
 """
-    result = wrapper(runtime, bd_binary=Path(bd))([sys.executable, "-c", script], **kwargs(runtime))
+    result = wrapper(runtime, bd_binary=Path(bd))(
+        [str(HARNESS_PYTHON), "-c", script], **kwargs(runtime)
+    )
     assert result.returncode == 0, result.stderr
     assert "bd-and-hooks-ok" in result.stdout
 

@@ -11,6 +11,9 @@ import pytest
 
 from membench.runner.bd_receipts import InstrumentationError, hook_response, run_bd
 
+# Where `membench` lives, for the wrappers these tests spawn as standalone scripts.
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+
 
 def event(command: str) -> dict:
     return {
@@ -106,6 +109,12 @@ def test_compound_commands(tmp_path: Path, fake_bd: Path, commands: str) -> None
     wrapper = tmp_path / "bd"
     wrapper.write_text(
         f"#!{sys.executable}\n"
+        # The same `sys.path` line production's `prepare_receipt_leg` writes, and for the same
+        # reason: the wrapper runs as a script, so `sys.path[0]` is its own directory and
+        # `membench` is importable only if it is put there. Without it this wrapper dies with a
+        # ModuleNotFoundError, bd never runs, and the test reads an absent receipts file --
+        # which is how it failed on a checkout where membench is not installed into the venv.
+        f"import sys\nsys.path[:0] = {[str(PACKAGE_ROOT)]!r}\n"
         "from membench.runner.bd_receipts import wrapper_main\n"
         f"raise SystemExit(wrapper_main(binary={str(fake_bd)!r}, "
         f"store={str(tmp_path)!r}, receipt_path={str(log)!r}))\n"
