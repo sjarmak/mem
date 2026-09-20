@@ -3,6 +3,34 @@
 A harness for one question: **will a coding agent choose a memory tool on its own,
 recover what it stored in a later session, and act on it?**
 
+**Scope correction, 2026-09-07:** the later installed-guidance and public-checker
+experiments linked below included task-specific memory-handoff instructions.
+They demonstrate guided workflows, not adoption from standing rules/skills alone.
+The [replacement experiment](MEMORY-UNPROMPTED.md) specifies ordinary tasks,
+independent task review, and Claude Code, Codex, OpenCode, and zcode coverage.
+Its [120-session scored cohort](../../specs/memory-unprompted-results-2026-09-07.md)
+is complete: some unprompted capture/search handoffs occurred on Codex and zcode,
+but initial treatment capture was 0/12 and direct known-reference lookup was
+unobserved. Frozen checks pass 100/120 artifacts; independent posthoc coverage
+exposes two additional failing artifacts. Earlier evidence remains unchanged.
+
+The completed [policy-handoff experiment](MEMORY-POLICY-HANDOFF.md) tests clearer
+workflow occasions on tasks whose later behavior depends on previously approved
+scope, with a model sweep within Claude Code and Codex plus OpenCode and zcode.
+Its task requests contain no instructions to use memories. The
+[264-session report](../../specs/memory-policy-handoff-results-2026-09-07.md)
+records strict main handoffs in 2/20 generic and 9/20 occasions lifecycles,
+including both direct and search routes. Occasions guidance improved observed
+memory capture/use, but did not improve overall artifact correctness. The 24
+normal-memory checks are reported separately.
+
+The [prime-delivery experiment](MEMORY-PRIME-DELIVERY.md) compares that same
+occasions procedure behind existing rules/skills, returned directly by prime,
+or supplied as a generic startup briefing. Its pre-run design covers 216 sessions
+across six models and all four CLIs, with twelve separate delivery qualifications.
+The ordinary task component is unchanged; the startup arm intentionally adds
+standing guidance to the full launch message.
+
 Task success cannot answer that question by itself. In our first run, the agents that
 were given only general "you have persistent memory" guidance solved their tasks
 without touching bd at all. They wrote the facts to Claude Code's own memory files
@@ -10,9 +38,18 @@ instead. The task passed; bd was never used. The harness therefore measures the
 pathway as well as the outcome, and it reads that pathway from execution receipts
 rather than from what the agent reports doing.
 
-Agent trials run against the real `claude` CLI and a real `bd` binary. There is no
-simulation mode. Only the `--fire` step starts paid sessions; installation, the local
-smoke check, corpus generation, planning, and reporting do not call a model.
+The original pair harness described below runs against the real `claude` CLI and
+a real `bd` binary. There is no simulation mode. Its `--fire` step starts paid
+sessions; installation, its local smoke check, corpus generation, planning, and
+reporting do not call a model. The newer experiments linked above have their own
+multi-CLI qualification and execution commands.
+
+A separate [end-to-end Memory Beads experiment](MEMORY-E2E.md) tested installed
+project rules and a shared Beads skill through real issue work. Its completed
+32-session screen preserved all eight captures/revisions but produced only 19
+complete artifacts. A [public interface-check follow-up](MEMORY-CONTRACT-CHECK.md)
+tested whether ordinary project tests improve application of those memories;
+both baseline and checker passed 16/16 in that fresh comparison.
 
 ## What one trial looks like
 
@@ -28,10 +65,10 @@ A trial is a **pair** of agent sessions against the same synthetic project.
 
 Every task ships as twins:
 
-| Variant | Goal prompt | What a bd read means |
-|---|---|---|
-| `necessary` | omits the token | the agent had to recover it from memory |
-| `unnecessary` | supplies the token | reading memory was avoidable work |
+| Variant       | Goal prompt        | What a bd read means                    |
+| ------------- | ------------------ | --------------------------------------- |
+| `necessary`   | omits the token    | the agent had to recover it from memory |
+| `unnecessary` | supplies the token | reading memory was avoidable work       |
 
 The `unnecessary` twin is the control. Without it, a condition could score well on
 adoption purely by making the agent read memory constantly.
@@ -70,11 +107,11 @@ current scorer, so a run scored under an older version need not be bought again.
 All three run the same tasks, the same tools, the same isolated store lifecycle, and
 the same default native-memory settings. Only the guidance differs.
 
-| Condition | What the agent is told | Native memory |
-|---|---|---|
-| `generic` | general persistent-memory guidance, bd never named | observed |
-| `explicit` | bd deployment context plus working `remember` / `recall` / `memories` examples | observed |
-| `redirect` | the explicit context, plus a hook that blocks a native-memory access and answers it by naming the bd commands | intercepted |
+| Condition  | What the agent is told                                                                                        | Native memory |
+| ---------- | ------------------------------------------------------------------------------------------------------------- | ------------- |
+| `generic`  | general persistent-memory guidance, bd never named                                                            | observed      |
+| `explicit` | bd deployment context plus working `remember` / `recall` / `memories` examples                                | observed      |
+| `redirect` | the explicit context, plus a hook that blocks a native-memory access and answers it by naming the bd commands | intercepted   |
 
 "Observed" means a `PreToolUse` hook records the reach and lets it through.
 "Intercepted" means the same hook refuses the call and returns a message pointing at
@@ -89,11 +126,11 @@ clusters, $13.47 of estimated spend.
 The table shows the necessary twins (16 pairs per condition); the other 48 pairs
 are unnecessary-memory controls. Redirect recall also has one unknown outcome.
 
-| Condition | Captured the token | Recalled it | Recalled it *before* acting | Full bd handoff | Qualifying Write |
-|---|---:|---:|---:|---:|---:|
-| `generic` | 0/16 | 0/16 | 0/16 | **0/16** | 16/16 |
-| `explicit` | 10/16 | 9/16 | 8/16 | **8/16** | 14/16 |
-| `redirect` | 15/16 | 15/16 | 12/16 | **12/16** | 12/16 |
+| Condition  | Captured the token | Recalled it | Recalled it _before_ acting | Full bd handoff | Qualifying Write |
+| ---------- | -----------------: | ----------: | --------------------------: | --------------: | ---------------: |
+| `generic`  |               0/16 |        0/16 |                        0/16 |        **0/16** |            16/16 |
+| `explicit` |              10/16 |        9/16 |                        8/16 |        **8/16** |            14/16 |
+| `redirect` |              15/16 |       15/16 |                       12/16 |       **12/16** |            12/16 |
 
 Two details in that table matter as much as the headline. The `generic` row is an
 agent that never discovers the tool and produces a qualifying Write every time anyway.
@@ -242,7 +279,7 @@ PYTHONPATH=. uv run python -m membench.runner.bd_experiment \
   --fire --max-pairs 1
 ```
 
-`--max-pairs` bounds how many *new* pairs this invocation may buy. It defaults to 1, so
+`--max-pairs` bounds how many _new_ pairs this invocation may buy. It defaults to 1, so
 the obvious first command buys one pair and stops. Re-run with a larger `--max-pairs` to
 continue; already-completed pairs are reused, never repurchased. Budget roughly **$0.14
 per pair** at the rates our run saw, so a full 96-pair replication is around $13. A
@@ -269,7 +306,7 @@ PYTHONPATH=. uv run python scripts/analyze_bd_experiment.py runs/my-first-run \
 
 That writes `analysis.json` and a human-readable `report.md`; the pair from our own run
 is in [`reference-run/`](reference-run/report.md) if you want to see the shape before you
-spend anything. Denominators come from the *schedule*, not from whatever completed, so a
+spend anything. Denominators come from the _schedule_, not from whatever completed, so a
 missing or unmeasured pair stays visible in the counts instead of quietly shrinking the
 sample. The analyzer reads the leg plan from the manifest: a trial run gets a second
 table tallying the revision, stale-write and after-rejection verdicts per condition,
@@ -355,7 +392,7 @@ filed under a role at the wrong position.
 Every bd invocation inside a session is wrapped so that its actual argv, exit status
 and per-stream output are recorded. A verb on a command line is not an operation: in
 an earlier run the only apparent "memory write" was a `bd remember list` that bd
-*refused*, and only the recorded result could say so.
+_refused_, and only the recorded result could say so.
 
 ## Refusals you may hit
 
