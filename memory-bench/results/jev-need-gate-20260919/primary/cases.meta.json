@@ -1,0 +1,15 @@
+{
+  "by_variant": {
+    "necessary": 32,
+    "partial": 32,
+    "unnecessary": 32,
+    "unnecessary-by-absence": 32
+  },
+  "cases": 128,
+  "cases_sha256": "2e044b000f32cdec07ae0a40ca4cd536562ba7bb6ee7c2709ee063be39f67eb7",
+  "corpus_dir": "fixtures/worlds-tool-jev32",
+  "labels_sha256": "2aa23287509cd2d01f97371604a3476c5b41696c89f8ca82ef2f81af7caf7977",
+  "needs_memory_true": 64,
+  "seeds": 32,
+  "with_titles": true
+}

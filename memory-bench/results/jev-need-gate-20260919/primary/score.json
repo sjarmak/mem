@@ -1,0 +1,511 @@
+{
+  "kill_gates": [
+    {
+      "detail": "cutoff 0.910, coverage 0.516, n 198",
+      "gate": 1,
+      "name": "accepted-answer accuracy at the cutoff",
+      "observed": 1.0,
+      "passed": true,
+      "threshold": 0.9
+    },
+    {
+      "gate": 2,
+      "name": "repeat stability",
+      "observed": 0.9921875,
+      "passed": true,
+      "threshold": 0.95
+    },
+    {
+      "comparator": 0.9869791666666666,
+      "detail": "jev 95% CI [0.981, 0.999]",
+      "gate": 3,
+      "name": "better than Haiku on the primary row",
+      "observed": 0.9947916666666666,
+      "passed": false
+    },
+    {
+      "comparator": 0.0,
+      "gate": 4,
+      "name": "better than the regex on the partial class",
+      "observed": 1.0,
+      "passed": true
+    }
+  ],
+  "n_cases": 128,
+  "primary_model": "typesafe-ai/jev",
+  "scores": {
+    "claude-cli/haiku": {
+      "accuracy_interval": [
+        0.9698853213826314,
+        0.9944258819539885
+      ],
+      "bins": [
+        {
+          "accuracy": NaN,
+          "lower": 0.5,
+          "mean_confidence": NaN,
+          "n": 0,
+          "upper": 0.6
+        },
+        {
+          "accuracy": 0.0,
+          "lower": 0.6,
+          "mean_confidence": 0.7,
+          "n": 2,
+          "upper": 0.7
+        },
+        {
+          "accuracy": NaN,
+          "lower": 0.7,
+          "mean_confidence": NaN,
+          "n": 0,
+          "upper": 0.8
+        },
+        {
+          "accuracy": 0.7692307692307693,
+          "lower": 0.8,
+          "mean_confidence": 0.8461538461538461,
+          "n": 13,
+          "upper": 0.9
+        },
+        {
+          "accuracy": 1.0,
+          "lower": 0.9,
+          "mean_confidence": 0.9800271002710027,
+          "n": 369,
+          "upper": 1.0
+        }
+      ],
+      "brier": 0.00985546875,
+      "cutoff": {
+        "accuracy": 1.0,
+        "confidence": 1.0,
+        "coverage": 0.5859375,
+        "n_accepted": 225
+      },
+      "model": "claude-cli/haiku",
+      "n": 384,
+      "per_class_accuracy": {
+        "necessary": 1.0,
+        "partial": 1.0,
+        "unnecessary": 1.0,
+        "unnecessary-by-absence": 0.9479166666666666
+      },
+      "raw_accuracy": 0.9869791666666666,
+      "repeat_stability": 0.9609375,
+      "sweep": [
+        {
+          "accuracy": 0.9869791666666666,
+          "confidence": 0.7,
+          "coverage": 1.0,
+          "n_accepted": 384
+        },
+        {
+          "accuracy": 0.9921465968586387,
+          "confidence": 0.8,
+          "coverage": 0.9947916666666666,
+          "n_accepted": 382
+        },
+        {
+          "accuracy": 0.9921259842519685,
+          "confidence": 0.85,
+          "coverage": 0.9921875,
+          "n_accepted": 381
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.9,
+          "coverage": 0.9609375,
+          "n_accepted": 369
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.92,
+          "coverage": 0.9479166666666666,
+          "n_accepted": 364
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.95,
+          "coverage": 0.9453125,
+          "n_accepted": 363
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.98,
+          "coverage": 0.59375,
+          "n_accepted": 228
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.99,
+          "coverage": 0.5911458333333334,
+          "n_accepted": 227
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 1.0,
+          "coverage": 0.5859375,
+          "n_accepted": 225
+        }
+      ]
+    },
+    "regex/state-heading": {
+      "accuracy_interval": [
+        0.41465072364379996,
+        0.5853492763562
+      ],
+      "bins": [
+        {
+          "accuracy": NaN,
+          "lower": 0.5,
+          "mean_confidence": NaN,
+          "n": 0,
+          "upper": 0.6
+        },
+        {
+          "accuracy": NaN,
+          "lower": 0.6,
+          "mean_confidence": NaN,
+          "n": 0,
+          "upper": 0.7
+        },
+        {
+          "accuracy": NaN,
+          "lower": 0.7,
+          "mean_confidence": NaN,
+          "n": 0,
+          "upper": 0.8
+        },
+        {
+          "accuracy": NaN,
+          "lower": 0.8,
+          "mean_confidence": NaN,
+          "n": 0,
+          "upper": 0.9
+        },
+        {
+          "accuracy": 0.5,
+          "lower": 0.9,
+          "mean_confidence": 1.0,
+          "n": 128,
+          "upper": 1.0
+        }
+      ],
+      "brier": 0.5,
+      "cutoff": {
+        "accuracy": 0.5,
+        "confidence": 1.0,
+        "coverage": 1.0,
+        "n_accepted": 128
+      },
+      "model": "regex/state-heading",
+      "n": 128,
+      "per_class_accuracy": {
+        "necessary": 1.0,
+        "partial": 0.0,
+        "unnecessary": 1.0,
+        "unnecessary-by-absence": 0.0
+      },
+      "raw_accuracy": 0.5,
+      "repeat_stability": NaN,
+      "sweep": [
+        {
+          "accuracy": 0.5,
+          "confidence": 1.0,
+          "coverage": 1.0,
+          "n_accepted": 128
+        }
+      ]
+    },
+    "typesafe-ai/jev": {
+      "accuracy_interval": [
+        0.9812108834079003,
+        0.9985705531373286
+      ],
+      "bins": [
+        {
+          "accuracy": 1.0,
+          "lower": 0.5,
+          "mean_confidence": 0.5616666666666666,
+          "n": 6,
+          "upper": 0.6
+        },
+        {
+          "accuracy": 0.9047619047619048,
+          "lower": 0.6,
+          "mean_confidence": 0.6552380952380952,
+          "n": 21,
+          "upper": 0.7
+        },
+        {
+          "accuracy": 1.0,
+          "lower": 0.7,
+          "mean_confidence": 0.760909090909091,
+          "n": 55,
+          "upper": 0.8
+        },
+        {
+          "accuracy": 1.0,
+          "lower": 0.8,
+          "mean_confidence": 0.8533333333333333,
+          "n": 72,
+          "upper": 0.9
+        },
+        {
+          "accuracy": 1.0,
+          "lower": 0.9,
+          "mean_confidence": 0.9222173913043479,
+          "n": 230,
+          "upper": 1.0
+        }
+      ],
+      "brier": 0.027578385416666667,
+      "cutoff": {
+        "accuracy": 1.0,
+        "confidence": 0.91,
+        "coverage": 0.515625,
+        "n_accepted": 198
+      },
+      "model": "typesafe-ai/jev",
+      "n": 384,
+      "per_class_accuracy": {
+        "necessary": 1.0,
+        "partial": 1.0,
+        "unnecessary": 0.9791666666666666,
+        "unnecessary-by-absence": 1.0
+      },
+      "raw_accuracy": 0.9947916666666666,
+      "repeat_stability": 0.9921875,
+      "sweep": [
+        {
+          "accuracy": 0.9947916666666666,
+          "confidence": 0.52,
+          "coverage": 1.0,
+          "n_accepted": 384
+        },
+        {
+          "accuracy": 0.9947643979057592,
+          "confidence": 0.54,
+          "coverage": 0.9947916666666666,
+          "n_accepted": 382
+        },
+        {
+          "accuracy": 0.994750656167979,
+          "confidence": 0.5900000000000001,
+          "coverage": 0.9921875,
+          "n_accepted": 381
+        },
+        {
+          "accuracy": 0.9947368421052631,
+          "confidence": 0.6,
+          "coverage": 0.9895833333333334,
+          "n_accepted": 380
+        },
+        {
+          "accuracy": 0.9947089947089947,
+          "confidence": 0.61,
+          "coverage": 0.984375,
+          "n_accepted": 378
+        },
+        {
+          "accuracy": 0.9946808510638298,
+          "confidence": 0.63,
+          "coverage": 0.9791666666666666,
+          "n_accepted": 376
+        },
+        {
+          "accuracy": 0.9946524064171123,
+          "confidence": 0.64,
+          "coverage": 0.9739583333333334,
+          "n_accepted": 374
+        },
+        {
+          "accuracy": 0.9972826086956522,
+          "confidence": 0.65,
+          "coverage": 0.9583333333333334,
+          "n_accepted": 368
+        },
+        {
+          "accuracy": 0.997275204359673,
+          "confidence": 0.6599999999999999,
+          "coverage": 0.9557291666666666,
+          "n_accepted": 367
+        },
+        {
+          "accuracy": 0.9972527472527473,
+          "confidence": 0.6799999999999999,
+          "coverage": 0.9479166666666666,
+          "n_accepted": 364
+        },
+        {
+          "accuracy": 0.9972222222222222,
+          "confidence": 0.69,
+          "coverage": 0.9375,
+          "n_accepted": 360
+        },
+        {
+          "accuracy": 0.9972144846796658,
+          "confidence": 0.7,
+          "coverage": 0.9348958333333334,
+          "n_accepted": 359
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.71,
+          "coverage": 0.9296875,
+          "n_accepted": 357
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.72,
+          "coverage": 0.9244791666666666,
+          "n_accepted": 355
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.73,
+          "coverage": 0.9192708333333334,
+          "n_accepted": 353
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.74,
+          "coverage": 0.90625,
+          "n_accepted": 348
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.75,
+          "coverage": 0.8854166666666666,
+          "n_accepted": 340
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.76,
+          "coverage": 0.8671875,
+          "n_accepted": 333
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.77,
+          "coverage": 0.859375,
+          "n_accepted": 330
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.78,
+          "coverage": 0.8385416666666666,
+          "n_accepted": 322
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.79,
+          "coverage": 0.8203125,
+          "n_accepted": 315
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.8,
+          "coverage": 0.7864583333333334,
+          "n_accepted": 302
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.81,
+          "coverage": 0.7630208333333334,
+          "n_accepted": 293
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.8200000000000001,
+          "coverage": 0.7473958333333334,
+          "n_accepted": 287
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.83,
+          "coverage": 0.7291666666666666,
+          "n_accepted": 280
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.84,
+          "coverage": 0.7239583333333334,
+          "n_accepted": 278
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.85,
+          "coverage": 0.7135416666666666,
+          "n_accepted": 274
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.86,
+          "coverage": 0.7005208333333334,
+          "n_accepted": 269
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.87,
+          "coverage": 0.6953125,
+          "n_accepted": 267
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.88,
+          "coverage": 0.671875,
+          "n_accepted": 258
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.89,
+          "coverage": 0.6458333333333334,
+          "n_accepted": 248
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.9,
+          "coverage": 0.5989583333333334,
+          "n_accepted": 230
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.91,
+          "coverage": 0.515625,
+          "n_accepted": 198
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.92,
+          "coverage": 0.40625,
+          "n_accepted": 156
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.93,
+          "coverage": 0.2786458333333333,
+          "n_accepted": 107
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.94,
+          "coverage": 0.11979166666666667,
+          "n_accepted": 46
+        },
+        {
+          "accuracy": 1.0,
+          "confidence": 0.95,
+          "coverage": 0.010416666666666666,
+          "n_accepted": 4
+        }
+      ]
+    }
+  },
+  "verdict": {
+    "killed_by": 3,
+    "passed": false,
+    "reason": "better than Haiku on the primary row"
+  }
+}
