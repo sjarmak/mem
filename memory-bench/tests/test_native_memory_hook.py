@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 
+from membench.runner.arm_separation import TRANSCRIPT_READ_SPELLINGS, TRANSCRIPT_TOKEN
 from membench.runner.native_memory_hook import (
     hook_reaches,
     install_native_memory_hook,
@@ -261,8 +262,6 @@ def test_redirect_distinguishes_exact_keys_from_search_queries() -> None:
 # spelling its author thought of has passed here before and bitten later (mem-e0b): every probe
 # is a spelling an agent would plausibly reach for, and each one is asserted to BLOCK.
 
-TRANSCRIPT_TOKEN = "zt-7Q4W-KEEPOUT"
-
 
 def _transcript(config_dir: Path) -> Path:
     """The leaked file: a session transcript inside the pin, holding a prior leg's answer."""
@@ -308,20 +307,8 @@ def test_the_narrow_recognizer_cannot_see_the_transcript_leak(tmp_path: Path) ->
 
 @pytest.mark.parametrize(
     ("label", "spelling"),
-    [
-        ("plain cat", "cat {path}"),
-        ("command substitution", "echo $(cat {path})"),
-        ("backticks", "echo `cat {path}`"),
-        ("sed range", "sed -n 1,5p {path}"),
-        ("env wrapper", "env cat {path}"),
-        ("head through a pipe", "cat {path} | head -1"),
-        ("recursive grep over the pin", "grep -r " + TRANSCRIPT_TOKEN + " {config_dir}"),
-        ("cd then a relative read", "cd {parent} && cat sess-01.jsonl"),
-        (
-            "the pinned variable",
-            'cat "$CLAUDE_CONFIG_DIR/projects/-home-ds-projects-mem/' 'sess-01.jsonl"',
-        ),
-    ],
+    TRANSCRIPT_READ_SPELLINGS,
+    ids=[label for label, _ in TRANSCRIPT_READ_SPELLINGS],
 )
 def test_deny_blocks_every_idiomatic_spelling_of_the_transcript_read(
     tmp_path: Path, label: str, spelling: str
