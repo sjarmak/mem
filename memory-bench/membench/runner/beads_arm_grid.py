@@ -28,20 +28,33 @@ ZFC: filesystem plumbing and a PATH lookup. No model call, no judgment.
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 import tempfile
-from collections.abc import Iterator, Mapping
+from collections.abc import Collection, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
+from membench.harbor.agent_memory import NATIVE_MEMORY_GLOB
+from membench.metrics.scorers import states_value
 from membench.runner.arm_context import ARM_BEADS
+from membench.runner.bd_receipt_surface import prepare_receipt_leg, read_receipts
 from membench.runner.e1_grid import (
+    ESTABLISH_INSTRUCTION,
     native_memory_pinned_off,
     pin_precedence_fingerprint,
 )
-from membench.runner.headless_agent import seed_config_dir
+from membench.runner.headless_agent import (
+    CellCalls,
+    Leg,
+    MemoryChannel,
+    cell_agent,
+    render_cell_calls,
+    seed_config_dir,
+)
 from membench.runner.memory_arm import (
     MemoryArm,
     MemoryArmError,
@@ -50,15 +63,22 @@ from membench.runner.memory_arm import (
     assert_no_memory_command,
     plant_arm_context,
 )
-from membench.runner.native_memory_hook import install_native_memory_hook
-from membench.runner.sandbox import paid_sandbox
+from membench.runner.native_memory_hook import hook_reaches, install_native_memory_hook
+from membench.runner.realagent_probe import score_goal_action
+from membench.runner.sandbox import assert_neutral_ancestry, paid_sandbox
 from membench.runner.tool_surface import (
     CONFIG_DIR_ENV,
     MEMORY_COMMAND,
     MemoryToolSurface,
     capture_bd_context,
+    memory_invocations,
     provision_memory_tool,
 )
+from membench.runner.toolreq_builtin import wipe_cwd_contents
+from membench.runner.toolreq_realagent import ToolReqRealAgentTask
+from membench.runtime import StepContext
+from membench.schemas.sequence import SequenceStep
+from membench.spawn import Runner
 
 # What a shell reports for a command it cannot find. The floor arms plant a stub that exits with
 # it, so an arm without a store fails the way a missing command fails.
@@ -215,12 +235,187 @@ def child_path_of(env: Mapping[str, str]) -> list[str]:
     return [entry for entry in env.get("PATH", "").split(os.pathsep) if entry]
 
 
+# ---------------------------------------------------------------------------------------
+# the fire path
+#
+# One definition of the two legs, one definition of engagement, one definition of the cell.
+# The three arms differ in the surface minted above and in NOTHING here: the same instruction,
+# the same goal step, the same scorer, the same order. Anything an arm needs that this path
+# cannot express belongs in the registry, where `assert_arms_comparable` can see it.
+
+
+@dataclass(frozen=True)
+class ArmCell:
+    """One (arm, work_id) cell: what the pair of legs did and what it is allowed to claim."""
+
+    arm: str
+    work_id: str
+    passed: bool
+    engaged: bool
+    leaked: bool
+    establish_tool_names: tuple[str, ...]
+    endogenous_verbs: tuple[str, ...]
+    native_reaches: int
+    pinned_off: bool
+    status: str
+    detail: str = ""
+
+
+def arm_cell_legs(task: ToolReqRealAgentTask, arm_name: str) -> tuple[Leg, Leg]:
+    """The two calls one (arm, work_id) cell makes, in order.
+
+    The establish instruction is the ladder's memory-SILENT one (`e1_grid.ESTABLISH_INSTRUCTION`),
+    identical across the arms. An instruction that said "remember this" would be a treatment: it
+    is the usability-ceiling choice the builtin arm's own experiment makes on purpose, and here
+    it would hand one arm the disposition the grid is buying an answer about.
+
+    The establish leg's allowlist is the arm's (the comparator runs unclamped, or the clamp
+    blocks the CLI's own memory-write path and the arm measures the clamp). The GOAL leg is
+    `task.goal_step` untouched, so its allowlist is the same object for every arm."""
+    one = arm(arm_name)
+    establish = SequenceStep(
+        step_id=f"{task.work_id}-establish",
+        user_request=ESTABLISH_INSTRUCTION,
+        available_tools=list(one.establish_tools),
+    )
+    return (
+        Leg("establish", establish, dict(task.oracle_memory)),
+        # BARE. With the cwd emptied, the arm's own store is the only channel left that can
+        # carry the value into the goal call. That empty dict IS each arm's hypothesis.
+        Leg("goal", task.goal_step, {}),
+    )
+
+
+def arm_cell_calls(
+    task: ToolReqRealAgentTask, arm_name: str, channel: MemoryChannel, *, model: str
+) -> CellCalls:
+    """The command lines one cell WILL spawn, rendered from the legs it executes."""
+    return render_cell_calls(
+        arm=arm_name, channel=channel, legs=arm_cell_legs(task, arm_name), model=model
+    )
+
+
+def engagement_of(
+    store: ArmCellStore, tokens: Collection[str], *, receipts: tuple[dict[str, Any], ...] = ()
+) -> bool:
+    """Whether the establish leg put the current value into the arm's OWN store.
+
+    Content, never file existence: the CLI scaffolds an empty `memory/` regardless, and bd writes
+    a receipt for a call that stored nothing (mem-bd-remember-list-is-not-a-write -- a verb token
+    is not an operation). Each arm is asked about the store it actually has, and the floor arm is
+    asked nothing, because it has none: its engagement is False by construction, which is what
+    makes a floor PASS a leak to be explained rather than a win to be reported.
+
+    `receipts` are the establish leg's own execution receipts, read from the wrapper the bd arm
+    installs; they are the only observation of what bd was handed and what it answered."""
+    if not tokens:
+        return False
+    one = store.arm
+    if one.provisions_bd:
+        return any(
+            states_value(json.dumps(row, sort_keys=True), token)
+            for row in receipts
+            for token in tokens
+        )
+    if one.settings.get("autoMemoryEnabled") is True:
+        for memory_file in store.config_dir.glob(NATIVE_MEMORY_GLOB):
+            try:
+                content = memory_file.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            if any(states_value(content, token) for token in tokens):
+                return True
+    return False
+
+
+def run_arm_cell(
+    task: ToolReqRealAgentTask,
+    arm_name: str,
+    *,
+    repeat: int,
+    model: str,
+    channel: MemoryChannel,
+    runner: Runner,
+) -> ArmCell:
+    """Run ONE (arm, work_id) repeat: mint, establish, close the cwd, goal, score.
+
+    `runner` has no default for the reason `cell_agent`'s has none: a leg must not reach the paid
+    CLI because a caller left an argument out. The order here is the ladder's and the builtin
+    arm's, unchanged -- the wipe lands between the legs (it closes the cwd scavenge channel the
+    unclamped establish leg opens), the ancestor guard re-runs after it because the wipe cannot
+    reach one directory up, and the context is re-planted because the wipe ate it."""
+    with arm_cell_store(arm_name, label=f"{arm_name}-{task.work_id}-{repeat}") as store:
+        establish_leg, goal_leg = arm_cell_legs(task, arm_name)
+        agent = cell_agent(
+            model=model,
+            channel=channel,
+            runner=runner,
+            cwd=str(store.sandbox),
+            env=store.env(),
+        )
+
+        def _ctx(leg: Leg) -> StepContext:
+            return StepContext(
+                trial_id=f"{arm_name}-{channel.value}-{repeat}-{leg.name}",
+                session_id=f"{arm_name}-{channel.value}-{repeat}",
+                step_id=leg.step.step_id,
+            )
+
+        instrumented = store.arm.provisions_bd
+        establish_receipts_path = (
+            prepare_receipt_leg(store.surface, leg=1) if instrumented else None
+        )
+        establish = agent.run_step(
+            establish_leg.step, dict(establish_leg.memory), _ctx(establish_leg)
+        )
+        receipts = read_receipts(establish_receipts_path) if establish_receipts_path else ()
+        engaged = engagement_of(store, task.current_opaque_values, receipts=receipts)
+
+        wipe_cwd_contents(store.sandbox)
+        assert_neutral_ancestry(store.sandbox)
+        replant_context(store)
+
+        if instrumented:
+            prepare_receipt_leg(store.surface, leg=2)
+        goal = agent.run_step(goal_leg.step, dict(goal_leg.memory), _ctx(goal_leg))
+
+        reaches = len(hook_reaches(store.hook_log))
+        pinned_off = store.pinned_off
+
+    passed = score_goal_action(
+        goal_leg.step, tool_calls=goal.tool_calls, final_answer=goal.final_answer
+    )
+    verbs = tuple(
+        invocation.verb
+        for invocation in memory_invocations([*establish.tool_calls, *goal.tool_calls])
+    )
+    return ArmCell(
+        arm=arm_name,
+        work_id=task.work_id,
+        passed=passed,
+        engaged=engaged,
+        # A pass the arm's own store cannot account for. Never a win for any arm, and for the
+        # floor it is the only way a pass can happen at all.
+        leaked=passed and not engaged,
+        establish_tool_names=tuple(sorted({call.name for call in establish.tool_calls})),
+        endogenous_verbs=verbs,
+        native_reaches=reaches,
+        pinned_off=pinned_off,
+        status="ok",
+    )
+
+
 __all__ = [
     "ARM_BEADS",
     "COMMAND_NOT_FOUND",
+    "ArmCell",
     "ArmCellStore",
     "NoStoreSurface",
+    "arm_cell_calls",
+    "arm_cell_legs",
     "arm_cell_store",
     "child_path_of",
+    "engagement_of",
     "replant_context",
+    "run_arm_cell",
 ]
