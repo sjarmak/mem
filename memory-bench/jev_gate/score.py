@@ -397,7 +397,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--results", type=Path, required=True, help="run.mts output jsonl")
     parser.add_argument("--labels", type=Path, required=True)
     parser.add_argument("--cases", type=Path, help="cases.jsonl, to score the regex comparator")
-    parser.add_argument("--primary-model", default="typesafe-ai/jev")
+    parser.add_argument("--primary-model", default="typesafe-ai/jev-latest")
     parser.add_argument("--haiku-model", default="claude-cli/haiku")
     parser.add_argument("--out", type=Path)
     args = parser.parse_args(argv)

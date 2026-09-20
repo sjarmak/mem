@@ -71,6 +71,44 @@ absent.
 X2 is not fired. Under the pre-registered kill order it cannot be, and a
 decision to revisit the line is a new pre-registration.
 
+## Adoption decision (Stephanie, 2026-09-20)
+
+The kill order ended the research claim, not the engineering question, and
+those are different tests. Gate 3 asked whether Jev is *more accurate* than
+Haiku and could not tell, because both models sit at the ceiling of a 128-case
+corpus. The failure is symmetric: Haiku's interval does not clear Jev's point
+estimate either, and the accuracy gap that exists runs in Jev's favour. For an
+adoption decision the question is whether Jev is *no worse*, and on this
+evidence it is not worse on any axis measured.
+
+**Jev is the need-gate classifier.** The three margins that decide it, all on
+the same 384-answer row:
+
+| | Jev (direct) | Haiku (CLI) |
+| --- | --- | --- |
+| Accuracy | 0.9922 | 0.9870 |
+| Repeat stability | 1.000 | 0.961 |
+| Median latency | 184 ms | 4,806 ms |
+| Cost per call, list | $0.0000248 | $0.00330 |
+
+Repeat stability carries the most weight for a gating component. Asked the
+same question three times, Jev returned the same answer on all 384 calls;
+Haiku changed its answer on about 4% of cases. A gate that flips on identical
+input injects noise into every stage downstream of it.
+
+Two limits on this evidence, neither of which counts against Jev. Both models
+are near-perfect on this corpus, so it cannot say how either behaves on harder
+real inputs; that is what mem-46qaw exists to build. And neither run billed
+(Jev on system credentials, Haiku on OAuth), so the cost row is list price
+rather than what production would pay. Confirm real pricing before the
+controller depends on it.
+
+The route matters for latency and nothing else. Call TypeSafe directly
+(`typesafe-ai/jev-latest`); the Vercel gateway spelling `vercel/typesafe-ai/jev`
+still works but throttles, with a 4,529 ms mean against its own 246 ms median
+and an 86,695 ms worst case. Direct-lane replication:
+`memory-bench/results/jev-need-gate-20260919/primary/results-jev-direct.jsonl`.
+
 ## Artifacts
 
 - Cases, labels, per-call rows and scores:
