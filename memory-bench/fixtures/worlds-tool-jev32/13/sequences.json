@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed13-task0",
+    "title": "Lumen Collective initiative: reconcile 3 decisions",
+    "domain": "customer-support",
+    "goal": "Deliver the current customer-support initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed13-task0-s0v1-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-9fdd45b1f201cc79": "the supported API version is v1 \u2014 by Bruno Castellanos (researcher) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed13-task0-s0v2-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-b6c92741133186ed": "the supported API version is v4 \u2014 by Dmitri Haddad (support-lead) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-9fdd45b1f201cc79"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed13-task0-s0v3-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-5c9cfdb4e395d090": "the supported API version is v2 \u2014 by Bruno Castellanos (researcher) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-b6c92741133186ed"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed13-task0-s1-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-dc844da42747eb58": "the primary deployment region is us-west-2 \u2014 by Dmitri Haddad (support-lead) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed13-task0-s2-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-21d2416bda96689f": "the data retention window is 7 years \u2014 by Leila Doyle (researcher) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed13-task0-goal",
+        "user_request": "Deliver the current customer-support initiative. Using the tool `apply_config`, apply the current value of: the supported API version, the primary deployment region, the data retention window.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-5c9cfdb4e395d090",
+          "m-dc844da42747eb58",
+          "m-21d2416bda96689f"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed13-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-5c9cfdb4e395d090",
+              "m-dc844da42747eb58",
+              "m-21d2416bda96689f"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "v2"
+                ],
+                "forbidden_values": [
+                  "v1",
+                  "v4"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed13-task0-probe-api-version",
+            "expected_memory_id": "m-5c9cfdb4e395d090",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed13-task0-probe-primary-region",
+            "expected_memory_id": "m-dc844da42747eb58",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed13-task0-probe-retention-window",
+            "expected_memory_id": "m-21d2416bda96689f",
+            "description": "the data retention window must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-4c6d090c9a7c52b4": "the supported API version is v3 \u2014 by Ada Fontaine (staff-engineer) in #meeting channel",
+          "m-91fb0b28600f736c": "the primary deployment region is ap-south-1 \u2014 by Leila Doyle (researcher) in #meeting channel",
+          "m-afbe8d78e3171db2": "the data retention window is 30 days \u2014 by Leila Doyle (researcher) in #chat channel"
+        },
+        "superseded_memory_ids": [
+          "m-9fdd45b1f201cc79",
+          "m-b6c92741133186ed"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

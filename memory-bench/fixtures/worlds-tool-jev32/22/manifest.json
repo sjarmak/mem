@@ -1,0 +1,13 @@
+{
+  "schema_version": "world-manifest.v1",
+  "world_schema_version": "world.v1",
+  "workflow_generator_version": "enterprise-workflow.v3",
+  "seed": 22,
+  "nim_model": "deterministic:synthetic_records",
+  "n_tasks": 1,
+  "facts_per_task": 3,
+  "tool_requiring": true,
+  "world_sha256": "2b2408d80e32622e6621b189e614bc76f8ff4056c77525a8b01e25db382a5f75",
+  "project_sha256": "848c4988ece623ffa78b0ae3b9ad8548f16ae53374552e1b40b7fce2b1294f4c",
+  "sequences_sha256": "96a6f7af4e0fd4456e620ce96733834432a83b8539a73e1329e5c7721ecc9fa2"
+}

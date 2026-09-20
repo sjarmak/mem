@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed30",
+  "domain": "medical",
+  "org_name": "Ironwood Works",
+  "teams": [
+    {
+      "team_id": "world-seed30-team-medical-core",
+      "name": "Medical Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed30-team-medical-platform",
+      "name": "Medical Platform",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed30-team-medical-delivery",
+      "name": "Medical Delivery",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed30-persona-0-mateo-eriksen",
+      "name": "Mateo Eriksen",
+      "role": "engineering-manager",
+      "team_id": "world-seed30-team-medical-core"
+    },
+    {
+      "persona_id": "world-seed30-persona-1-mateo-haddad",
+      "name": "Mateo Haddad",
+      "role": "qa-engineer",
+      "team_id": "world-seed30-team-medical-core"
+    },
+    {
+      "persona_id": "world-seed30-persona-2-farid-eriksen",
+      "name": "Farid Eriksen",
+      "role": "staff-engineer",
+      "team_id": "world-seed30-team-medical-platform"
+    },
+    {
+      "persona_id": "world-seed30-persona-3-nadia-doyle",
+      "name": "Nadia Doyle",
+      "role": "qa-engineer",
+      "team_id": "world-seed30-team-medical-delivery"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed30-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed30-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed30-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed30-kb-medical",
+      "name": "medical knowledge base",
+      "topic": "medical"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed30-repo-rust",
+      "name": "medical-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed30-repo-go",
+      "name": "medical-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed30-repo-typescript",
+      "name": "medical-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 30,
+  "generator_version": "world.v1"
+}

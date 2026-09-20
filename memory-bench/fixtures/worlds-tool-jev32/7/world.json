@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed7",
+  "domain": "customer-support",
+  "org_name": "Meridian Collective",
+  "teams": [
+    {
+      "team_id": "world-seed7-team-customer-support-core",
+      "name": "Customer Support Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed7-team-customer-support-delivery",
+      "name": "Customer Support Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed7-team-customer-support-reliability",
+      "name": "Customer Support Reliability",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed7-persona-0-esther-moreau",
+      "name": "Esther Moreau",
+      "role": "staff-engineer",
+      "team_id": "world-seed7-team-customer-support-core"
+    },
+    {
+      "persona_id": "world-seed7-persona-1-dmitri-gruber",
+      "name": "Dmitri Gruber",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed7-team-customer-support-delivery"
+    },
+    {
+      "persona_id": "world-seed7-persona-2-esther-almeida",
+      "name": "Esther Almeida",
+      "role": "researcher",
+      "team_id": "world-seed7-team-customer-support-delivery"
+    },
+    {
+      "persona_id": "world-seed7-persona-3-bruno-bergstrom",
+      "name": "Bruno Bergstrom",
+      "role": "engineering-manager",
+      "team_id": "world-seed7-team-customer-support-reliability"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed7-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed7-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    },
+    {
+      "channel_id": "world-seed7-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed7-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed7-kb-customer-support",
+      "name": "customer-support knowledge base",
+      "topic": "customer-support"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed7-repo-python",
+      "name": "customer-support-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed7-repo-rust",
+      "name": "customer-support-rust",
+      "language": "rust"
+    }
+  ],
+  "seed": 7,
+  "generator_version": "world.v1"
+}

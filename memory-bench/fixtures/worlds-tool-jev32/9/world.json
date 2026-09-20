@@ -1,0 +1,101 @@
+{
+  "world_id": "world-seed9",
+  "domain": "legal",
+  "org_name": "Sablefish Industries",
+  "teams": [
+    {
+      "team_id": "world-seed9-team-legal-reliability",
+      "name": "Legal Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed9-team-legal-platform",
+      "name": "Legal Platform",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed9-team-legal-foundations",
+      "name": "Legal Foundations",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed9-persona-0-imani-castellanos",
+      "name": "Imani Castellanos",
+      "role": "legal-counsel",
+      "team_id": "world-seed9-team-legal-reliability"
+    },
+    {
+      "persona_id": "world-seed9-persona-1-hiroshi-doyle",
+      "name": "Hiroshi Doyle",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed9-team-legal-platform"
+    },
+    {
+      "persona_id": "world-seed9-persona-2-farid-petrov",
+      "name": "Farid Petrov",
+      "role": "support-lead",
+      "team_id": "world-seed9-team-legal-platform"
+    },
+    {
+      "persona_id": "world-seed9-persona-3-greta-almeida",
+      "name": "Greta Almeida",
+      "role": "engineering-manager",
+      "team_id": "world-seed9-team-legal-foundations"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed9-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    },
+    {
+      "channel_id": "world-seed9-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed9-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed9-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed9-kb-legal",
+      "name": "legal knowledge base",
+      "topic": "legal"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed9-repo-cuda-cpp",
+      "name": "legal-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed9-repo-typescript",
+      "name": "legal-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed9-repo-rust",
+      "name": "legal-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed9-repo-go",
+      "name": "legal-go",
+      "language": "go"
+    }
+  ],
+  "seed": 9,
+  "generator_version": "world.v1"
+}

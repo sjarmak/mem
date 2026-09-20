@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed1-task0",
+    "title": "Westmark Dynamics initiative: reconcile 3 decisions",
+    "domain": "chip-design",
+    "goal": "Deliver the current chip-design initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed1-task0-s0v1-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-0b714befe8b7eb4e": "the checkout_v2 feature flag state is enabled \u2014 by Joaquin Larsen (site-reliability-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed1-task0-s0v2-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-75c3c6829cfd90f8": "the checkout_v2 feature flag state is disabled \u2014 by Imani Okonkwo (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-0b714befe8b7eb4e"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed1-task0-s0v3-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ae994e146e841b34": "the checkout_v2 feature flag state is canary-50% \u2014 by Imani Okonkwo (engineering-manager) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-75c3c6829cfd90f8"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed1-task0-s1-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-f767c61846659331": "the production deploy timeout is 15s \u2014 by Greta Castellanos (product-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed1-task0-s2-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-297ce9c87a2a685c": "the data retention window is 30 days \u2014 by Bruno Gruber (legal-counsel) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed1-task0-goal",
+        "user_request": "Deliver the current chip-design initiative. Using the tool `apply_config`, apply the current value of: the checkout_v2 feature flag state, the production deploy timeout, the data retention window.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-ae994e146e841b34",
+          "m-f767c61846659331",
+          "m-297ce9c87a2a685c"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed1-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-ae994e146e841b34",
+              "m-f767c61846659331",
+              "m-297ce9c87a2a685c"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "canary-50%"
+                ],
+                "forbidden_values": [
+                  "enabled",
+                  "disabled"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed1-task0-probe-feature-flag",
+            "expected_memory_id": "m-ae994e146e841b34",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed1-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-f767c61846659331",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed1-task0-probe-retention-window",
+            "expected_memory_id": "m-297ce9c87a2a685c",
+            "description": "the data retention window must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-c1607d07095909e6": "the checkout_v2 feature flag state is canary-10% \u2014 by Joaquin Larsen (site-reliability-engineer) in #email channel",
+          "m-df99842b2a0e7f16": "the production deploy timeout is 45s \u2014 by Bruno Gruber (legal-counsel) in #docs channel",
+          "m-8bf0878460ad2207": "the data retention window is 1 year \u2014 by Joaquin Larsen (site-reliability-engineer) in #docs channel"
+        },
+        "superseded_memory_ids": [
+          "m-0b714befe8b7eb4e",
+          "m-75c3c6829cfd90f8"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

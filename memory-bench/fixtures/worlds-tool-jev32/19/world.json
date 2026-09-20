@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed19",
+  "domain": "research-platform",
+  "org_name": "Meridian Dynamics",
+  "teams": [
+    {
+      "team_id": "world-seed19-team-research-platform-reliability",
+      "name": "Research Platform Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed19-team-research-platform-core",
+      "name": "Research Platform Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed19-team-research-platform-platform",
+      "name": "Research Platform Platform",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed19-team-research-platform-delivery",
+      "name": "Research Platform Delivery",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed19-persona-0-joaquin-castellanos",
+      "name": "Joaquin Castellanos",
+      "role": "engineering-manager",
+      "team_id": "world-seed19-team-research-platform-reliability"
+    },
+    {
+      "persona_id": "world-seed19-persona-1-leila-bergstrom",
+      "name": "Leila Bergstrom",
+      "role": "product-manager",
+      "team_id": "world-seed19-team-research-platform-core"
+    },
+    {
+      "persona_id": "world-seed19-persona-2-farid-moreau",
+      "name": "Farid Moreau",
+      "role": "staff-engineer",
+      "team_id": "world-seed19-team-research-platform-platform"
+    },
+    {
+      "persona_id": "world-seed19-persona-3-hiroshi-castellanos",
+      "name": "Hiroshi Castellanos",
+      "role": "product-manager",
+      "team_id": "world-seed19-team-research-platform-delivery"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed19-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed19-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed19-kb-research-platform",
+      "name": "research-platform knowledge base",
+      "topic": "research-platform"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed19-repo-go",
+      "name": "research-platform-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed19-repo-rust",
+      "name": "research-platform-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed19-repo-cuda-cpp",
+      "name": "research-platform-cuda-cpp",
+      "language": "cuda-cpp"
+    }
+  ],
+  "seed": 19,
+  "generator_version": "world.v1"
+}

@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed16-task0",
+    "title": "Northwind Systems initiative: reconcile 3 decisions",
+    "domain": "customer-support",
+    "goal": "Deliver the current customer-support initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed16-task0-s0-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-2ea60ed02e325f70": "the approved rollback command is kubectl rollout undo \u2014 by Joaquin Nakamura (support-lead) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed16-task0-s1v1-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-30da086539e07016": "the production deploy timeout is 30s \u2014 by Dmitri Fontaine (site-reliability-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed16-task0-s1v2-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-7b935d018e475de0": "the production deploy timeout is 45s \u2014 by Joaquin Nakamura (support-lead) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-30da086539e07016"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed16-task0-s1v3-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ec132b33709c4942": "the production deploy timeout is 60s \u2014 by Joaquin Nakamura (support-lead) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-7b935d018e475de0"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed16-task0-s2-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-37867193f8fbf2fd": "the checkout_v2 feature flag state is canary-50% \u2014 by Joaquin Nakamura (support-lead) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed16-task0-goal",
+        "user_request": "Deliver the current customer-support initiative. Using the tool `apply_config`, apply the current value of: the approved rollback command, the production deploy timeout, the checkout_v2 feature flag state.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-2ea60ed02e325f70",
+          "m-ec132b33709c4942",
+          "m-37867193f8fbf2fd"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed16-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-2ea60ed02e325f70",
+              "m-ec132b33709c4942",
+              "m-37867193f8fbf2fd"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "60s"
+                ],
+                "forbidden_values": [
+                  "30s",
+                  "45s"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed16-task0-probe-rollback-command",
+            "expected_memory_id": "m-2ea60ed02e325f70",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed16-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-ec132b33709c4942",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed16-task0-probe-feature-flag",
+            "expected_memory_id": "m-37867193f8fbf2fd",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-1e09158a2edc2a6c": "the approved rollback command is git revert then redeploy \u2014 by Joaquin Nakamura (support-lead) in #meeting channel",
+          "m-e22048725e537eca": "the production deploy timeout is 15s \u2014 by Joaquin Nakamura (support-lead) in #email channel",
+          "m-361e1ac966ef6b1b": "the checkout_v2 feature flag state is disabled \u2014 by Joaquin Nakamura (support-lead) in #chat channel"
+        },
+        "superseded_memory_ids": [
+          "m-30da086539e07016",
+          "m-7b935d018e475de0"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

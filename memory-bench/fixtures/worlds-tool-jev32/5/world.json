@@ -1,0 +1,86 @@
+{
+  "world_id": "world-seed5",
+  "domain": "medical",
+  "org_name": "Sablefish Labs",
+  "teams": [
+    {
+      "team_id": "world-seed5-team-medical-foundations",
+      "name": "Medical Foundations",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed5-team-medical-enablement",
+      "name": "Medical Enablement",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed5-persona-0-priya-kowalski",
+      "name": "Priya Kowalski",
+      "role": "engineering-manager",
+      "team_id": "world-seed5-team-medical-foundations"
+    },
+    {
+      "persona_id": "world-seed5-persona-1-imani-doyle",
+      "name": "Imani Doyle",
+      "role": "staff-engineer",
+      "team_id": "world-seed5-team-medical-enablement"
+    },
+    {
+      "persona_id": "world-seed5-persona-2-greta-nakamura",
+      "name": "Greta Nakamura",
+      "role": "researcher",
+      "team_id": "world-seed5-team-medical-enablement"
+    },
+    {
+      "persona_id": "world-seed5-persona-3-leila-haddad",
+      "name": "Leila Haddad",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed5-team-medical-foundations"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed5-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed5-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed5-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed5-kb-medical",
+      "name": "medical knowledge base",
+      "topic": "medical"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed5-repo-python",
+      "name": "medical-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed5-repo-go",
+      "name": "medical-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed5-repo-typescript",
+      "name": "medical-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 5,
+  "generator_version": "world.v1"
+}

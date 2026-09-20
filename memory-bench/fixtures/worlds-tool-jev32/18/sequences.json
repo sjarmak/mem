@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed18-task0",
+    "title": "Cobalt Dynamics initiative: reconcile 3 decisions",
+    "domain": "chip-design",
+    "goal": "Deliver the current chip-design initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed18-task0-s0-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-1c1e615549ef9e63": "the production deploy timeout is 60s \u2014 by Farid Haddad (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed18-task0-s1v1-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a42f35143c901695": "the primary deployment region is ap-south-1 \u2014 by Joaquin Jorgensen (staff-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed18-task0-s1v2-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-da7c6d427093b4ec": "the primary deployment region is us-east-1 \u2014 by Farid Petrov (engineering-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-a42f35143c901695"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed18-task0-s1v3-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-9ac5c3b1679270ba": "the primary deployment region is us-west-2 \u2014 by Mateo Ibarra (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-da7c6d427093b4ec"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed18-task0-s2-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-54a646f3db4002ea": "the data retention window is 30 days \u2014 by Mateo Ibarra (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed18-task0-goal",
+        "user_request": "Deliver the current chip-design initiative. Using the tool `apply_config`, apply the current value of: the production deploy timeout, the primary deployment region, the data retention window.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-1c1e615549ef9e63",
+          "m-9ac5c3b1679270ba",
+          "m-54a646f3db4002ea"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed18-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-1c1e615549ef9e63",
+              "m-9ac5c3b1679270ba",
+              "m-54a646f3db4002ea"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "us-west-2"
+                ],
+                "forbidden_values": [
+                  "ap-south-1",
+                  "us-east-1"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed18-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-1c1e615549ef9e63",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed18-task0-probe-primary-region",
+            "expected_memory_id": "m-9ac5c3b1679270ba",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed18-task0-probe-retention-window",
+            "expected_memory_id": "m-54a646f3db4002ea",
+            "description": "the data retention window must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-e7ceb7e0efb660f6": "the production deploy timeout is 45s \u2014 by Mateo Ibarra (engineering-manager) in #issue-tracker channel",
+          "m-2cdb28487ccd8493": "the primary deployment region is eu-west-1 \u2014 by Joaquin Jorgensen (staff-engineer) in #issue-tracker channel",
+          "m-4fb88073ebc741e8": "the data retention window is 1 year \u2014 by Farid Haddad (support-lead) in #issue-tracker channel"
+        },
+        "superseded_memory_ids": [
+          "m-a42f35143c901695",
+          "m-da7c6d427093b4ec"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

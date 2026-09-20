@@ -1,0 +1,8 @@
+{
+  "project_id": "world-seed16-project",
+  "world_id": "world-seed16",
+  "name": "Northwind Systems initiative",
+  "goal": "Deliver the current customer-support initiative.",
+  "prd_summary": "Northwind Systems is consolidating its customer support tooling onto a single supported path this quarter. The initiative covers migration of the existing scaleup workloads, a documented rollback, and retirement of the superseded configuration.",
+  "task_briefs": []
+}

@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed26",
+  "domain": "research-platform",
+  "org_name": "Cobalt Dynamics",
+  "teams": [
+    {
+      "team_id": "world-seed26-team-research-platform-enablement",
+      "name": "Research Platform Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed26-team-research-platform-foundations",
+      "name": "Research Platform Foundations",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed26-team-research-platform-platform",
+      "name": "Research Platform Platform",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed26-persona-0-oskar-nakamura",
+      "name": "Oskar Nakamura",
+      "role": "staff-engineer",
+      "team_id": "world-seed26-team-research-platform-enablement"
+    },
+    {
+      "persona_id": "world-seed26-persona-1-esther-bergstrom",
+      "name": "Esther Bergstrom",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed26-team-research-platform-foundations"
+    },
+    {
+      "persona_id": "world-seed26-persona-2-hiroshi-haddad",
+      "name": "Hiroshi Haddad",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed26-team-research-platform-foundations"
+    },
+    {
+      "persona_id": "world-seed26-persona-3-mateo-doyle",
+      "name": "Mateo Doyle",
+      "role": "qa-engineer",
+      "team_id": "world-seed26-team-research-platform-platform"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed26-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed26-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed26-kb-research-platform",
+      "name": "research-platform knowledge base",
+      "topic": "research-platform"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed26-repo-go",
+      "name": "research-platform-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed26-repo-python",
+      "name": "research-platform-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed26-repo-rust",
+      "name": "research-platform-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed26-repo-typescript",
+      "name": "research-platform-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 26,
+  "generator_version": "world.v1"
+}

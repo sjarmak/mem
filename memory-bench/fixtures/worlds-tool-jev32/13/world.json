@@ -1,0 +1,76 @@
+{
+  "world_id": "world-seed13",
+  "domain": "customer-support",
+  "org_name": "Lumen Collective",
+  "teams": [
+    {
+      "team_id": "world-seed13-team-customer-support-reliability",
+      "name": "Customer Support Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed13-team-customer-support-platform",
+      "name": "Customer Support Platform",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed13-persona-0-ada-fontaine",
+      "name": "Ada Fontaine",
+      "role": "staff-engineer",
+      "team_id": "world-seed13-team-customer-support-reliability"
+    },
+    {
+      "persona_id": "world-seed13-persona-1-bruno-castellanos",
+      "name": "Bruno Castellanos",
+      "role": "researcher",
+      "team_id": "world-seed13-team-customer-support-reliability"
+    },
+    {
+      "persona_id": "world-seed13-persona-2-leila-doyle",
+      "name": "Leila Doyle",
+      "role": "researcher",
+      "team_id": "world-seed13-team-customer-support-platform"
+    },
+    {
+      "persona_id": "world-seed13-persona-3-dmitri-haddad",
+      "name": "Dmitri Haddad",
+      "role": "support-lead",
+      "team_id": "world-seed13-team-customer-support-reliability"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed13-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    },
+    {
+      "channel_id": "world-seed13-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed13-kb-customer-support",
+      "name": "customer-support knowledge base",
+      "topic": "customer-support"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed13-repo-cuda-cpp",
+      "name": "customer-support-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed13-repo-typescript",
+      "name": "customer-support-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 13,
+  "generator_version": "world.v1"
+}

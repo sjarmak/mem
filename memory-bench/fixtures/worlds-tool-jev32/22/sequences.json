@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed22-task0",
+    "title": "Sablefish Systems initiative: reconcile 3 decisions",
+    "domain": "chip-design",
+    "goal": "Deliver the current chip-design initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed22-task0-s0-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-67d462c5863df072": "the checkout_v2 feature flag state is canary-50% \u2014 by Nadia Ibarra (product-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed22-task0-s1v1-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-b56c9060d1a34962": "the approved rollback command is git revert then redeploy \u2014 by Leila Doyle (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed22-task0-s1v2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-41f8fa41c90bd3f4": "the approved rollback command is helm rollback \u2014 by Leila Doyle (researcher) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-b56c9060d1a34962"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed22-task0-s1v3-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-431d8c4073377446": "the approved rollback command is terraform apply -refresh \u2014 by Leila Doyle (researcher) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-41f8fa41c90bd3f4"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed22-task0-s2-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-b12e2a64a61c033d": "the primary deployment region is us-west-2 \u2014 by Priya Eriksen (product-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed22-task0-goal",
+        "user_request": "Deliver the current chip-design initiative. Using the tool `apply_config`, apply the current value of: the checkout_v2 feature flag state, the approved rollback command, the primary deployment region.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-67d462c5863df072",
+          "m-431d8c4073377446",
+          "m-b12e2a64a61c033d"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed22-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-67d462c5863df072",
+              "m-431d8c4073377446",
+              "m-b12e2a64a61c033d"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "terraform apply -refresh"
+                ],
+                "forbidden_values": [
+                  "git revert then redeploy",
+                  "helm rollback"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed22-task0-probe-feature-flag",
+            "expected_memory_id": "m-67d462c5863df072",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed22-task0-probe-rollback-command",
+            "expected_memory_id": "m-431d8c4073377446",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed22-task0-probe-primary-region",
+            "expected_memory_id": "m-b12e2a64a61c033d",
+            "description": "the primary deployment region must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-e8b0967a23c0b277": "the checkout_v2 feature flag state is canary-10% \u2014 by Nadia Ibarra (product-manager) in #issue-tracker channel",
+          "m-b0de1167c1381203": "the approved rollback command is kubectl rollout undo \u2014 by Dmitri Bergstrom (site-reliability-engineer) in #meeting channel",
+          "m-e4a3049d1d5a4600": "the primary deployment region is ap-south-1 \u2014 by Nadia Ibarra (product-manager) in #chat channel"
+        },
+        "superseded_memory_ids": [
+          "m-b56c9060d1a34962",
+          "m-41f8fa41c90bd3f4"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

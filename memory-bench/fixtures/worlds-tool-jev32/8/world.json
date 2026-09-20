@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed8",
+  "domain": "chip-design",
+  "org_name": "Verdigris Dynamics",
+  "teams": [
+    {
+      "team_id": "world-seed8-team-chip-design-foundations",
+      "name": "Chip Design Foundations",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed8-team-chip-design-delivery",
+      "name": "Chip Design Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed8-team-chip-design-platform",
+      "name": "Chip Design Platform",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed8-persona-0-mateo-castellanos",
+      "name": "Mateo Castellanos",
+      "role": "legal-counsel",
+      "team_id": "world-seed8-team-chip-design-foundations"
+    },
+    {
+      "persona_id": "world-seed8-persona-1-imani-petrov",
+      "name": "Imani Petrov",
+      "role": "product-manager",
+      "team_id": "world-seed8-team-chip-design-delivery"
+    },
+    {
+      "persona_id": "world-seed8-persona-2-joaquin-ibarra",
+      "name": "Joaquin Ibarra",
+      "role": "engineering-manager",
+      "team_id": "world-seed8-team-chip-design-platform"
+    },
+    {
+      "persona_id": "world-seed8-persona-3-hiroshi-moreau",
+      "name": "Hiroshi Moreau",
+      "role": "legal-counsel",
+      "team_id": "world-seed8-team-chip-design-platform"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed8-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed8-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed8-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed8-kb-chip-design",
+      "name": "chip-design knowledge base",
+      "topic": "chip-design"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed8-repo-go",
+      "name": "chip-design-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed8-repo-rust",
+      "name": "chip-design-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed8-repo-typescript",
+      "name": "chip-design-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 8,
+  "generator_version": "world.v1"
+}

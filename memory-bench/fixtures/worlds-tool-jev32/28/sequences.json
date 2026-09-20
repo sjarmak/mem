@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed28-task0",
+    "title": "Verdigris Systems initiative: reconcile 3 decisions",
+    "domain": "cuda-engineering",
+    "goal": "Deliver the current cuda-engineering initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed28-task0-s0-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-8c4fb805b27e3bab": "the production deploy timeout is 45s \u2014 by Hiroshi Okonkwo (qa-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed28-task0-s1-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a5e9d4535ead645f": "the checkout_v2 feature flag state is enabled \u2014 by Esther Moreau (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed28-task0-s2v1-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-1f611e14cb9ec3bd": "the primary deployment region is ap-south-1 \u2014 by Hiroshi Okonkwo (qa-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed28-task0-s2v2-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-02cf8af061fd2ad8": "the primary deployment region is us-east-1 \u2014 by Esther Moreau (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-1f611e14cb9ec3bd"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed28-task0-s2v3-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-df1f82a005921db6": "the primary deployment region is eu-west-1 \u2014 by Hiroshi Okonkwo (qa-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-02cf8af061fd2ad8"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed28-task0-goal",
+        "user_request": "Deliver the current cuda-engineering initiative. Using the tool `apply_config`, apply the current value of: the production deploy timeout, the checkout_v2 feature flag state, the primary deployment region.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-8c4fb805b27e3bab",
+          "m-a5e9d4535ead645f",
+          "m-df1f82a005921db6"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed28-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-8c4fb805b27e3bab",
+              "m-a5e9d4535ead645f",
+              "m-df1f82a005921db6"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "eu-west-1"
+                ],
+                "forbidden_values": [
+                  "ap-south-1",
+                  "us-east-1"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed28-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-8c4fb805b27e3bab",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed28-task0-probe-feature-flag",
+            "expected_memory_id": "m-a5e9d4535ead645f",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed28-task0-probe-primary-region",
+            "expected_memory_id": "m-df1f82a005921db6",
+            "description": "the primary deployment region must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-83e044cd38247a3f": "the production deploy timeout is 15s \u2014 by Esther Almeida (staff-engineer) in #issue-tracker channel",
+          "m-52abcff093d85dc5": "the checkout_v2 feature flag state is canary-10% \u2014 by Mateo Okonkwo (qa-engineer) in #meeting channel",
+          "m-d13eeb5de2760be6": "the primary deployment region is us-west-2 \u2014 by Hiroshi Okonkwo (qa-engineer) in #issue-tracker channel"
+        },
+        "superseded_memory_ids": [
+          "m-1f611e14cb9ec3bd",
+          "m-02cf8af061fd2ad8"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

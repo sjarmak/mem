@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed26-task0",
+    "title": "Cobalt Dynamics initiative: reconcile 3 decisions",
+    "domain": "research-platform",
+    "goal": "Deliver the current research-platform initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed26-task0-s0-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-c8d5f5e22577b3bf": "the production deploy timeout is 45s \u2014 by Oskar Nakamura (staff-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed26-task0-s1v1-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-298c97f6519f6a37": "the supported API version is v1 \u2014 by Esther Bergstrom (site-reliability-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed26-task0-s1v2-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ab0a05f90fc9e364": "the supported API version is v2 \u2014 by Mateo Doyle (qa-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-298c97f6519f6a37"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed26-task0-s1v3-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-9ce6703471ad7d7d": "the supported API version is v4 \u2014 by Mateo Doyle (qa-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-ab0a05f90fc9e364"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed26-task0-s2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-7e9ebb3db91c8b2c": "the approved rollback command is kubectl rollout undo \u2014 by Oskar Nakamura (staff-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed26-task0-goal",
+        "user_request": "Deliver the current research-platform initiative. Using the tool `apply_config`, apply the current value of: the production deploy timeout, the supported API version, the approved rollback command.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-c8d5f5e22577b3bf",
+          "m-9ce6703471ad7d7d",
+          "m-7e9ebb3db91c8b2c"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed26-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-c8d5f5e22577b3bf",
+              "m-9ce6703471ad7d7d",
+              "m-7e9ebb3db91c8b2c"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "v4"
+                ],
+                "forbidden_values": [
+                  "v1",
+                  "v2"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed26-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-c8d5f5e22577b3bf",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed26-task0-probe-api-version",
+            "expected_memory_id": "m-9ce6703471ad7d7d",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed26-task0-probe-rollback-command",
+            "expected_memory_id": "m-7e9ebb3db91c8b2c",
+            "description": "the approved rollback command must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-d9e6aa9d57fd2543": "the production deploy timeout is 30s \u2014 by Hiroshi Haddad (site-reliability-engineer) in #email channel",
+          "m-addb2e34c417ef79": "the supported API version is v3 \u2014 by Esther Bergstrom (site-reliability-engineer) in #email channel",
+          "m-5331b1fc3b1f54b5": "the approved rollback command is terraform apply -refresh \u2014 by Oskar Nakamura (staff-engineer) in #email channel"
+        },
+        "superseded_memory_ids": [
+          "m-298c97f6519f6a37",
+          "m-ab0a05f90fc9e364"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

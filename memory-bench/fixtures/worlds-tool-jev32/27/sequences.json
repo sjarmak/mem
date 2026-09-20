@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed27-task0",
+    "title": "Cobalt Systems initiative: reconcile 3 decisions",
+    "domain": "research-platform",
+    "goal": "Deliver the current research-platform initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed27-task0-s0-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-70d000773cf217b8": "the supported API version is v1 \u2014 by Greta Moreau (product-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed27-task0-s1v1-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-471a749222646552": "the production deploy timeout is 45s \u2014 by Oskar Eriksen (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed27-task0-s1v2-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-91b38708c5d1ae10": "the production deploy timeout is 15s \u2014 by Greta Moreau (product-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-471a749222646552"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed27-task0-s1v3-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-b3b61995670d68a3": "the production deploy timeout is 30s \u2014 by Nadia Jorgensen (engineering-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-91b38708c5d1ae10"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed27-task0-s2-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-46a1a4b2bb1d90db": "the data retention window is 90 days \u2014 by Greta Moreau (product-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed27-task0-goal",
+        "user_request": "Deliver the current research-platform initiative. Using the tool `apply_config`, apply the current value of: the supported API version, the production deploy timeout, the data retention window.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-70d000773cf217b8",
+          "m-b3b61995670d68a3",
+          "m-46a1a4b2bb1d90db"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed27-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-70d000773cf217b8",
+              "m-b3b61995670d68a3",
+              "m-46a1a4b2bb1d90db"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "30s"
+                ],
+                "forbidden_values": [
+                  "45s",
+                  "15s"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed27-task0-probe-api-version",
+            "expected_memory_id": "m-70d000773cf217b8",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed27-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-b3b61995670d68a3",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed27-task0-probe-retention-window",
+            "expected_memory_id": "m-46a1a4b2bb1d90db",
+            "description": "the data retention window must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-79cc6ce547dd6b64": "the supported API version is v2 \u2014 by Nadia Jorgensen (engineering-manager) in #meeting channel",
+          "m-04b83da7b8a8b7b0": "the production deploy timeout is 60s \u2014 by Priya Gruber (researcher) in #meeting channel",
+          "m-c0fa0b9258c56370": "the data retention window is 30 days \u2014 by Oskar Eriksen (researcher) in #email channel"
+        },
+        "superseded_memory_ids": [
+          "m-471a749222646552",
+          "m-91b38708c5d1ae10"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

@@ -1,0 +1,172 @@
+# Buildable specification: three-arm beads memory experiment (beads / none / builtin)
+
+Repo: `/home/ds/projects/mem/.claude/worktrees/jev-need-gate-prereg/memory-bench`. Gates run from there: `uv run ruff check`, `uv run black --check`, `uv run mypy --strict membench`, `uv run pytest`.
+
+**Spine chosen: design 3 (variant-ready), because the `MemoryArm` frozen-record abstraction plus `assert_arms_comparable` is the only one of the three that makes a fourth beads variant a registry entry rather than a runner edit, which is the standing requirement.** Grafted in:
+
+- From design 1 (minimal-diff): keep `e1_grid`'s fire path, `cell_store`, `close_cwd_channel`, `out_lock`, `write_json_new`, resume identity, and the pinned R0 rung, rather than forking a new runner. Reason: the resume/no-repurchase machinery is where paid runs have previously been lost, and it is already correct.
+- From design 2 (validity-maximal): the **sham arm is deferred, not adopted** (see §9), but its diagnosis is adopted: `sham − none` is the only thing that would separate "being told a persistence tool exists" from "persistence works", and without it `beads − none` contains both. Also adopted from design 2: per-leg config-dir minting for the non-builtin arms, and the instrument-agreement idea (argv counter vs shim receipts).
+- From every attacker: the config-dir **session-transcript leak** (all three attacks found it independently, in different words). It is the single most important correction in this spec.
+
+Where the attacks disagreed is surfaced in §4 (gate 6) and §9.
+
+---
+
+## 1. The question, stated so it can come out negative
+
+Does giving a coding agent the `bd` CLI as its memory substrate, with Claude Code's own native memory pinned off, raise its success rate on a second-session task whose answer exists only in the first session? **Beads helps** if the paired goal-leg success delta `beads − none` is positive with a 95% interval excluding 0 on the memory-necessary variant, while the same three arms do not separate on the memory-unnecessary twin. **Beads does not help** if that interval contains 0 while the discovery gate (§4.4) shows the agent did reach for `bd` and bd acknowledged real writes and reads: that is a null about the substrate, not about the rig. **The experiment failed rather than beads failing** in any of these cases: the `none` arm passes memory-necessary tasks (a leak, so nothing is being measured), the `none` arm fails memory-unnecessary tasks (the corpus is hard for non-memory reasons), the beads arm issues zero bd calls (the treatment was never discovered, the 480-leg outcome), the builtin arm records zero native-memory engagement (the comparator was structurally disabled, most likely by the tool clamp), or any leg's native-memory pin is outranked. Those are declared UNMEASURED and reported as such; they are not written up as nulls.
+
+---
+
+## 2. The three arms
+
+One `MemoryArm` frozen record per arm in `membench/runner/memory_arm.py`. `assert_arms_comparable(ARMS)` refuses a registry whose arms differ on anything outside the may-vary list.
+
+| Arm | Memory available | Config-dir settings (`seed_config_dir`, whole-file write) | What the agent is told | What mechanically enforces absence |
+|---|---|---|---|---|
+| **beads** (subject) | `bd` on PATH via the `provision_memory_tool` shim, which injects `-C <store>` on every argv; store minted outside the sandbox. Native memory off. | `{"autoMemoryEnabled": false}` (the `e1_grid.RUNG_SETTINGS["R0"]` dict, imported not retyped), plus a merged `hooks` key from `install_native_memory_hook(config_dir, mode="deny")`. | Shared scaffold + bd capability paragraph: bd's own `capture_bd_context` block plus `BD_CONTEXT_ADDENDUM` (`bd remember`, `bd recall`, `bd memories`). Re-planted after every cwd wipe. | Native path: new `deny` hook mode (see below) blocks at PreToolUse; `native_memory_pinned_off(config_dir)` read back off disk; `assert_pin_precedence(env=agent.child_env(), cwd=sandbox)` per leg; `native_memory_accesses` re-scores the finished stream; any nonzero voids the **work_id**, not just the leg. |
+| **none** (floor) | Nothing durable. No bd anywhere on the child PATH. Native memory off. | Byte-identical to beads apart from the hook log path. | Same scaffold, capability paragraph states this session has no durable store and nothing written here persists. No persistence facility named. | `assert_no_memory_command(env)` resolves `bd` under the leg's effective PATH and refuses the fire if it resolves at all; child PATH is the harness `bin_dir` only, **no `os.environ["PATH"]` passthrough**; a `bd` stub that exits 127 is planted so the error surface matches; `endogenous_memory_verbs(calls)` must be empty. Same native-path stack as beads. |
+| **builtin** (comparator) | Claude Code's native memory only: `$CLAUDE_CONFIG_DIR/projects/<cwd-slug>/memory/MEMORY.md` plus topic files. | `toolreq_builtin.BUILTIN_SETTINGS` = `{"autoMemoryEnabled": true}`, plus `install_native_memory_hook(mode="observe")` so the hook shape and latency match and only the mode differs. | Same scaffold, capability paragraph names the native memory index and topic files and says they carry across sessions in this project. Deliberately not silence. | `assert_no_memory_command(env)` (bd must not resolve) and `endogenous_memory_verbs` empty. Engagement graded on CONTENT, not file existence: every `.md` under `harbor.agent_memory.NATIVE_MEMORY_GLOB` scanned with `metrics.scorers.states_value` for the task's opaque token. A goal PASS with `engaged=False` is flagged a LEAK, never a builtin win. |
+
+Two corrections to the input designs are load-bearing here:
+
+**`deny` does not exist and must be built.** `tool_surface.NATIVE_MEMORY_HOOK_MODES` holds only `observe` and `redirect`; `native_memory_hook.hook_decision` blocks only when `mode == "redirect"`. Attack 2 is right that `redirect` is unusable across arms: `native_memory_hook.redirect_reason()` renders `tool_surface.MEMORY_COMMAND = "bd"` plus the bd verbs, so installing redirect on the `none` arm would tell the floor to use the subject under test. So: add `deny` as a third mode whose refusal text names **no** alternative facility, and use it on beads and none. Do not parameterize the redirect text; that path leads into threading a per-arm command table through `MEMORY_COMMAND`, the recognizer, the shim and `surface_fingerprint`, which is the sham-arm refactor and is out of scope for this run.
+
+**The establish-leg tool clamp must vary by arm, and this is a disclosed asymmetry.** Attack 3 is right: `toolreq_builtin.py:104` sets `available_tools=[]` on the builtin establish leg with the in-code reason `# H3: no --allowedTools clamp on CC's own memory-write path`. Forcing `MEMORY_ALLOWED_TOOLS` on all arms would block Claude Code's own memory write and collapse the comparator to the floor while looking like a legitimate null. Therefore `establish_tools` is a **may-vary** field on `MemoryArm` (beads/none: `MEMORY_ALLOWED_TOOLS`; builtin: unclamped), and the **goal leg is clamped identically across all three arms** (`MEMORY_ALLOWED_TOOLS` = Bash, Write, Read, Edit; `HOST_DENIED_TOOLS` as `--disallowedTools`), because the goal leg is where the endpoint is scored. The dry run asserts the goal argv is byte-identical across arms and prints the establish-leg clamp per arm in the summary.
+
+### Presentation symmetry, and what is left over
+
+Every arm gets a drop-in `CLAUDE.md` + `AGENTS.md` pair built by `arm_context.render_arm_context(arm)` as `<shared preamble> + <arm capability paragraph> + <shared closing>`. The preamble and closing are single module constants, so no arm can carry a scaffold another lacks; a test asserts the three rendered texts are byte-identical outside the capability paragraph. Each paragraph states the affordance and says nothing about *when* to use it, since disposition is the thing under test. `arm_context_words(arm)` is emitted per leg exactly as `guidance_words` is, and published per arm in the summary. The guidance ladder is pinned at R0 (no rung text) for every arm.
+
+Residual asymmetry, reported and not eliminated: bd's paragraph can state an argv grammar and the native-memory paragraph structurally cannot, because native memory has no command line. A word-count ratio above 1.5x across arms forces the write-up to state that presentation length is confounded with arm; the gate discloses, it never silently corrects. Second residual: the model has priors about its own native memory and none about `bd`, so `beads − builtin` is partly a familiarity contrast. Third: the `deny` hook fires only in beads and none, so a refusal message and a lost turn are part of those arms and not of builtin; denial counts and turn counts per arm are published, and any beads or none leg with >0 denials is flagged in the record.
+
+---
+
+## 3. Primary endpoint and leg structure
+
+**The single number: the paired median of per-`work_id` goal-leg success-rate deltas, `beads − none`, on the memory-necessary variant, with a 95% percentile bootstrap interval from `grading.paired_ci.paired_delta_ci`, reported on the `matched` population with `itt` published beside it.** `beads − builtin` is the second contrast, same construction.
+
+Attack 3's estimand objection is correct and is taken: `paired_ci.py:86` calls `bootstrap_median_ci`, so the function returns a median of per-task rate deltas, not a difference of pooled rates. The pre-registration names the median explicitly. A mean-delta bootstrap is reported alongside; the median is the pre-registered primary.
+
+Success per goal leg = `realagent_probe.score_goal_action` / `e1_reliability.score_bd_leg(...).goal_action_success`: the goal leg's real `Write` to `realagent_probe.CONFIG_FILE` states the current opaque token (`metrics.scorers.states_value`) and states none of the superseded tokens.
+
+Leg plan: `leg_plans.PAIR_ROLES = ("establish", "goal")`, two `claude -p` sessions per repeat, one sandbox (`sandbox.paid_sandbox`, `assert_neutral_ancestry` fail-closed at mint and again after the wipe), one store per repeat. Establish uses `e1_grid.ESTABLISH_INSTRUCTION` verbatim in all three arms; it discloses the cell's shape and says nothing about memory, recording or durability. Between legs: `wipe_cwd_contents`, ancestor re-check, re-plant the arm context, and (for beads and none) **mint a fresh config dir** (see §4.6). The four-role `TRIAL_ROLES` plan stays reachable as `leg_plan=` for a later supersession variant and is not bought here.
+
+**Establish legs are excluded from the endpoint** and the filter is asserted (`n_establish_legs_scored == 0`). The establish leg is *instructed* to acknowledge state, so its memory action is not a choice and its discrimination margin is exactly 0.0000 by construction; pooling it halves the endpoint, which mem-eg850 already paid for (+0.425/+0.175/+0.300 on goal legs became +0.2125/+0.0875/+0.150 pooled). No pooled rate is emitted anywhere in the artifact, so there is no halved number for a reader to pick up. Establish behavior goes in a separate `establish_mechanism` block: acknowledged-capture rate, `BdCallObservation.outcome` histogram, builtin content-engagement.
+
+---
+
+## 4. Pre-registered validity gates
+
+**A gate that fails voids the run. It is not adjusted, re-thresholded, or reported with a caveat.** Thresholds below are frozen before the fire and ride in the manifest.
+
+1. **Necessity floor.** `none`-arm goal-leg success on the `necessary` variant must be `< 0.2`. At or above: the corpus does not require memory under this model, the run is VOID, and the leak is located before anything is re-bought.
+2. **Specificity ceiling.** `none`-arm goal-leg success on the `unnecessary` variant must be `> 0.8`, and the three arms must not separate there (the `beads − none` interval must contain 0). Below the ceiling, the tasks fail for non-memory reasons and every delta is uninterpretable. VOID.
+3. **Pin held, as far as it can be shown.** Every beads and none leg records `native_memory_pinned_off: true` read off disk and a clean `assert_pin_precedence` against `agent.child_env()` and the real sandbox cwd. Any `PinPrecedenceError` HALTS the fire; bought legs persist, remaining legs are not spent.
+4. **Discovery gate (distinguishes "did not help" from "never reached for").** In the paid preflight (§6), the beads arm must record `>= 1` bd call classified `remembered`/`updated` on an establish leg and `>= 1` classified `returned`/`recalled` on a goal leg, and the builtin arm must record `_memory_engaged == True` on `>= 1` establish leg. Zero in either is a HALT with verdict UNMEASURED, on the `e1_grid.HALT_NO_CALL` shape, and the grid is not bought. At grid scale: a beads-arm goal-leg reach rate of 0 is reported as UNMEASURED, never as a null.
+5. **Leak gate (trap 1), widened.** Zero `native_memory_accesses` in the finished stream and zero allowed reaches in the hook log, on every beads and none leg. Detection is widened past `memory/*.md`: the predicate is **any** read or Bash operand resolving under `$CLAUDE_CONFIG_DIR` other than the leg's own `settings.json` and hook script. `tool_surface._is_native_memory_path` (tool_surface.py:1827) requires a literal `memory` path segment, so as shipped it cannot see `$CLAUDE_CONFIG_DIR/projects/<slug>/*.jsonl`, the session transcript that carries the establish leg's opaque token verbatim. All three attacks found this channel. It is closed structurally first (fresh config dir per leg for beads and none, since only builtin needs cross-leg native continuity) and detected second. A violation voids the **work_id across all three arms**, not the single leg.
+6. **Pairing intact.** `paired_delta_ci` on the `matched` population by construction has `n_imputed_zero == 0`; the `itt` population is published as the conservative bound. Attack 3 found a real contradiction in design 3 here: leg-level voiding plus an `n_imputed_zero == 0` gate on `itt` cannot both hold, because ITT imputes a missing arm's delta as 0, which is the silent scoring the void rule exists to prevent. Resolved by voiding at work_id level and reading the endpoint on `matched`. Designs 1 and 2 did not address this; attack 3 is taken.
+7. **Substrate exclusivity.** `endogenous_memory_verbs` empty on every none and builtin leg; `bd` must not resolve under those arms' PATH. One bd call voids the work_id.
+8. **Hermeticity.** `provision_memory_tool` runs `git init` before `bd init` and calls `assert_store_outside(sandbox, store_dir)` with its required `sandbox` argument; the shim injects `-C <store>` so bd's upward walk never binds an ancestor `.beads` (mem-pkglb); no `.beads` exists in the sandbox or any ancestor; `scrub_store_guidance` reports no surviving file naming `remember`/`recall`/`memories`; `bd -C <store> memories` on a fresh store returns empty. Every one refuses the spend rather than warning.
+9. **Presentation parity.** The three rendered contexts are byte-identical outside the capability paragraph, asserted by test before any spend; `arm_context_words` per arm published; ratio above 1.5x forces the confound statement in the write-up.
+10. **One instrument.** `stream_cli_version` equals the pinned CLI version on every leg; the arm fingerprint (settings dicts + context scaffold + `surface_fingerprint` + `RECOGNIZER_IMPLEMENTATION_VERSION` + corpus digest + selected work_id list + protocol version) is constant within the fire and rides in the resume identity. A mid-sweep change HALTS rather than pooling.
+11. **Instrument agreement.** The argv counter (`tool_surface.memory_invocations`) and the shim's receipt log (`bd_receipt_surface.read_receipts`) must agree on the per-leg beads call set. Disagreement voids the run, since it means a spelling escaped the recognizer.
+12. **Unmeasured budget.** Unmeasured legs (timeout, CLI error, quota) under 10% per arm; `UnmeasuredStreak` halts. A timed-out leg is unmeasured, never a scored zero.
+
+---
+
+## 5. The free proof (the gate on spending)
+
+A `--dry-run` over the full grid on `e1_grid._silent_runner` (an agent that makes zero tool calls, deliberately not a cooperating simulator), plus `render_arm_separation(out)`, which materializes one real `cell_store` per arm without spawning an agent. It buys no tokens. It is not side-effect-free: it shells a real `git init` and `bd init` per arm, so it runs under the same outside-the-sandbox store discipline as a paid leg.
+
+It must demonstrate, as artifacts on disk and in the dry-run JSON, before a single paid call:
+
+1. The `settings.json` bytes of each minted config dir: beads and none byte-identical, builtin differing in exactly one key, `hooks` merged and the pin surviving the merge in all three.
+2. `bd` resolves on PATH in exactly one arm; the none/builtin `bd` stub exits 127; the beads shim resolves the minted store from the sandbox cwd and does not self-exec.
+3. The planted context bytes per arm, their diff (exactly one paragraph), and their word counts.
+4. The rendered `claude -p` argv from `headless_agent.render_cell_calls`: **goal-leg argv byte-identical across arms** apart from `CLAUDE_CONFIG_DIR` and cwd; establish-leg clamp difference printed explicitly.
+5. The `deny` hook probed with the idiomatic spellings, each asserted to exit `NATIVE_MEMORY_HOOK_EXIT_BLOCK` (2) and to appear in the hook log: `Read` on the memory path; `cat "$CLAUDE_CONFIG_DIR/projects/<slug>/memory/MEMORY.md"`; the same backticked and `$( )`-wrapped; `sed -n 1,5p`; `env cat ...`; and the widened predicate probed with `grep -r <token> "$CLAUDE_CONFIG_DIR/projects"` and a direct read of the session `.jsonl`.
+6. The counter spelling probe: `bd recall k`, `bd recall k 2>&1`, `bd --db X recall k`, `sh -c 'bd recall k; bd remember v'`, `$(bd memories q)`, backticked, heredoc-wrapped, absolute-path, `bd remember "x" --key=k`, `bd memories q | head` all count with the expected verbs; the negative set (`echo "bd recall k"`, a `#` comment, `bd recall k > out`) does not. A missed spelling is a red test, not a footnote.
+7. `assert_pin_precedence` clean and the env inlets absent from `child_env_after_scrub`.
+8. The surviving config-dir tree after a simulated wipe, showing no establish-leg transcript reachable from a beads or none goal leg.
+9. The resume identity digest differs pairwise across arms and is stable within an arm across repeats, so no arm can serve another's cached cell.
+10. `priced_plan` arithmetic equals the declared paid shape cell-for-cell against the fire's own `grid_keys` iteration.
+
+None of this proves the agent behaves. It proves the three arms are three different machines.
+
+---
+
+## 6. Paid accounting (needs approval before any spend)
+
+Corpus load path correction: use `toolreq_corpus.load_twin_corpus(Path("fixtures/worlds-tool-jev32"))` and `toolreq_corpus.variant_split`, **not** `toolreq_realagent.load_corpus_with_sequences`. Attack 3 is right that the latter returns tasks with `variant` defaulting to `VARIANT_NECESSARY` and `memory_necessary=True` hardcoded; the four classes are derived in `toolreq_corpus.four_class_tasks` (line 524). On the raw path the necessity and specificity gates are unbuyable. Also: `toolreq_realagent.DEFAULT_CORPUS` points at `fixtures/worlds-tool`, which does not exist in this worktree, so `--corpus-dir fixtures/worlds-tool-jev32` must be passed explicitly. The corpus is 32 world dirs, one sequence each, 32 `work_id`s, twinned to 64 tasks.
+
+Task subset: **all 32 `work_id`s** (Stephanie's ruling, 2026-09-20, decision 1 option b). The subset is therefore the whole corpus and carries no selection degree of freedom; the sorted `work_id` list is still folded into the resume identity and published before the fire, so a later partial re-buy cannot silently re-select. Attacks 1 and 2 flagged unpinned subset selection as a live researcher degree of freedom that `corpus_fingerprint` does not cover; buying the full corpus closes it outright.
+
+```
+Paid preflight (mechanism, gate 4):
+  1 task x 3 arms x 1 repeat x 2 legs                      =    6 sessions
+
+Grid, necessary variant (the endpoint):
+  32 tasks x 3 arms x 4 repeats x 2 legs                   =  768 sessions
+    of which goal legs (scored)                            =  384
+
+Specificity slice, unnecessary twin (gate 2):
+  32 tasks x 3 arms x 2 repeats x 2 legs                   =  384 sessions
+
+Subtotal                                                      1158 sessions
+Void/re-buy headroom, 15% (a voided work_id costs all 3 arms) +174
+-------------------------------------------------------------------
+Authorization ceiling                                         1332 paid claude -p sessions
+```
+
+Each later beads variant adds `32 x 4 x 2 = 256` sessions on the necessary variant as one registry row, resumable against the same `--out`.
+
+Power, stated rather than discovered afterwards: the independent unit is the `work_id`, so n = 32 pairs, not 384 legs. A 95% percentile bootstrap on 32 per-task deltas over the lattice `{-1, -0.75, ..., 1}` spans roughly ±0.18. **Pre-registered minimum detectable effect: 0.20.** A smaller true effect will come back null and that null is uninformative. 32 is the whole corpus, so the only remaining way to buy power is more corpus, not more repeats — repeats are correlated within a task and do not move n.
+
+The necessity preflight (`e1_necessity_preflight --paid`) is **not** bought separately. The `none` arm of the grid is that measurement, run in-grid, same-run, on the same work_ids the endpoint scores. Design 2 bought it separately on 8 tasks while scoring 16, which verifies necessity on half the tasks the endpoint uses; that is not worth the money.
+
+---
+
+## 7. Build plan
+
+Repo rule: the test ships in the same commit as the source change, never a follow-up.
+
+1. `membench/runner/native_memory_hook.py` (edit) and `membench/runner/tool_surface.py` (edit): add the `deny` mode to `NATIVE_MEMORY_HOOK_MODES` and to `hook_decision`, with a refusal string that names no alternative facility; widen the config-dir predicate beside `_is_native_memory_path` to catch any `$CLAUDE_CONFIG_DIR` read that is not the arm's own `settings.json` or hook script; bump `RECOGNIZER_IMPLEMENTATION_VERSION`. Ships with: `tests/runner/test_native_memory_hook.py` (edit) asserting deny exits 2, the refusal text contains no `bd`/verb token, and the widened predicate catches the transcript grep and the `.jsonl` read.
+2. `membench/runner/arm_context.py` (new): shared preamble/closing constants, the per-arm capability paragraph table, `render_arm_context(arm)` built by accumulation. Ships with `tests/runner/test_arm_context.py`: byte-identity outside the capability slot, word counts within 1.5x, no arm-specific scaffold drift.
+3. `membench/runner/memory_arm.py` (new): frozen `MemoryArm` (name, `settings: MappingProxyType`, `provisions_bd`, `establish_tools`, `capability_paragraph`, `hook_mode`, `store_seed`, `verbs`), the `ARMS` registry with the three instances, `arm_settings_fingerprint()`, `arm_context_words()`, `plant_arm_context()`, `assert_no_memory_command(env)`, `assert_arms_comparable(arms)`. Ships with `tests/runner/test_memory_arm.py`: the may-vary/may-not-vary split is enforced (a registry differing on corpus, goal-leg allowlist, scorer, model, CLI version, timeout or sandbox policy is refused), settings are scrubbed not merged, `assert_no_memory_command` fires on a PATH where `bd` resolves.
+4. `membench/runner/beads_arm_grid.py` (new): the driver. Reuses `e1_grid.cell_store` / `close_cwd_channel` / `out_lock` / `write_json_new` / `RigHaltError` / `QuotaHaltError` / `UnmeasuredStreak` / `_silent_runner` rather than forking them; `run_arm_cell`, `staged_plan` / `priced_plan` over `(arm, variant, work_id, repeat)`, per-leg config-dir minting for beads and none, `--dry-run` / `--preflight` / `--fire-staged` with `e1_grid.main`'s refusal stance, the frozen manifest on the `bd_real_experiment.freeze` / `_completed` / `_identity_check` pattern (note: `build_manifest` lives in `bd_experiment.py:63`, not `bd_real_experiment.py`), and `summary-beads-arms.json` emission. Ships with `tests/runner/test_beads_arm_grid.py`: gate arithmetic, goal-legs-only filter (`n_establish_legs_scored == 0`), work_id-level voiding, resume refusal on a changed arm digest, `priced_plan` equals `grid_keys`.
+5. `membench/runner/arm_separation.py` (new, or a function in the driver): `render_arm_separation(out)` producing the §5 artifact. Ships with `tests/runner/test_arm_separation.py` asserting each of the ten items.
+6. `docs/prereg-beads-three-arm.md` (new): endpoint, estimand (paired median), gates with thresholds, MDE 0.20, paid shape, the full 32-work_id list, the may-vary contract, and the mem-eg850 reason for goal-legs-only. Written and frozen before the fire.
+
+Reused unchanged: `e1_grid.py` (`RUNG_SETTINGS["R0"]`, `NATIVE_MEMORY_SETTING`, `NATIVE_MEMORY_ENV_INLETS`, `native_memory_pinned_off`, `assert_pin_precedence`, `pin_precedence_fingerprint`, `child_env_after_scrub`, `ESTABLISH_INSTRUCTION`, `LegRecord`), `tool_surface.py` (`provision_memory_tool`, `MemoryToolSurface.env`, `capture_bd_context`, `plant_bd_context`, `BD_CONTEXT_ADDENDUM`, `scrub_store_guidance`, `assert_store_outside`, `MEMORY_ALLOWED_TOOLS`, `HOST_DENIED_TOOLS`, `memory_invocations`, `endogenous_memory_verbs`, `strip_redirections`, `native_memory_accesses`, `surface_fingerprint`), `bd_receipt_surface.read_receipts`, `toolreq_builtin.BUILTIN_SETTINGS` and its content-engagement check, `headless_agent.py` (`seed_config_dir`, `cell_agent`, `env_unset`, `render_cell_calls`, `resolve_model`, `stream_cli_version`), `e1_reliability.py` (`score_bd_leg`, `CallOutcome`, `RELIABILITY_VERSION`), `realagent_probe.py` (`CONFIG_FILE`, `score_goal_action`), `toolreq_corpus.py` (`load_twin_corpus`, `variant_split`, `four_class_tasks`, `superseded_values`), `sandbox.py` (`paid_sandbox`, `assert_neutral_ancestry`, `assert_corpus_unreachable`, `wipe_cwd_contents`), `leg_plans.py`, `resume_cache.py`, `grading/paired_ci.py`, `fixtures/worlds-tool-jev32/`.
+
+Note two symbol attributions the attacks corrected and this spec follows: `wipe_cwd_contents` is defined in `sandbox.py` (re-exported through `toolreq_builtin`), and `NATIVE_MEMORY_GLOB` / `native_memory_path` live in `membench.harbor.agent_memory`, with `states_value` in `membench.metrics.scorers`; `toolreq_builtin._memory_engaged` is private and its logic is lifted rather than imported.
+
+---
+
+## 8. The eight traps
+
+1. **Pin necessary, not sufficient.** Defeated in depth, not by the pin: pin written and read back off disk, env inlets removed via `env_unset`, `assert_pin_precedence` per leg against the spawned env, the new `deny` hook blocking at PreToolUse, and a post-hoc stream rescore. Residual: the hook faults open by design, and the block and the rescore share one recognizer, so a recognizer blind spot is a single point of failure. Reported.
+2. **Treatment never discovered.** Defeated: every arm plants a context file that Claude Code auto-loads with no tool call, re-planted after every wipe; `plant_bd_context` raises on an empty capture; and the paid preflight HALTS on zero bd calls before the grid is bought, so the 480-leg silence becomes a stop, not a null.
+3. **Presentation is itself a treatment.** Partly defeated, partly reported. Defeated structurally: one scaffold, one differing paragraph, byte-identity test, R0 for all arms, `Bash` as the tool name in every arm so no allowlisted tool carries an invitation. Not defeated semantically: a command grammar is a stronger instruction than a file path, and no sham arm is bought here to decompose naming from persistence. Reported as `arm_context_words` and as a named confound.
+4. **Counter misses spellings.** Defeated by construction plus probe plus a second instrument: `memory_invocations`'s shell-word grammar (wrappers, assignment prefixes, `-c` recursion, `$( )`, backticks, heredocs, `--key=`, `strip_redirections` for `2>&1`), the §5 spelling probe run before any money, and the shim receipt log cross-checked per leg by gate 11.
+5. **A verb token is not an operation.** Defeated: every call classified by `e1_reliability.score_bd_leg` from bd's own acknowledgement into `CallOutcome`. Writes are only `{remembered, updated}`; a bare-key `bd remember` answered as a read scores `recalled`; refusals score `refused`; unattributable compounds score `unattributed` and never count. `RELIABILITY_VERSION` / `CALL_OBSERVATION_SINCE` refuse observations scored by an older attributor.
+6. **Establish vs goal.** Defeated: goal-legs-only endpoint, asserted by gate, and no pooled rate emitted anywhere in the artifact.
+7. **Config-dir locality and scrub-not-merge.** Defeated: fresh config dir per leg for beads and none and per repeat for builtin; `seed_config_dir` writes `settings.json` whole from a frozen `MappingProxyType`, so removal is absence; the only merge is the hook's `hooks` key and the pin is read back afterwards; removal on the env side is `env_unset`, not an overriding key; the arm table digest is in the resume identity.
+8. **Hermeticity.** Defeated, fail-closed: `git init` before `bd init`, `-C <store>` on every argv so the upward walk is never consulted, `assert_store_outside` with a required `sandbox` argument, no `.beads` in the sandbox or any ancestor, `scrub_store_guidance` clean, empty `bd memories` on a fresh store, `assert_neutral_ancestry` before and after the wipe. All refusals, no warnings.
+
+---
+
+## 9. What this cannot answer
+
+**It cannot separate "bd helps because it persists" from "bd helps because the agent was told a persistence tool exists".** The sham arm (design 2's `wk`) is the only construction that decomposes those, and it is **not buildable with the current machinery without real refactoring**: `tool_surface.MEMORY_COMMAND = "bd"` (line 109) and `MEMORY_VERBS` are module constants consumed by `command_segments`, `memory_invocations`, the shim provisioner, `recognizer_policy` and `surface_fingerprint`. A `wk` CLI's calls are invisible to the counter, and monkeypatching the global per arm moves `surface_fingerprint` for every arm in the same process, collapsing resume-identity separation. Threading a frozen `(command, verb-table)` record through all of those is the correct fix and should be priced as its own bead before any run that claims to isolate persistence. Until then, `beads − none` is "bd as deployed, with its own shipped context block" versus "nothing, told so".
+
+**It cannot make `beads − builtin` a substrate comparison.** The model was trained on its own native memory and has priors about when to write to it; it has none about `bd`. Matching the harness prose equalizes what we say and leaves the prior unequal. Read `beads − builtin` as "bd as deployed versus native memory as deployed", with an unclamped establish leg on one side and a clamped one on the other.
+
+**It cannot prove the pin held.** `assert_pin_precedence` can prove the pin was *outranked*; it cannot prove it held, because the env names, scope paths and precedence order were read out of a minified release bundle with three predicates unresolved. The `deny` hook is a PreToolUse rule engine, not a kernel boundary: an agent that writes a script and runs it, or spells a path the tokenizer does not attribute, is not stopped. The void gate catches only what the recognizer already sees.
+
+**It cannot close every durable channel.** `/tmp`, `$HOME`, the sandbox's parent and any writable path outside the wiped cwd remain open to all three arms, and `MEMORY_ALLOWED_TOOLS` includes a real shell. This spec closes the config-dir transcript channel, which is the one that carries the opaque token by default; it does not close a deliberate `/tmp/notes.md` handoff. Mitigation available if the floor gate ever fires: per-leg `TMPDIR` and `HOME` inside the sandbox, plus an out-of-sandbox write detector over the finished stream. Not bought in this run.
+
+**It cannot generalize past this corpus or this model.** 32 frozen synthetic tool-requiring worlds, one model, one CLI version, one task shape (recover an opaque token across a session boundary and write it to a config file). A null here is a null about that shape.
+
+**It cannot detect an effect smaller than about 0.20** at n = 32 pairs. A result inside that band is not evidence of absence.

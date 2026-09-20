@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed30-task0",
+    "title": "Ironwood Works initiative: reconcile 3 decisions",
+    "domain": "medical",
+    "goal": "Deliver the current medical initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed30-task0-s0-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ecb32263bcaeb135": "the data retention window is 7 years \u2014 by Mateo Haddad (qa-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed30-task0-s1-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-95f00c13e13ceaf0": "the supported API version is v3 \u2014 by Nadia Doyle (qa-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed30-task0-s2v1-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-2cc8a5a8a4c670e6": "the approved rollback command is kubectl rollout undo \u2014 by Farid Eriksen (staff-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed30-task0-s2v2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ff1aaa55991a5e76": "the approved rollback command is helm rollback \u2014 by Nadia Doyle (qa-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-2cc8a5a8a4c670e6"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed30-task0-s2v3-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ecd61b401536054d": "the approved rollback command is git revert then redeploy \u2014 by Nadia Doyle (qa-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-ff1aaa55991a5e76"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed30-task0-goal",
+        "user_request": "Deliver the current medical initiative. Using the tool `apply_config`, apply the current value of: the data retention window, the supported API version, the approved rollback command.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-ecb32263bcaeb135",
+          "m-95f00c13e13ceaf0",
+          "m-ecd61b401536054d"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed30-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-ecb32263bcaeb135",
+              "m-95f00c13e13ceaf0",
+              "m-ecd61b401536054d"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "git revert then redeploy"
+                ],
+                "forbidden_values": [
+                  "kubectl rollout undo",
+                  "helm rollback"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed30-task0-probe-retention-window",
+            "expected_memory_id": "m-ecb32263bcaeb135",
+            "description": "the data retention window must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed30-task0-probe-api-version",
+            "expected_memory_id": "m-95f00c13e13ceaf0",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed30-task0-probe-rollback-command",
+            "expected_memory_id": "m-ecd61b401536054d",
+            "description": "the approved rollback command must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-3b3113831c4d6385": "the data retention window is 30 days \u2014 by Mateo Haddad (qa-engineer) in #issue-tracker channel",
+          "m-3d364953180b15d5": "the supported API version is v2 \u2014 by Mateo Eriksen (engineering-manager) in #issue-tracker channel",
+          "m-0bc31ec870de90fb": "the approved rollback command is terraform apply -refresh \u2014 by Farid Eriksen (staff-engineer) in #chat channel"
+        },
+        "superseded_memory_ids": [
+          "m-2cc8a5a8a4c670e6",
+          "m-ff1aaa55991a5e76"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

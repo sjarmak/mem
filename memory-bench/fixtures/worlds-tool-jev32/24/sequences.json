@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed24-task0",
+    "title": "Sablefish Works initiative: reconcile 3 decisions",
+    "domain": "research-platform",
+    "goal": "Deliver the current research-platform initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed24-task0-s0-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ba391b0ee77fde4b": "the data retention window is 30 days \u2014 by Ada Gruber (researcher) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed24-task0-s1v1-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-be03a0b24dbfd81c": "the primary deployment region is eu-west-1 \u2014 by Ada Gruber (researcher) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed24-task0-s1v2-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-e2f0811cb743c415": "the primary deployment region is us-east-1 \u2014 by Hiroshi Petrov (engineering-manager) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-be03a0b24dbfd81c"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed24-task0-s1v3-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-e374f3de940b5093": "the primary deployment region is ap-south-1 \u2014 by Ada Gruber (researcher) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-e2f0811cb743c415"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed24-task0-s2-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-401565d3c7def9e5": "the checkout_v2 feature flag state is canary-50% \u2014 by Hiroshi Petrov (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed24-task0-goal",
+        "user_request": "Deliver the current research-platform initiative. Using the tool `apply_config`, apply the current value of: the data retention window, the primary deployment region, the checkout_v2 feature flag state.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-ba391b0ee77fde4b",
+          "m-e374f3de940b5093",
+          "m-401565d3c7def9e5"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed24-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-ba391b0ee77fde4b",
+              "m-e374f3de940b5093",
+              "m-401565d3c7def9e5"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "ap-south-1"
+                ],
+                "forbidden_values": [
+                  "eu-west-1",
+                  "us-east-1"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed24-task0-probe-retention-window",
+            "expected_memory_id": "m-ba391b0ee77fde4b",
+            "description": "the data retention window must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed24-task0-probe-primary-region",
+            "expected_memory_id": "m-e374f3de940b5093",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed24-task0-probe-feature-flag",
+            "expected_memory_id": "m-401565d3c7def9e5",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-bd865236b09cf015": "the data retention window is 1 year \u2014 by Imani Eriksen (engineering-manager) in #docs channel",
+          "m-ce2ea5f7dc32889b": "the primary deployment region is us-west-2 \u2014 by Imani Eriksen (engineering-manager) in #issue-tracker channel",
+          "m-d601ca3cfea3ec51": "the checkout_v2 feature flag state is canary-10% \u2014 by Imani Eriksen (engineering-manager) in #docs channel"
+        },
+        "superseded_memory_ids": [
+          "m-be03a0b24dbfd81c",
+          "m-e2f0811cb743c415"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

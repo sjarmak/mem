@@ -1,0 +1,81 @@
+{
+  "world_id": "world-seed25",
+  "domain": "legal",
+  "org_name": "Meridian Industries",
+  "teams": [
+    {
+      "team_id": "world-seed25-team-legal-reliability",
+      "name": "Legal Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed25-team-legal-platform",
+      "name": "Legal Platform",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed25-team-legal-delivery",
+      "name": "Legal Delivery",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed25-persona-0-bruno-jorgensen",
+      "name": "Bruno Jorgensen",
+      "role": "engineering-manager",
+      "team_id": "world-seed25-team-legal-reliability"
+    },
+    {
+      "persona_id": "world-seed25-persona-1-greta-moreau",
+      "name": "Greta Moreau",
+      "role": "engineering-manager",
+      "team_id": "world-seed25-team-legal-platform"
+    },
+    {
+      "persona_id": "world-seed25-persona-2-bruno-castellanos",
+      "name": "Bruno Castellanos",
+      "role": "qa-engineer",
+      "team_id": "world-seed25-team-legal-delivery"
+    },
+    {
+      "persona_id": "world-seed25-persona-3-joaquin-bergstrom",
+      "name": "Joaquin Bergstrom",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed25-team-legal-reliability"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed25-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed25-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed25-kb-legal",
+      "name": "legal knowledge base",
+      "topic": "legal"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed25-repo-typescript",
+      "name": "legal-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed25-repo-rust",
+      "name": "legal-rust",
+      "language": "rust"
+    }
+  ],
+  "seed": 25,
+  "generator_version": "world.v1"
+}

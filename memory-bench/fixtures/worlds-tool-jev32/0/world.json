@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed0",
+  "domain": "data-infrastructure",
+  "org_name": "Tessellate Systems",
+  "teams": [
+    {
+      "team_id": "world-seed0-team-data-infrastructure-core",
+      "name": "Data Infrastructure Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed0-team-data-infrastructure-delivery",
+      "name": "Data Infrastructure Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed0-team-data-infrastructure-platform",
+      "name": "Data Infrastructure Platform",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed0-persona-0-kenji-nakamura",
+      "name": "Kenji Nakamura",
+      "role": "qa-engineer",
+      "team_id": "world-seed0-team-data-infrastructure-core"
+    },
+    {
+      "persona_id": "world-seed0-persona-1-esther-ibarra",
+      "name": "Esther Ibarra",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed0-team-data-infrastructure-delivery"
+    },
+    {
+      "persona_id": "world-seed0-persona-2-oskar-almeida",
+      "name": "Oskar Almeida",
+      "role": "legal-counsel",
+      "team_id": "world-seed0-team-data-infrastructure-platform"
+    },
+    {
+      "persona_id": "world-seed0-persona-3-imani-haddad",
+      "name": "Imani Haddad",
+      "role": "support-lead",
+      "team_id": "world-seed0-team-data-infrastructure-delivery"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed0-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed0-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed0-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed0-kb-data-infrastructure",
+      "name": "data-infrastructure knowledge base",
+      "topic": "data-infrastructure"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed0-repo-typescript",
+      "name": "data-infrastructure-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed0-repo-go",
+      "name": "data-infrastructure-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed0-repo-cuda-cpp",
+      "name": "data-infrastructure-cuda-cpp",
+      "language": "cuda-cpp"
+    }
+  ],
+  "seed": 0,
+  "generator_version": "world.v1"
+}

@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed12-task0",
+    "title": "Sablefish Works initiative: reconcile 3 decisions",
+    "domain": "legal",
+    "goal": "Deliver the current legal initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed12-task0-s0-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-37394efaea2ce781": "the data retention window is 1 year \u2014 by Hiroshi Nakamura (site-reliability-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed12-task0-s1v1-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-f7a27a482b0f6a67": "the production deploy timeout is 60s \u2014 by Hiroshi Nakamura (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed12-task0-s1v2-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-5bb3572bcbc2263e": "the production deploy timeout is 30s \u2014 by Bruno Haddad (engineering-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-f7a27a482b0f6a67"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed12-task0-s1v3-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-87e8e215a60d0fb2": "the production deploy timeout is 45s \u2014 by Hiroshi Nakamura (site-reliability-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-5bb3572bcbc2263e"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed12-task0-s2-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-f0bce81fff76285f": "the primary deployment region is us-east-1 \u2014 by Bruno Haddad (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed12-task0-goal",
+        "user_request": "Deliver the current legal initiative. Using the tool `apply_config`, apply the current value of: the data retention window, the production deploy timeout, the primary deployment region.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-37394efaea2ce781",
+          "m-87e8e215a60d0fb2",
+          "m-f0bce81fff76285f"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed12-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-37394efaea2ce781",
+              "m-87e8e215a60d0fb2",
+              "m-f0bce81fff76285f"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "45s"
+                ],
+                "forbidden_values": [
+                  "60s",
+                  "30s"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed12-task0-probe-retention-window",
+            "expected_memory_id": "m-37394efaea2ce781",
+            "description": "the data retention window must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed12-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-87e8e215a60d0fb2",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed12-task0-probe-primary-region",
+            "expected_memory_id": "m-f0bce81fff76285f",
+            "description": "the primary deployment region must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-1cf28f354e3c77ee": "the data retention window is 7 years \u2014 by Bruno Haddad (engineering-manager) in #email channel",
+          "m-1034ccffe3addfce": "the production deploy timeout is 15s \u2014 by Farid Jorgensen (support-lead) in #email channel",
+          "m-adc3e30349f431a6": "the primary deployment region is eu-west-1 \u2014 by Bruno Haddad (engineering-manager) in #email channel"
+        },
+        "superseded_memory_ids": [
+          "m-f7a27a482b0f6a67",
+          "m-5bb3572bcbc2263e"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

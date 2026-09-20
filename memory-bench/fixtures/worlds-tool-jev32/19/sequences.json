@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed19-task0",
+    "title": "Meridian Dynamics initiative: reconcile 3 decisions",
+    "domain": "research-platform",
+    "goal": "Deliver the current research-platform initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed19-task0-s0-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-639d0a389924e72b": "the supported API version is v1 \u2014 by Leila Bergstrom (product-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed19-task0-s1v1-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-e4be24e8b893814b": "the checkout_v2 feature flag state is canary-10% \u2014 by Leila Bergstrom (product-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed19-task0-s1v2-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-f8da143a0d6c9f44": "the checkout_v2 feature flag state is canary-50% \u2014 by Farid Moreau (staff-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-e4be24e8b893814b"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed19-task0-s1v3-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a904aaa83d51604e": "the checkout_v2 feature flag state is enabled \u2014 by Joaquin Castellanos (engineering-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-f8da143a0d6c9f44"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed19-task0-s2-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-2380dc3b6942a2b0": "the primary deployment region is us-east-1 \u2014 by Hiroshi Castellanos (product-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed19-task0-goal",
+        "user_request": "Deliver the current research-platform initiative. Using the tool `apply_config`, apply the current value of: the supported API version, the checkout_v2 feature flag state, the primary deployment region.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-639d0a389924e72b",
+          "m-a904aaa83d51604e",
+          "m-2380dc3b6942a2b0"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed19-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-639d0a389924e72b",
+              "m-a904aaa83d51604e",
+              "m-2380dc3b6942a2b0"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "enabled"
+                ],
+                "forbidden_values": [
+                  "canary-10%",
+                  "canary-50%"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed19-task0-probe-api-version",
+            "expected_memory_id": "m-639d0a389924e72b",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed19-task0-probe-feature-flag",
+            "expected_memory_id": "m-a904aaa83d51604e",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed19-task0-probe-primary-region",
+            "expected_memory_id": "m-2380dc3b6942a2b0",
+            "description": "the primary deployment region must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-0b477792adc782ec": "the supported API version is v4 \u2014 by Farid Moreau (staff-engineer) in #email channel",
+          "m-7b96c9d1436cc423": "the checkout_v2 feature flag state is disabled \u2014 by Joaquin Castellanos (engineering-manager) in #meeting channel",
+          "m-15b98775da4699da": "the primary deployment region is ap-south-1 \u2014 by Leila Bergstrom (product-manager) in #meeting channel"
+        },
+        "superseded_memory_ids": [
+          "m-e4be24e8b893814b",
+          "m-f8da143a0d6c9f44"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

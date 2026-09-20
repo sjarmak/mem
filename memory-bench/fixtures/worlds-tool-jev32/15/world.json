@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed15",
+  "domain": "chip-design",
+  "org_name": "Tessellate Collective",
+  "teams": [
+    {
+      "team_id": "world-seed15-team-chip-design-reliability",
+      "name": "Chip Design Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed15-team-chip-design-platform",
+      "name": "Chip Design Platform",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed15-team-chip-design-foundations",
+      "name": "Chip Design Foundations",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed15-persona-0-nadia-nakamura",
+      "name": "Nadia Nakamura",
+      "role": "legal-counsel",
+      "team_id": "world-seed15-team-chip-design-reliability"
+    },
+    {
+      "persona_id": "world-seed15-persona-1-greta-okonkwo",
+      "name": "Greta Okonkwo",
+      "role": "legal-counsel",
+      "team_id": "world-seed15-team-chip-design-platform"
+    },
+    {
+      "persona_id": "world-seed15-persona-2-esther-almeida",
+      "name": "Esther Almeida",
+      "role": "researcher",
+      "team_id": "world-seed15-team-chip-design-foundations"
+    },
+    {
+      "persona_id": "world-seed15-persona-3-nadia-haddad",
+      "name": "Nadia Haddad",
+      "role": "legal-counsel",
+      "team_id": "world-seed15-team-chip-design-reliability"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed15-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed15-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed15-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed15-kb-chip-design",
+      "name": "chip-design knowledge base",
+      "topic": "chip-design"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed15-repo-typescript",
+      "name": "chip-design-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed15-repo-cuda-cpp",
+      "name": "chip-design-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed15-repo-rust",
+      "name": "chip-design-rust",
+      "language": "rust"
+    }
+  ],
+  "seed": 15,
+  "generator_version": "world.v1"
+}

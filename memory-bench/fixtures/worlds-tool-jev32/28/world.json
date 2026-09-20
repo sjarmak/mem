@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed28",
+  "domain": "cuda-engineering",
+  "org_name": "Verdigris Systems",
+  "teams": [
+    {
+      "team_id": "world-seed28-team-cuda-engineering-reliability",
+      "name": "Cuda Engineering Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed28-team-cuda-engineering-foundations",
+      "name": "Cuda Engineering Foundations",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed28-team-cuda-engineering-enablement",
+      "name": "Cuda Engineering Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed28-team-cuda-engineering-core",
+      "name": "Cuda Engineering Core",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed28-persona-0-hiroshi-okonkwo",
+      "name": "Hiroshi Okonkwo",
+      "role": "qa-engineer",
+      "team_id": "world-seed28-team-cuda-engineering-reliability"
+    },
+    {
+      "persona_id": "world-seed28-persona-1-esther-moreau",
+      "name": "Esther Moreau",
+      "role": "engineering-manager",
+      "team_id": "world-seed28-team-cuda-engineering-foundations"
+    },
+    {
+      "persona_id": "world-seed28-persona-2-esther-almeida",
+      "name": "Esther Almeida",
+      "role": "staff-engineer",
+      "team_id": "world-seed28-team-cuda-engineering-enablement"
+    },
+    {
+      "persona_id": "world-seed28-persona-3-mateo-okonkwo",
+      "name": "Mateo Okonkwo",
+      "role": "qa-engineer",
+      "team_id": "world-seed28-team-cuda-engineering-core"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed28-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed28-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed28-kb-cuda-engineering",
+      "name": "cuda-engineering knowledge base",
+      "topic": "cuda-engineering"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed28-repo-python",
+      "name": "cuda-engineering-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed28-repo-go",
+      "name": "cuda-engineering-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed28-repo-typescript",
+      "name": "cuda-engineering-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 28,
+  "generator_version": "world.v1"
+}

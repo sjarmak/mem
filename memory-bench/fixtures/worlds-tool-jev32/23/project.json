@@ -1,0 +1,8 @@
+{
+  "project_id": "world-seed23-project",
+  "world_id": "world-seed23",
+  "name": "Lumen Collective initiative",
+  "goal": "Deliver the current data-infrastructure initiative.",
+  "prd_summary": "Lumen Collective is consolidating its data infrastructure tooling onto a single supported path this quarter. The initiative covers migration of the existing scaleup workloads, a documented rollback, and retirement of the superseded configuration.",
+  "task_briefs": []
+}

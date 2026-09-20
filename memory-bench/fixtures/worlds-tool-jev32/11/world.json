@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed11",
+  "domain": "legal",
+  "org_name": "Halcyon Dynamics",
+  "teams": [
+    {
+      "team_id": "world-seed11-team-legal-core",
+      "name": "Legal Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed11-team-legal-platform",
+      "name": "Legal Platform",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed11-team-legal-enablement",
+      "name": "Legal Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed11-team-legal-reliability",
+      "name": "Legal Reliability",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed11-persona-0-bruno-fontaine",
+      "name": "Bruno Fontaine",
+      "role": "legal-counsel",
+      "team_id": "world-seed11-team-legal-core"
+    },
+    {
+      "persona_id": "world-seed11-persona-1-oskar-haddad",
+      "name": "Oskar Haddad",
+      "role": "product-manager",
+      "team_id": "world-seed11-team-legal-platform"
+    },
+    {
+      "persona_id": "world-seed11-persona-2-leila-larsen",
+      "name": "Leila Larsen",
+      "role": "qa-engineer",
+      "team_id": "world-seed11-team-legal-enablement"
+    },
+    {
+      "persona_id": "world-seed11-persona-3-oskar-okonkwo",
+      "name": "Oskar Okonkwo",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed11-team-legal-reliability"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed11-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed11-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed11-kb-legal",
+      "name": "legal knowledge base",
+      "topic": "legal"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed11-repo-cuda-cpp",
+      "name": "legal-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed11-repo-go",
+      "name": "legal-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed11-repo-typescript",
+      "name": "legal-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 11,
+  "generator_version": "world.v1"
+}

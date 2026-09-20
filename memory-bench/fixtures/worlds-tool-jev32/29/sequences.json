@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed29-task0",
+    "title": "Westmark Works initiative: reconcile 3 decisions",
+    "domain": "medical",
+    "goal": "Deliver the current medical initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed29-task0-s0-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-c725a109c49b367e": "the checkout_v2 feature flag state is canary-10% \u2014 by Joaquin Larsen (staff-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed29-task0-s1v1-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-fc925fcc3db10c4b": "the production deploy timeout is 45s \u2014 by Nadia Jorgensen (engineering-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed29-task0-s1v2-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-15bbcda23044d758": "the production deploy timeout is 30s \u2014 by Joaquin Larsen (staff-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-fc925fcc3db10c4b"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed29-task0-s1v3-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-87a9bc899ec19376": "the production deploy timeout is 15s \u2014 by Nadia Bergstrom (support-lead) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-15bbcda23044d758"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed29-task0-s2-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-f304c640eae3a323": "the supported API version is v1 \u2014 by Nadia Jorgensen (engineering-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed29-task0-goal",
+        "user_request": "Deliver the current medical initiative. Using the tool `apply_config`, apply the current value of: the checkout_v2 feature flag state, the production deploy timeout, the supported API version.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-c725a109c49b367e",
+          "m-87a9bc899ec19376",
+          "m-f304c640eae3a323"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed29-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-c725a109c49b367e",
+              "m-87a9bc899ec19376",
+              "m-f304c640eae3a323"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "15s"
+                ],
+                "forbidden_values": [
+                  "45s",
+                  "30s"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed29-task0-probe-feature-flag",
+            "expected_memory_id": "m-c725a109c49b367e",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed29-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-87a9bc899ec19376",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed29-task0-probe-api-version",
+            "expected_memory_id": "m-f304c640eae3a323",
+            "description": "the supported API version must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-ef153d4acc79d9da": "the checkout_v2 feature flag state is disabled \u2014 by Imani Okonkwo (qa-engineer) in #email channel",
+          "m-f62f94a985a36e72": "the production deploy timeout is 60s \u2014 by Joaquin Larsen (staff-engineer) in #email channel",
+          "m-51dc790609b90528": "the supported API version is v2 \u2014 by Nadia Jorgensen (engineering-manager) in #meeting channel"
+        },
+        "superseded_memory_ids": [
+          "m-fc925fcc3db10c4b",
+          "m-15bbcda23044d758"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

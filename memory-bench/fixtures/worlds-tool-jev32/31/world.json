@@ -1,0 +1,96 @@
+{
+  "world_id": "world-seed31",
+  "domain": "cuda-engineering",
+  "org_name": "Meridian Labs",
+  "teams": [
+    {
+      "team_id": "world-seed31-team-cuda-engineering-foundations",
+      "name": "Cuda Engineering Foundations",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed31-team-cuda-engineering-platform",
+      "name": "Cuda Engineering Platform",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed31-team-cuda-engineering-enablement",
+      "name": "Cuda Engineering Enablement",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed31-persona-0-farid-larsen",
+      "name": "Farid Larsen",
+      "role": "staff-engineer",
+      "team_id": "world-seed31-team-cuda-engineering-foundations"
+    },
+    {
+      "persona_id": "world-seed31-persona-1-farid-ibarra",
+      "name": "Farid Ibarra",
+      "role": "researcher",
+      "team_id": "world-seed31-team-cuda-engineering-foundations"
+    },
+    {
+      "persona_id": "world-seed31-persona-2-mateo-nakamura",
+      "name": "Mateo Nakamura",
+      "role": "support-lead",
+      "team_id": "world-seed31-team-cuda-engineering-platform"
+    },
+    {
+      "persona_id": "world-seed31-persona-3-hiroshi-fontaine",
+      "name": "Hiroshi Fontaine",
+      "role": "product-manager",
+      "team_id": "world-seed31-team-cuda-engineering-enablement"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed31-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed31-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    },
+    {
+      "channel_id": "world-seed31-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed31-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed31-kb-cuda-engineering",
+      "name": "cuda-engineering knowledge base",
+      "topic": "cuda-engineering"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed31-repo-rust",
+      "name": "cuda-engineering-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed31-repo-python",
+      "name": "cuda-engineering-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed31-repo-cuda-cpp",
+      "name": "cuda-engineering-cuda-cpp",
+      "language": "cuda-cpp"
+    }
+  ],
+  "seed": 31,
+  "generator_version": "world.v1"
+}

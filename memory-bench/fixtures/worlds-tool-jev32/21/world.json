@@ -1,0 +1,101 @@
+{
+  "world_id": "world-seed21",
+  "domain": "chip-design",
+  "org_name": "Northwind Industries",
+  "teams": [
+    {
+      "team_id": "world-seed21-team-chip-design-platform",
+      "name": "Chip Design Platform",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed21-team-chip-design-enablement",
+      "name": "Chip Design Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed21-team-chip-design-delivery",
+      "name": "Chip Design Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed21-team-chip-design-foundations",
+      "name": "Chip Design Foundations",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed21-persona-0-mateo-ibarra",
+      "name": "Mateo Ibarra",
+      "role": "staff-engineer",
+      "team_id": "world-seed21-team-chip-design-platform"
+    },
+    {
+      "persona_id": "world-seed21-persona-1-priya-jorgensen",
+      "name": "Priya Jorgensen",
+      "role": "qa-engineer",
+      "team_id": "world-seed21-team-chip-design-enablement"
+    },
+    {
+      "persona_id": "world-seed21-persona-2-kenji-ibarra",
+      "name": "Kenji Ibarra",
+      "role": "engineering-manager",
+      "team_id": "world-seed21-team-chip-design-delivery"
+    },
+    {
+      "persona_id": "world-seed21-persona-3-priya-doyle",
+      "name": "Priya Doyle",
+      "role": "researcher",
+      "team_id": "world-seed21-team-chip-design-foundations"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed21-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed21-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed21-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed21-kb-chip-design",
+      "name": "chip-design knowledge base",
+      "topic": "chip-design"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed21-repo-python",
+      "name": "chip-design-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed21-repo-typescript",
+      "name": "chip-design-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed21-repo-rust",
+      "name": "chip-design-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed21-repo-go",
+      "name": "chip-design-go",
+      "language": "go"
+    }
+  ],
+  "seed": 21,
+  "generator_version": "world.v1"
+}

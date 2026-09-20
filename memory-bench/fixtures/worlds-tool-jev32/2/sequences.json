@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed2-task0",
+    "title": "Cobalt Works initiative: reconcile 3 decisions",
+    "domain": "data-infrastructure",
+    "goal": "Deliver the current data-infrastructure initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed2-task0-s0-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-22e83c09f77a455e": "the production deploy timeout is 15s \u2014 by Hiroshi Doyle (staff-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed2-task0-s1v1-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-277c1f07ccfcafc8": "the supported API version is v1 \u2014 by Hiroshi Doyle (staff-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed2-task0-s1v2-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a10d22c5ba5c1ad5": "the supported API version is v2 \u2014 by Priya Kowalski (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-277c1f07ccfcafc8"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed2-task0-s1v3-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-b2583aad1b5e27dd": "the supported API version is v3 \u2014 by Camila Larsen (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-a10d22c5ba5c1ad5"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed2-task0-s2-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ef9f99fa784c3f4b": "the checkout_v2 feature flag state is disabled \u2014 by Priya Kowalski (researcher) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed2-task0-goal",
+        "user_request": "Deliver the current data-infrastructure initiative. Using the tool `apply_config`, apply the current value of: the production deploy timeout, the supported API version, the checkout_v2 feature flag state.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-22e83c09f77a455e",
+          "m-b2583aad1b5e27dd",
+          "m-ef9f99fa784c3f4b"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed2-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-22e83c09f77a455e",
+              "m-b2583aad1b5e27dd",
+              "m-ef9f99fa784c3f4b"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "v3"
+                ],
+                "forbidden_values": [
+                  "v1",
+                  "v2"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed2-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-22e83c09f77a455e",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed2-task0-probe-api-version",
+            "expected_memory_id": "m-b2583aad1b5e27dd",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed2-task0-probe-feature-flag",
+            "expected_memory_id": "m-ef9f99fa784c3f4b",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-746db05c3231a127": "the production deploy timeout is 60s \u2014 by Priya Kowalski (researcher) in #docs channel",
+          "m-d3d2705b389f63fb": "the supported API version is v4 \u2014 by Camila Petrov (support-lead) in #issue-tracker channel",
+          "m-09fe9d4a7db84330": "the checkout_v2 feature flag state is enabled \u2014 by Priya Kowalski (researcher) in #docs channel"
+        },
+        "superseded_memory_ids": [
+          "m-277c1f07ccfcafc8",
+          "m-a10d22c5ba5c1ad5"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

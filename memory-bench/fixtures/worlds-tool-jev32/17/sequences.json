@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed17-task0",
+    "title": "Westmark Works initiative: reconcile 3 decisions",
+    "domain": "medical",
+    "goal": "Deliver the current medical initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed17-task0-s0-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-d0535de40cfd30ad": "the approved rollback command is kubectl rollout undo \u2014 by Esther Jorgensen (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed17-task0-s1v1-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a7dda1f3b8dd6cab": "the production deploy timeout is 45s \u2014 by Nadia Moreau (researcher) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed17-task0-s1v2-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-1c33250e252823dc": "the production deploy timeout is 30s \u2014 by Esther Jorgensen (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-a7dda1f3b8dd6cab"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed17-task0-s1v3-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a19abcb572453dc2": "the production deploy timeout is 60s \u2014 by Bruno Nakamura (legal-counsel) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-1c33250e252823dc"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed17-task0-s2-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-7e9633616585459d": "the data retention window is 90 days \u2014 by Nadia Moreau (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed17-task0-goal",
+        "user_request": "Deliver the current medical initiative. Using the tool `apply_config`, apply the current value of: the approved rollback command, the production deploy timeout, the data retention window.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-d0535de40cfd30ad",
+          "m-a19abcb572453dc2",
+          "m-7e9633616585459d"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed17-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-d0535de40cfd30ad",
+              "m-a19abcb572453dc2",
+              "m-7e9633616585459d"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "60s"
+                ],
+                "forbidden_values": [
+                  "45s",
+                  "30s"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed17-task0-probe-rollback-command",
+            "expected_memory_id": "m-d0535de40cfd30ad",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed17-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-a19abcb572453dc2",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed17-task0-probe-retention-window",
+            "expected_memory_id": "m-7e9633616585459d",
+            "description": "the data retention window must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-a8a8c2f976ed6b21": "the approved rollback command is helm rollback \u2014 by Bruno Nakamura (legal-counsel) in #issue-tracker channel",
+          "m-8dd515186beb1bf0": "the production deploy timeout is 15s \u2014 by Nadia Moreau (researcher) in #issue-tracker channel",
+          "m-ed1620f96a5c8997": "the data retention window is 30 days \u2014 by Esther Jorgensen (support-lead) in #issue-tracker channel"
+        },
+        "superseded_memory_ids": [
+          "m-a7dda1f3b8dd6cab",
+          "m-1c33250e252823dc"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

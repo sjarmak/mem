@@ -1,0 +1,96 @@
+{
+  "world_id": "world-seed3",
+  "domain": "chip-design",
+  "org_name": "Northwind Systems",
+  "teams": [
+    {
+      "team_id": "world-seed3-team-chip-design-delivery",
+      "name": "Chip Design Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed3-team-chip-design-core",
+      "name": "Chip Design Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed3-team-chip-design-enablement",
+      "name": "Chip Design Enablement",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed3-persona-0-farid-okonkwo",
+      "name": "Farid Okonkwo",
+      "role": "researcher",
+      "team_id": "world-seed3-team-chip-design-delivery"
+    },
+    {
+      "persona_id": "world-seed3-persona-1-hiroshi-okonkwo",
+      "name": "Hiroshi Okonkwo",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed3-team-chip-design-core"
+    },
+    {
+      "persona_id": "world-seed3-persona-2-joaquin-larsen",
+      "name": "Joaquin Larsen",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed3-team-chip-design-enablement"
+    },
+    {
+      "persona_id": "world-seed3-persona-3-dmitri-moreau",
+      "name": "Dmitri Moreau",
+      "role": "product-manager",
+      "team_id": "world-seed3-team-chip-design-core"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed3-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed3-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed3-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    },
+    {
+      "channel_id": "world-seed3-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed3-kb-chip-design",
+      "name": "chip-design knowledge base",
+      "topic": "chip-design"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed3-repo-go",
+      "name": "chip-design-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed3-repo-rust",
+      "name": "chip-design-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed3-repo-typescript",
+      "name": "chip-design-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 3,
+  "generator_version": "world.v1"
+}

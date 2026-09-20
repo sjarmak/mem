@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed21-task0",
+    "title": "Northwind Industries initiative: reconcile 3 decisions",
+    "domain": "chip-design",
+    "goal": "Deliver the current chip-design initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed21-task0-s0-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a2cf13e61e164926": "the data retention window is 90 days \u2014 by Priya Jorgensen (qa-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed21-task0-s1-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-03cf7cedbd812cd1": "the checkout_v2 feature flag state is canary-50% \u2014 by Mateo Ibarra (staff-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed21-task0-s2v1-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-e4f3b53380801d24": "the supported API version is v2 \u2014 by Priya Doyle (researcher) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed21-task0-s2v2-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-54e7c09aa78dba6d": "the supported API version is v4 \u2014 by Priya Doyle (researcher) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-e4f3b53380801d24"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed21-task0-s2v3-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-add725d78eb396e4": "the supported API version is v3 \u2014 by Priya Jorgensen (qa-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-54e7c09aa78dba6d"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed21-task0-goal",
+        "user_request": "Deliver the current chip-design initiative. Using the tool `apply_config`, apply the current value of: the data retention window, the checkout_v2 feature flag state, the supported API version.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-a2cf13e61e164926",
+          "m-03cf7cedbd812cd1",
+          "m-add725d78eb396e4"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed21-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-a2cf13e61e164926",
+              "m-03cf7cedbd812cd1",
+              "m-add725d78eb396e4"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "v3"
+                ],
+                "forbidden_values": [
+                  "v2",
+                  "v4"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed21-task0-probe-retention-window",
+            "expected_memory_id": "m-a2cf13e61e164926",
+            "description": "the data retention window must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed21-task0-probe-feature-flag",
+            "expected_memory_id": "m-03cf7cedbd812cd1",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed21-task0-probe-api-version",
+            "expected_memory_id": "m-add725d78eb396e4",
+            "description": "the supported API version must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-4af484b048d3c191": "the data retention window is 1 year \u2014 by Priya Jorgensen (qa-engineer) in #chat channel",
+          "m-99484f0b8b86ec8b": "the checkout_v2 feature flag state is enabled \u2014 by Priya Jorgensen (qa-engineer) in #chat channel",
+          "m-e4aa259c86736ef0": "the supported API version is v1 \u2014 by Kenji Ibarra (engineering-manager) in #issue-tracker channel"
+        },
+        "superseded_memory_ids": [
+          "m-e4f3b53380801d24",
+          "m-54e7c09aa78dba6d"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed9-task0",
+    "title": "Sablefish Industries initiative: reconcile 3 decisions",
+    "domain": "legal",
+    "goal": "Deliver the current legal initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed9-task0-s0v1-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-fb32c1579547fed6": "the primary deployment region is us-west-2 \u2014 by Greta Almeida (engineering-manager) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed9-task0-s0v2-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-5121a4ebe03b68b8": "the primary deployment region is eu-west-1 \u2014 by Imani Castellanos (legal-counsel) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-fb32c1579547fed6"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed9-task0-s0v3-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-2066248910ad6f71": "the primary deployment region is us-east-1 \u2014 by Hiroshi Doyle (site-reliability-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-5121a4ebe03b68b8"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed9-task0-s1-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-8a365b78d657cc0b": "the production deploy timeout is 30s \u2014 by Hiroshi Doyle (site-reliability-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed9-task0-s2-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-6da85c4b07b527e6": "the data retention window is 7 years \u2014 by Imani Castellanos (legal-counsel) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed9-task0-goal",
+        "user_request": "Deliver the current legal initiative. Using the tool `apply_config`, apply the current value of: the primary deployment region, the production deploy timeout, the data retention window.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-2066248910ad6f71",
+          "m-8a365b78d657cc0b",
+          "m-6da85c4b07b527e6"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed9-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-2066248910ad6f71",
+              "m-8a365b78d657cc0b",
+              "m-6da85c4b07b527e6"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "us-east-1"
+                ],
+                "forbidden_values": [
+                  "us-west-2",
+                  "eu-west-1"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed9-task0-probe-primary-region",
+            "expected_memory_id": "m-2066248910ad6f71",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed9-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-8a365b78d657cc0b",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed9-task0-probe-retention-window",
+            "expected_memory_id": "m-6da85c4b07b527e6",
+            "description": "the data retention window must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-573ef29a272ad995": "the primary deployment region is ap-south-1 \u2014 by Greta Almeida (engineering-manager) in #issue-tracker channel",
+          "m-b9309b776e138f44": "the production deploy timeout is 45s \u2014 by Greta Almeida (engineering-manager) in #email channel",
+          "m-b8b4dbab04f47fc6": "the data retention window is 1 year \u2014 by Imani Castellanos (legal-counsel) in #email channel"
+        },
+        "superseded_memory_ids": [
+          "m-fb32c1579547fed6",
+          "m-5121a4ebe03b68b8"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

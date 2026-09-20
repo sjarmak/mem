@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed14",
+  "domain": "cuda-engineering",
+  "org_name": "Lumen Dynamics",
+  "teams": [
+    {
+      "team_id": "world-seed14-team-cuda-engineering-core",
+      "name": "Cuda Engineering Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed14-team-cuda-engineering-enablement",
+      "name": "Cuda Engineering Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed14-team-cuda-engineering-foundations",
+      "name": "Cuda Engineering Foundations",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed14-persona-0-camila-kowalski",
+      "name": "Camila Kowalski",
+      "role": "support-lead",
+      "team_id": "world-seed14-team-cuda-engineering-core"
+    },
+    {
+      "persona_id": "world-seed14-persona-1-camila-nakamura",
+      "name": "Camila Nakamura",
+      "role": "qa-engineer",
+      "team_id": "world-seed14-team-cuda-engineering-enablement"
+    },
+    {
+      "persona_id": "world-seed14-persona-2-leila-jorgensen",
+      "name": "Leila Jorgensen",
+      "role": "staff-engineer",
+      "team_id": "world-seed14-team-cuda-engineering-foundations"
+    },
+    {
+      "persona_id": "world-seed14-persona-3-ada-ibarra",
+      "name": "Ada Ibarra",
+      "role": "researcher",
+      "team_id": "world-seed14-team-cuda-engineering-enablement"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed14-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed14-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed14-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed14-kb-cuda-engineering",
+      "name": "cuda-engineering knowledge base",
+      "topic": "cuda-engineering"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed14-repo-go",
+      "name": "cuda-engineering-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed14-repo-typescript",
+      "name": "cuda-engineering-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed14-repo-cuda-cpp",
+      "name": "cuda-engineering-cuda-cpp",
+      "language": "cuda-cpp"
+    }
+  ],
+  "seed": 14,
+  "generator_version": "world.v1"
+}

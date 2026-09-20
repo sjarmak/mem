@@ -1,0 +1,96 @@
+{
+  "world_id": "world-seed12",
+  "domain": "legal",
+  "org_name": "Sablefish Works",
+  "teams": [
+    {
+      "team_id": "world-seed12-team-legal-delivery",
+      "name": "Legal Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed12-team-legal-enablement",
+      "name": "Legal Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed12-team-legal-core",
+      "name": "Legal Core",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed12-persona-0-hiroshi-nakamura",
+      "name": "Hiroshi Nakamura",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed12-team-legal-delivery"
+    },
+    {
+      "persona_id": "world-seed12-persona-1-dmitri-petrov",
+      "name": "Dmitri Petrov",
+      "role": "product-manager",
+      "team_id": "world-seed12-team-legal-delivery"
+    },
+    {
+      "persona_id": "world-seed12-persona-2-bruno-haddad",
+      "name": "Bruno Haddad",
+      "role": "engineering-manager",
+      "team_id": "world-seed12-team-legal-enablement"
+    },
+    {
+      "persona_id": "world-seed12-persona-3-farid-jorgensen",
+      "name": "Farid Jorgensen",
+      "role": "support-lead",
+      "team_id": "world-seed12-team-legal-core"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed12-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed12-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed12-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed12-kb-legal",
+      "name": "legal knowledge base",
+      "topic": "legal"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed12-repo-typescript",
+      "name": "legal-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed12-repo-python",
+      "name": "legal-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed12-repo-rust",
+      "name": "legal-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed12-repo-go",
+      "name": "legal-go",
+      "language": "go"
+    }
+  ],
+  "seed": 12,
+  "generator_version": "world.v1"
+}

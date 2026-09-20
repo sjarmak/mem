@@ -1,0 +1,8 @@
+{
+  "project_id": "world-seed14-project",
+  "world_id": "world-seed14",
+  "name": "Lumen Dynamics initiative",
+  "goal": "Deliver the current cuda-engineering initiative.",
+  "prd_summary": "Lumen Dynamics is consolidating its cuda engineering tooling onto a single supported path this quarter. The initiative covers migration of the existing enterprise workloads, a documented rollback, and retirement of the superseded configuration.",
+  "task_briefs": []
+}

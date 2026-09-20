@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed25-task0",
+    "title": "Meridian Industries initiative: reconcile 3 decisions",
+    "domain": "legal",
+    "goal": "Deliver the current legal initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed25-task0-s0v1-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-060060d5c0d176b2": "the checkout_v2 feature flag state is enabled \u2014 by Bruno Jorgensen (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed25-task0-s0v2-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ce229705dc15a0b2": "the checkout_v2 feature flag state is disabled \u2014 by Greta Moreau (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-060060d5c0d176b2"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed25-task0-s0v3-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-f52c72b1ee99db30": "the checkout_v2 feature flag state is canary-50% \u2014 by Joaquin Bergstrom (site-reliability-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-ce229705dc15a0b2"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed25-task0-s1-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-d9383f866c2ca1ce": "the approved rollback command is terraform apply -refresh \u2014 by Bruno Jorgensen (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed25-task0-s2-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-79517a206174f772": "the production deploy timeout is 30s \u2014 by Joaquin Bergstrom (site-reliability-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed25-task0-goal",
+        "user_request": "Deliver the current legal initiative. Using the tool `apply_config`, apply the current value of: the checkout_v2 feature flag state, the approved rollback command, the production deploy timeout.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-f52c72b1ee99db30",
+          "m-d9383f866c2ca1ce",
+          "m-79517a206174f772"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed25-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-f52c72b1ee99db30",
+              "m-d9383f866c2ca1ce",
+              "m-79517a206174f772"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "canary-50%"
+                ],
+                "forbidden_values": [
+                  "enabled",
+                  "disabled"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed25-task0-probe-feature-flag",
+            "expected_memory_id": "m-f52c72b1ee99db30",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed25-task0-probe-rollback-command",
+            "expected_memory_id": "m-d9383f866c2ca1ce",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed25-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-79517a206174f772",
+            "description": "the production deploy timeout must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-0d336ab91af81a97": "the checkout_v2 feature flag state is canary-10% \u2014 by Greta Moreau (engineering-manager) in #docs channel",
+          "m-504cb1d0274fd3b5": "the approved rollback command is helm rollback \u2014 by Bruno Jorgensen (engineering-manager) in #docs channel",
+          "m-5963425f3d92b5b1": "the production deploy timeout is 15s \u2014 by Greta Moreau (engineering-manager) in #issue-tracker channel"
+        },
+        "superseded_memory_ids": [
+          "m-060060d5c0d176b2",
+          "m-ce229705dc15a0b2"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

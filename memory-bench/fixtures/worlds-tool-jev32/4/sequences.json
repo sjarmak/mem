@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed4-task0",
+    "title": "Halcyon Collective initiative: reconcile 3 decisions",
+    "domain": "chip-design",
+    "goal": "Deliver the current chip-design initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed4-task0-s0v1-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-9e75fe74aebe246a": "the data retention window is 7 years \u2014 by Oskar Gruber (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed4-task0-s0v2-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-91dc4cb4fd64c87e": "the data retention window is 30 days \u2014 by Kenji Ibarra (product-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-9e75fe74aebe246a"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed4-task0-s0v3-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-4156d03f3cf47ace": "the data retention window is 1 year \u2014 by Oskar Gruber (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-91dc4cb4fd64c87e"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed4-task0-s1-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-75145f82bce694b3": "the production deploy timeout is 60s \u2014 by Dmitri Ibarra (qa-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed4-task0-s2-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-61d3a312fd20e047": "the supported API version is v1 \u2014 by Dmitri Ibarra (qa-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed4-task0-goal",
+        "user_request": "Deliver the current chip-design initiative. Using the tool `apply_config`, apply the current value of: the data retention window, the production deploy timeout, the supported API version.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-4156d03f3cf47ace",
+          "m-75145f82bce694b3",
+          "m-61d3a312fd20e047"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed4-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-4156d03f3cf47ace",
+              "m-75145f82bce694b3",
+              "m-61d3a312fd20e047"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "1 year"
+                ],
+                "forbidden_values": [
+                  "7 years",
+                  "30 days"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed4-task0-probe-retention-window",
+            "expected_memory_id": "m-4156d03f3cf47ace",
+            "description": "the data retention window must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed4-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-75145f82bce694b3",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed4-task0-probe-api-version",
+            "expected_memory_id": "m-61d3a312fd20e047",
+            "description": "the supported API version must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-ff9cbd040ad0bf38": "the data retention window is 90 days \u2014 by Kenji Ibarra (product-manager) in #issue-tracker channel",
+          "m-69eb6ddb5ba6edcc": "the production deploy timeout is 45s \u2014 by Oskar Gruber (engineering-manager) in #email channel",
+          "m-b80eeb436f9b6764": "the supported API version is v2 \u2014 by Oskar Gruber (engineering-manager) in #issue-tracker channel"
+        },
+        "superseded_memory_ids": [
+          "m-9e75fe74aebe246a",
+          "m-91dc4cb4fd64c87e"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

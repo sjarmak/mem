@@ -1,0 +1,86 @@
+{
+  "world_id": "world-seed4",
+  "domain": "chip-design",
+  "org_name": "Halcyon Collective",
+  "teams": [
+    {
+      "team_id": "world-seed4-team-chip-design-foundations",
+      "name": "Chip Design Foundations",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed4-team-chip-design-platform",
+      "name": "Chip Design Platform",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed4-team-chip-design-core",
+      "name": "Chip Design Core",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed4-persona-0-kenji-kowalski",
+      "name": "Kenji Kowalski",
+      "role": "support-lead",
+      "team_id": "world-seed4-team-chip-design-foundations"
+    },
+    {
+      "persona_id": "world-seed4-persona-1-dmitri-ibarra",
+      "name": "Dmitri Ibarra",
+      "role": "qa-engineer",
+      "team_id": "world-seed4-team-chip-design-platform"
+    },
+    {
+      "persona_id": "world-seed4-persona-2-oskar-gruber",
+      "name": "Oskar Gruber",
+      "role": "engineering-manager",
+      "team_id": "world-seed4-team-chip-design-core"
+    },
+    {
+      "persona_id": "world-seed4-persona-3-kenji-ibarra",
+      "name": "Kenji Ibarra",
+      "role": "product-manager",
+      "team_id": "world-seed4-team-chip-design-core"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed4-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed4-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed4-kb-chip-design",
+      "name": "chip-design knowledge base",
+      "topic": "chip-design"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed4-repo-typescript",
+      "name": "chip-design-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed4-repo-python",
+      "name": "chip-design-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed4-repo-rust",
+      "name": "chip-design-rust",
+      "language": "rust"
+    }
+  ],
+  "seed": 4,
+  "generator_version": "world.v1"
+}

@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed31-task0",
+    "title": "Meridian Labs initiative: reconcile 3 decisions",
+    "domain": "cuda-engineering",
+    "goal": "Deliver the current cuda-engineering initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed31-task0-s0-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a43ed6c3c1c73277": "the approved rollback command is git revert then redeploy \u2014 by Farid Larsen (staff-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed31-task0-s1v1-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-f8faf8b8083a43c5": "the checkout_v2 feature flag state is disabled \u2014 by Farid Larsen (staff-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed31-task0-s1v2-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-9d986945f9879699": "the checkout_v2 feature flag state is enabled \u2014 by Farid Ibarra (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-f8faf8b8083a43c5"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed31-task0-s1v3-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-0d0aa2acd59ac886": "the checkout_v2 feature flag state is canary-50% \u2014 by Farid Larsen (staff-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-9d986945f9879699"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed31-task0-s2-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-862f58f44dd838f4": "the supported API version is v2 \u2014 by Farid Larsen (staff-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed31-task0-goal",
+        "user_request": "Deliver the current cuda-engineering initiative. Using the tool `apply_config`, apply the current value of: the approved rollback command, the checkout_v2 feature flag state, the supported API version.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-a43ed6c3c1c73277",
+          "m-0d0aa2acd59ac886",
+          "m-862f58f44dd838f4"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed31-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-a43ed6c3c1c73277",
+              "m-0d0aa2acd59ac886",
+              "m-862f58f44dd838f4"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "canary-50%"
+                ],
+                "forbidden_values": [
+                  "disabled",
+                  "enabled"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed31-task0-probe-rollback-command",
+            "expected_memory_id": "m-a43ed6c3c1c73277",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed31-task0-probe-feature-flag",
+            "expected_memory_id": "m-0d0aa2acd59ac886",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed31-task0-probe-api-version",
+            "expected_memory_id": "m-862f58f44dd838f4",
+            "description": "the supported API version must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-485c3e745e3777a3": "the approved rollback command is helm rollback \u2014 by Farid Larsen (staff-engineer) in #chat channel",
+          "m-c9c45e6ccf776023": "the checkout_v2 feature flag state is canary-10% \u2014 by Hiroshi Fontaine (product-manager) in #issue-tracker channel",
+          "m-d1a636361fdc486f": "the supported API version is v3 \u2014 by Hiroshi Fontaine (product-manager) in #chat channel"
+        },
+        "superseded_memory_ids": [
+          "m-f8faf8b8083a43c5",
+          "m-9d986945f9879699"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

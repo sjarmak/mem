@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed6-task0",
+    "title": "Meridian Labs initiative: reconcile 3 decisions",
+    "domain": "data-infrastructure",
+    "goal": "Deliver the current data-infrastructure initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed6-task0-s0-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-030edf9ad93d9691": "the production deploy timeout is 60s \u2014 by Imani Bergstrom (site-reliability-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed6-task0-s1-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-7eded72ab7a01263": "the approved rollback command is git revert then redeploy \u2014 by Greta Almeida (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed6-task0-s2v1-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a1cbb75a0aca28c4": "the primary deployment region is us-east-1 \u2014 by Greta Almeida (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed6-task0-s2v2-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-c6c62a3d4b4a2684": "the primary deployment region is us-west-2 \u2014 by Imani Bergstrom (site-reliability-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-a1cbb75a0aca28c4"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed6-task0-s2v3-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a09f1e80f771df8b": "the primary deployment region is eu-west-1 \u2014 by Imani Eriksen (qa-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-c6c62a3d4b4a2684"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed6-task0-goal",
+        "user_request": "Deliver the current data-infrastructure initiative. Using the tool `apply_config`, apply the current value of: the production deploy timeout, the approved rollback command, the primary deployment region.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-030edf9ad93d9691",
+          "m-7eded72ab7a01263",
+          "m-a09f1e80f771df8b"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed6-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-030edf9ad93d9691",
+              "m-7eded72ab7a01263",
+              "m-a09f1e80f771df8b"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "eu-west-1"
+                ],
+                "forbidden_values": [
+                  "us-east-1",
+                  "us-west-2"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed6-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-030edf9ad93d9691",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed6-task0-probe-rollback-command",
+            "expected_memory_id": "m-7eded72ab7a01263",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed6-task0-probe-primary-region",
+            "expected_memory_id": "m-a09f1e80f771df8b",
+            "description": "the primary deployment region must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-6ecefa136082507c": "the production deploy timeout is 15s \u2014 by Kenji Jorgensen (site-reliability-engineer) in #issue-tracker channel",
+          "m-07f166efd766521e": "the approved rollback command is helm rollback \u2014 by Greta Almeida (engineering-manager) in #issue-tracker channel",
+          "m-c01ff2f7b758af49": "the primary deployment region is ap-south-1 \u2014 by Imani Eriksen (qa-engineer) in #email channel"
+        },
+        "superseded_memory_ids": [
+          "m-a1cbb75a0aca28c4",
+          "m-c6c62a3d4b4a2684"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

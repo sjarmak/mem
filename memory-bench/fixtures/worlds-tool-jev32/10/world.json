@@ -1,0 +1,96 @@
+{
+  "world_id": "world-seed10",
+  "domain": "medical",
+  "org_name": "Meridian Industries",
+  "teams": [
+    {
+      "team_id": "world-seed10-team-medical-reliability",
+      "name": "Medical Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed10-team-medical-core",
+      "name": "Medical Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed10-team-medical-delivery",
+      "name": "Medical Delivery",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed10-persona-0-ada-petrov",
+      "name": "Ada Petrov",
+      "role": "researcher",
+      "team_id": "world-seed10-team-medical-reliability"
+    },
+    {
+      "persona_id": "world-seed10-persona-1-nadia-moreau",
+      "name": "Nadia Moreau",
+      "role": "engineering-manager",
+      "team_id": "world-seed10-team-medical-core"
+    },
+    {
+      "persona_id": "world-seed10-persona-2-farid-bergstrom",
+      "name": "Farid Bergstrom",
+      "role": "support-lead",
+      "team_id": "world-seed10-team-medical-delivery"
+    },
+    {
+      "persona_id": "world-seed10-persona-3-kenji-castellanos",
+      "name": "Kenji Castellanos",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed10-team-medical-delivery"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed10-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed10-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed10-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    },
+    {
+      "channel_id": "world-seed10-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed10-kb-medical",
+      "name": "medical knowledge base",
+      "topic": "medical"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed10-repo-go",
+      "name": "medical-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed10-repo-cuda-cpp",
+      "name": "medical-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed10-repo-typescript",
+      "name": "medical-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 10,
+  "generator_version": "world.v1"
+}

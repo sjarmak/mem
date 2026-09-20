@@ -1,0 +1,96 @@
+{
+  "world_id": "world-seed16",
+  "domain": "customer-support",
+  "org_name": "Northwind Systems",
+  "teams": [
+    {
+      "team_id": "world-seed16-team-customer-support-delivery",
+      "name": "Customer Support Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed16-team-customer-support-enablement",
+      "name": "Customer Support Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed16-team-customer-support-reliability",
+      "name": "Customer Support Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed16-team-customer-support-platform",
+      "name": "Customer Support Platform",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed16-persona-0-joaquin-nakamura",
+      "name": "Joaquin Nakamura",
+      "role": "support-lead",
+      "team_id": "world-seed16-team-customer-support-delivery"
+    },
+    {
+      "persona_id": "world-seed16-persona-1-nadia-moreau",
+      "name": "Nadia Moreau",
+      "role": "legal-counsel",
+      "team_id": "world-seed16-team-customer-support-enablement"
+    },
+    {
+      "persona_id": "world-seed16-persona-2-bruno-doyle",
+      "name": "Bruno Doyle",
+      "role": "qa-engineer",
+      "team_id": "world-seed16-team-customer-support-reliability"
+    },
+    {
+      "persona_id": "world-seed16-persona-3-dmitri-fontaine",
+      "name": "Dmitri Fontaine",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed16-team-customer-support-platform"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed16-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    },
+    {
+      "channel_id": "world-seed16-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed16-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed16-kb-customer-support",
+      "name": "customer-support knowledge base",
+      "topic": "customer-support"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed16-repo-rust",
+      "name": "customer-support-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed16-repo-python",
+      "name": "customer-support-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed16-repo-cuda-cpp",
+      "name": "customer-support-cuda-cpp",
+      "language": "cuda-cpp"
+    }
+  ],
+  "seed": 16,
+  "generator_version": "world.v1"
+}

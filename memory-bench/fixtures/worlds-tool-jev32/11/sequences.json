@@ -1,0 +1,186 @@
+[
+  {
+    "sequence_id": "world-seed11-task0",
+    "title": "Halcyon Dynamics initiative: reconcile 3 decisions",
+    "domain": "legal",
+    "goal": "Deliver the current legal initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed11-task0-s0-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-6e8afc6246496b69": "the checkout_v2 feature flag state is enabled \u2014 by Leila Larsen (qa-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed11-task0-s1-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-7f25389f10ac97af": "the primary deployment region is eu-west-1 \u2014 by Leila Larsen (qa-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed11-task0-s2v1-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-909352af3101db13": "the production deploy timeout is 15s \u2014 by Oskar Haddad (product-manager) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed11-task0-s2v2-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-29f6baa6108794e6": "the production deploy timeout is 30s \u2014 by Bruno Fontaine (legal-counsel) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-909352af3101db13"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed11-task0-s2v3-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ef442ad199627aa8": "the production deploy timeout is 45s \u2014 by Oskar Haddad (product-manager) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-29f6baa6108794e6"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed11-task0-goal",
+        "user_request": "Deliver the current legal initiative. Using the tool `apply_config`, apply the current value of: the checkout_v2 feature flag state, the primary deployment region, the production deploy timeout.",
+        "available_tools": [
+          "apply_config"
+        ],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-6e8afc6246496b69",
+          "m-7f25389f10ac97af",
+          "m-ef442ad199627aa8"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed11-task0-goal-check",
+            "description": "goal requires calling `apply_config` with the current value of the superseded subject and never a stale one",
+            "requires_memory": [
+              "m-6e8afc6246496b69",
+              "m-7f25389f10ac97af",
+              "m-ef442ad199627aa8"
+            ],
+            "forbidden_values": [],
+            "requires_action": [
+              {
+                "tool": "apply_config",
+                "arg_values": [
+                  "45s"
+                ],
+                "forbidden_values": [
+                  "15s",
+                  "30s"
+                ]
+              }
+            ]
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed11-task0-probe-feature-flag",
+            "expected_memory_id": "m-6e8afc6246496b69",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed11-task0-probe-primary-region",
+            "expected_memory_id": "m-7f25389f10ac97af",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed11-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-ef442ad199627aa8",
+            "description": "the production deploy timeout must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-998c6314ceb3498e": "the checkout_v2 feature flag state is disabled \u2014 by Oskar Okonkwo (site-reliability-engineer) in #docs channel",
+          "m-6799cb5d32a23cc8": "the primary deployment region is us-east-1 \u2014 by Leila Larsen (qa-engineer) in #chat channel",
+          "m-612d9779f6b40129": "the production deploy timeout is 60s \u2014 by Oskar Haddad (product-manager) in #docs channel"
+        },
+        "superseded_memory_ids": [
+          "m-909352af3101db13",
+          "m-29f6baa6108794e6"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null
+  }
+]

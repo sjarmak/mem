@@ -1,0 +1,86 @@
+{
+  "world_id": "world-seed24",
+  "domain": "research-platform",
+  "org_name": "Sablefish Works",
+  "teams": [
+    {
+      "team_id": "world-seed24-team-research-platform-delivery",
+      "name": "Research Platform Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed24-team-research-platform-reliability",
+      "name": "Research Platform Reliability",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed24-persona-0-imani-eriksen",
+      "name": "Imani Eriksen",
+      "role": "engineering-manager",
+      "team_id": "world-seed24-team-research-platform-delivery"
+    },
+    {
+      "persona_id": "world-seed24-persona-1-nadia-kowalski",
+      "name": "Nadia Kowalski",
+      "role": "legal-counsel",
+      "team_id": "world-seed24-team-research-platform-reliability"
+    },
+    {
+      "persona_id": "world-seed24-persona-2-hiroshi-petrov",
+      "name": "Hiroshi Petrov",
+      "role": "engineering-manager",
+      "team_id": "world-seed24-team-research-platform-reliability"
+    },
+    {
+      "persona_id": "world-seed24-persona-3-ada-gruber",
+      "name": "Ada Gruber",
+      "role": "researcher",
+      "team_id": "world-seed24-team-research-platform-delivery"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed24-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed24-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed24-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed24-kb-research-platform",
+      "name": "research-platform knowledge base",
+      "topic": "research-platform"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed24-repo-go",
+      "name": "research-platform-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed24-repo-python",
+      "name": "research-platform-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed24-repo-typescript",
+      "name": "research-platform-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 24,
+  "generator_version": "world.v1"
+}
