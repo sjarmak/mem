@@ -204,20 +204,32 @@ def plant_arm_context(cwd: Path, name: str, *, bd_capability: str | None = None)
     return tuple(planted)
 
 
-def assert_no_memory_command(env: Mapping[str, str]) -> None:
-    """Refuse the fire if the memory command resolves under this leg's effective PATH.
+def assert_no_memory_command(env: Mapping[str, str], *, allow_stub: Path | None = None) -> None:
+    """Refuse the fire if a WORKING memory command resolves under this leg's effective PATH.
 
     The arms that must not have bd are graded on not having reached it, so a PATH on which it
     resolves makes the whole leg unfalsifiable: a null would read as disposition when it could
     be luck. `shutil.which` with the leg's own PATH, never `os.environ` -- the point is the
-    CHILD's lookup, and the harness's own PATH almost always has bd on it."""
+    CHILD's lookup, and the harness's own PATH almost always has bd on it.
+
+    `allow_stub` is the one permitted resolution, and it exists because the floor arm is
+    required to have BOTH properties at once: no store, and the same error surface as a missing
+    command. Those conflict if the gate asks only "does the name resolve" -- the deliberately
+    non-functional stub that exits 127 resolves like any other file. So the gate asks the
+    question it means: does anything OTHER than the stub this arm planted resolve. Passing the
+    stub is an assertion by the caller that it wrote that file; a stub that had been swapped for
+    a working bd would still be at that path, which is why the arms also gate on
+    `endogenous_memory_verbs` being empty in the finished stream."""
     path = env.get("PATH", "")
     found = shutil.which(MEMORY_COMMAND, path=path)
-    if found is not None:
-        raise MemoryArmError(
-            f"{MEMORY_COMMAND!r} resolves to {found} under this leg's PATH, so this arm is not "
-            f"free of it. PATH={path!r}"
-        )
+    if found is None:
+        return
+    if allow_stub is not None and Path(found).resolve() == Path(allow_stub).resolve():
+        return
+    raise MemoryArmError(
+        f"{MEMORY_COMMAND!r} resolves to {found} under this leg's PATH, so this arm is not "
+        f"free of it. PATH={path!r}"
+    )
 
 
 def assert_arms_comparable(arms: Sequence[MemoryArm]) -> None:
