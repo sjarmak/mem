@@ -109,6 +109,33 @@ DEFAULT_CORPUS = Path(__file__).resolve().parents[2] / "fixtures" / "worlds-tool
 VARIANT_NECESSARY = "necessary"
 VARIANT_UNNECESSARY = "unnecessary"
 
+# The two classes mem-xh9vb adds so the corpus stops being solvable by a heading match.
+# The E1 pair above is a LEXICAL TELL: the unnecessary half is the necessary request plus a
+# ``Current state:`` block, so a regex on the heading labels all of it correctly and a model
+# that beats chance has shown nothing. These two break the tell in both directions --
+# ``partial`` carries the heading and still needs memory, ``unnecessary-by-absence`` carries no
+# heading and does not. They share the pair's ``work_id`` for the same reason the pair does.
+VARIANT_PARTIAL = "partial"
+VARIANT_UNNECESSARY_BY_ABSENCE = "unnecessary-by-absence"
+
+# Every class, in the canonical order the four-class corpus emits them.
+VARIANTS = (
+    VARIANT_NECESSARY,
+    VARIANT_UNNECESSARY,
+    VARIANT_UNNECESSARY_BY_ABSENCE,
+    VARIANT_PARTIAL,
+)
+
+# Whether a task of each class needs information the prompt does not carry. This is the X1
+# label and the E1 ``necessary`` half of the discrimination margin; it is ground truth about
+# the CONSTRUCTION, and ``e1_necessity_preflight`` is what checks it against agent behaviour.
+VARIANT_NEEDS_MEMORY = {
+    VARIANT_NECESSARY: True,
+    VARIANT_UNNECESSARY: False,
+    VARIANT_UNNECESSARY_BY_ABSENCE: False,
+    VARIANT_PARTIAL: True,
+}
+
 
 @dataclass(frozen=True)
 class ToolReqRealAgentTask:

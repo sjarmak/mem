@@ -46,10 +46,13 @@ from typing import Any
 
 from membench.generators.enterprise_workflow import fact_subject, fact_value
 from membench.metrics.scorers import states_value
+from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL
 from membench.runner.toolreq_realagent import (
     DEFAULT_CORPUS,
     VARIANT_NECESSARY,
+    VARIANT_PARTIAL,
     VARIANT_UNNECESSARY,
+    VARIANT_UNNECESSARY_BY_ABSENCE,
     ToolReqRealAgentTask,
     load_corpus_with_sequences,
 )
@@ -319,6 +322,218 @@ def unnecessary_twin(task: ToolReqRealAgentTask) -> ToolReqRealAgentTask:
         current_opaque_values=task.current_opaque_values,
         variant=VARIANT_UNNECESSARY,
     )
+
+
+def scored_value(task: ToolReqRealAgentTask) -> str:
+    """The one value a passing ``Write`` must carry — what ``partial`` withholds.
+
+    ``adapt_sequence`` mints exactly one current opaque value per task, so this is a lookup,
+    not a choice. It raises rather than picking a first element if that ever stops holding,
+    because silently withholding an UNSCORED value would leave the partial class solvable
+    without memory and the class would be mislabelled rather than merely odd."""
+    if len(task.current_opaque_values) != 1:
+        raise ValueError(
+            f"{task.work_id}: expected exactly one scored opaque value, got "
+            f"{list(task.current_opaque_values)} — partial_twin cannot choose which to withhold"
+        )
+    return task.current_opaque_values[0]
+
+
+def partial_context_block(task: ToolReqRealAgentTask) -> str:
+    """``context_block`` with the SCORED value's line removed, heading intact.
+
+    The heading is the whole point. A ``partial`` task looks answered — it carries the same
+    ``Current state:`` block the memory-unnecessary half carries — and is not, because the one
+    value the scorer checks is the one the block does not state. A regex on the heading calls
+    it unnecessary and is wrong, which is what makes this the class the experiment rests on."""
+    withheld = scored_value(task)
+    subject_of = _subject_of(task)
+    lines = sorted(
+        f"- {subject_of[value]} is {value}" if value in subject_of else f"- {value}"
+        for value in context_values(task)
+        if value != withheld
+    )
+    if not lines:
+        raise ValueError(
+            f"{task.work_id}: withholding the scored value empties the context block, so the "
+            "partial task is just the necessary task with a bare heading"
+        )
+    return "\n".join([CONTEXT_HEADING, *lines])
+
+
+def partial_twin(task: ToolReqRealAgentTask) -> ToolReqRealAgentTask:
+    """The PARTIAL sibling: the unnecessary twin's request minus the scored value's line.
+
+    Memory is still required — the scorer checks a value the prompt never states — so the
+    label stays ``memory_necessary=True`` and ``oracle_memory`` keeps exactly the facts that
+    carry the withheld value. Everything else matches the unnecessary twin byte for byte:
+    same tool, same ``arg_values``, same ``forbidden_values``, same heading, same sort order.
+
+    Raises if the constructed request states the withheld value (the class would not need
+    memory) or a superseded one (it would reward a stale write)."""
+    if task.variant != VARIANT_NECESSARY:
+        raise ValueError(
+            f"{task.work_id}: can only derive a partial sibling"
+            f" from a {VARIANT_NECESSARY!r} task"
+        )
+    action = _goal_action(task.goal_step)
+    withheld = scored_value(task)
+    block = partial_context_block(task)
+    request = task.goal_step.user_request + CONTEXT_SEPARATOR + block
+    if states_value(request, withheld):
+        raise ValueError(
+            f"{task.work_id}: partial sibling states the withheld scored value {withheld!r}, "
+            "so it does not need memory and is not partial"
+        )
+    for value in context_values(task):
+        if value != withheld and not states_value(request, value):
+            raise ValueError(
+                f"{task.work_id}: partial sibling does not state retained value {value!r}"
+            )
+    for value in action.forbidden_values:
+        if states_value(request, value):
+            raise ValueError(
+                f"{task.work_id}: partial sibling states superseded value {value!r} — it "
+                "would reward a stale write"
+            )
+    # Exactly the facts carrying the withheld value: what a correct arm must surface, and
+    # nothing else, so the oracle ceiling for this class is the withheld value alone.
+    oracle_memory = {
+        key: content
+        for key, content in task.oracle_memory.items()
+        if fact_value(content) == withheld
+    }
+    if not oracle_memory:
+        raise ValueError(
+            f"{task.work_id}: no authored fact carries the withheld value {withheld!r}, so no "
+            "arm could recover it and the partial task would be unsolvable rather than hard"
+        )
+    step_id = f"{task.goal_step.step_id}-{VARIANT_PARTIAL}"
+    goal_step = SequenceStep(
+        step_id=step_id,
+        user_request=request,
+        available_tools=list(task.goal_step.available_tools),
+        expected_memory_reads=list(oracle_memory),
+        memory_necessary=True,
+        outcome_checks=[
+            OutcomeCheck(
+                check_id=step_id,
+                description=(
+                    "partial sibling: the state block states every required value except the "
+                    "scored one, which the Write must still carry and only memory supplies"
+                ),
+                requires_memory=list(oracle_memory),
+                requires_action=[
+                    ExpectedAction(
+                        tool=action.tool,
+                        arg_values=list(action.arg_values),
+                        forbidden_values=list(action.forbidden_values),
+                    )
+                ],
+            )
+        ],
+    )
+    return ToolReqRealAgentTask(
+        work_id=task.work_id,
+        goal_step=goal_step,
+        oracle_memory=oracle_memory,
+        current_opaque_values=task.current_opaque_values,
+        variant=VARIANT_PARTIAL,
+    )
+
+
+def unnecessary_by_absence_twin(task: ToolReqRealAgentTask) -> ToolReqRealAgentTask:
+    """The UNNECESSARY-BY-ABSENCE sibling: a self-contained goal with no state block at all.
+
+    The other three classes all phrase the goal as a LOOKUP — "apply the current value of
+    <subject>" — and then either withhold the values, supply them, or supply all but one. This
+    one drops the lookup framing entirely and names the values as literals in the instruction
+    itself. Nothing is referred to that the prompt does not carry, so no prior session could
+    hold anything this task needs, and there is no ``Current state:`` heading anywhere.
+
+    It is the mirror of ``partial`` against the lexical tell: a regex on the heading finds none
+    and calls this task memory-necessary, and is wrong. With both classes present the heading
+    match scores at chance over the four-class corpus, which is the condition under which a
+    model result means anything.
+
+    Scoring is unchanged — same tool, same ``arg_values``, same ``forbidden_values`` — so a
+    task of this class passes only by writing the current value and never a stale one."""
+    if task.variant != VARIANT_NECESSARY:
+        raise ValueError(
+            f"{task.work_id}: can only derive an absence sibling from a {VARIANT_NECESSARY!r} task"
+        )
+    action = _goal_action(task.goal_step)
+    values = context_values(task)
+    # Canonical order, same sort as the context block, so the only difference from the other
+    # classes is the framing and never the order the values arrive in.
+    listed = ", ".join(values)
+    request = (
+        f"Using the {REAL_TOOL} tool, write these values to a file named {CONFIG_FILE} in the "
+        f"current directory: {listed}. Write only the value(s), nothing else."
+    )
+    if CONTEXT_HEADING in request:
+        raise ValueError(
+            f"{task.work_id}: absence sibling carries the {CONTEXT_HEADING!r} heading, which is "
+            "the one thing that distinguishes it from the unnecessary twin"
+        )
+    for value in values:
+        if not states_value(request, value):
+            raise ValueError(
+                f"{task.work_id}: absence sibling does not state required value {value!r}"
+            )
+    for value in action.forbidden_values:
+        if states_value(request, value):
+            raise ValueError(
+                f"{task.work_id}: absence sibling states superseded value {value!r} — it would "
+                "reward a stale write"
+            )
+    step_id = f"{task.goal_step.step_id}-{VARIANT_UNNECESSARY_BY_ABSENCE}"
+    goal_step = SequenceStep(
+        step_id=step_id,
+        user_request=request,
+        available_tools=list(task.goal_step.available_tools),
+        expected_memory_reads=[],
+        memory_necessary=False,
+        outcome_checks=[
+            OutcomeCheck(
+                check_id=step_id,
+                description=(
+                    "absence sibling: a self-contained instruction naming the values as "
+                    "literals, with no lookup framing and no state block"
+                ),
+                requires_memory=[],
+                requires_action=[
+                    ExpectedAction(
+                        tool=action.tool,
+                        arg_values=list(action.arg_values),
+                        forbidden_values=list(action.forbidden_values),
+                    )
+                ],
+            )
+        ],
+    )
+    return ToolReqRealAgentTask(
+        work_id=task.work_id,
+        goal_step=goal_step,
+        oracle_memory={},
+        current_opaque_values=task.current_opaque_values,
+        variant=VARIANT_UNNECESSARY_BY_ABSENCE,
+    )
+
+
+def four_class_tasks(tasks: Sequence[ToolReqRealAgentTask]) -> list[ToolReqRealAgentTask]:
+    """Every task followed by its three siblings, in ``VARIANTS`` order.
+
+    Kept separate from ``twin_tasks`` rather than replacing it: both paid E1 grids walk the
+    two-class corpus and pair on adjacency, and quietly doubling what they iterate would
+    change what those grids measure. mem-xh9vb's X1 is the only caller of this one."""
+    out: list[ToolReqRealAgentTask] = []
+    for task in tasks:
+        out.append(task)
+        out.append(unnecessary_twin(task))
+        out.append(unnecessary_by_absence_twin(task))
+        out.append(partial_twin(task))
+    return out
 
 
 def twin_tasks(tasks: Sequence[ToolReqRealAgentTask]) -> list[ToolReqRealAgentTask]:
