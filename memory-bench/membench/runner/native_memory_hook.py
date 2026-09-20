@@ -3,8 +3,15 @@
 The scoring path in `tool_surface` reads a finished stream: it says what a leg did once the leg
 is over, for the legs that survived to be scored. This module installs the same recognition as a
 `PreToolUse` hook inside the leg's own `CLAUDE_CONFIG_DIR`, so the reach is recorded at the moment
-the agent makes it, and — in `redirect` mode only — the call is refused with a message naming the
+the agent makes it, and — in `redirect` mode — the call is refused with a message naming the
 `bd` verbs instead.
+
+THREE modes, and the third is not a variant of the second. `deny` refuses the call and names no
+alternative, because the arm it is installed for (`none`, the floor) must not learn that a memory
+tool exists at all; and it decides on the WIDE predicate, `config_dir_leak_accesses`, because the
+thing it has to keep out is the session transcript at `projects/<slug>/*.jsonl` — a verbatim copy
+of the establish leg's answer that carries no `memory` path segment and is therefore invisible to
+the narrow recognizer the other two modes use.
 
 ONE recognizer, not two. The hook subprocess imports `tool_surface.native_memory_accesses` and
 decides with it; nothing here re-derives which paths count. A second copy of that grammar would
@@ -31,17 +38,20 @@ from .tool_surface import (
     MEMORY_COMMAND,
     MEMORY_READ_VERBS,
     MEMORY_WRITE_VERBS,
+    NATIVE_MEMORY_HOOK_DENY_REASON,
     NATIVE_MEMORY_HOOK_EVENT,
     NATIVE_MEMORY_HOOK_EXIT_ALLOW,
     NATIVE_MEMORY_HOOK_EXIT_BLOCK,
     NATIVE_MEMORY_HOOK_LOG_NAME,
     NATIVE_MEMORY_HOOK_MODE_DEFAULT,
+    NATIVE_MEMORY_HOOK_MODE_DENY,
     NATIVE_MEMORY_HOOK_MODE_REDIRECT,
     NATIVE_MEMORY_HOOK_MODES,
     NATIVE_MEMORY_HOOK_REDIRECT_REASON,
     NATIVE_MEMORY_HOOK_SCRIPT_NAME,
     NATIVE_MEMORY_HOOK_TOOLS,
     MemoryToolError,
+    config_dir_leak_accesses,
     native_memory_accesses,
 )
 
@@ -130,7 +140,7 @@ def _script_body(*, config_dir: Path, log_path: Path, mode: str) -> str:
 
 
 def hook_decision(payload: str, *, config_dir: str, log_path: str, mode: str) -> int:
-    """Decide ONE pending tool call: record it, and block it in `redirect` mode.
+    """Decide ONE pending tool call: record it, and block it in `redirect` and `deny` modes.
 
     Every failure of this function's own is an ALLOW. A hook that exits 2 because its input was
     malformed would block a tool call the agent was entitled to make and publish that as the
@@ -143,7 +153,12 @@ def hook_decision(payload: str, *, config_dir: str, log_path: str, mode: str) ->
         arguments = event.get("tool_input") or {}
         if not isinstance(arguments, dict):
             arguments = {}
-        accesses = native_memory_accesses(
+        recognize = (
+            config_dir_leak_accesses
+            if mode == NATIVE_MEMORY_HOOK_MODE_DENY
+            else native_memory_accesses
+        )
+        accesses = recognize(
             [ToolCall(name=name, arguments=arguments)], config_dir=Path(config_dir)
         )
     except Exception as exc:  # see the docstring: a hook fault is never a block
@@ -161,10 +176,13 @@ def hook_decision(payload: str, *, config_dir: str, log_path: str, mode: str) ->
             "session_id": event.get("session_id", ""),
         },
     )
-    if mode != NATIVE_MEMORY_HOOK_MODE_REDIRECT:
-        return NATIVE_MEMORY_HOOK_EXIT_ALLOW
-    print(redirect_reason(), file=sys.stderr)
-    return NATIVE_MEMORY_HOOK_EXIT_BLOCK
+    if mode == NATIVE_MEMORY_HOOK_MODE_REDIRECT:
+        print(redirect_reason(), file=sys.stderr)
+        return NATIVE_MEMORY_HOOK_EXIT_BLOCK
+    if mode == NATIVE_MEMORY_HOOK_MODE_DENY:
+        print(NATIVE_MEMORY_HOOK_DENY_REASON, file=sys.stderr)
+        return NATIVE_MEMORY_HOOK_EXIT_BLOCK
+    return NATIVE_MEMORY_HOOK_EXIT_ALLOW
 
 
 def _append(log: Path, record: dict[str, Any]) -> None:

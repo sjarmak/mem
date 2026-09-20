@@ -95,7 +95,7 @@ import shutil
 import stat
 import subprocess
 import types
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 from typing import Literal
@@ -287,10 +287,18 @@ NATIVE_MEMORY_BASH_WRAPPER_VALUE_FLAGS: tuple[tuple[str, str], ...] = (
 NATIVE_MEMORY_BASH_WRITE_REDIRECTS: tuple[str, ...] = (">", ">>", ">|", "&>", "&>>")
 NATIVE_MEMORY_BASH_READ_REDIRECTS: tuple[str, ...] = ("<",)
 
-# Where one shell command ends and the next begins, as `shlex` tokenises them.
+# Where one shell command ends and the next begins, as `shlex` tokenises them. The backtick is
+# here for the same reason `(` is: it opens a command substitution, and the command inside it is
+# a reader in its own right. Without it ``echo `cat <pinned path>` `` is one segment whose
+# command word is `echo`, which is non-accessing, so the `cat` is never seen. Found by the
+# pre-registered spelling battery in `tests/test_native_memory_hook.py`.
 NATIVE_MEMORY_BASH_SEGMENT_BREAKS: frozenset[str] = frozenset(
-    {"|", "||", "|&", "&&", ";", ";;", "&", "(", ")"}
+    {"|", "||", "|&", "&&", ";", ";;", "&", "(", ")", "`", "``"}
 )
+
+# `shlex`'s own default is "();<>|&"; the backtick is added so it is emitted as a token of its
+# own rather than glued to the word beside it (`` `cat `` would otherwise tokenise as one word).
+NATIVE_MEMORY_BASH_PUNCTUATION_CHARS = "();<>|&`"
 
 # What ends a path embedded inside a larger token (`open('/cfg/.../MEMORY.md').read()`,
 # `if=/cfg/.../MEMORY.md`): the scan starts at the pinned config dir's own spelling and runs to
@@ -395,9 +403,25 @@ NATIVE_MEMORY_HOOK_SCRIPT_NAME = "native-memory-hook.py"
 NATIVE_MEMORY_HOOK_LOG_NAME = "native-memory-reaches.jsonl"
 NATIVE_MEMORY_HOOK_MODE_OBSERVE = "observe"
 NATIVE_MEMORY_HOOK_MODE_REDIRECT = "redirect"
+# `deny`: block every reach into the pinned config dir and name NO alternative.
+#
+# It exists because `redirect` cannot be used by an arm that is not allowed to know about bd.
+# `redirect`'s message is rendered from MEMORY_COMMAND and the verb tables, so installing it on
+# the `none` floor would hand the floor the name of the subject under test at the exact moment
+# the agent was reaching for memory — the floor would be a coached arm and the contrast would be
+# measuring the hook's prose. `deny` refuses and says only that the path is not available.
+#
+# It is also WIDER than the other two modes: `observe` and `redirect` decide on
+# `_is_native_memory_path` (containment plus a `memory` segment), and `deny` decides on
+# `_is_config_dir_leak_path` (containment, minus the arm's own machinery). The reason is the
+# session transcript: `<config>/projects/<slug>/*.jsonl` carries a prior leg's answer verbatim
+# and has no `memory` segment, so a mode built to keep an arm's memory empty has to cover the
+# whole pinned directory rather than the memory subtree alone.
+NATIVE_MEMORY_HOOK_MODE_DENY = "deny"
 NATIVE_MEMORY_HOOK_MODES: tuple[str, ...] = (
     NATIVE_MEMORY_HOOK_MODE_OBSERVE,
     NATIVE_MEMORY_HOOK_MODE_REDIRECT,
+    NATIVE_MEMORY_HOOK_MODE_DENY,
 )
 # What a paid grid installs unless it says otherwise. `observe`: the instrument, not the
 # treatment.
@@ -416,6 +440,22 @@ NATIVE_MEMORY_HOOK_REDIRECT_REASON = (
 # the script's own faults exit 0 and leave a `hook_error` line in the log.
 NATIVE_MEMORY_HOOK_EXIT_ALLOW = 0
 NATIVE_MEMORY_HOOK_EXIT_BLOCK = 2
+
+# What `deny` puts on stderr. It names no command, no verb and no alternative surface, because
+# every word of it reaches an arm that must not be told what the other arms have. It is a policy
+# constant for the same reason the redirect reason is: reword it and every leg run under it ran
+# under different guidance.
+NATIVE_MEMORY_HOOK_DENY_REASON = (
+    "That path is not available in this session. Work from the repository and the task "
+    "description."
+)
+
+# The files inside the pinned config dir that `deny` still lets through: the arm's OWN machinery,
+# which the harness put there and which carries nothing from any other leg. Matched on the name
+# at the TOP level of the pin only, so `projects/<slug>/settings.json` is not exempt.
+CONFIG_DIR_LEAK_EXEMPT_NAMES: frozenset[str] = frozenset(
+    {"settings.json", NATIVE_MEMORY_HOOK_SCRIPT_NAME, NATIVE_MEMORY_HOOK_LOG_NAME}
+)
 
 
 # The bd a shim wraps, overridable so an operator can pin a patched build (the beads_ordering rig
@@ -864,8 +904,17 @@ _POLICY_PREFIXES: tuple[str, ...] = (
 # anchor: value words and leading value operands are policy-enumerated and never anchored);
 # 4 = every access carries `satisfied`, so a leg scores reached-for and obtained separately;
 # 5 = remember content is positional, `--` preserves literal operands, and retained content
-# requires an attributable storage acknowledgement matching any explicit key.
-RECOGNIZER_IMPLEMENTATION_VERSION = 5
+# requires an attributable storage acknowledgement matching any explicit key; 6 = the path
+# walk is parameterised by the containment predicate, so `config_dir_leak_accesses` reaches
+# the whole pin through the same doors `native_memory_accesses` reaches the memory subtree
+# through. The native predicate's decisions are unchanged; the number moves because the walk
+# they are made in is now shared, and a resume must not serve a pre-share leg for a post-share
+# one on the strength of the decisions having happened to agree. Version 6 also closes a hole
+# the parameterisation exposed: the backtick is now a segment break, so a reader inside a
+# backticked command substitution is its own segment instead of being swallowed by a
+# non-accessing `echo`. That fix applies to EVERY mode, not only `deny`, so legs recorded
+# under 5 undercount this spelling.
+RECOGNIZER_IMPLEMENTATION_VERSION = 6
 
 
 def _policy_value(name: str, value: object) -> object:
@@ -1841,13 +1890,40 @@ def _is_native_memory_path(path: str, *, config_dir: Path) -> bool:
     return NATIVE_MEMORY_SEGMENT in relative.parts
 
 
+def _is_config_dir_leak_path(path: str, *, config_dir: Path) -> bool:
+    """Containment in the PINNED config dir, minus the arm's own machinery.
+
+    The wide sibling of `_is_native_memory_path`, and deliberately not a generalisation of it:
+    the two answer different questions and both are wanted. "Did the agent use native memory"
+    is the ladder's behavioural endpoint and must keep meaning the memory files. "Did the agent
+    read anything in the pin it was not given" is a validity gate, and it has to cover
+    `projects/<slug>/<session>.jsonl`, which holds a prior leg's transcript verbatim, carries no
+    `memory` segment, and is therefore invisible to the narrow predicate.
+
+    Exempt: the top-level files the harness itself wrote (`CONFIG_DIR_LEAK_EXEMPT_NAMES`). A
+    nested file of the same name is not exempt."""
+    if not path:
+        return False
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        return False
+    try:
+        relative = candidate.resolve().relative_to(Path(config_dir).resolve())
+    except ValueError:
+        return False
+    # The pin's own root counts. `grep -r <token> $CLAUDE_CONFIG_DIR` names the directory and
+    # reads every file under it, which is the widest version of the leak this predicate exists
+    # for; excusing the root because it is not itself a file would excuse exactly that command.
+    return not (len(relative.parts) == 1 and relative.parts[0] in CONFIG_DIR_LEAK_EXEMPT_NAMES)
+
+
 def _bash_tokens(command: str) -> tuple[list[str], bool]:
     """The shell's own tokenisation, with operators as their own tokens, and whether it FAILED.
 
     An unterminated quote is a command the shell would refuse too, but the path is still in the
     text and a model writes such a command by accident: the scan falls back to a whitespace
     split rather than attributing nothing, and the failure is flagged on every access found."""
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=NATIVE_MEMORY_BASH_PUNCTUATION_CHARS)
     lexer.whitespace_split = True
     try:
         return list(lexer), False
@@ -2044,7 +2120,13 @@ def _embedded_runs(text: str, *, prefix: str) -> list[str]:
 
 
 def _pinned_paths(
-    use: _BashPathUse, *, config_dir: Path, cwd: str, in_pin: bool, tokenizer_failed: bool
+    use: _BashPathUse,
+    *,
+    config_dir: Path,
+    cwd: str,
+    in_pin: bool,
+    tokenizer_failed: bool,
+    is_pinned: Callable[..., bool],
 ) -> list[str]:
     """Every path ``use.token`` names under the pinned config dir.
 
@@ -2055,18 +2137,23 @@ def _pinned_paths(
     tokens still carry the quote and separator characters shlex would have consumed)."""
     if not tokenizer_failed:
         whole = _whole_token_path(use, config_dir=config_dir, cwd=cwd, in_pin=in_pin)
-        if whole and _is_native_memory_path(whole, config_dir=config_dir):
+        if whole and is_pinned(whole, config_dir=config_dir):
             return [whole]
     expanded = _expand_pinned(use.token, config_dir=config_dir)
     return [
         run
         for run in _embedded_runs(expanded, prefix=str(config_dir))
-        if _is_native_memory_path(run, config_dir=config_dir)
+        if is_pinned(run, config_dir=config_dir)
     ]
 
 
 def _bash_accesses(
-    command: str, *, config_dir: Path, call_index: int, satisfied: bool | None
+    command: str,
+    *,
+    config_dir: Path,
+    call_index: int,
+    satisfied: bool | None,
+    is_pinned: Callable[..., bool] = _is_native_memory_path,
 ) -> list[NativeMemoryAccess]:
     """Every native-memory access one shell command makes, segment by segment.
 
@@ -2087,7 +2174,7 @@ def _bash_accesses(
             if target and cwd and not PurePosixPath(target).is_absolute():
                 target = str(PurePosixPath(cwd) / target)
             cwd = target
-            in_pin = _is_native_memory_path(cwd, config_dir=config_dir)
+            in_pin = is_pinned(cwd, config_dir=config_dir)
             continue
         for use in [*_command_path_uses(words), *uses]:
             for path in _pinned_paths(
@@ -2096,6 +2183,7 @@ def _bash_accesses(
                 cwd=cwd,
                 in_pin=in_pin,
                 tokenizer_failed=tokenizer_failed,
+                is_pinned=is_pinned,
             ):
                 found.append(
                     NativeMemoryAccess(
@@ -2128,16 +2216,15 @@ def call_satisfied(call: ToolCall) -> bool | None:
     return not call.is_error
 
 
-def native_memory_accesses(
-    calls: Iterable[ToolCall], *, config_dir: Path | None
+def _pinned_accesses(
+    calls: Iterable[ToolCall], *, config_dir: Path | None, is_pinned: Callable[..., bool]
 ) -> list[NativeMemoryAccess]:
-    """Every native-memory access across ``calls``, in stream order — through the file tools
-    (``Read``/``Write``/``Edit``) and through a shell command that names the pinned path.
+    """The shared walk behind `native_memory_accesses` and `config_dir_leak_accesses`.
 
-    ``config_dir=None`` means the surface pins no config dir, so there is no path the harness owns
-    and nothing can be attributed — it returns nothing rather than guessing, because a recognizer
-    that fell back to matching ``~/.claude`` would count a read of the OPERATOR's memory as the
-    agent's own."""
+    ONE walk, two predicates. The tool-argument door, the shell door, the `cd` anchoring and the
+    embedded-run scan are the parts that are hard to get right and expensive to get wrong; a
+    second copy of them for the leak gate would agree with this one until the day it did not,
+    and that day is the one the gate was installed for."""
     if config_dir is None:
         return []
     found: list[NativeMemoryAccess] = []
@@ -2149,13 +2236,14 @@ def native_memory_accesses(
                     config_dir=config_dir,
                     call_index=index,
                     satisfied=call_satisfied(call),
+                    is_pinned=is_pinned,
                 )
             )
             continue
         if call.name not in NATIVE_MEMORY_TOOL_NAMES:
             continue
         path = _path_of(call)
-        if not _is_native_memory_path(path, config_dir=config_dir):
+        if not is_pinned(path, config_dir=config_dir):
             continue
         found.append(
             NativeMemoryAccess(
@@ -2167,6 +2255,34 @@ def native_memory_accesses(
             )
         )
     return found
+
+
+def config_dir_leak_accesses(
+    calls: Iterable[ToolCall], *, config_dir: Path | None
+) -> list[NativeMemoryAccess]:
+    """Every reach into the pinned config dir that is not the arm's own machinery.
+
+    The validity gate's instrument, not the ladder's. A non-empty result on an arm that was
+    supposed to have no durable memory voids that work_id: the transcript files under
+    `projects/<slug>/` carry a prior leg's answer verbatim, so one read of one of them is enough
+    to explain a success without any memory system being involved.
+
+    Superset of `native_memory_accesses` by construction, so on the `builtin` arm — where the
+    native files ARE the arm — it is the wrong instrument and the narrow one is used instead."""
+    return _pinned_accesses(calls, config_dir=config_dir, is_pinned=_is_config_dir_leak_path)
+
+
+def native_memory_accesses(
+    calls: Iterable[ToolCall], *, config_dir: Path | None
+) -> list[NativeMemoryAccess]:
+    """Every native-memory access across ``calls``, in stream order — through the file tools
+    (``Read``/``Write``/``Edit``) and through a shell command that names the pinned path.
+
+    ``config_dir=None`` means the surface pins no config dir, so there is no path the harness owns
+    and nothing can be attributed — it returns nothing rather than guessing, because a recognizer
+    that fell back to matching ``~/.claude`` would count a read of the OPERATOR's memory as the
+    agent's own."""
+    return _pinned_accesses(calls, config_dir=config_dir, is_pinned=_is_native_memory_path)
 
 
 def native_memory_calls(calls: Iterable[ToolCall], *, config_dir: Path | None) -> int:

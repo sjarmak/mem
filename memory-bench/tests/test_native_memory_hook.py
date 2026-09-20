@@ -23,17 +23,26 @@ from membench.runner.native_memory_hook import (
     redirect_reason,
 )
 from membench.runner.tool_surface import (
+    CONFIG_DIR_LEAK_EXEMPT_NAMES,
     MEMORY_COMMAND,
+    MEMORY_READ_VERBS,
+    MEMORY_WRITE_VERBS,
+    NATIVE_MEMORY_HOOK_DENY_REASON,
     NATIVE_MEMORY_HOOK_EVENT,
     NATIVE_MEMORY_HOOK_EXIT_ALLOW,
     NATIVE_MEMORY_HOOK_EXIT_BLOCK,
+    NATIVE_MEMORY_HOOK_MODE_DENY,
     NATIVE_MEMORY_HOOK_MODE_OBSERVE,
     NATIVE_MEMORY_HOOK_MODE_REDIRECT,
+    NATIVE_MEMORY_HOOK_MODES,
     NATIVE_MEMORY_HOOK_SCRIPT_NAME,
     MemoryToolError,
+    config_dir_leak_accesses,
+    native_memory_accesses,
     recognizer_policy,
     surface_fingerprint,
 )
+from membench.schemas.trace import ToolCall
 
 
 def _fire(config_dir: Path, payload: dict[str, object]) -> subprocess.CompletedProcess[str]:
@@ -239,3 +248,154 @@ def test_redirect_distinguishes_exact_keys_from_search_queries() -> None:
     assert "bd recall <key>" in reason
     assert "bd memories <query>" in reason
     assert "bd recall <query>" not in reason
+
+
+# --- `deny`: the floor arm's enforcement -------------------------------------------------------
+#
+# `deny` exists because `redirect` cannot be installed on an arm that must not learn bd exists,
+# and because the thing it has to keep out is not the memory subtree. The session transcript at
+# `projects/<slug>/<session>.jsonl` holds the establish leg's answer verbatim and carries no
+# `memory` path segment, so the narrow recognizer the other two modes use cannot see it at all.
+#
+# The spelling battery below is the point of this block. A source gate that only catches the one
+# spelling its author thought of has passed here before and bitten later (mem-e0b): every probe
+# is a spelling an agent would plausibly reach for, and each one is asserted to BLOCK.
+
+TRANSCRIPT_TOKEN = "zt-7Q4W-KEEPOUT"
+
+
+def _transcript(config_dir: Path) -> Path:
+    """The leaked file: a session transcript inside the pin, holding a prior leg's answer."""
+    path = config_dir / "projects" / "-home-ds-projects-mem" / "sess-01.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"text": f"the value is {TRANSCRIPT_TOKEN}"}) + "\n", "utf-8")
+    return path
+
+
+def _bash(command: str) -> dict[str, object]:
+    return {"tool_name": "Bash", "tool_input": {"command": command}, "session_id": "s-deny"}
+
+
+def test_deny_blocks_the_memory_file_and_names_no_alternative(tmp_path: Path) -> None:
+    """Blocking is the easy half. Saying nothing is the half that matters: one mention of the
+    command here and the floor arm has been coached in the subject under test, at the exact
+    moment it was reaching for memory."""
+    config_dir = tmp_path / "config"
+    log = install_native_memory_hook(config_dir, mode=NATIVE_MEMORY_HOOK_MODE_DENY)
+
+    done = _fire(config_dir, _read_of(config_dir))
+
+    assert done.returncode == NATIVE_MEMORY_HOOK_EXIT_BLOCK
+    assert done.stderr.strip() == NATIVE_MEMORY_HOOK_DENY_REASON
+    assert MEMORY_COMMAND not in done.stderr
+    for verb in (*MEMORY_READ_VERBS, *MEMORY_WRITE_VERBS):
+        assert verb not in done.stderr
+    assert len(hook_reaches(log)) == 1
+
+
+def test_the_narrow_recognizer_cannot_see_the_transcript_leak(tmp_path: Path) -> None:
+    """The reason `deny` needed its own predicate, asserted rather than asserted-about. If this
+    ever starts failing, the wide predicate has stopped being necessary and should be re-argued
+    rather than quietly kept."""
+    config_dir = tmp_path / "config"
+    transcript = _transcript(config_dir)
+    call = ToolCall(name="Read", arguments={"file_path": str(transcript)})
+
+    assert native_memory_accesses([call], config_dir=config_dir) == []
+    (leak,) = config_dir_leak_accesses([call], config_dir=config_dir)
+    assert leak.path == str(transcript)
+
+
+@pytest.mark.parametrize(
+    ("label", "spelling"),
+    [
+        ("plain cat", "cat {path}"),
+        ("command substitution", "echo $(cat {path})"),
+        ("backticks", "echo `cat {path}`"),
+        ("sed range", "sed -n 1,5p {path}"),
+        ("env wrapper", "env cat {path}"),
+        ("head through a pipe", "cat {path} | head -1"),
+        ("recursive grep over the pin", "grep -r " + TRANSCRIPT_TOKEN + " {config_dir}"),
+        ("cd then a relative read", "cd {parent} && cat sess-01.jsonl"),
+        (
+            "the pinned variable",
+            'cat "$CLAUDE_CONFIG_DIR/projects/-home-ds-projects-mem/' 'sess-01.jsonl"',
+        ),
+    ],
+)
+def test_deny_blocks_every_idiomatic_spelling_of_the_transcript_read(
+    tmp_path: Path, label: str, spelling: str
+) -> None:
+    config_dir = tmp_path / "config"
+    transcript = _transcript(config_dir)
+    log = install_native_memory_hook(config_dir, mode=NATIVE_MEMORY_HOOK_MODE_DENY)
+
+    command = spelling.format(path=transcript, parent=transcript.parent, config_dir=config_dir)
+    done = _fire(config_dir, _bash(command))
+
+    assert done.returncode == NATIVE_MEMORY_HOOK_EXIT_BLOCK, f"{label} was allowed: {command}"
+    assert done.stderr.strip() == NATIVE_MEMORY_HOOK_DENY_REASON
+    assert hook_reaches(log), label
+
+
+def test_deny_blocks_a_direct_read_of_the_transcript(tmp_path: Path) -> None:
+    config_dir = tmp_path / "config"
+    transcript = _transcript(config_dir)
+    install_native_memory_hook(config_dir, mode=NATIVE_MEMORY_HOOK_MODE_DENY)
+
+    done = _fire(
+        config_dir,
+        {"tool_name": "Read", "tool_input": {"file_path": str(transcript)}, "session_id": "s"},
+    )
+
+    assert done.returncode == NATIVE_MEMORY_HOOK_EXIT_BLOCK
+
+
+def test_deny_lets_the_arms_own_machinery_through(tmp_path: Path) -> None:
+    """The exemption, and its limit. `settings.json` at the top of the pin is the harness's own
+    file and carries nothing from any leg; the same name nested under `projects/` is not the same
+    file and is not exempt."""
+    config_dir = tmp_path / "config"
+    install_native_memory_hook(config_dir, mode=NATIVE_MEMORY_HOOK_MODE_DENY)
+    nested = config_dir / "projects" / "slug" / "settings.json"
+    nested.parent.mkdir(parents=True, exist_ok=True)
+    nested.write_text("{}", "utf-8")
+
+    for name in sorted(CONFIG_DIR_LEAK_EXEMPT_NAMES):
+        done = _fire(
+            config_dir,
+            {"tool_name": "Read", "tool_input": {"file_path": str(config_dir / name)}},
+        )
+        assert done.returncode == NATIVE_MEMORY_HOOK_EXIT_ALLOW, name
+
+    done = _fire(config_dir, {"tool_name": "Read", "tool_input": {"file_path": str(nested)}})
+    assert done.returncode == NATIVE_MEMORY_HOOK_EXIT_BLOCK
+
+
+def test_a_path_outside_the_pin_is_not_a_leak(tmp_path: Path) -> None:
+    """The predicate is containment-anchored, not name-anchored. The operator's own memory, and
+    the repository the agent is supposed to be working in, stay reachable."""
+    config_dir = tmp_path / "config"
+    install_native_memory_hook(config_dir, mode=NATIVE_MEMORY_HOOK_MODE_DENY)
+    elsewhere = tmp_path / "repo" / "projects" / "slug" / "sess-01.jsonl"
+    elsewhere.parent.mkdir(parents=True, exist_ok=True)
+    elsewhere.write_text("{}", "utf-8")
+
+    done = _fire(config_dir, {"tool_name": "Read", "tool_input": {"file_path": str(elsewhere)}})
+
+    assert done.returncode == NATIVE_MEMORY_HOOK_EXIT_ALLOW
+
+
+def test_deny_is_a_distinct_treatment_in_the_resume_identity(tmp_path: Path) -> None:
+    """A leg run under `deny` did not run under `observe`. If the fingerprint could not tell them
+    apart, a resume would serve a blocked leg's result for an unblocked leg's cell."""
+    assert NATIVE_MEMORY_HOOK_MODE_DENY in NATIVE_MEMORY_HOOK_MODES
+    policy = recognizer_policy()
+    assert NATIVE_MEMORY_HOOK_DENY_REASON in policy.values()
+    assert policy["NATIVE_MEMORY_HOOK_MODES"] == list(NATIVE_MEMORY_HOOK_MODES)
+    assert sorted(policy["CONFIG_DIR_LEAK_EXEMPT_NAMES"]) == sorted(CONFIG_DIR_LEAK_EXEMPT_NAMES)
+
+
+def test_an_unknown_mode_is_refused_at_install_time(tmp_path: Path) -> None:
+    with pytest.raises(MemoryToolError, match="unknown native-memory hook mode"):
+        install_native_memory_hook(tmp_path / "config", mode="silence")
