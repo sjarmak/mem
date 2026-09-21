@@ -48,7 +48,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
-from collections.abc import Collection, Iterator, Mapping
+from collections.abc import Collection, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -73,6 +73,7 @@ from membench.runner.headless_agent import (
     seed_config_dir,
 )
 from membench.runner.memory_arm import (
+    SHARED_PROTOCOL,
     MemoryArm,
     MemoryArmError,
     arm,
@@ -88,6 +89,7 @@ from membench.runner.tool_surface import (
     MEMORY_COMMAND,
     MemoryToolSurface,
     capture_bd_context,
+    command_segments,
     memory_invocations,
     provision_memory_tool,
 )
@@ -421,30 +423,106 @@ class ArmCell:
     paid: bool
     status: str
     detail: str = ""
+    # Absolute paths the establish leg touched that the between-leg wipe cannot reach, as
+    # operands, deduplicated and sorted. DIAGNOSTIC ONLY: nothing in the plan gates or voids on
+    # it, because an out-of-sandbox write detector is named in prereg §9 as a mitigation this
+    # run does not buy, and adding a void rule after the fact is the re-thresholding §4 forbids.
+    #
+    # It is here because the establish leg is now ASKED to record (mem-q34kw) and the floor arm
+    # has no store to record INTO. `/tmp` and `$HOME` stay writable to all three arms, so the
+    # instruction that fixes the beads arm's silence is the same instruction that could hand the
+    # floor a durable channel. If that happens the necessity gate (§4.1, none-arm success < 0.2)
+    # catches it and voids the run — but only after the money is spent. This field is what lets
+    # the one-task pilot see it for the price of the pilot.
+    establish_out_of_sandbox_operands: tuple[str, ...] = ()
+
+
+# The recording clause, and the establish instruction that carries it. IDENTICAL on all three
+# arms, which is what keeps it from being a treatment: it names no mechanism, so beads hears it
+# with `bd` on PATH, builtin hears it with its own native memory on, and the floor hears it with
+# neither, and what each arm then does with it is the measurement.
+#
+# It is the ladder's topmost clause (`e1_grid.RUNG_CLAUSES[4]`, "After you act, record any durable
+# fact you established so a later session can recall it") RE-POINTED at what this leg holds.
+# The ladder's wording assumes the agent acted and established something; the establish leg acts
+# on nothing, it is TOLD the state and asked to acknowledge it, so read verbatim the clause asks
+# for a recording of the empty set and licenses the very no-op it is here to prevent. Same verb,
+# same stated purpose, different object.
+#
+# Not `RUNG_TEXT[4]` either: rung text is cumulative, and its lower clauses assert that a
+# persistent memory tool is available in this session — true of the beads arm, false of the floor
+# arm whose `bd` exits 127 by construction. An instruction that lies to one arm is not the same
+# instruction.
+#
+# It used to be the silent opener alone, on the argument that saying "remember this" is itself a
+# treatment. The one-task pilot (2026-09-21, mem-q34kw) priced that argument: the beads arm's
+# establish leg made ZERO tool calls and answered in prose, having been handed bd's own 1,338-word
+# shipped capability text as CLAUDE.md and done nothing with it. Three earlier campaigns reached
+# the same place, 0 writes over 480 legs and over 160. With nothing written, the beads arm and the
+# floor arm are the same machine, and the grid would have bought 1,152 sessions to measure a
+# difference arithmetic forbids.
+#
+# What the grid can no longer answer is whether an agent reaches for memory UNPROMPTED. R0
+# measured exactly that, four times, and the answer is on record. Scoring stays on the goal leg
+# alone (mem-eg850: pooling the instructed establish leg halved a +0.425 effect to +0.2125), so
+# the instruction cannot pay itself.
+RECORD_CLAUSE = "Record what you have been told above, so a later session can recall it."
+ARM_ESTABLISH_INSTRUCTION = f"{ESTABLISH_INSTRUCTION} {RECORD_CLAUSE}"
+
+
+class ArmProtocolError(RuntimeError):
+    """A leg was rendered with an allowlist the shared protocol does not declare."""
+
+
+def assert_goal_allowlist_is_the_protocol(tools: Collection[str]) -> None:
+    """Refuse a goal leg whose allowlist is not `SHARED_PROTOCOL.goal_tools`, exactly.
+
+    The gate the pilot needed and did not have. `SHARED_PROTOCOL.goal_tools` named four tools and
+    every goal step in the corpus named one, `Write`; `arm_cell_legs` passed the corpus step
+    through untouched, so the scored leg ran `--allowedTools Write` on all three arms. `bd` is
+    reachable only through `Bash`, so the beads arm's store had no channel into the step it is
+    graded on, and only the comparator — whose memory is injected without a tool call — could
+    deliver anything at all. Nothing compared the declaration against the render, and the
+    separation report printed the argv without judging it.
+
+    Equality, not containment: the corpus was a strict SUBSET of the declaration and that is the
+    shape that failed. A subset check would have passed it."""
+    named = tuple(tools)
+    if named != SHARED_PROTOCOL.goal_tools:
+        raise ArmProtocolError(
+            f"the goal leg would run --allowedTools {list(named)}, and the shared protocol "
+            f"declares {list(SHARED_PROTOCOL.goal_tools)}. An arm whose store is reachable only "
+            "through a tool the scored leg does not allow cannot deliver, and the contrast it "
+            "carries is zero before the agent is consulted."
+        )
 
 
 def arm_cell_legs(task: ToolReqRealAgentTask, arm_name: str) -> tuple[Leg, Leg]:
     """The two calls one (arm, work_id) cell makes, in order.
 
-    The establish instruction is the ladder's memory-SILENT one (`e1_grid.ESTABLISH_INSTRUCTION`),
-    identical across the arms. An instruction that said "remember this" would be a treatment: it
-    is the usability-ceiling choice the builtin arm's own experiment makes on purpose, and here
-    it would hand one arm the disposition the grid is buying an answer about.
+    The establish instruction is `ARM_ESTABLISH_INSTRUCTION`, the same words for every arm; the
+    block above it says why it is no longer the silent one. The establish leg's allowlist is the
+    arm's (the comparator runs unclamped, or the clamp blocks the CLI's own memory-write path and
+    the arm measures the clamp).
 
-    The establish leg's allowlist is the arm's (the comparator runs unclamped, or the clamp
-    blocks the CLI's own memory-write path and the arm measures the clamp). The GOAL leg is
-    `task.goal_step` untouched, so its allowlist is the same object for every arm."""
+    The GOAL leg is `task.goal_step` with its allowlist REPLACED by `SHARED_PROTOCOL.goal_tools`.
+    The protocol is the authority there and the corpus is not: the corpus authored one tool, the
+    protocol declares four, and the silent disagreement is what mem-q34kw cost. Overriding rather
+    than refusing keeps one derivation of the allowlist instead of two that must be kept equal by
+    hand, and `assert_goal_allowlist_is_the_protocol` is what checks the render before a spend."""
     one = arm(arm_name)
     establish = SequenceStep(
         step_id=f"{task.work_id}-establish",
-        user_request=ESTABLISH_INSTRUCTION,
+        user_request=ARM_ESTABLISH_INSTRUCTION,
         available_tools=list(one.establish_tools),
     )
+    goal = task.goal_step.model_copy(update={"available_tools": list(SHARED_PROTOCOL.goal_tools)})
+    assert_goal_allowlist_is_the_protocol(goal.available_tools)
     return (
         Leg("establish", establish, dict(task.oracle_memory)),
         # BARE. With the cwd emptied, the arm's own store is the only channel left that can
         # carry the value into the goal call. That empty dict IS each arm's hypothesis.
-        Leg("goal", task.goal_step, {}),
+        Leg("goal", goal, {}),
     )
 
 
@@ -488,6 +566,45 @@ def engagement_of(
             if any(states_value(content, token) for token in tokens):
                 return True
     return False
+
+
+def out_of_sandbox_operands(calls: Sequence[Any], *, sandbox: Path) -> tuple[str, ...]:
+    """Absolute path operands a leg named that do not resolve under `sandbox`.
+
+    Structural, not semantic (the ZFC line): an operand is a token the agent literally passed,
+    and "under the sandbox" is a path comparison. No judgment about what the agent MEANT by it,
+    and no verdict attached — the caller records the strings and a person reads them.
+
+    A `~` token is reported unexpanded, because the shell would have expanded it against a HOME
+    the sandbox does not own, which is the case worth seeing."""
+    sandbox = sandbox.resolve()
+    found: set[str] = set()
+    for call in calls:
+        arguments = getattr(call, "arguments", {}) or {}
+        operands: list[str] = [
+            str(arguments[key])
+            for key in ("file_path", "path", "notebook_path")
+            if arguments.get(key)
+        ]
+        command = arguments.get("command")
+        if isinstance(command, str):
+            operands += [
+                token
+                for segment in command_segments(command)
+                for token in segment
+                if token.startswith("/") or token.startswith("~")
+            ]
+        for operand in operands:
+            if operand.startswith("~"):
+                found.add(operand)
+                continue
+            try:
+                resolved = Path(operand).resolve()
+            except (OSError, ValueError):
+                continue
+            if resolved != sandbox and sandbox not in resolved.parents:
+                found.add(operand)
+    return tuple(sorted(found))
 
 
 def run_arm_cell(
@@ -534,6 +651,9 @@ def run_arm_cell(
         establish = _agent(store).run_step(
             establish_leg.step, dict(establish_leg.memory), _ctx(establish_leg)
         )
+        # Inside the `with`, while the sandbox still exists: resolving an operand against a
+        # tempdir that has already been removed compares a different string.
+        establish_outside = out_of_sandbox_operands(establish.tool_calls, sandbox=store.sandbox)
         receipts = read_receipts(establish_receipts_path) if establish_receipts_path else ()
         engaged = engagement_of(store, task.current_opaque_values, receipts=receipts)
 
@@ -575,6 +695,7 @@ def run_arm_cell(
         leaked=passed and not engaged,
         establish_tool_names=tuple(sorted({call.name for call in establish.tool_calls})),
         endogenous_verbs=verbs,
+        establish_out_of_sandbox_operands=establish_outside,
         establish_outcomes=tuple(
             observation.outcome for observation in observe_calls(task, establish.tool_calls)
         ),
@@ -592,17 +713,22 @@ def run_arm_cell(
 
 __all__ = [
     "ARM_BEADS",
+    "ARM_ESTABLISH_INSTRUCTION",
     "COMMAND_NOT_FOUND",
+    "RECORD_CLAUSE",
     "ArmCell",
     "ArmCellStore",
+    "ArmProtocolError",
     "NoStoreSurface",
     "arm_cell_calls",
     "arm_cell_legs",
     "arm_cell_store",
     "arm_child_path",
+    "assert_goal_allowlist_is_the_protocol",
     "carries_native_memory",
     "child_path_of",
     "engagement_of",
+    "out_of_sandbox_operands",
     "remint_config_dir",
     "replant_context",
     "run_arm_cell",

@@ -13,6 +13,7 @@ from membench.runner.arm_separation import (
     TRANSCRIPT_READ_SPELLINGS,
     ArmSeparationError,
     deny_battery,
+    goal_allowlist_of,
     render_arm_separation,
 )
 from membench.runner.memory_arm import ARM_NAMES
@@ -83,3 +84,29 @@ def test_the_artifact_records_one_scaffold_one_goal_call_and_three_settings(
         ), by_arm[name]["goal_leg_config_dir_files"]
     assert by_arm["builtin"]["goal_leg_config_dir_is_fresh"] is False
     assert by_arm["builtin"]["establish_transcript_reachable_from_goal_leg"] is True
+
+
+def test_the_allowlist_is_read_back_off_the_argv_the_cli_is_handed() -> None:
+    assert goal_allowlist_of(
+        ["claude", "-p", "--allowedTools", "Bash,Read", "--strict-mcp-config"]
+    ) == ("Bash", "Read")
+    assert goal_allowlist_of(["claude", "-p"]) == ()
+
+
+@pytest.mark.skipif(
+    shutil.which(MEMORY_COMMAND) is None, reason="minting the beads arm needs a real bd on PATH"
+)
+def test_the_report_refuses_a_goal_allowlist_that_is_not_the_shared_protocols(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """mem-q34kw: the three arms agreed on a goal command line that starved all three of `Bash`,
+    so the identity check passed and the run was bought anyway. Agreeing on the wrong allowlist
+    is the failure this gate exists for, which means the gate has to be provable with an argv
+    that is identical across the arms — as the one that shipped was."""
+
+    def starved(argv: list[str]) -> tuple[str, ...]:
+        return ("Write",)
+
+    monkeypatch.setattr(arm_separation, "goal_allowlist_of", starved)
+    with pytest.raises(ArmSeparationError, match="--allowedTools"):
+        render_arm_separation(tmp_path / "separation.json", _task(), root=tmp_path / "deny")

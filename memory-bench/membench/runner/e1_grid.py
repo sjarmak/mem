@@ -137,6 +137,7 @@ __all__ = [
     "NATIVE_MEMORY_ENV_INLETS",
     "NATIVE_MEMORY_SETTING",
     "OK_FIRED",
+    "RUNG_CLAUSES",
     "RUNG_IDS",
     "RUNG_SETTINGS",
     "RUNG_TEXT",
@@ -582,7 +583,12 @@ def assert_pin_precedence(
     )
 
 
-# The ladder, as ADDED CLAUSES. Each rung's text is its predecessor's plus one clause, so the
+# The ladder, as ADDED CLAUSES. Public because a clause is separately usable: the three-arm
+# grid (`beads_arm_grid.ARM_ESTABLISH_INSTRUCTION`) needs the recording clause ALONE, without
+# the rungs beneath it that assert a memory tool is present — an assertion that is false on
+# that grid's floor arm.
+#
+# Each rung's text is its predecessor's plus one clause, so the
 # nesting `RUNG_TEXT[n] in RUNG_TEXT[n+1]` is structural rather than a property of prose someone
 # has to keep true by hand. R0 is EMPTY — the silent rung, whose prompt carries no guidance block
 # at all — and it is the TOOL-AFFORDANCE FLOOR, not a zero: the agent still sees an allowlisted
@@ -592,7 +598,7 @@ def assert_pin_precedence(
 # config dir (`RUNG_SETTINGS`), because the agent's OWN native memory is a second, unprompted
 # guidance channel: left on, an R0 leg can reach memory the ladder never offered it, and the
 # floor it measures is the harness's default rather than the affordance under test.
-_RUNG_CLAUSES: tuple[str, ...] = (
+RUNG_CLAUSES: tuple[str, ...] = (
     "",
     "You have a persistent memory tool available in this session.",
     "Consult it when the task may depend on facts established in earlier sessions.",
@@ -617,7 +623,7 @@ def _ladder(clauses: Sequence[str]) -> tuple[str, ...]:
     return tuple(texts)
 
 
-RUNG_TEXT: tuple[str, ...] = _ladder(_RUNG_CLAUSES)
+RUNG_TEXT: tuple[str, ...] = _ladder(RUNG_CLAUSES)
 
 _GUIDANCE_HEADER = "## Memory guidance"
 
@@ -680,7 +686,7 @@ LEGS_PER_CELL = len(LEG_ROLES)
 # The establish leg's own instruction, and everything it must not say. It discloses the CELL'S
 # SHAPE (a later turn will ask for work) because that is true of every leg at every rung and
 # cancels in every contrast. It says nothing about memory, recording, remembering or durability:
-# those clauses are the ladder's treatment (`_RUNG_CLAUSES`), and putting any of them here would
+# those clauses are the ladder's treatment (`RUNG_CLAUSES`), and putting any of them here would
 # hand R0 the guidance whose absence defines the floor.
 ESTABLISH_INSTRUCTION = (
     "You are picking up work in this session. The current state of the system is below. "

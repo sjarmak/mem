@@ -43,7 +43,13 @@ from membench.runner.toolreq_realagent import (
 
 # Bumped when anything about what a cell MEANS changes. Rides in the resume identity beside the
 # corpus and the arm registry, so a cell bought under one protocol cannot be pooled into another.
-PROTOCOL_VERSION = 1
+#
+# 2 (2026-09-21, mem-q34kw): the one-task pilot bought a single cell under protocol 1 and the
+# receipt showed that cell could not have carried a contrast. Two changes, both of which change
+# what a cell MEANS: the scored goal leg now runs the allowlist the shared protocol declares
+# instead of the one the corpus authored, and the establish leg now carries an identical recording
+# clause on every arm. The bump is what stops the protocol-1 cell being resumed into this grid.
+PROTOCOL_VERSION = 2
 
 # Repeats per variant (§6). Asymmetric on purpose: the necessary variant carries the endpoint and
 # buys four, the unnecessary twin only has to show the arms do NOT separate and buys two. A table
@@ -191,6 +197,7 @@ def cell_row(cell: ArmCell) -> dict[str, Any]:
         "leaked": cell.leaked,
         "establish_tool_names": list(cell.establish_tool_names),
         "endogenous_verbs": list(cell.endogenous_verbs),
+        "establish_out_of_sandbox_operands": list(cell.establish_out_of_sandbox_operands),
         "establish_outcomes": list(cell.establish_outcomes),
         "goal_outcomes": list(cell.goal_outcomes),
         "native_reaches": cell.native_reaches,
@@ -215,6 +222,9 @@ def cell_from_row(row: Mapping[str, Any]) -> ArmCell:
             leaked=bool(row["leaked"]),
             establish_tool_names=tuple(row["establish_tool_names"]),
             endogenous_verbs=tuple(row["endogenous_verbs"]),
+            establish_out_of_sandbox_operands=tuple(
+                row.get("establish_out_of_sandbox_operands", ())
+            ),
             establish_outcomes=tuple(row["establish_outcomes"]),
             goal_outcomes=tuple(row["goal_outcomes"]),
             native_reaches=int(row["native_reaches"]),

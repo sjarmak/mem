@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 from collections.abc import Collection, Sequence
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -18,15 +19,20 @@ import pytest
 from membench.harbor.agent_memory import native_memory_path
 from membench.runner.arm_context import capability_of, scaffold_of
 from membench.runner.beads_arm_grid import (
+    ARM_ESTABLISH_INSTRUCTION,
     COMMAND_NOT_FOUND,
+    RECORD_CLAUSE,
     SHARED_SYSTEM_PATH,
     SHARED_TOOLCHAIN_COMMANDS,
+    ArmProtocolError,
     arm_cell_calls,
     arm_cell_legs,
     arm_cell_store,
+    assert_goal_allowlist_is_the_protocol,
     carries_native_memory,
     child_path_of,
     engagement_of,
+    out_of_sandbox_operands,
     remint_config_dir,
     replant_context,
     run_arm_cell,
@@ -38,11 +44,12 @@ from membench.runner.headless_agent import (
     result_event,
     serialize_stream,
 )
-from membench.runner.memory_arm import ARM_NAMES
+from membench.runner.memory_arm import ARM_NAMES, SHARED_PROTOCOL
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL
 from membench.runner.tool_surface import BD_CONTEXT_FILES, CONFIG_DIR_ENV, MEMORY_COMMAND
 from membench.runner.toolreq_builtin import simulated_builtin_runner
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask, adapt_sequence
+from membench.schemas.trace import ToolCall
 from membench.spawn import Runner
 from tests.toolreq_helpers import toolreq_seq
 
@@ -159,30 +166,74 @@ def _task(seq_id: str = "arm-t0") -> ToolReqRealAgentTask:
     return adapt_sequence(toolreq_seq(seq_id))
 
 
-def test_every_arm_runs_the_same_establish_instruction_and_the_same_goal_step() -> None:
-    """The instruction is the ladder's memory-SILENT one. An arm told to "remember this" would
-    be carrying a treatment the grid is supposed to be measuring."""
+def test_every_arm_runs_the_same_establish_instruction_and_the_same_goal_request() -> None:
+    """One instruction for three arms. It now carries a recording clause (mem-q34kw), which is a
+    treatment only if an arm hears it differently — so identity across the arms is the property,
+    and it is asserted here rather than trusted to the one expression that builds it."""
     task = _task()
     prompts = set()
-    goals = set()
+    goal_requests = set()
     for name in ARM_NAMES:
         establish, goal = arm_cell_legs(task, name)
         prompts.add(establish.step.user_request)
-        goals.add(id(goal.step))
+        goal_requests.add(goal.step.user_request)
         assert goal.memory == {}, name
         assert establish.memory == task.oracle_memory, name
-    assert prompts == {ESTABLISH_INSTRUCTION}
-    assert goals == {id(task.goal_step)}
+    assert prompts == {ARM_ESTABLISH_INSTRUCTION}
+    assert goal_requests == {task.goal_step.user_request}
 
 
-def test_the_establish_allowlist_is_the_arms_and_the_goal_allowlist_is_not() -> None:
+def test_the_establish_instruction_asks_for_a_recording_and_names_no_mechanism() -> None:
+    """The pilot's establish leg made zero tool calls under the silent instruction, on every arm,
+    so nothing was recallable and the primary contrast was zero by arithmetic. The clause is what
+    fixes that; naming a mechanism in it is what would break the arms' symmetry, since `bd` is on
+    one arm's PATH, absent from the floor's, and never a tool name on the comparator's."""
+    assert ARM_ESTABLISH_INSTRUCTION.startswith(ESTABLISH_INSTRUCTION)
+    assert RECORD_CLAUSE in ARM_ESTABLISH_INSTRUCTION
+    assert "record" in RECORD_CLAUSE.lower()
+    for mechanism in ("bd", "beads", "memory", "tool", "CLAUDE.md", "file"):
+        assert mechanism not in RECORD_CLAUSE.split(), RECORD_CLAUSE
+
+
+def test_the_establish_allowlist_is_the_arms_and_the_goal_allowlist_is_the_protocols() -> None:
     task = _task()
     assert arm_cell_legs(task, "beads")[0].step.available_tools == ["Bash"]
     assert arm_cell_legs(task, "builtin")[0].step.available_tools == []
     goal_allowlists = {
         tuple(arm_cell_legs(task, name)[1].step.available_tools) for name in ARM_NAMES
     }
-    assert len(goal_allowlists) == 1
+    assert goal_allowlists == {SHARED_PROTOCOL.goal_tools}
+
+
+def test_the_goal_allowlist_comes_from_the_protocol_and_not_from_the_corpus() -> None:
+    """mem-q34kw, the defect the one-task pilot bought. Every goal step in the live corpus carries
+    `available_tools=['Write']` while the protocol declares four tools including `Bash`, and the
+    old code passed the corpus step through untouched. `bd` is reachable only through `Bash`, so
+    the arm under test could not deliver into the leg it is scored on. A corpus that disagrees is
+    the normal case, not a hypothetical, and the protocol is what wins."""
+    task = _task()
+    starved = replace(
+        task, goal_step=task.goal_step.model_copy(update={"available_tools": ["Write"]})
+    )
+    assert starved.goal_step.available_tools == ["Write"]
+    _, goal = arm_cell_legs(starved, "beads")
+    assert tuple(goal.step.available_tools) == SHARED_PROTOCOL.goal_tools
+    assert "Bash" in goal.step.available_tools
+
+
+def test_the_goal_allowlist_gate_refuses_a_subset_and_a_reordering() -> None:
+    """Equality, not containment: the shape that shipped was a strict SUBSET of the declaration,
+    which is exactly what a containment check would have waved through."""
+    assert_goal_allowlist_is_the_protocol(SHARED_PROTOCOL.goal_tools)
+    for wrong in (
+        ("Write",),
+        SHARED_PROTOCOL.goal_tools[:-1],
+        tuple(reversed(SHARED_PROTOCOL.goal_tools)),
+        (*SHARED_PROTOCOL.goal_tools, "WebFetch"),
+        (),
+    ):
+        with pytest.raises(ArmProtocolError):
+            assert_goal_allowlist_is_the_protocol(wrong)
 
 
 def test_the_goal_leg_argv_is_byte_identical_across_the_arms() -> None:
@@ -407,3 +458,41 @@ def test_the_beads_arm_still_resolves_its_own_shim_first() -> None:
     with arm_cell_store("beads", label="shim-first") as store:
         resolved = shutil.which(MEMORY_COMMAND, path=store.env()["PATH"])
         assert resolved == str(store.surface.bin_dir / MEMORY_COMMAND), resolved
+
+
+def test_the_establish_leg_reports_operands_the_wipe_cannot_reach(tmp_path: Path) -> None:
+    """The floor arm is now ASKED to record and has no store to record into, so `/tmp` and
+    `$HOME` are the channels left to it. Nothing here voids anything — prereg §9 names the
+    out-of-sandbox detector as a mitigation this run does not buy — but the one-task pilot has
+    to be able to SEE it, or the next diagnosis costs another instrumented round."""
+    sandbox = tmp_path / "cell"
+    (sandbox / "sub").mkdir(parents=True)
+
+    def call(name: str, **arguments: object) -> ToolCall:
+        return ToolCall(name=name, arguments=dict(arguments))
+
+    inside = [
+        call("Write", file_path=str(sandbox / "notes.md")),
+        call("Write", file_path=str(sandbox / "sub" / "notes.md")),
+        call("Bash", command=f"cd {sandbox} && echo hi > notes.md"),
+        call("Bash", command="bd remember 'the token is 4'"),
+    ]
+    assert out_of_sandbox_operands(inside, sandbox=sandbox) == ()
+
+    outside = [
+        call("Write", file_path="/tmp/handoff.md"),
+        call("Bash", command="echo token > ~/.carry"),
+        call("Bash", command="cp state /var/tmp/keep"),
+    ]
+    assert out_of_sandbox_operands(outside, sandbox=sandbox) == (
+        "/tmp/handoff.md",
+        "/var/tmp/keep",
+        "~/.carry",
+    )
+    # The sandbox itself is not outside itself, and a call carrying no operand contributes none.
+    assert (
+        out_of_sandbox_operands(
+            [call("Write", file_path=str(sandbox)), call("Read")], sandbox=sandbox
+        )
+        == ()
+    )

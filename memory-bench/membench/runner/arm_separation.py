@@ -17,11 +17,12 @@ ZFC: filesystem reads, a PATH lookup, a subprocess exit code. No model call, no 
 
 from __future__ import annotations
 
+import itertools
 import json
 import shlex
 import shutil
 import subprocess
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -242,6 +243,17 @@ def arm_rows(task: Any, *, model: str, channel: MemoryChannel) -> list[dict[str,
     return rows
 
 
+def goal_allowlist_of(argv: Sequence[str]) -> tuple[str, ...]:
+    """The tools a rendered goal argv actually permits, read back off the command line.
+
+    Read back rather than taken from the step, because the step is the thing under suspicion. The
+    argv is what the CLI is handed and therefore the last place the truth can still be checked."""
+    for flag, value in itertools.pairwise(argv):
+        if flag == "--allowedTools":
+            return tuple(value.split(","))
+    return ()
+
+
 def render_arm_separation(out: Path, task: Any, *, root: Path, model: str = "sonnet") -> Path:
     """Write the §5 artifact and return its path. `root` holds the per-spelling config dirs."""
     channel = MemoryChannel.TRUSTED
@@ -259,6 +271,19 @@ def render_arm_separation(out: Path, task: Any, *, root: Path, model: str = "son
             "the goal leg's command line differs across the arms, so they differ in what they "
             "were ASKED as well as in what they could remember."
         )
+    # Identical is not enough: three arms can agree on a command line that defeats all three. The
+    # pilot's goal argv was `--allowedTools Write` on every arm, matching the corpus and NOT the
+    # protocol's four tools, and `bd` is reachable only through `Bash` — so the arm whose store is
+    # the subject under test had no channel into the leg it is graded on, and the contrast was
+    # zero before any agent was consulted. This gate is the one that was missing.
+    allowlists = {goal_allowlist_of(row["goal_call"]) for row in rows}
+    for allowed in sorted(allowlists):
+        if allowed != SHARED_PROTOCOL.goal_tools:
+            raise ArmSeparationError(
+                f"the goal leg would run --allowedTools {list(allowed)}, and the shared protocol "
+                f"declares {list(SHARED_PROTOCOL.goal_tools)}. A memory system reachable only "
+                "through a tool the scored leg withholds cannot deliver, whatever the agent does."
+            )
     shapes = {json.dumps(row["child_path_shape"]) for row in rows}
     if len(shapes) != 1:
         raise ArmSeparationError(
@@ -295,6 +320,7 @@ def render_arm_separation(out: Path, task: Any, *, root: Path, model: str = "son
         },
         "arms": rows,
         "goal_call_is_identical_across_arms": True,
+        "goal_allowlist_is_the_shared_protocol": list(SHARED_PROTOCOL.goal_tools),
         "child_path_is_identical_across_arms": True,
         "shared_system_path": list(SHARED_SYSTEM_PATH),
         "scaffold_is_identical_across_arms": True,
