@@ -428,3 +428,13 @@ def test_the_artifact_names_the_rig_that_produced_it() -> None:
     ):
         assert summary[field], field
     assert summary["n_paid_cells"] == summary["n_cells"]
+
+
+def test_a_row_without_the_goal_legs_tool_names_is_refused() -> None:
+    """A cell bought before the goal leg was instrumented (mem-0wpq8.1) cannot be pooled with
+    one bought after: the pre-instrumentation pilot IS the black box the field was added to open."""
+    row = cell_row(cell(ARM_BEADS, "w-t0"))
+    assert cell_from_row(row).goal_tool_names == cell(ARM_BEADS, "w-t0").goal_tool_names
+    del row["goal_tool_names"]
+    with pytest.raises(ArmPlanError):
+        cell_from_row(row)

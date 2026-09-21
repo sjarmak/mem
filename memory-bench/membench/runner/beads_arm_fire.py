@@ -60,6 +60,7 @@ from membench.runner.e1_grid import (
     out_lock,
     spawn_timeout_of,
     write_json_new,
+    write_text_new,
 )
 from membench.runner.headless_agent import (
     HeadlessAgentError,
@@ -186,6 +187,21 @@ def _unmeasured(key: ArmGridKey, *, status: str, detail: str, paid: bool) -> Arm
     )
 
 
+def _stream_keeper(
+    on_stream: Callable[[ArmGridKey, str, str], None] | None, key: ArmGridKey
+) -> Callable[[str, str], None] | None:
+    """Bind one cell's key into the per-leg sink `run_arm_cell` calls. Bound here, outside the
+    fire loop, so the closure cannot capture the loop variable of a later cell."""
+    if on_stream is None:
+        return None
+    sink = on_stream
+
+    def keep(leg: str, raw_stream: str) -> None:
+        sink(key, leg, raw_stream)
+
+    return keep
+
+
 def fire(
     tasks: Sequence[ToolReqRealAgentTask],
     *,
@@ -194,6 +210,7 @@ def fire(
     n_tasks: int | None = None,
     landed: Sequence[ArmCell] = (),
     on_cell: Callable[[ArmCell], None] | None = None,
+    on_stream: Callable[[ArmGridKey, str, str], None] | None = None,
 ) -> list[ArmCell]:
     """Run every cell of the grid that ``landed`` does not already hold.
 
@@ -206,7 +223,11 @@ def fire(
     measurement: nothing can be bought until the account resets, so the fire keeps what it has and
     stops rather than burning the rest of the authorization into unmeasured cells. A run of
     consecutive unmeasured cells is a broken rig, and a tolerance applied everywhere is a grid
-    that measured nothing while reporting a rate."""
+    that measured nothing while reporting a rate.
+
+    ``on_stream(key, leg, raw_stream)`` receives each leg's verbatim stream as the cell runs,
+    keyed by the cell it belongs to. It fires for a cell that then times out or errors, which is
+    the point: an unmeasured cell's stream is the only evidence of WHY it measured nothing."""
     by_key = {(task.variant, task.work_id): task for task in tasks}
     done = {cell_key(cell) for cell in landed}
     cells = list(landed)
@@ -224,7 +245,13 @@ def fire(
             )
         try:
             cell = run_arm_cell(
-                task, arm_name, repeat=repeat, model=model, channel=CHANNEL, runner=runner
+                task,
+                arm_name,
+                repeat=repeat,
+                model=model,
+                channel=CHANNEL,
+                runner=runner,
+                keep_stream=_stream_keeper(on_stream, key),
             )
         except HeadlessAgentError as exc:
             if is_quota_halt(exc):
@@ -352,12 +379,24 @@ def _run(
     def _persist() -> None:
         atomic_write_json(out, _artifact(kept))
 
+    def _cell_stem(key: ArmGridKey) -> str:
+        arm_name, variant, work_id, repeat = key
+        return f"{arm_name}-{variant}-{work_id}-{repeat}"
+
+    def _keep_stream(key: ArmGridKey, leg: str, raw_stream: str) -> None:
+        # Beside the cell file, under the cell's own key: `<stem>.establish.jsonl` and
+        # `<stem>.goal.jsonl`. Never over an existing one (`write_text_new`), for the reason the
+        # cell files are never overwritten. An empty stream is a stand-in's absence and gets no
+        # file: a zero-byte `.jsonl` would read as a paid agent that said nothing.
+        if raw_stream:
+            write_text_new(cells_dir / f"{_cell_stem(key)}.{leg}.jsonl", raw_stream)
+
     def _record(cell: ArmCell) -> None:
         if cell not in kept:
             kept.append(cell)
         key = cell_key(cell)
         write_json_new(
-            cells_dir / f"{cell.arm}-{cell.variant}-{cell.work_id}-{cell.repeat}.json",
+            cells_dir / f"{_cell_stem(key)}.json",
             {"key": list(key)} | _artifact([cell])["cells"][0],
         )
         print(
@@ -371,7 +410,13 @@ def _run(
 
     try:
         cells = fire(
-            tasks, model=args.model, runner=runner, n_tasks=n_tasks, landed=landed, on_cell=_record
+            tasks,
+            model=args.model,
+            runner=runner,
+            n_tasks=n_tasks,
+            landed=landed,
+            on_cell=_record,
+            on_stream=_keep_stream,
         )
     except (QuotaHaltError, RigHaltError) as exc:
         _persist()

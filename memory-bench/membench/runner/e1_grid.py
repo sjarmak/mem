@@ -2719,8 +2719,8 @@ def atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
     os.replace(tmp, path)
 
 
-def write_json_new(path: Path, payload: Mapping[str, Any]) -> Path:
-    """Write ``payload`` to ``path``, or to the next free ``.attemptN`` beside it. Never over it.
+def write_text_new(path: Path, text: str) -> Path:
+    """Write ``text`` to ``path``, or to the next free ``.attemptN`` beside it. Never over it.
 
     A leg file is keyed ``(rung, variant, work_id, leg)``, and a fire halted MID-CELL re-runs that
     cell from leg 0 on resume — same key, different paid leg. An overwrite there destroys the
@@ -2737,8 +2737,13 @@ def write_json_new(path: Path, payload: Mapping[str, Any]) -> Path:
             attempt += 1
             continue
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, indent=2))
+            handle.write(text)
         return candidate
+
+
+def write_json_new(path: Path, payload: Mapping[str, Any]) -> Path:
+    """`write_text_new` for a JSON payload."""
+    return write_text_new(path, json.dumps(payload, indent=2))
 
 
 @contextmanager

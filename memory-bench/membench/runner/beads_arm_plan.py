@@ -200,6 +200,7 @@ def cell_row(cell: ArmCell) -> dict[str, Any]:
         "establish_out_of_sandbox_operands": list(cell.establish_out_of_sandbox_operands),
         "establish_outcomes": list(cell.establish_outcomes),
         "goal_outcomes": list(cell.goal_outcomes),
+        "goal_tool_names": list(cell.goal_tool_names),
         "native_reaches": cell.native_reaches,
         "pinned_off": cell.pinned_off,
         "paid": cell.paid,
@@ -227,6 +228,9 @@ def cell_from_row(row: Mapping[str, Any]) -> ArmCell:
             ),
             establish_outcomes=tuple(row["establish_outcomes"]),
             goal_outcomes=tuple(row["goal_outcomes"]),
+            # Required, not defaulted: a row bought before the goal leg was instrumented is the
+            # black box mem-0wpq8.1 opened, and pooling it would put unread cells in a read grid.
+            goal_tool_names=tuple(row["goal_tool_names"]),
             native_reaches=int(row["native_reaches"]),
             pinned_off=bool(row["pinned_off"]),
             paid=bool(row["paid"]),
@@ -372,6 +376,7 @@ def establish_mechanism(cells: Sequence[ArmCell]) -> dict[str, Any]:
             "establish_tool_names": sorted(
                 {name for cell in rows for name in cell.establish_tool_names}
             ),
+            "goal_tool_names": sorted({name for cell in rows for name in cell.goal_tool_names}),
         }
     return block
 

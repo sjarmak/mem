@@ -48,7 +48,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
-from collections.abc import Collection, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -435,6 +435,13 @@ class ArmCell:
     # catches it and voids the run — but only after the money is spent. This field is what lets
     # the one-task pilot see it for the price of the pilot.
     establish_out_of_sandbox_operands: tuple[str, ...] = ()
+    # What the GOAL leg called, sorted and deduplicated like `establish_tool_names`. Added after
+    # the re-fired one-task pilot (mem-0wpq8.1) scored 0/18 on the goal leg — the comparator
+    # included, with its store provably engaged — and the cell carried nothing about what that
+    # leg did. DIAGNOSTIC ONLY: no gate reads it. Defaulted so `_unmeasured` need not name it,
+    # but a persisted row must carry it (`cell_from_row`), so a pre-instrumentation cell cannot
+    # be resumed into an instrumented grid as if it had been read.
+    goal_tool_names: tuple[str, ...] = ()
 
 
 # The recording clause, and the establish instruction that carries it. IDENTICAL on all three
@@ -615,8 +622,15 @@ def run_arm_cell(
     model: str,
     channel: MemoryChannel,
     runner: Runner,
+    keep_stream: Callable[[str, str], None] | None = None,
 ) -> ArmCell:
     """Run ONE (arm, work_id) repeat: mint, establish, close the cwd, goal, score.
+
+    `keep_stream(leg, raw_stream)` is called once per leg, in leg order, with the agent's verbatim
+    stream-json, BEFORE the cell is scored. The mint is torn down when this returns and the
+    config dir with it, so a caller that wants to read a leg after the fact gets exactly one
+    chance to keep it. An empty string is a stand-in runner's honest absence, passed through as
+    such: the caller decides whether an absence is written down.
 
     `runner` has no default for the reason `cell_agent`'s has none: a leg must not reach the paid
     CLI because a caller left an argument out. The order here is the ladder's and the builtin
@@ -651,6 +665,8 @@ def run_arm_cell(
         establish = _agent(store).run_step(
             establish_leg.step, dict(establish_leg.memory), _ctx(establish_leg)
         )
+        if keep_stream is not None:
+            keep_stream(establish_leg.name, establish.raw_stream)
         # Inside the `with`, while the sandbox still exists: resolving an operand against a
         # tempdir that has already been removed compares a different string.
         establish_outside = out_of_sandbox_operands(establish.tool_calls, sandbox=store.sandbox)
@@ -667,6 +683,8 @@ def run_arm_cell(
         if instrumented:
             prepare_receipt_leg(goal_store.surface, leg=2)
         goal = _agent(goal_store).run_step(goal_leg.step, dict(goal_leg.memory), _ctx(goal_leg))
+        if keep_stream is not None:
+            keep_stream(goal_leg.name, goal.raw_stream)
 
         # Both legs' logs, because a cell that re-mints has two and a reach on either is a reach
         # by this cell. Counting one would report the re-minting arms as reaching less often
@@ -708,6 +726,7 @@ def run_arm_cell(
         # runner the legs actually went through, so a caller cannot label a cell paid.
         paid=runner is subprocess.run,
         status="ok",
+        goal_tool_names=tuple(sorted({call.name for call in goal.tool_calls})),
     )
 
 

@@ -328,3 +328,75 @@ def test_an_empty_corpus_is_reported_as_missing_and_never_as_a_result(
     monkeypatch.setattr(beads_arm_fire, "load_twin_corpus", lambda *a, **k: ([], []))
     assert main(["--plan"]) != EXIT_OK
     assert "NOT a result" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------------------
+# the goal leg is no longer a black box (mem-0wpq8.1)
+# ---------------------------------------------------------------------------------------
+
+
+def test_the_driver_keeps_each_legs_stream_beside_the_cell(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The re-fired pilot scored 0/18 on the goal leg with nothing to read: the cell row says
+    what the establish leg called and nothing about the goal leg, and neither stream survived
+    the mint's teardown. Each leg's verbatim stream lands beside the cell file under the cell's
+    own key, or the next diagnosis costs another paid round."""
+    tasks = corpus(1)
+
+    def buy(
+        task: ToolReqRealAgentTask,
+        arm: str,
+        *,
+        repeat: int = 0,
+        keep_stream: Any = None,
+        **_kw: object,
+    ) -> ArmCell:
+        keep_stream("establish", f'{{"leg": "establish", "arm": "{arm}"}}\n')
+        keep_stream("goal", f'{{"leg": "goal", "arm": "{arm}"}}\n')
+        return a_cell(task, arm, repeat=repeat, paid=False)
+
+    monkeypatch.setattr(beads_arm_fire, "run_arm_cell", buy)
+    monkeypatch.setattr(beads_arm_fire, "load_twin_corpus", lambda *a, **k: ([], tasks))
+    monkeypatch.setattr(beads_arm_fire, "resolve_cli_version", lambda *a, **k: "2.1.210")
+    out = tmp_path / "out.json"
+    assert main(["--dry-run", "--out", str(out), "--model", MODEL]) == EXIT_OK
+
+    cells_dir = tmp_path / "out.json.cells"
+    cell_files = sorted(cells_dir.glob("*.json"))
+    assert len(cell_files) == len(grid_keys(tasks))
+    for cell_file in cell_files:
+        key = cell_file.name[: -len(".json")]
+        establish = cells_dir / f"{key}.establish.jsonl"
+        goal = cells_dir / f"{key}.goal.jsonl"
+        assert establish.is_file() and goal.is_file(), key
+        assert json.loads(establish.read_text(encoding="utf-8"))["leg"] == "establish"
+        assert json.loads(goal.read_text(encoding="utf-8"))["leg"] == "goal"
+        assert json.loads(goal.read_text(encoding="utf-8"))["arm"] == key.split("-")[0]
+
+
+def test_an_empty_stream_is_an_absence_and_never_an_empty_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A stand-in runner hands back no stream. Writing a zero-byte file for it would let a
+    dry-run cell look, on disk, like a paid cell whose agent said nothing."""
+    tasks = corpus(1)
+
+    def buy(
+        task: ToolReqRealAgentTask,
+        arm: str,
+        *,
+        repeat: int = 0,
+        keep_stream: Any = None,
+        **_kw: object,
+    ) -> ArmCell:
+        keep_stream("establish", "")
+        keep_stream("goal", "")
+        return a_cell(task, arm, repeat=repeat, paid=False)
+
+    monkeypatch.setattr(beads_arm_fire, "run_arm_cell", buy)
+    monkeypatch.setattr(beads_arm_fire, "load_twin_corpus", lambda *a, **k: ([], tasks))
+    monkeypatch.setattr(beads_arm_fire, "resolve_cli_version", lambda *a, **k: "2.1.210")
+    out = tmp_path / "out.json"
+    assert main(["--dry-run", "--out", str(out), "--model", MODEL]) == EXIT_OK
+    assert list((tmp_path / "out.json.cells").glob("*.jsonl")) == []

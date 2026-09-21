@@ -496,3 +496,32 @@ def test_the_establish_leg_reports_operands_the_wipe_cannot_reach(tmp_path: Path
         )
         == ()
     )
+
+
+def test_the_goal_leg_reports_its_tool_names_and_both_legs_hand_back_their_streams(
+    tmp_path: Path,
+) -> None:
+    """mem-0wpq8.1. The re-fired pilot scored zero on the goal leg for EVERY arm, including the
+    comparator that had provably engaged, and the cell carried nothing about what the goal leg
+    did: `establish_tool_names` exists, `goal_tool_names` did not, and neither leg's stream was
+    kept. A goal leg that cannot be read is a black box a 576-cell run cannot afford."""
+    task = _task()
+    streams: list[tuple[str, str]] = []
+    cell = run_arm_cell(
+        task,
+        "builtin",
+        repeat=0,
+        model="sonnet",
+        channel=MemoryChannel.TRUSTED,
+        runner=simulated_builtin_runner(task.current_opaque_values),
+        keep_stream=lambda leg, text: streams.append((leg, text)),
+    )
+    assert cell.passed is True
+    # The simulated comparator reads its topic file back and Writes the value: sorted, deduped.
+    assert cell.goal_tool_names == tuple(sorted(set(cell.goal_tool_names)))
+    assert "Write" in cell.goal_tool_names
+    assert [leg for leg, _ in streams] == ["establish", "goal"]
+    # Verbatim stream-json, one event per line, not a summary of it.
+    for _, text in streams:
+        assert text.strip()
+        assert all(json.loads(line) for line in text.strip().splitlines())
