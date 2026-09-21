@@ -14,6 +14,18 @@ Where the attacks disagreed is surfaced in §4 (gate 6) and §9.
 
 ## 1. The question, stated so it can come out negative
 
+> **Amendment, 2026-09-21 (registered before the first capture turn).** One item in §1's
+> UNMEASURED list has been reclassified: **"the beads arm issues zero bd calls" is no longer
+> UNMEASURED for this registration's purposes, because it is now MEASURED, by a separate
+> protocol.** It has come back from four pilots in a row, so it is not a rig fault to be excluded
+> but the stable finding about the shipped text, and treating a reproducible result as an
+> experimental failure discards the one thing the series has established. `docs/prereg-beads-capture.md`
+> registers it as its own endpoint, with its own sample, fixed presentation and validity
+> conditions. Nothing else here changes: the goal-leg endpoint, the gates, and the remaining
+> UNMEASURED items stand as written, and a zero-call beads arm still means the GOAL-leg contrast
+> in this document measured nothing. See `docs/adr/0003-capture-is-its-own-registration.md`.
+
+
 Does giving a coding agent the `bd` CLI as its memory substrate, with Claude Code's own native memory pinned off, raise its success rate on a second-session task whose answer exists only in the first session? **Beads helps** if the paired goal-leg success delta `beads − none` is positive with a 95% interval excluding 0 on the memory-necessary variant, while the same three arms do not separate on the memory-unnecessary twin. **Beads does not help** if that interval contains 0 while the discovery gate (§4.4) shows the agent did reach for `bd` and bd acknowledged real writes and reads: that is a null about the substrate, not about the rig. **The experiment failed rather than beads failing** in any of these cases: the `none` arm passes memory-necessary tasks (a leak, so nothing is being measured), the `none` arm fails memory-unnecessary tasks (the corpus is hard for non-memory reasons), the beads arm issues zero bd calls (the treatment was never discovered, the 480-leg outcome), the builtin arm records zero native-memory engagement (the comparator was structurally disabled, most likely by the tool clamp), or any leg's native-memory pin is outranked. Those are declared UNMEASURED and reported as such; they are not written up as nulls.
 
 ---
