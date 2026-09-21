@@ -29,6 +29,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from membench.runner.agent_harness import AgentHarness
 from membench.runner.bd_build import BdBuild, resolve_bd_build
 from membench.runner.bd_ref import build_bd_ref
 from membench.runner.beads_arm_grid import (
@@ -232,8 +233,12 @@ def run_grid(
     on_cell: Callable[[ArmCell], None] | None = None,
     on_stream: Callable[[ArmGridKey, str, str], None] | None = None,
     bd_binary: str | None = None,
+    harness: AgentHarness | None = None,
 ) -> list[ArmCell]:
     """Run every cell in ``keys`` that ``landed`` does not already hold.
+
+    ``harness`` is the runtime every cell spawns on (`agent_harness`); ``None`` is Claude Code.
+    Passed once for the grid, like ``bd_binary``, so one grid cannot straddle two runtimes.
 
     ``keys`` is passed in rather than derived here because the two registrations derive their
     grids differently and each owns its own derivation: ``grid_keys`` for the three-arm contrast,
@@ -285,6 +290,7 @@ def run_grid(
                 keep_stream=_stream_keeper(on_stream, key),
                 bd_binary=bd_binary,
                 protocol=protocol,
+                harness=harness,
             )
         except HeadlessAgentError as exc:
             if is_quota_halt(exc):

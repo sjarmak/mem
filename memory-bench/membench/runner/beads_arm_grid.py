@@ -56,8 +56,13 @@ from typing import Any
 
 from membench.harbor.agent_memory import NATIVE_MEMORY_GLOB
 from membench.metrics.scorers import states_value
+from membench.runner.agent_harness import AgentHarness, claude_code_harness
 from membench.runner.arm_context import ARM_BEADS
-from membench.runner.bd_receipt_surface import prepare_receipt_leg, read_receipts
+from membench.runner.bd_receipt_surface import (
+    attributed_invocations,
+    prepare_receipt_leg,
+    read_receipts,
+)
 from membench.runner.e1_grid import (
     ESTABLISH_INSTRUCTION,
     native_memory_pinned_off,
@@ -68,7 +73,6 @@ from membench.runner.headless_agent import (
     CellCalls,
     Leg,
     MemoryChannel,
-    cell_agent,
     render_cell_calls,
     seed_config_dir,
 )
@@ -110,12 +114,23 @@ exit {COMMAND_NOT_FOUND}
 """
 
 
-# The tooling every arm reaches, over and above its own `bin_dir`. `git` because the corpus is a
-# repository, `dolt` because bd's store is one, `claude` because it is the agent binary the legs
-# spawn by name. Identical for all three arms: an arm that could reach a tool another could not
-# is an arm difference that is not the memory it has. `bd` is refused by name -- see
+# The tooling every arm reaches, over and above its own `bin_dir` and the harness binary the
+# legs spawn by name (`shared_toolchain`). `git` because the corpus is a repository, `dolt`
+# because bd's store is one. Identical for all three arms: an arm that could reach a tool another
+# could not is an arm difference that is not the memory it has. `bd` is refused by name -- see
 # `_link_shared_toolchain`.
-SHARED_TOOLCHAIN_COMMANDS: tuple[str, ...] = ("git", "dolt", "claude")
+SHARED_TOOLCHAIN_COMMANDS: tuple[str, ...] = ("git", "dolt")
+
+
+def shared_toolchain(harness: AgentHarness) -> tuple[str, ...]:
+    """The commands every arm's toolchain links: the shared set plus the harness's own binary."""
+    return (*SHARED_TOOLCHAIN_COMMANDS, harness.binary)
+
+
+def default_harness() -> AgentHarness:
+    """The runtime a cell runs on when none is named: Claude Code, its version pinned at fire."""
+    return claude_code_harness(version=SHARED_PROTOCOL.cli_version)
+
 
 # The system directories, on every arm's PATH identically. They hold the ordinary shell utilities
 # a `Bash` tool call assumes and no memory tool; `assert_no_memory_command` re-checks that on the
@@ -123,7 +138,7 @@ SHARED_TOOLCHAIN_COMMANDS: tuple[str, ...] = ("git", "dolt", "claude")
 SHARED_SYSTEM_PATH: tuple[str, ...] = ("/usr/bin", "/bin")
 
 
-def _link_shared_toolchain(root: Path) -> Path:
+def _link_shared_toolchain(root: Path, commands: Sequence[str]) -> Path:
     """A directory of symlinks to the shared toolchain, minted per cell.
 
     Symlinks rather than putting the hosting directories on PATH: `dolt` lives beside the real
@@ -135,7 +150,7 @@ def _link_shared_toolchain(root: Path) -> Path:
     toolchain = root / "toolchain"
     toolchain.mkdir(parents=True, exist_ok=True)
     missing: list[str] = []
-    for name in SHARED_TOOLCHAIN_COMMANDS:
+    for name in commands:
         if name == MEMORY_COMMAND:
             raise MemoryArmError(
                 f"{MEMORY_COMMAND!r} cannot be a shared toolchain command: linking it would give "
@@ -253,7 +268,11 @@ def _no_store_surface(root: Path) -> NoStoreSurface:
 
 @contextmanager
 def arm_cell_store(
-    arm_name: str, *, label: str, bd_binary: str | None = None
+    arm_name: str,
+    *,
+    label: str,
+    bd_binary: str | None = None,
+    harness: AgentHarness | None = None,
 ) -> Iterator[ArmCellStore]:
     """Mint one repeat's surface for one arm and tear it down when both legs have run.
 
@@ -264,8 +283,19 @@ def arm_cell_store(
     rather than being read off PATH in `provision_memory_tool`: the fire records the build in the
     artifact's resume identity, so a cell that mints against the ambient binary instead would
     publish an identity naming a build it never ran. `None` means the ambient bd, which is what
-    the fixtures and a flagless local run want."""
+    the fixtures and a flagless local run want.
+
+    `harness` is the runtime the legs will be spawned on. It decides two things here: which
+    binary the shared toolchain links, and whether the comparator arm can be minted at all. The
+    builtin arm IS the runtime's native memory; on a runtime that has none the arm names nothing,
+    and a cell that ran it would publish the floor under the comparator's name."""
     one = arm(arm_name)
+    on = harness if harness is not None else default_harness()
+    if carries_native_memory(one) and not on.native_memory:
+        raise MemoryArmError(
+            f"{arm_name}: this arm is the runtime's own native memory, and the {on.name!r} "
+            "harness has none; on it a turn is the treatment against the floor"
+        )
     with (
         tempfile.TemporaryDirectory(prefix="membench-arm-") as root_name,
         paid_sandbox(f"arm-{arm_name}-") as sandbox,
@@ -295,7 +325,7 @@ def arm_cell_store(
         # After the seed and merging into it: the hook is an instrument on top of whatever the arm
         # pinned, and an install that replaced the file would drop the pin.
         hook_log = install_native_memory_hook(config_dir, mode=one.hook_mode)
-        toolchain = _link_shared_toolchain(root)
+        toolchain = _link_shared_toolchain(root, shared_toolchain(on))
         # The file this mint just planted at `bin_dir/bd` is the ONE permitted resolution, for
         # every arm, and the reason differs by arm. On an arm without bd that file is the stub
         # that exits 127, and anything else on the PATH would give it a store it is graded on
@@ -492,6 +522,13 @@ class ArmCell:
     # two it is, and guessing would be the pooling these fields exist to make unrepresentable.
     protocol: str = PROTOCOL_THREE_ARM
     legs: int = 2
+    # How many times the establish leg executed bd, counted from bd's OWN receipts
+    # (`bd_receipt_surface.attributed_invocations`), not from the runtime's transcript. This is
+    # what the capture endpoint reads for an arm with a store, on every harness alike; the
+    # stream-derived `endogenous_verbs` stays as diagnostics for the runtimes that emit one.
+    # Zero on the arms without a store, by construction. Defaulted so `_unmeasured` need not name
+    # it; required on a persisted row (`cell_from_row`).
+    bd_invocations: int = 0
 
 
 # The recording clause, and the establish instruction that carries it. IDENTICAL on all three
@@ -675,8 +712,13 @@ def run_arm_cell(
     keep_stream: Callable[[str, str], None] | None = None,
     bd_binary: str | None = None,
     protocol: str = PROTOCOL_THREE_ARM,
+    harness: AgentHarness | None = None,
 ) -> ArmCell:
     """Run ONE (arm, work_id) repeat: mint, establish, close the cwd, goal, score.
+
+    `harness` is the runtime that spawns each leg (`agent_harness`); `None` is Claude Code. The
+    mint, the legs, the receipts and the scoring are the same whichever runtime it is; what the
+    harness owns is the spawn itself and the environment the leg is spawned under.
 
     Under `PROTOCOL_CAPTURE` the cell stops after the establish leg and its engagement check, and
     never mints the goal leg. The whole difference between the two protocols is expressed as this
@@ -695,8 +737,9 @@ def run_arm_cell(
     arm's, unchanged -- the wipe lands between the legs (it closes the cwd scavenge channel the
     unclamped establish leg opens), the ancestor guard re-runs after it because the wipe cannot
     reach one directory up, and the context is re-planted because the wipe ate it."""
+    on = harness if harness is not None else default_harness()
     with arm_cell_store(
-        arm_name, label=f"{arm_name}-{task.work_id}-{repeat}", bd_binary=bd_binary
+        arm_name, label=f"{arm_name}-{task.work_id}-{repeat}", bd_binary=bd_binary, harness=on
     ) as store:
         establish_leg, goal_leg = arm_cell_legs(task, arm_name)
 
@@ -707,22 +750,26 @@ def run_arm_cell(
                 step_id=leg.step.step_id,
             )
 
-        def _agent(on: ArmCellStore) -> Any:
+        def _agent(cell_store: ArmCellStore, leg: Leg, receipts_path: Path | None) -> Any:
             # One agent per LEG, not one per cell: the goal leg may run on a freshly minted
-            # config dir, and an agent built once would hand it the establish leg's.
-            return cell_agent(
+            # config dir, and an agent built once would hand it the establish leg's. The leg's
+            # receipt attribution rides in the environment, keyed the way the Claude hook keys
+            # it (the receipt file's stem), so a call booked by either route lands in one file.
+            ctx = _ctx(leg)
+            leg_id = receipts_path.stem if receipts_path is not None else leg.name
+            return on.agent(
                 model=model,
                 channel=channel,
                 runner=runner,
-                cwd=str(on.sandbox),
-                env=on.env(),
+                cwd=str(cell_store.sandbox),
+                env=on.leg_env(cell_store.env(), leg_id=leg_id, session_id=ctx.session_id),
             )
 
         instrumented = store.arm.provisions_bd
         establish_receipts_path = (
             prepare_receipt_leg(store.surface, leg=1) if instrumented else None
         )
-        establish = _agent(store).run_step(
+        establish = _agent(store, establish_leg, establish_receipts_path).run_step(
             establish_leg.step, dict(establish_leg.memory), _ctx(establish_leg)
         )
         if keep_stream is not None:
@@ -732,6 +779,7 @@ def run_arm_cell(
         establish_outside = out_of_sandbox_operands(establish.tool_calls, sandbox=store.sandbox)
         receipts = read_receipts(establish_receipts_path) if establish_receipts_path else ()
         engaged = engagement_of(store, task.current_opaque_values, receipts=receipts)
+        invocations = attributed_invocations(receipts)
 
         if legs_for(protocol) == 1:
             # Capture stops here. `native_reaches` is counted off the establish mint alone
@@ -763,6 +811,7 @@ def run_arm_cell(
                 goal_tool_names=(),
                 protocol=protocol,
                 legs=1,
+                bd_invocations=invocations,
             )
 
         wipe_cwd_contents(store.sandbox)
@@ -772,9 +821,12 @@ def run_arm_cell(
         # the config dir, which is where the establish leg's transcript sits.
         goal_store = remint_config_dir(store, leg=2)
 
-        if instrumented:
-            prepare_receipt_leg(goal_store.surface, leg=2)
-        goal = _agent(goal_store).run_step(goal_leg.step, dict(goal_leg.memory), _ctx(goal_leg))
+        goal_receipts_path = (
+            prepare_receipt_leg(goal_store.surface, leg=2) if instrumented else None
+        )
+        goal = _agent(goal_store, goal_leg, goal_receipts_path).run_step(
+            goal_leg.step, dict(goal_leg.memory), _ctx(goal_leg)
+        )
         if keep_stream is not None:
             keep_stream(goal_leg.name, goal.raw_stream)
 
@@ -822,6 +874,7 @@ def run_arm_cell(
         goal_tool_names=tuple(sorted({call.name for call in goal.tool_calls})),
         protocol=protocol,
         legs=2,
+        bd_invocations=invocations,
     )
 
 
@@ -844,10 +897,12 @@ __all__ = [
     "assert_goal_allowlist_is_the_protocol",
     "carries_native_memory",
     "child_path_of",
+    "default_harness",
     "engagement_of",
     "legs_for",
     "out_of_sandbox_operands",
     "remint_config_dir",
     "replant_context",
     "run_arm_cell",
+    "shared_toolchain",
 ]

@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 
 from membench.runner import beads_capture_fire
+from membench.runner.agent_harness import claude_code_harness
 from membench.runner.bd_build import BdBuild
 from membench.runner.beads_arm_fire import admissible_cells, resume_identity
 from membench.runner.beads_arm_grid import PROTOCOL_CAPTURE, PROTOCOL_THREE_ARM, ArmCell, legs_for
@@ -70,6 +71,7 @@ def a_capture_cell(
     engaged: bool = False,
     verbs: tuple[str, ...] = (),
     reaches: int = 0,
+    invocations: int = 0,
     status: str = "ok",
 ) -> ArmCell:
     return ArmCell(
@@ -90,6 +92,7 @@ def a_capture_cell(
         status=status,
         protocol=PROTOCOL_CAPTURE,
         legs=1,
+        bd_invocations=invocations,
     )
 
 
@@ -187,16 +190,19 @@ def test_the_capture_grid_and_the_three_arm_grid_are_different_derivations() -> 
 # ---------------------------------------------------------------------------------------
 
 
-def test_a_bd_verb_is_a_reach_on_an_arm_with_a_store() -> None:
-    assert reached(a_capture_cell(ARM_BEADS, verbs=("remember",))) is True
+def test_a_bd_execution_in_the_receipts_is_a_reach_on_an_arm_with_a_store() -> None:
+    assert reached(a_capture_cell(ARM_BEADS, invocations=1)) is True
     assert reached(a_capture_cell(ARM_BEADS)) is False
+    # The transcript's verb is diagnostics; a verb the receipts do not corroborate is not a
+    # reach, and a receipt without a transcript (a runtime that emits none) is.
+    assert reached(a_capture_cell(ARM_BEADS, verbs=("remember",))) is False
 
 
 def test_the_comparator_reaches_through_its_native_path_not_through_bd() -> None:
     assert reached(a_capture_cell(ARM_BUILTIN, reaches=2)) is True
     # A bd verb on the comparator would be a call to a store it does not have; it is refused in
     # the mint, and it is not quietly counted as a capture here either.
-    assert reached(a_capture_cell(ARM_BUILTIN, verbs=("remember",))) is False
+    assert reached(a_capture_cell(ARM_BUILTIN, invocations=1)) is False
 
 
 def test_a_three_arm_cell_cannot_be_read_for_the_capture_endpoint() -> None:
@@ -207,7 +213,7 @@ def test_a_three_arm_cell_cannot_be_read_for_the_capture_endpoint() -> None:
 
 def test_an_unmeasured_cell_is_excluded_and_counted_never_scored_zero() -> None:
     cells = [
-        a_capture_cell(ARM_BEADS, "a", verbs=("remember",), engaged=True),
+        a_capture_cell(ARM_BEADS, "a", invocations=1, engaged=True),
         a_capture_cell(ARM_BEADS, "b", status="timeout"),
     ]
     rates = capture_rates(cells, arm_name=ARM_BEADS)
@@ -256,7 +262,7 @@ def test_a_three_arm_artifact_cannot_be_resumed_into_a_capture_turn() -> None:
     work_ids = capture_work_ids(tasks)
     mine = capture_identity(
         model=MODEL,
-        cli_version="2.1.278",
+        harness=claude_code_harness(version="2.1.278"),
         corpus="deadbeef",
         arms=[ARM_BEADS],
         work_ids=work_ids,
@@ -278,7 +284,7 @@ def test_a_turn_that_bought_the_treatment_alone_cannot_pass_for_one_that_bought_
     def ident(arms: list[str]) -> dict[str, Any]:
         return capture_identity(
             model=MODEL,
-            cli_version="2.1.278",
+            harness=claude_code_harness(version="2.1.278"),
             corpus="deadbeef",
             arms=arms,
             work_ids=work_ids,
@@ -297,7 +303,7 @@ def test_a_turn_that_bought_the_treatment_alone_cannot_pass_for_one_that_bought_
 def test_the_identity_names_the_bd_build_the_turn_measured() -> None:
     ident = capture_identity(
         model=MODEL,
-        cli_version="2.1.278",
+        harness=claude_code_harness(version="2.1.278"),
         corpus="deadbeef",
         arms=[ARM_BEADS],
         work_ids=["w-t0"],

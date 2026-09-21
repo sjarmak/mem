@@ -110,11 +110,13 @@ def capture_plan(
 def reached(cell: ArmCell) -> bool:
     """§3: did this leg call its memory facility at all?
 
-    Read per arm because the facilities are different things. For an arm with a store, a `bd`
-    invocation on the observed argv; for the comparator, a write the native-memory hook saw. Not
-    a union over both: a `bd` call on the comparator arm would be a call to a store it does not
-    have, and a native-memory write on the treatment arm is §7's invalidating reach, not a
-    capture. Both are refused upstream, and neither is quietly counted as a reach here."""
+    Read per arm because the facilities are different things. For an arm with a store, an
+    execution of `bd` booked in the leg's own receipts (`ArmCell.bd_invocations`), which is bd's
+    side of the call and so reads the same on every harness; for the comparator, a write the
+    native-memory hook saw. Not a union over both: a `bd` call on the comparator arm would be a
+    call to a store it does not have, and a native-memory write on the treatment arm is §7's
+    invalidating reach, not a capture. Both are refused upstream, and neither is quietly counted
+    as a reach here."""
     if cell.protocol != PROTOCOL_CAPTURE:
         raise ArmPlanError(
             f"cell {cell.arm}/{cell.work_id}#{cell.repeat} was bought under {cell.protocol!r}; "
@@ -122,7 +124,7 @@ def reached(cell: ArmCell) -> bool:
         )
     if cell.arm == ARM_BUILTIN:
         return cell.native_reaches > 0
-    return bool(cell.endogenous_verbs)
+    return cell.bd_invocations > 0
 
 
 def capture_rates(cells: Sequence[ArmCell], *, arm_name: str) -> dict[str, Any]:

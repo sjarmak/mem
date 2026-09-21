@@ -17,12 +17,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import subprocess
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from membench.runner.agent_harness import (
+    HARNESS_CLAUDE_CODE,
+    AgentHarness,
+    HarnessError,
+    claude_code_harness,
+    command_harness,
+)
 from membench.runner.bd_build import BdBuild, resolve_bd_build
 from membench.runner.bd_ref import build_bd_ref
 from membench.runner.beads_arm_fire import DEFAULT_CORPUS, admissible_cells, run_grid
@@ -59,12 +67,14 @@ from membench.runner.e1_grid import (
     write_text_new,
 )
 from membench.runner.headless_agent import (
+    REFUSE_UNPINNED_MODEL,
     HeadlessAgentError,
     MemoryChannel,
+    a_paid_run_needs_a_model,
     resolve_cli_version,
     resolve_model,
 )
-from membench.runner.memory_arm import arm_settings_fingerprint
+from membench.runner.memory_arm import ARM_BUILTIN, arm_settings_fingerprint
 from membench.runner.tool_surface import (
     RECOGNIZER_IMPLEMENTATION_VERSION,
     MemoryToolError,
@@ -90,11 +100,11 @@ _PLAN_ONLY = (
 def capture_identity(
     *,
     model: str,
-    cli_version: str,
     corpus: str,
     arms: Sequence[str],
     work_ids: Sequence[str],
     bd_build: BdBuild,
+    harness: AgentHarness,
 ) -> dict[str, Any]:
     """Everything a partial artifact must match before its cells may be pooled into this turn.
 
@@ -103,13 +113,18 @@ def capture_identity(
     contrast grid would enter its rates as a zero on a leg it never bought. ``arms`` is in here
     because §6 buys the treatment every turn and REUSES the floor and comparator: an artifact that
     could not say which arms it bought would let a candidate-only file be resumed as though it
-    already held the reused pair."""
+    already held the reused pair.
+
+    ``harness`` names the runtime and its conditions: ``cli_version`` is that runtime's version,
+    and the harness name and conditions fingerprint sit beside it, so a turn bought on one
+    runtime, or under one set of conditions, never pools with a turn bought on another."""
     return {
         "protocol": PROTOCOL_CAPTURE,
         "protocol_version": PROTOCOL_VERSION,
         **bd_build.identity(),
         "model": resolve_model(model) or "cli-default",
-        "cli_version": cli_version,
+        "cli_version": harness.version,
+        **harness.identity(),
         "corpus_fingerprint": corpus,
         "arm_settings_fingerprint": arm_settings_fingerprint(),
         "surface_fingerprint": surface_fingerprint(),
@@ -118,6 +133,41 @@ def capture_identity(
         "arms": list(arms),
         "work_ids": list(work_ids),
     }
+
+
+def parse_conditions(pairs: Sequence[str]) -> dict[str, str]:
+    """``KEY=VALUE`` pairs from the command line into the conditions the harness exports."""
+    conditions: dict[str, str] = {}
+    for pair in pairs:
+        key, separator, value = pair.partition("=")
+        if not separator or not key:
+            raise HarnessError(f"--condition takes KEY=VALUE, got {pair!r}")
+        conditions[key] = value
+    return conditions
+
+
+def harness_of(
+    *,
+    name: str,
+    version: str | None,
+    command: Sequence[str] | None,
+    conditions: Mapping[str, str],
+    cli_version: Callable[[], str],
+) -> AgentHarness:
+    """The runtime this turn spawns on. Claude Code by name, its version read off the binary;
+    any other name is a command harness and must declare both its command and its version,
+    because this rig cannot read a version off a binary it does not know."""
+    if name == HARNESS_CLAUDE_CODE:
+        if command is not None:
+            raise HarnessError(f"--harness-command is not for the {HARNESS_CLAUDE_CODE} harness")
+        return claude_code_harness(
+            version=version if version is not None else cli_version(), conditions=conditions
+        )
+    if command is None:
+        raise HarnessError(f"harness {name!r} needs --harness-command <argv...> with a {{prompt}}")
+    if version is None:
+        raise HarnessError(f"harness {name!r} needs --harness-version; it cannot be read off")
+    return command_harness(name=name, version=version, argv_template=command, conditions=conditions)
 
 
 def _bd_build_of(args: argparse.Namespace, *, runner: Runner) -> BdBuild:
@@ -150,7 +200,15 @@ def _run(
     out: Path = args.out
     corpus = corpus_fingerprint(tasks)
     try:
-        cli_version = resolve_cli_version()
+        harness = harness_of(
+            name=args.harness,
+            version=args.harness_version,
+            command=(
+                shlex.split(args.harness_command) if args.harness_command is not None else None
+            ),
+            conditions=parse_conditions(args.condition),
+            cli_version=resolve_cli_version,
+        )
         # `subprocess.run`, never the run's own `runner`. A dry run swaps in a stand-in that
         # answers every spawn with a fixed agent result, and handing it `bd version --json` makes
         # the binary unidentifiable and refuses the run -- which is what `--dry-run` did from the
@@ -158,8 +216,17 @@ def _run(
         # prints and exits) and it is part of what a dry run is for: proving the pinned commit
         # fetches, builds, and reports itself before a paid run depends on it.
         bd_build = _bd_build_of(args, runner=subprocess.run)
-    except (HeadlessAgentError, MemoryToolError) as exc:
+    except (HeadlessAgentError, MemoryToolError, HarnessError) as exc:
         print(f"REFUSING to run: {exc}", file=sys.stderr)
+        return EXIT_REFUSED
+    if ARM_BUILTIN in arms and not harness.native_memory:
+        # Before the first cell, not at the first builtin cell: the grid is work_id-major, so
+        # the mint would otherwise refuse after the treatment cells of the first task were bought.
+        print(
+            f"REFUSING to run: the {ARM_BUILTIN!r} arm is the runtime's own native memory and "
+            f"the {harness.name!r} harness has none; buy '--arms beads none' there instead",
+            file=sys.stderr,
+        )
         return EXIT_REFUSED
 
     try:
@@ -167,11 +234,11 @@ def _run(
         plan = capture_plan(tasks, arms=arms)
         identity = capture_identity(
             model=args.model,
-            cli_version=cli_version,
             corpus=corpus,
             arms=arms,
             work_ids=capture_work_ids(tasks),
             bd_build=bd_build,
+            harness=harness,
         )
     except ArmPlanError as exc:
         print(f"REFUSING to run: {exc}", file=sys.stderr)
@@ -196,7 +263,8 @@ def _run(
                 "dry_run": dry_run,
                 "resumed_cells": len(landed),
                 "remaining_cells": len(grid) - len(landed),
-                "cli_version": cli_version,
+                "cli_version": harness.version,
+                **harness.identity(),
                 "corpus_fingerprint": corpus,
                 "bd_binary": bd_build.binary,
                 "bd_version": bd_build.version,
@@ -229,8 +297,8 @@ def _run(
         write_json_new(cells_dir / f"{_stem(key)}.json", {"key": list(key)} | cell_row(cell))
         print(
             f"[{len(kept)}/{len(grid)}] {cell.arm}/{cell.work_id}#{cell.repeat} {cell.status} "
-            f"engaged={cell.engaged} verbs={list(cell.endogenous_verbs)} "
-            f"reaches={cell.native_reaches}",
+            f"engaged={cell.engaged} bd_invocations={cell.bd_invocations} "
+            f"verbs={list(cell.endogenous_verbs)} reaches={cell.native_reaches}",
             file=sys.stderr,
             flush=True,
         )
@@ -247,6 +315,7 @@ def _run(
             on_cell=_record,
             on_stream=_keep_stream,
             bd_binary=bd_build.binary,
+            harness=harness,
         )
     except (QuotaHaltError, RigHaltError) as exc:
         _persist()
@@ -295,6 +364,42 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     ap.add_argument(
+        "--harness",
+        default=HARNESS_CLAUDE_CODE,
+        help=(
+            f"the agent runtime the legs spawn on. Default {HARNESS_CLAUDE_CODE!r}, whose "
+            "version is read off the binary and which alone can buy the builtin arm. Any other "
+            "name is a command harness and needs --harness-command and --harness-version"
+        ),
+    )
+    ap.add_argument(
+        "--harness-command",
+        metavar="'ARGV ...'",
+        default=None,
+        help=(
+            "how to spawn a non-Claude harness: ONE shell-quoted string, split with shlex, with "
+            "the prompt as one whole word spelled {prompt} and, optionally, the model as "
+            "{model}. The turn reads what the agent did from bd's own receipts, so the runtime "
+            "need emit no transcript"
+        ),
+    )
+    ap.add_argument(
+        "--harness-version",
+        default=None,
+        help="the runtime's version, recorded in the resume identity; required off Claude Code",
+    )
+    ap.add_argument(
+        "--condition",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help=(
+            "an environment variable exported to the spawned agent, repeatable: the config / "
+            "settings / conditions axis under test. Fingerprinted into the identity, so turns "
+            "under different conditions never pool"
+        ),
+    )
+    ap.add_argument(
         "--plan", action="store_true", help="price the turn and print it; spends nothing"
     )
     ap.add_argument(
@@ -326,7 +431,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     arms = [one for one in CAPTURE_ARMS if one in set(args.arms)]
 
-    refusal = _refusal(dry_run=not args.fire, model=args.model)
+    # The OAuth and metered-key gates are Claude Code's; a command harness carries its own
+    # account, and what this rig still requires of a paid turn there is the pinned model.
+    if args.harness == HARNESS_CLAUDE_CODE:
+        refusal = _refusal(dry_run=not args.fire, model=args.model)
+    elif a_paid_run_needs_a_model(args.model, dry_run=not args.fire):
+        refusal = REFUSE_UNPINNED_MODEL
+    else:
+        refusal = None
     if refusal is not None:
         print(refusal, file=sys.stderr)
         return EXIT_REFUSED
@@ -372,4 +484,4 @@ if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
 
 
-__all__ = ["CHANNEL", "capture_identity", "main"]
+__all__ = ["CHANNEL", "capture_identity", "harness_of", "main", "parse_conditions"]

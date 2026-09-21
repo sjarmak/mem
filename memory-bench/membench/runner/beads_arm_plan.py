@@ -208,6 +208,7 @@ def cell_row(cell: ArmCell) -> dict[str, Any]:
         "detail": cell.detail,
         "protocol": cell.protocol,
         "legs": cell.legs,
+        "bd_invocations": cell.bd_invocations,
     }
 
 
@@ -244,6 +245,9 @@ def cell_from_row(row: Mapping[str, Any]) -> ArmCell:
             # to refuse.
             protocol=str(row["protocol"]),
             legs=int(row["legs"]),
+            # Required: a row written before the endpoint was read from bd's receipts carries a
+            # stream-derived reach, and pooling it would put two instruments under one rate.
+            bd_invocations=int(row["bd_invocations"]),
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise ArmPlanError(f"not a readable cell row: {exc}") from exc

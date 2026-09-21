@@ -31,11 +31,13 @@ from membench.runner.beads_arm_grid import (
     assert_goal_allowlist_is_the_protocol,
     carries_native_memory,
     child_path_of,
+    default_harness,
     engagement_of,
     out_of_sandbox_operands,
     remint_config_dir,
     replant_context,
     run_arm_cell,
+    shared_toolchain,
 )
 from membench.runner.e1_grid import ESTABLISH_INSTRUCTION
 from membench.runner.headless_agent import (
@@ -441,7 +443,8 @@ def test_every_arm_reaches_the_same_shared_tools() -> None:
         with arm_cell_store(name, label=f"tools-{name}") as store:
             reachable[name] = sorted(entry.name for entry in store.toolchain.iterdir())
     assert len(set(map(tuple, reachable.values()))) == 1, reachable
-    assert reachable["none"] == sorted(SHARED_TOOLCHAIN_COMMANDS), reachable
+    assert reachable["none"] == sorted(shared_toolchain(default_harness())), reachable
+    assert "claude" in reachable["none"]
 
 
 def test_the_shared_toolchain_never_carries_the_memory_command() -> None:

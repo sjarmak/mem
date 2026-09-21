@@ -35,6 +35,12 @@ CONTEXT_KEYS = {
     "leg_id": "MEMBENCH_BD_LEG_ID",
 }
 
+# What an execution must be attributed to before it is a measurement: the leg and the session,
+# which the cell exports into the agent's environment for every runtime. The tool_use_id is what
+# the Claude PreToolUse hook adds on top, per call; a runtime without that hook has no such id
+# and its executions are still booked under the leg they ran in.
+REQUIRED_CONTEXT = ("session_id", "leg_id")
+
 
 class InstrumentationError(ValueError):
     """An observation cannot be attributed; this is never a bd operation result."""
@@ -102,8 +108,15 @@ def _observe(path: Path, record: Mapping[str, object]) -> None:
         )
 
 
-def _context(environ: Mapping[str, str]) -> dict[str, str]:
-    return {field: _identifier(environ.get(key), field) for field, key in CONTEXT_KEYS.items()}
+def _context(environ: Mapping[str, str]) -> dict[str, str | None]:
+    context: dict[str, str | None] = {}
+    for field, key in CONTEXT_KEYS.items():
+        value = environ.get(key)
+        if value is None and field not in REQUIRED_CONTEXT:
+            context[field] = None
+            continue
+        context[field] = _identifier(value, field)
+    return context
 
 
 def _execution_identity(binary: Path, store: Path, argv: Sequence[str]) -> dict[str, object]:
@@ -133,6 +146,7 @@ def run_bd(
     """
     environment = dict(os.environ if environ is None else environ)
     identity = _execution_identity(binary, store, argv)
+    attribution: dict[str, str | None]
     try:
         attribution = _context(environment)
     except InstrumentationError as exc:

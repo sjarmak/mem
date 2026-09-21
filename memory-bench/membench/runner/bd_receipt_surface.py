@@ -6,9 +6,11 @@ import hashlib
 import json
 import shlex
 import sys
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from membench.runner.bd_receipts import InstrumentationError
 from membench.runner.tool_surface import MemoryToolSurface
 
 SCRIPT_NAME = "bd-receipt-hook.py"
@@ -92,6 +94,29 @@ def hook_main(path_text: str) -> None:
                 f"({type(log_error).__name__})",
                 file=sys.stderr,
             )
+
+
+def attributed_invocations(receipts: Sequence[Mapping[str, Any]]) -> int:
+    """How many bd executions the leg's receipts attribute to it: one per ``start`` record.
+
+    The capture endpoint's "reached" for an arm with a store, read from bd's side rather than
+    from a transcript, so it means the same thing under every runtime. An execution the wrapper
+    could not attribute (a row that carries an ``invocation_id`` and an ``instrumentation_error``
+    but no ``event``) is REFUSED rather than counted or skipped: bd ran, so "no call" would be
+    false, and the leg it ran in is unknown, so "one call here" would be a guess. A hook-side
+    diagnostic without an ``invocation_id`` is not an execution and counts for nothing."""
+    unattributed = [
+        row
+        for row in receipts
+        if "invocation_id" in row and "instrumentation_error" in row and "event" not in row
+    ]
+    if unattributed:
+        raise InstrumentationError(
+            f"{len(unattributed)} bd execution(s) ran unattributed "
+            f"({unattributed[0]['instrumentation_error']}); the leg attribution the cell "
+            "exports did not reach the shim, so this leg cannot be read as measured"
+        )
+    return sum(1 for row in receipts if row.get("event") == "start")
 
 
 def read_receipts(path: Path) -> tuple[dict[str, Any], ...]:
