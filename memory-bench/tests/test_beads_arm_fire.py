@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 
 from membench.runner import beads_arm_fire
+from membench.runner.bd_build import BdBuild
 from membench.runner.beads_arm_fire import (
     admissible_cells,
     fire,
@@ -40,6 +41,7 @@ from membench.runner.e1_grid import (
 )
 from membench.runner.headless_agent import ENV_OAUTH, HeadlessAgentError
 from membench.runner.memory_arm import ARM_BEADS, ARM_NONE
+from membench.runner.tool_surface import MemoryToolError
 from membench.runner.toolreq_corpus import twin_tasks
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask, adapt_sequence
 from membench.spawn import with_child
@@ -72,12 +74,16 @@ def a_cell(task: ToolReqRealAgentTask, arm: str, *, repeat: int = 0, paid: bool 
     )
 
 
+BD_BUILD = BdBuild(binary="/opt/bd", sha256="f" * 64, commit="e9d2f1778", version="1.3.0-rc.1")
+
+
 def identity_of(tasks: list[ToolReqRealAgentTask]) -> dict[str, Any]:
     return resume_identity(
         model=MODEL,
         cli_version="2.1.210",
         corpus="deadbeef",
         work_ids=sorted({task.work_id for task in tasks}),
+        bd_build=BD_BUILD,
     )
 
 
@@ -359,6 +365,7 @@ def test_the_driver_keeps_each_legs_stream_beside_the_cell(
     monkeypatch.setattr(beads_arm_fire, "run_arm_cell", buy)
     monkeypatch.setattr(beads_arm_fire, "load_twin_corpus", lambda *a, **k: ([], tasks))
     monkeypatch.setattr(beads_arm_fire, "resolve_cli_version", lambda *a, **k: "2.1.210")
+    monkeypatch.setattr(beads_arm_fire, "resolve_bd_build", lambda *a, **k: BD_BUILD)
     out = tmp_path / "out.json"
     assert main(["--dry-run", "--out", str(out), "--model", MODEL]) == EXIT_OK
 
@@ -397,6 +404,71 @@ def test_an_empty_stream_is_an_absence_and_never_an_empty_file(
     monkeypatch.setattr(beads_arm_fire, "run_arm_cell", buy)
     monkeypatch.setattr(beads_arm_fire, "load_twin_corpus", lambda *a, **k: ([], tasks))
     monkeypatch.setattr(beads_arm_fire, "resolve_cli_version", lambda *a, **k: "2.1.210")
+    monkeypatch.setattr(beads_arm_fire, "resolve_bd_build", lambda *a, **k: BD_BUILD)
     out = tmp_path / "out.json"
     assert main(["--dry-run", "--out", str(out), "--model", MODEL]) == EXIT_OK
     assert list((tmp_path / "out.json.cells").glob("*.jsonl")) == []
+
+
+# ---------------------------------------------------------------------------------------
+# the bd build is part of the identity (mem-0wpq8.2)
+# ---------------------------------------------------------------------------------------
+
+
+def test_an_artifact_bought_against_another_bd_build_is_refused() -> None:
+    """The flywheel's one variable per turn is the beads build. A partial bought against the
+    last turn's binary must not be pooled into this turn's grid -- by commit OR by bytes, since a
+    rebuilt binary at the same commit is a different instrument."""
+    tasks = corpus(1)
+    prior = artifact(tasks, [a_cell(tasks[0], ARM_BEADS)], bd_commit="0000000")
+    with pytest.raises(ResumeMismatchError, match="bd_commit"):
+        admissible_cells(prior, identity=identity_of(tasks), grid=grid_keys(tasks))
+    prior = artifact(tasks, [a_cell(tasks[0], ARM_BEADS)], bd_binary_sha256="0" * 64)
+    with pytest.raises(ResumeMismatchError, match="bd_binary_sha256"):
+        admissible_cells(prior, identity=identity_of(tasks), grid=grid_keys(tasks))
+
+
+def test_an_artifact_that_never_recorded_its_bd_build_is_refused() -> None:
+    """Every artifact bought before this field existed: the bd it wrapped is unknowable now."""
+    tasks = corpus(1)
+    prior = artifact(tasks, [a_cell(tasks[0], ARM_BEADS)])
+    del prior["bd_commit"]
+    del prior["bd_binary_sha256"]
+    with pytest.raises(ResumeMismatchError, match="different rig"):
+        admissible_cells(prior, identity=identity_of(tasks), grid=grid_keys(tasks))
+
+
+def test_a_run_whose_bd_cannot_be_identified_refuses_before_spending(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(beads_arm_fire, "load_twin_corpus", lambda *a, **k: ([], corpus(1)))
+    monkeypatch.setattr(beads_arm_fire, "resolve_cli_version", lambda *a, **k: "2.1.210")
+
+    def no_bd(*_a: object, **_k: object) -> BdBuild:
+        raise MemoryToolError("no executable 'bd'")
+
+    monkeypatch.setattr(beads_arm_fire, "resolve_bd_build", no_bd)
+    monkeypatch.setattr(
+        beads_arm_fire, "run_arm_cell", lambda *a, **k: pytest.fail("spent without an identity")
+    )
+    out = tmp_path / "out.json"
+    assert main(["--dry-run", "--out", str(out), "--model", MODEL]) == EXIT_REFUSED
+
+
+def test_the_artifact_records_the_bd_build_it_was_bought_against(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    tasks = corpus(1)
+    monkeypatch.setattr(
+        beads_arm_fire,
+        "run_arm_cell",
+        lambda task, arm, *, repeat=0, **_kw: a_cell(task, arm, repeat=repeat, paid=False),
+    )
+    monkeypatch.setattr(beads_arm_fire, "load_twin_corpus", lambda *a, **k: ([], tasks))
+    monkeypatch.setattr(beads_arm_fire, "resolve_cli_version", lambda *a, **k: "2.1.210")
+    monkeypatch.setattr(beads_arm_fire, "resolve_bd_build", lambda *a, **k: BD_BUILD)
+    out = tmp_path / "out.json"
+    assert main(["--dry-run", "--out", str(out), "--model", MODEL]) == EXIT_OK
+    written = json.loads(out.read_text(encoding="utf-8"))
+    assert written["bd_commit"] == "e9d2f1778"
+    assert written["bd_binary_sha256"] == "f" * 64

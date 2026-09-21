@@ -29,6 +29,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from membench.runner.bd_build import BdBuild, resolve_bd_build
 from membench.runner.beads_arm_grid import ArmCell, run_arm_cell
 from membench.runner.beads_arm_plan import (
     PREFLIGHT_TASKS,
@@ -69,7 +70,11 @@ from membench.runner.headless_agent import (
     resolve_model,
 )
 from membench.runner.memory_arm import ARM_NAMES, arm_settings_fingerprint
-from membench.runner.tool_surface import RECOGNIZER_IMPLEMENTATION_VERSION, surface_fingerprint
+from membench.runner.tool_surface import (
+    RECOGNIZER_IMPLEMENTATION_VERSION,
+    MemoryToolError,
+    surface_fingerprint,
+)
 from membench.runner.toolreq_corpus import load_twin_corpus
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask
 from membench.spawn import Runner
@@ -89,7 +94,7 @@ HALT_NO_CALL = "NO-MEMORY-CALL"
 
 
 def resume_identity(
-    *, model: str, cli_version: str, corpus: str, work_ids: Sequence[str]
+    *, model: str, cli_version: str, corpus: str, work_ids: Sequence[str], bd_build: BdBuild
 ) -> dict[str, Any]:
     """Everything a partial artifact must match before its cells may be pooled into this fire.
 
@@ -98,9 +103,13 @@ def resume_identity(
     hook still observed rather than denied, measured a different machine. So is the sorted
     work_id list — §6 buys the whole corpus precisely so the subset carries no researcher degree
     of freedom, and an identity that could not see a re-selection would let a later partial re-buy
-    silently choose a friendlier set."""
+    silently choose a friendlier set.
+
+    The bd build is in here (mem-0wpq8.2) because it is the flywheel's one variable per turn: a
+    cell bought against last turn's binary measured a different treatment."""
     return {
         "protocol_version": PROTOCOL_VERSION,
+        **bd_build.identity(),
         "model": resolve_model(model) or "cli-default",
         "cli_version": cli_version,
         "corpus_fingerprint": corpus,
@@ -330,7 +339,8 @@ def _run(
     corpus = corpus_fingerprint(tasks)
     try:
         cli_version = resolve_cli_version()
-    except HeadlessAgentError as exc:
+        bd_build = resolve_bd_build()
+    except (HeadlessAgentError, MemoryToolError) as exc:
         print(f"REFUSING to run: {exc}", file=sys.stderr)
         return EXIT_REFUSED
     identity = resume_identity(
@@ -338,6 +348,7 @@ def _run(
         cli_version=cli_version,
         corpus=corpus,
         work_ids=work_ids_of(tasks, n_tasks=n_tasks),
+        bd_build=bd_build,
     )
     grid = grid_keys(tasks, n_tasks=n_tasks)
     plan = priced_plan(tasks, n_tasks=n_tasks)
@@ -363,6 +374,9 @@ def _run(
                 "remaining_cells": len(grid) - len(landed),
                 "cli_version": cli_version,
                 "corpus_fingerprint": corpus,
+                "bd_binary": bd_build.binary,
+                "bd_version": bd_build.version,
+                **bd_build.identity(),
             },
             indent=2,
         ),
