@@ -26,6 +26,13 @@ Three properties the surfaces here must have, each of which has cost this rig a 
   not found" and one whose bd invocation dies some other way are different error surfaces, and
   the difference is visible to the agent. 127 is what a missing command gives; the stub makes the
   arms agree on the surface while disagreeing on the store.
+- **The config dir is re-minted between the legs of a cell**, for every arm whose memory does
+  not live in one. `$CLAUDE_CONFIG_DIR/projects/<slug>/*.jsonl` is the session transcript and it
+  carries the establish leg's opaque token verbatim, so a goal leg sharing the directory can read
+  its predecessor's answer without touching any memory system. The wipe cannot reach it -- it is
+  outside the cwd -- and the deny hook only DETECTS the read. `remint_config_dir` removes the
+  file. The builtin arm keeps its directory, because for that arm the transcript and the store
+  under test are the same directory.
 - **Settings are written whole, never merged** (mem-nclzl). The hook install merges into them
   afterwards, which is correct and is the opposite direction: it adds `hooks` without disturbing
   the pin. What must never happen is one arm's pin surviving underneath another's.
@@ -42,7 +49,7 @@ import stat
 import tempfile
 from collections.abc import Collection, Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -177,7 +184,8 @@ class NoStoreSurface(MemoryToolSurface):
 
 @dataclass(frozen=True)
 class ArmCellStore:
-    """One repeat's minted surface for one arm. The two legs of the cell share all of it."""
+    """One repeat's minted surface for one arm. The two legs share the sandbox and the store;
+    the CONFIG DIR they share only where the arm needs native continuity across them."""
 
     arm: MemoryArm
     surface: MemoryToolSurface
@@ -187,6 +195,9 @@ class ArmCellStore:
     pinned_off: bool
     probe: str
     context_files: tuple[str, ...]
+    # The tempdir the whole mint lives under, so a fresh per-leg config dir is a sibling of the
+    # first rather than a second TemporaryDirectory nobody holds open.
+    root: Path
     # The per-cell symlink directory that makes the three arms' reachable tooling identical.
     toolchain: Path
     # Held on the store so the re-plant after the cwd wipe cannot render a DIFFERENT context
@@ -292,6 +303,7 @@ def arm_cell_store(arm_name: str, *, label: str) -> Iterator[ArmCellStore]:
             pinned_off=native_memory_pinned_off(config_dir),
             probe=pin_precedence_fingerprint(cwd=sandbox),
             context_files=planted,
+            root=root,
             toolchain=toolchain,
             bd_capability=bd_capability,
         )
@@ -321,6 +333,49 @@ def replant_context(store: ArmCellStore) -> tuple[str, ...]:
     return plant_arm_context(store.sandbox, store.arm.name, bd_capability=store.bd_capability)
 
 
+def carries_native_memory(one: MemoryArm) -> bool:
+    """Whether this arm's OWN store lives in the config dir, and so must survive between legs.
+
+    The same predicate `engagement_of` grades the comparator on, named once: the builtin arm IS
+    the CLI's native memory, so its config dir is the thing under test and re-minting it between
+    legs would delete the store mid-cell and publish the deletion as a disposition."""
+    return one.settings.get("autoMemoryEnabled") is True
+
+
+def remint_config_dir(store: ArmCellStore, *, leg: int) -> ArmCellStore:
+    """A FRESH config dir for the next leg, for every arm whose memory does not live in one.
+
+    Gate 5's structural half. `$CLAUDE_CONFIG_DIR/projects/<slug>/*.jsonl` is the session
+    transcript, and it carries the establish leg's opaque token verbatim; a goal leg pointed at
+    the same config dir can read its predecessor's answer without touching any memory system.
+    The deny hook DETECTS that read, and detection alone would make the gate a promise that the
+    recognizer is complete. Minting a new directory removes the file instead, and the hook stays
+    as the instrument that says whether anything reached for it.
+
+    Returns a new store; the caller runs the next leg on it. The builtin arm is returned
+    unchanged (`carries_native_memory`), because for it the transcript's directory and the
+    memory under test are the same directory."""
+    if carries_native_memory(store.arm):
+        return store
+    config_dir = store.root / f"config-leg{leg}"
+    if config_dir.exists():
+        raise MemoryArmError(
+            f"{store.arm.name}: {config_dir} already exists, so this leg would inherit a config "
+            "dir another leg wrote -- which is the transcript channel the fresh mint closes."
+        )
+    config_dir.mkdir(parents=True)
+    seed_config_dir(config_dir, arm_settings(store.arm.name))
+    hook_log = install_native_memory_hook(config_dir, mode=store.arm.hook_mode)
+    return replace(
+        store,
+        surface=replace(store.surface, config_dir=config_dir),
+        config_dir=config_dir,
+        hook_log=hook_log,
+        pinned_off=native_memory_pinned_off(config_dir),
+        probe=pin_precedence_fingerprint(cwd=store.sandbox),
+    )
+
+
 def child_path_of(env: Mapping[str, str]) -> list[str]:
     """The PATH entries a child of this env would search, for the separation report."""
     return [entry for entry in env.get("PATH", "").split(os.pathsep) if entry]
@@ -341,6 +396,11 @@ class ArmCell:
 
     arm: str
     work_id: str
+    # Carried on the cell, not re-derived by the driver from a task it looked up again: the grid
+    # is keyed `(arm, variant, work_id, repeat)`, and a key one half of the rig reconstructs is a
+    # key that can disagree with the one the money was spent under.
+    variant: str
+    repeat: int
     passed: bool
     engaged: bool
     leaked: bool
@@ -437,13 +497,6 @@ def run_arm_cell(
     reach one directory up, and the context is re-planted because the wipe ate it."""
     with arm_cell_store(arm_name, label=f"{arm_name}-{task.work_id}-{repeat}") as store:
         establish_leg, goal_leg = arm_cell_legs(task, arm_name)
-        agent = cell_agent(
-            model=model,
-            channel=channel,
-            runner=runner,
-            cwd=str(store.sandbox),
-            env=store.env(),
-        )
 
         def _ctx(leg: Leg) -> StepContext:
             return StepContext(
@@ -452,11 +505,22 @@ def run_arm_cell(
                 step_id=leg.step.step_id,
             )
 
+        def _agent(on: ArmCellStore) -> Any:
+            # One agent per LEG, not one per cell: the goal leg may run on a freshly minted
+            # config dir, and an agent built once would hand it the establish leg's.
+            return cell_agent(
+                model=model,
+                channel=channel,
+                runner=runner,
+                cwd=str(on.sandbox),
+                env=on.env(),
+            )
+
         instrumented = store.arm.provisions_bd
         establish_receipts_path = (
             prepare_receipt_leg(store.surface, leg=1) if instrumented else None
         )
-        establish = agent.run_step(
+        establish = _agent(store).run_step(
             establish_leg.step, dict(establish_leg.memory), _ctx(establish_leg)
         )
         receipts = read_receipts(establish_receipts_path) if establish_receipts_path else ()
@@ -465,13 +529,21 @@ def run_arm_cell(
         wipe_cwd_contents(store.sandbox)
         assert_neutral_ancestry(store.sandbox)
         replant_context(store)
+        # Gate 5's structural close, between the legs and after the wipe: the wipe cannot reach
+        # the config dir, which is where the establish leg's transcript sits.
+        goal_store = remint_config_dir(store, leg=2)
 
         if instrumented:
-            prepare_receipt_leg(store.surface, leg=2)
-        goal = agent.run_step(goal_leg.step, dict(goal_leg.memory), _ctx(goal_leg))
+            prepare_receipt_leg(goal_store.surface, leg=2)
+        goal = _agent(goal_store).run_step(goal_leg.step, dict(goal_leg.memory), _ctx(goal_leg))
 
-        reaches = len(hook_reaches(store.hook_log))
-        pinned_off = store.pinned_off
+        # Both legs' logs, because a cell that re-mints has two and a reach on either is a reach
+        # by this cell. Counting one would report the re-minting arms as reaching less often
+        # than they did, which is the direction that flatters the gate.
+        reaches = sum(
+            len(hook_reaches(log)) for log in dict.fromkeys((store.hook_log, goal_store.hook_log))
+        )
+        pinned_off = store.pinned_off and goal_store.pinned_off
 
     passed = score_goal_action(
         goal_leg.step, tool_calls=goal.tool_calls, final_answer=goal.final_answer
@@ -483,6 +555,8 @@ def run_arm_cell(
     return ArmCell(
         arm=arm_name,
         work_id=task.work_id,
+        variant=task.variant,
+        repeat=repeat,
         passed=passed,
         engaged=engaged,
         # A pass the arm's own store cannot account for. Never a win for any arm, and for the
@@ -505,8 +579,11 @@ __all__ = [
     "arm_cell_calls",
     "arm_cell_legs",
     "arm_cell_store",
+    "arm_child_path",
+    "carries_native_memory",
     "child_path_of",
     "engagement_of",
+    "remint_config_dir",
     "replant_context",
     "run_arm_cell",
 ]

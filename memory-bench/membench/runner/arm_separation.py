@@ -30,7 +30,9 @@ from membench.runner.beads_arm_grid import (
     COMMAND_NOT_FOUND,
     SHARED_SYSTEM_PATH,
     arm_cell_store,
+    carries_native_memory,
     child_path_of,
+    remint_config_dir,
 )
 from membench.runner.headless_agent import MemoryChannel
 from membench.runner.memory_arm import ARM_NAMES, SHARED_PROTOCOL, arm, arm_settings_fingerprint
@@ -147,6 +149,49 @@ def _path_shape(env: Mapping[str, str], store: Any) -> list[str]:
     return [roles.get(entry, entry) for entry in child_path_of(env)]
 
 
+def _transcript_close(store: Any) -> dict[str, Any]:
+    """§5 item 8: what the goal leg's config dir holds after the between-legs re-mint.
+
+    Plants the establish leg's transcript where the CLI writes one, re-mints as `run_arm_cell`
+    does, and reads back the whole surviving tree. The claim being evidenced is not "the hook
+    would have blocked it" -- that is the deny battery's claim, and it rests on the recognizer
+    being complete. This one rests on the file not being there.
+
+    The comparator is expected to keep its directory and is reported as keeping it, because for
+    that arm the transcript and the memory under test live in the same place. Its transcript IS
+    reachable from its goal leg, and saying so plainly is the point: it is the one arm whose
+    cross-leg continuity is the treatment rather than a leak."""
+    transcript = _plant_transcript(store.config_dir)
+    goal = remint_config_dir(store, leg=2)
+    files = sorted(
+        str(path.relative_to(goal.config_dir))
+        for path in goal.config_dir.rglob("*")
+        if path.is_file()
+    )
+    reachable = any(
+        TRANSCRIPT_TOKEN in (goal.config_dir / name).read_text(encoding="utf-8", errors="replace")
+        for name in files
+    )
+    fresh = goal.config_dir != store.config_dir
+    if fresh == carries_native_memory(store.arm):
+        raise ArmSeparationError(
+            f"{store.arm.name}: the goal leg's config dir was "
+            f"{'re-minted' if fresh else 'reused'}, which is the wrong way round for an arm whose "
+            f"own memory {'does' if carries_native_memory(store.arm) else 'does not'} live in it."
+        )
+    if reachable and not carries_native_memory(store.arm):
+        raise ArmSeparationError(
+            f"{store.arm.name}: {TRANSCRIPT_TOKEN} is readable from the goal leg's config dir "
+            f"({transcript.name} survived the re-mint), so the establish leg's answer reaches the "
+            "goal leg without any memory system carrying it."
+        )
+    return {
+        "goal_leg_config_dir_is_fresh": fresh,
+        "goal_leg_config_dir_files": files,
+        "establish_transcript_reachable_from_goal_leg": reachable,
+    }
+
+
 def arm_rows(task: Any, *, model: str, channel: MemoryChannel) -> list[dict[str, Any]]:
     """One row per arm, each read off that arm's own minted surface."""
     from membench.runner.beads_arm_grid import arm_cell_calls
@@ -192,6 +237,7 @@ def arm_rows(task: Any, *, model: str, channel: MemoryChannel) -> list[dict[str,
                     "capability_words": context_words(capability_of(context)),
                     "goal_call": arm_cell_calls(task, name, channel, model=model).calls[-1],
                 }
+                | _transcript_close(store)
             )
     return rows
 

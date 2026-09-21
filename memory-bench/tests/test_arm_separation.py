@@ -71,3 +71,15 @@ def test_the_artifact_records_one_scaffold_one_goal_call_and_three_settings(
     assert by_arm["beads"]["memory_command_exit"] is None
     # Each arm's capability paragraph is its own, and none of them is empty.
     assert all(row["capability_words"] >= 20 for row in document["arms"])
+
+    # §5 item 8: the establish leg's transcript is GONE from the goal leg's config dir for the
+    # two arms that re-mint, and present for the comparator, whose cross-leg continuity is the
+    # treatment rather than a leak.
+    for name in ("beads", "none"):
+        assert by_arm[name]["goal_leg_config_dir_is_fresh"] is True, name
+        assert by_arm[name]["establish_transcript_reachable_from_goal_leg"] is False, name
+        assert not any(
+            path.startswith("projects/") for path in by_arm[name]["goal_leg_config_dir_files"]
+        ), by_arm[name]["goal_leg_config_dir_files"]
+    assert by_arm["builtin"]["goal_leg_config_dir_is_fresh"] is False
+    assert by_arm["builtin"]["establish_transcript_reachable_from_goal_leg"] is True

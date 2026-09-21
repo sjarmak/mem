@@ -10,6 +10,7 @@ import json
 import os
 import shutil
 import subprocess
+from collections.abc import Collection, Sequence
 from pathlib import Path
 
 import pytest
@@ -23,17 +24,26 @@ from membench.runner.beads_arm_grid import (
     arm_cell_calls,
     arm_cell_legs,
     arm_cell_store,
+    carries_native_memory,
     child_path_of,
     engagement_of,
+    remint_config_dir,
     replant_context,
     run_arm_cell,
 )
 from membench.runner.e1_grid import ESTABLISH_INSTRUCTION
-from membench.runner.headless_agent import MemoryChannel
+from membench.runner.headless_agent import (
+    MemoryChannel,
+    assistant_event,
+    result_event,
+    serialize_stream,
+)
 from membench.runner.memory_arm import ARM_NAMES
+from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL
 from membench.runner.tool_surface import BD_CONTEXT_FILES, CONFIG_DIR_ENV, MEMORY_COMMAND
 from membench.runner.toolreq_builtin import simulated_builtin_runner
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask, adapt_sequence
+from membench.spawn import Runner
 from tests.toolreq_helpers import toolreq_seq
 
 pytestmark = pytest.mark.skipif(
@@ -224,12 +234,15 @@ def test_the_beads_arm_is_engaged_from_its_receipts_and_not_from_a_bare_verb() -
         assert engagement_of(store, (), receipts=wrote) is False
 
 
-def test_a_floor_pass_is_booked_as_a_leak_and_never_as_a_win(tmp_path: Path) -> None:
-    """The simulated CLI persists whatever its prompt carried and reads it back, WITHOUT
-    consulting `autoMemoryEnabled` -- so it models a CLI whose native memory is on, which is the
-    one condition the floor arm's pin exists to prevent. That makes it the right adversary here:
-    the floor gets a pass it has no store to account for, and the accounting has to book it as a
-    leak. If `leaked` ever stopped firing, this reads as a floor arm that solved the task."""
+def test_the_floor_arm_cannot_carry_a_value_through_its_config_dir(tmp_path: Path) -> None:
+    """Gate 5's structural close, driven by the adversary that used to defeat it.
+
+    The simulated CLI persists whatever its prompt carried into the config dir's native-memory
+    layout and reads it back on the bare call, WITHOUT consulting `autoMemoryEnabled` -- it models
+    a CLI whose native memory is on, which is the one condition the floor arm's pin exists to
+    prevent. Before `remint_config_dir` it carried the establish leg's value straight into the
+    goal leg and the floor arm passed. Now the goal leg runs on a config dir the establish leg
+    never wrote to, and there is nothing to read back."""
     task = _task()
     cell = run_arm_cell(
         task,
@@ -241,10 +254,80 @@ def test_a_floor_pass_is_booked_as_a_leak_and_never_as_a_win(tmp_path: Path) -> 
     )
     assert cell.arm == "none"
     assert cell.engaged is False
+    assert cell.passed is False
+    assert cell.leaked is False
+    assert cell.pinned_off is True
+    assert cell.status == "ok"
+
+
+def _unaccountable_pass_runner(values: Sequence[str]) -> Runner:
+    """A CLI that answers the GOAL leg correctly and never persists anything.
+
+    Deliberately says nothing about where the value came from: the point of `leaked` is that a
+    pass the arm's own store cannot account for is booked as a leak whatever its channel, and a
+    guard tied to one channel stops firing the moment that channel is closed -- which is what
+    just happened to the config-dir one."""
+
+    def run(argv: Collection[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        argv_list = list(argv)
+        prompt = argv_list[2] if len(argv_list) > 2 else ""
+        events: list[dict[str, object]] = []
+        if values and not all(value in prompt for value in values):
+            # The bare call is the goal leg: its prompt never carries the values.
+            events.append(
+                assistant_event(
+                    [(REAL_TOOL, {"file_path": CONFIG_FILE, "content": " ".join(values)})]
+                )
+            )
+        events.append(result_event())
+        return subprocess.CompletedProcess(
+            argv_list, returncode=0, stdout=serialize_stream(events), stderr=""
+        )
+
+    return run
+
+
+def test_a_floor_pass_is_booked_as_a_leak_and_never_as_a_win(tmp_path: Path) -> None:
+    """A floor arm that answers correctly has no store the answer can have come from, so the
+    accounting has to book it as a leak. If `leaked` ever stopped firing, this reads as a floor
+    arm that solved a memory-necessary task without memory."""
+    task = _task()
+    cell = run_arm_cell(
+        task,
+        "none",
+        repeat=0,
+        model="sonnet",
+        channel=MemoryChannel.TRUSTED,
+        runner=_unaccountable_pass_runner(list(task.current_opaque_values)),
+    )
+    assert cell.arm == "none"
+    assert cell.engaged is False
     assert cell.passed is True
     assert cell.leaked is True
     assert cell.pinned_off is True
     assert cell.status == "ok"
+
+
+def test_the_comparator_keeps_its_config_dir_across_the_legs() -> None:
+    """The builtin arm's memory IS the config dir, so re-minting it would delete the store mid-
+    cell and publish the deletion as the agent choosing not to remember."""
+    with arm_cell_store("builtin", label="remint") as store:
+        assert carries_native_memory(store.arm) is True
+        assert remint_config_dir(store, leg=2) is store
+
+
+def test_the_floor_and_beads_arms_get_a_fresh_config_dir_for_the_goal_leg() -> None:
+    for name in ("beads", "none"):
+        with arm_cell_store(name, label=f"remint-{name}") as store:
+            goal = remint_config_dir(store, leg=2)
+            assert goal.config_dir != store.config_dir, name
+            assert goal.hook_log != store.hook_log, name
+            assert goal.env()["CLAUDE_CONFIG_DIR"] == str(goal.config_dir), name
+            assert goal.pinned_off is True, name
+            # The pin and the hook both survive the re-mint; a fresh dir that lost either would
+            # hand the goal leg a different arm than the establish leg ran.
+            assert (goal.config_dir / "settings.json").exists(), name
+            assert child_path_of(goal.env()) == child_path_of(store.env()), name
 
 
 def test_the_comparator_runs_end_to_end_and_carries_the_value(tmp_path: Path) -> None:
