@@ -95,4 +95,6 @@ After copying, link the destination repository, verify all fields and views agai
 
 The live project should have 43 total fields (13 GitHub defaults plus 30 custom fields), 10 views, public visibility, a repository link to `sjarmak/mem`, and six enabled default workflows. Its description and README must state the decision rule and privacy boundary.
 
+An external agent seat (a Beads maintainer's own orchestrator, for example) works the same Issues and board under [`peer-collaboration.md`](peer-collaboration.md): it reads and writes the public surfaces only, picks up items labelled `peer-ready`, and returns sanitized result packages by pull request. Spend, preregistration changes, upstream posts, and `Decision` rulings stay with the project owner.
+
 Issue forms in `.github/ISSUE_TEMPLATE/` provide the reusable intake contracts. At present, `sjarmak/mem` Issues are the incubation channel; broader Beads sentiment should be gathered in the upstream [Beads Discussions](https://github.com/gastownhall/beads/discussions) and linked rather than copied.
