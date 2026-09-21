@@ -12,9 +12,16 @@ surface that is the same shape with the store removed.
 
 Three properties the surfaces here must have, each of which has cost this rig a run before:
 
-- **The child PATH is the harness `bin_dir` and nothing else** for the arms without a store.
-  `MemoryToolSurface.env()` appends the operator's own PATH, which on this machine has a real bd
-  on it; a floor arm inheriting that is not a floor. `NoStoreSurface` overrides exactly that.
+- **Every arm's child PATH is the same short list, and the operator's own PATH is on none of
+  them.** `MemoryToolSurface.env()` appends the operator's PATH, which on this machine has a
+  real bd on it; a floor arm inheriting that is not a floor, and `NoStoreSurface` overrides
+  exactly that. The bd arm inheriting it is the same defect wearing the other face: the
+  separation report caught the bd arm reaching the operator's whole toolchain while the floors
+  reached their own `bin_dir` alone, which is a difference in what tooling each arm HAS and
+  no gate was watching it. `arm_child_path` gives all three the identical list: the arm's own
+  `bin_dir`, a per-cell `toolchain` directory of symlinks to `SHARED_TOOLCHAIN_COMMANDS`, and
+  the system directories. The memory command is refused a link there by name, so equalizing
+  the toolchain cannot hand a floor arm the store it is graded on not having.
 - **A `bd` that exits 127 is planted anyway.** A floor arm whose bd invocation dies with "command
   not found" and one whose bd invocation dies some other way are different error surfaces, and
   the difference is visible to the agent. 127 is what a missing command gives; the stub makes the
@@ -30,6 +37,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import stat
 import tempfile
 from collections.abc import Collection, Iterator, Mapping
@@ -90,6 +98,63 @@ exit {COMMAND_NOT_FOUND}
 """
 
 
+# The tooling every arm reaches, over and above its own `bin_dir`. `git` because the corpus is a
+# repository, `dolt` because bd's store is one, `claude` because it is the agent binary the legs
+# spawn by name. Identical for all three arms: an arm that could reach a tool another could not
+# is an arm difference that is not the memory it has. `bd` is refused by name -- see
+# `_link_shared_toolchain`.
+SHARED_TOOLCHAIN_COMMANDS: tuple[str, ...] = ("git", "dolt", "claude")
+
+# The system directories, on every arm's PATH identically. They hold the ordinary shell utilities
+# a `Bash` tool call assumes and no memory tool; `assert_no_memory_command` re-checks that on the
+# assembled PATH for the arms without a store rather than trusting this comment.
+SHARED_SYSTEM_PATH: tuple[str, ...] = ("/usr/bin", "/bin")
+
+
+def _link_shared_toolchain(root: Path) -> Path:
+    """A directory of symlinks to the shared toolchain, minted per cell.
+
+    Symlinks rather than putting the hosting directories on PATH: `dolt` lives beside the real
+    `bd` on this machine, so naming its directory would put a working store back on a floor arm's
+    PATH by a side door. A link per command names exactly what is shared and nothing adjacent.
+
+    Refuses rather than skipping a missing command. An arm that lost `git` is running a different
+    environment than its siblings, and the resulting gap would read as an arm effect."""
+    toolchain = root / "toolchain"
+    toolchain.mkdir(parents=True, exist_ok=True)
+    missing: list[str] = []
+    for name in SHARED_TOOLCHAIN_COMMANDS:
+        if name == MEMORY_COMMAND:
+            raise MemoryArmError(
+                f"{MEMORY_COMMAND!r} cannot be a shared toolchain command: linking it would give "
+                "every arm the store two of them are defined by not having."
+            )
+        found = shutil.which(name)
+        if found is None:
+            missing.append(name)
+            continue
+        link = toolchain / name
+        if not link.exists():
+            link.symlink_to(found)
+    if missing:
+        raise MemoryArmError(
+            f"the shared toolchain is incomplete on this host: {missing} did not resolve. Every "
+            "arm must reach the same tools, so a partial toolchain is refused rather than run."
+        )
+    return toolchain
+
+
+def arm_child_path(bin_dir: Path, toolchain: Path) -> str:
+    """The one PATH every arm's child searches, in order.
+
+    `bin_dir` FIRST, so the bd arm's store-pinned shim wins and the floor arms' 127 stub wins;
+    then the shared toolchain; then the system directories. The operator's own PATH appears
+    nowhere, for either kind of arm."""
+    entries = [str(bin_dir), str(toolchain)]
+    entries.extend(entry for entry in SHARED_SYSTEM_PATH if Path(entry).is_dir())
+    return os.pathsep.join(entries)
+
+
 class NoStoreSurface(MemoryToolSurface):
     """The surface for an arm that has no store: the same object the bd arm hands the agent, with
     the operator's PATH taken back out.
@@ -104,6 +169,11 @@ class NoStoreSurface(MemoryToolSurface):
             env[CONFIG_DIR_ENV] = str(self.config_dir)
         return env
 
+    # `ArmCellStore.env` replaces PATH for EVERY arm, so this override is no longer what keeps
+    # the operator's bd off a floor leg. It stays because the surface is handed around on its
+    # own -- `assert_no_memory_command(surface.env())` at mint time is one such caller -- and a
+    # surface whose bare env leaked the host PATH would make that check meaningless.
+
 
 @dataclass(frozen=True)
 class ArmCellStore:
@@ -117,6 +187,8 @@ class ArmCellStore:
     pinned_off: bool
     probe: str
     context_files: tuple[str, ...]
+    # The per-cell symlink directory that makes the three arms' reachable tooling identical.
+    toolchain: Path
     # Held on the store so the re-plant after the cwd wipe cannot render a DIFFERENT context
     # than the mint did. One planting path for every arm and both legs: `plant_bd_context`
     # writes bd's block without the shared scaffold, so using it for the goal leg would give
@@ -124,9 +196,20 @@ class ArmCellStore:
     bd_capability: str | None
 
     def env(self) -> dict[str, str]:
-        """What the cell hands the agent. `PWD` is pinned to the sandbox because the agent merges
-        this over the operator's environment, whose `PWD` is the checkout the corpus lives in."""
-        return {**self.surface.env(), "PWD": str(self.sandbox)}
+        """What the cell hands the agent.
+
+        PATH is REPLACED, not taken from the surface: `MemoryToolSurface.env()` appends the
+        operator's own PATH, and an arm that reached the operator's toolchain while another
+        reached only its own `bin_dir` differs in what tools it HAS. Every arm gets
+        `arm_child_path`, identically.
+
+        `PWD` is pinned to the sandbox because the agent merges this over the operator's
+        environment, whose `PWD` is the checkout the corpus lives in."""
+        return {
+            **self.surface.env(),
+            "PATH": arm_child_path(self.surface.bin_dir, self.toolchain),
+            "PWD": str(self.sandbox),
+        }
 
 
 def _plant_missing_command(bin_dir: Path) -> Path:
@@ -188,10 +271,17 @@ def arm_cell_store(arm_name: str, *, label: str) -> Iterator[ArmCellStore]:
         # After the seed and merging into it: the hook is an instrument on top of whatever the arm
         # pinned, and an install that replaced the file would drop the pin.
         hook_log = install_native_memory_hook(config_dir, mode=one.hook_mode)
+        toolchain = _link_shared_toolchain(root)
         if not one.provisions_bd:
             # The stub this mint just planted is the one permitted resolution; anything else on
-            # this PATH would give the arm a store it is graded on not having.
-            assert_no_memory_command(surface.env(), allow_stub=surface.bin_dir / MEMORY_COMMAND)
+            # this PATH would give the arm a store it is graded on not having. Checked against
+            # the ASSEMBLED child PATH, toolchain and system directories included, because that
+            # is what the agent's shell will search -- checking `surface.env()` alone would pass
+            # while a `bd` sat in `/usr/bin`.
+            assert_no_memory_command(
+                {"PATH": arm_child_path(surface.bin_dir, toolchain)},
+                allow_stub=surface.bin_dir / MEMORY_COMMAND,
+            )
         planted = plant_arm_context(sandbox, arm_name, bd_capability=bd_capability)
         yield ArmCellStore(
             arm=one,
@@ -202,6 +292,7 @@ def arm_cell_store(arm_name: str, *, label: str) -> Iterator[ArmCellStore]:
             pinned_off=native_memory_pinned_off(config_dir),
             probe=pin_precedence_fingerprint(cwd=sandbox),
             context_files=planted,
+            toolchain=toolchain,
             bd_capability=bd_capability,
         )
 

@@ -17,9 +17,14 @@ the grid is buying an answer about. For the same reason the bd paragraph is CAPT
 `bd init` shipped (`tool_surface.capture_bd_context` plus `BD_CONTEXT_ADDENDUM`) rather than
 written here: a paraphrase of bd's own deployment text would measure prose this rig authored.
 
-What this module does NOT defeat: a command grammar is a stronger instruction than a file path,
-whatever the word counts say. That residue is reported, not removed -- `arm_context_words` per
-arm goes in the summary, and a ratio above 1.5x forces the confound statement in the write-up.
+What this module does NOT defeat: LENGTH, and a command grammar being a stronger instruction
+than a file path. The measured capability paragraphs are 1,338 words (beads) against 35 (none)
+and 37 (builtin) -- about 38x, with the arm under test on the long side. Condensing bd's text
+was rejected (ruling 1(a)): a shortened paragraph tests a deployment of bd that does not exist,
+and this rig would then be choosing how much instruction the subject receives. So the residue is
+reported and not removed: `arm_context_words` per arm goes in the summary, and the write-up
+carries the presentation-length confound statement UNCONDITIONALLY rather than on a ratio
+trigger. Symmetry here means one scaffold and one differing slot; it never meant equal length.
 
 ZFC: string accumulation and a word count. No model call, no judgment.
 """

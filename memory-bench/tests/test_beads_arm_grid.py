@@ -18,6 +18,8 @@ from membench.harbor.agent_memory import native_memory_path
 from membench.runner.arm_context import capability_of, scaffold_of
 from membench.runner.beads_arm_grid import (
     COMMAND_NOT_FOUND,
+    SHARED_SYSTEM_PATH,
+    SHARED_TOOLCHAIN_COMMANDS,
     arm_cell_calls,
     arm_cell_legs,
     arm_cell_store,
@@ -78,13 +80,18 @@ def test_a_working_bd_resolves_in_exactly_one_arm() -> None:
     assert resolves == {"beads": True, "none": False, "builtin": False}
 
 
-def test_the_arms_without_a_store_see_only_the_harness_bin_dir() -> None:
+def test_no_arm_carries_the_operators_path_passthrough() -> None:
     """`MemoryToolSurface.env()` appends the operator's PATH, which on this machine has a real bd
-    on it. A floor arm that inherited it would not be a floor."""
-    for name in ("none", "builtin"):
+    on it. A floor arm that inherited it would not be a floor -- and under ruling 2(a) the bd arm
+    must not inherit it either, or it reaches tooling the floors cannot."""
+    for name in ARM_NAMES:
         with arm_cell_store(name, label="test") as store:
             entries = child_path_of(store.env())
-            assert entries == [str(store.surface.bin_dir)], name
+            assert entries[0] == str(store.surface.bin_dir), name
+            assert entries[1] == str(store.toolchain), name
+            assert entries[2:] == [
+                entry for entry in SHARED_SYSTEM_PATH if Path(entry).is_dir()
+            ], name
 
 
 def test_the_planted_stub_exits_command_not_found() -> None:
@@ -254,3 +261,66 @@ def test_the_comparator_runs_end_to_end_and_carries_the_value(tmp_path: Path) ->
     assert cell.passed is True
     assert cell.leaked is False
     assert cell.pinned_off is False
+
+
+def _shape(store: object) -> list[str]:
+    roles = {
+        str(store.surface.bin_dir): "<cell>/bin",  # type: ignore[attr-defined]
+        str(store.toolchain): "<cell>/toolchain",  # type: ignore[attr-defined]
+    }
+    return [roles.get(entry, entry) for entry in child_path_of(store.env())]  # type: ignore[attr-defined]
+
+
+def test_every_arm_searches_the_same_path_shape() -> None:
+    """Ruling 2(a). Before this, the beads arm inherited the operator's whole PATH and the two
+    floor arms saw their own `bin_dir` alone -- a difference in what tooling the arm HAS."""
+    shapes = {}
+    for name in ARM_NAMES:
+        with arm_cell_store(name, label=f"path-{name}") as store:
+            shapes[name] = _shape(store)
+    assert len(set(map(tuple, shapes.values()))) == 1, shapes
+    assert shapes["none"][:2] == ["<cell>/bin", "<cell>/toolchain"], shapes
+
+
+def test_no_arm_can_reach_the_operators_own_path() -> None:
+    """The specific leak this closes: `/home/ds/.local/bin` holds the real `bd` and `dolt`."""
+    operator = [entry for entry in os.environ.get("PATH", "").split(os.pathsep) if entry]
+    for name in ARM_NAMES:
+        with arm_cell_store(name, label=f"leak-{name}") as store:
+            entries = child_path_of(store.env())
+            outside = [
+                entry
+                for entry in entries
+                if not entry.startswith(str(store.surface.bin_dir).rsplit("/", 1)[0])
+                and entry not in SHARED_SYSTEM_PATH
+            ]
+            assert not outside, f"{name} reaches {outside}"
+            for entry in operator:
+                if entry in SHARED_SYSTEM_PATH:
+                    continue
+                assert entry not in entries, f"{name} inherited {entry}"
+
+
+def test_every_arm_reaches_the_same_shared_tools() -> None:
+    reachable = {}
+    for name in ARM_NAMES:
+        with arm_cell_store(name, label=f"tools-{name}") as store:
+            reachable[name] = sorted(entry.name for entry in store.toolchain.iterdir())
+    assert len(set(map(tuple, reachable.values()))) == 1, reachable
+    assert reachable["none"] == sorted(SHARED_TOOLCHAIN_COMMANDS), reachable
+
+
+def test_the_shared_toolchain_never_carries_the_memory_command() -> None:
+    """Equalizing the toolchain must not hand a floor arm the store it is graded on lacking."""
+    assert MEMORY_COMMAND not in SHARED_TOOLCHAIN_COMMANDS
+    for name in ("none", "builtin"):
+        with arm_cell_store(name, label=f"nobd-{name}") as store:
+            assert not (store.toolchain / MEMORY_COMMAND).exists()
+            resolved = shutil.which(MEMORY_COMMAND, path=store.env()["PATH"])
+            assert resolved == str(store.surface.bin_dir / MEMORY_COMMAND), resolved
+
+
+def test_the_beads_arm_still_resolves_its_own_shim_first() -> None:
+    with arm_cell_store("beads", label="shim-first") as store:
+        resolved = shutil.which(MEMORY_COMMAND, path=store.env()["PATH"])
+        assert resolved == str(store.surface.bin_dir / MEMORY_COMMAND), resolved

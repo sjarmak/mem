@@ -21,12 +21,14 @@ import json
 import shlex
 import shutil
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from membench.runner.arm_context import capability_of, context_words, scaffold_of
 from membench.runner.beads_arm_grid import (
     COMMAND_NOT_FOUND,
+    SHARED_SYSTEM_PATH,
     arm_cell_store,
     child_path_of,
 )
@@ -133,6 +135,18 @@ def deny_battery(root: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _path_shape(env: Mapping[str, str], store: Any) -> list[str]:
+    """One arm's child PATH with its per-cell directories replaced by their role.
+
+    The bd arm and the floor arms mint different temp roots, so their PATHs can never be equal
+    byte for byte even when they are the same PATH. What must be equal is the SHAPE: same number
+    of entries, same roles in the same order, same system directories -- and, from the separate
+    `shared_toolchain` listing, the same tools reachable through them. A difference here is a
+    difference in what tooling the arm HAS, which is the confound this shape exists to catch."""
+    roles = {str(store.surface.bin_dir): "<cell>/bin", str(store.toolchain): "<cell>/toolchain"}
+    return [roles.get(entry, entry) for entry in child_path_of(env)]
+
+
 def arm_rows(task: Any, *, model: str, channel: MemoryChannel) -> list[dict[str, Any]]:
     """One row per arm, each read off that arm's own minted surface."""
     from membench.runner.beads_arm_grid import arm_cell_calls
@@ -164,6 +178,11 @@ def arm_rows(task: Any, *, model: str, channel: MemoryChannel) -> list[dict[str,
                     "settings": json.loads(settings_text),
                     "settings_digest": digest(settings_text),
                     "child_path": child_path_of(env),
+                    # The per-cell directories are named by ROLE, not by their temp path, so the
+                    # three arms' PATHs can be compared as the shapes they are. Raw entries are
+                    # kept above for the reader; the gate below runs on this.
+                    "child_path_shape": _path_shape(env, store),
+                    "shared_toolchain": sorted(entry.name for entry in store.toolchain.iterdir()),
                     "memory_command_resolves_to": resolved,
                     "memory_command_exit": stub_exit,
                     "establish_tools": list(store.arm.establish_tools),
@@ -194,6 +213,26 @@ def render_arm_separation(out: Path, task: Any, *, root: Path, model: str = "son
             "the goal leg's command line differs across the arms, so they differ in what they "
             "were ASKED as well as in what they could remember."
         )
+    shapes = {json.dumps(row["child_path_shape"]) for row in rows}
+    if len(shapes) != 1:
+        raise ArmSeparationError(
+            "the arms' child PATHs differ in shape, so they differ in what tooling they can "
+            f"reach and not only in the memory they have: {sorted(shapes)}"
+        )
+    toolchains = {json.dumps(row["shared_toolchain"]) for row in rows}
+    if len(toolchains) != 1:
+        raise ArmSeparationError(f"the arms reach different shared tools: {sorted(toolchains)}")
+    leaked = sorted(
+        entry
+        for row in rows
+        for entry in row["child_path_shape"]
+        if not entry.startswith("<cell>/") and entry not in SHARED_SYSTEM_PATH
+    )
+    if leaked:
+        raise ArmSeparationError(
+            "an arm's child PATH carries a directory that is neither its own nor a shared "
+            f"system directory, so the operator's own toolchain is reachable from it: {leaked}"
+        )
     settings = {row["settings_digest"] for row in rows}
     if len(settings) != len(rows):
         raise ArmSeparationError("two arms seeded identical settings, so they are one arm.")
@@ -210,6 +249,8 @@ def render_arm_separation(out: Path, task: Any, *, root: Path, model: str = "son
         },
         "arms": rows,
         "goal_call_is_identical_across_arms": True,
+        "child_path_is_identical_across_arms": True,
+        "shared_system_path": list(SHARED_SYSTEM_PATH),
         "scaffold_is_identical_across_arms": True,
         "deny_battery": deny_battery(root),
         "verbs_counted": list(arm("beads").verbs),

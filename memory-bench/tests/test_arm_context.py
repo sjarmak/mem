@@ -57,8 +57,12 @@ def test_no_arm_is_given_silence_where_another_is_given_a_paragraph() -> None:
 def test_the_authored_paragraphs_are_within_the_pre_registered_ratio() -> None:
     """Only the two AUTHORED paragraphs are in scope here. The bd paragraph is captured at
     provision time from whatever `bd init` shipped, so its length is not this module's to set
-    and a stub asserted against here would measure the stub; the three-way ratio is checked on
-    the real captured text in the driver's pre-flight, before any spend."""
+    and a stub asserted against here would measure the stub.
+
+    There is deliberately no three-way ratio assertion anywhere (ruling 1(a)). The real captured
+    bd text measures ~1,338 words against these two at 35 and 37, and that gap is DISCLOSED in
+    the write-up rather than gated: a gate here could only be satisfied by shortening bd's own
+    deployment text, which would measure a deployment of bd that nobody ships."""
     counts = {arm: context_words(capability_of(_render(arm))) for arm in ("none", "builtin")}
     assert max(counts.values()) <= 1.5 * min(counts.values()), counts
 
