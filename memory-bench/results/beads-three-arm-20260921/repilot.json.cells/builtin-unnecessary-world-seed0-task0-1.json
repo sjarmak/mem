@@ -1,0 +1,34 @@
+{
+  "key": [
+    "builtin",
+    "unnecessary",
+    "world-seed0-task0",
+    1
+  ],
+  "arm": "builtin",
+  "work_id": "world-seed0-task0",
+  "variant": "unnecessary",
+  "repeat": 1,
+  "passed": false,
+  "engaged": false,
+  "leaked": false,
+  "establish_tool_names": [
+    "Bash",
+    "Read",
+    "Write"
+  ],
+  "endogenous_verbs": [],
+  "establish_out_of_sandbox_operands": [
+    "/dev/null",
+    "/tmp/membench-arm-54ponlq2/config/projects/-tmp-arm-builtin-1awctqhe/memory/",
+    "/tmp/membench-arm-54ponlq2/config/projects/-tmp-arm-builtin-1awctqhe/memory/MEMORY.md",
+    "/tmp/membench-arm-54ponlq2/config/projects/-tmp-arm-builtin-1awctqhe/memory/project_initial_state.md"
+  ],
+  "establish_outcomes": [],
+  "goal_outcomes": [],
+  "native_reaches": 3,
+  "pinned_off": false,
+  "paid": true,
+  "status": "ok",
+  "detail": ""
+}

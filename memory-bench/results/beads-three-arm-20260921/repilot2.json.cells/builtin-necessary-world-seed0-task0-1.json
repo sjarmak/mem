@@ -1,0 +1,38 @@
+{
+  "key": [
+    "builtin",
+    "necessary",
+    "world-seed0-task0",
+    1
+  ],
+  "arm": "builtin",
+  "work_id": "world-seed0-task0",
+  "variant": "necessary",
+  "repeat": 1,
+  "passed": false,
+  "engaged": true,
+  "leaked": false,
+  "establish_tool_names": [
+    "Bash",
+    "Write"
+  ],
+  "endogenous_verbs": [],
+  "establish_out_of_sandbox_operands": [
+    "/dev/null",
+    "/tmp/membench-arm-z_muyb3j/config/projects/-tmp-arm-builtin-1psvruq8/memory/",
+    "/tmp/membench-arm-z_muyb3j/config/projects/-tmp-arm-builtin-1psvruq8/memory/MEMORY.md",
+    "/tmp/membench-arm-z_muyb3j/config/projects/-tmp-arm-builtin-1psvruq8/memory/checkout_v2_flag_state.md",
+    "/tmp/membench-arm-z_muyb3j/config/projects/-tmp-arm-builtin-1psvruq8/memory/data_retention_window.md",
+    "/tmp/membench-arm-z_muyb3j/config/projects/-tmp-arm-builtin-1psvruq8/memory/production_deploy_timeout.md"
+  ],
+  "establish_outcomes": [],
+  "goal_outcomes": [],
+  "goal_tool_names": [
+    "Read"
+  ],
+  "native_reaches": 8,
+  "pinned_off": false,
+  "paid": true,
+  "status": "ok",
+  "detail": ""
+}

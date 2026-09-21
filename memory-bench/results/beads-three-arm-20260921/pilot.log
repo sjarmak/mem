@@ -1,0 +1,37 @@
+{
+  "running": {
+    "arms": [
+      "beads",
+      "none",
+      "builtin"
+    ],
+    "work_ids": [
+      "world-seed0-task0"
+    ],
+    "n_tasks": 1,
+    "repeats_by_variant": {
+      "necessary": 4,
+      "unnecessary": 2
+    },
+    "legs_per_cell": 2,
+    "cells": 18,
+    "sessions_by_variant": {
+      "necessary": 24,
+      "unnecessary": 12
+    },
+    "preflight_sessions": 6,
+    "grid_sessions": 36,
+    "subtotal_sessions": 42,
+    "void_headroom_sessions": 7,
+    "authorization_ceiling_sessions": 49,
+    "scored_goal_legs": 18,
+    "min_detectable_effect": 0.2,
+    "n_pairs": 1
+  },
+  "dry_run": false,
+  "resumed_cells": 0,
+  "remaining_cells": 18,
+  "cli_version": "2.1.278",
+  "corpus_fingerprint": "dec436a8e0fb05ce"
+}
+[1/18] beads/necessary/world-seed0-task0#0 ok passed=False engaged=False reaches=0

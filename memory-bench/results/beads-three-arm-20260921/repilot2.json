@@ -1,0 +1,655 @@
+{
+  "protocol_version": 2,
+  "bd_binary_sha256": "c8bcbdac2bb7b022c92592fa228a636c1bcfb64babb03c23fa3270a241ecac0e",
+  "bd_commit": "e9d2f1778",
+  "model": "sonnet",
+  "cli_version": "2.1.278",
+  "corpus_fingerprint": "dec436a8e0fb05ce",
+  "arm_settings_fingerprint": "3730f77a80e5e199",
+  "surface_fingerprint": "edd66a2dd0482fbc",
+  "recognizer_version": 6,
+  "work_ids": [
+    "world-seed0-task0"
+  ],
+  "execution_protocol": 4,
+  "dry_run": false,
+  "n_tasks": 1,
+  "repeats_by_variant": {
+    "necessary": 4,
+    "unnecessary": 2
+  },
+  "n_cells": 18,
+  "n_measured_cells": 18,
+  "n_paid_cells": 18,
+  "voided_work_ids": {},
+  "endpoint": {
+    "contrast": "beads - none",
+    "variant": "necessary",
+    "primary": "matched_median",
+    "readings": {
+      "matched_median": {
+        "delta": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0,
+        "n_pairs": 1,
+        "n_imputed_zero": 0,
+        "population": "matched",
+        "statistic": "median",
+        "excludes_zero": false
+      },
+      "matched_mean": {
+        "delta": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0,
+        "n_pairs": 1,
+        "n_imputed_zero": 0,
+        "population": "matched",
+        "statistic": "mean",
+        "excludes_zero": false
+      },
+      "itt_median": {
+        "delta": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0,
+        "n_pairs": 1,
+        "n_imputed_zero": 0,
+        "population": "itt",
+        "statistic": "median",
+        "excludes_zero": false
+      },
+      "itt_mean": {
+        "delta": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0,
+        "n_pairs": 1,
+        "n_imputed_zero": 0,
+        "population": "itt",
+        "statistic": "mean",
+        "excludes_zero": false
+      }
+    },
+    "per_work_id": {
+      "baseline": {
+        "world-seed0-task0": 0.0
+      },
+      "treatment": {
+        "world-seed0-task0": 0.0
+      }
+    }
+  },
+  "second_contrast": {
+    "contrast": "beads - builtin",
+    "variant": "necessary",
+    "primary": "matched_median",
+    "readings": {
+      "matched_median": {
+        "delta": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0,
+        "n_pairs": 1,
+        "n_imputed_zero": 0,
+        "population": "matched",
+        "statistic": "median",
+        "excludes_zero": false
+      },
+      "matched_mean": {
+        "delta": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0,
+        "n_pairs": 1,
+        "n_imputed_zero": 0,
+        "population": "matched",
+        "statistic": "mean",
+        "excludes_zero": false
+      },
+      "itt_median": {
+        "delta": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0,
+        "n_pairs": 1,
+        "n_imputed_zero": 0,
+        "population": "itt",
+        "statistic": "median",
+        "excludes_zero": false
+      },
+      "itt_mean": {
+        "delta": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0,
+        "n_pairs": 1,
+        "n_imputed_zero": 0,
+        "population": "itt",
+        "statistic": "mean",
+        "excludes_zero": false
+      }
+    },
+    "per_work_id": {
+      "baseline": {
+        "world-seed0-task0": 0.0
+      },
+      "treatment": {
+        "world-seed0-task0": 0.0
+      }
+    }
+  },
+  "gates": {
+    "necessity_floor": {
+      "threshold": 0.2,
+      "observed": 0.0,
+      "passed": true
+    },
+    "specificity_ceiling": {
+      "threshold": 0.8,
+      "observed": 0.0,
+      "arms_separate_on_unnecessary": false,
+      "passed": false
+    },
+    "pin_held": {
+      "enforced_at": "mint and every leg; here as observed",
+      "cells": 12,
+      "passed": true
+    },
+    "discovery": {
+      "variant": "necessary",
+      "beads_establish_write_cells": 0,
+      "beads_goal_read_cells": 0,
+      "builtin_engaged_cells": 3,
+      "beads_goal_reach_rate": 0.0,
+      "passed": false,
+      "verdict": "UNMEASURED: the mechanism was never reached for, so a zero here is not a null"
+    },
+    "leak": {
+      "denied_arm_reaches": 0,
+      "voided_work_ids": {},
+      "passed": true
+    },
+    "pairing_intact": {
+      "population": "matched",
+      "n_pairs": 1,
+      "n_imputed_zero": 0,
+      "passed": true
+    },
+    "substrate_exclusivity": {
+      "verbs_on_storeless_arms": [],
+      "passed": true
+    },
+    "presentation_parity": {
+      "enforced_at": "arm_separation.render_arm_separation, before any spend",
+      "arm_context_words": null,
+      "unavailable": "the beads arm's capability paragraph is captured from what `bd init` shipped (`tool_surface.capture_bd_context` + `BD_CONTEXT_ADDENDUM`) and must be passed in; there is no authored default, because a paraphrase would measure this rig's own prose.",
+      "length_confound_is_unconditional": true
+    },
+    "one_instrument": {
+      "enforced_at": "per-leg cli_version check and the resume identity digest",
+      "arm_settings_fingerprint": "3730f77a80e5e199"
+    },
+    "instrument_agreement": {
+      "enforced_at": "beads_arm_grid.engagement_of, argv counter vs shim receipts"
+    },
+    "unmeasured_budget": {
+      "threshold": 0.1,
+      "observed": {
+        "beads": 0.0,
+        "none": 0.0,
+        "builtin": 0.0
+      },
+      "passed": true
+    },
+    "n_establish_legs_scored": 0
+  },
+  "establish_mechanism": {
+    "beads": {
+      "cells": 6,
+      "engaged_cells": 0,
+      "establish_outcomes": {},
+      "establish_tool_names": [],
+      "goal_tool_names": [
+        "Bash"
+      ]
+    },
+    "none": {
+      "cells": 6,
+      "engaged_cells": 0,
+      "establish_outcomes": {},
+      "establish_tool_names": [],
+      "goal_tool_names": [
+        "Bash",
+        "Read"
+      ]
+    },
+    "builtin": {
+      "cells": 6,
+      "engaged_cells": 3,
+      "establish_outcomes": {},
+      "establish_tool_names": [
+        "Bash",
+        "Read",
+        "Write"
+      ],
+      "goal_tool_names": [
+        "Bash",
+        "Read"
+      ]
+    }
+  },
+  "min_detectable_effect": 0.2,
+  "cells": [
+    {
+      "arm": "beads",
+      "work_id": "world-seed0-task0",
+      "variant": "necessary",
+      "repeat": 0,
+      "passed": false,
+      "engaged": false,
+      "leaked": false,
+      "establish_tool_names": [],
+      "endogenous_verbs": [],
+      "establish_out_of_sandbox_operands": [],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "goal_tool_names": [],
+      "native_reaches": 0,
+      "pinned_off": true,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "arm": "beads",
+      "work_id": "world-seed0-task0",
+      "variant": "necessary",
+      "repeat": 1,
+      "passed": false,
+      "engaged": false,
+      "leaked": false,
+      "establish_tool_names": [],
+      "endogenous_verbs": [],
+      "establish_out_of_sandbox_operands": [],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "goal_tool_names": [
+        "Bash"
+      ],
+      "native_reaches": 0,
+      "pinned_off": true,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "arm": "beads",
+      "work_id": "world-seed0-task0",
+      "variant": "necessary",
+      "repeat": 2,
+      "passed": false,
+      "engaged": false,
+      "leaked": false,
+      "establish_tool_names": [],
+      "endogenous_verbs": [],
+      "establish_out_of_sandbox_operands": [],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "goal_tool_names": [],
+      "native_reaches": 0,
+      "pinned_off": true,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "arm": "beads",
+      "work_id": "world-seed0-task0",
+      "variant": "necessary",
+      "repeat": 3,
+      "passed": false,
+      "engaged": false,
+      "leaked": false,
+      "establish_tool_names": [],
+      "endogenous_verbs": [],
+      "establish_out_of_sandbox_operands": [],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "goal_tool_names": [],
+      "native_reaches": 0,
+      "pinned_off": true,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "arm": "none",
+      "work_id": "world-seed0-task0",
+      "variant": "necessary",
+      "repeat": 0,
+      "passed": false,
+      "engaged": false,
+      "leaked": false,
+      "establish_tool_names": [],
+      "endogenous_verbs": [],
+      "establish_out_of_sandbox_operands": [],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "goal_tool_names": [],
+      "native_reaches": 0,
+      "pinned_off": true,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "arm": "none",
+      "work_id": "world-seed0-task0",
+      "variant": "necessary",
+      "repeat": 1,
+      "passed": false,
+      "engaged": false,
+      "leaked": false,
+      "establish_tool_names": [],
+      "endogenous_verbs": [],
+      "establish_out_of_sandbox_operands": [],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "goal_tool_names": [
+        "Bash",
+        "Read"
+      ],
+      "native_reaches": 0,
+      "pinned_off": true,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "arm": "none",
+      "work_id": "world-seed0-task0",
+      "variant": "necessary",
+      "repeat": 2,
+      "passed": false,
+      "engaged": false,
+      "leaked": false,
+      "establish_tool_names": [],
+      "endogenous_verbs": [],
+      "establish_out_of_sandbox_operands": [],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "goal_tool_names": [
+        "Bash",
+        "Read"
+      ],
+      "native_reaches": 0,
+      "pinned_off": true,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "arm": "none",
+      "work_id": "world-seed0-task0",
+      "variant": "necessary",
+      "repeat": 3,
+      "passed": false,
+      "engaged": false,
+      "leaked": false,
+      "establish_tool_names": [],
+      "endogenous_verbs": [],
+      "establish_out_of_sandbox_operands": [],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "goal_tool_names": [],
+      "native_reaches": 0,
+      "pinned_off": true,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "arm": "builtin",
+      "work_id": "world-seed0-task0",
+      "variant": "necessary",
+      "repeat": 0,
+      "passed": false,
+      "engaged": false,
+      "leaked": false,
+      "establish_tool_names": [],
+      "endogenous_verbs": [],
+      "establish_out_of_sandbox_operands": [],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "goal_tool_names": [
+        "Bash"
+      ],
+      "native_reaches": 1,
+      "pinned_off": false,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "arm": "builtin",
+      "work_id": "world-seed0-task0",
+      "variant": "necessary",
+      "repeat": 1,
+      "passed": false,
+      "engaged": true,
+      "leaked": false,
+      "establish_tool_names": [
+        "Bash",
+        "Write"
+      ],
+      "endogenous_verbs": [],
+      "establish_out_of_sandbox_operands": [
+        "/dev/null",
+        "/tmp/membench-arm-z_muyb3j/config/projects/-tmp-arm-builtin-1psvruq8/memory/",
+        "/tmp/membench-arm-z_muyb3j/config/projects/-tmp-arm-builtin-1psvruq8/memory/MEMORY.md",
+        "/tmp/membench-arm-z_muyb3j/config/projects/-tmp-arm-builtin-1psvruq8/memory/checkout_v2_flag_state.md",
+        "/tmp/membench-arm-z_muyb3j/config/projects/-tmp-arm-builtin-1psvruq8/memory/data_retention_window.md",
+        "/tmp/membench-arm-z_muyb3j/config/projects/-tmp-arm-builtin-1psvruq8/memory/production_deploy_timeout.md"
+      ],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "goal_tool_names": [
+        "Read"
+      ],
+      "native_reaches": 8,
+      "pinned_off": false,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "arm": "builtin",
+      "work_id": "world-seed0-task0",
+      "variant": "necessary",
+      "repeat": 2,
+      "passed": false,
+      "engaged": true,
+      "leaked": false,
+      "establish_tool_names": [
+        "Bash",
+        "Write"
+      ],
+      "endogenous_verbs": [],
+      "establish_out_of_sandbox_operands": [
+        "/dev/null",
+        "/tmp/membench-arm-xs_5jg3a/config/projects/-tmp-arm-builtin-dd5rs7fc/memory/",
+        "/tmp/membench-arm-xs_5jg3a/config/projects/-tmp-arm-builtin-dd5rs7fc/memory/MEMORY.md",
+        "/tmp/membench-arm-xs_5jg3a/config/projects/-tmp-arm-builtin-dd5rs7fc/memory/project_system_state.md"
+      ],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "goal_tool_names": [
+        "Bash",
+        "Read"
+      ],
+      "native_reaches": 5,
+      "pinned_off": false,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "arm": "builtin",
+      "work_id": "world-seed0-task0",
+      "variant": "necessary",
+      "repeat": 3,
+      "passed": false,
+      "engaged": true,
+      "leaked": false,
+      "establish_tool_names": [
+        "Bash",
+        "Write"
+      ],
+      "endogenous_verbs": [],
+      "establish_out_of_sandbox_operands": [
+        "/dev/null",
+        "/tmp/membench-arm-boij0o28/config/projects/-tmp-arm-builtin-n5e1zsy3/memory/MEMORY.md",
+        "/tmp/membench-arm-boij0o28/config/projects/-tmp-arm-builtin-n5e1zsy3/memory/project_checkout_v2_flag.md",
+        "/tmp/membench-arm-boij0o28/config/projects/-tmp-arm-builtin-n5e1zsy3/memory/project_data_retention_window.md",
+        "/tmp/membench-arm-boij0o28/config/projects/-tmp-arm-builtin-n5e1zsy3/memory/project_deploy_timeout.md"
+      ],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "goal_tool_names": [
+        "Read"
+      ],
+      "native_reaches": 8,
+      "pinned_off": false,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "arm": "beads",
+      "work_id": "world-seed0-task0",
+      "variant": "unnecessary",
+      "repeat": 0,
+      "passed": false,
+      "engaged": false,
+      "leaked": false,
+      "establish_tool_names": [],
+      "endogenous_verbs": [],
+      "establish_out_of_sandbox_operands": [],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "goal_tool_names": [],
+      "native_reaches": 0,
+      "pinned_off": true,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "arm": "beads",
+      "work_id": "world-seed0-task0",
+      "variant": "unnecessary",
+      "repeat": 1,
+      "passed": false,
+      "engaged": false,
+      "leaked": false,
+      "establish_tool_names": [],
+      "endogenous_verbs": [],
+      "establish_out_of_sandbox_operands": [],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "goal_tool_names": [],
+      "native_reaches": 0,
+      "pinned_off": true,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "arm": "none",
+      "work_id": "world-seed0-task0",
+      "variant": "unnecessary",
+      "repeat": 0,
+      "passed": false,
+      "engaged": false,
+      "leaked": false,
+      "establish_tool_names": [],
+      "endogenous_verbs": [],
+      "establish_out_of_sandbox_operands": [],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "goal_tool_names": [],
+      "native_reaches": 0,
+      "pinned_off": true,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "arm": "none",
+      "work_id": "world-seed0-task0",
+      "variant": "unnecessary",
+      "repeat": 1,
+      "passed": false,
+      "engaged": false,
+      "leaked": false,
+      "establish_tool_names": [],
+      "endogenous_verbs": [],
+      "establish_out_of_sandbox_operands": [],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "goal_tool_names": [],
+      "native_reaches": 0,
+      "pinned_off": true,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "arm": "builtin",
+      "work_id": "world-seed0-task0",
+      "variant": "unnecessary",
+      "repeat": 0,
+      "passed": false,
+      "engaged": false,
+      "leaked": false,
+      "establish_tool_names": [
+        "Bash"
+      ],
+      "endogenous_verbs": [],
+      "establish_out_of_sandbox_operands": [
+        "/tmp/membench-arm-fodte33g/config/projects/-tmp-arm-builtin-580g0eul/memory/",
+        "/tmp/membench-arm-fodte33g/config/projects/-tmp-arm-builtin-580g0eul/memory/MEMORY.md"
+      ],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "goal_tool_names": [],
+      "native_reaches": 1,
+      "pinned_off": false,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "arm": "builtin",
+      "work_id": "world-seed0-task0",
+      "variant": "unnecessary",
+      "repeat": 1,
+      "passed": false,
+      "engaged": false,
+      "leaked": false,
+      "establish_tool_names": [
+        "Bash",
+        "Read",
+        "Write"
+      ],
+      "endogenous_verbs": [],
+      "establish_out_of_sandbox_operands": [
+        "/dev/null",
+        "/tmp/membench-arm-g5f3td6u/config/projects/-tmp-arm-builtin-kjwfjalb/memory/MEMORY.md",
+        "/tmp/membench-arm-g5f3td6u/config/projects/-tmp-arm-builtin-kjwfjalb/memory/project_initial_state.md"
+      ],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "goal_tool_names": [],
+      "native_reaches": 3,
+      "pinned_off": false,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    }
+  ]
+}

@@ -1,0 +1,207 @@
+{
+  "protocol_version": 1,
+  "model": "sonnet",
+  "cli_version": "2.1.278",
+  "corpus_fingerprint": "dec436a8e0fb05ce",
+  "arm_settings_fingerprint": "3730f77a80e5e199",
+  "surface_fingerprint": "edd66a2dd0482fbc",
+  "recognizer_version": 6,
+  "work_ids": [
+    "world-seed0-task0"
+  ],
+  "execution_protocol": 4,
+  "dry_run": false,
+  "n_tasks": 1,
+  "repeats_by_variant": {
+    "necessary": 4,
+    "unnecessary": 2
+  },
+  "n_cells": 1,
+  "n_measured_cells": 1,
+  "n_paid_cells": 1,
+  "voided_work_ids": {},
+  "endpoint": {
+    "contrast": "beads - none",
+    "variant": "necessary",
+    "primary": "matched_median",
+    "readings": {
+      "matched_median": {
+        "unavailable": "paired_delta_ci: no tasks in the 'matched' population"
+      },
+      "matched_mean": {
+        "unavailable": "paired_delta_ci: no tasks in the 'matched' population"
+      },
+      "itt_median": {
+        "delta": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0,
+        "n_pairs": 1,
+        "n_imputed_zero": 1,
+        "population": "itt",
+        "statistic": "median",
+        "excludes_zero": false
+      },
+      "itt_mean": {
+        "delta": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0,
+        "n_pairs": 1,
+        "n_imputed_zero": 1,
+        "population": "itt",
+        "statistic": "mean",
+        "excludes_zero": false
+      }
+    },
+    "per_work_id": {
+      "baseline": {},
+      "treatment": {
+        "world-seed0-task0": 0.0
+      }
+    }
+  },
+  "second_contrast": {
+    "contrast": "beads - builtin",
+    "variant": "necessary",
+    "primary": "matched_median",
+    "readings": {
+      "matched_median": {
+        "unavailable": "paired_delta_ci: no tasks in the 'matched' population"
+      },
+      "matched_mean": {
+        "unavailable": "paired_delta_ci: no tasks in the 'matched' population"
+      },
+      "itt_median": {
+        "delta": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0,
+        "n_pairs": 1,
+        "n_imputed_zero": 1,
+        "population": "itt",
+        "statistic": "median",
+        "excludes_zero": false
+      },
+      "itt_mean": {
+        "delta": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0,
+        "n_pairs": 1,
+        "n_imputed_zero": 1,
+        "population": "itt",
+        "statistic": "mean",
+        "excludes_zero": false
+      }
+    },
+    "per_work_id": {
+      "baseline": {},
+      "treatment": {
+        "world-seed0-task0": 0.0
+      }
+    }
+  },
+  "gates": {
+    "necessity_floor": {
+      "threshold": 0.2,
+      "observed": null,
+      "passed": null
+    },
+    "specificity_ceiling": {
+      "threshold": 0.8,
+      "observed": null,
+      "arms_separate_on_unnecessary": null,
+      "passed": null
+    },
+    "pin_held": {
+      "enforced_at": "mint and every leg; here as observed",
+      "cells": 1,
+      "passed": true
+    },
+    "discovery": {
+      "variant": "necessary",
+      "beads_establish_write_cells": 0,
+      "beads_goal_read_cells": 0,
+      "builtin_engaged_cells": 0,
+      "beads_goal_reach_rate": 0.0,
+      "passed": false,
+      "verdict": "UNMEASURED: the mechanism was never reached for, so a zero here is not a null"
+    },
+    "leak": {
+      "denied_arm_reaches": 0,
+      "voided_work_ids": {},
+      "passed": true
+    },
+    "pairing_intact": {
+      "population": "matched",
+      "n_pairs": null,
+      "n_imputed_zero": null,
+      "passed": null
+    },
+    "substrate_exclusivity": {
+      "verbs_on_storeless_arms": [],
+      "passed": true
+    },
+    "presentation_parity": {
+      "enforced_at": "arm_separation.render_arm_separation, before any spend",
+      "arm_context_words": null,
+      "unavailable": "the beads arm's capability paragraph is captured from what `bd init` shipped (`tool_surface.capture_bd_context` + `BD_CONTEXT_ADDENDUM`) and must be passed in; there is no authored default, because a paraphrase would measure this rig's own prose.",
+      "length_confound_is_unconditional": true
+    },
+    "one_instrument": {
+      "enforced_at": "per-leg cli_version check and the resume identity digest",
+      "arm_settings_fingerprint": "3730f77a80e5e199"
+    },
+    "instrument_agreement": {
+      "enforced_at": "beads_arm_grid.engagement_of, argv counter vs shim receipts"
+    },
+    "unmeasured_budget": {
+      "threshold": 0.1,
+      "observed": {
+        "beads": 0.0,
+        "none": null,
+        "builtin": null
+      },
+      "passed": true
+    },
+    "n_establish_legs_scored": 0
+  },
+  "establish_mechanism": {
+    "beads": {
+      "cells": 1,
+      "engaged_cells": 0,
+      "establish_outcomes": {},
+      "establish_tool_names": []
+    },
+    "none": {
+      "cells": 0,
+      "engaged_cells": 0,
+      "establish_outcomes": {},
+      "establish_tool_names": []
+    },
+    "builtin": {
+      "cells": 0,
+      "engaged_cells": 0,
+      "establish_outcomes": {},
+      "establish_tool_names": []
+    }
+  },
+  "min_detectable_effect": 0.2,
+  "cells": [
+    {
+      "arm": "beads",
+      "work_id": "world-seed0-task0",
+      "variant": "necessary",
+      "repeat": 0,
+      "passed": false,
+      "engaged": false,
+      "leaked": false,
+      "establish_tool_names": [],
+      "endogenous_verbs": [],
+      "establish_outcomes": [],
+      "goal_outcomes": [],
+      "native_reaches": 0,
+      "pinned_off": true,
+      "paid": true,
+      "status": "ok",
+      "detail": ""
+    }
+  ]
+}

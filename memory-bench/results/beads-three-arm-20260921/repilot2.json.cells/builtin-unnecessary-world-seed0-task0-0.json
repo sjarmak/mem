@@ -1,0 +1,31 @@
+{
+  "key": [
+    "builtin",
+    "unnecessary",
+    "world-seed0-task0",
+    0
+  ],
+  "arm": "builtin",
+  "work_id": "world-seed0-task0",
+  "variant": "unnecessary",
+  "repeat": 0,
+  "passed": false,
+  "engaged": false,
+  "leaked": false,
+  "establish_tool_names": [
+    "Bash"
+  ],
+  "endogenous_verbs": [],
+  "establish_out_of_sandbox_operands": [
+    "/tmp/membench-arm-fodte33g/config/projects/-tmp-arm-builtin-580g0eul/memory/",
+    "/tmp/membench-arm-fodte33g/config/projects/-tmp-arm-builtin-580g0eul/memory/MEMORY.md"
+  ],
+  "establish_outcomes": [],
+  "goal_outcomes": [],
+  "goal_tool_names": [],
+  "native_reaches": 1,
+  "pinned_off": false,
+  "paid": true,
+  "status": "ok",
+  "detail": ""
+}
