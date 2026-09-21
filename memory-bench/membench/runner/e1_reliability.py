@@ -203,10 +203,15 @@ def _observe_call(
     return ("refused" if call.is_error else "returned"), ""
 
 
-def _observe_calls(
+def observe_calls(
     task: ToolReqRealAgentTask, calls: Sequence[ToolCall]
 ) -> tuple[BdCallObservation, ...]:
-    """Every bd invocation in ``calls`` as the agent saw it, in stream order."""
+    """Every bd invocation in ``calls`` as the agent saw it, in stream order.
+
+    Public because the three-arm grid's discovery gate reads the same classification per LEG
+    (`beads_arm_grid.run_arm_cell`). A second classifier over the same streams would be a second
+    definition of what "bd answered" means, and the gate that decides whether the grid gets
+    bought must not be reading one while the reliability rig reads another."""
     current = tuple(task.current_opaque_values)
     superseded = superseded_values(task)
     observations: list[BdCallObservation] = []
@@ -471,7 +476,7 @@ def score_bd_leg(
             "leg": leg,
             "role": role,
             "status": status,
-            "bd_calls": _observe_calls(task, calls),
+            "bd_calls": observe_calls(task, calls),
             "bd_recall_states_superseded": any(
                 states_value(payload, value) for payload in payloads for value in superseded
             ),

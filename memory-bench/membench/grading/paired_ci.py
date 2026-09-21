@@ -23,11 +23,20 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
 
-from membench.handoff_efficiency import bootstrap_median_ci
+from membench.handoff_efficiency import bootstrap_mean_ci, bootstrap_median_ci
 
 Population = Literal["itt", "matched"]
 
 POPULATION_PRIMARY: Population = "itt"
+
+Statistic = Literal["median", "mean"]
+
+# The paired summary a caller may ask for. The median is the pre-registered primary everywhere
+# in this repo; the mean is admissible only ALONGSIDE it, because a median over a coarse
+# per-task rate lattice can sit flat while most tasks moved a little. Naming both here, rather
+# than letting a caller pass its own callable, keeps "which statistic was this reported at" a
+# value that rides in the artifact instead of a closure nobody can read back.
+_STATISTICS = {"median": bootstrap_median_ci, "mean": bootstrap_mean_ci}
 
 
 @dataclass(frozen=True)
@@ -43,6 +52,10 @@ class PairedDeltaCI:
     n_pairs: int
     n_imputed_zero: int
     population: Population
+    # Which summary of the deltas ``delta`` is. Defaulted so every existing caller keeps the
+    # median it already reports, and carried on the result so a reader of an artifact never has
+    # to infer it from the call site that produced it.
+    statistic: Statistic = "median"
 
 
 def paired_deltas(
@@ -74,18 +87,21 @@ def paired_delta_ci(
     treatment: Mapping[str, float],
     *,
     population: Population = POPULATION_PRIMARY,
+    statistic: Statistic = "median",
     n_resamples: int = 5000,
     conf: float = 0.95,
     seed: int = 0,
 ) -> PairedDeltaCI:
-    """The paired median delta + percentile-bootstrap CI on the labeled population.
+    """The paired delta + percentile-bootstrap CI on the labeled population.
 
     An empty population is a caller error — there is nothing to infer from — so it
     raises rather than fabricating a degenerate interval."""
     deltas, imputed = paired_deltas(baseline, treatment, population=population)
     if not deltas:
         raise ValueError(f"paired_delta_ci: no tasks in the {population!r} population")
-    point, lo, hi = bootstrap_median_ci(deltas, n_resamples=n_resamples, conf=conf, seed=seed)
+    if statistic not in _STATISTICS:
+        raise ValueError(f"paired_delta_ci: unknown statistic {statistic!r}")
+    point, lo, hi = _STATISTICS[statistic](deltas, n_resamples=n_resamples, conf=conf, seed=seed)
     return PairedDeltaCI(
         delta=point,
         ci_low=lo,
@@ -93,4 +109,5 @@ def paired_delta_ci(
         n_pairs=len(deltas),
         n_imputed_zero=imputed,
         population=population,
+        statistic=statistic,
     )

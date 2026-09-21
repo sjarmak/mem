@@ -1,0 +1,330 @@
+"""The three-arm driver: what it refuses, what it resumes, and when it stops spending.
+
+Nothing here spawns an agent or mints a store — ``run_arm_cell`` is replaced, so what is under
+test is the driver's control flow around a spend rather than the spend itself. The tests that
+exercise a real mint live in ``test_beads_arm_grid``; the arithmetic is in
+``test_beads_arm_plan``.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+from dataclasses import replace
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from membench.runner import beads_arm_fire
+from membench.runner.beads_arm_fire import (
+    admissible_cells,
+    fire,
+    main,
+    resume_identity,
+)
+from membench.runner.beads_arm_grid import ArmCell
+from membench.runner.beads_arm_plan import (
+    ArmGridKey,
+    cell_key,
+    cell_row,
+    grid_keys,
+    priced_plan,
+)
+from membench.runner.e1_grid import (
+    EXIT_OK,
+    EXIT_REFUSED,
+    QuotaHaltError,
+    ResumeMismatchError,
+    RigHaltError,
+)
+from membench.runner.headless_agent import ENV_OAUTH, HeadlessAgentError
+from membench.runner.memory_arm import ARM_BEADS, ARM_NONE
+from membench.runner.toolreq_corpus import twin_tasks
+from membench.runner.toolreq_realagent import ToolReqRealAgentTask, adapt_sequence
+from membench.spawn import with_child
+from tests.toolreq_helpers import toolreq_seq
+
+MODEL = "sonnet"
+
+
+def corpus(n: int = 2) -> list[ToolReqRealAgentTask]:
+    return twin_tasks([adapt_sequence(toolreq_seq(f"w-t{i}")) for i in range(n)])
+
+
+def a_cell(task: ToolReqRealAgentTask, arm: str, *, repeat: int = 0, paid: bool = True) -> ArmCell:
+    return ArmCell(
+        arm=arm,
+        work_id=task.work_id,
+        variant=task.variant,
+        repeat=repeat,
+        passed=True,
+        engaged=True,
+        leaked=False,
+        establish_tool_names=("Bash",),
+        endogenous_verbs=(),
+        establish_outcomes=("remembered",),
+        goal_outcomes=("returned",),
+        native_reaches=0,
+        pinned_off=True,
+        paid=paid,
+        status="ok",
+    )
+
+
+def identity_of(tasks: list[ToolReqRealAgentTask]) -> dict[str, Any]:
+    return resume_identity(
+        model=MODEL,
+        cli_version="2.1.210",
+        corpus="deadbeef",
+        work_ids=sorted({task.work_id for task in tasks}),
+    )
+
+
+def artifact(
+    tasks: list[ToolReqRealAgentTask], cells: list[ArmCell], **overrides: Any
+) -> dict[str, Any]:
+    return identity_of(tasks) | {"cells": [cell_row(cell) for cell in cells]} | overrides
+
+
+def quota_refusal() -> HeadlessAgentError:
+    """The CLI's own refusal event, classified off the child's stream rather than the message."""
+    child = subprocess.CompletedProcess(
+        ["claude"],
+        1,
+        json.dumps(
+            {"type": "result", "is_error": True, "api_error_status": 429, "result": "session limit"}
+        ),
+        "",
+    )
+    exc = HeadlessAgentError("claude -p failed (exit 1): <redacted>")
+    with_child(exc, child)
+    return exc
+
+
+def timed_out() -> HeadlessAgentError:
+    exc = HeadlessAgentError("claude -p timed out")
+    exc.__cause__ = subprocess.TimeoutExpired(["claude"], 900)
+    return exc
+
+
+def a_runner(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+    raise AssertionError("no test in this module spawns")
+
+
+# ---------------------------------------------------------------------------------------
+# what a partial artifact is allowed to contribute
+# ---------------------------------------------------------------------------------------
+
+
+def test_an_artifact_from_a_different_arm_registry_is_refused() -> None:
+    """The registry IS the experiment. A cell bought when the floor arm still reached the host
+    toolchain measured a different machine, and pooling it publishes two rigs as one."""
+    tasks = corpus(1)
+    grid = grid_keys(tasks)
+    identity = identity_of(tasks)
+    prior = artifact(tasks, [a_cell(tasks[0], ARM_BEADS)], arm_settings_fingerprint="stale")
+    with pytest.raises(ResumeMismatchError, match="different rig"):
+        admissible_cells(prior, identity=identity, grid=grid)
+
+
+def test_a_rig_that_cannot_state_its_own_identity_refuses_to_match_anything() -> None:
+    tasks = corpus(1)
+    identity = identity_of(tasks) | {"cli_version": ""}
+    with pytest.raises(ResumeMismatchError, match="cannot state its own cli_version"):
+        admissible_cells(artifact(tasks, []), identity=identity, grid=grid_keys(tasks))
+
+
+def test_a_cell_written_twice_is_refused_rather_than_deduplicated() -> None:
+    """Two fires wrote this file, and neither row can be shown to be the one to keep. Picking
+    either one silently chooses which paid measurement survives."""
+    tasks = corpus(1)
+    cell = a_cell(tasks[0], ARM_BEADS)
+    prior = artifact(tasks, [cell, cell])
+    with pytest.raises(ResumeMismatchError, match="twice"):
+        admissible_cells(prior, identity=identity_of(tasks), grid=grid_keys(tasks))
+
+
+def test_a_cell_outside_this_fires_grid_is_refused_rather_than_ignored() -> None:
+    tasks = corpus(2)
+    pilot_grid = grid_keys(tasks, n_tasks=1)
+    stranger = a_cell(tasks[2], ARM_BEADS)  # the SECOND work_id, which the pilot does not buy
+    prior = artifact(tasks, [stranger])
+    with pytest.raises(ResumeMismatchError, match="not a cell of the grid"):
+        admissible_cells(prior, identity=identity_of(tasks), grid=pilot_grid)
+
+
+def test_unpaid_and_unmeasured_cells_are_dropped_so_the_resume_can_buy_them() -> None:
+    """A dry-run cell carried into a paid grid publishes a simulation as a measurement; an
+    unmeasured cell is a cell still owed."""
+    tasks = corpus(1)
+    paid = a_cell(tasks[0], ARM_BEADS)
+    simulated = a_cell(tasks[0], ARM_NONE, paid=False)
+    unmeasured = replace(a_cell(tasks[0], ARM_BEADS, repeat=1), status="timeout")
+    prior = artifact(tasks, [paid, simulated, unmeasured])
+    kept = admissible_cells(prior, identity=identity_of(tasks), grid=grid_keys(tasks))
+    assert [cell_key(cell) for cell in kept] == [cell_key(paid)]
+
+
+# ---------------------------------------------------------------------------------------
+# the fire loop
+# ---------------------------------------------------------------------------------------
+
+
+def test_a_quota_refusal_halts_instead_of_burning_the_authorization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Not a defect and not a measurement: nothing can be bought until the account resets, so
+    filling the rest of the grid with unmeasured cells spends the authorization on nothing."""
+    tasks = corpus(1)
+    calls: list[str] = []
+
+    def refused(task: ToolReqRealAgentTask, arm: str, **_kw: object) -> ArmCell:
+        calls.append(arm)
+        raise quota_refusal()
+
+    monkeypatch.setattr(beads_arm_fire, "run_arm_cell", refused)
+    with pytest.raises(QuotaHaltError, match="refused at cell"):
+        fire(tasks, model=MODEL, runner=a_runner)
+    assert len(calls) == 1  # stopped on the first refusal rather than walking the grid
+
+
+def test_three_consecutive_unmeasured_cells_halt_the_rig(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A tolerance applied everywhere is a grid that measured nothing while reporting a rate."""
+    tasks = corpus(2)
+    kept: list[ArmCell] = []
+
+    def always_times_out(task: ToolReqRealAgentTask, arm: str, **_kw: object) -> ArmCell:
+        raise timed_out()
+
+    monkeypatch.setattr(beads_arm_fire, "run_arm_cell", always_times_out)
+    with pytest.raises(RigHaltError, match="consecutive"):
+        fire(tasks, model=MODEL, runner=a_runner, on_cell=kept.append)
+    assert len(kept) == 3
+    assert {cell.status for cell in kept} == {"timeout"}
+
+
+def test_a_timed_out_cell_lands_unmeasured_and_never_as_a_pass(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gate 12's granularity: ``run_arm_cell`` is atomic, so a failure inside it leaves a cell
+    that bought legs and measured nothing — not a scorable zero."""
+    tasks = corpus(1)
+    seen: list[tuple[str, str]] = []
+
+    def flaky(task: ToolReqRealAgentTask, arm: str, *, repeat: int = 0, **_kw: object) -> ArmCell:
+        seen.append((arm, task.variant))
+        if len(seen) == 1:
+            raise timed_out()
+        return a_cell(task, arm, repeat=repeat, paid=False)
+
+    monkeypatch.setattr(beads_arm_fire, "run_arm_cell", flaky)
+    cells = fire(tasks, model=MODEL, runner=a_runner)
+    unmeasured = [cell for cell in cells if cell.status != "ok"]
+    assert len(unmeasured) == 1
+    assert unmeasured[0].status == "timeout"
+    assert unmeasured[0].passed is False
+    assert unmeasured[0].engaged is False
+    # The streak reset on the next measured cell, so one timeout did not stop the fire.
+    assert len(cells) == len(grid_keys(tasks))
+
+
+def test_a_resumed_cell_is_not_bought_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    tasks = corpus(1)
+    landed = [a_cell(tasks[0], ARM_BEADS)]
+    bought: list[ArmGridKey] = []
+
+    def buy(task: ToolReqRealAgentTask, arm: str, *, repeat: int = 0, **_kw: object) -> ArmCell:
+        cell = a_cell(task, arm, repeat=repeat, paid=False)
+        bought.append(cell_key(cell))
+        return cell
+
+    monkeypatch.setattr(beads_arm_fire, "run_arm_cell", buy)
+    cells = fire(tasks, model=MODEL, runner=a_runner, landed=landed)
+    assert cell_key(landed[0]) not in bought
+    assert sorted([*bought, cell_key(landed[0])]) == sorted(grid_keys(tasks))
+    # And it is in the result exactly once — kept, not kept and re-bought.
+    assert sum(1 for cell in cells if cell_key(cell) == cell_key(landed[0])) == 1
+
+
+def test_a_cell_named_by_the_grid_with_no_task_behind_it_refuses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The grid and the corpus are derived from the same tasks, so a disagreement means one of
+    them was re-derived. Buying the arms the grid names against a task it guessed is worse."""
+    tasks = corpus(1)
+    monkeypatch.setattr(
+        beads_arm_fire, "grid_keys", lambda *a, **k: [(ARM_BEADS, "necessary", "w-nope", 0)]
+    )
+    monkeypatch.setattr(
+        beads_arm_fire, "run_arm_cell", lambda *a, **k: pytest.fail("should not spend")
+    )
+    with pytest.raises(beads_arm_fire.ArmPlanError, match="carries no"):
+        fire(tasks, model=MODEL, runner=a_runner)
+
+
+# ---------------------------------------------------------------------------------------
+# the CLI's refusal ladder
+# ---------------------------------------------------------------------------------------
+
+
+def test_preflight_and_fire_are_two_different_spends() -> None:
+    with pytest.raises(SystemExit) as exit_code:
+        main(["--preflight", "--fire"])
+    assert exit_code.value.code == 2
+
+
+def test_preflight_will_not_take_a_task_count_it_does_not_buy() -> None:
+    """§6 fixes the preflight at one task. ``--n-tasks`` here prices one grid and buys another."""
+    with pytest.raises(SystemExit) as exit_code:
+        main(["--preflight", "--n-tasks", "4"])
+    assert exit_code.value.code == 2
+
+
+def test_a_paid_run_without_a_pinned_model_is_refused_before_the_corpus_loads(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A paid run whose model resolves empty executes under the CLI's own default, which no
+    identity records — a resume across a CLI upgrade would then serve one model's numbers as
+    another's. Refused before the corpus loads, so it costs nothing."""
+    monkeypatch.delenv("MEMBENCH_AGENT_MODEL", raising=False)
+    monkeypatch.setenv(ENV_OAUTH, "token")
+    monkeypatch.setattr(
+        beads_arm_fire, "load_twin_corpus", lambda *a, **k: pytest.fail("loaded the corpus")
+    )
+    assert main(["--fire", "--out", str(tmp_path / "out.json")]) == EXIT_REFUSED
+
+
+def test_a_fire_without_an_out_artifact_is_refused(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``--out`` is the resume artifact, the lock and the parent of the per-cell evidence. A halt
+    without one loses every cell bought so far and the re-run buys the whole grid again."""
+    monkeypatch.setenv(ENV_OAUTH, "token")
+    monkeypatch.setattr(beads_arm_fire, "load_twin_corpus", lambda *a, **k: ([], corpus(1)))
+    assert main(["--fire", "--model", MODEL]) == EXIT_REFUSED
+
+
+def test_pricing_the_grid_spends_nothing_and_needs_no_account(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Pricing and spending are never the same keystroke."""
+    tasks = corpus(3)
+    monkeypatch.delenv(ENV_OAUTH, raising=False)
+    monkeypatch.setattr(beads_arm_fire, "load_twin_corpus", lambda *a, **k: ([], tasks))
+    monkeypatch.setattr(
+        beads_arm_fire, "run_arm_cell", lambda *a, **k: pytest.fail("priced and then spent")
+    )
+    assert main(["--plan"]) == EXIT_OK
+    printed = json.loads(capsys.readouterr().out)
+    assert printed == priced_plan(tasks)
+
+
+def test_an_empty_corpus_is_reported_as_missing_and_never_as_a_result(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(beads_arm_fire, "load_twin_corpus", lambda *a, **k: ([], []))
+    assert main(["--plan"]) != EXIT_OK
+    assert "NOT a result" in capsys.readouterr().err

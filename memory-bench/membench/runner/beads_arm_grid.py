@@ -46,6 +46,7 @@ import json
 import os
 import shutil
 import stat
+import subprocess
 import tempfile
 from collections.abc import Collection, Iterator, Mapping
 from contextlib import contextmanager
@@ -62,6 +63,7 @@ from membench.runner.e1_grid import (
     native_memory_pinned_off,
     pin_precedence_fingerprint,
 )
+from membench.runner.e1_reliability import observe_calls
 from membench.runner.headless_agent import (
     CellCalls,
     Leg,
@@ -406,8 +408,17 @@ class ArmCell:
     leaked: bool
     establish_tool_names: tuple[str, ...]
     endogenous_verbs: tuple[str, ...]
+    # bd's OWN answer per leg (`e1_reliability.observe_calls`), not the argv verb: the discovery
+    # gate asks whether a write was acknowledged on the establish leg and a read returned payload
+    # on the goal leg, and an argv that spelled `bd remember` tells neither.
+    establish_outcomes: tuple[str, ...]
+    goal_outcomes: tuple[str, ...]
     native_reaches: int
     pinned_off: bool
+    # Whether real money bought this cell. Carried per cell, not inferred from the artifact it
+    # lands in: a dry-run cell resumed into a paid grid publishes a simulation as a measurement,
+    # and the field that refuses that has to travel with the cell.
+    paid: bool
     status: str
     detail: str = ""
 
@@ -564,8 +575,17 @@ def run_arm_cell(
         leaked=passed and not engaged,
         establish_tool_names=tuple(sorted({call.name for call in establish.tool_calls})),
         endogenous_verbs=verbs,
+        establish_outcomes=tuple(
+            observation.outcome for observation in observe_calls(task, establish.tool_calls)
+        ),
+        goal_outcomes=tuple(
+            observation.outcome for observation in observe_calls(task, goal.tool_calls)
+        ),
         native_reaches=reaches,
         pinned_off=pinned_off,
+        # `subprocess.run` IS the paid spawn; every other runner is a stand-in. Asked of the
+        # runner the legs actually went through, so a caller cannot label a cell paid.
+        paid=runner is subprocess.run,
         status="ok",
     )
 

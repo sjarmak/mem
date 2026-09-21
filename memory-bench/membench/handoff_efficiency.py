@@ -31,7 +31,7 @@ import random
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from math import comb
-from statistics import median
+from statistics import fmean, median
 
 from pydantic import BaseModel, Field
 
@@ -96,6 +96,37 @@ _METRICS: dict[str, Callable[[RunEfficiency], float | None]] = {
 }
 
 
+def bootstrap_ci(
+    deltas: Sequence[float],
+    *,
+    statistic: Callable[[Sequence[float]], float],
+    n_resamples: int = 5000,
+    conf: float = 0.95,
+    seed: int = 0,
+) -> tuple[float, float, float]:
+    """``statistic`` of ``deltas`` with a percentile bootstrap CI (the paper's 5k
+    resamples). Seeded ⇒ reproducible; pure stdlib (no scipy). A single observation
+    has no resample spread, so its bounds collapse to the value.
+
+    Parameterized by the statistic rather than copied per statistic: the seed, the
+    resample count and the percentile arithmetic are the parts a reader checks, and
+    two of them drifting apart would make a median and a mean read off the same
+    deltas incomparable for a reason nothing in either call site shows."""
+    if not deltas:
+        raise ValueError("bootstrap_ci needs at least one delta")
+    point = float(statistic(deltas))
+    if len(deltas) < 2:
+        return point, point, point
+    rng = random.Random(seed)
+    n = len(deltas)
+    resampled = sorted(
+        statistic([deltas[rng.randrange(n)] for _ in range(n)]) for _ in range(n_resamples)
+    )
+    lo_idx = int((1.0 - conf) / 2.0 * n_resamples)
+    hi_idx = min(n_resamples - 1, int((1.0 + conf) / 2.0 * n_resamples))
+    return point, float(resampled[lo_idx]), float(resampled[hi_idx])
+
+
 def bootstrap_median_ci(
     deltas: Sequence[float],
     *,
@@ -103,22 +134,32 @@ def bootstrap_median_ci(
     conf: float = 0.95,
     seed: int = 0,
 ) -> tuple[float, float, float]:
-    """Median of ``deltas`` with a percentile bootstrap CI (the paper's 5k
-    resamples). Seeded ⇒ reproducible; pure stdlib (no scipy). A single observation
-    has no resample spread, so its bounds collapse to the value."""
-    if not deltas:
-        raise ValueError("bootstrap_median_ci needs at least one delta")
-    point = float(median(deltas))
-    if len(deltas) < 2:
-        return point, point, point
-    rng = random.Random(seed)
-    n = len(deltas)
-    resampled = sorted(
-        median(deltas[rng.randrange(n)] for _ in range(n)) for _ in range(n_resamples)
-    )
-    lo_idx = int((1.0 - conf) / 2.0 * n_resamples)
-    hi_idx = min(n_resamples - 1, int((1.0 + conf) / 2.0 * n_resamples))
-    return point, float(resampled[lo_idx]), float(resampled[hi_idx])
+    """Median of ``deltas`` with a percentile bootstrap CI."""
+    return bootstrap_ci(deltas, statistic=_median, n_resamples=n_resamples, conf=conf, seed=seed)
+
+
+def bootstrap_mean_ci(
+    deltas: Sequence[float],
+    *,
+    n_resamples: int = 5000,
+    conf: float = 0.95,
+    seed: int = 0,
+) -> tuple[float, float, float]:
+    """Mean of ``deltas`` with a percentile bootstrap CI, on the same resampler.
+
+    The pre-registered primary is the MEDIAN everywhere it is reported; this exists
+    because a median over a coarse per-task rate lattice hides a shift that moves
+    most tasks a little, and the three-arm pre-registration publishes both rather
+    than choosing after seeing them."""
+    return bootstrap_ci(deltas, statistic=_mean, n_resamples=n_resamples, conf=conf, seed=seed)
+
+
+def _median(values: Sequence[float]) -> float:
+    return float(median(values))
+
+
+def _mean(values: Sequence[float]) -> float:
+    return float(fmean(values))
 
 
 def _exact_mcnemar_p(b: int, c: int) -> float:
