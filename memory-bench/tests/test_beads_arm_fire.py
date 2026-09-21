@@ -569,3 +569,29 @@ def test_a_ref_that_cannot_be_built_refuses_before_spending(
 
     assert code == EXIT_REFUSED
     assert bought == []
+
+
+def test_a_dry_run_identifies_the_bd_build_through_the_real_spawn(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The stand-in runner answers every spawn with a fixed agent result, so handing it
+    ``bd version --json`` makes the binary unidentifiable and refuses the run. ``--dry-run`` did
+    exactly that from the moment the build entered the identity, and the CLI could not be
+    dry-run at all. Identifying the build is free and is part of what a dry run proves."""
+    tasks = corpus(1)
+    seen: list[object] = []
+
+    def record(*_a: object, runner: object = None, **_kw: object) -> BdBuild:
+        seen.append(runner)
+        return BD_BUILD
+
+    def buy(task: ToolReqRealAgentTask, arm: str, *, repeat: int = 0, **_kw: object) -> ArmCell:
+        return a_cell(task, arm, repeat=repeat, paid=False)
+
+    monkeypatch.setattr(beads_arm_fire, "run_arm_cell", buy)
+    monkeypatch.setattr(beads_arm_fire, "load_twin_corpus", lambda *a, **k: ([], tasks))
+    monkeypatch.setattr(beads_arm_fire, "resolve_cli_version", lambda *a, **k: "2.1.210")
+    monkeypatch.setattr(beads_arm_fire, "resolve_bd_build", record)
+    out = tmp_path / "out.json"
+    assert main(["--dry-run", "--out", str(out), "--model", MODEL]) == EXIT_OK
+    assert seen == [subprocess.run]

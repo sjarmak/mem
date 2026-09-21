@@ -206,6 +206,8 @@ def cell_row(cell: ArmCell) -> dict[str, Any]:
         "paid": cell.paid,
         "status": cell.status,
         "detail": cell.detail,
+        "protocol": cell.protocol,
+        "legs": cell.legs,
     }
 
 
@@ -236,6 +238,12 @@ def cell_from_row(row: Mapping[str, Any]) -> ArmCell:
             paid=bool(row["paid"]),
             status=str(row["status"]),
             detail=str(row.get("detail", "")),
+            # Required, not defaulted, for the reason `goal_tool_names` is: a row written before
+            # the capture protocol existed cannot say which registration bought it, and a default
+            # would silently declare it three-arm. That is exactly the pooling the field exists
+            # to refuse.
+            protocol=str(row["protocol"]),
+            legs=int(row["legs"]),
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise ArmPlanError(f"not a readable cell row: {exc}") from exc

@@ -31,7 +31,12 @@ from typing import Any
 
 from membench.runner.bd_build import BdBuild, resolve_bd_build
 from membench.runner.bd_ref import build_bd_ref
-from membench.runner.beads_arm_grid import ArmCell, run_arm_cell
+from membench.runner.beads_arm_grid import (
+    PROTOCOL_THREE_ARM,
+    ArmCell,
+    legs_for,
+    run_arm_cell,
+)
 from membench.runner.beads_arm_plan import (
     PREFLIGHT_TASKS,
     PROTOCOL_VERSION,
@@ -173,7 +178,9 @@ def admissible_cells(
     return kept
 
 
-def _unmeasured(key: ArmGridKey, *, status: str, detail: str, paid: bool) -> ArmCell:
+def _unmeasured(
+    key: ArmGridKey, *, status: str, detail: str, paid: bool, protocol: str = PROTOCOL_THREE_ARM
+) -> ArmCell:
     """A cell that bought legs and measured nothing. Explicitly NOT a scored zero (gate 12): it
     carries no pass, is absent from every rate, and counts against the arm's unmeasured budget."""
     arm_name, variant, work_id, repeat = key
@@ -194,6 +201,8 @@ def _unmeasured(key: ArmGridKey, *, status: str, detail: str, paid: bool) -> Arm
         paid=paid,
         status=status,
         detail=detail,
+        protocol=protocol,
+        legs=legs_for(protocol),
     )
 
 
@@ -212,18 +221,25 @@ def _stream_keeper(
     return keep
 
 
-def fire(
+def run_grid(
     tasks: Sequence[ToolReqRealAgentTask],
+    keys: Sequence[ArmGridKey],
     *,
     model: str,
     runner: Runner,
-    n_tasks: int | None = None,
+    protocol: str = PROTOCOL_THREE_ARM,
     landed: Sequence[ArmCell] = (),
     on_cell: Callable[[ArmCell], None] | None = None,
     on_stream: Callable[[ArmGridKey, str, str], None] | None = None,
     bd_binary: str | None = None,
 ) -> list[ArmCell]:
-    """Run every cell of the grid that ``landed`` does not already hold.
+    """Run every cell in ``keys`` that ``landed`` does not already hold.
+
+    ``keys`` is passed in rather than derived here because the two registrations derive their
+    grids differently and each owns its own derivation: ``grid_keys`` for the three-arm contrast,
+    ``capture_keys`` for the capture turn. What is shared is everything below the derivation --
+    the one-cell-at-a-time spend, the atomicity, the two halts -- and sharing it is what keeps a
+    capture turn from growing a second, subtly different spending loop.
 
     One cell at a time, and ``run_arm_cell`` is atomic: it mints, runs both legs and tears the
     mint down, so a failure anywhere inside it leaves a cell that bought legs and measured
@@ -248,7 +264,7 @@ def fire(
     cells = list(landed)
     streak = UnmeasuredStreak()
     paid = runner is subprocess.run
-    for key in grid_keys(tasks, n_tasks=n_tasks):
+    for key in keys:
         if key in done:
             continue
         arm_name, variant, work_id, repeat = key
@@ -268,6 +284,7 @@ def fire(
                 runner=runner,
                 keep_stream=_stream_keeper(on_stream, key),
                 bd_binary=bd_binary,
+                protocol=protocol,
             )
         except HeadlessAgentError as exc:
             if is_quota_halt(exc):
@@ -281,6 +298,7 @@ def fire(
                 status="timeout" if timeout is not None else "error",
                 detail=str(exc),
                 paid=paid,
+                protocol=protocol,
             )
             cells.append(cell)
             if on_cell is not None:
@@ -296,6 +314,33 @@ def fire(
         if on_cell is not None:
             on_cell(cell)
     return cells
+
+
+def fire(
+    tasks: Sequence[ToolReqRealAgentTask],
+    *,
+    model: str,
+    runner: Runner,
+    n_tasks: int | None = None,
+    landed: Sequence[ArmCell] = (),
+    on_cell: Callable[[ArmCell], None] | None = None,
+    on_stream: Callable[[ArmGridKey, str, str], None] | None = None,
+    bd_binary: str | None = None,
+) -> list[ArmCell]:
+    """The three-arm grid, run under its own registration. Its derivation is ``grid_keys`` and
+    nothing else may substitute one: a caller that could hand this function a key list could buy
+    a subset of the registered grid and publish it as the grid."""
+    return run_grid(
+        tasks,
+        grid_keys(tasks, n_tasks=n_tasks),
+        model=model,
+        runner=runner,
+        protocol=PROTOCOL_THREE_ARM,
+        landed=landed,
+        on_cell=on_cell,
+        on_stream=on_stream,
+        bd_binary=bd_binary,
+    )
 
 
 # ---------------------------------------------------------------------------------------
@@ -359,7 +404,13 @@ def _run(
     corpus = corpus_fingerprint(tasks)
     try:
         cli_version = resolve_cli_version()
-        bd_build = _bd_build_of(args, runner=runner)
+        # `subprocess.run`, never the run's own `runner`. A dry run swaps in a stand-in that
+        # answers every spawn with a fixed agent result, and handing it `bd version --json` makes
+        # the binary unidentifiable and refuses the run -- which is what `--dry-run` did from the
+        # moment the build was added to the identity. Identifying and building bd is FREE (it
+        # prints and exits) and it is part of what a dry run is for: proving the pinned commit
+        # fetches, builds, and reports itself before a paid run depends on it.
+        bd_build = _bd_build_of(args, runner=subprocess.run)
     except (HeadlessAgentError, MemoryToolError) as exc:
         print(f"REFUSING to run: {exc}", file=sys.stderr)
         return EXIT_REFUSED
@@ -606,4 +657,5 @@ __all__ = [
     "fire",
     "main",
     "resume_identity",
+    "run_grid",
 ]

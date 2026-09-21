@@ -406,9 +406,41 @@ def child_path_of(env: Mapping[str, str]) -> list[str]:
 # cannot express belongs in the registry, where `assert_arms_comparable` can see it.
 
 
+# The two protocols a cell can be bought under, and the number of legs each buys.
+#
+# `three-arm` is `docs/prereg-beads-three-arm.md`: establish, then a scored goal leg, and the
+# endpoint is the goal leg's pass. `capture` is `docs/prereg-beads-capture.md`: the establish leg
+# ALONE, and the endpoint is whether the arm reached for its memory and whether the store then
+# held the fact. A capture cell has no goal leg, so it has no pass and never carries one.
+#
+# Named on the cell and carried into the artifact because the two are not poolable in either
+# direction. A capture row pooled into a three-arm grid would enter every rate as a scored zero
+# on a leg it never bought; a three-arm row pooled into a capture grid would report a reach rate
+# over cells whose establish leg ran under a different registration.
+PROTOCOL_THREE_ARM = "three-arm"
+PROTOCOL_CAPTURE = "capture"
+LEGS_BY_PROTOCOL: Mapping[str, int] = {PROTOCOL_THREE_ARM: 2, PROTOCOL_CAPTURE: 1}
+
+
+def legs_for(protocol: str) -> int:
+    """How many legs ``protocol`` buys. An unknown protocol raises rather than defaulting to the
+    pair: a run that cannot say how many legs it buys cannot be priced, and the price is what the
+    spend is authorized against."""
+    if protocol not in LEGS_BY_PROTOCOL:
+        raise ArmProtocolError(
+            f"no leg count registered for protocol {protocol!r}; known: "
+            f"{sorted(LEGS_BY_PROTOCOL)}"
+        )
+    return LEGS_BY_PROTOCOL[protocol]
+
+
 @dataclass(frozen=True)
 class ArmCell:
-    """One (arm, work_id) cell: what the pair of legs did and what it is allowed to claim."""
+    """One (arm, work_id) cell: what its legs did and what it is allowed to claim.
+
+    Under `PROTOCOL_THREE_ARM` that is a pair of legs and `passed` is the endpoint. Under
+    `PROTOCOL_CAPTURE` it is the establish leg alone, `passed` is False because no goal leg was
+    bought, and the endpoint is read off `engaged` and the establish-leg instrumentation."""
 
     arm: str
     work_id: str
@@ -454,6 +486,12 @@ class ArmCell:
     # but a persisted row must carry it (`cell_from_row`), so a pre-instrumentation cell cannot
     # be resumed into an instrumented grid as if it had been read.
     goal_tool_names: tuple[str, ...] = ()
+    # Which registration bought this cell, and how many legs it therefore ran. Defaulted so the
+    # three-arm construction sites need not repeat themselves, but REQUIRED on a persisted row
+    # (`cell_from_row`): a row bought before the capture protocol existed cannot say which of the
+    # two it is, and guessing would be the pooling these fields exist to make unrepresentable.
+    protocol: str = PROTOCOL_THREE_ARM
+    legs: int = 2
 
 
 # The recording clause, and the establish instruction that carries it. IDENTICAL on all three
@@ -636,8 +674,15 @@ def run_arm_cell(
     runner: Runner,
     keep_stream: Callable[[str, str], None] | None = None,
     bd_binary: str | None = None,
+    protocol: str = PROTOCOL_THREE_ARM,
 ) -> ArmCell:
     """Run ONE (arm, work_id) repeat: mint, establish, close the cwd, goal, score.
+
+    Under `PROTOCOL_CAPTURE` the cell stops after the establish leg and its engagement check, and
+    never mints the goal leg. The whole difference between the two protocols is expressed as this
+    one argument rather than as a second copy of the mint: the establish leg a capture turn reads
+    has to be the SAME leg, on the same surface, that the three-arm grid runs, or the capture rate
+    would describe a machine the contrast protocol does not use.
 
     `keep_stream(leg, raw_stream)` is called once per leg, in leg order, with the agent's verbatim
     stream-json, BEFORE the cell is scored. The mint is torn down when this returns and the
@@ -687,6 +732,38 @@ def run_arm_cell(
         establish_outside = out_of_sandbox_operands(establish.tool_calls, sandbox=store.sandbox)
         receipts = read_receipts(establish_receipts_path) if establish_receipts_path else ()
         engaged = engagement_of(store, task.current_opaque_values, receipts=receipts)
+
+        if legs_for(protocol) == 1:
+            # Capture stops here. `native_reaches` is counted off the establish mint alone
+            # because it is the only mint this cell made, and the goal-leg fields stay empty
+            # rather than being filled with a stand-in: a capture cell did not buy that leg and
+            # must not carry anything that reads as if it had.
+            assert_no_schema_migration(establish.tool_calls)
+            return ArmCell(
+                arm=arm_name,
+                work_id=task.work_id,
+                variant=task.variant,
+                repeat=repeat,
+                passed=False,
+                engaged=engaged,
+                leaked=False,
+                establish_tool_names=tuple(sorted({call.name for call in establish.tool_calls})),
+                endogenous_verbs=tuple(
+                    invocation.verb for invocation in memory_invocations(establish.tool_calls)
+                ),
+                establish_out_of_sandbox_operands=establish_outside,
+                establish_outcomes=tuple(
+                    observation.outcome for observation in observe_calls(task, establish.tool_calls)
+                ),
+                goal_outcomes=(),
+                native_reaches=len(hook_reaches(store.hook_log)),
+                pinned_off=store.pinned_off,
+                paid=runner is subprocess.run,
+                status="ok",
+                goal_tool_names=(),
+                protocol=protocol,
+                legs=1,
+            )
 
         wipe_cwd_contents(store.sandbox)
         assert_neutral_ancestry(store.sandbox)
@@ -743,6 +820,8 @@ def run_arm_cell(
         paid=runner is subprocess.run,
         status="ok",
         goal_tool_names=tuple(sorted({call.name for call in goal.tool_calls})),
+        protocol=protocol,
+        legs=2,
     )
 
 
@@ -750,6 +829,9 @@ __all__ = [
     "ARM_BEADS",
     "ARM_ESTABLISH_INSTRUCTION",
     "COMMAND_NOT_FOUND",
+    "LEGS_BY_PROTOCOL",
+    "PROTOCOL_CAPTURE",
+    "PROTOCOL_THREE_ARM",
     "RECORD_CLAUSE",
     "ArmCell",
     "ArmCellStore",
@@ -763,6 +845,7 @@ __all__ = [
     "carries_native_memory",
     "child_path_of",
     "engagement_of",
+    "legs_for",
     "out_of_sandbox_operands",
     "remint_config_dir",
     "replant_context",
