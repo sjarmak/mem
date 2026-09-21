@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from membench.runner.bd_build import BdBuild, resolve_bd_build
+from membench.runner.bd_ref import build_bd_ref
 from membench.runner.beads_arm_grid import ArmCell, run_arm_cell
 from membench.runner.beads_arm_plan import (
     PREFLIGHT_TASKS,
@@ -220,6 +221,7 @@ def fire(
     landed: Sequence[ArmCell] = (),
     on_cell: Callable[[ArmCell], None] | None = None,
     on_stream: Callable[[ArmGridKey, str, str], None] | None = None,
+    bd_binary: str | None = None,
 ) -> list[ArmCell]:
     """Run every cell of the grid that ``landed`` does not already hold.
 
@@ -233,6 +235,10 @@ def fire(
     stops rather than burning the rest of the authorization into unmeasured cells. A run of
     consecutive unmeasured cells is a broken rig, and a tolerance applied everywhere is a grid
     that measured nothing while reporting a rate.
+
+    ``bd_binary`` is the build every cell mints against -- the commit ``--bd-ref`` pinned. It is
+    passed rather than looked up per cell so that one grid cannot straddle two builds, and so the
+    build the artifact's identity names is provably the one the cells ran.
 
     ``on_stream(key, leg, raw_stream)`` receives each leg's verbatim stream as the cell runs,
     keyed by the cell it belongs to. It fires for a cell that then times out or errors, which is
@@ -261,6 +267,7 @@ def fire(
                 channel=CHANNEL,
                 runner=runner,
                 keep_stream=_stream_keeper(on_stream, key),
+                bd_binary=bd_binary,
             )
         except HeadlessAgentError as exc:
             if is_quota_halt(exc):
@@ -327,6 +334,19 @@ def _summary(
     )
 
 
+def _bd_build_of(args: argparse.Namespace, *, runner: Runner) -> BdBuild:
+    """The bd this fire measures: the commit ``--bd-ref`` pins, else the ambient binary.
+
+    The flywheel's one variable per turn is the beads build, and memory beads are a prototype, so
+    a turn normally names ``(remote, sha)`` and gets a binary built from exactly that. Without the
+    flag the behaviour is unchanged -- ``MEMBENCH_BD_BINARY`` or whatever is on PATH -- which is
+    what the harness's own fixtures and a quick local run want."""
+    if args.bd_ref is None:
+        return resolve_bd_build(runner=runner)
+    remote, sha = args.bd_ref
+    return build_bd_ref(remote, sha, runner=runner)
+
+
 def _run(
     args: argparse.Namespace,
     tasks: Sequence[ToolReqRealAgentTask],
@@ -339,7 +359,7 @@ def _run(
     corpus = corpus_fingerprint(tasks)
     try:
         cli_version = resolve_cli_version()
-        bd_build = resolve_bd_build()
+        bd_build = _bd_build_of(args, runner=runner)
     except (HeadlessAgentError, MemoryToolError) as exc:
         print(f"REFUSING to run: {exc}", file=sys.stderr)
         return EXIT_REFUSED
@@ -431,6 +451,7 @@ def _run(
             landed=landed,
             on_cell=_record,
             on_stream=_keep_stream,
+            bd_binary=bd_build.binary,
         )
     except (QuotaHaltError, RigHaltError) as exc:
         _persist()
@@ -465,6 +486,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--corpus-dir", type=Path, default=DEFAULT_CORPUS)
     ap.add_argument("--model", default="")
+    ap.add_argument(
+        "--bd-ref",
+        nargs=2,
+        metavar=("REMOTE", "SHA"),
+        default=None,
+        help=(
+            "the beads commit this turn measures: a git remote (URL or name) and a COMMIT HASH, "
+            "fetched and built with the project's own Makefile and cached by sha. The flywheel's "
+            "one variable per turn. A branch or tag is refused -- it names different code on "
+            "different days. Omit to use MEMBENCH_BD_BINARY or the ambient bd"
+        ),
+    )
     ap.add_argument(
         "--n-tasks",
         type=int,

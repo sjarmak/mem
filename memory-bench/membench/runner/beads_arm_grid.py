@@ -88,6 +88,7 @@ from membench.runner.tool_surface import (
     CONFIG_DIR_ENV,
     MEMORY_COMMAND,
     MemoryToolSurface,
+    assert_no_schema_migration,
     capture_bd_context,
     command_segments,
     memory_invocations,
@@ -251,11 +252,19 @@ def _no_store_surface(root: Path) -> NoStoreSurface:
 
 
 @contextmanager
-def arm_cell_store(arm_name: str, *, label: str) -> Iterator[ArmCellStore]:
+def arm_cell_store(
+    arm_name: str, *, label: str, bd_binary: str | None = None
+) -> Iterator[ArmCellStore]:
     """Mint one repeat's surface for one arm and tear it down when both legs have run.
 
     `label` only names the sandbox, so a directory left behind by a crash says which cell it came
-    from. Everything that decides what the agent can reach comes from the registry."""
+    from. Everything that decides what the agent can reach comes from the registry.
+
+    `bd_binary` is the PINNED build the turn is measuring (`--bd-ref`), and it has to arrive here
+    rather than being read off PATH in `provision_memory_tool`: the fire records the build in the
+    artifact's resume identity, so a cell that mints against the ambient binary instead would
+    publish an identity naming a build it never ran. `None` means the ambient bd, which is what
+    the fixtures and a flagless local run want."""
     one = arm(arm_name)
     with (
         tempfile.TemporaryDirectory(prefix="membench-arm-") as root_name,
@@ -265,7 +274,7 @@ def arm_cell_store(arm_name: str, *, label: str) -> Iterator[ArmCellStore]:
         bd_capability: str | None = None
         surface: MemoryToolSurface
         if one.provisions_bd:
-            surface = provision_memory_tool(root, sandbox=sandbox)
+            surface = provision_memory_tool(root, sandbox=sandbox, bd_binary=bd_binary)
             captured = capture_bd_context(surface.store_dir)
             # The bd arm's capability paragraph IS what bd shipped, plus the addendum that
             # `plant_bd_context` appends; rendering it through `arm_context` keeps the shared
@@ -287,16 +296,19 @@ def arm_cell_store(arm_name: str, *, label: str) -> Iterator[ArmCellStore]:
         # pinned, and an install that replaced the file would drop the pin.
         hook_log = install_native_memory_hook(config_dir, mode=one.hook_mode)
         toolchain = _link_shared_toolchain(root)
-        if not one.provisions_bd:
-            # The stub this mint just planted is the one permitted resolution; anything else on
-            # this PATH would give the arm a store it is graded on not having. Checked against
-            # the ASSEMBLED child PATH, toolchain and system directories included, because that
-            # is what the agent's shell will search -- checking `surface.env()` alone would pass
-            # while a `bd` sat in `/usr/bin`.
-            assert_no_memory_command(
-                {"PATH": arm_child_path(surface.bin_dir, toolchain)},
-                allow_stub=surface.bin_dir / MEMORY_COMMAND,
-            )
+        # The file this mint just planted at `bin_dir/bd` is the ONE permitted resolution, for
+        # every arm, and the reason differs by arm. On an arm without bd that file is the stub
+        # that exits 127, and anything else on the PATH would give it a store it is graded on
+        # not having. On the TREATMENT arm that file is the shim, whose whole body is
+        # `exec <pinned bd> -C <minted store>`, and anything else on the PATH is a bd that
+        # reaches a DIFFERENT store with an UNPINNED build -- which is the same loss of
+        # attribution, arriving from the other side. Checked against the ASSEMBLED child PATH,
+        # toolchain and system directories included, because that is what the agent's shell will
+        # search -- checking `surface.env()` alone would pass while a `bd` sat in `/usr/bin`.
+        assert_no_memory_command(
+            {"PATH": arm_child_path(surface.bin_dir, toolchain)},
+            allow_stub=surface.bin_dir / MEMORY_COMMAND,
+        )
         planted = plant_arm_context(sandbox, arm_name, bd_capability=bd_capability)
         yield ArmCellStore(
             arm=one,
@@ -623,6 +635,7 @@ def run_arm_cell(
     channel: MemoryChannel,
     runner: Runner,
     keep_stream: Callable[[str, str], None] | None = None,
+    bd_binary: str | None = None,
 ) -> ArmCell:
     """Run ONE (arm, work_id) repeat: mint, establish, close the cwd, goal, score.
 
@@ -637,7 +650,9 @@ def run_arm_cell(
     arm's, unchanged -- the wipe lands between the legs (it closes the cwd scavenge channel the
     unclamped establish leg opens), the ancestor guard re-runs after it because the wipe cannot
     reach one directory up, and the context is re-planted because the wipe ate it."""
-    with arm_cell_store(arm_name, label=f"{arm_name}-{task.work_id}-{repeat}") as store:
+    with arm_cell_store(
+        arm_name, label=f"{arm_name}-{task.work_id}-{repeat}", bd_binary=bd_binary
+    ) as store:
         establish_leg, goal_leg = arm_cell_legs(task, arm_name)
 
         def _ctx(leg: Leg) -> StepContext:
@@ -697,6 +712,7 @@ def run_arm_cell(
     passed = score_goal_action(
         goal_leg.step, tool_calls=goal.tool_calls, final_answer=goal.final_answer
     )
+    assert_no_schema_migration([*establish.tool_calls, *goal.tool_calls])
     verbs = tuple(
         invocation.verb
         for invocation in memory_invocations([*establish.tool_calls, *goal.tool_calls])

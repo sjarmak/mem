@@ -108,6 +108,9 @@ from membench.spawn import Runner, run_checked
 # these verbs on this binary, so an experiment about them must call them.
 MEMORY_COMMAND = "bd"
 
+# bd flags that consume the word after them, so a scan for the VERB steps over both.
+_BD_FLAGS_WITH_OPERAND = frozenset({"-C", "--dir", "--db", "--prefix", "--actor"})
+
 # The memory verbs of bd 1.3.0-rc.1 (the host build; a52bebd's "bd 1.2.1" was a stale pin).
 # `link` is deliberately ABSENT: it is shorthand for `bd dep add` (an issue dependency), not a
 # memory verb, and counting it would inflate every rate with ordinary issue-graph work. `bd prime`
@@ -1037,6 +1040,84 @@ def assert_store_outside(sandbox: Path, store_dir: Path) -> None:
         )
 
 
+def assert_store_is_its_own_workspace(store_dir: Path) -> None:
+    """Refuse a mint whose ``bd init`` did not land in THIS store.
+
+    ``bd`` finds its workspace by walking UP from the cwd, so an initialized ``.beads`` in any
+    ancestor of the store captures it: ``bd init`` aborts with "This workspace is already
+    initialized" and creates nothing, and every later call in the cell reads and writes the
+    ancestor's store. The arm then shares memory with whatever planted that ``.beads``, across
+    cells and across arms, and the run is not a measurement.
+
+    ``provision_memory_tool`` plants a ``.git`` at the store first, which STOPS that walk, and
+    ``test_a_mint_survives_an_initialized_beads_workspace_in_an_ancestor`` holds that boundary.
+    This is the check that the boundary WORKED, asked of the artifact it was supposed to produce
+    rather than of the ancestors it was supposed to defeat -- so it keeps holding if bd's
+    discovery rules change, and it does not refuse the ancestor the boundary already handles.
+
+    mem-pkglb is the realized cost: a stray ``bd init`` rooted at a tmp ancestor captured every
+    store minted afterwards and reddened 57 tests. It fails CLOSED, so it costs CI time rather
+    than validity -- but a fire that cannot mint a store measures wiring, and the pinned-build
+    identity an artifact carries means nothing if the calls reached somebody else's store."""
+    store_r = store_dir.resolve()
+    if not (store_r / ".beads").is_dir():
+        captor = next(
+            (str(a) for a in store_r.parents if (a / ".beads").is_dir()),
+            "no ancestor workspace found, so the cause is something else",
+        )
+        raise MemoryToolError(
+            f"`bd init` created no .beads under the minted store {store_r}, so every call in "
+            f"this cell would reach some other store. Nearest ancestor workspace: {captor}."
+        )
+
+
+def _bd_verb_words(words: Sequence[str]) -> list[str]:
+    """``words`` (a bd argv with the command word already dropped) without its flags, so the verb
+    is at index 0 however the call was spelled.
+
+    A flag is dropped, and so is the OPERAND of a flag that takes one -- ``-C <dir>`` above all,
+    because every call in this rig rides a shim that puts it there, and a scan that dropped only
+    the flag would read the store path as the verb. Nothing else is inferred: the remaining words
+    are returned in order, and a quoted argument stays the single token the tokenizer made it, so
+    a stored string that happens to contain a verb is not one."""
+    kept: list[str] = []
+    skip_next = False
+    for word in words:
+        if skip_next:
+            skip_next = False
+            continue
+        if word.startswith("-"):
+            skip_next = word in _BD_FLAGS_WITH_OPERAND
+            continue
+        kept.append(word)
+    return kept
+
+
+def assert_no_schema_migration(calls: Iterable[ToolCall]) -> None:
+    """Refuse a leg in which the agent ran a bd SCHEMA MIGRATION.
+
+    The subject under test is a pinned beads build, identified in the artifact by its commit and
+    binary hash. A schema migration changes the store's shape underneath that pin, so the build
+    that produced the second half of the cell is no longer the build the identity names, and a
+    later cell resumed against the same identity is not comparable. It is also not a memory
+    operation: nothing about `bd remember` or `bd recall` needs it, so an agent reaching for it is
+    outside the behaviour being measured either way.
+
+    Argv shape, read from the harness-observed command text, never from the agent's prose."""
+    for call in calls:
+        if call.name not in MEMORY_TOOL_NAMES:
+            continue
+        for segment in command_segments(_command_of(call)):
+            if not segment or Path(segment[0]).name != MEMORY_COMMAND:
+                continue
+            if _bd_verb_words(segment[1:])[:2] == ["migrate", "schema"]:
+                raise MemoryToolError(
+                    f"the agent ran a bd schema migration ({' '.join(segment)!r}). That moves "
+                    "the store out from under the pinned build this artifact is identified "
+                    "by, so the cell is no longer attributable to that build."
+                )
+
+
 def provision_memory_tool(
     root: Path,
     *,
@@ -1102,6 +1183,7 @@ def provision_memory_tool(
         cwd=store_dir,
     )
 
+    assert_store_is_its_own_workspace(store_dir)
     captured = capture_bd_context(store_dir)
     scrub_store_guidance(store_dir)
 

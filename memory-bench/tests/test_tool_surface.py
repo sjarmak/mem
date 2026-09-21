@@ -62,6 +62,8 @@ from membench.runner.tool_surface import (
     MemoryInvocation,
     MemoryToolError,
     NativeMemoryAccess,
+    assert_no_schema_migration,
+    assert_store_is_its_own_workspace,
     assert_store_outside,
     call_satisfied,
     command_segments,
@@ -1962,3 +1964,91 @@ def test_the_recognizer_policy_covers_every_constant_the_recognizers_read() -> N
         "ENV_BD_BINARY",
         "_POLICY_PREFIXES",
     }
+
+
+def test_a_store_that_bd_init_never_claimed_is_refused(tmp_path: Path) -> None:
+    """The boundary in `provision_memory_tool` is what keeps an ancestor workspace from capturing
+    the mint, and it is a side effect of a git call that can fail, be stubbed out, or be deleted by
+    someone reading it as redundant. This asks the question the boundary exists to make true --
+    did `bd init` land HERE -- so the refusal survives the boundary being removed, and it names the
+    ancestor that took the store rather than leaving a silent share."""
+    store = tmp_path / "root" / "store"
+    store.mkdir(parents=True)
+    (tmp_path / ".beads").mkdir()
+
+    with pytest.raises(tool_surface.MemoryToolError) as caught:
+        assert_store_is_its_own_workspace(store)
+    assert str(tmp_path) in str(caught.value), "the refusal must name the capturing ancestor"
+
+
+def test_a_claimed_store_passes_even_under_an_ancestor_workspace(tmp_path: Path) -> None:
+    """The companion to the refusal, and the reason this check is not the ancestor scan it replaced:
+    an ancestor workspace is SURVIVABLE (the `.git` boundary defeats the walk), so a gate that
+    refused on the ancestor alone would refuse every mint under a `/tmp` somebody had `bd init`-ed.
+    What matters is only whether this store is its own workspace."""
+    store = tmp_path / "root" / "store"
+    store.mkdir(parents=True)
+    (tmp_path / ".beads").mkdir()
+    (store / ".beads").mkdir()
+
+    assert_store_is_its_own_workspace(store)
+
+
+def test_a_schema_migration_in_the_stream_is_refused() -> None:
+    """The artifact identifies its cell by the pinned bd commit and binary hash. A schema migration
+    moves the store out from under that pin, so the second half of the cell was not produced by the
+    build the identity names and a resume against that identity is not comparable."""
+    with pytest.raises(tool_surface.MemoryToolError) as caught:
+        assert_no_schema_migration(
+            [ToolCall(name="Bash", arguments={"command": "bd migrate schema"}, result="")]
+        )
+    assert "schema migration" in str(caught.value)
+
+
+def test_a_migration_reached_through_the_shim_path_is_still_refused() -> None:
+    """The agent's shell resolves `bd` through the shim directory, and a stream can carry the call
+    spelled as the path it resolved to. The gate reads the command WORD, not the literal `bd`, so
+    the absolute spelling is not a way around it. Flags are skipped, so `-C` cannot hide the verb.
+    """
+    with pytest.raises(tool_surface.MemoryToolError):
+        assert_no_schema_migration(
+            [
+                ToolCall(
+                    name="Bash",
+                    arguments={"command": "/tmp/mint/bin/bd -C /tmp/mint/store migrate schema"},
+                    result="",
+                )
+            ]
+        )
+
+
+def test_the_ordinary_memory_verbs_are_not_mistaken_for_a_migration() -> None:
+    """A gate that refused on the word `migrate` anywhere would refuse a recall whose CONTENT
+    mentions one, and the stored text of a work record very often does."""
+    assert_no_schema_migration(
+        [
+            ToolCall(
+                name="Bash",
+                arguments={"command": "bd remember k 'migrate schema later'"},
+                result="",
+            ),
+            ToolCall(name="Bash", arguments={"command": "bd recall k"}, result=""),
+            ToolCall(name="Read", arguments={"file_path": "/x"}, result="bd migrate schema"),
+        ]
+    )
+
+
+def test_a_stored_string_that_names_the_migration_unquoted_is_not_a_migration() -> None:
+    """The narrow case the flag-aware scan exists for. `bd remember <key> migrate schema later`
+    stores those words; it does not run a migration. A gate that looked for the adjacent pair
+    anywhere in the argv would refuse this run and lose the cell, and the content of a work record
+    is exactly the place those words turn up."""
+    assert_no_schema_migration(
+        [
+            ToolCall(
+                name="Bash",
+                arguments={"command": "bd remember k migrate schema later"},
+                result="",
+            )
+        ]
+    )

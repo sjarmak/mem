@@ -472,3 +472,100 @@ def test_the_artifact_records_the_bd_build_it_was_bought_against(
     written = json.loads(out.read_text(encoding="utf-8"))
     assert written["bd_commit"] == "e9d2f1778"
     assert written["bd_binary_sha256"] == "f" * 64
+
+
+# ---------------------------------------------------------------------------------------
+# the pinned beads build reaches the cells, not just the identity (mem-0wpq8.4)
+# ---------------------------------------------------------------------------------------
+
+
+def test_every_cell_mints_against_the_build_the_artifact_names(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The defect this wiring exists to make unrepresentable. `--bd-ref` records a commit and a
+    binary hash in the resume identity, while `provision_memory_tool` would resolve bd off PATH --
+    so a turn could publish an identity naming a prototype build that no cell ever ran, and the
+    ambient binary on this machine is a different build from any commit a turn pins.
+
+    Asked of every cell, not the first: a grid that straddled two builds would pass a check on
+    one of them."""
+    tasks = corpus(1)
+    minted: list[str | None] = []
+
+    def buy(
+        task: ToolReqRealAgentTask,
+        arm: str,
+        *,
+        repeat: int = 0,
+        bd_binary: str | None = None,
+        **_kw: object,
+    ) -> ArmCell:
+        minted.append(bd_binary)
+        return a_cell(task, arm, repeat=repeat, paid=False)
+
+    monkeypatch.setattr(beads_arm_fire, "run_arm_cell", buy)
+    monkeypatch.setattr(beads_arm_fire, "load_twin_corpus", lambda *a, **k: ([], tasks))
+    monkeypatch.setattr(beads_arm_fire, "resolve_cli_version", lambda *a, **k: "2.1.210")
+    monkeypatch.setattr(beads_arm_fire, "resolve_bd_build", lambda *a, **k: BD_BUILD)
+
+    out = tmp_path / "out.json"
+    assert main(["--dry-run", "--out", str(out), "--model", MODEL]) == EXIT_OK
+
+    assert minted, "no cell ran"
+    assert set(minted) == {
+        BD_BUILD.binary
+    }, "a cell minted against a bd other than the one the artifact's identity names"
+
+
+def test_a_pinned_ref_is_built_before_any_cell_is_bought(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """`--bd-ref` has to resolve to a binary BEFORE the first cell, and a failure to build it has
+    to refuse rather than fall through to the ambient bd. A build failure discovered mid-grid
+    would leave a half-bought artifact whose cells straddle two instruments."""
+    tasks = corpus(1)
+    asked: list[tuple[str, str]] = []
+
+    def built(remote: str, sha: str, **_kw: object) -> Any:
+        asked.append((remote, sha))
+        return BD_BUILD
+
+    monkeypatch.setattr(beads_arm_fire, "run_arm_cell", lambda t, a, **k: a_cell(t, a, paid=False))
+    monkeypatch.setattr(beads_arm_fire, "load_twin_corpus", lambda *a, **k: ([], tasks))
+    monkeypatch.setattr(beads_arm_fire, "resolve_cli_version", lambda *a, **k: "2.1.210")
+    monkeypatch.setattr(beads_arm_fire, "build_bd_ref", built)
+
+    out = tmp_path / "out.json"
+    code = main(
+        ["--dry-run", "--out", str(out), "--model", MODEL, "--bd-ref", "origin", "5b9e938b5"]
+    )
+
+    assert code == EXIT_OK
+    assert asked == [("origin", "5b9e938b5")], "the pinned ref was not the build that was used"
+
+
+def test_a_ref_that_cannot_be_built_refuses_before_spending(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    tasks = corpus(1)
+    bought: list[str] = []
+
+    def never(task: Any, arm: str, **_kw: object) -> ArmCell:
+        bought.append(arm)
+        raise AssertionError("a cell was bought after the build failed")
+
+    def refuse(remote: str, sha: str, **_kw: object) -> Any:
+        raise MemoryToolError("no toolchain")
+
+    monkeypatch.setattr(beads_arm_fire, "run_arm_cell", never)
+    monkeypatch.setattr(beads_arm_fire, "load_twin_corpus", lambda *a, **k: ([], tasks))
+    monkeypatch.setattr(beads_arm_fire, "resolve_cli_version", lambda *a, **k: "2.1.210")
+    monkeypatch.setattr(beads_arm_fire, "build_bd_ref", refuse)
+
+    out = tmp_path / "out.json"
+    code = main(
+        ["--dry-run", "--out", str(out), "--model", MODEL, "--bd-ref", "origin", "5b9e938b5"]
+    )
+
+    assert code == EXIT_REFUSED
+    assert bought == []
