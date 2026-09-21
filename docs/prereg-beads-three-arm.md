@@ -92,6 +92,19 @@ It must demonstrate, as artifacts on disk and in the dry-run JSON, before a sing
 9. The resume identity digest differs pairwise across arms and is stable within an arm across repeats, so no arm can serve another's cached cell.
 10. `priced_plan` arithmetic equals the declared paid shape cell-for-cell against the fire's own `grid_keys` iteration.
 
+*Amended 2026-09-20, during the build.* Item 9 is satisfied by a different mechanism than the
+one its wording assumes, and the wording is the thing that was wrong. There is one resume identity
+per FIRE, not one per arm: `beads_arm_fire.resume_identity` digests the protocol version, the
+resolved model, the CLI version, the corpus fingerprint, `arm_settings_fingerprint()` (which covers
+all three arms at once, so a cell bought when the floor arm still reached the host toolchain fails
+to match), the surface fingerprint, the recognizer version, and the sorted work_id list. What keeps
+one arm from serving another's cached cell is the CELL KEY, `(arm, variant, work_id, repeat)`, which
+carries the arm as its first field: each `(variant, work_id, repeat)` is three separate keys, the
+per-cell evidence file is named for the key, and `admissible_cells` REFUSES on a duplicate key or a
+key outside this fire's grid rather than silently preferring one row. A per-arm identity digest
+would have been the weaker guarantee of the two, since it can only reject a whole artifact, where
+the key rejects the individual cell.
+
 None of this proves the agent behaves. It proves the three arms are three different machines.
 
 ---
