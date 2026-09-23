@@ -4,7 +4,7 @@
 //
 // Usage:
 //   node build-page.mjs --model model.json --figures _site/figures \
-//        --out _site/index.html --repo <slug> [--explore ./explore/]
+//        --out _site/index.html --repo <slug> [--explore ./explore/] [--review ./review/]
 //
 // Fully generic: no per-repo copy. Captions come from each view's own title +
 // description, falling back to the description of the element the view is "of".
@@ -153,6 +153,7 @@ const html = `<!doctype html>
         <nav class="site-header__nav" aria-label="Primary">
           <a class="nav-extra" href="https://sjarmak.ai">sjarmak.ai</a>
           <a href="${esc(explore)}">Explorer</a>
+          ${args.review ? `<a href="${esc(args.review)}">Code review</a>` : ""}
           <a class="nav-extra" href="https://github.com/sjarmak/${esc(repo)}">GitHub</a>
           <button class="theme-toggle" type="button" aria-label="Toggle color theme" data-theme-toggle>
             <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>

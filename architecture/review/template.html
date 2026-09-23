@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>mem · Code review</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./review.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#workspace">Skip to review</a>
+    <header class="review-header">
+      <a href="https://sjarmak.github.io/mem/">mem / architecture</a><span>Observed code</span
+      ><button id="theme" type="button">Switch theme</button>
+    </header>
+    <main>
+      <section class="intro">
+        <p class="eyebrow">Architecture review · TypeScript pilot</p>
+        <h1>Follow the change.</h1>
+        <p>Explore source dependencies, inspect the evidence, and prepare a finding.</p>
+        <p id="provenance" class="provenance"></p>
+      </section>
+      <form id="live-controls" class="toolbar" method="get" action="/" hidden>
+        <label for="baseline">Compare working tree against</label>
+        <select id="baseline" name="baseline"></select>
+        <button id="refresh" type="submit">Refresh changes</button>
+        <span id="refresh-status" role="status">Baseline stays fixed while you edit.</span>
+      </form>
+      <details class="agent-request">
+        <summary>Review with an agent</summary>
+        <p id="agent-intro">
+          Prepare a request for your agent conversation. After the agent makes changes, refresh this
+          review. No agent is connected to this page.
+        </p>
+        <div id="agent-live" hidden>
+          <button id="agent-launch" type="button">Launch review agent</button>
+          <button id="agent-stop" type="button" disabled>Stop review</button>
+          <p id="agent-run-status" role="status">Ready to review.</p>
+          <p id="agent-run-error" role="alert"></p>
+          <p id="agent-run-context" class="provenance"></p>
+          <pre id="agent-findings" tabindex="0" aria-label="Agent findings" hidden></pre>
+        </div>
+        <button id="agent-prepare" type="button">Prepare agent request</button>
+        <button id="agent-copy" type="button" disabled>Copy agent request</button>
+        <textarea
+          id="agent-prompt"
+          aria-label="Agent review request"
+          rows="9"
+          readonly
+          hidden
+        ></textarea>
+        <p id="agent-status" role="status"></p>
+      </details>
+      <details class="scope">
+        <summary id="scope-summary">Scan scope and limitations</summary>
+        <div id="scope-details"></div>
+      </details>
+      <section class="diff-summary" aria-label="Architecture changes">
+        <h2>What changed</h2>
+        <p id="diff-counts"></p>
+        <details id="dependency-changes">
+          <summary id="dependency-change-count">Dependency changes</summary>
+          <div id="dependency-change-list"></div>
+        </details>
+      </section>
+      <div class="toolbar">
+        <label
+          >Find a module<input
+            id="search"
+            type="search"
+            placeholder="Path or symbol"
+            autocomplete="off" /></label
+        ><label
+          >Show<select id="filter">
+            <option value="all">All modules</option>
+            <option value="changed">Changed modules</option>
+            <option value="unresolved">Unresolved imports</option>
+            <option value="cycles">Dependency cycles</option>
+          </select></label
+        ><button id="diff-view" type="button" aria-pressed="true">Architecture diff</button
+        ><button id="overview" type="button">Package overview</button
+        ><span id="counts" role="status"></span>
+      </div>
+      <div class="workspace" id="workspace">
+        <aside class="module-nav" aria-label="Source modules">
+          <h2>Modules</h2>
+          <div id="modules"></div>
+        </aside>
+        <section class="graph-panel" aria-label="Dependency diagram">
+          <div class="panel-heading">
+            <h2 id="graph-title">Package dependencies</h2>
+            <p id="graph-caption">Select a package to inspect its modules.</p>
+          </div>
+          <div id="graph" tabindex="0" aria-label="Scrollable dependency diagram"></div>
+          <p class="legend">
+            Arrow: importer → dependency. <span class="added">+ added</span>
+            <span class="removed">− removed</span> <span class="changed">● changed</span>. Type-only
+            imports are included.
+          </p>
+        </section>
+        <section class="inspector" aria-label="Source evidence">
+          <h2 id="selection-title" tabindex="-1">Start with a module</h2>
+          <p id="selection-summary">
+            Select a module in the list to inspect its dependencies and captured source.
+          </p>
+          <div id="evidence"></div>
+        </section>
+      </div>
+      <section class="source-section" id="source-section" hidden>
+        <div class="panel-heading">
+          <h2 id="source-title">Captured source</h2>
+          <label
+            >Version<select id="source-version">
+              <option value="current">Current snapshot</option>
+              <option value="baseline">Baseline</option>
+            </select></label
+          >
+        </div>
+        <p id="source-hash"></p>
+        <pre id="source" tabindex="0" aria-label="Captured source code"></pre>
+      </section>
+      <section class="handoff" id="handoff" hidden>
+        <h2>Prepare a finding</h2>
+        <p>
+          The packet includes this module, dependency evidence and snapshot identifiers for an agent
+          or Beads issue. Draft concerns stay with each module across refreshes in this browser tab
+          when storage is available.
+        </p>
+        <label
+          >Concern or requested change<textarea
+            id="concern"
+            rows="3"
+            placeholder="What should we investigate or change?"
+          ></textarea>
+        </label>
+        <div class="actions">
+          <button id="prepare" type="button">Prepare review packet</button
+          ><button id="copy" type="button" disabled>Copy packet</button
+          ><button id="download" type="button" disabled>Download packet</button
+          ><span id="packet-status" role="status"></span>
+        </div>
+        <textarea id="packet" rows="8" readonly hidden aria-label="Review packet"></textarea>
+      </section>
+    </main>
+    <footer>
+      Captured evidence, generated locally. Coverage, complexity and mutation scores: not measured.
+      Architectural policy: not evaluated.
+    </footer>
+    <script type="application/json" id="report">
+      REPORT_DATA
+    </script>
+    <script src="./diff-model.js" defer></script>
+    <script src="./review.js" defer></script>
+  </body>
+</html>

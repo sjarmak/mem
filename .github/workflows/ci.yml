@@ -46,3 +46,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - run: npx playwright install --with-deps chromium
+      - run: npm run review:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: architecture-review-browser-failure
+          path: .architecture-review-tests/
+          include-hidden-files: true

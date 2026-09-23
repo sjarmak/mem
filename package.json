@@ -17,10 +17,14 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tests",
     "lint:fix": "eslint src tests --fix",
-    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\" \"bin/**/*\"",
-    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\" \"bin/**/*\"",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\" \"bin/**/*\" \"architecture/review/**/*.{mjs,js,css,html}\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\" \"bin/**/*\" \"architecture/review/**/*.{mjs,js,css,html}\"",
     "regen:fixtures": "npm run build && node scripts/regen-extract-errors-fixture.mjs",
-    "check": "npm run typecheck && npm run lint && npm run format:check && npm test"
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run review:test",
+    "review:build": "node architecture/review/build.mjs",
+    "review:test": "node --test architecture/review/review.test.mjs architecture/review/server.test.mjs architecture/review/agent.test.mjs architecture/review/diff.test.mjs",
+    "review:e2e": "playwright test --config architecture/review/playwright.config.mjs",
+    "review:serve": "node architecture/review/server.mjs"
   },
   "engines": {
     "node": ">=18"
@@ -30,6 +34,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.10.0",
     "@typescript-eslint/eslint-plugin": "^8.46.3",
