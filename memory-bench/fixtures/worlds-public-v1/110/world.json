@@ -1,0 +1,96 @@
+{
+  "world_id": "world-seed110",
+  "domain": "legal",
+  "org_name": "Ironwood Collective",
+  "teams": [
+    {
+      "team_id": "world-seed110-team-legal-core",
+      "name": "Legal Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed110-team-legal-reliability",
+      "name": "Legal Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed110-team-legal-delivery",
+      "name": "Legal Delivery",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed110-persona-0-bruno-ibarra",
+      "name": "Bruno Ibarra",
+      "role": "researcher",
+      "team_id": "world-seed110-team-legal-core"
+    },
+    {
+      "persona_id": "world-seed110-persona-1-esther-nakamura",
+      "name": "Esther Nakamura",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed110-team-legal-reliability"
+    },
+    {
+      "persona_id": "world-seed110-persona-2-esther-gruber",
+      "name": "Esther Gruber",
+      "role": "support-lead",
+      "team_id": "world-seed110-team-legal-core"
+    },
+    {
+      "persona_id": "world-seed110-persona-3-greta-haddad",
+      "name": "Greta Haddad",
+      "role": "product-manager",
+      "team_id": "world-seed110-team-legal-delivery"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed110-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    },
+    {
+      "channel_id": "world-seed110-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed110-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed110-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed110-kb-legal",
+      "name": "legal knowledge base",
+      "topic": "legal"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed110-repo-python",
+      "name": "legal-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed110-repo-go",
+      "name": "legal-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed110-repo-typescript",
+      "name": "legal-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 110,
+  "generator_version": "world.v1"
+}

@@ -1,0 +1,81 @@
+{
+  "world_id": "world-seed128",
+  "domain": "data-infrastructure",
+  "org_name": "Verdigris Industries",
+  "teams": [
+    {
+      "team_id": "world-seed128-team-data-infrastructure-reliability",
+      "name": "Data Infrastructure Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed128-team-data-infrastructure-enablement",
+      "name": "Data Infrastructure Enablement",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed128-persona-0-joaquin-jorgensen",
+      "name": "Joaquin Jorgensen",
+      "role": "product-manager",
+      "team_id": "world-seed128-team-data-infrastructure-reliability"
+    },
+    {
+      "persona_id": "world-seed128-persona-1-greta-okonkwo",
+      "name": "Greta Okonkwo",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed128-team-data-infrastructure-enablement"
+    },
+    {
+      "persona_id": "world-seed128-persona-2-esther-haddad",
+      "name": "Esther Haddad",
+      "role": "product-manager",
+      "team_id": "world-seed128-team-data-infrastructure-enablement"
+    },
+    {
+      "persona_id": "world-seed128-persona-3-priya-nakamura",
+      "name": "Priya Nakamura",
+      "role": "support-lead",
+      "team_id": "world-seed128-team-data-infrastructure-reliability"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed128-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    },
+    {
+      "channel_id": "world-seed128-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed128-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed128-kb-data-infrastructure",
+      "name": "data-infrastructure knowledge base",
+      "topic": "data-infrastructure"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed128-repo-python",
+      "name": "data-infrastructure-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed128-repo-typescript",
+      "name": "data-infrastructure-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 128,
+  "generator_version": "world.v1"
+}

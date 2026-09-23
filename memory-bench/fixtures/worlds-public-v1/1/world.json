@@ -1,0 +1,101 @@
+{
+  "world_id": "world-seed1",
+  "domain": "chip-design",
+  "org_name": "Westmark Dynamics",
+  "teams": [
+    {
+      "team_id": "world-seed1-team-chip-design-platform",
+      "name": "Chip Design Platform",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed1-team-chip-design-delivery",
+      "name": "Chip Design Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed1-team-chip-design-enablement",
+      "name": "Chip Design Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed1-team-chip-design-reliability",
+      "name": "Chip Design Reliability",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed1-persona-0-imani-okonkwo",
+      "name": "Imani Okonkwo",
+      "role": "engineering-manager",
+      "team_id": "world-seed1-team-chip-design-platform"
+    },
+    {
+      "persona_id": "world-seed1-persona-1-joaquin-larsen",
+      "name": "Joaquin Larsen",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed1-team-chip-design-delivery"
+    },
+    {
+      "persona_id": "world-seed1-persona-2-bruno-gruber",
+      "name": "Bruno Gruber",
+      "role": "legal-counsel",
+      "team_id": "world-seed1-team-chip-design-enablement"
+    },
+    {
+      "persona_id": "world-seed1-persona-3-greta-castellanos",
+      "name": "Greta Castellanos",
+      "role": "product-manager",
+      "team_id": "world-seed1-team-chip-design-reliability"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed1-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed1-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed1-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed1-kb-chip-design",
+      "name": "chip-design knowledge base",
+      "topic": "chip-design"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed1-repo-go",
+      "name": "chip-design-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed1-repo-cuda-cpp",
+      "name": "chip-design-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed1-repo-typescript",
+      "name": "chip-design-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed1-repo-rust",
+      "name": "chip-design-rust",
+      "language": "rust"
+    }
+  ],
+  "seed": 1,
+  "generator_version": "world.v1"
+}

@@ -42,7 +42,10 @@ from dataclasses import dataclass
 # is unambiguous across runs (V2 confound control). The model names below ARE the
 # identity; this version disambiguates two runs that pin different defaults.
 # v2 (mem-sikg): added the pinned NeMo dense embedder for the `nemo-embed` arm.
-STACK_VERSION = "2"
+# v3 (mem-r6yzk.15): pinned that embedder to a REVISION, not just a name. A bare
+# name resolves to whatever the Hub serves at load time, so two runs a month apart
+# could report the same arm name over different weights and different remote code.
+STACK_VERSION = "3"
 
 # Defaults match the phase-2.5-plan recommendation: one Ollama embedding model
 # (``nomic-embed-text``), the lightest bundled sentence-transformer
@@ -52,16 +55,25 @@ DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 DEFAULT_CHAT_MODEL = "llama3"
 DEFAULT_OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"
 DEFAULT_SENTENCE_TRANSFORMER_MODEL = "all-MiniLM-L6-v2"
-# PL default (mem-sikg, countermandable): the PERMISSIVELY-licensed NVIDIA embedder,
-# not the NVIDIA-Non-Commercial agentic-recipe backend (llama-nv-embed-reasoning-3b),
-# to keep the published stack redistribution-clean. Swap via the env override below.
+# PL default (mem-sikg, countermandable): the commercially-usable NVIDIA embedder, not
+# the NVIDIA-Non-Commercial agentic-recipe backend (llama-nv-embed-reasoning-3b), to keep
+# the published stack redistribution-clean. NVIDIA Open Model License plus the Llama 3.2
+# Community License as additional terms: commercial use and derivative distribution are
+# granted, but it is not OSI-permissive (mem-r6yzk.15). Swap via the env override below.
 DEFAULT_NEMO_EMBEDDING_MODEL = "nvidia/llama-nemotron-embed-1b-v2"
+# The exact Hub commit the published dense-arm numbers were measured against. A model
+# id alone is a moving target: the Hub serves whatever HEAD is at load time, and this
+# model ships CUSTOM MODELING CODE that `trust_remote_code=True` executes, so an
+# unpinned load both un-reproduces the row and runs whatever upstream pushed since.
+# Bump this only together with a re-measured baseline, never to chase upstream.
+DEFAULT_NEMO_EMBEDDING_REVISION = "113abe4acafa848e77ead9c0623205e511932348"
 
 ENV_OLLAMA_BASE_URL = "MEMBENCH_OLLAMA_BASE_URL"
 ENV_CHAT_MODEL = "MEMBENCH_LOCAL_CHAT_MODEL"
 ENV_OLLAMA_EMBEDDING_MODEL = "MEMBENCH_LOCAL_EMBED_MODEL"
 ENV_SENTENCE_TRANSFORMER_MODEL = "MEMBENCH_LOCAL_ST_MODEL"
 ENV_NEMO_EMBEDDING_MODEL = "MEMBENCH_LOCAL_NEMO_EMBED_MODEL"
+ENV_NEMO_EMBEDDING_REVISION = "MEMBENCH_LOCAL_NEMO_EMBED_REVISION"
 
 
 class LocalStackUnavailableError(RuntimeError):
@@ -101,6 +113,7 @@ class LocalModelStack:
     ollama_embedding_model: str = DEFAULT_OLLAMA_EMBEDDING_MODEL
     sentence_transformer_model: str = DEFAULT_SENTENCE_TRANSFORMER_MODEL
     nemo_embedding_model: str = DEFAULT_NEMO_EMBEDDING_MODEL
+    nemo_embedding_revision: str = DEFAULT_NEMO_EMBEDDING_REVISION
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> LocalModelStack:
@@ -118,6 +131,9 @@ class LocalModelStack:
                 ENV_SENTENCE_TRANSFORMER_MODEL, DEFAULT_SENTENCE_TRANSFORMER_MODEL
             ),
             nemo_embedding_model=source.get(ENV_NEMO_EMBEDDING_MODEL, DEFAULT_NEMO_EMBEDDING_MODEL),
+            nemo_embedding_revision=source.get(
+                ENV_NEMO_EMBEDDING_REVISION, DEFAULT_NEMO_EMBEDDING_REVISION
+            ),
         )
 
     def telemetry_dict(self) -> dict[str, str]:
@@ -130,6 +146,9 @@ class LocalModelStack:
             "ollama_embedding_model": self.ollama_embedding_model,
             "sentence_transformer_model": self.sentence_transformer_model,
             "nemo_embedding_model": self.nemo_embedding_model,
+            # The revision travels WITH the model name: the pair is the identity, and
+            # a row carrying only the name cannot be re-run to the same number.
+            "nemo_embedding_revision": self.nemo_embedding_revision,
         }
 
     def preflight(

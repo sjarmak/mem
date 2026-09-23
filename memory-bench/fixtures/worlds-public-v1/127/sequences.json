@@ -1,0 +1,760 @@
+[
+  {
+    "sequence_id": "world-seed127-task0",
+    "title": "Verdigris Labs initiative: reconcile 5 decisions",
+    "domain": "cuda-engineering",
+    "goal": "Deliver the current cuda-engineering initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed127-task0-shared0-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-15c381b55921a300": "the production deploy timeout is 600s \u2014 by Kenji Bergstrom (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task0-shared1-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ccc5eead95e2cda2": "the data retention window is 14 days \u2014 by Kenji Bergstrom (researcher) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task0-s0v1-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-27046a4ee4ce7df9": "the supported API version is v4 \u2014 by Kenji Bergstrom (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task0-s0v2-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a923f0ab0e95cc70": "the supported API version is v9 \u2014 by Dmitri Almeida (support-lead) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-27046a4ee4ce7df9"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task0-s0v3-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-4c2a1f84f05c0b4c": "the supported API version is v10 \u2014 by Kenji Bergstrom (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-a923f0ab0e95cc70"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task0-s1-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-0a21218bc36912c1": "the project charter decision is freeze scope at the phase-3 milestone \u2014 by Kenji Bergstrom (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task0-s2-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-f498f41ad1369ee4": "the primary deployment region is us-east-1 \u2014 by Imani Petrov (support-lead) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task0-s3-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-8fc23e9b77d11b1f": "the paging severity floor is anything breaching the latency objective \u2014 by Dmitri Almeida (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task0-s4-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-71237c0e33c3c7ec": "the on-call rotation cadence is split by timezone \u2014 by Farid Ibarra (support-lead) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task0-goal",
+        "user_request": "Deliver the current cuda-engineering initiative. State the current value of: the on-call rotation cadence, the supported API version, the paging severity floor, the primary deployment region, the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-71237c0e33c3c7ec",
+          "m-4c2a1f84f05c0b4c",
+          "m-8fc23e9b77d11b1f",
+          "m-f498f41ad1369ee4",
+          "m-0a21218bc36912c1"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed127-task0-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-71237c0e33c3c7ec",
+              "m-4c2a1f84f05c0b4c",
+              "m-8fc23e9b77d11b1f",
+              "m-f498f41ad1369ee4",
+              "m-0a21218bc36912c1"
+            ],
+            "forbidden_values": [
+              "v4",
+              "v9"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed127-task0-probe-oncall-rotation",
+            "expected_memory_id": "m-71237c0e33c3c7ec",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed127-task0-probe-api-version",
+            "expected_memory_id": "m-4c2a1f84f05c0b4c",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed127-task0-probe-paging-floor",
+            "expected_memory_id": "m-8fc23e9b77d11b1f",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed127-task0-probe-primary-region",
+            "expected_memory_id": "m-f498f41ad1369ee4",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed127-task0-probe-charter",
+            "expected_memory_id": "m-0a21218bc36912c1",
+            "description": "the project charter decision must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-2898a2d06035b867": "the supported API version is v2 \u2014 by Farid Ibarra (support-lead) in #meeting channel",
+          "m-6ec8264daa9dead3": "the supported API version is v8 \u2014 by Kenji Bergstrom (researcher) in #meeting channel",
+          "m-b9ad9b7853615152": "the supported API version is v7 \u2014 by Imani Petrov (support-lead) in #email channel",
+          "m-f00267482f0efd9e": "the project charter decision is move the launch behind the compliance review \u2014 by Dmitri Almeida (support-lead) in #issue-tracker channel",
+          "m-5e2731e0d130a6bd": "the project charter decision is retire the legacy pipeline before any new feature \u2014 by Imani Petrov (support-lead) in #email channel",
+          "m-080ebeb8b91b7e57": "the project charter decision is extend the beta by one quarter \u2014 by Imani Petrov (support-lead) in #email channel",
+          "m-5fa105f8ef1c4a84": "the primary deployment region is ap-northeast-1 \u2014 by Dmitri Almeida (support-lead) in #meeting channel",
+          "m-21b6c0cb46a1ed1e": "the primary deployment region is af-south-1 \u2014 by Kenji Bergstrom (researcher) in #issue-tracker channel",
+          "m-61c6292ccbbb9fa0": "the primary deployment region is me-south-1 \u2014 by Farid Ibarra (support-lead) in #docs channel",
+          "m-05d6c6f223e33771": "the primary deployment region is eu-central-1 \u2014 by Farid Ibarra (support-lead) in #meeting channel",
+          "m-6c4944278a6a340c": "the primary deployment region is ap-south-1 \u2014 by Imani Petrov (support-lead) in #meeting channel",
+          "m-2ae483a72d359501": "the paging severity floor is sev-1 only \u2014 by Imani Petrov (support-lead) in #docs channel",
+          "m-4865d4493956c063": "the paging severity floor is any failed deploy \u2014 by Imani Petrov (support-lead) in #docs channel",
+          "m-6dc25d607e078e7b": "the paging severity floor is any customer-visible regression \u2014 by Kenji Bergstrom (researcher) in #issue-tracker channel",
+          "m-3bf9e01a6a5d21d4": "the paging severity floor is sev-4 and above \u2014 by Kenji Bergstrom (researcher) in #issue-tracker channel",
+          "m-6718bc989ff671a0": "the paging severity floor is sev-2 and above \u2014 by Kenji Bergstrom (researcher) in #docs channel",
+          "m-8d6d22da1f6d03eb": "the on-call rotation cadence is paired primary and secondary \u2014 by Kenji Bergstrom (researcher) in #issue-tracker channel",
+          "m-13ab00f5abcea815": "the on-call rotation cadence is weekly on Thursdays \u2014 by Kenji Bergstrom (researcher) in #issue-tracker channel",
+          "m-c4d96591611901bd": "the on-call rotation cadence is weekly on Mondays \u2014 by Farid Ibarra (support-lead) in #docs channel",
+          "m-50537d52149de1bd": "the on-call rotation cadence is two-week shifts \u2014 by Farid Ibarra (support-lead) in #docs channel"
+        },
+        "superseded_memory_ids": [
+          "m-27046a4ee4ce7df9",
+          "m-a923f0ab0e95cc70"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed127-task1",
+    "title": "Verdigris Labs initiative: reconcile 5 decisions",
+    "domain": "cuda-engineering",
+    "goal": "Deliver the current cuda-engineering initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed127-task1-shared0-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-3cff0e3e86a47733": "the checkout_v2 feature flag state is shadow-only \u2014 by Imani Petrov (support-lead) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task1-s0-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-986f78775ed5587a": "the project charter decision is cut the integrations track and ship the core \u2014 by Farid Ibarra (support-lead) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task1-s1-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-d8d773a642ed6b61": "the release artifact store is a per-team namespace \u2014 by Farid Ibarra (support-lead) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task1-s2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-c0b18cbd366a5a55": "the approved rollback command is ansible-playbook restore.yml \u2014 by Kenji Bergstrom (researcher) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task1-s3v1-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-bb4243986b3c9cf8": "the primary deployment region is af-south-1 \u2014 by Farid Ibarra (support-lead) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task1-s3v2-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-b84e93dd719e98e8": "the primary deployment region is us-west-2 \u2014 by Dmitri Almeida (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-bb4243986b3c9cf8"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task1-s3v3-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-6fb5081495bed3d4": "the primary deployment region is eu-central-1 \u2014 by Farid Ibarra (support-lead) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-b84e93dd719e98e8"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task1-goal",
+        "user_request": "Deliver the current cuda-engineering initiative. State the current value of: the approved rollback command, the primary deployment region, the release artifact store, the project charter decision, the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-c0b18cbd366a5a55",
+          "m-6fb5081495bed3d4",
+          "m-d8d773a642ed6b61",
+          "m-986f78775ed5587a",
+          "m-15c381b55921a300"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed127-task1-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-c0b18cbd366a5a55",
+              "m-6fb5081495bed3d4",
+              "m-d8d773a642ed6b61",
+              "m-986f78775ed5587a",
+              "m-15c381b55921a300"
+            ],
+            "forbidden_values": [
+              "af-south-1",
+              "us-west-2"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed127-task1-probe-rollback-command",
+            "expected_memory_id": "m-c0b18cbd366a5a55",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed127-task1-probe-primary-region",
+            "expected_memory_id": "m-6fb5081495bed3d4",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed127-task1-probe-artifact-store",
+            "expected_memory_id": "m-d8d773a642ed6b61",
+            "description": "the release artifact store must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed127-task1-probe-charter",
+            "expected_memory_id": "m-986f78775ed5587a",
+            "description": "the project charter decision must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed127-task1-probe-shared-deploy-timeout",
+            "expected_memory_id": "m-15c381b55921a300",
+            "description": "the production deploy timeout (decided in an earlier task) must be recalled"
+          }
+        ],
+        "distractor_memories": {
+          "m-8f883983043f24d2": "the project charter decision is extend the beta by one quarter \u2014 by Imani Petrov (support-lead) in #issue-tracker channel",
+          "m-e1e8c5e219351e30": "the project charter decision is run the rewrite and the old stack side by side \u2014 by Farid Ibarra (support-lead) in #meeting channel",
+          "m-39fc82889dec12e2": "the project charter decision is move the launch behind the compliance review \u2014 by Kenji Bergstrom (researcher) in #issue-tracker channel",
+          "m-06cb9b7e1b58bb76": "the project charter decision is split delivery into two independent releases \u2014 by Imani Petrov (support-lead) in #meeting channel",
+          "m-19f580533ee7e57e": "the project charter decision is hold the public interface steady through the migration \u2014 by Farid Ibarra (support-lead) in #email channel",
+          "m-149a38cb205686c5": "the release artifact store is the internal registry \u2014 by Imani Petrov (support-lead) in #docs channel",
+          "m-ebb47d77afe60fa2": "the release artifact store is one bucket per release \u2014 by Dmitri Almeida (support-lead) in #docs channel",
+          "m-32702f7b169680a7": "the release artifact store is the build cache \u2014 by Imani Petrov (support-lead) in #issue-tracker channel",
+          "m-2821f7ddfe9b1e44": "the release artifact store is the mirrored CDN origin \u2014 by Farid Ibarra (support-lead) in #email channel",
+          "m-937d7a9a10e8f337": "the approved rollback command is flux suspend then resume \u2014 by Imani Petrov (support-lead) in #issue-tracker channel",
+          "m-10ddf9cc5e8159c0": "the approved rollback command is helm rollback \u2014 by Imani Petrov (support-lead) in #docs channel",
+          "m-ec7df31e3136989b": "the approved rollback command is nomad job revert \u2014 by Farid Ibarra (support-lead) in #docs channel",
+          "m-d120aa97923c3643": "the primary deployment region is me-south-1 \u2014 by Imani Petrov (support-lead) in #meeting channel",
+          "m-fa79aeee7484fd7f": "the primary deployment region is eu-west-1 \u2014 by Kenji Bergstrom (researcher) in #email channel",
+          "m-7435ae0c64b2c575": "the primary deployment region is us-east-1 \u2014 by Farid Ibarra (support-lead) in #email channel",
+          "m-cefc92e62522b003": "the production deploy timeout is 900s \u2014 by Dmitri Almeida (support-lead) in #docs channel",
+          "m-a4ef5fae7df196a2": "the production deploy timeout is 90s \u2014 by Dmitri Almeida (support-lead) in #issue-tracker channel",
+          "m-263e39d6c66ee58d": "the production deploy timeout is 120s \u2014 by Farid Ibarra (support-lead) in #issue-tracker channel"
+        },
+        "superseded_memory_ids": [
+          "m-bb4243986b3c9cf8",
+          "m-b84e93dd719e98e8"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed127-task2",
+    "title": "Verdigris Labs initiative: reconcile 5 decisions",
+    "domain": "cuda-engineering",
+    "goal": "Deliver the current cuda-engineering initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed127-task2-s0-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-1036d14da962d173": "the primary deployment region is us-west-2 \u2014 by Kenji Bergstrom (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task2-s1-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ebc46e031b0315bf": "the paging severity floor is manual escalation only \u2014 by Dmitri Almeida (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task2-s2v1-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-13b7692fb643fa8e": "the approved rollback command is ansible-playbook restore.yml \u2014 by Kenji Bergstrom (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task2-s2v2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-840ea07c664972a6": "the approved rollback command is helm rollback \u2014 by Dmitri Almeida (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-13b7692fb643fa8e"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task2-s2v3-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-cc454194e9100eea": "the approved rollback command is terraform apply -refresh \u2014 by Kenji Bergstrom (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-840ea07c664972a6"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task2-s3-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-adaca66f7574897c": "the project charter decision is run the rewrite and the old stack side by side \u2014 by Kenji Bergstrom (researcher) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed127-task2-goal",
+        "user_request": "Deliver the current cuda-engineering initiative. State the current value of: the paging severity floor, the approved rollback command, the primary deployment region, the project charter decision, the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-ebc46e031b0315bf",
+          "m-cc454194e9100eea",
+          "m-1036d14da962d173",
+          "m-adaca66f7574897c",
+          "m-3cff0e3e86a47733"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed127-task2-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-ebc46e031b0315bf",
+              "m-cc454194e9100eea",
+              "m-1036d14da962d173",
+              "m-adaca66f7574897c",
+              "m-3cff0e3e86a47733"
+            ],
+            "forbidden_values": [
+              "ansible-playbook restore.yml",
+              "helm rollback"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed127-task2-probe-paging-floor",
+            "expected_memory_id": "m-ebc46e031b0315bf",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed127-task2-probe-rollback-command",
+            "expected_memory_id": "m-cc454194e9100eea",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed127-task2-probe-primary-region",
+            "expected_memory_id": "m-1036d14da962d173",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed127-task2-probe-charter",
+            "expected_memory_id": "m-adaca66f7574897c",
+            "description": "the project charter decision must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed127-task2-probe-shared-feature-flag",
+            "expected_memory_id": "m-3cff0e3e86a47733",
+            "description": "the checkout_v2 feature flag state (decided in an earlier task) must be recalled"
+          }
+        ],
+        "distractor_memories": {
+          "m-184fa42f0cde66c5": "the primary deployment region is eu-west-1 \u2014 by Kenji Bergstrom (researcher) in #issue-tracker channel",
+          "m-1b2325da3f897cc1": "the primary deployment region is me-south-1 \u2014 by Kenji Bergstrom (researcher) in #docs channel",
+          "m-9db1cba4d4c3fd9b": "the primary deployment region is ca-central-1 \u2014 by Imani Petrov (support-lead) in #email channel",
+          "m-6eaad88319383168": "the primary deployment region is af-south-1 \u2014 by Farid Ibarra (support-lead) in #issue-tracker channel",
+          "m-3b6d8b7f83568897": "the primary deployment region is sa-east-1 \u2014 by Imani Petrov (support-lead) in #meeting channel",
+          "m-1fbf42b51fb2caa5": "the paging severity floor is nothing below a full outage \u2014 by Imani Petrov (support-lead) in #email channel",
+          "m-f78b786c62d7397f": "the paging severity floor is sev-2 and above \u2014 by Kenji Bergstrom (researcher) in #issue-tracker channel",
+          "m-b8cba6b2188bad8e": "the paging severity floor is anything breaching the latency objective \u2014 by Dmitri Almeida (support-lead) in #meeting channel",
+          "m-4a368d1411c57134": "the paging severity floor is sev-3 and above \u2014 by Farid Ibarra (support-lead) in #docs channel",
+          "m-f7605db00f2cfc54": "the approved rollback command is spinnaker pipeline rewind \u2014 by Imani Petrov (support-lead) in #issue-tracker channel",
+          "m-23694945489f0a68": "the approved rollback command is git revert then redeploy \u2014 by Farid Ibarra (support-lead) in #docs channel",
+          "m-d3b4e63a11ffc7df": "the approved rollback command is docker service update --rollback \u2014 by Kenji Bergstrom (researcher) in #docs channel",
+          "m-8f72bf9bde13078b": "the project charter decision is hold the public interface steady through the migration \u2014 by Farid Ibarra (support-lead) in #email channel",
+          "m-63b2edc50815e888": "the project charter decision is freeze scope at the phase-3 milestone \u2014 by Kenji Bergstrom (researcher) in #email channel",
+          "m-f33f57b0863d6efc": "the project charter decision is cut the integrations track and ship the core \u2014 by Farid Ibarra (support-lead) in #docs channel",
+          "m-70266c1493402dc1": "the project charter decision is staff the reliability track ahead of the roadmap \u2014 by Kenji Bergstrom (researcher) in #email channel",
+          "m-00a5f3d85089b97d": "the checkout_v2 feature flag state is canary-25% \u2014 by Kenji Bergstrom (researcher) in #email channel",
+          "m-d145911e773e2b2e": "the checkout_v2 feature flag state is canary-10% \u2014 by Farid Ibarra (support-lead) in #issue-tracker channel",
+          "m-698c2c6fe8bc98e8": "the checkout_v2 feature flag state is ramped to all traffic \u2014 by Farid Ibarra (support-lead) in #issue-tracker channel"
+        },
+        "superseded_memory_ids": [
+          "m-13b7692fb643fa8e",
+          "m-840ea07c664972a6"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  }
+]

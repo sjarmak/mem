@@ -1,0 +1,96 @@
+{
+  "world_id": "world-seed124",
+  "domain": "customer-support",
+  "org_name": "Ironwood Dynamics",
+  "teams": [
+    {
+      "team_id": "world-seed124-team-customer-support-enablement",
+      "name": "Customer Support Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed124-team-customer-support-core",
+      "name": "Customer Support Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed124-team-customer-support-foundations",
+      "name": "Customer Support Foundations",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed124-team-customer-support-delivery",
+      "name": "Customer Support Delivery",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed124-persona-0-dmitri-doyle",
+      "name": "Dmitri Doyle",
+      "role": "staff-engineer",
+      "team_id": "world-seed124-team-customer-support-enablement"
+    },
+    {
+      "persona_id": "world-seed124-persona-1-ada-moreau",
+      "name": "Ada Moreau",
+      "role": "engineering-manager",
+      "team_id": "world-seed124-team-customer-support-core"
+    },
+    {
+      "persona_id": "world-seed124-persona-2-dmitri-almeida",
+      "name": "Dmitri Almeida",
+      "role": "staff-engineer",
+      "team_id": "world-seed124-team-customer-support-foundations"
+    },
+    {
+      "persona_id": "world-seed124-persona-3-esther-nakamura",
+      "name": "Esther Nakamura",
+      "role": "support-lead",
+      "team_id": "world-seed124-team-customer-support-delivery"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed124-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed124-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed124-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed124-kb-customer-support",
+      "name": "customer-support knowledge base",
+      "topic": "customer-support"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed124-repo-cuda-cpp",
+      "name": "customer-support-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed124-repo-go",
+      "name": "customer-support-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed124-repo-typescript",
+      "name": "customer-support-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 124,
+  "generator_version": "world.v1"
+}

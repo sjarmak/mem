@@ -1,0 +1,71 @@
+{
+  "world_id": "world-seed117",
+  "domain": "chip-design",
+  "org_name": "Cobalt Works",
+  "teams": [
+    {
+      "team_id": "world-seed117-team-chip-design-reliability",
+      "name": "Chip Design Reliability",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed117-persona-0-leila-gruber",
+      "name": "Leila Gruber",
+      "role": "product-manager",
+      "team_id": "world-seed117-team-chip-design-reliability"
+    },
+    {
+      "persona_id": "world-seed117-persona-1-bruno-larsen",
+      "name": "Bruno Larsen",
+      "role": "qa-engineer",
+      "team_id": "world-seed117-team-chip-design-reliability"
+    },
+    {
+      "persona_id": "world-seed117-persona-2-farid-moreau",
+      "name": "Farid Moreau",
+      "role": "staff-engineer",
+      "team_id": "world-seed117-team-chip-design-reliability"
+    },
+    {
+      "persona_id": "world-seed117-persona-3-oskar-gruber",
+      "name": "Oskar Gruber",
+      "role": "legal-counsel",
+      "team_id": "world-seed117-team-chip-design-reliability"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed117-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    },
+    {
+      "channel_id": "world-seed117-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed117-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed117-kb-chip-design",
+      "name": "chip-design knowledge base",
+      "topic": "chip-design"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed117-repo-cuda-cpp",
+      "name": "chip-design-cuda-cpp",
+      "language": "cuda-cpp"
+    }
+  ],
+  "seed": 117,
+  "generator_version": "world.v1"
+}

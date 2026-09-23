@@ -1,0 +1,86 @@
+{
+  "world_id": "world-seed121",
+  "domain": "cuda-engineering",
+  "org_name": "Westmark Systems",
+  "teams": [
+    {
+      "team_id": "world-seed121-team-cuda-engineering-reliability",
+      "name": "Cuda Engineering Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed121-team-cuda-engineering-enablement",
+      "name": "Cuda Engineering Enablement",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed121-persona-0-mateo-petrov",
+      "name": "Mateo Petrov",
+      "role": "support-lead",
+      "team_id": "world-seed121-team-cuda-engineering-reliability"
+    },
+    {
+      "persona_id": "world-seed121-persona-1-bruno-kowalski",
+      "name": "Bruno Kowalski",
+      "role": "qa-engineer",
+      "team_id": "world-seed121-team-cuda-engineering-enablement"
+    },
+    {
+      "persona_id": "world-seed121-persona-2-camila-doyle",
+      "name": "Camila Doyle",
+      "role": "researcher",
+      "team_id": "world-seed121-team-cuda-engineering-reliability"
+    },
+    {
+      "persona_id": "world-seed121-persona-3-nadia-petrov",
+      "name": "Nadia Petrov",
+      "role": "legal-counsel",
+      "team_id": "world-seed121-team-cuda-engineering-reliability"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed121-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    },
+    {
+      "channel_id": "world-seed121-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed121-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed121-kb-cuda-engineering",
+      "name": "cuda-engineering knowledge base",
+      "topic": "cuda-engineering"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed121-repo-cuda-cpp",
+      "name": "cuda-engineering-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed121-repo-rust",
+      "name": "cuda-engineering-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed121-repo-go",
+      "name": "cuda-engineering-go",
+      "language": "go"
+    }
+  ],
+  "seed": 121,
+  "generator_version": "world.v1"
+}

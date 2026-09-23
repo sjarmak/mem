@@ -7,6 +7,7 @@ null-safe temporal cut, undirected supersedes closure, null-safe sibling test.
 import pytest
 
 from membench.validity import (
+    SIBLING_AXES,
     LeakageError,
     QueryWork,
     WorkRef,
@@ -80,6 +81,69 @@ def test_sibling_test_is_null_safe():
     assert is_sibling(ref_with_pr, _query()) is False
 
 
+def test_epic_parent_axis_excludes():
+    # Two directions on the parent axis: a record SHARING the query's epic, and
+    # the epic record itself (its work_id IS the query's parent).
+    corpus = [
+        _ref("a", closed="2026-01-01T00:00:00Z", parent="epic-1"),
+        _ref("epic-1", closed="2026-01-01T00:00:00Z"),
+        _ref("b", closed="2026-01-01T00:00:00Z", parent="epic-2"),
+        _ref("c", closed="2026-01-01T00:00:00Z"),
+    ]
+    q = _query(parent="epic-1")
+    assert [r.work_id for r in loo_bounded(corpus, q)] == ["b", "c"]
+
+
+def test_child_axis_excludes_unconditionally():
+    # A record hanging under the query work is the same work, and the query names
+    # no parent of its own — the child axis must fire on work_id alone.
+    corpus = [
+        _ref("child", closed="2026-01-01T00:00:00Z", parent="B"),
+        _ref("other", closed="2026-01-01T00:00:00Z", parent="epic-9"),
+    ]
+    q = _query(work_id="B")
+    assert q.parent is None
+    assert [r.work_id for r in loo_bounded(corpus, q)] == ["other"]
+
+
+def test_parentless_record_unaffected_by_parent_axes():
+    # Records carrying no parent keep the pre-fix behavior: neither the
+    # epic-parent nor the child axis may fire on absence.
+    parentless = _ref("a", closed="2026-01-01T00:00:00Z")
+    assert parentless.parent is None
+    assert is_sibling(parentless, _query(work_id="B", parent="epic-1")) is False
+    assert is_sibling(parentless, _query(work_id="B")) is False
+    assert [r.work_id for r in loo_bounded([parentless], _query(parent="epic-1"))] == ["a"]
+
+
+def test_sibling_axis_table_pins_all_five():
+    # Parity contract with `retrieve/exclusions.ts` `isSibling`. Each row isolates
+    # ONE axis: the ref carries only that axis's key, the query only its counterpart.
+    # A dropped axis turns its row False; a new TS axis leaves SIBLING_AXES stale.
+    assert SIBLING_AXES == ("convoy", "pr", "external_ref", "epic_parent", "child")
+    cases = {
+        "convoy": (
+            _ref("a", closed="2026-01-01T00:00:00Z", convoy_id="cv-1"),
+            _query(convoy_id="cv-1"),
+        ),
+        "pr": (_ref("a", closed="2026-01-01T00:00:00Z", pr="gh-1"), _query(pr="gh-1")),
+        "external_ref": (
+            _ref("a", closed="2026-01-01T00:00:00Z", external_ref="br-1"),
+            _query(external_ref="br-1"),
+        ),
+        "epic_parent": (
+            _ref("a", closed="2026-01-01T00:00:00Z", parent="epic-1"),
+            _query(parent="epic-1"),
+        ),
+        "child": (_ref("a", closed="2026-01-01T00:00:00Z", parent="B"), _query(work_id="B")),
+    }
+    assert tuple(cases) == SIBLING_AXES
+    fired = tuple(axis for axis, (ref, q) in cases.items() if is_sibling(ref, q))
+    assert fired == SIBLING_AXES
+    # And the epic-parent axis's second direction: the record IS the query's epic.
+    assert is_sibling(_ref("epic-1", closed="2026-01-01T00:00:00Z"), _query(parent="epic-1"))
+
+
 def test_supersedes_closure_is_undirected_and_transitive():
     # b supersedes a; c supersedes b. Querying b must exclude both a (descendant)
     # and c (ancestor) — undirected, multi-hop.
@@ -127,7 +191,7 @@ def test_work_ref_from_record_projects_loo_fields():
         "rig": "rigA",
         "external_ref": "gh-7",
         "lifecycle": {"created": "2026-01-01T00:00:00Z", "closed": "2026-01-05T00:00:00Z"},
-        "links": {"convoy_id": "cv", "supersedes": ["w0"]},
+        "links": {"convoy_id": "cv", "supersedes": ["w0"], "parent": "epic-1"},
         "outcome": {"pr": "gh-100"},
     }
     ref = work_ref_from_record(record)
@@ -139,7 +203,10 @@ def test_work_ref_from_record_projects_loo_fields():
         pr="gh-100",
         external_ref="gh-7",
         supersedes=("w0",),
+        parent="epic-1",
     )
+    started = {**record, "lifecycle": {"started": "2026-01-02T00:00:00Z"}}
+    assert query_from_record(started).parent == "epic-1"
 
 
 def test_query_from_record_falls_back_to_created():

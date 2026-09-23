@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed116",
+  "domain": "data-infrastructure",
+  "org_name": "Cobalt Works",
+  "teams": [
+    {
+      "team_id": "world-seed116-team-data-infrastructure-core",
+      "name": "Data Infrastructure Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed116-team-data-infrastructure-reliability",
+      "name": "Data Infrastructure Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed116-team-data-infrastructure-delivery",
+      "name": "Data Infrastructure Delivery",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed116-persona-0-farid-petrov",
+      "name": "Farid Petrov",
+      "role": "researcher",
+      "team_id": "world-seed116-team-data-infrastructure-core"
+    },
+    {
+      "persona_id": "world-seed116-persona-1-dmitri-eriksen",
+      "name": "Dmitri Eriksen",
+      "role": "product-manager",
+      "team_id": "world-seed116-team-data-infrastructure-reliability"
+    },
+    {
+      "persona_id": "world-seed116-persona-2-kenji-kowalski",
+      "name": "Kenji Kowalski",
+      "role": "support-lead",
+      "team_id": "world-seed116-team-data-infrastructure-delivery"
+    },
+    {
+      "persona_id": "world-seed116-persona-3-bruno-jorgensen",
+      "name": "Bruno Jorgensen",
+      "role": "engineering-manager",
+      "team_id": "world-seed116-team-data-infrastructure-delivery"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed116-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed116-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed116-kb-data-infrastructure",
+      "name": "data-infrastructure knowledge base",
+      "topic": "data-infrastructure"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed116-repo-rust",
+      "name": "data-infrastructure-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed116-repo-python",
+      "name": "data-infrastructure-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed116-repo-cuda-cpp",
+      "name": "data-infrastructure-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed116-repo-typescript",
+      "name": "data-infrastructure-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 116,
+  "generator_version": "world.v1"
+}

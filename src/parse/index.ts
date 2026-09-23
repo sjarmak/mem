@@ -8,6 +8,14 @@ export type { Execution, TraceError, TraceRun } from '../schemas/trace.js';
 
 export { type ErrorExtractor, extractErrors } from './error-extractors.js';
 export {
+  type ContextReach,
+  type ContextReachScan,
+  type ReachKind,
+  countReachesByTool,
+  extractContextReaches,
+  scanContextReaches,
+} from './context-reach.js';
+export {
   type ParsedTrace,
   type TraceReader,
   parseTranscript,

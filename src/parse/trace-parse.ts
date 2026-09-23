@@ -40,7 +40,7 @@ export interface ParsedTrace {
 }
 
 /** The `message.usage` block — only the token fields this parser sums. */
-interface MessageUsage {
+export interface MessageUsage {
   input_tokens?: number;
   output_tokens?: number;
   cache_creation_input_tokens?: number;
@@ -48,8 +48,13 @@ interface MessageUsage {
 }
 
 /** Transcript-entry shape — only the fields this parser reads. Cast (not `any`)
- * to stay within the type-checked lint, matching ingest/trace-index. */
-interface TranscriptEntry {
+ * to stay within the type-checked lint, matching ingest/trace-index.
+ *
+ * Exported as the single transcript-shape declaration for the whole parse
+ * layer: every module that walks a Claude transcript JSONL (here,
+ * {@link file://./context-reach.ts}) imports this rather than re-declaring it,
+ * so the two can never drift apart on a field the harness renames. */
+export interface TranscriptEntry {
   type?: string;
   sessionId?: string;
   version?: string;
@@ -68,12 +73,15 @@ interface TranscriptEntry {
 }
 
 /** A content block inside `message.content[]`. */
-interface ContentBlock {
+export interface ContentBlock {
   type?: string;
   // tool_use
   id?: string;
   name?: string;
-  input?: { command?: unknown };
+  /** A tool_use call's arguments, verbatim and unvalidated — the key set differs
+   * per tool (`command` for Bash, `file_path` for Read, `pattern` for Grep, …),
+   * so it is an open record and every read narrows the value it pulls out. */
+  input?: Record<string, unknown>;
   // tool_result
   tool_use_id?: string;
   is_error?: boolean;
@@ -92,7 +100,7 @@ function asText(value: unknown): string {
 
 /** The content of a tool_result block can be a plain string or an array of
  * `{ type: 'text', text }` blocks; flatten either to text. */
-function resultBlockText(content: unknown): string {
+export function resultBlockText(content: unknown): string {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
   return content
@@ -114,7 +122,7 @@ function executionOutput(entry: TranscriptEntry, block: ContentBlock): string {
 }
 
 /** Iterate `message.content[]` as typed blocks (empty when absent/non-array). */
-function contentBlocks(entry: TranscriptEntry): ContentBlock[] {
+export function contentBlocks(entry: TranscriptEntry): ContentBlock[] {
   const content = entry.message?.content;
   return Array.isArray(content) ? (content as ContentBlock[]) : [];
 }

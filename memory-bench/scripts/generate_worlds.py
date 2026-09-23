@@ -37,15 +37,18 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from membench.generators import (
-    materialize_world,
-    memory_necessity_gate,
+    GateCandidate,
+    materialize_project_tier,
+    materialize_session_tier,
+    necessity_gate,
     shape_wellformedness_gate,
 )
+from membench.generators.necessity_sweep import context_for
 from membench.generators.nemo import records_to_world, write_world
 from membench.generators.nemo.model_provider import DEFAULT_NIM_ENDPOINT, DEFAULT_NIM_MODEL
 from membench.generators.nemo.world_builder import generate_world_records
 from membench.generators.synthetic_records import synthetic_world_records
-from membench.generators.world_manifest import build_manifest, write_manifest
+from membench.generators.world_manifest import FreezeTier, build_manifest, write_manifest
 from membench.memory_systems.lexical_system import DEFAULT_TOP_K
 
 # What the manifest records as the world's generator under --offline. The manifest field
@@ -114,6 +117,7 @@ def generate_and_freeze(
     out: str,
     tool_requiring: bool = False,
     offline: bool = False,
+    tier: FreezeTier = "session",
     verbose: bool = True,
 ) -> WorldResult:
     """Generate one synthetic world, freeze it under ``<out>/<seed>/``, and gate its tasks.
@@ -123,6 +127,11 @@ def generate_and_freeze(
     per-sequence admission verdicts so callers can aggregate across seeds. ``tool_requiring``
     (mem-31vl) materialises the goal as a tool action carrying the current value instead of
     a text answer, so retrieval quality is load-bearing through the action.
+
+    ``tier`` (mem-r6yzk.3) selects the memory scope the tasks span: "session" (each
+    goal reaches only inside its own sequence) or "project" (each goal also requires
+    the charter another sequence established). It is recorded on the manifest, which
+    is what lets ``verify_world`` re-materialise with the same generator.
     """
     # `offline` swaps ONLY the records producer; every downstream step is the same code on
     # the same rows, so the two paths differ in the four flavor fields and in nothing the
@@ -147,13 +156,22 @@ def generate_and_freeze(
     if verbose:
         print(f"[seed {seed}] froze world '{world.org_name}' ({world.domain}) -> {out_dir}")
 
-    sequences = materialize_world(
-        world, project, n_tasks=tasks, facts_per_task=facts, tool_requiring=tool_requiring
-    )
+    if tier == "session":
+        sequences = materialize_session_tier(
+            world, project, n_tasks=tasks, facts_per_task=facts, tool_requiring=tool_requiring
+        )
+    else:
+        sequences = materialize_project_tier(
+            world, project, n_tasks=tasks, facts_per_task=facts, tool_requiring=tool_requiring
+        )
     admissions: list[SequenceAdmission] = []
     wellformedness: list[SequenceWellformedness] = []
-    for seq in sequences:
-        v = memory_necessity_gate(seq).verdict
+    for index, seq in enumerate(sequences):
+        # Scope matters: a project-tier sequence answers from what an EARLIER sequence
+        # of this world wrote, so it is piloted alongside that prefix. Piloting it alone
+        # would report REJECT about a task that discriminates perfectly (mem-r6yzk B1).
+        candidate = GateCandidate(sequence=seq, context=context_for(sequences, index))
+        v = necessity_gate(candidate).verdict
         admissions.append(
             SequenceAdmission(
                 sequence_id=seq.sequence_id,
@@ -203,6 +221,7 @@ def generate_and_freeze(
         facts_per_task=facts,
         seed=seed,
         tool_requiring=tool_requiring,
+        tier=tier,
     )
     mpath = write_manifest(manifest, world_dir=str(out_dir))
     result = WorldResult(
@@ -235,6 +254,14 @@ def main() -> int:
         help="materialise goals as memory-gated tool actions (mem-31vl) instead of text answers",
     )
     ap.add_argument(
+        "--tier",
+        choices=("session", "project"),
+        default="session",
+        help="memory scope the goals span (mem-r6yzk.3): session = inside one "
+        "sequence; project = also requires a shared decision another sequence "
+        "established",
+    )
+    ap.add_argument(
         "--offline",
         action="store_true",
         help="author the persona rows deterministically instead of calling NeMo: no "
@@ -252,6 +279,7 @@ def main() -> int:
         out=args.out,
         tool_requiring=args.tool_requiring,
         offline=args.offline,
+        tier=args.tier,
     )
     return 0
 

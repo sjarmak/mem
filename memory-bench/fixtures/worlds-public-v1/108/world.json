@@ -1,0 +1,101 @@
+{
+  "world_id": "world-seed108",
+  "domain": "chip-design",
+  "org_name": "Westmark Labs",
+  "teams": [
+    {
+      "team_id": "world-seed108-team-chip-design-delivery",
+      "name": "Chip Design Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed108-team-chip-design-reliability",
+      "name": "Chip Design Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed108-team-chip-design-platform",
+      "name": "Chip Design Platform",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed108-persona-0-dmitri-jorgensen",
+      "name": "Dmitri Jorgensen",
+      "role": "product-manager",
+      "team_id": "world-seed108-team-chip-design-delivery"
+    },
+    {
+      "persona_id": "world-seed108-persona-1-imani-castellanos",
+      "name": "Imani Castellanos",
+      "role": "engineering-manager",
+      "team_id": "world-seed108-team-chip-design-delivery"
+    },
+    {
+      "persona_id": "world-seed108-persona-2-dmitri-ibarra",
+      "name": "Dmitri Ibarra",
+      "role": "support-lead",
+      "team_id": "world-seed108-team-chip-design-reliability"
+    },
+    {
+      "persona_id": "world-seed108-persona-3-imani-eriksen",
+      "name": "Imani Eriksen",
+      "role": "legal-counsel",
+      "team_id": "world-seed108-team-chip-design-platform"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed108-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed108-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed108-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed108-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed108-kb-chip-design",
+      "name": "chip-design knowledge base",
+      "topic": "chip-design"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed108-repo-typescript",
+      "name": "chip-design-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed108-repo-cuda-cpp",
+      "name": "chip-design-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed108-repo-go",
+      "name": "chip-design-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed108-repo-python",
+      "name": "chip-design-python",
+      "language": "python"
+    }
+  ],
+  "seed": 108,
+  "generator_version": "world.v1"
+}

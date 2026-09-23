@@ -1,0 +1,96 @@
+{
+  "world_id": "world-seed133",
+  "domain": "legal",
+  "org_name": "Northwind Systems",
+  "teams": [
+    {
+      "team_id": "world-seed133-team-legal-platform",
+      "name": "Legal Platform",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed133-team-legal-core",
+      "name": "Legal Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed133-team-legal-enablement",
+      "name": "Legal Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed133-team-legal-delivery",
+      "name": "Legal Delivery",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed133-persona-0-nadia-eriksen",
+      "name": "Nadia Eriksen",
+      "role": "engineering-manager",
+      "team_id": "world-seed133-team-legal-platform"
+    },
+    {
+      "persona_id": "world-seed133-persona-1-imani-fontaine",
+      "name": "Imani Fontaine",
+      "role": "staff-engineer",
+      "team_id": "world-seed133-team-legal-core"
+    },
+    {
+      "persona_id": "world-seed133-persona-2-leila-bergstrom",
+      "name": "Leila Bergstrom",
+      "role": "legal-counsel",
+      "team_id": "world-seed133-team-legal-enablement"
+    },
+    {
+      "persona_id": "world-seed133-persona-3-oskar-bergstrom",
+      "name": "Oskar Bergstrom",
+      "role": "legal-counsel",
+      "team_id": "world-seed133-team-legal-delivery"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed133-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed133-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    },
+    {
+      "channel_id": "world-seed133-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed133-kb-legal",
+      "name": "legal knowledge base",
+      "topic": "legal"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed133-repo-cuda-cpp",
+      "name": "legal-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed133-repo-go",
+      "name": "legal-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed133-repo-typescript",
+      "name": "legal-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 133,
+  "generator_version": "world.v1"
+}

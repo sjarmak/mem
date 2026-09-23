@@ -1,0 +1,75 @@
+{
+  "entries_parsed": 15,
+  "reach_count": 7,
+  "by_tool": {
+    "Read": 1,
+    "Glob": 1,
+    "Grep": 1,
+    "Bash": 4
+  },
+  "reaches": [
+    {
+      "tool": "Read",
+      "reach_kind": "path",
+      "target": "src/widget/loader.ts",
+      "tool_use_id": "call_read_1",
+      "turn_index": 1,
+      "result_is_error": false,
+      "result_chars": 38
+    },
+    {
+      "tool": "Glob",
+      "reach_kind": "query",
+      "target": "src/**/*.test.ts",
+      "tool_use_id": "call_glob_1",
+      "turn_index": 3,
+      "result_is_error": false,
+      "result_chars": 50
+    },
+    {
+      "tool": "Grep",
+      "reach_kind": "query",
+      "target": "loadWidget",
+      "tool_use_id": "call_grep_1",
+      "turn_index": 3,
+      "result_is_error": true,
+      "result_chars": 16
+    },
+    {
+      "tool": "Bash",
+      "reach_kind": "command",
+      "target": "bd show synth-0001",
+      "tool_use_id": "call_bash_1",
+      "turn_index": 5,
+      "result_is_error": false,
+      "result_chars": 38
+    },
+    {
+      "tool": "Bash",
+      "reach_kind": "command",
+      "target": "git log --oneline -n 3",
+      "tool_use_id": "call_bash_3",
+      "turn_index": 7,
+      "result_is_error": false,
+      "result_chars": 26
+    },
+    {
+      "tool": "Bash",
+      "reach_kind": "command",
+      "target": "git log --oneline -n 3 | head -n 2",
+      "tool_use_id": "call_bash_pipe_read",
+      "turn_index": 11,
+      "result_is_error": false,
+      "result_chars": 26
+    },
+    {
+      "tool": "Bash",
+      "reach_kind": "command",
+      "target": "cd src/widget && rg loadWidget",
+      "tool_use_id": "call_bash_cd_read",
+      "turn_index": 11,
+      "result_is_error": false,
+      "result_chars": 26
+    }
+  ]
+}

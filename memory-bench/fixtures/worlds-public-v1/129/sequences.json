@@ -1,0 +1,737 @@
+[
+  {
+    "sequence_id": "world-seed129-task0",
+    "title": "Lumen Works initiative: reconcile 5 decisions",
+    "domain": "medical",
+    "goal": "Deliver the current medical initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed129-task0-shared0-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-e261e9542c388488": "the data retention window is 1 year \u2014 by Kenji Doyle (product-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task0-s0-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-df902dbf8789b7ca": "the production deploy timeout is 15s \u2014 by Kenji Doyle (product-manager) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task0-s1-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-8b5bf3ebfa8c178b": "the approved rollback command is docker service update --rollback \u2014 by Kenji Doyle (product-manager) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task0-s2-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-6382181de98ac7ef": "the supported API version is v4 \u2014 by Kenji Ibarra (support-lead) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task0-s3v1-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ec09743868034a4e": "the on-call rotation cadence is fortnightly \u2014 by Leila Petrov (support-lead) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task0-s3v2-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-cadf3b3689e58a5b": "the on-call rotation cadence is follow-the-sun \u2014 by Leila Petrov (support-lead) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-ec09743868034a4e"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task0-s3v3-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-867e4e8408845696": "the on-call rotation cadence is monthly blocks \u2014 by Leila Petrov (support-lead) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-cadf3b3689e58a5b"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task0-s4-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-89504398fc21e6dc": "the paging severity floor is any customer-visible regression \u2014 by Kenji Ibarra (support-lead) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task0-goal",
+        "user_request": "Deliver the current medical initiative. State the current value of: the approved rollback command, the paging severity floor, the supported API version, the production deploy timeout, the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-8b5bf3ebfa8c178b",
+          "m-89504398fc21e6dc",
+          "m-6382181de98ac7ef",
+          "m-df902dbf8789b7ca",
+          "m-867e4e8408845696"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed129-task0-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-8b5bf3ebfa8c178b",
+              "m-89504398fc21e6dc",
+              "m-6382181de98ac7ef",
+              "m-df902dbf8789b7ca",
+              "m-867e4e8408845696"
+            ],
+            "forbidden_values": [
+              "fortnightly",
+              "follow-the-sun"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed129-task0-probe-rollback-command",
+            "expected_memory_id": "m-8b5bf3ebfa8c178b",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed129-task0-probe-paging-floor",
+            "expected_memory_id": "m-89504398fc21e6dc",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed129-task0-probe-api-version",
+            "expected_memory_id": "m-6382181de98ac7ef",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed129-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-df902dbf8789b7ca",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed129-task0-probe-oncall-rotation",
+            "expected_memory_id": "m-867e4e8408845696",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-24fcd546a982650e": "the production deploy timeout is 900s \u2014 by Kenji Ibarra (support-lead) in #chat channel",
+          "m-2800e813e82a4db7": "the production deploy timeout is 600s \u2014 by Kenji Ibarra (support-lead) in #chat channel",
+          "m-42e0f4a60ade9baf": "the production deploy timeout is 90s \u2014 by Kenji Larsen (staff-engineer) in #chat channel",
+          "m-1c166a395561dbf9": "the production deploy timeout is 60s \u2014 by Kenji Ibarra (support-lead) in #email channel",
+          "m-4f06e5d3e725c1fa": "the production deploy timeout is 30s \u2014 by Kenji Larsen (staff-engineer) in #email channel",
+          "m-ff3248102d89b636": "the approved rollback command is spinnaker pipeline rewind \u2014 by Kenji Larsen (staff-engineer) in #email channel",
+          "m-e42c04810503a7c0": "the approved rollback command is git revert then redeploy \u2014 by Kenji Larsen (staff-engineer) in #chat channel",
+          "m-a286326dc1ad7db3": "the approved rollback command is argocd app rollback \u2014 by Kenji Ibarra (support-lead) in #chat channel",
+          "m-d6251be622276222": "the approved rollback command is helm rollback \u2014 by Kenji Larsen (staff-engineer) in #email channel",
+          "m-c3bdc1111ad9c738": "the supported API version is v9 \u2014 by Kenji Ibarra (support-lead) in #chat channel",
+          "m-3299d97cc80ece61": "the supported API version is v6 \u2014 by Leila Petrov (support-lead) in #email channel",
+          "m-d5b49dea758bff62": "the supported API version is v3 \u2014 by Leila Petrov (support-lead) in #email channel",
+          "m-9ca350c79f91d937": "the on-call rotation cadence is split by timezone \u2014 by Kenji Doyle (product-manager) in #chat channel",
+          "m-2e17bdc9200333e4": "the on-call rotation cadence is weekly on Mondays \u2014 by Leila Petrov (support-lead) in #email channel",
+          "m-66c934a930a3f6dc": "the paging severity floor is sev-1 only \u2014 by Kenji Doyle (product-manager) in #chat channel",
+          "m-5a227c92f27267c5": "the paging severity floor is manual escalation only \u2014 by Kenji Doyle (product-manager) in #chat channel",
+          "m-b4d68f800c44a632": "the paging severity floor is sev-3 and above \u2014 by Leila Petrov (support-lead) in #email channel"
+        },
+        "superseded_memory_ids": [
+          "m-ec09743868034a4e",
+          "m-cadf3b3689e58a5b"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed129-task1",
+    "title": "Lumen Works initiative: reconcile 5 decisions",
+    "domain": "medical",
+    "goal": "Deliver the current medical initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed129-task1-shared0-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-0b5f5283ebcd051d": "the checkout_v2 feature flag state is canary-75% \u2014 by Kenji Ibarra (support-lead) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task1-s0-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-db694abf391ce181": "the supported API version is v1 \u2014 by Kenji Larsen (staff-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task1-s1-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-026ae9008077db88": "the production deploy timeout is 60s \u2014 by Kenji Ibarra (support-lead) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task1-s2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-f3590ec4715530a0": "the approved rollback command is helm rollback \u2014 by Kenji Ibarra (support-lead) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task1-s3v1-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a5726a197045a8ce": "the release artifact store is the compliance archive \u2014 by Kenji Larsen (staff-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task1-s3v2-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-b0ca25edab8a2a7b": "the release artifact store is the internal registry \u2014 by Kenji Larsen (staff-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-a5726a197045a8ce"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task1-s3v3-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-bcb586751484eb6b": "the release artifact store is a per-team namespace \u2014 by Kenji Larsen (staff-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-b0ca25edab8a2a7b"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task1-goal",
+        "user_request": "Deliver the current medical initiative. State the current value of: the data retention window, the approved rollback command, the supported API version, the release artifact store, the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-e261e9542c388488",
+          "m-f3590ec4715530a0",
+          "m-db694abf391ce181",
+          "m-bcb586751484eb6b",
+          "m-026ae9008077db88"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed129-task1-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-e261e9542c388488",
+              "m-f3590ec4715530a0",
+              "m-db694abf391ce181",
+              "m-bcb586751484eb6b",
+              "m-026ae9008077db88"
+            ],
+            "forbidden_values": [
+              "the compliance archive",
+              "the internal registry"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed129-task1-probe-shared-retention-window",
+            "expected_memory_id": "m-e261e9542c388488",
+            "description": "the data retention window (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed129-task1-probe-rollback-command",
+            "expected_memory_id": "m-f3590ec4715530a0",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed129-task1-probe-api-version",
+            "expected_memory_id": "m-db694abf391ce181",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed129-task1-probe-artifact-store",
+            "expected_memory_id": "m-bcb586751484eb6b",
+            "description": "the release artifact store must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed129-task1-probe-deploy-timeout",
+            "expected_memory_id": "m-026ae9008077db88",
+            "description": "the production deploy timeout must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-4aa7675112c850db": "the supported API version is v6 \u2014 by Kenji Ibarra (support-lead) in #email channel",
+          "m-895209cd029d0187": "the supported API version is v9 \u2014 by Kenji Ibarra (support-lead) in #email channel",
+          "m-51895577380f0e49": "the supported API version is v10 \u2014 by Kenji Larsen (staff-engineer) in #chat channel",
+          "m-8b1f85a5591a5072": "the supported API version is v5 \u2014 by Kenji Ibarra (support-lead) in #email channel",
+          "m-3035965338024d7e": "the production deploy timeout is 30s \u2014 by Kenji Ibarra (support-lead) in #email channel",
+          "m-dc9e8eba0c6bfe96": "the production deploy timeout is 180s \u2014 by Kenji Doyle (product-manager) in #chat channel",
+          "m-9d0e07ef6ddf99fa": "the production deploy timeout is 120s \u2014 by Kenji Ibarra (support-lead) in #chat channel",
+          "m-9fd41eb65be5222e": "the approved rollback command is ansible-playbook restore.yml \u2014 by Kenji Ibarra (support-lead) in #chat channel",
+          "m-e8613c46f58d339a": "the approved rollback command is argocd app rollback \u2014 by Kenji Ibarra (support-lead) in #email channel",
+          "m-c4ef8fe50003ecbd": "the approved rollback command is kubectl rollout undo \u2014 by Kenji Doyle (product-manager) in #email channel",
+          "m-f2a32f613935a578": "the approved rollback command is git revert then redeploy \u2014 by Leila Petrov (support-lead) in #email channel",
+          "m-1644a72d4e28fe11": "the approved rollback command is terraform apply -refresh \u2014 by Leila Petrov (support-lead) in #email channel",
+          "m-a148dd5aaea4b61d": "the release artifact store is the build cache \u2014 by Kenji Ibarra (support-lead) in #chat channel",
+          "m-5ddf93b2863bbcce": "the data retention window is 7 years \u2014 by Kenji Doyle (product-manager) in #email channel",
+          "m-a8a79bd231e9d918": "the data retention window is 14 days \u2014 by Kenji Doyle (product-manager) in #chat channel",
+          "m-4a682e0ce604f320": "the data retention window is 5 years \u2014 by Kenji Doyle (product-manager) in #email channel",
+          "m-bf40310d14daca88": "the data retention window is 10 years \u2014 by Kenji Doyle (product-manager) in #chat channel"
+        },
+        "superseded_memory_ids": [
+          "m-a5726a197045a8ce",
+          "m-b0ca25edab8a2a7b"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed129-task2",
+    "title": "Lumen Works initiative: reconcile 5 decisions",
+    "domain": "medical",
+    "goal": "Deliver the current medical initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed129-task2-s0-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-bea102a35cfc4dbc": "the production deploy timeout is 180s \u2014 by Kenji Ibarra (support-lead) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task2-s1-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-cbe9f344037fd95f": "the paging severity floor is anything breaching the latency objective \u2014 by Leila Petrov (support-lead) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task2-s2-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-961bfe1e33f1d658": "the on-call rotation cadence is daily handoff \u2014 by Kenji Larsen (staff-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task2-s3v1-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-e04003eaa8a568c3": "the approved rollback command is ansible-playbook restore.yml \u2014 by Kenji Doyle (product-manager) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task2-s3v2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-48969edc635701b1": "the approved rollback command is kubectl rollout undo \u2014 by Kenji Doyle (product-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-e04003eaa8a568c3"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task2-s3v3-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-39ad9b9c3a473bc1": "the approved rollback command is helm rollback \u2014 by Kenji Ibarra (support-lead) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-48969edc635701b1"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed129-task2-goal",
+        "user_request": "Deliver the current medical initiative. State the current value of: the approved rollback command, the checkout_v2 feature flag state, the production deploy timeout, the paging severity floor, the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-39ad9b9c3a473bc1",
+          "m-0b5f5283ebcd051d",
+          "m-bea102a35cfc4dbc",
+          "m-cbe9f344037fd95f",
+          "m-961bfe1e33f1d658"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed129-task2-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-39ad9b9c3a473bc1",
+              "m-0b5f5283ebcd051d",
+              "m-bea102a35cfc4dbc",
+              "m-cbe9f344037fd95f",
+              "m-961bfe1e33f1d658"
+            ],
+            "forbidden_values": [
+              "ansible-playbook restore.yml",
+              "kubectl rollout undo"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed129-task2-probe-rollback-command",
+            "expected_memory_id": "m-39ad9b9c3a473bc1",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed129-task2-probe-shared-feature-flag",
+            "expected_memory_id": "m-0b5f5283ebcd051d",
+            "description": "the checkout_v2 feature flag state (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed129-task2-probe-deploy-timeout",
+            "expected_memory_id": "m-bea102a35cfc4dbc",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed129-task2-probe-paging-floor",
+            "expected_memory_id": "m-cbe9f344037fd95f",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed129-task2-probe-oncall-rotation",
+            "expected_memory_id": "m-961bfe1e33f1d658",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-6fa9dadd03329a0e": "the production deploy timeout is 300s \u2014 by Kenji Larsen (staff-engineer) in #chat channel",
+          "m-def22f6ddcf0dc9d": "the production deploy timeout is 900s \u2014 by Kenji Doyle (product-manager) in #chat channel",
+          "m-cc073beacfb95d85": "the production deploy timeout is 120s \u2014 by Kenji Doyle (product-manager) in #email channel",
+          "m-88a8f83808435671": "the production deploy timeout is 90s \u2014 by Kenji Doyle (product-manager) in #email channel",
+          "m-6118a570a86d2b80": "the paging severity floor is any customer-visible regression \u2014 by Leila Petrov (support-lead) in #chat channel",
+          "m-487342d698f23d65": "the paging severity floor is any error-budget burn alert \u2014 by Kenji Larsen (staff-engineer) in #email channel",
+          "m-a8cf41abc00e3a84": "the paging severity floor is sev-1 only \u2014 by Leila Petrov (support-lead) in #chat channel",
+          "m-ac3cd848627fe218": "the paging severity floor is nothing below a full outage \u2014 by Kenji Doyle (product-manager) in #chat channel",
+          "m-0cb36325ebc96d62": "the on-call rotation cadence is weekly on Mondays \u2014 by Leila Petrov (support-lead) in #chat channel",
+          "m-b9828445254b82d0": "the on-call rotation cadence is two-week shifts \u2014 by Kenji Larsen (staff-engineer) in #email channel",
+          "m-3c8166689d70e060": "the on-call rotation cadence is three-day shifts \u2014 by Kenji Doyle (product-manager) in #chat channel",
+          "m-5fe936f1153f4e50": "the on-call rotation cadence is split by timezone \u2014 by Kenji Doyle (product-manager) in #email channel",
+          "m-61264b72c2c80ead": "the on-call rotation cadence is monthly blocks \u2014 by Kenji Ibarra (support-lead) in #chat channel",
+          "m-1f05e4c55a614e6e": "the approved rollback command is git revert then redeploy \u2014 by Leila Petrov (support-lead) in #chat channel",
+          "m-f411e107a1119425": "the approved rollback command is terraform apply -refresh \u2014 by Kenji Ibarra (support-lead) in #chat channel",
+          "m-8f6949e3c5ebdc8f": "the checkout_v2 feature flag state is held at zero traffic \u2014 by Leila Petrov (support-lead) in #email channel",
+          "m-9bd82eee272464b6": "the checkout_v2 feature flag state is kill-switched \u2014 by Kenji Doyle (product-manager) in #chat channel",
+          "m-260c61eb7ee8f396": "the checkout_v2 feature flag state is canary-50% \u2014 by Kenji Larsen (staff-engineer) in #email channel",
+          "m-a2429b922060bf02": "the checkout_v2 feature flag state is canary-10% \u2014 by Leila Petrov (support-lead) in #chat channel",
+          "m-884ed93aecc0ee45": "the checkout_v2 feature flag state is canary-25% \u2014 by Kenji Larsen (staff-engineer) in #email channel"
+        },
+        "superseded_memory_ids": [
+          "m-e04003eaa8a568c3",
+          "m-48969edc635701b1"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  }
+]

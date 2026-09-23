@@ -8,6 +8,14 @@ agent-visible id through ``opaque_memory_id``: a deterministic, content-keyed
 hash that carries zero class information. The label→id mapping is never stored
 in an agent-visible field; it is a pure function of ``(namespace, label)``, so
 harness-side code (grading, diagnostics, tests) recomputes it on demand.
+
+Scope limit — this is opaque to a READER, not to a SEARCHER. Being a pure function of
+``(namespace, label)`` is exactly what lets anyone holding the published namespace
+recompute the id for every label in the generator's small fixed vocabulary and read off
+which id is the gold fact (mem-r6yzk B2). That is fine for an id shown to an agent
+mid-run, which is what this module is for, and fatal for an id written into a published
+record. Publication goes through ``membench.public_alias``, which replaces every id with
+a keyed alias whose inverse stays in this repo.
 """
 
 from __future__ import annotations

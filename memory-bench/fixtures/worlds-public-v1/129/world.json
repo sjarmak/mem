@@ -1,0 +1,86 @@
+{
+  "world_id": "world-seed129",
+  "domain": "medical",
+  "org_name": "Lumen Works",
+  "teams": [
+    {
+      "team_id": "world-seed129-team-medical-foundations",
+      "name": "Medical Foundations",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed129-team-medical-reliability",
+      "name": "Medical Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed129-team-medical-enablement",
+      "name": "Medical Enablement",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed129-persona-0-leila-petrov",
+      "name": "Leila Petrov",
+      "role": "support-lead",
+      "team_id": "world-seed129-team-medical-foundations"
+    },
+    {
+      "persona_id": "world-seed129-persona-1-kenji-larsen",
+      "name": "Kenji Larsen",
+      "role": "staff-engineer",
+      "team_id": "world-seed129-team-medical-reliability"
+    },
+    {
+      "persona_id": "world-seed129-persona-2-kenji-ibarra",
+      "name": "Kenji Ibarra",
+      "role": "support-lead",
+      "team_id": "world-seed129-team-medical-foundations"
+    },
+    {
+      "persona_id": "world-seed129-persona-3-kenji-doyle",
+      "name": "Kenji Doyle",
+      "role": "product-manager",
+      "team_id": "world-seed129-team-medical-enablement"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed129-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed129-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed129-kb-medical",
+      "name": "medical knowledge base",
+      "topic": "medical"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed129-repo-typescript",
+      "name": "medical-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed129-repo-python",
+      "name": "medical-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed129-repo-cuda-cpp",
+      "name": "medical-cuda-cpp",
+      "language": "cuda-cpp"
+    }
+  ],
+  "seed": 129,
+  "generator_version": "world.v1"
+}

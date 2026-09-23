@@ -6,6 +6,7 @@ hidden semantic judgment (an allowed ZFC exception). The oracle-vs-no_memory
 relationship is also the task-validity gate (plan §A, DIV-3).
 """
 
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -136,9 +137,21 @@ class ComparisonReport:
         return "\n".join(lines)
 
 
+def summarize_trials(trials: Sequence[StepTrial]) -> dict[str, ConditionSummary]:
+    """Per-condition summaries over an ARBITRARY set of trials, keyed by condition value.
+
+    Split out of ``build_comparison`` so a caller that grades a SUBSET of a run can reuse
+    the one summarizer instead of re-deriving arm means (``memory_necessity_gate`` scores
+    only the graded steps; ``report.comparison`` scores the whole run). Conditions appear
+    in first-seen trial order, exactly as ``SequenceRun.by_condition`` ordered them."""
+    by_cond: dict[Condition, list[StepTrial]] = {}
+    for trial in trials:
+        by_cond.setdefault(trial.condition, []).append(trial)
+    return {c.value: _summarize(c, cond_trials) for c, cond_trials in by_cond.items()}
+
+
 def build_comparison(run: SequenceRun) -> ComparisonReport:
-    by_cond = run.by_condition()
-    summaries = {c.value: _summarize(c, trials) for c, trials in by_cond.items()}
+    summaries = summarize_trials(run.trials)
     return ComparisonReport(
         sequence_id=run.sequence_id,
         experiment_id=run.experiment_id,

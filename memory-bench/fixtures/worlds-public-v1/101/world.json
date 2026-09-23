@@ -1,0 +1,81 @@
+{
+  "world_id": "world-seed101",
+  "domain": "medical",
+  "org_name": "Northwind Collective",
+  "teams": [
+    {
+      "team_id": "world-seed101-team-medical-delivery",
+      "name": "Medical Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed101-team-medical-enablement",
+      "name": "Medical Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed101-team-medical-core",
+      "name": "Medical Core",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed101-persona-0-greta-doyle",
+      "name": "Greta Doyle",
+      "role": "researcher",
+      "team_id": "world-seed101-team-medical-delivery"
+    },
+    {
+      "persona_id": "world-seed101-persona-1-hiroshi-ibarra",
+      "name": "Hiroshi Ibarra",
+      "role": "researcher",
+      "team_id": "world-seed101-team-medical-enablement"
+    },
+    {
+      "persona_id": "world-seed101-persona-2-camila-kowalski",
+      "name": "Camila Kowalski",
+      "role": "staff-engineer",
+      "team_id": "world-seed101-team-medical-core"
+    },
+    {
+      "persona_id": "world-seed101-persona-3-priya-bergstrom",
+      "name": "Priya Bergstrom",
+      "role": "product-manager",
+      "team_id": "world-seed101-team-medical-enablement"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed101-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed101-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed101-kb-medical",
+      "name": "medical knowledge base",
+      "topic": "medical"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed101-repo-go",
+      "name": "medical-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed101-repo-typescript",
+      "name": "medical-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 101,
+  "generator_version": "world.v1"
+}

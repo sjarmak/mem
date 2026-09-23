@@ -342,3 +342,21 @@ htmlcov/
 # Generated architecture review snapshots and browser artifacts.
 /.architecture-review/
 /.architecture-review-tests/
+
+# The public benchmark's MINT (mem-r6yzk N3): `fixtures/mint/<corpus>.mint.json` holds
+# the seed plus the whole alias -> internal-id inverse, which is exactly the labelling
+# capability the published corpus exists to withhold. `origin` is a PUBLIC GitHub repo
+# (github.com/sjarmak/mem, "visibility": "public", with an outside collaborator holding
+# push), so TRACKING that file publishes it and voids the corpus's id-anonymity on the
+# next push; a single `git add -A` was all it took. Nothing is lost by keeping it out of
+# git: the map is fully regenerable from the frozen corpus plus the seed
+# (`scripts/mint_public_ids.py`, and `public_alias.read_alias_map` re-derives it on every
+# load), so the SEED is the backed-up secret, not this file. Decision + backup location:
+# memory-bench/fixtures/mint/README.md. Enforced by tests/test_mint_is_unpublishable.py.
+memory-bench/fixtures/mint/*
+!memory-bench/fixtures/mint/README.md
+
+# A mint copied or moved anywhere else under any name keeps the suffix `public_alias`
+# writes, so ignore the suffix repo-wide as well. The content guard is what catches a
+# copy that is renamed past this; this pattern catches the careless case.
+*.mint.json

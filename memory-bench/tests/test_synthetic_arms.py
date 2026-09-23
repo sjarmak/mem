@@ -108,7 +108,14 @@ def test_lexical_arm_trips_confusion_and_staleness_exact_arms_do_not(tmp_path) -
 
 
 def test_lexical_confusion_persists_under_shared_store(tmp_path) -> None:
-    seqs = materialize_project(_world(), _project(), n_tasks=3)
+    # The goal's graded width is pinned BELOW the default budget deliberately. A top-k
+    # arm reaches a superseded version only when the candidates of the subjects the
+    # question NAMES do not already fill k: at the default five graded subjects, the ten
+    # slots this arm retrieves go to their current values and distractors, and the stale
+    # rate reads 0.000 under the shared store and in isolation alike. At three it reads
+    # 0.100 here and 0.150 isolated. Two tasks rather than three, because three at this
+    # width draws a task needing more shared decisions than its budget leaves local.
+    seqs = materialize_project(_world(), _project(), n_tasks=2, facts_per_task=3)
     proj = _by_arm(eval_arms_over_project(seqs, ["lexical"], fs_base_dir=tmp_path))["lexical"]
     assert proj.arm_confusion > 0.0
     assert proj.arm_staleness > 0.0

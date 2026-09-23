@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed103",
+  "domain": "research-platform",
+  "org_name": "Verdigris Dynamics",
+  "teams": [
+    {
+      "team_id": "world-seed103-team-research-platform-enablement",
+      "name": "Research Platform Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed103-team-research-platform-reliability",
+      "name": "Research Platform Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed103-team-research-platform-platform",
+      "name": "Research Platform Platform",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed103-team-research-platform-foundations",
+      "name": "Research Platform Foundations",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed103-persona-0-bruno-nakamura",
+      "name": "Bruno Nakamura",
+      "role": "legal-counsel",
+      "team_id": "world-seed103-team-research-platform-enablement"
+    },
+    {
+      "persona_id": "world-seed103-persona-1-priya-kowalski",
+      "name": "Priya Kowalski",
+      "role": "engineering-manager",
+      "team_id": "world-seed103-team-research-platform-reliability"
+    },
+    {
+      "persona_id": "world-seed103-persona-2-leila-almeida",
+      "name": "Leila Almeida",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed103-team-research-platform-platform"
+    },
+    {
+      "persona_id": "world-seed103-persona-3-hiroshi-ibarra",
+      "name": "Hiroshi Ibarra",
+      "role": "staff-engineer",
+      "team_id": "world-seed103-team-research-platform-foundations"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed103-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed103-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed103-kb-research-platform",
+      "name": "research-platform knowledge base",
+      "topic": "research-platform"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed103-repo-go",
+      "name": "research-platform-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed103-repo-rust",
+      "name": "research-platform-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed103-repo-python",
+      "name": "research-platform-python",
+      "language": "python"
+    }
+  ],
+  "seed": 103,
+  "generator_version": "world.v1"
+}

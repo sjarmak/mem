@@ -1,0 +1,86 @@
+{
+  "world_id": "world-seed104",
+  "domain": "cuda-engineering",
+  "org_name": "Halcyon Works",
+  "teams": [
+    {
+      "team_id": "world-seed104-team-cuda-engineering-core",
+      "name": "Cuda Engineering Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed104-team-cuda-engineering-enablement",
+      "name": "Cuda Engineering Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed104-team-cuda-engineering-delivery",
+      "name": "Cuda Engineering Delivery",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed104-persona-0-bruno-doyle",
+      "name": "Bruno Doyle",
+      "role": "legal-counsel",
+      "team_id": "world-seed104-team-cuda-engineering-core"
+    },
+    {
+      "persona_id": "world-seed104-persona-1-esther-ibarra",
+      "name": "Esther Ibarra",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed104-team-cuda-engineering-core"
+    },
+    {
+      "persona_id": "world-seed104-persona-2-priya-gruber",
+      "name": "Priya Gruber",
+      "role": "legal-counsel",
+      "team_id": "world-seed104-team-cuda-engineering-enablement"
+    },
+    {
+      "persona_id": "world-seed104-persona-3-ada-okonkwo",
+      "name": "Ada Okonkwo",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed104-team-cuda-engineering-delivery"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed104-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed104-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed104-kb-cuda-engineering",
+      "name": "cuda-engineering knowledge base",
+      "topic": "cuda-engineering"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed104-repo-cuda-cpp",
+      "name": "cuda-engineering-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed104-repo-rust",
+      "name": "cuda-engineering-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed104-repo-typescript",
+      "name": "cuda-engineering-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 104,
+  "generator_version": "world.v1"
+}

@@ -1,0 +1,723 @@
+[
+  {
+    "sequence_id": "world-seed104-task0",
+    "title": "Halcyon Works initiative: reconcile 5 decisions",
+    "domain": "cuda-engineering",
+    "goal": "Deliver the current cuda-engineering initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed104-task0-shared0-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-9c09341115126154": "the release artifact store is the legacy file server \u2014 by Priya Gruber (legal-counsel) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task0-shared1-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-084498e8d94d2467": "the paging severity floor is any error-budget burn alert \u2014 by Ada Okonkwo (site-reliability-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task0-s0-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-4b41343fb3b8bbdc": "the approved rollback command is ansible-playbook restore.yml \u2014 by Esther Ibarra (site-reliability-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task0-s1-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-06246f01992a8d9e": "the data retention window is kept indefinitely \u2014 by Esther Ibarra (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task0-s2-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-bc080b1fb2edc71b": "the primary deployment region is af-south-1 \u2014 by Esther Ibarra (site-reliability-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task0-s3-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-cf10cf791c69f469": "the production deploy timeout is 180s \u2014 by Ada Okonkwo (site-reliability-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task0-s4v1-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-c429daf1a45ecfe9": "the supported API version is v10 \u2014 by Esther Ibarra (site-reliability-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task0-s4v2-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-aba8fbb435e18a32": "the supported API version is v6 \u2014 by Ada Okonkwo (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-c429daf1a45ecfe9"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task0-s4v3-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-aeda456c8a451f28": "the supported API version is v4 \u2014 by Ada Okonkwo (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-aba8fbb435e18a32"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task0-goal",
+        "user_request": "Deliver the current cuda-engineering initiative. State the current value of: the data retention window, the approved rollback command, the production deploy timeout, the supported API version, the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-06246f01992a8d9e",
+          "m-4b41343fb3b8bbdc",
+          "m-cf10cf791c69f469",
+          "m-aeda456c8a451f28",
+          "m-bc080b1fb2edc71b"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed104-task0-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-06246f01992a8d9e",
+              "m-4b41343fb3b8bbdc",
+              "m-cf10cf791c69f469",
+              "m-aeda456c8a451f28",
+              "m-bc080b1fb2edc71b"
+            ],
+            "forbidden_values": [
+              "v10",
+              "v6"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed104-task0-probe-retention-window",
+            "expected_memory_id": "m-06246f01992a8d9e",
+            "description": "the data retention window must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed104-task0-probe-rollback-command",
+            "expected_memory_id": "m-4b41343fb3b8bbdc",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed104-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-cf10cf791c69f469",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed104-task0-probe-api-version",
+            "expected_memory_id": "m-aeda456c8a451f28",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed104-task0-probe-primary-region",
+            "expected_memory_id": "m-bc080b1fb2edc71b",
+            "description": "the primary deployment region must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-786f319322aa04f2": "the approved rollback command is kubectl rollout undo \u2014 by Bruno Doyle (legal-counsel) in #meeting channel",
+          "m-09efb4196b2b6646": "the approved rollback command is docker service update --rollback \u2014 by Bruno Doyle (legal-counsel) in #email channel",
+          "m-541a59ada8f00d69": "the approved rollback command is argocd app rollback \u2014 by Esther Ibarra (site-reliability-engineer) in #email channel",
+          "m-8819bf0e348f6c3b": "the approved rollback command is terraform apply -refresh \u2014 by Ada Okonkwo (site-reliability-engineer) in #meeting channel",
+          "m-71d0932c34a4bfab": "the approved rollback command is git revert then redeploy \u2014 by Priya Gruber (legal-counsel) in #meeting channel",
+          "m-05f06c5ee461f174": "the data retention window is 1 year \u2014 by Bruno Doyle (legal-counsel) in #meeting channel",
+          "m-72c2d71ca1177bd9": "the data retention window is 5 years \u2014 by Ada Okonkwo (site-reliability-engineer) in #email channel",
+          "m-e341bc3dc1e06d1b": "the data retention window is 90 days \u2014 by Bruno Doyle (legal-counsel) in #meeting channel",
+          "m-2848a596820ff78a": "the data retention window is 180 days \u2014 by Ada Okonkwo (site-reliability-engineer) in #meeting channel",
+          "m-6f5c8089d5778243": "the primary deployment region is us-east-1 \u2014 by Bruno Doyle (legal-counsel) in #meeting channel",
+          "m-319caef7c6e036bd": "the primary deployment region is eu-central-1 \u2014 by Ada Okonkwo (site-reliability-engineer) in #meeting channel",
+          "m-98662480559c5c8d": "the primary deployment region is ap-northeast-1 \u2014 by Bruno Doyle (legal-counsel) in #email channel",
+          "m-e1011c0d36b0978a": "the primary deployment region is ca-central-1 \u2014 by Esther Ibarra (site-reliability-engineer) in #meeting channel",
+          "m-3ecdfc1e76e01263": "the production deploy timeout is 45s \u2014 by Priya Gruber (legal-counsel) in #email channel",
+          "m-93341b62744ba255": "the production deploy timeout is 15s \u2014 by Esther Ibarra (site-reliability-engineer) in #meeting channel",
+          "m-2bf301729bf37588": "the production deploy timeout is 120s \u2014 by Ada Okonkwo (site-reliability-engineer) in #email channel",
+          "m-a8a6c3ac742727fe": "the production deploy timeout is 30s \u2014 by Ada Okonkwo (site-reliability-engineer) in #email channel",
+          "m-adb49c50b0184bbb": "the production deploy timeout is 600s \u2014 by Esther Ibarra (site-reliability-engineer) in #meeting channel",
+          "m-446a213f8d489851": "the supported API version is v3 \u2014 by Bruno Doyle (legal-counsel) in #email channel"
+        },
+        "superseded_memory_ids": [
+          "m-c429daf1a45ecfe9",
+          "m-aba8fbb435e18a32"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed104-task1",
+    "title": "Halcyon Works initiative: reconcile 5 decisions",
+    "domain": "cuda-engineering",
+    "goal": "Deliver the current cuda-engineering initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed104-task1-s0-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-00b2d5151a4780ba": "the primary deployment region is eu-west-1 \u2014 by Bruno Doyle (legal-counsel) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task1-s1-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-dd06bf471381a6cb": "the supported API version is v3 \u2014 by Bruno Doyle (legal-counsel) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task1-s2-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-4267247955fbb46a": "the production deploy timeout is 60s \u2014 by Priya Gruber (legal-counsel) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task1-s3v1-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-999fc33145b9bd50": "the on-call rotation cadence is paired primary and secondary \u2014 by Priya Gruber (legal-counsel) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task1-s3v2-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-c03203e84ec0b336": "the on-call rotation cadence is two-week shifts \u2014 by Priya Gruber (legal-counsel) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-999fc33145b9bd50"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task1-s3v3-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-002c6612baf62bc2": "the on-call rotation cadence is follow-the-sun \u2014 by Esther Ibarra (site-reliability-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-c03203e84ec0b336"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task1-goal",
+        "user_request": "Deliver the current cuda-engineering initiative. State the current value of: the primary deployment region, the production deploy timeout, the release artifact store, the on-call rotation cadence, the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-00b2d5151a4780ba",
+          "m-4267247955fbb46a",
+          "m-9c09341115126154",
+          "m-002c6612baf62bc2",
+          "m-dd06bf471381a6cb"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed104-task1-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-00b2d5151a4780ba",
+              "m-4267247955fbb46a",
+              "m-9c09341115126154",
+              "m-002c6612baf62bc2",
+              "m-dd06bf471381a6cb"
+            ],
+            "forbidden_values": [
+              "paired primary and secondary",
+              "two-week shifts"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed104-task1-probe-primary-region",
+            "expected_memory_id": "m-00b2d5151a4780ba",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed104-task1-probe-deploy-timeout",
+            "expected_memory_id": "m-4267247955fbb46a",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed104-task1-probe-shared-artifact-store",
+            "expected_memory_id": "m-9c09341115126154",
+            "description": "the release artifact store (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed104-task1-probe-oncall-rotation",
+            "expected_memory_id": "m-002c6612baf62bc2",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed104-task1-probe-api-version",
+            "expected_memory_id": "m-dd06bf471381a6cb",
+            "description": "the supported API version must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-00c0a408736c1813": "the primary deployment region is ca-central-1 \u2014 by Priya Gruber (legal-counsel) in #email channel",
+          "m-b91f9bd4e8f13c75": "the primary deployment region is me-south-1 \u2014 by Bruno Doyle (legal-counsel) in #meeting channel",
+          "m-54f5bc24ebca7d9d": "the primary deployment region is eu-central-1 \u2014 by Ada Okonkwo (site-reliability-engineer) in #meeting channel",
+          "m-eb3afd0fd57ce324": "the primary deployment region is af-south-1 \u2014 by Bruno Doyle (legal-counsel) in #email channel",
+          "m-3e7490baaa0f1e5e": "the supported API version is v9 \u2014 by Priya Gruber (legal-counsel) in #meeting channel",
+          "m-d222f6e6c2f1ee1d": "the supported API version is v2 \u2014 by Esther Ibarra (site-reliability-engineer) in #meeting channel",
+          "m-271c282c9657f873": "the supported API version is v1 \u2014 by Ada Okonkwo (site-reliability-engineer) in #email channel",
+          "m-bd342e1e5939d8b6": "the supported API version is v4 \u2014 by Priya Gruber (legal-counsel) in #email channel",
+          "m-0cdde5d51f3af6e0": "the production deploy timeout is 30s \u2014 by Ada Okonkwo (site-reliability-engineer) in #meeting channel",
+          "m-046941745c80ee4c": "the production deploy timeout is 900s \u2014 by Ada Okonkwo (site-reliability-engineer) in #email channel",
+          "m-1a0a14b677390336": "the production deploy timeout is 300s \u2014 by Ada Okonkwo (site-reliability-engineer) in #email channel",
+          "m-28480c553e99538a": "the production deploy timeout is 180s \u2014 by Ada Okonkwo (site-reliability-engineer) in #email channel",
+          "m-decfc8c604455a49": "the on-call rotation cadence is weekly on Mondays \u2014 by Bruno Doyle (legal-counsel) in #email channel",
+          "m-6724681fc9eb509c": "the release artifact store is the vendor registry \u2014 by Esther Ibarra (site-reliability-engineer) in #meeting channel",
+          "m-c04964519de209af": "the release artifact store is the shared package mirror \u2014 by Priya Gruber (legal-counsel) in #email channel",
+          "m-49ba0dcb40fea590": "the release artifact store is the build cache \u2014 by Priya Gruber (legal-counsel) in #email channel",
+          "m-00a9b1e1d46ce9cf": "the release artifact store is a per-team namespace \u2014 by Esther Ibarra (site-reliability-engineer) in #meeting channel",
+          "m-6b206174dccc4fc4": "the release artifact store is a signed OCI repository \u2014 by Ada Okonkwo (site-reliability-engineer) in #email channel"
+        },
+        "superseded_memory_ids": [
+          "m-999fc33145b9bd50",
+          "m-c03203e84ec0b336"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed104-task2",
+    "title": "Halcyon Works initiative: reconcile 5 decisions",
+    "domain": "cuda-engineering",
+    "goal": "Deliver the current cuda-engineering initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed104-task2-s0v1-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-2c65f56d98eacec4": "the approved rollback command is git revert then redeploy \u2014 by Bruno Doyle (legal-counsel) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task2-s0v2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-49f48966ab039844": "the approved rollback command is kubectl rollout undo \u2014 by Ada Okonkwo (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-2c65f56d98eacec4"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task2-s0v3-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-6e490801c8bf12da": "the approved rollback command is nomad job revert \u2014 by Priya Gruber (legal-counsel) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-49f48966ab039844"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task2-s1-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-5005b751566e3495": "the on-call rotation cadence is monthly blocks \u2014 by Priya Gruber (legal-counsel) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task2-s2-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-27a0af9c09c69c08": "the project charter decision is cut the integrations track and ship the core \u2014 by Esther Ibarra (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed104-task2-goal",
+        "user_request": "Deliver the current cuda-engineering initiative. State the current value of: the on-call rotation cadence, the paging severity floor, the project charter decision, the release artifact store, the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-5005b751566e3495",
+          "m-084498e8d94d2467",
+          "m-27a0af9c09c69c08",
+          "m-9c09341115126154",
+          "m-6e490801c8bf12da"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed104-task2-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-5005b751566e3495",
+              "m-084498e8d94d2467",
+              "m-27a0af9c09c69c08",
+              "m-9c09341115126154",
+              "m-6e490801c8bf12da"
+            ],
+            "forbidden_values": [
+              "git revert then redeploy",
+              "kubectl rollout undo"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed104-task2-probe-oncall-rotation",
+            "expected_memory_id": "m-5005b751566e3495",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed104-task2-probe-shared-paging-floor",
+            "expected_memory_id": "m-084498e8d94d2467",
+            "description": "the paging severity floor (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed104-task2-probe-charter",
+            "expected_memory_id": "m-27a0af9c09c69c08",
+            "description": "the project charter decision must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed104-task2-probe-shared-artifact-store",
+            "expected_memory_id": "m-9c09341115126154",
+            "description": "the release artifact store (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed104-task2-probe-rollback-command",
+            "expected_memory_id": "m-6e490801c8bf12da",
+            "description": "the approved rollback command must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-6ec15ab24695acad": "the approved rollback command is argocd app rollback \u2014 by Priya Gruber (legal-counsel) in #meeting channel",
+          "m-0a624238bf3f6ea0": "the approved rollback command is spinnaker pipeline rewind \u2014 by Priya Gruber (legal-counsel) in #meeting channel",
+          "m-d11e76b02fae1033": "the approved rollback command is terraform apply -refresh \u2014 by Priya Gruber (legal-counsel) in #email channel",
+          "m-da9a20488fad7120": "the on-call rotation cadence is follow-the-sun \u2014 by Ada Okonkwo (site-reliability-engineer) in #email channel",
+          "m-5b190d5c6de832e4": "the on-call rotation cadence is daily handoff \u2014 by Priya Gruber (legal-counsel) in #email channel",
+          "m-80881784436a0640": "the on-call rotation cadence is weekly on Thursdays \u2014 by Ada Okonkwo (site-reliability-engineer) in #meeting channel",
+          "m-76778366028acebb": "the on-call rotation cadence is three-day shifts \u2014 by Priya Gruber (legal-counsel) in #meeting channel",
+          "m-13535adfbd462436": "the on-call rotation cadence is split by timezone \u2014 by Bruno Doyle (legal-counsel) in #email channel",
+          "m-a2016152ab9fe9c4": "the project charter decision is move the launch behind the compliance review \u2014 by Esther Ibarra (site-reliability-engineer) in #meeting channel",
+          "m-67c30d7897e29740": "the project charter decision is split delivery into two independent releases \u2014 by Ada Okonkwo (site-reliability-engineer) in #email channel",
+          "m-1dd04457de822241": "the project charter decision is hold the public interface steady through the migration \u2014 by Bruno Doyle (legal-counsel) in #email channel",
+          "m-aae63f9b40f374e8": "the project charter decision is adopt the vendor SDK instead of the in-house client \u2014 by Ada Okonkwo (site-reliability-engineer) in #email channel",
+          "m-c5a2a54c4a6bc28d": "the project charter decision is retire the legacy pipeline before any new feature \u2014 by Ada Okonkwo (site-reliability-engineer) in #meeting channel",
+          "m-6724681fc9eb509c": "the release artifact store is the vendor registry \u2014 by Esther Ibarra (site-reliability-engineer) in #meeting channel",
+          "m-c04964519de209af": "the release artifact store is the shared package mirror \u2014 by Priya Gruber (legal-counsel) in #email channel",
+          "m-49ba0dcb40fea590": "the release artifact store is the build cache \u2014 by Priya Gruber (legal-counsel) in #email channel",
+          "m-00a9b1e1d46ce9cf": "the release artifact store is a per-team namespace \u2014 by Esther Ibarra (site-reliability-engineer) in #meeting channel",
+          "m-6b206174dccc4fc4": "the release artifact store is a signed OCI repository \u2014 by Ada Okonkwo (site-reliability-engineer) in #email channel",
+          "m-c6c4b547bf15f807": "the paging severity floor is anything breaching the latency objective \u2014 by Bruno Doyle (legal-counsel) in #email channel",
+          "m-882b5792fc098507": "the paging severity floor is any failed deploy \u2014 by Esther Ibarra (site-reliability-engineer) in #meeting channel",
+          "m-78bc569e880a3346": "the paging severity floor is sev-1 only \u2014 by Ada Okonkwo (site-reliability-engineer) in #email channel",
+          "m-8a69a63fca494cf9": "the paging severity floor is manual escalation only \u2014 by Esther Ibarra (site-reliability-engineer) in #email channel",
+          "m-3019230b0a8f9fd8": "the paging severity floor is sev-4 and above \u2014 by Esther Ibarra (site-reliability-engineer) in #email channel"
+        },
+        "superseded_memory_ids": [
+          "m-2c65f56d98eacec4",
+          "m-49f48966ab039844"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  }
+]

@@ -4,8 +4,9 @@ This is the contract D6 / D11 boundary, owned by the harness rather than by any
 single arm. When a query work `B` is evaluated, the *only* records an arm may
 ingest are WorkRecords closed strictly before `B.started`, minus the records that
 are "the same work dodging the timestamp filter": `B` itself, its convoy
-siblings, its supersedes-chain, and anything sharing `B`'s PR or branch
-(`external_ref`). No arm — `oracle`, `ours`, `builtin`, or a later competitive
+siblings, its supersedes-chain, anything sharing `B`'s PR or branch
+(`external_ref`), and the epic axis — `B`'s epic parent, work sharing that
+parent, and `B`'s own children. No arm — `oracle`, `ours`, `builtin`, or a later competitive
 arm — may touch the raw store directly: every arm consumes the set this module
 produces, and every arm's output is re-checked against it by `assert_no_leak`.
 
@@ -22,9 +23,11 @@ substrate agree:
 - the supersedes closure is **undirected** and transitive — ancestors *and*
   descendants are "the same work" for the LOO exclusion (`store/reader.ts`
   `supersedesClosure`).
-- the sibling test is null-safe: a comparison only fires when the *query* side
-  names a value, so absence never matches absence (`retrieve/exclusions.ts`
-  `isSibling`).
+- the sibling test spans five axes — convoy, PR, branch (`external_ref`), epic
+  parent (shared parent, or the record IS the query's epic), and child (the
+  record hangs under the query work) — and is null-safe on the first four: a
+  comparison only fires when the *query* side names a value, so absence never
+  matches absence (`retrieve/exclusions.ts` `isSibling`).
 
 Pure mechanism (ZFC): deterministic set arithmetic with explicit ordering, no
 semantic judgment. No outcome label can enter an arm's input through this path.
@@ -86,6 +89,9 @@ class WorkRef:
     # generator-materialized one (D-J SHARE — one schema, distinguished only here).
     # Defaults "real" so every existing record and inline WorkRef keeps its meaning.
     origin: str = "real"
+    # links.parent — the epic this work hangs under (mem-qgdz). None when the
+    # record names no parent, which never matches anything.
+    parent: str | None = None
 
 
 @dataclass(frozen=True)
@@ -99,6 +105,9 @@ class QueryWork:
     convoy_id: str | None = None
     pr: str | None = None
     external_ref: str | None = None
+    # links.parent — the query work's epic. Drives the epic-parent axis of
+    # `is_sibling`; the child axis keys on `work_id` and needs no field.
+    parent: str | None = None
 
 
 class LeakageError(AssertionError):
@@ -133,14 +142,36 @@ def supersedes_closure(corpus: Iterable[WorkRef], work_id: str) -> set[str]:
     return seen
 
 
+# The five same-work axes `is_sibling` enforces, named so a drift against the TS
+# side (`retrieve/exclusions.ts` `isSibling`) is loud rather than silent. Parity
+# contract: change both, and pin the change in `test_validity.py`'s axis table.
+SIBLING_AXES: tuple[str, ...] = ("convoy", "pr", "external_ref", "epic_parent", "child")
+
+
 def is_sibling(ref: WorkRef, query: QueryWork) -> bool:
-    """Null-safe same-work test: a record is `query`'s sibling when it shares the
-    query's convoy, PR, or branch (`external_ref`). Each comparison only fires
-    when the query side names a value. Mirrors `retrieve/exclusions.ts`."""
+    """Null-safe same-work test over five axes (`SIBLING_AXES`), the parity
+    contract with `retrieve/exclusions.ts` `isSibling`:
+
+    1. `convoy` — the record shares the query's `convoy_id`.
+    2. `pr` — the record shares the query's `pr`.
+    3. `external_ref` — the record shares the query's branch.
+    4. `epic_parent` — the record shares the query's `parent`, OR the record IS
+       the query's parent (`ref.work_id == query.parent`).
+    5. `child` — the record hangs under the query work (`ref.parent ==
+       query.work_id`). Unconditional: it needs no value on the query side
+       beyond `work_id`, which is always present.
+
+    Axes 1-4 only fire when the query side names a value, so absence never
+    matches absence. A record carrying no `parent` is unaffected by axes 4-5
+    (`None` equals no work_id and no named parent)."""
     return (
         (query.convoy_id is not None and ref.convoy_id == query.convoy_id)
         or (query.pr is not None and ref.pr == query.pr)
         or (query.external_ref is not None and ref.external_ref == query.external_ref)
+        or (
+            query.parent is not None and (ref.parent == query.parent or ref.work_id == query.parent)
+        )
+        or ref.parent == query.work_id
     )
 
 
@@ -150,7 +181,7 @@ def _is_eligible(ref: WorkRef, query: QueryWork, chain: set[str], boundary: str)
         and canonical_ts(ref.closed) < boundary  # D6 strict temporal cut (canonical UTC)
         and ref.work_id != query.work_id  # self-exclusion
         and ref.work_id not in chain  # supersedes-chain exclusion
-        and not is_sibling(ref, query)  # convoy / pr / branch exclusion
+        and not is_sibling(ref, query)  # convoy / pr / branch / parent / child
     )
 
 
@@ -193,6 +224,7 @@ def work_ref_from_record(record: Mapping[str, Any]) -> WorkRef:
         pr=outcome.get("pr"),
         external_ref=record.get("external_ref"),
         supersedes=tuple(links.get("supersedes", ())),
+        parent=links.get("parent"),
         # Carried through the SAME reader so synthetic and real work share one corpus;
         # a record with no marker is real by construction.
         origin=str(record.get("origin") or "real"),
@@ -220,11 +252,13 @@ def query_from_record(record: Mapping[str, Any]) -> QueryWork:
         convoy_id=links.get("convoy_id"),
         pr=outcome.get("pr"),
         external_ref=record.get("external_ref"),
+        parent=links.get("parent"),
     )
 
 
 # Re-exported for callers that build corpora inline rather than from records.
 __all__ = [
+    "SIBLING_AXES",
     "LeakageError",
     "QueryWork",
     "WorkRef",

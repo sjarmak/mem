@@ -9,5 +9,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
+    // Bound subprocess-heavy integration tests to avoid SQLite contention.
+    maxWorkers: 4,
   },
 });

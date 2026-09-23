@@ -1,0 +1,8 @@
+{
+  "project_id": "world-seed135-project",
+  "world_id": "world-seed135",
+  "name": "Ironwood Labs initiative",
+  "goal": "Deliver the current research-platform initiative.",
+  "prd_summary": "Ironwood Labs is consolidating its research platform tooling onto a single supported path this quarter. The initiative covers migration of the existing scaleup workloads, a documented rollback, and retirement of the superseded configuration.",
+  "task_briefs": []
+}

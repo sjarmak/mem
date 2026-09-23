@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed125",
+  "domain": "chip-design",
+  "org_name": "Ironwood Collective",
+  "teams": [
+    {
+      "team_id": "world-seed125-team-chip-design-enablement",
+      "name": "Chip Design Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed125-team-chip-design-core",
+      "name": "Chip Design Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed125-team-chip-design-foundations",
+      "name": "Chip Design Foundations",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed125-persona-0-kenji-fontaine",
+      "name": "Kenji Fontaine",
+      "role": "legal-counsel",
+      "team_id": "world-seed125-team-chip-design-enablement"
+    },
+    {
+      "persona_id": "world-seed125-persona-1-priya-bergstrom",
+      "name": "Priya Bergstrom",
+      "role": "legal-counsel",
+      "team_id": "world-seed125-team-chip-design-core"
+    },
+    {
+      "persona_id": "world-seed125-persona-2-kenji-jorgensen",
+      "name": "Kenji Jorgensen",
+      "role": "engineering-manager",
+      "team_id": "world-seed125-team-chip-design-foundations"
+    },
+    {
+      "persona_id": "world-seed125-persona-3-bruno-doyle",
+      "name": "Bruno Doyle",
+      "role": "support-lead",
+      "team_id": "world-seed125-team-chip-design-foundations"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed125-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed125-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed125-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed125-kb-chip-design",
+      "name": "chip-design knowledge base",
+      "topic": "chip-design"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed125-repo-cuda-cpp",
+      "name": "chip-design-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed125-repo-rust",
+      "name": "chip-design-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed125-repo-typescript",
+      "name": "chip-design-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 125,
+  "generator_version": "world.v1"
+}

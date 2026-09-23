@@ -6,7 +6,7 @@ context per step, with the persistent memory store the only continuity channel
 construction; this module is the construction target.
 """
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -129,3 +129,29 @@ class BenchmarkSequence(BaseModel):
     # source-trace set is the written episode ids (expected_memory_writes across
     # steps); it is not duplicated here.
     latent_rule: str | None = None
+    # mem-r6yzk.3 — the memory SCOPE the sequence asks the agent to span, stated in
+    # terms of this module's own objects rather than an abstract taxonomy:
+    #
+    #   "prompt"  — the answer is reachable inside a SINGLE SequenceStep's own
+    #               ``user_request`` + ``environment_state``. No cross-step carry is
+    #               needed, so a no-memory arm can solve it. No materialiser freezes
+    #               this tier; it exists as the floor the other two are defined against.
+    #   "session" — the scope of one BenchmarkSequence run: the goal step must carry
+    #               values established by EARLIER steps of the same sequence (what the
+    #               last step on this thread left behind / what the current value now
+    #               is). This is what ``runner.conditions.run_sequence`` isolates, and
+    #               it is the default because every pre-r6yzk fixture is this shape.
+    #   "project" — the scope ``runner.project.run_project`` shares across sequences:
+    #               the goal additionally requires a memory written by a DIFFERENT
+    #               sequence (the charter), so an isolated run cannot reach it.
+    #
+    # Harness-side only: the runner never renders this field to the agent, so it
+    # cannot act as a lexical tell (see ``generators.enterprise_workflow``).
+    tier: Literal["prompt", "session", "project"] = "session"
+    # What the goal step ASKS FOR, as a harness-side label for slicing results. Never
+    # rendered to the agent. The goal wording is NOT identical across tiers — it names
+    # every subject it grades, the project tier's charter included (mem-r6yzk B5) — so
+    # what keeps the question from marking its own gold fact is that every subject it
+    # names is held by more than one candidate memory
+    # (``tests/test_enterprise_workflow``), not silence about what is asked.
+    question_type: str = "current-value-recall"

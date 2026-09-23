@@ -30,8 +30,21 @@ jobs:
       # Whole-tree by default (mem-sspvk) — a new directory is covered without
       # anyone remembering to add it here. mypy's target set and its reasoned
       # exclusions live in pyproject's [tool.mypy] (which sets strict = true).
-      - run: ruff check .
-      - run: black --check .
+      #
+      # `../public` is named because it is a SIBLING of the crawl root, so "whole
+      # tree" does not reach it: the published release ships a standalone
+      # validator (public/validator/membench_validate.py) that was outside all
+      # three gates and failed all three. The named target is the DIRECTORY, so a
+      # new .py file anywhere under public/ is still covered without an edit here.
+      #
+      # `--config` is load-bearing for black and kept on ruff for symmetry. Both
+      # tools resolve configuration from the files they are handed, and public/
+      # has no pyproject.toml above it before the git root — so a bare
+      # `black --check . ../public` silently formats the validator at black's
+      # DEFAULT 88 columns while this repo's rule is 100, and reports a diff that
+      # no in-repo configuration can satisfy.
+      - run: ruff check --config pyproject.toml . ../public
+      - run: black --check --config pyproject.toml . ../public
       - run: mypy
       - run: pytest -q
 

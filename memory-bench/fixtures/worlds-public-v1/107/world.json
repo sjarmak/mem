@@ -1,0 +1,81 @@
+{
+  "world_id": "world-seed107",
+  "domain": "chip-design",
+  "org_name": "Northwind Industries",
+  "teams": [
+    {
+      "team_id": "world-seed107-team-chip-design-foundations",
+      "name": "Chip Design Foundations",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed107-team-chip-design-reliability",
+      "name": "Chip Design Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed107-team-chip-design-core",
+      "name": "Chip Design Core",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed107-persona-0-greta-jorgensen",
+      "name": "Greta Jorgensen",
+      "role": "legal-counsel",
+      "team_id": "world-seed107-team-chip-design-foundations"
+    },
+    {
+      "persona_id": "world-seed107-persona-1-esther-kowalski",
+      "name": "Esther Kowalski",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed107-team-chip-design-reliability"
+    },
+    {
+      "persona_id": "world-seed107-persona-2-priya-ibarra",
+      "name": "Priya Ibarra",
+      "role": "support-lead",
+      "team_id": "world-seed107-team-chip-design-foundations"
+    },
+    {
+      "persona_id": "world-seed107-persona-3-kenji-doyle",
+      "name": "Kenji Doyle",
+      "role": "staff-engineer",
+      "team_id": "world-seed107-team-chip-design-core"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed107-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed107-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed107-kb-chip-design",
+      "name": "chip-design knowledge base",
+      "topic": "chip-design"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed107-repo-typescript",
+      "name": "chip-design-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed107-repo-python",
+      "name": "chip-design-python",
+      "language": "python"
+    }
+  ],
+  "seed": 107,
+  "generator_version": "world.v1"
+}

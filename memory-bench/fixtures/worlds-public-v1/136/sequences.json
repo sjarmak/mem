@@ -1,0 +1,737 @@
+[
+  {
+    "sequence_id": "world-seed136-task0",
+    "title": "Meridian Collective initiative: reconcile 5 decisions",
+    "domain": "medical",
+    "goal": "Deliver the current medical initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed136-task0-shared0-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-0fccb6ce17f50e70": "the data retention window is 2 years \u2014 by Kenji Okonkwo (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task0-s0v1-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-cb55f20238a08bfa": "the release artifact store is the shared package mirror \u2014 by Imani Doyle (staff-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task0-s0v2-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-951aa182ee4ab5fa": "the release artifact store is the legacy file server \u2014 by Imani Doyle (staff-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-cb55f20238a08bfa"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task0-s0v3-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-c000aed7d95e7322": "the release artifact store is a per-team namespace \u2014 by Leila Haddad (staff-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-951aa182ee4ab5fa"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task0-s1-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-6d3ca189be3c3f3f": "the paging severity floor is any error-budget burn alert \u2014 by Camila Okonkwo (support-lead) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task0-s2-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-d712f828358ff47e": "the supported API version is v4 \u2014 by Camila Okonkwo (support-lead) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task0-s3-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-b272bb682cce19f1": "the on-call rotation cadence is monthly blocks \u2014 by Camila Okonkwo (support-lead) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task0-s4-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-b48a484e31965866": "the approved rollback command is git revert then redeploy \u2014 by Kenji Okonkwo (researcher) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task0-goal",
+        "user_request": "Deliver the current medical initiative. State the current value of: the approved rollback command, the release artifact store, the paging severity floor, the on-call rotation cadence, the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-b48a484e31965866",
+          "m-c000aed7d95e7322",
+          "m-6d3ca189be3c3f3f",
+          "m-b272bb682cce19f1",
+          "m-d712f828358ff47e"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed136-task0-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-b48a484e31965866",
+              "m-c000aed7d95e7322",
+              "m-6d3ca189be3c3f3f",
+              "m-b272bb682cce19f1",
+              "m-d712f828358ff47e"
+            ],
+            "forbidden_values": [
+              "the shared package mirror",
+              "the legacy file server"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed136-task0-probe-rollback-command",
+            "expected_memory_id": "m-b48a484e31965866",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed136-task0-probe-artifact-store",
+            "expected_memory_id": "m-c000aed7d95e7322",
+            "description": "the release artifact store must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed136-task0-probe-paging-floor",
+            "expected_memory_id": "m-6d3ca189be3c3f3f",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed136-task0-probe-oncall-rotation",
+            "expected_memory_id": "m-b272bb682cce19f1",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed136-task0-probe-api-version",
+            "expected_memory_id": "m-d712f828358ff47e",
+            "description": "the supported API version must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-59b41f88544a173e": "the release artifact store is a signed OCI repository \u2014 by Camila Okonkwo (support-lead) in #meeting channel",
+          "m-37369cd4c393e350": "the paging severity floor is nothing below a full outage \u2014 by Leila Haddad (staff-engineer) in #meeting channel",
+          "m-c51434e5dc1728d2": "the paging severity floor is sev-2 and above \u2014 by Kenji Okonkwo (researcher) in #docs channel",
+          "m-db34d0f5d5b33e84": "the paging severity floor is any customer-visible regression \u2014 by Camila Okonkwo (support-lead) in #email channel",
+          "m-fb8a061a530aff65": "the paging severity floor is sev-1 only \u2014 by Imani Doyle (staff-engineer) in #meeting channel",
+          "m-91d031268abc20dc": "the paging severity floor is any failed deploy \u2014 by Leila Haddad (staff-engineer) in #email channel",
+          "m-f9a365785feba666": "the supported API version is v6 \u2014 by Camila Okonkwo (support-lead) in #docs channel",
+          "m-acdb1ddfb3a92b55": "the supported API version is v2 \u2014 by Camila Okonkwo (support-lead) in #meeting channel",
+          "m-b715528f988b4e37": "the supported API version is v10 \u2014 by Imani Doyle (staff-engineer) in #meeting channel",
+          "m-bfca4f209afe0220": "the supported API version is v8 \u2014 by Kenji Okonkwo (researcher) in #email channel",
+          "m-145770082753c810": "the on-call rotation cadence is daily handoff \u2014 by Imani Doyle (staff-engineer) in #email channel",
+          "m-f334e77c4be42c79": "the on-call rotation cadence is follow-the-sun \u2014 by Camila Okonkwo (support-lead) in #meeting channel",
+          "m-90e05e553d3cf1bf": "the on-call rotation cadence is two-week shifts \u2014 by Kenji Okonkwo (researcher) in #meeting channel",
+          "m-81a51e7e54d8ec55": "the on-call rotation cadence is weekly on Thursdays \u2014 by Leila Haddad (staff-engineer) in #docs channel",
+          "m-63185b9f299eda97": "the on-call rotation cadence is paired primary and secondary \u2014 by Camila Okonkwo (support-lead) in #email channel",
+          "m-d1180823375088b5": "the approved rollback command is flux suspend then resume \u2014 by Imani Doyle (staff-engineer) in #docs channel",
+          "m-341e06443a573aaa": "the approved rollback command is kubectl rollout undo \u2014 by Camila Okonkwo (support-lead) in #meeting channel",
+          "m-7a04aa1b7b2c9456": "the approved rollback command is nomad job revert \u2014 by Imani Doyle (staff-engineer) in #docs channel",
+          "m-bcedfd1ea25c6ef6": "the approved rollback command is ansible-playbook restore.yml \u2014 by Camila Okonkwo (support-lead) in #meeting channel"
+        },
+        "superseded_memory_ids": [
+          "m-cb55f20238a08bfa",
+          "m-951aa182ee4ab5fa"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed136-task1",
+    "title": "Meridian Collective initiative: reconcile 5 decisions",
+    "domain": "medical",
+    "goal": "Deliver the current medical initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed136-task1-shared0-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-4b06832c78158d76": "the checkout_v2 feature flag state is held at zero traffic \u2014 by Camila Okonkwo (support-lead) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task1-s0-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-64f2fe21fbf87a62": "the on-call rotation cadence is monthly blocks \u2014 by Kenji Okonkwo (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task1-s1-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-0cae081ec234f72f": "the release artifact store is a per-team namespace \u2014 by Kenji Okonkwo (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task1-s2v1-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-c3bea48e958da2c3": "the paging severity floor is nothing below a full outage \u2014 by Leila Haddad (staff-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task1-s2v2-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-7eed81caf097dff6": "the paging severity floor is sev-4 and above \u2014 by Imani Doyle (staff-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-c3bea48e958da2c3"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task1-s2v3-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-50691ec620448f3a": "the paging severity floor is any customer-visible regression \u2014 by Imani Doyle (staff-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-7eed81caf097dff6"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task1-s3-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-48ad0daf799c6b86": "the primary deployment region is us-west-2 \u2014 by Leila Haddad (staff-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task1-goal",
+        "user_request": "Deliver the current medical initiative. State the current value of: the on-call rotation cadence, the data retention window, the paging severity floor, the release artifact store, the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-64f2fe21fbf87a62",
+          "m-0fccb6ce17f50e70",
+          "m-50691ec620448f3a",
+          "m-0cae081ec234f72f",
+          "m-48ad0daf799c6b86"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed136-task1-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-64f2fe21fbf87a62",
+              "m-0fccb6ce17f50e70",
+              "m-50691ec620448f3a",
+              "m-0cae081ec234f72f",
+              "m-48ad0daf799c6b86"
+            ],
+            "forbidden_values": [
+              "nothing below a full outage",
+              "sev-4 and above"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed136-task1-probe-oncall-rotation",
+            "expected_memory_id": "m-64f2fe21fbf87a62",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed136-task1-probe-shared-retention-window",
+            "expected_memory_id": "m-0fccb6ce17f50e70",
+            "description": "the data retention window (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed136-task1-probe-paging-floor",
+            "expected_memory_id": "m-50691ec620448f3a",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed136-task1-probe-artifact-store",
+            "expected_memory_id": "m-0cae081ec234f72f",
+            "description": "the release artifact store must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed136-task1-probe-primary-region",
+            "expected_memory_id": "m-48ad0daf799c6b86",
+            "description": "the primary deployment region must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-0607ed35ee53a68d": "the on-call rotation cadence is fortnightly \u2014 by Camila Okonkwo (support-lead) in #meeting channel",
+          "m-f16b02d471d7fe4d": "the on-call rotation cadence is weekly on Mondays \u2014 by Camila Okonkwo (support-lead) in #meeting channel",
+          "m-a5746002e27b80ba": "the on-call rotation cadence is weekly on Thursdays \u2014 by Kenji Okonkwo (researcher) in #meeting channel",
+          "m-bf8ba1d90b63aaa6": "the on-call rotation cadence is paired primary and secondary \u2014 by Imani Doyle (staff-engineer) in #meeting channel",
+          "m-3f2f3349e7da2e4f": "the on-call rotation cadence is split by timezone \u2014 by Kenji Okonkwo (researcher) in #meeting channel",
+          "m-8b1cd42090418426": "the release artifact store is a signed OCI repository \u2014 by Kenji Okonkwo (researcher) in #docs channel",
+          "m-b8a9576dc38c70e0": "the release artifact store is the compliance archive \u2014 by Leila Haddad (staff-engineer) in #meeting channel",
+          "m-d3753f0c67f6859d": "the release artifact store is the vendor registry \u2014 by Leila Haddad (staff-engineer) in #meeting channel",
+          "m-c6abafe5e4441998": "the paging severity floor is any error-budget burn alert \u2014 by Camila Okonkwo (support-lead) in #email channel",
+          "m-a7cea3201db2c4e1": "the primary deployment region is ap-northeast-1 \u2014 by Kenji Okonkwo (researcher) in #docs channel",
+          "m-0ca1c250b756b7ac": "the primary deployment region is ap-south-1 \u2014 by Imani Doyle (staff-engineer) in #docs channel",
+          "m-f7cadaaf0efb8f31": "the primary deployment region is me-south-1 \u2014 by Leila Haddad (staff-engineer) in #email channel",
+          "m-110ecdab524e47ef": "the primary deployment region is sa-east-1 \u2014 by Imani Doyle (staff-engineer) in #docs channel",
+          "m-797e6fdb353f6da2": "the primary deployment region is eu-west-1 \u2014 by Kenji Okonkwo (researcher) in #meeting channel",
+          "m-b69b74b33c8a9b4f": "the data retention window is 90 days \u2014 by Leila Haddad (staff-engineer) in #email channel",
+          "m-aef273f9b8f5d487": "the data retention window is 30 days \u2014 by Imani Doyle (staff-engineer) in #docs channel",
+          "m-566b774f464fc62c": "the data retention window is 14 days \u2014 by Leila Haddad (staff-engineer) in #email channel",
+          "m-8fd36a93fc3387b8": "the data retention window is 5 years \u2014 by Camila Okonkwo (support-lead) in #email channel"
+        },
+        "superseded_memory_ids": [
+          "m-c3bea48e958da2c3",
+          "m-7eed81caf097dff6"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed136-task2",
+    "title": "Meridian Collective initiative: reconcile 5 decisions",
+    "domain": "medical",
+    "goal": "Deliver the current medical initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed136-task2-s0v1-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-7776b019c2f9c4bb": "the production deploy timeout is 45s \u2014 by Imani Doyle (staff-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task2-s0v2-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-9aa16a3affa47a3d": "the production deploy timeout is 90s \u2014 by Camila Okonkwo (support-lead) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-7776b019c2f9c4bb"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task2-s0v3-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-4af075cd03049318": "the production deploy timeout is 15s \u2014 by Camila Okonkwo (support-lead) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-9aa16a3affa47a3d"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task2-s1-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-4fc8fe1e89b34ea9": "the release artifact store is the mirrored CDN origin \u2014 by Camila Okonkwo (support-lead) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task2-s2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-4d28b71730714eb0": "the approved rollback command is flux suspend then resume \u2014 by Camila Okonkwo (support-lead) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task2-s3-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-42e61372e92a7736": "the primary deployment region is us-east-1 \u2014 by Kenji Okonkwo (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed136-task2-goal",
+        "user_request": "Deliver the current medical initiative. State the current value of: the checkout_v2 feature flag state, the production deploy timeout, the release artifact store, the primary deployment region, the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-4b06832c78158d76",
+          "m-4af075cd03049318",
+          "m-4fc8fe1e89b34ea9",
+          "m-42e61372e92a7736",
+          "m-4d28b71730714eb0"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed136-task2-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-4b06832c78158d76",
+              "m-4af075cd03049318",
+              "m-4fc8fe1e89b34ea9",
+              "m-42e61372e92a7736",
+              "m-4d28b71730714eb0"
+            ],
+            "forbidden_values": [
+              "45s",
+              "90s"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed136-task2-probe-shared-feature-flag",
+            "expected_memory_id": "m-4b06832c78158d76",
+            "description": "the checkout_v2 feature flag state (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed136-task2-probe-deploy-timeout",
+            "expected_memory_id": "m-4af075cd03049318",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed136-task2-probe-artifact-store",
+            "expected_memory_id": "m-4fc8fe1e89b34ea9",
+            "description": "the release artifact store must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed136-task2-probe-primary-region",
+            "expected_memory_id": "m-42e61372e92a7736",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed136-task2-probe-rollback-command",
+            "expected_memory_id": "m-4d28b71730714eb0",
+            "description": "the approved rollback command must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-fb4e23b923822069": "the production deploy timeout is 180s \u2014 by Kenji Okonkwo (researcher) in #docs channel",
+          "m-f10aee6f3d053c5a": "the release artifact store is the legacy file server \u2014 by Camila Okonkwo (support-lead) in #email channel",
+          "m-71245ef2a0cd3349": "the release artifact store is one bucket per release \u2014 by Imani Doyle (staff-engineer) in #docs channel",
+          "m-e9e58fb22f5891e5": "the release artifact store is the internal registry \u2014 by Kenji Okonkwo (researcher) in #meeting channel",
+          "m-a17defb99ffcadff": "the approved rollback command is kubectl rollout undo \u2014 by Imani Doyle (staff-engineer) in #meeting channel",
+          "m-795e7e73323a2728": "the approved rollback command is nomad job revert \u2014 by Kenji Okonkwo (researcher) in #email channel",
+          "m-9b3f3e9b68a37867": "the approved rollback command is argocd app rollback \u2014 by Kenji Okonkwo (researcher) in #email channel",
+          "m-cf9d691c0cddf163": "the primary deployment region is sa-east-1 \u2014 by Imani Doyle (staff-engineer) in #meeting channel",
+          "m-34a7e1698b042e4a": "the primary deployment region is ap-northeast-1 \u2014 by Imani Doyle (staff-engineer) in #meeting channel",
+          "m-07758ff8d464831c": "the primary deployment region is us-west-2 \u2014 by Imani Doyle (staff-engineer) in #email channel",
+          "m-bf837afbfe3ef468": "the primary deployment region is ap-south-1 \u2014 by Imani Doyle (staff-engineer) in #email channel",
+          "m-f689cb4c18ad62e2": "the primary deployment region is me-south-1 \u2014 by Kenji Okonkwo (researcher) in #docs channel",
+          "m-e2ffe8dc9ef480ba": "the checkout_v2 feature flag state is canary-75% \u2014 by Camila Okonkwo (support-lead) in #email channel",
+          "m-cf8d251117c9c1bd": "the checkout_v2 feature flag state is canary-25% \u2014 by Camila Okonkwo (support-lead) in #docs channel",
+          "m-3de8e61af357c01c": "the checkout_v2 feature flag state is disabled \u2014 by Leila Haddad (staff-engineer) in #meeting channel",
+          "m-b41184196a996ab9": "the checkout_v2 feature flag state is canary-50% \u2014 by Camila Okonkwo (support-lead) in #email channel",
+          "m-b3d61b1012387951": "the checkout_v2 feature flag state is enabled \u2014 by Imani Doyle (staff-engineer) in #docs channel"
+        },
+        "superseded_memory_ids": [
+          "m-7776b019c2f9c4bb",
+          "m-9aa16a3affa47a3d"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  }
+]

@@ -31,6 +31,7 @@ from membench.memory_systems.builtin_system import BuiltinMemory
 from membench.memory_systems.consolidating_system import ConsolidatingMemory
 from membench.memory_systems.filesystem_system import FilesystemMemory
 from membench.memory_systems.graphiti_system import GraphitiMemory
+from membench.memory_systems.grouped_system import GroupedRetrievalMemory
 from membench.memory_systems.lexical_system import LexicalTopKMemory
 from membench.memory_systems.local_stack import (
     LocalModelStack,
@@ -59,6 +60,7 @@ __all__ = [
     "ConsolidatingMemory",
     "FilesystemMemory",
     "GraphitiMemory",
+    "GroupedRetrievalMemory",
     "LexicalTopKMemory",
     "LocalModelStack",
     "LocalStackUnavailableError",
@@ -100,6 +102,7 @@ def _systems_registry() -> dict[str, type[MemorySystem]]:
         "a-mem": AMemMemory,
         "nat": NatMemory,
         "graphiti": GraphitiMemory,
+        "grouped": GroupedRetrievalMemory,
         "openwiki": OpenWikiMemory,
     }
 

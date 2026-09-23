@@ -1,0 +1,96 @@
+{
+  "world_id": "world-seed106",
+  "domain": "research-platform",
+  "org_name": "Sablefish Systems",
+  "teams": [
+    {
+      "team_id": "world-seed106-team-research-platform-platform",
+      "name": "Research Platform Platform",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed106-team-research-platform-core",
+      "name": "Research Platform Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed106-team-research-platform-reliability",
+      "name": "Research Platform Reliability",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed106-persona-0-nadia-bergstrom",
+      "name": "Nadia Bergstrom",
+      "role": "legal-counsel",
+      "team_id": "world-seed106-team-research-platform-platform"
+    },
+    {
+      "persona_id": "world-seed106-persona-1-ada-larsen",
+      "name": "Ada Larsen",
+      "role": "support-lead",
+      "team_id": "world-seed106-team-research-platform-core"
+    },
+    {
+      "persona_id": "world-seed106-persona-2-farid-haddad",
+      "name": "Farid Haddad",
+      "role": "researcher",
+      "team_id": "world-seed106-team-research-platform-reliability"
+    },
+    {
+      "persona_id": "world-seed106-persona-3-esther-nakamura",
+      "name": "Esther Nakamura",
+      "role": "staff-engineer",
+      "team_id": "world-seed106-team-research-platform-platform"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed106-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed106-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed106-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed106-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed106-kb-research-platform",
+      "name": "research-platform knowledge base",
+      "topic": "research-platform"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed106-repo-typescript",
+      "name": "research-platform-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed106-repo-go",
+      "name": "research-platform-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed106-repo-rust",
+      "name": "research-platform-rust",
+      "language": "rust"
+    }
+  ],
+  "seed": 106,
+  "generator_version": "world.v1"
+}

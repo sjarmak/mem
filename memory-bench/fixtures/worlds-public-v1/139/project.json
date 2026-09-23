@@ -1,0 +1,8 @@
+{
+  "project_id": "world-seed139-project",
+  "world_id": "world-seed139",
+  "name": "Lumen Labs initiative",
+  "goal": "Deliver the current cuda-engineering initiative.",
+  "prd_summary": "Lumen Labs is consolidating its cuda engineering tooling onto a single supported path this quarter. The initiative covers migration of the existing enterprise workloads, a documented rollback, and retirement of the superseded configuration.",
+  "task_briefs": []
+}

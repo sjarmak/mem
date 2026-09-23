@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed111",
+  "domain": "data-infrastructure",
+  "org_name": "Westmark Works",
+  "teams": [
+    {
+      "team_id": "world-seed111-team-data-infrastructure-enablement",
+      "name": "Data Infrastructure Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed111-team-data-infrastructure-reliability",
+      "name": "Data Infrastructure Reliability",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed111-persona-0-priya-nakamura",
+      "name": "Priya Nakamura",
+      "role": "qa-engineer",
+      "team_id": "world-seed111-team-data-infrastructure-enablement"
+    },
+    {
+      "persona_id": "world-seed111-persona-1-imani-almeida",
+      "name": "Imani Almeida",
+      "role": "researcher",
+      "team_id": "world-seed111-team-data-infrastructure-enablement"
+    },
+    {
+      "persona_id": "world-seed111-persona-2-bruno-eriksen",
+      "name": "Bruno Eriksen",
+      "role": "legal-counsel",
+      "team_id": "world-seed111-team-data-infrastructure-reliability"
+    },
+    {
+      "persona_id": "world-seed111-persona-3-esther-eriksen",
+      "name": "Esther Eriksen",
+      "role": "engineering-manager",
+      "team_id": "world-seed111-team-data-infrastructure-enablement"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed111-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed111-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed111-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed111-kb-data-infrastructure",
+      "name": "data-infrastructure knowledge base",
+      "topic": "data-infrastructure"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed111-repo-cuda-cpp",
+      "name": "data-infrastructure-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed111-repo-typescript",
+      "name": "data-infrastructure-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed111-repo-go",
+      "name": "data-infrastructure-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed111-repo-python",
+      "name": "data-infrastructure-python",
+      "language": "python"
+    }
+  ],
+  "seed": 111,
+  "generator_version": "world.v1"
+}

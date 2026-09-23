@@ -1,0 +1,2452 @@
+[
+  {
+    "sequence_id": "world-seed7-task0",
+    "title": "Meridian Collective initiative: reconcile 5 decisions",
+    "domain": "customer-support",
+    "goal": "Deliver the current customer-support initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed7-task0-s0-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-fcd4808af0ef1b32": "the project charter decision is move the launch behind the compliance review \u2014 by Dmitri Gruber (site-reliability-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task0-s1-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-672cca289d6414bd": "the production deploy timeout is 60s \u2014 by Esther Moreau (staff-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task0-s2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-e92d77bc4166e47f": "the approved rollback command is ansible-playbook restore.yml \u2014 by Dmitri Gruber (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task0-s3-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-2b19b4200a9b9de4": "the checkout_v2 feature flag state is held at zero traffic \u2014 by Esther Almeida (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task0-s4v1-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-217ba20d1360939b": "the paging severity floor is sev-1 only \u2014 by Esther Almeida (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task0-s4v2-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ad2f7b2cd0206d0e": "the paging severity floor is sev-2 and above \u2014 by Esther Almeida (researcher) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-217ba20d1360939b"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task0-s4v3-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-d7c6ee03acb13432": "the paging severity floor is sev-4 and above \u2014 by Esther Moreau (staff-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-ad2f7b2cd0206d0e"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task0-goal",
+        "user_request": "Deliver the current customer-support initiative. State the current value of: the production deploy timeout, the approved rollback command, the paging severity floor, the checkout_v2 feature flag state, the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-672cca289d6414bd",
+          "m-e92d77bc4166e47f",
+          "m-d7c6ee03acb13432",
+          "m-2b19b4200a9b9de4",
+          "m-fcd4808af0ef1b32"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed7-task0-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-672cca289d6414bd",
+              "m-e92d77bc4166e47f",
+              "m-d7c6ee03acb13432",
+              "m-2b19b4200a9b9de4",
+              "m-fcd4808af0ef1b32"
+            ],
+            "forbidden_values": [
+              "sev-1 only",
+              "sev-2 and above"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed7-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-672cca289d6414bd",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task0-probe-rollback-command",
+            "expected_memory_id": "m-e92d77bc4166e47f",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task0-probe-paging-floor",
+            "expected_memory_id": "m-d7c6ee03acb13432",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task0-probe-feature-flag",
+            "expected_memory_id": "m-2b19b4200a9b9de4",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task0-probe-charter",
+            "expected_memory_id": "m-fcd4808af0ef1b32",
+            "description": "the project charter decision must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-aae10f0924fb3ed0": "the project charter decision is split delivery into two independent releases \u2014 by Esther Moreau (staff-engineer) in #issue-tracker channel",
+          "m-d8f8c3ba6f29a10b": "the project charter decision is extend the beta by one quarter \u2014 by Esther Almeida (researcher) in #meeting channel",
+          "m-c6a56ab0166f8205": "the project charter decision is adopt the vendor SDK instead of the in-house client \u2014 by Esther Moreau (staff-engineer) in #email channel",
+          "m-24b4b7663dc441fd": "the project charter decision is cut the integrations track and ship the core \u2014 by Esther Almeida (researcher) in #meeting channel",
+          "m-466b1acd81d97741": "the production deploy timeout is 600s \u2014 by Esther Almeida (researcher) in #email channel",
+          "m-4c29acb6160653c6": "the production deploy timeout is 15s \u2014 by Esther Almeida (researcher) in #docs channel",
+          "m-01a990825b72bcdd": "the production deploy timeout is 120s \u2014 by Esther Moreau (staff-engineer) in #docs channel",
+          "m-7d5bb1ea4ffc1cf7": "the production deploy timeout is 30s \u2014 by Esther Moreau (staff-engineer) in #docs channel",
+          "m-2b9789b7bde5734b": "the approved rollback command is argocd app rollback \u2014 by Dmitri Gruber (site-reliability-engineer) in #issue-tracker channel",
+          "m-49d844f73d651081": "the approved rollback command is flux suspend then resume \u2014 by Esther Almeida (researcher) in #email channel",
+          "m-4c585919b1e7063c": "the approved rollback command is kubectl rollout undo \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel",
+          "m-1d21b22d60e0d1f9": "the approved rollback command is spinnaker pipeline rewind \u2014 by Esther Moreau (staff-engineer) in #meeting channel",
+          "m-6c3350ce083edf74": "the approved rollback command is docker service update --rollback \u2014 by Esther Almeida (researcher) in #email channel",
+          "m-fde2d745ef83e742": "the checkout_v2 feature flag state is canary-75% \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel",
+          "m-25734861d36117f0": "the checkout_v2 feature flag state is ramped to all traffic \u2014 by Esther Almeida (researcher) in #issue-tracker channel",
+          "m-9db2a80776064938": "the checkout_v2 feature flag state is kill-switched \u2014 by Esther Moreau (staff-engineer) in #meeting channel",
+          "m-689e24a9b9c0f74d": "the paging severity floor is anything breaching the latency objective \u2014 by Esther Almeida (researcher) in #meeting channel",
+          "m-1d614d7f25b6e6b7": "the paging severity floor is manual escalation only \u2014 by Esther Almeida (researcher) in #issue-tracker channel",
+          "m-6c55946799e23267": "the paging severity floor is sev-3 and above \u2014 by Esther Moreau (staff-engineer) in #docs channel"
+        },
+        "superseded_memory_ids": [
+          "m-217ba20d1360939b",
+          "m-ad2f7b2cd0206d0e"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "session",
+    "question_type": "current-value-recall"
+  },
+  {
+    "sequence_id": "world-seed7-task1",
+    "title": "Meridian Collective initiative: reconcile 5 decisions",
+    "domain": "customer-support",
+    "goal": "Deliver the current customer-support initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed7-task1-s0-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-80e393c0347f52e1": "the release artifact store is the shared package mirror \u2014 by Esther Moreau (staff-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task1-s1-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-71aaa5d6d8332c2d": "the supported API version is v3 \u2014 by Esther Almeida (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task1-s2-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-0fb7d9c080c58192": "the data retention window is 2 years \u2014 by Esther Almeida (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task1-s3v1-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-b7c539e156a42c38": "the primary deployment region is me-south-1 \u2014 by Esther Moreau (staff-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task1-s3v2-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-f46e5d4d8f68972d": "the primary deployment region is sa-east-1 \u2014 by Bruno Bergstrom (engineering-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-b7c539e156a42c38"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task1-s3v3-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-3373c765c8872ae0": "the primary deployment region is ca-central-1 \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-f46e5d4d8f68972d"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task1-s4-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-9629605836c127b3": "the on-call rotation cadence is two-week shifts \u2014 by Esther Moreau (staff-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task1-goal",
+        "user_request": "Deliver the current customer-support initiative. State the current value of: the supported API version, the primary deployment region, the release artifact store, the on-call rotation cadence, the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-71aaa5d6d8332c2d",
+          "m-3373c765c8872ae0",
+          "m-80e393c0347f52e1",
+          "m-9629605836c127b3",
+          "m-0fb7d9c080c58192"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed7-task1-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-71aaa5d6d8332c2d",
+              "m-3373c765c8872ae0",
+              "m-80e393c0347f52e1",
+              "m-9629605836c127b3",
+              "m-0fb7d9c080c58192"
+            ],
+            "forbidden_values": [
+              "me-south-1",
+              "sa-east-1"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed7-task1-probe-api-version",
+            "expected_memory_id": "m-71aaa5d6d8332c2d",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task1-probe-primary-region",
+            "expected_memory_id": "m-3373c765c8872ae0",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task1-probe-artifact-store",
+            "expected_memory_id": "m-80e393c0347f52e1",
+            "description": "the release artifact store must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task1-probe-oncall-rotation",
+            "expected_memory_id": "m-9629605836c127b3",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task1-probe-retention-window",
+            "expected_memory_id": "m-0fb7d9c080c58192",
+            "description": "the data retention window must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-72239b78dbf964bd": "the release artifact store is the vendor registry \u2014 by Esther Almeida (researcher) in #issue-tracker channel",
+          "m-3de62845843bdbfa": "the release artifact store is one bucket per release \u2014 by Esther Almeida (researcher) in #email channel",
+          "m-d66ddf723a5b4ce6": "the release artifact store is the build cache \u2014 by Dmitri Gruber (site-reliability-engineer) in #meeting channel",
+          "m-93b1ddea8e40b092": "the release artifact store is a signed OCI repository \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel",
+          "m-bd3622e49719a97b": "the supported API version is v5 \u2014 by Bruno Bergstrom (engineering-manager) in #meeting channel",
+          "m-e7279fb21e28f2f3": "the supported API version is v6 \u2014 by Esther Almeida (researcher) in #meeting channel",
+          "m-226c33a2cdcef66b": "the supported API version is v7 \u2014 by Esther Moreau (staff-engineer) in #meeting channel",
+          "m-79740b80ef63aaf2": "the supported API version is v1 \u2014 by Bruno Bergstrom (engineering-manager) in #meeting channel",
+          "m-40b9dda42d297f16": "the data retention window is 14 days \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel",
+          "m-18591bfb6220def2": "the data retention window is 90 days \u2014 by Esther Moreau (staff-engineer) in #issue-tracker channel",
+          "m-a28add7d8bc1622b": "the data retention window is kept indefinitely \u2014 by Bruno Bergstrom (engineering-manager) in #email channel",
+          "m-8422bead0c6744f6": "the data retention window is 1 year \u2014 by Dmitri Gruber (site-reliability-engineer) in #issue-tracker channel",
+          "m-f92b04c546eb5f79": "the primary deployment region is us-east-1 \u2014 by Esther Almeida (researcher) in #issue-tracker channel",
+          "m-dff41300011545cb": "the on-call rotation cadence is split by timezone \u2014 by Dmitri Gruber (site-reliability-engineer) in #docs channel",
+          "m-8f475ca978a8aa80": "the on-call rotation cadence is weekly on Thursdays \u2014 by Bruno Bergstrom (engineering-manager) in #issue-tracker channel",
+          "m-e1b71f15355de1a3": "the on-call rotation cadence is follow-the-sun \u2014 by Esther Almeida (researcher) in #email channel",
+          "m-08a42a076afb1d28": "the on-call rotation cadence is weekly on Mondays \u2014 by Bruno Bergstrom (engineering-manager) in #email channel"
+        },
+        "superseded_memory_ids": [
+          "m-b7c539e156a42c38",
+          "m-f46e5d4d8f68972d"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "session",
+    "question_type": "current-value-recall"
+  },
+  {
+    "sequence_id": "world-seed7-task2",
+    "title": "Meridian Collective initiative: reconcile 5 decisions",
+    "domain": "customer-support",
+    "goal": "Deliver the current customer-support initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed7-task2-s0v1-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a5486248d09ab05d": "the on-call rotation cadence is weekly on Thursdays \u2014 by Dmitri Gruber (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task2-s0v2-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-eab13502fcc3273e": "the on-call rotation cadence is two-week shifts \u2014 by Bruno Bergstrom (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-a5486248d09ab05d"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task2-s0v3-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-71f24d22ecc1d033": "the on-call rotation cadence is three-day shifts \u2014 by Bruno Bergstrom (engineering-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-eab13502fcc3273e"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task2-s1-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-30642e7badfa414e": "the release artifact store is the legacy file server \u2014 by Bruno Bergstrom (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task2-s2-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-9e82ab5d286e7891": "the production deploy timeout is 900s \u2014 by Esther Moreau (staff-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task2-s3-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-6a9427d1ad9d898e": "the project charter decision is retire the legacy pipeline before any new feature \u2014 by Esther Moreau (staff-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task2-s4-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-137effb6f7c1c9ee": "the primary deployment region is ap-northeast-1 \u2014 by Dmitri Gruber (site-reliability-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task2-goal",
+        "user_request": "Deliver the current customer-support initiative. State the current value of: the project charter decision, the release artifact store, the on-call rotation cadence, the production deploy timeout, the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-6a9427d1ad9d898e",
+          "m-30642e7badfa414e",
+          "m-71f24d22ecc1d033",
+          "m-9e82ab5d286e7891",
+          "m-137effb6f7c1c9ee"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed7-task2-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-6a9427d1ad9d898e",
+              "m-30642e7badfa414e",
+              "m-71f24d22ecc1d033",
+              "m-9e82ab5d286e7891",
+              "m-137effb6f7c1c9ee"
+            ],
+            "forbidden_values": [
+              "weekly on Thursdays",
+              "two-week shifts"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed7-task2-probe-charter",
+            "expected_memory_id": "m-6a9427d1ad9d898e",
+            "description": "the project charter decision must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task2-probe-artifact-store",
+            "expected_memory_id": "m-30642e7badfa414e",
+            "description": "the release artifact store must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task2-probe-oncall-rotation",
+            "expected_memory_id": "m-71f24d22ecc1d033",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task2-probe-deploy-timeout",
+            "expected_memory_id": "m-9e82ab5d286e7891",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task2-probe-primary-region",
+            "expected_memory_id": "m-137effb6f7c1c9ee",
+            "description": "the primary deployment region must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-4ca2461021977a9e": "the on-call rotation cadence is paired primary and secondary \u2014 by Esther Moreau (staff-engineer) in #issue-tracker channel",
+          "m-d27c7e0d960d49f6": "the on-call rotation cadence is monthly blocks \u2014 by Esther Almeida (researcher) in #email channel",
+          "m-641b8723acbd0540": "the on-call rotation cadence is split by timezone \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel",
+          "m-d2204219d5798212": "the release artifact store is a per-team namespace \u2014 by Esther Almeida (researcher) in #meeting channel",
+          "m-a08e3d566e8e6284": "the release artifact store is the shared package mirror \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel",
+          "m-eb2ddcbbca688206": "the release artifact store is the mirrored CDN origin \u2014 by Dmitri Gruber (site-reliability-engineer) in #issue-tracker channel",
+          "m-b168e064a2338549": "the release artifact store is one bucket per release \u2014 by Esther Almeida (researcher) in #email channel",
+          "m-89b645e8b8da6693": "the production deploy timeout is 600s \u2014 by Esther Almeida (researcher) in #docs channel",
+          "m-113b3b129aa4c587": "the production deploy timeout is 90s \u2014 by Dmitri Gruber (site-reliability-engineer) in #meeting channel",
+          "m-dcf9e75e37ea0d31": "the production deploy timeout is 30s \u2014 by Esther Almeida (researcher) in #docs channel",
+          "m-143e4dc106c29309": "the production deploy timeout is 60s \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel",
+          "m-bcd8aa6e1b2324c6": "the production deploy timeout is 120s \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel",
+          "m-a2d020d9be1b8bb8": "the project charter decision is adopt the vendor SDK instead of the in-house client \u2014 by Esther Almeida (researcher) in #email channel",
+          "m-59a28dd3e708521d": "the project charter decision is hold the public interface steady through the migration \u2014 by Esther Moreau (staff-engineer) in #email channel",
+          "m-29c1c21108c33c82": "the project charter decision is staff the reliability track ahead of the roadmap \u2014 by Dmitri Gruber (site-reliability-engineer) in #docs channel",
+          "m-f8f1d99568f1647d": "the primary deployment region is sa-east-1 \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel",
+          "m-c0cf5b9bce8db621": "the primary deployment region is eu-central-1 \u2014 by Dmitri Gruber (site-reliability-engineer) in #issue-tracker channel",
+          "m-1fc17597fedda424": "the primary deployment region is ca-central-1 \u2014 by Dmitri Gruber (site-reliability-engineer) in #docs channel"
+        },
+        "superseded_memory_ids": [
+          "m-a5486248d09ab05d",
+          "m-eab13502fcc3273e"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "session",
+    "question_type": "current-value-recall"
+  },
+  {
+    "sequence_id": "world-seed7-task3",
+    "title": "Meridian Collective initiative: reconcile 5 decisions",
+    "domain": "customer-support",
+    "goal": "Deliver the current customer-support initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed7-task3-s0-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-54ad0880d63d4003": "the primary deployment region is af-south-1 \u2014 by Esther Almeida (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task3-s1-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-5665e32bd4b142e0": "the release artifact store is the internal registry \u2014 by Bruno Bergstrom (engineering-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task3-s2-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-3d7ad3ffd541c80b": "the on-call rotation cadence is two-week shifts \u2014 by Esther Moreau (staff-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task3-s3v1-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-144da530310f7c64": "the checkout_v2 feature flag state is canary-25% \u2014 by Esther Moreau (staff-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task3-s3v2-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-f86a9b86884d7476": "the checkout_v2 feature flag state is ramped to all traffic \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-144da530310f7c64"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task3-s3v3-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-4b39d0c613e52218": "the checkout_v2 feature flag state is canary-50% \u2014 by Bruno Bergstrom (engineering-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-f86a9b86884d7476"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task3-s4-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ed90b7f34e43eed5": "the paging severity floor is sev-3 and above \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task3-goal",
+        "user_request": "Deliver the current customer-support initiative. State the current value of: the on-call rotation cadence, the release artifact store, the primary deployment region, the checkout_v2 feature flag state, the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-3d7ad3ffd541c80b",
+          "m-5665e32bd4b142e0",
+          "m-54ad0880d63d4003",
+          "m-4b39d0c613e52218",
+          "m-ed90b7f34e43eed5"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed7-task3-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-3d7ad3ffd541c80b",
+              "m-5665e32bd4b142e0",
+              "m-54ad0880d63d4003",
+              "m-4b39d0c613e52218",
+              "m-ed90b7f34e43eed5"
+            ],
+            "forbidden_values": [
+              "canary-25%",
+              "ramped to all traffic"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed7-task3-probe-oncall-rotation",
+            "expected_memory_id": "m-3d7ad3ffd541c80b",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task3-probe-artifact-store",
+            "expected_memory_id": "m-5665e32bd4b142e0",
+            "description": "the release artifact store must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task3-probe-primary-region",
+            "expected_memory_id": "m-54ad0880d63d4003",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task3-probe-feature-flag",
+            "expected_memory_id": "m-4b39d0c613e52218",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task3-probe-paging-floor",
+            "expected_memory_id": "m-ed90b7f34e43eed5",
+            "description": "the paging severity floor must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-ec9f6caf4e0fd0ad": "the primary deployment region is sa-east-1 \u2014 by Esther Almeida (researcher) in #email channel",
+          "m-af0561d47b426462": "the primary deployment region is us-east-1 \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel",
+          "m-4493752b13b732d7": "the primary deployment region is eu-west-1 \u2014 by Bruno Bergstrom (engineering-manager) in #email channel",
+          "m-6263931a82884445": "the release artifact store is the build cache \u2014 by Esther Moreau (staff-engineer) in #issue-tracker channel",
+          "m-6e62ebd382080b53": "the release artifact store is the compliance archive \u2014 by Esther Moreau (staff-engineer) in #meeting channel",
+          "m-867aee5dc35d52d1": "the release artifact store is a signed OCI repository \u2014 by Esther Moreau (staff-engineer) in #meeting channel",
+          "m-1c6701384016963b": "the release artifact store is the vendor registry \u2014 by Esther Almeida (researcher) in #docs channel",
+          "m-746ad6fb5239f604": "the release artifact store is the legacy file server \u2014 by Dmitri Gruber (site-reliability-engineer) in #meeting channel",
+          "m-2cfcc16a3c72762e": "the on-call rotation cadence is fortnightly \u2014 by Dmitri Gruber (site-reliability-engineer) in #issue-tracker channel",
+          "m-d79d813161617e59": "the on-call rotation cadence is three-day shifts \u2014 by Dmitri Gruber (site-reliability-engineer) in #meeting channel",
+          "m-98969797ff7f66aa": "the on-call rotation cadence is follow-the-sun \u2014 by Esther Moreau (staff-engineer) in #docs channel",
+          "m-45b0a052e6a1a9fb": "the on-call rotation cadence is monthly blocks \u2014 by Bruno Bergstrom (engineering-manager) in #email channel",
+          "m-9004bab5c4dbb273": "the checkout_v2 feature flag state is shadow-only \u2014 by Esther Moreau (staff-engineer) in #meeting channel",
+          "m-f6763a92c8c2c018": "the checkout_v2 feature flag state is enabled \u2014 by Esther Almeida (researcher) in #docs channel",
+          "m-7b8010162e859010": "the checkout_v2 feature flag state is canary-75% \u2014 by Esther Almeida (researcher) in #email channel",
+          "m-4a171466b4122e20": "the paging severity floor is nothing below a full outage \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel",
+          "m-b172e59436a9c2bc": "the paging severity floor is sev-4 and above \u2014 by Esther Almeida (researcher) in #meeting channel",
+          "m-a629a6936ab70b0c": "the paging severity floor is any failed deploy \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel",
+          "m-b1b6f1fd1a5c9376": "the paging severity floor is sev-2 and above \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel",
+          "m-3e8a8114970b6322": "the paging severity floor is sev-1 only \u2014 by Esther Moreau (staff-engineer) in #meeting channel"
+        },
+        "superseded_memory_ids": [
+          "m-144da530310f7c64",
+          "m-f86a9b86884d7476"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "session",
+    "question_type": "current-value-recall"
+  },
+  {
+    "sequence_id": "world-seed7-task4",
+    "title": "Meridian Collective initiative: reconcile 5 decisions",
+    "domain": "customer-support",
+    "goal": "Deliver the current customer-support initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed7-task4-s0-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-daee4ab49116ce55": "the on-call rotation cadence is weekly on Mondays \u2014 by Bruno Bergstrom (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task4-s1-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-d42d090e27b1153f": "the release artifact store is one bucket per release \u2014 by Esther Almeida (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task4-s2v1-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-84aaaaaf5188636d": "the primary deployment region is us-west-2 \u2014 by Esther Moreau (staff-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task4-s2v2-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-9558fb825206391b": "the primary deployment region is us-east-1 \u2014 by Bruno Bergstrom (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-84aaaaaf5188636d"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task4-s2v3-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-38d16c7c76c3a152": "the primary deployment region is sa-east-1 \u2014 by Dmitri Gruber (site-reliability-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-9558fb825206391b"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task4-s3-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-77e91665c39c4c57": "the checkout_v2 feature flag state is canary-25% \u2014 by Bruno Bergstrom (engineering-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task4-s4-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-78e831169463d168": "the data retention window is 14 days \u2014 by Dmitri Gruber (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task4-goal",
+        "user_request": "Deliver the current customer-support initiative. State the current value of: the release artifact store, the primary deployment region, the on-call rotation cadence, the data retention window, the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-d42d090e27b1153f",
+          "m-38d16c7c76c3a152",
+          "m-daee4ab49116ce55",
+          "m-78e831169463d168",
+          "m-77e91665c39c4c57"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed7-task4-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-d42d090e27b1153f",
+              "m-38d16c7c76c3a152",
+              "m-daee4ab49116ce55",
+              "m-78e831169463d168",
+              "m-77e91665c39c4c57"
+            ],
+            "forbidden_values": [
+              "us-west-2",
+              "us-east-1"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed7-task4-probe-artifact-store",
+            "expected_memory_id": "m-d42d090e27b1153f",
+            "description": "the release artifact store must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task4-probe-primary-region",
+            "expected_memory_id": "m-38d16c7c76c3a152",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task4-probe-oncall-rotation",
+            "expected_memory_id": "m-daee4ab49116ce55",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task4-probe-retention-window",
+            "expected_memory_id": "m-78e831169463d168",
+            "description": "the data retention window must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task4-probe-feature-flag",
+            "expected_memory_id": "m-77e91665c39c4c57",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-d27e947940462dbf": "the on-call rotation cadence is weekly on Thursdays \u2014 by Esther Almeida (researcher) in #email channel",
+          "m-c7c5cdfdd7ff3121": "the on-call rotation cadence is paired primary and secondary \u2014 by Bruno Bergstrom (engineering-manager) in #meeting channel",
+          "m-c984f4790b887df3": "the on-call rotation cadence is two-week shifts \u2014 by Bruno Bergstrom (engineering-manager) in #issue-tracker channel",
+          "m-dc65c27ea10237bf": "the on-call rotation cadence is daily handoff \u2014 by Dmitri Gruber (site-reliability-engineer) in #issue-tracker channel",
+          "m-fc7be2c9fdd8d0d4": "the release artifact store is the shared package mirror \u2014 by Dmitri Gruber (site-reliability-engineer) in #issue-tracker channel",
+          "m-10652f950a575538": "the release artifact store is the legacy file server \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel",
+          "m-5f20d06ae18ea94c": "the release artifact store is the mirrored CDN origin \u2014 by Bruno Bergstrom (engineering-manager) in #issue-tracker channel",
+          "m-2d9c004aea2e5280": "the release artifact store is the compliance archive \u2014 by Bruno Bergstrom (engineering-manager) in #email channel",
+          "m-9b2c40f49b9f1b9c": "the release artifact store is the internal registry \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel",
+          "m-495dcf01498f92a8": "the primary deployment region is af-south-1 \u2014 by Bruno Bergstrom (engineering-manager) in #email channel",
+          "m-472c31af1259d27c": "the checkout_v2 feature flag state is kill-switched \u2014 by Dmitri Gruber (site-reliability-engineer) in #docs channel",
+          "m-c6424af47f80caf7": "the checkout_v2 feature flag state is canary-50% \u2014 by Esther Almeida (researcher) in #issue-tracker channel",
+          "m-8edfc130d35bebc0": "the checkout_v2 feature flag state is shadow-only \u2014 by Dmitri Gruber (site-reliability-engineer) in #issue-tracker channel",
+          "m-3487cfaddbe008f0": "the checkout_v2 feature flag state is enabled \u2014 by Esther Moreau (staff-engineer) in #meeting channel",
+          "m-56b472c783fd35ef": "the checkout_v2 feature flag state is canary-75% \u2014 by Esther Moreau (staff-engineer) in #email channel",
+          "m-03e0baa3839d6beb": "the data retention window is 180 days \u2014 by Esther Moreau (staff-engineer) in #email channel",
+          "m-a47ffa17c8809e8c": "the data retention window is 2 years \u2014 by Bruno Bergstrom (engineering-manager) in #email channel",
+          "m-c522d29cabb3084f": "the data retention window is kept indefinitely \u2014 by Dmitri Gruber (site-reliability-engineer) in #meeting channel",
+          "m-d0135c13065f20e5": "the data retention window is 1 year \u2014 by Esther Moreau (staff-engineer) in #meeting channel",
+          "m-5cf2ee45a12e8065": "the data retention window is 5 years \u2014 by Esther Almeida (researcher) in #docs channel"
+        },
+        "superseded_memory_ids": [
+          "m-84aaaaaf5188636d",
+          "m-9558fb825206391b"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "session",
+    "question_type": "current-value-recall"
+  },
+  {
+    "sequence_id": "world-seed7-task5",
+    "title": "Meridian Collective initiative: reconcile 5 decisions",
+    "domain": "customer-support",
+    "goal": "Deliver the current customer-support initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed7-task5-s0v1-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-df9eccb30719016d": "the on-call rotation cadence is monthly blocks \u2014 by Esther Moreau (staff-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task5-s0v2-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-9b621e71ed38dc6b": "the on-call rotation cadence is weekly on Mondays \u2014 by Dmitri Gruber (site-reliability-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-df9eccb30719016d"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task5-s0v3-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-2333fbfe3c234ea3": "the on-call rotation cadence is fortnightly \u2014 by Esther Almeida (researcher) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-9b621e71ed38dc6b"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task5-s1-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-884ab721f3c191bf": "the data retention window is 180 days \u2014 by Esther Almeida (researcher) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task5-s2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-d5625df11db24a5d": "the approved rollback command is spinnaker pipeline rewind \u2014 by Dmitri Gruber (site-reliability-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task5-s3-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-286aaa150bd339c6": "the supported API version is v2 \u2014 by Dmitri Gruber (site-reliability-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task5-s4-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-f5844b6599ff80dd": "the paging severity floor is any customer-visible regression \u2014 by Dmitri Gruber (site-reliability-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task5-goal",
+        "user_request": "Deliver the current customer-support initiative. State the current value of: the data retention window, the paging severity floor, the on-call rotation cadence, the supported API version, the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-884ab721f3c191bf",
+          "m-f5844b6599ff80dd",
+          "m-2333fbfe3c234ea3",
+          "m-286aaa150bd339c6",
+          "m-d5625df11db24a5d"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed7-task5-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-884ab721f3c191bf",
+              "m-f5844b6599ff80dd",
+              "m-2333fbfe3c234ea3",
+              "m-286aaa150bd339c6",
+              "m-d5625df11db24a5d"
+            ],
+            "forbidden_values": [
+              "monthly blocks",
+              "weekly on Mondays"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed7-task5-probe-retention-window",
+            "expected_memory_id": "m-884ab721f3c191bf",
+            "description": "the data retention window must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task5-probe-paging-floor",
+            "expected_memory_id": "m-f5844b6599ff80dd",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task5-probe-oncall-rotation",
+            "expected_memory_id": "m-2333fbfe3c234ea3",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task5-probe-api-version",
+            "expected_memory_id": "m-286aaa150bd339c6",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task5-probe-rollback-command",
+            "expected_memory_id": "m-d5625df11db24a5d",
+            "description": "the approved rollback command must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-68f4eaead85015e4": "the on-call rotation cadence is two-week shifts \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel",
+          "m-c8eb698c65fca681": "the on-call rotation cadence is follow-the-sun \u2014 by Esther Moreau (staff-engineer) in #docs channel",
+          "m-838569bb62a77324": "the on-call rotation cadence is three-day shifts \u2014 by Esther Moreau (staff-engineer) in #docs channel",
+          "m-ea20dd1550b276c8": "the data retention window is 2 years \u2014 by Dmitri Gruber (site-reliability-engineer) in #issue-tracker channel",
+          "m-5392641bf406d3c3": "the data retention window is 30 days \u2014 by Esther Almeida (researcher) in #meeting channel",
+          "m-faf976c648eb129d": "the data retention window is 90 days \u2014 by Esther Moreau (staff-engineer) in #meeting channel",
+          "m-221936d82bab6160": "the approved rollback command is git revert then redeploy \u2014 by Bruno Bergstrom (engineering-manager) in #issue-tracker channel",
+          "m-546ed3b00ce1c8dc": "the approved rollback command is helm rollback \u2014 by Esther Almeida (researcher) in #meeting channel",
+          "m-40c2ff7126084393": "the approved rollback command is terraform apply -refresh \u2014 by Dmitri Gruber (site-reliability-engineer) in #issue-tracker channel",
+          "m-563f2ca10e34babc": "the supported API version is v8 \u2014 by Esther Almeida (researcher) in #meeting channel",
+          "m-f14790c411040526": "the supported API version is v1 \u2014 by Esther Moreau (staff-engineer) in #meeting channel",
+          "m-2035cb2828a642a3": "the supported API version is v7 \u2014 by Bruno Bergstrom (engineering-manager) in #issue-tracker channel",
+          "m-f5c71e6cfb447af2": "the supported API version is v9 \u2014 by Esther Moreau (staff-engineer) in #email channel",
+          "m-ec822bf3cbfbd3f5": "the supported API version is v10 \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel",
+          "m-44248c3c80ecd070": "the paging severity floor is sev-2 and above \u2014 by Dmitri Gruber (site-reliability-engineer) in #docs channel",
+          "m-f97b8bc03d7cdef4": "the paging severity floor is sev-4 and above \u2014 by Bruno Bergstrom (engineering-manager) in #issue-tracker channel",
+          "m-10fc7ecf08698042": "the paging severity floor is manual escalation only \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel",
+          "m-d1328699829bcef8": "the paging severity floor is anything breaching the latency objective \u2014 by Esther Almeida (researcher) in #meeting channel",
+          "m-eae424031b7c536a": "the paging severity floor is any failed deploy \u2014 by Esther Moreau (staff-engineer) in #meeting channel"
+        },
+        "superseded_memory_ids": [
+          "m-df9eccb30719016d",
+          "m-9b621e71ed38dc6b"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "session",
+    "question_type": "current-value-recall"
+  },
+  {
+    "sequence_id": "world-seed7-task6",
+    "title": "Meridian Collective initiative: reconcile 5 decisions",
+    "domain": "customer-support",
+    "goal": "Deliver the current customer-support initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed7-task6-s0-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-c271ab96d777ee74": "the supported API version is v1 \u2014 by Dmitri Gruber (site-reliability-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task6-s1v1-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-654b2efbaad2f6a4": "the on-call rotation cadence is paired primary and secondary \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task6-s1v2-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-4870655b17ecd849": "the on-call rotation cadence is follow-the-sun \u2014 by Esther Almeida (researcher) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-654b2efbaad2f6a4"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task6-s1v3-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-96ab48ea2be6fa82": "the on-call rotation cadence is fortnightly \u2014 by Esther Moreau (staff-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-4870655b17ecd849"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task6-s2-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-66f6b98274e3a06f": "the data retention window is 2 years \u2014 by Esther Almeida (researcher) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task6-s3-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-22da196d169813f7": "the release artifact store is the internal registry \u2014 by Esther Moreau (staff-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task6-s4-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-27025410429043b8": "the paging severity floor is sev-1 only \u2014 by Esther Almeida (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task6-goal",
+        "user_request": "Deliver the current customer-support initiative. State the current value of: the on-call rotation cadence, the data retention window, the paging severity floor, the supported API version, the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-96ab48ea2be6fa82",
+          "m-66f6b98274e3a06f",
+          "m-27025410429043b8",
+          "m-c271ab96d777ee74",
+          "m-22da196d169813f7"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed7-task6-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-96ab48ea2be6fa82",
+              "m-66f6b98274e3a06f",
+              "m-27025410429043b8",
+              "m-c271ab96d777ee74",
+              "m-22da196d169813f7"
+            ],
+            "forbidden_values": [
+              "paired primary and secondary",
+              "follow-the-sun"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed7-task6-probe-oncall-rotation",
+            "expected_memory_id": "m-96ab48ea2be6fa82",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task6-probe-retention-window",
+            "expected_memory_id": "m-66f6b98274e3a06f",
+            "description": "the data retention window must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task6-probe-paging-floor",
+            "expected_memory_id": "m-27025410429043b8",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task6-probe-api-version",
+            "expected_memory_id": "m-c271ab96d777ee74",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task6-probe-artifact-store",
+            "expected_memory_id": "m-22da196d169813f7",
+            "description": "the release artifact store must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-14d0e7adfffc9921": "the supported API version is v8 \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel",
+          "m-17f466764a7c2259": "the supported API version is v5 \u2014 by Esther Almeida (researcher) in #issue-tracker channel",
+          "m-cea815f4758a0146": "the supported API version is v10 \u2014 by Dmitri Gruber (site-reliability-engineer) in #meeting channel",
+          "m-9e7f3ec5152d2de7": "the on-call rotation cadence is weekly on Mondays \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel",
+          "m-33580a68edb1673f": "the data retention window is 180 days \u2014 by Bruno Bergstrom (engineering-manager) in #email channel",
+          "m-5fc6e38ffdd62343": "the data retention window is 14 days \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel",
+          "m-f5f5a8deec99b28b": "the data retention window is 30 days \u2014 by Dmitri Gruber (site-reliability-engineer) in #docs channel",
+          "m-4c1df46d9a127d4a": "the release artifact store is a signed OCI repository \u2014 by Esther Moreau (staff-engineer) in #issue-tracker channel",
+          "m-a7f1bd7312e6c686": "the release artifact store is the vendor registry \u2014 by Esther Moreau (staff-engineer) in #docs channel",
+          "m-0dd15dc5749e0427": "the release artifact store is the compliance archive \u2014 by Esther Moreau (staff-engineer) in #issue-tracker channel",
+          "m-4be9bc8e48daf2d2": "the paging severity floor is sev-3 and above \u2014 by Dmitri Gruber (site-reliability-engineer) in #meeting channel",
+          "m-370b4b39db7ede5b": "the paging severity floor is manual escalation only \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel",
+          "m-8e91386e1cb8bcbf": "the paging severity floor is sev-4 and above \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel",
+          "m-3feeaf0f5aa20143": "the paging severity floor is anything breaching the latency objective \u2014 by Esther Moreau (staff-engineer) in #meeting channel",
+          "m-4142fe3c2da8bf69": "the paging severity floor is any failed deploy \u2014 by Dmitri Gruber (site-reliability-engineer) in #meeting channel"
+        },
+        "superseded_memory_ids": [
+          "m-654b2efbaad2f6a4",
+          "m-4870655b17ecd849"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "session",
+    "question_type": "current-value-recall"
+  },
+  {
+    "sequence_id": "world-seed7-task7",
+    "title": "Meridian Collective initiative: reconcile 5 decisions",
+    "domain": "customer-support",
+    "goal": "Deliver the current customer-support initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed7-task7-s0-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-3707deb73f5b2140": "the release artifact store is the mirrored CDN origin \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task7-s1-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-9f68d671762ecd66": "the checkout_v2 feature flag state is shadow-only \u2014 by Esther Almeida (researcher) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task7-s2-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-be2d502fa09a3ea0": "the on-call rotation cadence is paired primary and secondary \u2014 by Esther Moreau (staff-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task7-s3-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a5b2f5284687b63c": "the paging severity floor is manual escalation only \u2014 by Esther Almeida (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task7-s4v1-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-787016a2e4e75994": "the production deploy timeout is 30s \u2014 by Dmitri Gruber (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task7-s4v2-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-0f946e0c75b82ca5": "the production deploy timeout is 900s \u2014 by Esther Moreau (staff-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-787016a2e4e75994"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task7-s4v3-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-eda6ebd3cdac97f4": "the production deploy timeout is 90s \u2014 by Esther Moreau (staff-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-0f946e0c75b82ca5"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task7-goal",
+        "user_request": "Deliver the current customer-support initiative. State the current value of: the on-call rotation cadence, the paging severity floor, the checkout_v2 feature flag state, the production deploy timeout, the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-be2d502fa09a3ea0",
+          "m-a5b2f5284687b63c",
+          "m-9f68d671762ecd66",
+          "m-eda6ebd3cdac97f4",
+          "m-3707deb73f5b2140"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed7-task7-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-be2d502fa09a3ea0",
+              "m-a5b2f5284687b63c",
+              "m-9f68d671762ecd66",
+              "m-eda6ebd3cdac97f4",
+              "m-3707deb73f5b2140"
+            ],
+            "forbidden_values": [
+              "30s",
+              "900s"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed7-task7-probe-oncall-rotation",
+            "expected_memory_id": "m-be2d502fa09a3ea0",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task7-probe-paging-floor",
+            "expected_memory_id": "m-a5b2f5284687b63c",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task7-probe-feature-flag",
+            "expected_memory_id": "m-9f68d671762ecd66",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task7-probe-deploy-timeout",
+            "expected_memory_id": "m-eda6ebd3cdac97f4",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task7-probe-artifact-store",
+            "expected_memory_id": "m-3707deb73f5b2140",
+            "description": "the release artifact store must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-f08d4ccfa22be4f4": "the release artifact store is the shared package mirror \u2014 by Esther Moreau (staff-engineer) in #meeting channel",
+          "m-bfd9148edd1eff65": "the release artifact store is the vendor registry \u2014 by Esther Moreau (staff-engineer) in #docs channel",
+          "m-f773a4c091249e9c": "the release artifact store is the compliance archive \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel",
+          "m-aac7e344467a78a4": "the checkout_v2 feature flag state is disabled \u2014 by Dmitri Gruber (site-reliability-engineer) in #docs channel",
+          "m-159f454ef4b63176": "the checkout_v2 feature flag state is enabled \u2014 by Bruno Bergstrom (engineering-manager) in #email channel",
+          "m-2e5b38a35c14aad5": "the checkout_v2 feature flag state is canary-25% \u2014 by Bruno Bergstrom (engineering-manager) in #email channel",
+          "m-15207288bfb2b78f": "the checkout_v2 feature flag state is canary-50% \u2014 by Esther Almeida (researcher) in #email channel",
+          "m-5e2a4175ca9a581d": "the checkout_v2 feature flag state is canary-75% \u2014 by Esther Moreau (staff-engineer) in #docs channel",
+          "m-c285b9dcbd74f5a3": "the on-call rotation cadence is monthly blocks \u2014 by Dmitri Gruber (site-reliability-engineer) in #issue-tracker channel",
+          "m-9df70d6401998364": "the on-call rotation cadence is weekly on Thursdays \u2014 by Bruno Bergstrom (engineering-manager) in #issue-tracker channel",
+          "m-1bd19c890a030674": "the on-call rotation cadence is weekly on Mondays \u2014 by Bruno Bergstrom (engineering-manager) in #meeting channel",
+          "m-594bbb7b44cbbe12": "the on-call rotation cadence is three-day shifts \u2014 by Esther Almeida (researcher) in #docs channel",
+          "m-8059767221eff536": "the paging severity floor is sev-4 and above \u2014 by Bruno Bergstrom (engineering-manager) in #issue-tracker channel",
+          "m-88643e3d342aff2a": "the paging severity floor is any error-budget burn alert \u2014 by Esther Moreau (staff-engineer) in #docs channel",
+          "m-992e446a9a0fd533": "the paging severity floor is nothing below a full outage \u2014 by Esther Almeida (researcher) in #issue-tracker channel",
+          "m-25299edd6e8ffc61": "the paging severity floor is any customer-visible regression \u2014 by Esther Almeida (researcher) in #email channel",
+          "m-7a370acc9d47709e": "the paging severity floor is sev-1 only \u2014 by Bruno Bergstrom (engineering-manager) in #meeting channel",
+          "m-8e66135d1211664f": "the production deploy timeout is 180s \u2014 by Bruno Bergstrom (engineering-manager) in #meeting channel",
+          "m-5fb07bf817749c58": "the production deploy timeout is 600s \u2014 by Esther Moreau (staff-engineer) in #meeting channel",
+          "m-7ce4ffb82ce1b682": "the production deploy timeout is 300s \u2014 by Dmitri Gruber (site-reliability-engineer) in #meeting channel"
+        },
+        "superseded_memory_ids": [
+          "m-787016a2e4e75994",
+          "m-0f946e0c75b82ca5"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "session",
+    "question_type": "current-value-recall"
+  },
+  {
+    "sequence_id": "world-seed7-task8",
+    "title": "Meridian Collective initiative: reconcile 5 decisions",
+    "domain": "customer-support",
+    "goal": "Deliver the current customer-support initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed7-task8-s0-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-0b3e203f14ea3e7f": "the supported API version is v4 \u2014 by Dmitri Gruber (site-reliability-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task8-s1v1-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-d28d9c769ac2ccba": "the paging severity floor is any failed deploy \u2014 by Dmitri Gruber (site-reliability-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task8-s1v2-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-c5af95f9f5fa43f7": "the paging severity floor is manual escalation only \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-d28d9c769ac2ccba"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task8-s1v3-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-35be6d176fcf7dc3": "the paging severity floor is sev-2 and above \u2014 by Esther Almeida (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-c5af95f9f5fa43f7"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task8-s2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-339ff01cab870c02": "the approved rollback command is nomad job revert \u2014 by Bruno Bergstrom (engineering-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task8-s3-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-64c6d7617f5b2e4a": "the checkout_v2 feature flag state is held at zero traffic \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task8-s4-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-1729c681b10671ac": "the project charter decision is run the rewrite and the old stack side by side \u2014 by Esther Almeida (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task8-goal",
+        "user_request": "Deliver the current customer-support initiative. State the current value of: the project charter decision, the checkout_v2 feature flag state, the paging severity floor, the supported API version, the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-1729c681b10671ac",
+          "m-64c6d7617f5b2e4a",
+          "m-35be6d176fcf7dc3",
+          "m-0b3e203f14ea3e7f",
+          "m-339ff01cab870c02"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed7-task8-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-1729c681b10671ac",
+              "m-64c6d7617f5b2e4a",
+              "m-35be6d176fcf7dc3",
+              "m-0b3e203f14ea3e7f",
+              "m-339ff01cab870c02"
+            ],
+            "forbidden_values": [
+              "any failed deploy",
+              "manual escalation only"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed7-task8-probe-charter",
+            "expected_memory_id": "m-1729c681b10671ac",
+            "description": "the project charter decision must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task8-probe-feature-flag",
+            "expected_memory_id": "m-64c6d7617f5b2e4a",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task8-probe-paging-floor",
+            "expected_memory_id": "m-35be6d176fcf7dc3",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task8-probe-api-version",
+            "expected_memory_id": "m-0b3e203f14ea3e7f",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task8-probe-rollback-command",
+            "expected_memory_id": "m-339ff01cab870c02",
+            "description": "the approved rollback command must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-f1e44857cb2c0870": "the supported API version is v9 \u2014 by Dmitri Gruber (site-reliability-engineer) in #issue-tracker channel",
+          "m-31e19502201ce0a0": "the supported API version is v3 \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel",
+          "m-9301e98b8a8945ca": "the supported API version is v7 \u2014 by Bruno Bergstrom (engineering-manager) in #issue-tracker channel",
+          "m-0671a6bd40cda27a": "the paging severity floor is nothing below a full outage \u2014 by Dmitri Gruber (site-reliability-engineer) in #meeting channel",
+          "m-091420f42caf2c1e": "the approved rollback command is terraform apply -refresh \u2014 by Esther Moreau (staff-engineer) in #email channel",
+          "m-4bc9a9650392d61a": "the approved rollback command is argocd app rollback \u2014 by Bruno Bergstrom (engineering-manager) in #meeting channel",
+          "m-f15699e6a8e88cb8": "the approved rollback command is docker service update --rollback \u2014 by Esther Almeida (researcher) in #email channel",
+          "m-c6bf51467e028164": "the checkout_v2 feature flag state is canary-75% \u2014 by Esther Almeida (researcher) in #issue-tracker channel",
+          "m-1ccc93bb529ba52d": "the checkout_v2 feature flag state is ramped to all traffic \u2014 by Dmitri Gruber (site-reliability-engineer) in #issue-tracker channel",
+          "m-052e010419aeede9": "the checkout_v2 feature flag state is disabled \u2014 by Esther Moreau (staff-engineer) in #docs channel",
+          "m-c57b0ce4b2784855": "the project charter decision is cut the integrations track and ship the core \u2014 by Bruno Bergstrom (engineering-manager) in #issue-tracker channel",
+          "m-3cf85f1a834944b5": "the project charter decision is hold the public interface steady through the migration \u2014 by Dmitri Gruber (site-reliability-engineer) in #issue-tracker channel",
+          "m-b5e1bb6f9df138cd": "the project charter decision is move the launch behind the compliance review \u2014 by Dmitri Gruber (site-reliability-engineer) in #meeting channel",
+          "m-ee01dd06d38c9d10": "the project charter decision is staff the reliability track ahead of the roadmap \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel"
+        },
+        "superseded_memory_ids": [
+          "m-d28d9c769ac2ccba",
+          "m-c5af95f9f5fa43f7"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "session",
+    "question_type": "current-value-recall"
+  },
+  {
+    "sequence_id": "world-seed7-task9",
+    "title": "Meridian Collective initiative: reconcile 5 decisions",
+    "domain": "customer-support",
+    "goal": "Deliver the current customer-support initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed7-task9-s0-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-5f1b9804e2794cb5": "the paging severity floor is sev-4 and above \u2014 by Esther Almeida (researcher) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task9-s1-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-5194d4de8f9d86cc": "the data retention window is 1 year \u2014 by Esther Almeida (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task9-s2v1-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-05f02bcd836b6908": "the approved rollback command is helm rollback \u2014 by Dmitri Gruber (site-reliability-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task9-s2v2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-be14394f535664b8": "the approved rollback command is docker service update --rollback \u2014 by Esther Almeida (researcher) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-05f02bcd836b6908"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task9-s2v3-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-d0db767197a396bd": "the approved rollback command is argocd app rollback \u2014 by Esther Almeida (researcher) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-be14394f535664b8"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task9-s3-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-4d548a2a46b613b8": "the supported API version is v6 \u2014 by Esther Moreau (staff-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task9-s4-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-1d0990feb3c3f4f2": "the primary deployment region is af-south-1 \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed7-task9-goal",
+        "user_request": "Deliver the current customer-support initiative. State the current value of: the data retention window, the approved rollback command, the primary deployment region, the supported API version, the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-5194d4de8f9d86cc",
+          "m-d0db767197a396bd",
+          "m-1d0990feb3c3f4f2",
+          "m-4d548a2a46b613b8",
+          "m-5f1b9804e2794cb5"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed7-task9-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-5194d4de8f9d86cc",
+              "m-d0db767197a396bd",
+              "m-1d0990feb3c3f4f2",
+              "m-4d548a2a46b613b8",
+              "m-5f1b9804e2794cb5"
+            ],
+            "forbidden_values": [
+              "helm rollback",
+              "docker service update --rollback"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed7-task9-probe-retention-window",
+            "expected_memory_id": "m-5194d4de8f9d86cc",
+            "description": "the data retention window must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task9-probe-rollback-command",
+            "expected_memory_id": "m-d0db767197a396bd",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task9-probe-primary-region",
+            "expected_memory_id": "m-1d0990feb3c3f4f2",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task9-probe-api-version",
+            "expected_memory_id": "m-4d548a2a46b613b8",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed7-task9-probe-paging-floor",
+            "expected_memory_id": "m-5f1b9804e2794cb5",
+            "description": "the paging severity floor must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-4645b38a9b0f54c9": "the paging severity floor is any failed deploy \u2014 by Esther Almeida (researcher) in #meeting channel",
+          "m-9ed5e0fdfdfaa08b": "the paging severity floor is any error-budget burn alert \u2014 by Esther Moreau (staff-engineer) in #docs channel",
+          "m-9b3248a0f11c7adf": "the paging severity floor is sev-2 and above \u2014 by Esther Almeida (researcher) in #meeting channel",
+          "m-798ff05aefe8c96e": "the paging severity floor is sev-1 only \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel",
+          "m-aafd8839735b1d07": "the data retention window is kept indefinitely \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel",
+          "m-bd18d5fb86027599": "the data retention window is 180 days \u2014 by Esther Almeida (researcher) in #issue-tracker channel",
+          "m-261777de20e7fca4": "the data retention window is 2 years \u2014 by Esther Moreau (staff-engineer) in #docs channel",
+          "m-644163b02f148161": "the data retention window is 90 days \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel",
+          "m-7fe48d7f86ff715e": "the data retention window is 30 days \u2014 by Bruno Bergstrom (engineering-manager) in #issue-tracker channel",
+          "m-c2860e664de3c937": "the approved rollback command is kubectl rollout undo \u2014 by Esther Moreau (staff-engineer) in #docs channel",
+          "m-2d2acd6197c08562": "the supported API version is v9 \u2014 by Esther Almeida (researcher) in #issue-tracker channel",
+          "m-053a642f7014aeb5": "the supported API version is v2 \u2014 by Esther Moreau (staff-engineer) in #meeting channel",
+          "m-433b502e471927be": "the supported API version is v1 \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel",
+          "m-2d19e9440135604d": "the primary deployment region is us-west-2 \u2014 by Esther Moreau (staff-engineer) in #docs channel",
+          "m-ded995229ba62deb": "the primary deployment region is ca-central-1 \u2014 by Esther Moreau (staff-engineer) in #meeting channel",
+          "m-652130821db35ed1": "the primary deployment region is eu-west-1 \u2014 by Esther Moreau (staff-engineer) in #issue-tracker channel",
+          "m-d814507743d11956": "the primary deployment region is me-south-1 \u2014 by Bruno Bergstrom (engineering-manager) in #docs channel",
+          "m-920f82766575354d": "the primary deployment region is eu-central-1 \u2014 by Dmitri Gruber (site-reliability-engineer) in #email channel"
+        },
+        "superseded_memory_ids": [
+          "m-05f02bcd836b6908",
+          "m-be14394f535664b8"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "session",
+    "question_type": "current-value-recall"
+  }
+]

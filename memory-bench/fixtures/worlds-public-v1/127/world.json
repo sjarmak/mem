@@ -1,0 +1,106 @@
+{
+  "world_id": "world-seed127",
+  "domain": "cuda-engineering",
+  "org_name": "Verdigris Labs",
+  "teams": [
+    {
+      "team_id": "world-seed127-team-cuda-engineering-enablement",
+      "name": "Cuda Engineering Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed127-team-cuda-engineering-delivery",
+      "name": "Cuda Engineering Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed127-team-cuda-engineering-core",
+      "name": "Cuda Engineering Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed127-team-cuda-engineering-reliability",
+      "name": "Cuda Engineering Reliability",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed127-persona-0-kenji-bergstrom",
+      "name": "Kenji Bergstrom",
+      "role": "researcher",
+      "team_id": "world-seed127-team-cuda-engineering-enablement"
+    },
+    {
+      "persona_id": "world-seed127-persona-1-imani-petrov",
+      "name": "Imani Petrov",
+      "role": "support-lead",
+      "team_id": "world-seed127-team-cuda-engineering-delivery"
+    },
+    {
+      "persona_id": "world-seed127-persona-2-dmitri-almeida",
+      "name": "Dmitri Almeida",
+      "role": "support-lead",
+      "team_id": "world-seed127-team-cuda-engineering-core"
+    },
+    {
+      "persona_id": "world-seed127-persona-3-farid-ibarra",
+      "name": "Farid Ibarra",
+      "role": "support-lead",
+      "team_id": "world-seed127-team-cuda-engineering-reliability"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed127-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed127-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    },
+    {
+      "channel_id": "world-seed127-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed127-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed127-kb-cuda-engineering",
+      "name": "cuda-engineering knowledge base",
+      "topic": "cuda-engineering"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed127-repo-go",
+      "name": "cuda-engineering-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed127-repo-typescript",
+      "name": "cuda-engineering-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed127-repo-cuda-cpp",
+      "name": "cuda-engineering-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed127-repo-python",
+      "name": "cuda-engineering-python",
+      "language": "python"
+    }
+  ],
+  "seed": 127,
+  "generator_version": "world.v1"
+}

@@ -1,0 +1,755 @@
+[
+  {
+    "sequence_id": "world-seed119-task0",
+    "title": "Northwind Systems initiative: reconcile 5 decisions",
+    "domain": "customer-support",
+    "goal": "Deliver the current customer-support initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed119-task0-shared0-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-cde882df9d3fa838": "the primary deployment region is us-west-2 \u2014 by Oskar Ibarra (engineering-manager) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task0-shared1-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-5970574554744fd0": "the supported API version is v3 \u2014 by Greta Petrov (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task0-s0-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-25db5dd6c19d9ba6": "the approved rollback command is terraform apply -refresh \u2014 by Dmitri Eriksen (legal-counsel) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task0-s1-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-4833c28518d7d883": "the production deploy timeout is 30s \u2014 by Oskar Ibarra (engineering-manager) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task0-s2-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-4384d4d1b42a704c": "the paging severity floor is any failed deploy \u2014 by Oskar Ibarra (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task0-s3-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-22bed330b210f784": "the data retention window is 5 years \u2014 by Camila Gruber (qa-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task0-s4v1-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-d062d88984ba1388": "the release artifact store is the internal registry \u2014 by Camila Gruber (qa-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task0-s4v2-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-6ffbdabf4015f854": "the release artifact store is the legacy file server \u2014 by Greta Petrov (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-d062d88984ba1388"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task0-s4v3-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-2f016d8e666b3231": "the release artifact store is the shared package mirror \u2014 by Camila Gruber (qa-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-6ffbdabf4015f854"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task0-goal",
+        "user_request": "Deliver the current customer-support initiative. State the current value of: the paging severity floor, the production deploy timeout, the data retention window, the approved rollback command, the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-4384d4d1b42a704c",
+          "m-4833c28518d7d883",
+          "m-22bed330b210f784",
+          "m-25db5dd6c19d9ba6",
+          "m-2f016d8e666b3231"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed119-task0-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-4384d4d1b42a704c",
+              "m-4833c28518d7d883",
+              "m-22bed330b210f784",
+              "m-25db5dd6c19d9ba6",
+              "m-2f016d8e666b3231"
+            ],
+            "forbidden_values": [
+              "the internal registry",
+              "the legacy file server"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed119-task0-probe-paging-floor",
+            "expected_memory_id": "m-4384d4d1b42a704c",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed119-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-4833c28518d7d883",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed119-task0-probe-retention-window",
+            "expected_memory_id": "m-22bed330b210f784",
+            "description": "the data retention window must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed119-task0-probe-rollback-command",
+            "expected_memory_id": "m-25db5dd6c19d9ba6",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed119-task0-probe-artifact-store",
+            "expected_memory_id": "m-2f016d8e666b3231",
+            "description": "the release artifact store must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-5227b576c0c74ca5": "the approved rollback command is kubectl rollout undo \u2014 by Greta Petrov (support-lead) in #chat channel",
+          "m-29d1fe360ab9bc63": "the approved rollback command is flux suspend then resume \u2014 by Camila Gruber (qa-engineer) in #docs channel",
+          "m-57416f5cf1605256": "the approved rollback command is nomad job revert \u2014 by Dmitri Eriksen (legal-counsel) in #chat channel",
+          "m-fe42a12a52894614": "the approved rollback command is argocd app rollback \u2014 by Oskar Ibarra (engineering-manager) in #issue-tracker channel",
+          "m-66e74d981f14f771": "the production deploy timeout is 300s \u2014 by Camila Gruber (qa-engineer) in #chat channel",
+          "m-dea7d3308b1545e4": "the production deploy timeout is 60s \u2014 by Greta Petrov (support-lead) in #chat channel",
+          "m-4aabc1e8cc542e18": "the production deploy timeout is 180s \u2014 by Camila Gruber (qa-engineer) in #docs channel",
+          "m-0f856447d1255854": "the paging severity floor is nothing below a full outage \u2014 by Camila Gruber (qa-engineer) in #docs channel",
+          "m-9e2c1a58e674d513": "the paging severity floor is anything breaching the latency objective \u2014 by Oskar Ibarra (engineering-manager) in #chat channel",
+          "m-6c3214929f077195": "the paging severity floor is manual escalation only \u2014 by Camila Gruber (qa-engineer) in #issue-tracker channel",
+          "m-be855ddd9d55caeb": "the paging severity floor is any error-budget burn alert \u2014 by Greta Petrov (support-lead) in #chat channel",
+          "m-851e3d1895a0af84": "the paging severity floor is sev-2 and above \u2014 by Camila Gruber (qa-engineer) in #chat channel",
+          "m-1cdfe594fc9591b8": "the data retention window is 1 year \u2014 by Camila Gruber (qa-engineer) in #issue-tracker channel",
+          "m-182b59d8443a38b1": "the data retention window is 14 days \u2014 by Greta Petrov (support-lead) in #docs channel",
+          "m-4db05d08f63cf4d4": "the data retention window is 7 years \u2014 by Camila Gruber (qa-engineer) in #issue-tracker channel",
+          "m-be78d30c76024e1e": "the data retention window is 90 days \u2014 by Dmitri Eriksen (legal-counsel) in #issue-tracker channel",
+          "m-e05dfe2770558728": "the release artifact store is the build cache \u2014 by Dmitri Eriksen (legal-counsel) in #issue-tracker channel",
+          "m-81bbc622b20563d8": "the release artifact store is the mirrored CDN origin \u2014 by Dmitri Eriksen (legal-counsel) in #chat channel",
+          "m-3da8542718ac742d": "the release artifact store is the vendor registry \u2014 by Camila Gruber (qa-engineer) in #docs channel"
+        },
+        "superseded_memory_ids": [
+          "m-d062d88984ba1388",
+          "m-6ffbdabf4015f854"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed119-task1",
+    "title": "Northwind Systems initiative: reconcile 5 decisions",
+    "domain": "customer-support",
+    "goal": "Deliver the current customer-support initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed119-task1-shared0-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-325a879f8525b74d": "the on-call rotation cadence is fortnightly \u2014 by Oskar Ibarra (engineering-manager) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task1-s0-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-d3d83cfaa883a53b": "the production deploy timeout is 60s \u2014 by Oskar Ibarra (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task1-s1-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-7adcfc875bb38e84": "the checkout_v2 feature flag state is canary-25% \u2014 by Dmitri Eriksen (legal-counsel) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task1-s2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a310b6cb28739e5f": "the approved rollback command is flux suspend then resume \u2014 by Oskar Ibarra (engineering-manager) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task1-s3v1-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-74f8d97049dfb063": "the paging severity floor is any customer-visible regression \u2014 by Oskar Ibarra (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task1-s3v2-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a7f58d4ba82a45d0": "the paging severity floor is anything breaching the latency objective \u2014 by Oskar Ibarra (engineering-manager) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-74f8d97049dfb063"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task1-s3v3-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-6e0de4fe10b92d66": "the paging severity floor is any error-budget burn alert \u2014 by Dmitri Eriksen (legal-counsel) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-a7f58d4ba82a45d0"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task1-goal",
+        "user_request": "Deliver the current customer-support initiative. State the current value of: the paging severity floor, the checkout_v2 feature flag state, the supported API version, the approved rollback command, the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-6e0de4fe10b92d66",
+          "m-7adcfc875bb38e84",
+          "m-5970574554744fd0",
+          "m-a310b6cb28739e5f",
+          "m-d3d83cfaa883a53b"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed119-task1-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-6e0de4fe10b92d66",
+              "m-7adcfc875bb38e84",
+              "m-5970574554744fd0",
+              "m-a310b6cb28739e5f",
+              "m-d3d83cfaa883a53b"
+            ],
+            "forbidden_values": [
+              "any customer-visible regression",
+              "anything breaching the latency objective"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed119-task1-probe-paging-floor",
+            "expected_memory_id": "m-6e0de4fe10b92d66",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed119-task1-probe-feature-flag",
+            "expected_memory_id": "m-7adcfc875bb38e84",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed119-task1-probe-shared-api-version",
+            "expected_memory_id": "m-5970574554744fd0",
+            "description": "the supported API version (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed119-task1-probe-rollback-command",
+            "expected_memory_id": "m-a310b6cb28739e5f",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed119-task1-probe-deploy-timeout",
+            "expected_memory_id": "m-d3d83cfaa883a53b",
+            "description": "the production deploy timeout must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-55df0d1ac14541cb": "the production deploy timeout is 180s \u2014 by Greta Petrov (support-lead) in #docs channel",
+          "m-54994bb71380fbe8": "the production deploy timeout is 90s \u2014 by Dmitri Eriksen (legal-counsel) in #issue-tracker channel",
+          "m-dfca6a2abd87d35f": "the production deploy timeout is 30s \u2014 by Greta Petrov (support-lead) in #issue-tracker channel",
+          "m-95a76eb521f44d9a": "the checkout_v2 feature flag state is held at zero traffic \u2014 by Dmitri Eriksen (legal-counsel) in #docs channel",
+          "m-edad66c8468d124c": "the checkout_v2 feature flag state is disabled \u2014 by Dmitri Eriksen (legal-counsel) in #docs channel",
+          "m-58b0f5999342abc4": "the checkout_v2 feature flag state is enabled \u2014 by Oskar Ibarra (engineering-manager) in #docs channel",
+          "m-1b8a3329952e0d6a": "the checkout_v2 feature flag state is kill-switched \u2014 by Oskar Ibarra (engineering-manager) in #chat channel",
+          "m-c6f5fc5d18c6846e": "the approved rollback command is ansible-playbook restore.yml \u2014 by Camila Gruber (qa-engineer) in #docs channel",
+          "m-925d834c6e9d977b": "the approved rollback command is git revert then redeploy \u2014 by Oskar Ibarra (engineering-manager) in #issue-tracker channel",
+          "m-c648c97562012f9e": "the approved rollback command is nomad job revert \u2014 by Greta Petrov (support-lead) in #chat channel",
+          "m-a20e5427e7dd4a05": "the approved rollback command is helm rollback \u2014 by Camila Gruber (qa-engineer) in #chat channel",
+          "m-7f5bf3f0cbf9de8a": "the paging severity floor is sev-2 and above \u2014 by Oskar Ibarra (engineering-manager) in #docs channel",
+          "m-94f3162e875ca12a": "the paging severity floor is manual escalation only \u2014 by Dmitri Eriksen (legal-counsel) in #docs channel",
+          "m-3359ff1257540abc": "the supported API version is v9 \u2014 by Oskar Ibarra (engineering-manager) in #docs channel",
+          "m-98d79f5ccac47ebd": "the supported API version is v6 \u2014 by Camila Gruber (qa-engineer) in #docs channel",
+          "m-96160af96e899e27": "the supported API version is v2 \u2014 by Camila Gruber (qa-engineer) in #docs channel",
+          "m-bb74fe95fb7e6300": "the supported API version is v10 \u2014 by Camila Gruber (qa-engineer) in #issue-tracker channel"
+        },
+        "superseded_memory_ids": [
+          "m-74f8d97049dfb063",
+          "m-a7f58d4ba82a45d0"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed119-task2",
+    "title": "Northwind Systems initiative: reconcile 5 decisions",
+    "domain": "customer-support",
+    "goal": "Deliver the current customer-support initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed119-task2-s0v1-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-6dc5b06158495a2f": "the paging severity floor is sev-2 and above \u2014 by Camila Gruber (qa-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task2-s0v2-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-9b47ccd370bda05b": "the paging severity floor is sev-3 and above \u2014 by Dmitri Eriksen (legal-counsel) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-6dc5b06158495a2f"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task2-s0v3-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ac27c228dd6217b0": "the paging severity floor is any customer-visible regression \u2014 by Dmitri Eriksen (legal-counsel) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-9b47ccd370bda05b"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task2-s1-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-4b496e8e209fa82f": "the project charter decision is staff the reliability track ahead of the roadmap \u2014 by Dmitri Eriksen (legal-counsel) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task2-s2-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-6550f65e7e650681": "the data retention window is 30 days \u2014 by Greta Petrov (support-lead) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task2-s3-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-8408ac254ad4031b": "the approved rollback command is git revert then redeploy \u2014 by Greta Petrov (support-lead) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed119-task2-goal",
+        "user_request": "Deliver the current customer-support initiative. State the current value of: the primary deployment region, the data retention window, the approved rollback command, the paging severity floor, the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-cde882df9d3fa838",
+          "m-6550f65e7e650681",
+          "m-8408ac254ad4031b",
+          "m-ac27c228dd6217b0",
+          "m-4b496e8e209fa82f"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed119-task2-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-cde882df9d3fa838",
+              "m-6550f65e7e650681",
+              "m-8408ac254ad4031b",
+              "m-ac27c228dd6217b0",
+              "m-4b496e8e209fa82f"
+            ],
+            "forbidden_values": [
+              "sev-2 and above",
+              "sev-3 and above"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed119-task2-probe-shared-primary-region",
+            "expected_memory_id": "m-cde882df9d3fa838",
+            "description": "the primary deployment region (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed119-task2-probe-retention-window",
+            "expected_memory_id": "m-6550f65e7e650681",
+            "description": "the data retention window must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed119-task2-probe-rollback-command",
+            "expected_memory_id": "m-8408ac254ad4031b",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed119-task2-probe-paging-floor",
+            "expected_memory_id": "m-ac27c228dd6217b0",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed119-task2-probe-charter",
+            "expected_memory_id": "m-4b496e8e209fa82f",
+            "description": "the project charter decision must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-0c3ab4490a008c8f": "the paging severity floor is manual escalation only \u2014 by Camila Gruber (qa-engineer) in #issue-tracker channel",
+          "m-939b9d5d0f38409c": "the paging severity floor is any error-budget burn alert \u2014 by Greta Petrov (support-lead) in #issue-tracker channel",
+          "m-0568d818129faa17": "the project charter decision is adopt the vendor SDK instead of the in-house client \u2014 by Dmitri Eriksen (legal-counsel) in #chat channel",
+          "m-4693b013cc0a362f": "the project charter decision is hold the public interface steady through the migration \u2014 by Dmitri Eriksen (legal-counsel) in #issue-tracker channel",
+          "m-5b5be7ff6e5d860e": "the project charter decision is run the rewrite and the old stack side by side \u2014 by Oskar Ibarra (engineering-manager) in #issue-tracker channel",
+          "m-f19714cf87d543d6": "the data retention window is 2 years \u2014 by Camila Gruber (qa-engineer) in #chat channel",
+          "m-436309af8e0deb51": "the data retention window is kept indefinitely \u2014 by Oskar Ibarra (engineering-manager) in #issue-tracker channel",
+          "m-f60de4fee085f8d1": "the data retention window is 5 years \u2014 by Oskar Ibarra (engineering-manager) in #chat channel",
+          "m-7a0950c8aa6a9f18": "the data retention window is 1 year \u2014 by Oskar Ibarra (engineering-manager) in #chat channel",
+          "m-f79c5b35b429c89f": "the approved rollback command is flux suspend then resume \u2014 by Camila Gruber (qa-engineer) in #issue-tracker channel",
+          "m-a9f59830852d1025": "the approved rollback command is nomad job revert \u2014 by Dmitri Eriksen (legal-counsel) in #docs channel",
+          "m-fbf27c2d328caeaa": "the approved rollback command is kubectl rollout undo \u2014 by Oskar Ibarra (engineering-manager) in #issue-tracker channel",
+          "m-65ee80564d241485": "the approved rollback command is docker service update --rollback \u2014 by Camila Gruber (qa-engineer) in #docs channel",
+          "m-d4ca4a2b065d1ae7": "the primary deployment region is us-east-1 \u2014 by Greta Petrov (support-lead) in #issue-tracker channel",
+          "m-8aa9b0ec1a6a2847": "the primary deployment region is ap-south-1 \u2014 by Dmitri Eriksen (legal-counsel) in #docs channel",
+          "m-fac27bf8f2f8c20b": "the primary deployment region is eu-central-1 \u2014 by Oskar Ibarra (engineering-manager) in #docs channel"
+        },
+        "superseded_memory_ids": [
+          "m-6dc5b06158495a2f",
+          "m-9b47ccd370bda05b"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  }
+]

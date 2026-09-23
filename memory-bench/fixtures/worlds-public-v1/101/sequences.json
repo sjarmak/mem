@@ -1,0 +1,739 @@
+[
+  {
+    "sequence_id": "world-seed101-task0",
+    "title": "Northwind Collective initiative: reconcile 5 decisions",
+    "domain": "medical",
+    "goal": "Deliver the current medical initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed101-task0-shared0-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-914a9118329584ee": "the on-call rotation cadence is weekly on Thursdays \u2014 by Hiroshi Ibarra (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task0-shared1-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-22f861bf35721e6a": "the supported API version is v5 \u2014 by Greta Doyle (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task0-s0-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-fd82a668699279f9": "the paging severity floor is any failed deploy \u2014 by Greta Doyle (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task0-s1-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-386cd6e959eb5760": "the primary deployment region is eu-west-1 \u2014 by Priya Bergstrom (product-manager) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task0-s2v1-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-be789040df3a766c": "the project charter decision is move the launch behind the compliance review \u2014 by Greta Doyle (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task0-s2v2-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-e60f906280288f24": "the project charter decision is staff the reliability track ahead of the roadmap \u2014 by Hiroshi Ibarra (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-be789040df3a766c"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task0-s2v3-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-fe2fe8cd21023259": "the project charter decision is retire the legacy pipeline before any new feature \u2014 by Greta Doyle (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-e60f906280288f24"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task0-s3-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-7fb812a7390fbb09": "the production deploy timeout is 15s \u2014 by Greta Doyle (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task0-s4-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-191f00b70cfd8410": "the checkout_v2 feature flag state is disabled \u2014 by Camila Kowalski (staff-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task0-goal",
+        "user_request": "Deliver the current medical initiative. State the current value of: the production deploy timeout, the project charter decision, the primary deployment region, the paging severity floor, the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-7fb812a7390fbb09",
+          "m-fe2fe8cd21023259",
+          "m-386cd6e959eb5760",
+          "m-fd82a668699279f9",
+          "m-191f00b70cfd8410"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed101-task0-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-7fb812a7390fbb09",
+              "m-fe2fe8cd21023259",
+              "m-386cd6e959eb5760",
+              "m-fd82a668699279f9",
+              "m-191f00b70cfd8410"
+            ],
+            "forbidden_values": [
+              "move the launch behind the compliance review",
+              "staff the reliability track ahead of the roadmap"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed101-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-7fb812a7390fbb09",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed101-task0-probe-charter",
+            "expected_memory_id": "m-fe2fe8cd21023259",
+            "description": "the project charter decision must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed101-task0-probe-primary-region",
+            "expected_memory_id": "m-386cd6e959eb5760",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed101-task0-probe-paging-floor",
+            "expected_memory_id": "m-fd82a668699279f9",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed101-task0-probe-feature-flag",
+            "expected_memory_id": "m-191f00b70cfd8410",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-a2a7c0590c646655": "the paging severity floor is nothing below a full outage \u2014 by Hiroshi Ibarra (researcher) in #meeting channel",
+          "m-0959846b467378f0": "the paging severity floor is sev-2 and above \u2014 by Camila Kowalski (staff-engineer) in #docs channel",
+          "m-112ba71a3fd2f471": "the paging severity floor is sev-3 and above \u2014 by Priya Bergstrom (product-manager) in #docs channel",
+          "m-c13c9a55de05059e": "the paging severity floor is sev-1 only \u2014 by Hiroshi Ibarra (researcher) in #meeting channel",
+          "m-0dde66af3072585a": "the primary deployment region is ap-south-1 \u2014 by Hiroshi Ibarra (researcher) in #docs channel",
+          "m-5df94a4594651abc": "the primary deployment region is us-east-1 \u2014 by Greta Doyle (researcher) in #docs channel",
+          "m-0f8d5bdc77793f68": "the primary deployment region is eu-central-1 \u2014 by Priya Bergstrom (product-manager) in #docs channel",
+          "m-d2d1da3c0a638ad5": "the project charter decision is split delivery into two independent releases \u2014 by Greta Doyle (researcher) in #meeting channel",
+          "m-3f1b3a58305a53f6": "the project charter decision is freeze scope at the phase-3 milestone \u2014 by Priya Bergstrom (product-manager) in #meeting channel",
+          "m-9a851c9064956369": "the project charter decision is cut the integrations track and ship the core \u2014 by Camila Kowalski (staff-engineer) in #meeting channel",
+          "m-700dc920075631a5": "the production deploy timeout is 60s \u2014 by Greta Doyle (researcher) in #docs channel",
+          "m-cd9cd600247da209": "the production deploy timeout is 120s \u2014 by Hiroshi Ibarra (researcher) in #docs channel",
+          "m-1ab70eed5d4a381c": "the production deploy timeout is 600s \u2014 by Priya Bergstrom (product-manager) in #docs channel",
+          "m-3f80ec7778020ae9": "the production deploy timeout is 180s \u2014 by Hiroshi Ibarra (researcher) in #meeting channel",
+          "m-f2e9047ab0d46274": "the production deploy timeout is 45s \u2014 by Priya Bergstrom (product-manager) in #docs channel",
+          "m-11600ba43f7aa67f": "the checkout_v2 feature flag state is ramped to all traffic \u2014 by Hiroshi Ibarra (researcher) in #meeting channel",
+          "m-c31048be767484e9": "the checkout_v2 feature flag state is canary-25% \u2014 by Hiroshi Ibarra (researcher) in #meeting channel",
+          "m-e74d9f0f3094f2bb": "the checkout_v2 feature flag state is enabled \u2014 by Hiroshi Ibarra (researcher) in #docs channel",
+          "m-e9ca6b4308612887": "the checkout_v2 feature flag state is held at zero traffic \u2014 by Greta Doyle (researcher) in #meeting channel"
+        },
+        "superseded_memory_ids": [
+          "m-be789040df3a766c",
+          "m-e60f906280288f24"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed101-task1",
+    "title": "Northwind Collective initiative: reconcile 5 decisions",
+    "domain": "medical",
+    "goal": "Deliver the current medical initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed101-task1-shared0-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-205a3edb3c89873a": "the release artifact store is the internal registry \u2014 by Priya Bergstrom (product-manager) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task1-s0-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-3d39ad5c7050406f": "the data retention window is 1 year \u2014 by Priya Bergstrom (product-manager) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task1-s1-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-887730f7cde17cf0": "the checkout_v2 feature flag state is held at zero traffic \u2014 by Priya Bergstrom (product-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task1-s2-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-941dc858ff4f4c83": "the paging severity floor is sev-1 only \u2014 by Priya Bergstrom (product-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task1-s3v1-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-634f0694a80bd576": "the primary deployment region is me-south-1 \u2014 by Camila Kowalski (staff-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task1-s3v2-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-cd6e3cff06137f40": "the primary deployment region is eu-central-1 \u2014 by Hiroshi Ibarra (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-634f0694a80bd576"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task1-s3v3-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ae0a7948464dc05b": "the primary deployment region is eu-west-1 \u2014 by Greta Doyle (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-cd6e3cff06137f40"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task1-goal",
+        "user_request": "Deliver the current medical initiative. State the current value of: the data retention window, the paging severity floor, the on-call rotation cadence, the checkout_v2 feature flag state, the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-3d39ad5c7050406f",
+          "m-941dc858ff4f4c83",
+          "m-914a9118329584ee",
+          "m-887730f7cde17cf0",
+          "m-ae0a7948464dc05b"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed101-task1-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-3d39ad5c7050406f",
+              "m-941dc858ff4f4c83",
+              "m-914a9118329584ee",
+              "m-887730f7cde17cf0",
+              "m-ae0a7948464dc05b"
+            ],
+            "forbidden_values": [
+              "me-south-1",
+              "eu-central-1"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed101-task1-probe-retention-window",
+            "expected_memory_id": "m-3d39ad5c7050406f",
+            "description": "the data retention window must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed101-task1-probe-paging-floor",
+            "expected_memory_id": "m-941dc858ff4f4c83",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed101-task1-probe-shared-oncall-rotation",
+            "expected_memory_id": "m-914a9118329584ee",
+            "description": "the on-call rotation cadence (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed101-task1-probe-feature-flag",
+            "expected_memory_id": "m-887730f7cde17cf0",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed101-task1-probe-primary-region",
+            "expected_memory_id": "m-ae0a7948464dc05b",
+            "description": "the primary deployment region must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-e238a746f326f069": "the data retention window is 14 days \u2014 by Camila Kowalski (staff-engineer) in #docs channel",
+          "m-5a6ceb57ce3faf81": "the data retention window is 2 years \u2014 by Greta Doyle (researcher) in #docs channel",
+          "m-a5822df12d2c9e55": "the data retention window is 5 years \u2014 by Priya Bergstrom (product-manager) in #docs channel",
+          "m-222de35080d60094": "the checkout_v2 feature flag state is canary-10% \u2014 by Hiroshi Ibarra (researcher) in #meeting channel",
+          "m-cbf71391cb925899": "the checkout_v2 feature flag state is canary-25% \u2014 by Priya Bergstrom (product-manager) in #meeting channel",
+          "m-839b7ac1cb987d3f": "the checkout_v2 feature flag state is kill-switched \u2014 by Hiroshi Ibarra (researcher) in #meeting channel",
+          "m-d67e8a0b0d94ca17": "the checkout_v2 feature flag state is ramped to all traffic \u2014 by Camila Kowalski (staff-engineer) in #meeting channel",
+          "m-d1e7767838c74702": "the checkout_v2 feature flag state is shadow-only \u2014 by Greta Doyle (researcher) in #docs channel",
+          "m-bfd0c31578754b2c": "the paging severity floor is sev-2 and above \u2014 by Hiroshi Ibarra (researcher) in #meeting channel",
+          "m-17a3f4360ad4bf2b": "the paging severity floor is sev-4 and above \u2014 by Hiroshi Ibarra (researcher) in #docs channel",
+          "m-95d93061b3cf5394": "the paging severity floor is manual escalation only \u2014 by Camila Kowalski (staff-engineer) in #docs channel",
+          "m-afc652ba89f75231": "the primary deployment region is ap-south-1 \u2014 by Camila Kowalski (staff-engineer) in #meeting channel",
+          "m-9d6d65c4e62ead03": "the primary deployment region is sa-east-1 \u2014 by Priya Bergstrom (product-manager) in #docs channel",
+          "m-ed0769e13429986e": "the primary deployment region is us-east-1 \u2014 by Greta Doyle (researcher) in #meeting channel",
+          "m-b85132b22d067e75": "the on-call rotation cadence is paired primary and secondary \u2014 by Hiroshi Ibarra (researcher) in #docs channel",
+          "m-3e103b6c53eb7a43": "the on-call rotation cadence is split by timezone \u2014 by Priya Bergstrom (product-manager) in #meeting channel",
+          "m-b974680b30ec0038": "the on-call rotation cadence is three-day shifts \u2014 by Camila Kowalski (staff-engineer) in #meeting channel",
+          "m-5db1f2ac73fbde6c": "the on-call rotation cadence is fortnightly \u2014 by Greta Doyle (researcher) in #docs channel",
+          "m-f29844979673bebc": "the on-call rotation cadence is daily handoff \u2014 by Camila Kowalski (staff-engineer) in #meeting channel"
+        },
+        "superseded_memory_ids": [
+          "m-634f0694a80bd576",
+          "m-cd6e3cff06137f40"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed101-task2",
+    "title": "Northwind Collective initiative: reconcile 5 decisions",
+    "domain": "medical",
+    "goal": "Deliver the current medical initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed101-task2-s0-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-be4318d10bfa9f5e": "the checkout_v2 feature flag state is enabled \u2014 by Priya Bergstrom (product-manager) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task2-s1-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-754588f23ede3924": "the data retention window is 30 days \u2014 by Greta Doyle (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task2-s2v1-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-59ec581f22470283": "the paging severity floor is sev-1 only \u2014 by Greta Doyle (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task2-s2v2-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-eff83c921f6bfd81": "the paging severity floor is any error-budget burn alert \u2014 by Priya Bergstrom (product-manager) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-59ec581f22470283"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task2-s2v3-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-c32602d0c0fc5e9d": "the paging severity floor is any customer-visible regression \u2014 by Hiroshi Ibarra (researcher) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-eff83c921f6bfd81"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed101-task2-goal",
+        "user_request": "Deliver the current medical initiative. State the current value of: the paging severity floor, the data retention window, the release artifact store, the checkout_v2 feature flag state, the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-c32602d0c0fc5e9d",
+          "m-754588f23ede3924",
+          "m-205a3edb3c89873a",
+          "m-be4318d10bfa9f5e",
+          "m-914a9118329584ee"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed101-task2-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-c32602d0c0fc5e9d",
+              "m-754588f23ede3924",
+              "m-205a3edb3c89873a",
+              "m-be4318d10bfa9f5e",
+              "m-914a9118329584ee"
+            ],
+            "forbidden_values": [
+              "sev-1 only",
+              "any error-budget burn alert"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed101-task2-probe-paging-floor",
+            "expected_memory_id": "m-c32602d0c0fc5e9d",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed101-task2-probe-retention-window",
+            "expected_memory_id": "m-754588f23ede3924",
+            "description": "the data retention window must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed101-task2-probe-shared-artifact-store",
+            "expected_memory_id": "m-205a3edb3c89873a",
+            "description": "the release artifact store (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed101-task2-probe-feature-flag",
+            "expected_memory_id": "m-be4318d10bfa9f5e",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed101-task2-probe-shared-oncall-rotation",
+            "expected_memory_id": "m-914a9118329584ee",
+            "description": "the on-call rotation cadence (decided in an earlier task) must be recalled"
+          }
+        ],
+        "distractor_memories": {
+          "m-eba119975b70878f": "the checkout_v2 feature flag state is canary-10% \u2014 by Greta Doyle (researcher) in #docs channel",
+          "m-0333b95d64b85e62": "the checkout_v2 feature flag state is held at zero traffic \u2014 by Hiroshi Ibarra (researcher) in #docs channel",
+          "m-29c8fffcb0fd89af": "the checkout_v2 feature flag state is ramped to all traffic \u2014 by Hiroshi Ibarra (researcher) in #meeting channel",
+          "m-bb6476bc3e3642f7": "the checkout_v2 feature flag state is disabled \u2014 by Greta Doyle (researcher) in #meeting channel",
+          "m-f714ef9d869669aa": "the data retention window is kept indefinitely \u2014 by Greta Doyle (researcher) in #meeting channel",
+          "m-86def2961ed375cc": "the data retention window is 7 years \u2014 by Hiroshi Ibarra (researcher) in #meeting channel",
+          "m-d372a69894c07749": "the data retention window is 90 days \u2014 by Hiroshi Ibarra (researcher) in #meeting channel",
+          "m-adfeb9aa57e5749f": "the data retention window is 2 years \u2014 by Hiroshi Ibarra (researcher) in #docs channel",
+          "m-6effaabe09424d52": "the paging severity floor is nothing below a full outage \u2014 by Hiroshi Ibarra (researcher) in #docs channel",
+          "m-b85132b22d067e75": "the on-call rotation cadence is paired primary and secondary \u2014 by Hiroshi Ibarra (researcher) in #docs channel",
+          "m-3e103b6c53eb7a43": "the on-call rotation cadence is split by timezone \u2014 by Priya Bergstrom (product-manager) in #meeting channel",
+          "m-b974680b30ec0038": "the on-call rotation cadence is three-day shifts \u2014 by Camila Kowalski (staff-engineer) in #meeting channel",
+          "m-5db1f2ac73fbde6c": "the on-call rotation cadence is fortnightly \u2014 by Greta Doyle (researcher) in #docs channel",
+          "m-f29844979673bebc": "the on-call rotation cadence is daily handoff \u2014 by Camila Kowalski (staff-engineer) in #meeting channel",
+          "m-1d2e1fce86b4d2cc": "the release artifact store is the shared package mirror \u2014 by Hiroshi Ibarra (researcher) in #docs channel",
+          "m-f75eef98167ba12d": "the release artifact store is a signed OCI repository \u2014 by Camila Kowalski (staff-engineer) in #meeting channel",
+          "m-632320d8f7de8b7d": "the release artifact store is one bucket per release \u2014 by Greta Doyle (researcher) in #docs channel",
+          "m-32ec59fcb0463ab5": "the release artifact store is the legacy file server \u2014 by Camila Kowalski (staff-engineer) in #docs channel"
+        },
+        "superseded_memory_ids": [
+          "m-59ec581f22470283",
+          "m-eff83c921f6bfd81"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  }
+]

@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed119",
+  "domain": "customer-support",
+  "org_name": "Northwind Systems",
+  "teams": [
+    {
+      "team_id": "world-seed119-team-customer-support-delivery",
+      "name": "Customer Support Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed119-team-customer-support-reliability",
+      "name": "Customer Support Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed119-team-customer-support-core",
+      "name": "Customer Support Core",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed119-persona-0-greta-petrov",
+      "name": "Greta Petrov",
+      "role": "support-lead",
+      "team_id": "world-seed119-team-customer-support-delivery"
+    },
+    {
+      "persona_id": "world-seed119-persona-1-dmitri-eriksen",
+      "name": "Dmitri Eriksen",
+      "role": "legal-counsel",
+      "team_id": "world-seed119-team-customer-support-delivery"
+    },
+    {
+      "persona_id": "world-seed119-persona-2-camila-gruber",
+      "name": "Camila Gruber",
+      "role": "qa-engineer",
+      "team_id": "world-seed119-team-customer-support-reliability"
+    },
+    {
+      "persona_id": "world-seed119-persona-3-oskar-ibarra",
+      "name": "Oskar Ibarra",
+      "role": "engineering-manager",
+      "team_id": "world-seed119-team-customer-support-core"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed119-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed119-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed119-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed119-kb-customer-support",
+      "name": "customer-support knowledge base",
+      "topic": "customer-support"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed119-repo-go",
+      "name": "customer-support-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed119-repo-python",
+      "name": "customer-support-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed119-repo-typescript",
+      "name": "customer-support-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 119,
+  "generator_version": "world.v1"
+}

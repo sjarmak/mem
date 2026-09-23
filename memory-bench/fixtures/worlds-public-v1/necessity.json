@@ -1,0 +1,2012 @@
+{
+  "gate_version": "necessity-sweep.v2",
+  "epsilon": 0.05,
+  "reference_agent": "scripted-ref",
+  "corpus": "worlds-public-v1",
+  "n_candidates": 200,
+  "n_accepted": 200,
+  "n_rejected": 0,
+  "rejection_rate": 0.0,
+  "per_sequence": [
+    {
+      "sequence_id": "world-seed0-task0",
+      "world": "0",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed0-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed0-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed0-task1",
+      "world": "0",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed0-task1",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed0-task1 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed0-task2",
+      "world": "0",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed0-task2",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed0-task2 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed0-task3",
+      "world": "0",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed0-task3",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed0-task3 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed0-task4",
+      "world": "0",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed0-task4",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed0-task4 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed0-task5",
+      "world": "0",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed0-task5",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed0-task5 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed0-task6",
+      "world": "0",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed0-task6",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed0-task6 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed0-task7",
+      "world": "0",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed0-task7",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed0-task7 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed0-task8",
+      "world": "0",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed0-task8",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed0-task8 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed0-task9",
+      "world": "0",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed0-task9",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed0-task9 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed1-task0",
+      "world": "1",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed1-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed1-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed1-task1",
+      "world": "1",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed1-task1",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed1-task1 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed1-task2",
+      "world": "1",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed1-task2",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed1-task2 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed1-task3",
+      "world": "1",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed1-task3",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed1-task3 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed1-task4",
+      "world": "1",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed1-task4",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed1-task4 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed1-task5",
+      "world": "1",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed1-task5",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed1-task5 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed1-task6",
+      "world": "1",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed1-task6",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed1-task6 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed1-task7",
+      "world": "1",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed1-task7",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed1-task7 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed1-task8",
+      "world": "1",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed1-task8",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed1-task8 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed1-task9",
+      "world": "1",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed1-task9",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed1-task9 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed100-task0",
+      "world": "100",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed100-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed100-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed100-task1",
+      "world": "100",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed100-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed100-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed100-task2",
+      "world": "100",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed100-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed100-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed101-task0",
+      "world": "101",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed101-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed101-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed101-task1",
+      "world": "101",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed101-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed101-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed101-task2",
+      "world": "101",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed101-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed101-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed102-task0",
+      "world": "102",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed102-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed102-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed102-task1",
+      "world": "102",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed102-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed102-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed102-task2",
+      "world": "102",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed102-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed102-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed103-task0",
+      "world": "103",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed103-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed103-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed103-task1",
+      "world": "103",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed103-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed103-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed103-task2",
+      "world": "103",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed103-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed103-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed104-task0",
+      "world": "104",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed104-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed104-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed104-task1",
+      "world": "104",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed104-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed104-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed104-task2",
+      "world": "104",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed104-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed104-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed105-task0",
+      "world": "105",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed105-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed105-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed105-task1",
+      "world": "105",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed105-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed105-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed105-task2",
+      "world": "105",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed105-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed105-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed106-task0",
+      "world": "106",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed106-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed106-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed106-task1",
+      "world": "106",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed106-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed106-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed106-task2",
+      "world": "106",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed106-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed106-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed107-task0",
+      "world": "107",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed107-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed107-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed107-task1",
+      "world": "107",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed107-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed107-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed107-task2",
+      "world": "107",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed107-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed107-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed108-task0",
+      "world": "108",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed108-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed108-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed108-task1",
+      "world": "108",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed108-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed108-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed108-task2",
+      "world": "108",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed108-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed108-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed109-task0",
+      "world": "109",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed109-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed109-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed109-task1",
+      "world": "109",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed109-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed109-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed109-task2",
+      "world": "109",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed109-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed109-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed110-task0",
+      "world": "110",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed110-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed110-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed110-task1",
+      "world": "110",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed110-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed110-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed110-task2",
+      "world": "110",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed110-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed110-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed111-task0",
+      "world": "111",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed111-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed111-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed111-task1",
+      "world": "111",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed111-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed111-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed111-task2",
+      "world": "111",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed111-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed111-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed112-task0",
+      "world": "112",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed112-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed112-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed112-task1",
+      "world": "112",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed112-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed112-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed112-task2",
+      "world": "112",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed112-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed112-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed113-task0",
+      "world": "113",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed113-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed113-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed113-task1",
+      "world": "113",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed113-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed113-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed113-task2",
+      "world": "113",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed113-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed113-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed114-task0",
+      "world": "114",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed114-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed114-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed114-task1",
+      "world": "114",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed114-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed114-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed114-task2",
+      "world": "114",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed114-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed114-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed115-task0",
+      "world": "115",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed115-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed115-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed115-task1",
+      "world": "115",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed115-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed115-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed115-task2",
+      "world": "115",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed115-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed115-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed116-task0",
+      "world": "116",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed116-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed116-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed116-task1",
+      "world": "116",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed116-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed116-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed116-task2",
+      "world": "116",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed116-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed116-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed117-task0",
+      "world": "117",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed117-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed117-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed117-task1",
+      "world": "117",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed117-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed117-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed117-task2",
+      "world": "117",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed117-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed117-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed118-task0",
+      "world": "118",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed118-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed118-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed118-task1",
+      "world": "118",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed118-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed118-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed118-task2",
+      "world": "118",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed118-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed118-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed119-task0",
+      "world": "119",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed119-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed119-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed119-task1",
+      "world": "119",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed119-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed119-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed119-task2",
+      "world": "119",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed119-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed119-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed120-task0",
+      "world": "120",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed120-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed120-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed120-task1",
+      "world": "120",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed120-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed120-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed120-task2",
+      "world": "120",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed120-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed120-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed121-task0",
+      "world": "121",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed121-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed121-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed121-task1",
+      "world": "121",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed121-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed121-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed121-task2",
+      "world": "121",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed121-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed121-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed122-task0",
+      "world": "122",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed122-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed122-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed122-task1",
+      "world": "122",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed122-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed122-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed122-task2",
+      "world": "122",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed122-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed122-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed123-task0",
+      "world": "123",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed123-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed123-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed123-task1",
+      "world": "123",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed123-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed123-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed123-task2",
+      "world": "123",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed123-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed123-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed124-task0",
+      "world": "124",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed124-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed124-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed124-task1",
+      "world": "124",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed124-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed124-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed124-task2",
+      "world": "124",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed124-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed124-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed125-task0",
+      "world": "125",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed125-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed125-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed125-task1",
+      "world": "125",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed125-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed125-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed125-task2",
+      "world": "125",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed125-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed125-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed126-task0",
+      "world": "126",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed126-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed126-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed126-task1",
+      "world": "126",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed126-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed126-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed126-task2",
+      "world": "126",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed126-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed126-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed127-task0",
+      "world": "127",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed127-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed127-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed127-task1",
+      "world": "127",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed127-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed127-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed127-task2",
+      "world": "127",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed127-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed127-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed128-task0",
+      "world": "128",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed128-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed128-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed128-task1",
+      "world": "128",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed128-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed128-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed128-task2",
+      "world": "128",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed128-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed128-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed129-task0",
+      "world": "129",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed129-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed129-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed129-task1",
+      "world": "129",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed129-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed129-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed129-task2",
+      "world": "129",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed129-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed129-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed130-task0",
+      "world": "130",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed130-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed130-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed130-task1",
+      "world": "130",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed130-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed130-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed130-task2",
+      "world": "130",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed130-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed130-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed131-task0",
+      "world": "131",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed131-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed131-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed131-task1",
+      "world": "131",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed131-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed131-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed131-task2",
+      "world": "131",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed131-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed131-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed132-task0",
+      "world": "132",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed132-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed132-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed132-task1",
+      "world": "132",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed132-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed132-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed132-task2",
+      "world": "132",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed132-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed132-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed133-task0",
+      "world": "133",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed133-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed133-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed133-task1",
+      "world": "133",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed133-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed133-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed133-task2",
+      "world": "133",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed133-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed133-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed134-task0",
+      "world": "134",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed134-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed134-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed134-task1",
+      "world": "134",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed134-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed134-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed134-task2",
+      "world": "134",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed134-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed134-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed135-task0",
+      "world": "135",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed135-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed135-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed135-task1",
+      "world": "135",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed135-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed135-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed135-task2",
+      "world": "135",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed135-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed135-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed136-task0",
+      "world": "136",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed136-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed136-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed136-task1",
+      "world": "136",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed136-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed136-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed136-task2",
+      "world": "136",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed136-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed136-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed137-task0",
+      "world": "137",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed137-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed137-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed137-task1",
+      "world": "137",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed137-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed137-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed137-task2",
+      "world": "137",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed137-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed137-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed138-task0",
+      "world": "138",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed138-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed138-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed138-task1",
+      "world": "138",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed138-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed138-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed138-task2",
+      "world": "138",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed138-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed138-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed139-task0",
+      "world": "139",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed139-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed139-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed139-task1",
+      "world": "139",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed139-task1 under a store shared with 1 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed139-task1 under a store shared with 1 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed139-task2",
+      "world": "139",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed139-task2 under a store shared with 2 earlier sequence(s)",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed139-task2 under a store shared with 2 earlier sequence(s) by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed2-task0",
+      "world": "2",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed2-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed2-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed2-task1",
+      "world": "2",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed2-task1",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed2-task1 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed2-task2",
+      "world": "2",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed2-task2",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed2-task2 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed2-task3",
+      "world": "2",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed2-task3",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed2-task3 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed2-task4",
+      "world": "2",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed2-task4",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed2-task4 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed2-task5",
+      "world": "2",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed2-task5",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed2-task5 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed2-task6",
+      "world": "2",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed2-task6",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed2-task6 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed2-task7",
+      "world": "2",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed2-task7",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed2-task7 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed2-task8",
+      "world": "2",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed2-task8",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed2-task8 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed2-task9",
+      "world": "2",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed2-task9",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed2-task9 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed3-task0",
+      "world": "3",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed3-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed3-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed3-task1",
+      "world": "3",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed3-task1",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed3-task1 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed3-task2",
+      "world": "3",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed3-task2",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed3-task2 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed3-task3",
+      "world": "3",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed3-task3",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed3-task3 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed3-task4",
+      "world": "3",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed3-task4",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed3-task4 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed3-task5",
+      "world": "3",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed3-task5",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed3-task5 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed3-task6",
+      "world": "3",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed3-task6",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed3-task6 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed3-task7",
+      "world": "3",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed3-task7",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed3-task7 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed3-task8",
+      "world": "3",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed3-task8",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed3-task8 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed3-task9",
+      "world": "3",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed3-task9",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed3-task9 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed4-task0",
+      "world": "4",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed4-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed4-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed4-task1",
+      "world": "4",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed4-task1",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed4-task1 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed4-task2",
+      "world": "4",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed4-task2",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed4-task2 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed4-task3",
+      "world": "4",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed4-task3",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed4-task3 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed4-task4",
+      "world": "4",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed4-task4",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed4-task4 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed4-task5",
+      "world": "4",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed4-task5",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed4-task5 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed4-task6",
+      "world": "4",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed4-task6",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed4-task6 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed4-task7",
+      "world": "4",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed4-task7",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed4-task7 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed4-task8",
+      "world": "4",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed4-task8",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed4-task8 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed4-task9",
+      "world": "4",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed4-task9",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed4-task9 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed5-task0",
+      "world": "5",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed5-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed5-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed5-task1",
+      "world": "5",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed5-task1",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed5-task1 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed5-task2",
+      "world": "5",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed5-task2",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed5-task2 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed5-task3",
+      "world": "5",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed5-task3",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed5-task3 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed5-task4",
+      "world": "5",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed5-task4",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed5-task4 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed5-task5",
+      "world": "5",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed5-task5",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed5-task5 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed5-task6",
+      "world": "5",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed5-task6",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed5-task6 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed5-task7",
+      "world": "5",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed5-task7",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed5-task7 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed5-task8",
+      "world": "5",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed5-task8",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed5-task8 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed5-task9",
+      "world": "5",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed5-task9",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed5-task9 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed6-task0",
+      "world": "6",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed6-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed6-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed6-task1",
+      "world": "6",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed6-task1",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed6-task1 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed6-task2",
+      "world": "6",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed6-task2",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed6-task2 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed6-task3",
+      "world": "6",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed6-task3",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed6-task3 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed6-task4",
+      "world": "6",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed6-task4",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed6-task4 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed6-task5",
+      "world": "6",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed6-task5",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed6-task5 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed6-task6",
+      "world": "6",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed6-task6",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed6-task6 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed6-task7",
+      "world": "6",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed6-task7",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed6-task7 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed6-task8",
+      "world": "6",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed6-task8",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed6-task8 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed6-task9",
+      "world": "6",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed6-task9",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed6-task9 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed7-task0",
+      "world": "7",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed7-task0",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed7-task0 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed7-task1",
+      "world": "7",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed7-task1",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed7-task1 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed7-task2",
+      "world": "7",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed7-task2",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed7-task2 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed7-task3",
+      "world": "7",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed7-task3",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed7-task3 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed7-task4",
+      "world": "7",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed7-task4",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed7-task4 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed7-task5",
+      "world": "7",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed7-task5",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed7-task5 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed7-task6",
+      "world": "7",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed7-task6",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed7-task6 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed7-task7",
+      "world": "7",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed7-task7",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed7-task7 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed7-task8",
+      "world": "7",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed7-task8",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed7-task8 by 1.000 > epsilon 0.050"
+    },
+    {
+      "sequence_id": "world-seed7-task9",
+      "world": "7",
+      "accepted": true,
+      "oracle_reward": 1.0,
+      "no_memory_reward": 0.0,
+      "delta": 1.0,
+      "scope": "the 1 graded step(s) of world-seed7-task9",
+      "reason": "oracle beats no_memory over the 1 graded step(s) of world-seed7-task9 by 1.000 > epsilon 0.050"
+    }
+  ]
+}

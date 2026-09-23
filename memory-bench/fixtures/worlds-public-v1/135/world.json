@@ -1,0 +1,96 @@
+{
+  "world_id": "world-seed135",
+  "domain": "research-platform",
+  "org_name": "Ironwood Labs",
+  "teams": [
+    {
+      "team_id": "world-seed135-team-research-platform-foundations",
+      "name": "Research Platform Foundations",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed135-team-research-platform-reliability",
+      "name": "Research Platform Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed135-team-research-platform-platform",
+      "name": "Research Platform Platform",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed135-persona-0-leila-kowalski",
+      "name": "Leila Kowalski",
+      "role": "engineering-manager",
+      "team_id": "world-seed135-team-research-platform-foundations"
+    },
+    {
+      "persona_id": "world-seed135-persona-1-leila-almeida",
+      "name": "Leila Almeida",
+      "role": "legal-counsel",
+      "team_id": "world-seed135-team-research-platform-reliability"
+    },
+    {
+      "persona_id": "world-seed135-persona-2-mateo-almeida",
+      "name": "Mateo Almeida",
+      "role": "support-lead",
+      "team_id": "world-seed135-team-research-platform-foundations"
+    },
+    {
+      "persona_id": "world-seed135-persona-3-hiroshi-petrov",
+      "name": "Hiroshi Petrov",
+      "role": "support-lead",
+      "team_id": "world-seed135-team-research-platform-platform"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed135-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed135-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed135-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed135-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed135-kb-research-platform",
+      "name": "research-platform knowledge base",
+      "topic": "research-platform"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed135-repo-python",
+      "name": "research-platform-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed135-repo-go",
+      "name": "research-platform-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed135-repo-cuda-cpp",
+      "name": "research-platform-cuda-cpp",
+      "language": "cuda-cpp"
+    }
+  ],
+  "seed": 135,
+  "generator_version": "world.v1"
+}

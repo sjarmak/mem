@@ -1,0 +1,81 @@
+{
+  "world_id": "world-seed122",
+  "domain": "medical",
+  "org_name": "Northwind Industries",
+  "teams": [
+    {
+      "team_id": "world-seed122-team-medical-enablement",
+      "name": "Medical Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed122-team-medical-foundations",
+      "name": "Medical Foundations",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed122-persona-0-leila-petrov",
+      "name": "Leila Petrov",
+      "role": "researcher",
+      "team_id": "world-seed122-team-medical-enablement"
+    },
+    {
+      "persona_id": "world-seed122-persona-1-ada-gruber",
+      "name": "Ada Gruber",
+      "role": "product-manager",
+      "team_id": "world-seed122-team-medical-foundations"
+    },
+    {
+      "persona_id": "world-seed122-persona-2-esther-fontaine",
+      "name": "Esther Fontaine",
+      "role": "qa-engineer",
+      "team_id": "world-seed122-team-medical-enablement"
+    },
+    {
+      "persona_id": "world-seed122-persona-3-camila-gruber",
+      "name": "Camila Gruber",
+      "role": "qa-engineer",
+      "team_id": "world-seed122-team-medical-foundations"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed122-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed122-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed122-kb-medical",
+      "name": "medical knowledge base",
+      "topic": "medical"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed122-repo-cuda-cpp",
+      "name": "medical-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed122-repo-go",
+      "name": "medical-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed122-repo-rust",
+      "name": "medical-rust",
+      "language": "rust"
+    }
+  ],
+  "seed": 122,
+  "generator_version": "world.v1"
+}

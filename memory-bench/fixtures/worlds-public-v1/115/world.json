@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed115",
+  "domain": "customer-support",
+  "org_name": "Meridian Industries",
+  "teams": [
+    {
+      "team_id": "world-seed115-team-customer-support-delivery",
+      "name": "Customer Support Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed115-team-customer-support-core",
+      "name": "Customer Support Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed115-team-customer-support-platform",
+      "name": "Customer Support Platform",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed115-persona-0-bruno-moreau",
+      "name": "Bruno Moreau",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed115-team-customer-support-delivery"
+    },
+    {
+      "persona_id": "world-seed115-persona-1-dmitri-moreau",
+      "name": "Dmitri Moreau",
+      "role": "qa-engineer",
+      "team_id": "world-seed115-team-customer-support-core"
+    },
+    {
+      "persona_id": "world-seed115-persona-2-esther-gruber",
+      "name": "Esther Gruber",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed115-team-customer-support-platform"
+    },
+    {
+      "persona_id": "world-seed115-persona-3-imani-okonkwo",
+      "name": "Imani Okonkwo",
+      "role": "product-manager",
+      "team_id": "world-seed115-team-customer-support-delivery"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed115-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed115-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed115-kb-customer-support",
+      "name": "customer-support knowledge base",
+      "topic": "customer-support"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed115-repo-go",
+      "name": "customer-support-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed115-repo-python",
+      "name": "customer-support-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed115-repo-cuda-cpp",
+      "name": "customer-support-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed115-repo-rust",
+      "name": "customer-support-rust",
+      "language": "rust"
+    }
+  ],
+  "seed": 115,
+  "generator_version": "world.v1"
+}

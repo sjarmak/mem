@@ -1,0 +1,720 @@
+[
+  {
+    "sequence_id": "world-seed123-task0",
+    "title": "Ironwood Industries initiative: reconcile 5 decisions",
+    "domain": "cuda-engineering",
+    "goal": "Deliver the current cuda-engineering initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed123-task0-shared0-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-3d66dc61ad62c106": "the data retention window is 1 year \u2014 by Oskar Nakamura (support-lead) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task0-s0-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-6ef3e145f2c7a4da": "the project charter decision is freeze scope at the phase-3 milestone \u2014 by Kenji Nakamura (staff-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task0-s1v1-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-14d92055563a3620": "the primary deployment region is us-east-1 \u2014 by Esther Ibarra (qa-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task0-s1v2-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-060364906a952cb6": "the primary deployment region is sa-east-1 \u2014 by Esther Ibarra (qa-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-14d92055563a3620"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task0-s1v3-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ba30b8d1943774a9": "the primary deployment region is eu-central-1 \u2014 by Nadia Doyle (engineering-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-060364906a952cb6"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task0-s2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-c8c45e5ed733bfeb": "the approved rollback command is ansible-playbook restore.yml \u2014 by Kenji Nakamura (staff-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task0-s3-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-856c75b386a2f94c": "the supported API version is v5 \u2014 by Oskar Nakamura (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task0-s4-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-94bf9645f9939638": "the on-call rotation cadence is three-day shifts \u2014 by Oskar Nakamura (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task0-goal",
+        "user_request": "Deliver the current cuda-engineering initiative. State the current value of: the on-call rotation cadence, the supported API version, the approved rollback command, the primary deployment region, the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-94bf9645f9939638",
+          "m-856c75b386a2f94c",
+          "m-c8c45e5ed733bfeb",
+          "m-ba30b8d1943774a9",
+          "m-6ef3e145f2c7a4da"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed123-task0-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-94bf9645f9939638",
+              "m-856c75b386a2f94c",
+              "m-c8c45e5ed733bfeb",
+              "m-ba30b8d1943774a9",
+              "m-6ef3e145f2c7a4da"
+            ],
+            "forbidden_values": [
+              "us-east-1",
+              "sa-east-1"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed123-task0-probe-oncall-rotation",
+            "expected_memory_id": "m-94bf9645f9939638",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed123-task0-probe-api-version",
+            "expected_memory_id": "m-856c75b386a2f94c",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed123-task0-probe-rollback-command",
+            "expected_memory_id": "m-c8c45e5ed733bfeb",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed123-task0-probe-primary-region",
+            "expected_memory_id": "m-ba30b8d1943774a9",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed123-task0-probe-charter",
+            "expected_memory_id": "m-6ef3e145f2c7a4da",
+            "description": "the project charter decision must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-96e3b357cbef8a88": "the project charter decision is retire the legacy pipeline before any new feature \u2014 by Oskar Nakamura (support-lead) in #email channel",
+          "m-8e1ec555f433f702": "the project charter decision is run the rewrite and the old stack side by side \u2014 by Nadia Doyle (engineering-manager) in #email channel",
+          "m-166a32562d4de559": "the project charter decision is move the launch behind the compliance review \u2014 by Oskar Nakamura (support-lead) in #chat channel",
+          "m-cecc29b0d49db869": "the project charter decision is extend the beta by one quarter \u2014 by Nadia Doyle (engineering-manager) in #issue-tracker channel",
+          "m-b8dbda64d80d27d9": "the primary deployment region is ap-northeast-1 \u2014 by Nadia Doyle (engineering-manager) in #chat channel",
+          "m-db8716f400b7e64f": "the primary deployment region is us-west-2 \u2014 by Kenji Nakamura (staff-engineer) in #email channel",
+          "m-97e6ff692a896cbf": "the approved rollback command is nomad job revert \u2014 by Esther Ibarra (qa-engineer) in #chat channel",
+          "m-61d02de7c296534f": "the approved rollback command is kubectl rollout undo \u2014 by Oskar Nakamura (support-lead) in #chat channel",
+          "m-fcc168d34a458191": "the approved rollback command is flux suspend then resume \u2014 by Esther Ibarra (qa-engineer) in #email channel",
+          "m-787d6b8fd2c4b906": "the approved rollback command is docker service update --rollback \u2014 by Kenji Nakamura (staff-engineer) in #email channel",
+          "m-456de2866d2f6325": "the approved rollback command is helm rollback \u2014 by Nadia Doyle (engineering-manager) in #issue-tracker channel",
+          "m-4975833f1d5b9bbb": "the supported API version is v4 \u2014 by Oskar Nakamura (support-lead) in #issue-tracker channel",
+          "m-73925b0b9925dd28": "the supported API version is v8 \u2014 by Nadia Doyle (engineering-manager) in #chat channel",
+          "m-5a301b56ace24416": "the supported API version is v2 \u2014 by Oskar Nakamura (support-lead) in #email channel",
+          "m-f6c2ca0587cfd032": "the supported API version is v3 \u2014 by Oskar Nakamura (support-lead) in #chat channel",
+          "m-59c81f8a36913e80": "the supported API version is v1 \u2014 by Esther Ibarra (qa-engineer) in #email channel",
+          "m-7df32a5fb3179265": "the on-call rotation cadence is daily handoff \u2014 by Oskar Nakamura (support-lead) in #email channel",
+          "m-4d2f40e946d5ce99": "the on-call rotation cadence is follow-the-sun \u2014 by Kenji Nakamura (staff-engineer) in #issue-tracker channel",
+          "m-3e30096c95b5f620": "the on-call rotation cadence is fortnightly \u2014 by Nadia Doyle (engineering-manager) in #issue-tracker channel",
+          "m-6244e6b8773e9e5e": "the on-call rotation cadence is split by timezone \u2014 by Oskar Nakamura (support-lead) in #email channel",
+          "m-a8870bbc5b54076c": "the on-call rotation cadence is paired primary and secondary \u2014 by Esther Ibarra (qa-engineer) in #chat channel"
+        },
+        "superseded_memory_ids": [
+          "m-14d92055563a3620",
+          "m-060364906a952cb6"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed123-task1",
+    "title": "Ironwood Industries initiative: reconcile 5 decisions",
+    "domain": "cuda-engineering",
+    "goal": "Deliver the current cuda-engineering initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed123-task1-shared0-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-fc843647b0c0fa3e": "the checkout_v2 feature flag state is ramped to all traffic \u2014 by Nadia Doyle (engineering-manager) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task1-s0v1-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-6c52f525904d9c08": "the project charter decision is extend the beta by one quarter \u2014 by Nadia Doyle (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task1-s0v2-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-d96694fc32cdc632": "the project charter decision is move the launch behind the compliance review \u2014 by Nadia Doyle (engineering-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-6c52f525904d9c08"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task1-s0v3-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-4828488b66034b84": "the project charter decision is adopt the vendor SDK instead of the in-house client \u2014 by Nadia Doyle (engineering-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-d96694fc32cdc632"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task1-s1-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-6f8c3bf645b109dc": "the release artifact store is the legacy file server \u2014 by Esther Ibarra (qa-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task1-s2-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-934d37f7e06c8cb0": "the supported API version is v5 \u2014 by Esther Ibarra (qa-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task1-s3-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-b7211a6ef7cb52f0": "the primary deployment region is us-west-2 \u2014 by Oskar Nakamura (support-lead) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task1-goal",
+        "user_request": "Deliver the current cuda-engineering initiative. State the current value of: the release artifact store, the supported API version, the data retention window, the project charter decision, the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-6f8c3bf645b109dc",
+          "m-934d37f7e06c8cb0",
+          "m-3d66dc61ad62c106",
+          "m-4828488b66034b84",
+          "m-b7211a6ef7cb52f0"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed123-task1-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-6f8c3bf645b109dc",
+              "m-934d37f7e06c8cb0",
+              "m-3d66dc61ad62c106",
+              "m-4828488b66034b84",
+              "m-b7211a6ef7cb52f0"
+            ],
+            "forbidden_values": [
+              "extend the beta by one quarter",
+              "move the launch behind the compliance review"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed123-task1-probe-artifact-store",
+            "expected_memory_id": "m-6f8c3bf645b109dc",
+            "description": "the release artifact store must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed123-task1-probe-api-version",
+            "expected_memory_id": "m-934d37f7e06c8cb0",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed123-task1-probe-shared-retention-window",
+            "expected_memory_id": "m-3d66dc61ad62c106",
+            "description": "the data retention window (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed123-task1-probe-charter",
+            "expected_memory_id": "m-4828488b66034b84",
+            "description": "the project charter decision must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed123-task1-probe-primary-region",
+            "expected_memory_id": "m-b7211a6ef7cb52f0",
+            "description": "the primary deployment region must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-4458e7a4c63a94dc": "the project charter decision is retire the legacy pipeline before any new feature \u2014 by Nadia Doyle (engineering-manager) in #email channel",
+          "m-4b128ddd1e664819": "the project charter decision is cut the integrations track and ship the core \u2014 by Esther Ibarra (qa-engineer) in #chat channel",
+          "m-14b09cb7da3c5458": "the project charter decision is staff the reliability track ahead of the roadmap \u2014 by Kenji Nakamura (staff-engineer) in #email channel",
+          "m-4e606de139ee3451": "the release artifact store is the build cache \u2014 by Kenji Nakamura (staff-engineer) in #chat channel",
+          "m-a66beef42d1dd920": "the release artifact store is a signed OCI repository \u2014 by Nadia Doyle (engineering-manager) in #issue-tracker channel",
+          "m-4458350565fc43aa": "the release artifact store is one bucket per release \u2014 by Kenji Nakamura (staff-engineer) in #chat channel",
+          "m-7a299232a9b387e6": "the release artifact store is the internal registry \u2014 by Oskar Nakamura (support-lead) in #issue-tracker channel",
+          "m-34812a3b004e908c": "the supported API version is v1 \u2014 by Oskar Nakamura (support-lead) in #issue-tracker channel",
+          "m-632f45951a3eaeeb": "the supported API version is v2 \u2014 by Nadia Doyle (engineering-manager) in #chat channel",
+          "m-e9c5c34c631a1238": "the supported API version is v3 \u2014 by Kenji Nakamura (staff-engineer) in #email channel",
+          "m-f9eee3990b7cf8bc": "the supported API version is v9 \u2014 by Kenji Nakamura (staff-engineer) in #chat channel",
+          "m-61e1fb590c7f222d": "the supported API version is v6 \u2014 by Kenji Nakamura (staff-engineer) in #chat channel",
+          "m-d6608e54622f2a86": "the primary deployment region is af-south-1 \u2014 by Oskar Nakamura (support-lead) in #email channel",
+          "m-238ddb6c2459afcc": "the primary deployment region is sa-east-1 \u2014 by Nadia Doyle (engineering-manager) in #email channel",
+          "m-96c260161511f514": "the primary deployment region is ca-central-1 \u2014 by Kenji Nakamura (staff-engineer) in #chat channel",
+          "m-f6225a678b0e0865": "the data retention window is 14 days \u2014 by Nadia Doyle (engineering-manager) in #email channel",
+          "m-2b57fed2649479dd": "the data retention window is 180 days \u2014 by Oskar Nakamura (support-lead) in #chat channel",
+          "m-c4d89ee238749a4e": "the data retention window is 90 days \u2014 by Esther Ibarra (qa-engineer) in #issue-tracker channel",
+          "m-950cdd83128d4956": "the data retention window is 7 years \u2014 by Oskar Nakamura (support-lead) in #email channel"
+        },
+        "superseded_memory_ids": [
+          "m-6c52f525904d9c08",
+          "m-d96694fc32cdc632"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed123-task2",
+    "title": "Ironwood Industries initiative: reconcile 5 decisions",
+    "domain": "cuda-engineering",
+    "goal": "Deliver the current cuda-engineering initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed123-task2-s0v1-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-e6d327815a252034": "the supported API version is v2 \u2014 by Oskar Nakamura (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task2-s0v2-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-9c09844e7e7773e1": "the supported API version is v7 \u2014 by Nadia Doyle (engineering-manager) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-e6d327815a252034"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task2-s0v3-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-b73a8ce6fb76b268": "the supported API version is v5 \u2014 by Oskar Nakamura (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-9c09844e7e7773e1"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task2-s1-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-20ef65df25db3a1d": "the project charter decision is retire the legacy pipeline before any new feature \u2014 by Esther Ibarra (qa-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task2-s2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-f5ba1fb6b0ab2962": "the approved rollback command is nomad job revert \u2014 by Oskar Nakamura (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed123-task2-goal",
+        "user_request": "Deliver the current cuda-engineering initiative. State the current value of: the project charter decision, the approved rollback command, the supported API version, the checkout_v2 feature flag state, the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-20ef65df25db3a1d",
+          "m-f5ba1fb6b0ab2962",
+          "m-b73a8ce6fb76b268",
+          "m-fc843647b0c0fa3e",
+          "m-3d66dc61ad62c106"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed123-task2-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-20ef65df25db3a1d",
+              "m-f5ba1fb6b0ab2962",
+              "m-b73a8ce6fb76b268",
+              "m-fc843647b0c0fa3e",
+              "m-3d66dc61ad62c106"
+            ],
+            "forbidden_values": [
+              "v2",
+              "v7"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed123-task2-probe-charter",
+            "expected_memory_id": "m-20ef65df25db3a1d",
+            "description": "the project charter decision must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed123-task2-probe-rollback-command",
+            "expected_memory_id": "m-f5ba1fb6b0ab2962",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed123-task2-probe-api-version",
+            "expected_memory_id": "m-b73a8ce6fb76b268",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed123-task2-probe-shared-feature-flag",
+            "expected_memory_id": "m-fc843647b0c0fa3e",
+            "description": "the checkout_v2 feature flag state (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed123-task2-probe-shared-retention-window",
+            "expected_memory_id": "m-3d66dc61ad62c106",
+            "description": "the data retention window (decided in an earlier task) must be recalled"
+          }
+        ],
+        "distractor_memories": {
+          "m-8aef6bd28e9f2ad7": "the supported API version is v9 \u2014 by Oskar Nakamura (support-lead) in #email channel",
+          "m-41fa54a1704ad52f": "the supported API version is v8 \u2014 by Esther Ibarra (qa-engineer) in #email channel",
+          "m-329f964341390927": "the project charter decision is freeze scope at the phase-3 milestone \u2014 by Oskar Nakamura (support-lead) in #chat channel",
+          "m-fd947a4f9ff36e98": "the project charter decision is extend the beta by one quarter \u2014 by Oskar Nakamura (support-lead) in #issue-tracker channel",
+          "m-23a0eb86a2a9ec70": "the project charter decision is adopt the vendor SDK instead of the in-house client \u2014 by Nadia Doyle (engineering-manager) in #email channel",
+          "m-0db7b655c5c65213": "the project charter decision is run the rewrite and the old stack side by side \u2014 by Esther Ibarra (qa-engineer) in #email channel",
+          "m-caf7d7e07482f82f": "the approved rollback command is helm rollback \u2014 by Kenji Nakamura (staff-engineer) in #email channel",
+          "m-4448b1cc54a14d59": "the approved rollback command is ansible-playbook restore.yml \u2014 by Oskar Nakamura (support-lead) in #email channel",
+          "m-b227da0dab83ac5a": "the approved rollback command is terraform apply -refresh \u2014 by Oskar Nakamura (support-lead) in #chat channel",
+          "m-f6225a678b0e0865": "the data retention window is 14 days \u2014 by Nadia Doyle (engineering-manager) in #email channel",
+          "m-2b57fed2649479dd": "the data retention window is 180 days \u2014 by Oskar Nakamura (support-lead) in #chat channel",
+          "m-c4d89ee238749a4e": "the data retention window is 90 days \u2014 by Esther Ibarra (qa-engineer) in #issue-tracker channel",
+          "m-950cdd83128d4956": "the data retention window is 7 years \u2014 by Oskar Nakamura (support-lead) in #email channel",
+          "m-05c72f0bdb1fec13": "the checkout_v2 feature flag state is canary-75% \u2014 by Esther Ibarra (qa-engineer) in #chat channel",
+          "m-4c6c3bd5586cb3c2": "the checkout_v2 feature flag state is held at zero traffic \u2014 by Nadia Doyle (engineering-manager) in #email channel",
+          "m-8989a0cd4c5bd07d": "the checkout_v2 feature flag state is canary-25% \u2014 by Oskar Nakamura (support-lead) in #email channel",
+          "m-2690c5df664d0490": "the checkout_v2 feature flag state is canary-50% \u2014 by Oskar Nakamura (support-lead) in #issue-tracker channel"
+        },
+        "superseded_memory_ids": [
+          "m-e6d327815a252034",
+          "m-9c09844e7e7773e1"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  }
+]

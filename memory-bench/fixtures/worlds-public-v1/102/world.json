@@ -1,0 +1,96 @@
+{
+  "world_id": "world-seed102",
+  "domain": "chip-design",
+  "org_name": "Meridian Collective",
+  "teams": [
+    {
+      "team_id": "world-seed102-team-chip-design-delivery",
+      "name": "Chip Design Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed102-team-chip-design-foundations",
+      "name": "Chip Design Foundations",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed102-team-chip-design-platform",
+      "name": "Chip Design Platform",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed102-persona-0-ada-gruber",
+      "name": "Ada Gruber",
+      "role": "qa-engineer",
+      "team_id": "world-seed102-team-chip-design-delivery"
+    },
+    {
+      "persona_id": "world-seed102-persona-1-camila-ibarra",
+      "name": "Camila Ibarra",
+      "role": "staff-engineer",
+      "team_id": "world-seed102-team-chip-design-foundations"
+    },
+    {
+      "persona_id": "world-seed102-persona-2-hiroshi-castellanos",
+      "name": "Hiroshi Castellanos",
+      "role": "staff-engineer",
+      "team_id": "world-seed102-team-chip-design-platform"
+    },
+    {
+      "persona_id": "world-seed102-persona-3-greta-eriksen",
+      "name": "Greta Eriksen",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed102-team-chip-design-platform"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed102-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed102-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed102-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed102-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed102-kb-chip-design",
+      "name": "chip-design knowledge base",
+      "topic": "chip-design"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed102-repo-rust",
+      "name": "chip-design-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed102-repo-python",
+      "name": "chip-design-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed102-repo-typescript",
+      "name": "chip-design-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 102,
+  "generator_version": "world.v1"
+}

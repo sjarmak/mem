@@ -1,0 +1,81 @@
+{
+  "world_id": "world-seed118",
+  "domain": "research-platform",
+  "org_name": "Meridian Collective",
+  "teams": [
+    {
+      "team_id": "world-seed118-team-research-platform-platform",
+      "name": "Research Platform Platform",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed118-team-research-platform-reliability",
+      "name": "Research Platform Reliability",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed118-persona-0-leila-almeida",
+      "name": "Leila Almeida",
+      "role": "support-lead",
+      "team_id": "world-seed118-team-research-platform-platform"
+    },
+    {
+      "persona_id": "world-seed118-persona-1-imani-okonkwo",
+      "name": "Imani Okonkwo",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed118-team-research-platform-platform"
+    },
+    {
+      "persona_id": "world-seed118-persona-2-kenji-fontaine",
+      "name": "Kenji Fontaine",
+      "role": "engineering-manager",
+      "team_id": "world-seed118-team-research-platform-reliability"
+    },
+    {
+      "persona_id": "world-seed118-persona-3-greta-okonkwo",
+      "name": "Greta Okonkwo",
+      "role": "staff-engineer",
+      "team_id": "world-seed118-team-research-platform-reliability"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed118-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed118-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed118-kb-research-platform",
+      "name": "research-platform knowledge base",
+      "topic": "research-platform"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed118-repo-python",
+      "name": "research-platform-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed118-repo-typescript",
+      "name": "research-platform-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed118-repo-go",
+      "name": "research-platform-go",
+      "language": "go"
+    }
+  ],
+  "seed": 118,
+  "generator_version": "world.v1"
+}

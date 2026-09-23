@@ -1,0 +1,86 @@
+{
+  "world_id": "world-seed136",
+  "domain": "medical",
+  "org_name": "Meridian Collective",
+  "teams": [
+    {
+      "team_id": "world-seed136-team-medical-enablement",
+      "name": "Medical Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed136-team-medical-delivery",
+      "name": "Medical Delivery",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed136-persona-0-kenji-okonkwo",
+      "name": "Kenji Okonkwo",
+      "role": "researcher",
+      "team_id": "world-seed136-team-medical-enablement"
+    },
+    {
+      "persona_id": "world-seed136-persona-1-leila-haddad",
+      "name": "Leila Haddad",
+      "role": "staff-engineer",
+      "team_id": "world-seed136-team-medical-delivery"
+    },
+    {
+      "persona_id": "world-seed136-persona-2-imani-doyle",
+      "name": "Imani Doyle",
+      "role": "staff-engineer",
+      "team_id": "world-seed136-team-medical-delivery"
+    },
+    {
+      "persona_id": "world-seed136-persona-3-camila-okonkwo",
+      "name": "Camila Okonkwo",
+      "role": "support-lead",
+      "team_id": "world-seed136-team-medical-delivery"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed136-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed136-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed136-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed136-kb-medical",
+      "name": "medical knowledge base",
+      "topic": "medical"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed136-repo-cuda-cpp",
+      "name": "medical-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed136-repo-python",
+      "name": "medical-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed136-repo-rust",
+      "name": "medical-rust",
+      "language": "rust"
+    }
+  ],
+  "seed": 136,
+  "generator_version": "world.v1"
+}

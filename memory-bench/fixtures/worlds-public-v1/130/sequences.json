@@ -1,0 +1,721 @@
+[
+  {
+    "sequence_id": "world-seed130-task0",
+    "title": "Sablefish Systems initiative: reconcile 5 decisions",
+    "domain": "medical",
+    "goal": "Deliver the current medical initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed130-task0-shared0-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-dc7ae18f8fd1a47d": "the primary deployment region is us-west-2 \u2014 by Leila Kowalski (product-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task0-shared1-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-107ad7da18162916": "the supported API version is v10 \u2014 by Esther Ibarra (product-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task0-s0-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-62baaba6d798869f": "the project charter decision is hold the public interface steady through the migration \u2014 by Leila Kowalski (product-manager) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task0-s1-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-40a5c9ec09d40d3c": "the production deploy timeout is 60s \u2014 by Esther Larsen (site-reliability-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task0-s2-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-5d8def582eae0f75": "the on-call rotation cadence is split by timezone \u2014 by Esther Larsen (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task0-s3-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-76d71458ddec2cb1": "the release artifact store is the internal registry \u2014 by Esther Larsen (site-reliability-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task0-s4v1-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-8af7ae0f5ff71473": "the approved rollback command is argocd app rollback \u2014 by Ada Jorgensen (site-reliability-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task0-s4v2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-87ff6b00097ed5c3": "the approved rollback command is spinnaker pipeline rewind \u2014 by Esther Larsen (site-reliability-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-8af7ae0f5ff71473"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task0-s4v3-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-29a9516a46946cbe": "the approved rollback command is helm rollback \u2014 by Esther Larsen (site-reliability-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-87ff6b00097ed5c3"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task0-goal",
+        "user_request": "Deliver the current medical initiative. State the current value of: the production deploy timeout, the project charter decision, the release artifact store, the approved rollback command, the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-40a5c9ec09d40d3c",
+          "m-62baaba6d798869f",
+          "m-76d71458ddec2cb1",
+          "m-29a9516a46946cbe",
+          "m-5d8def582eae0f75"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed130-task0-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-40a5c9ec09d40d3c",
+              "m-62baaba6d798869f",
+              "m-76d71458ddec2cb1",
+              "m-29a9516a46946cbe",
+              "m-5d8def582eae0f75"
+            ],
+            "forbidden_values": [
+              "argocd app rollback",
+              "spinnaker pipeline rewind"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed130-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-40a5c9ec09d40d3c",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed130-task0-probe-charter",
+            "expected_memory_id": "m-62baaba6d798869f",
+            "description": "the project charter decision must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed130-task0-probe-artifact-store",
+            "expected_memory_id": "m-76d71458ddec2cb1",
+            "description": "the release artifact store must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed130-task0-probe-rollback-command",
+            "expected_memory_id": "m-29a9516a46946cbe",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed130-task0-probe-oncall-rotation",
+            "expected_memory_id": "m-5d8def582eae0f75",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-fd53563159fe330a": "the project charter decision is run the rewrite and the old stack side by side \u2014 by Leila Kowalski (product-manager) in #chat channel",
+          "m-7b336dc628bf141e": "the project charter decision is staff the reliability track ahead of the roadmap \u2014 by Esther Ibarra (product-manager) in #chat channel",
+          "m-5a20bc238cff66e7": "the project charter decision is retire the legacy pipeline before any new feature \u2014 by Esther Larsen (site-reliability-engineer) in #email channel",
+          "m-553204b9422155bc": "the project charter decision is adopt the vendor SDK instead of the in-house client \u2014 by Esther Larsen (site-reliability-engineer) in #meeting channel",
+          "m-eba897ed083d55c7": "the production deploy timeout is 30s \u2014 by Ada Jorgensen (site-reliability-engineer) in #email channel",
+          "m-8d1d07e58b11cee0": "the production deploy timeout is 900s \u2014 by Esther Ibarra (product-manager) in #email channel",
+          "m-422e72c5c2acf846": "the production deploy timeout is 600s \u2014 by Leila Kowalski (product-manager) in #chat channel",
+          "m-7f609730998ef4ae": "the on-call rotation cadence is paired primary and secondary \u2014 by Esther Ibarra (product-manager) in #email channel",
+          "m-c6c71a030d9a0c77": "the on-call rotation cadence is weekly on Mondays \u2014 by Esther Ibarra (product-manager) in #email channel",
+          "m-d4226b16d472ff99": "the on-call rotation cadence is follow-the-sun \u2014 by Esther Larsen (site-reliability-engineer) in #email channel",
+          "m-62bf171e6ebb923c": "the on-call rotation cadence is daily handoff \u2014 by Leila Kowalski (product-manager) in #chat channel",
+          "m-24f28145b8355148": "the on-call rotation cadence is monthly blocks \u2014 by Esther Ibarra (product-manager) in #meeting channel",
+          "m-609943ad7ada09d0": "the release artifact store is the legacy file server \u2014 by Esther Ibarra (product-manager) in #email channel",
+          "m-7da8974b185ee4d1": "the release artifact store is one bucket per release \u2014 by Esther Larsen (site-reliability-engineer) in #email channel",
+          "m-c4f78c5b1e18133a": "the release artifact store is the build cache \u2014 by Leila Kowalski (product-manager) in #chat channel",
+          "m-c2fe94eec9a63880": "the release artifact store is a per-team namespace \u2014 by Esther Larsen (site-reliability-engineer) in #meeting channel",
+          "m-2fb569aa27455448": "the release artifact store is the vendor registry \u2014 by Esther Ibarra (product-manager) in #email channel",
+          "m-3e150ec354102137": "the approved rollback command is git revert then redeploy \u2014 by Leila Kowalski (product-manager) in #meeting channel",
+          "m-58216ec87d519423": "the approved rollback command is terraform apply -refresh \u2014 by Leila Kowalski (product-manager) in #chat channel"
+        },
+        "superseded_memory_ids": [
+          "m-8af7ae0f5ff71473",
+          "m-87ff6b00097ed5c3"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed130-task1",
+    "title": "Sablefish Systems initiative: reconcile 5 decisions",
+    "domain": "medical",
+    "goal": "Deliver the current medical initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed130-task1-shared0-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-dd322ed8732c3dc3": "the data retention window is 1 year \u2014 by Esther Ibarra (product-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task1-s0-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-79aea196bdcd6295": "the project charter decision is staff the reliability track ahead of the roadmap \u2014 by Esther Ibarra (product-manager) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task1-s1v1-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-f6f25b830b77433d": "the approved rollback command is git revert then redeploy \u2014 by Esther Larsen (site-reliability-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task1-s1v2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a577e3dc7168a304": "the approved rollback command is docker service update --rollback \u2014 by Esther Ibarra (product-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-f6f25b830b77433d"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task1-s1v3-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-7e45133680215095": "the approved rollback command is kubectl rollout undo \u2014 by Leila Kowalski (product-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-a577e3dc7168a304"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task1-s2-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ca98b3524875bf69": "the checkout_v2 feature flag state is canary-75% \u2014 by Esther Ibarra (product-manager) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task1-s3-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ce637e1da17dbc9a": "the release artifact store is the mirrored CDN origin \u2014 by Leila Kowalski (product-manager) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task1-goal",
+        "user_request": "Deliver the current medical initiative. State the current value of: the project charter decision, the approved rollback command, the checkout_v2 feature flag state, the primary deployment region, the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-79aea196bdcd6295",
+          "m-7e45133680215095",
+          "m-ca98b3524875bf69",
+          "m-dc7ae18f8fd1a47d",
+          "m-ce637e1da17dbc9a"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed130-task1-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-79aea196bdcd6295",
+              "m-7e45133680215095",
+              "m-ca98b3524875bf69",
+              "m-dc7ae18f8fd1a47d",
+              "m-ce637e1da17dbc9a"
+            ],
+            "forbidden_values": [
+              "git revert then redeploy",
+              "docker service update --rollback"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed130-task1-probe-charter",
+            "expected_memory_id": "m-79aea196bdcd6295",
+            "description": "the project charter decision must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed130-task1-probe-rollback-command",
+            "expected_memory_id": "m-7e45133680215095",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed130-task1-probe-feature-flag",
+            "expected_memory_id": "m-ca98b3524875bf69",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed130-task1-probe-shared-primary-region",
+            "expected_memory_id": "m-dc7ae18f8fd1a47d",
+            "description": "the primary deployment region (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed130-task1-probe-artifact-store",
+            "expected_memory_id": "m-ce637e1da17dbc9a",
+            "description": "the release artifact store must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-b6759f53af22cc32": "the project charter decision is move the launch behind the compliance review \u2014 by Esther Ibarra (product-manager) in #email channel",
+          "m-8e300f5561bb86af": "the project charter decision is split delivery into two independent releases \u2014 by Esther Ibarra (product-manager) in #chat channel",
+          "m-0e9399485b77225d": "the project charter decision is hold the public interface steady through the migration \u2014 by Leila Kowalski (product-manager) in #meeting channel",
+          "m-b6c0ca93b2717d78": "the project charter decision is freeze scope at the phase-3 milestone \u2014 by Ada Jorgensen (site-reliability-engineer) in #email channel",
+          "m-eeb2b8afd8621a07": "the approved rollback command is argocd app rollback \u2014 by Leila Kowalski (product-manager) in #meeting channel",
+          "m-9744d498449437ad": "the approved rollback command is nomad job revert \u2014 by Ada Jorgensen (site-reliability-engineer) in #email channel",
+          "m-4f913f33673ae211": "the checkout_v2 feature flag state is canary-10% \u2014 by Leila Kowalski (product-manager) in #email channel",
+          "m-0b4d87dc5a0e37a9": "the checkout_v2 feature flag state is kill-switched \u2014 by Esther Ibarra (product-manager) in #chat channel",
+          "m-ae703acad6ef6f73": "the checkout_v2 feature flag state is ramped to all traffic \u2014 by Leila Kowalski (product-manager) in #email channel",
+          "m-8c2e3e658b7b3477": "the release artifact store is the legacy file server \u2014 by Esther Ibarra (product-manager) in #chat channel",
+          "m-55e077190cd0940b": "the release artifact store is one bucket per release \u2014 by Esther Ibarra (product-manager) in #meeting channel",
+          "m-2e0cbcc7452ae78e": "the release artifact store is a signed OCI repository \u2014 by Leila Kowalski (product-manager) in #chat channel",
+          "m-20ee880ff1aab1f8": "the primary deployment region is ap-northeast-1 \u2014 by Ada Jorgensen (site-reliability-engineer) in #meeting channel",
+          "m-ceccfcc33c992b7e": "the primary deployment region is af-south-1 \u2014 by Esther Larsen (site-reliability-engineer) in #chat channel",
+          "m-28618afad738c4c8": "the primary deployment region is me-south-1 \u2014 by Ada Jorgensen (site-reliability-engineer) in #chat channel",
+          "m-e68d0ff3148928ac": "the primary deployment region is eu-central-1 \u2014 by Esther Ibarra (product-manager) in #chat channel",
+          "m-efd44e445138c4c8": "the primary deployment region is us-east-1 \u2014 by Esther Larsen (site-reliability-engineer) in #chat channel"
+        },
+        "superseded_memory_ids": [
+          "m-f6f25b830b77433d",
+          "m-a577e3dc7168a304"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed130-task2",
+    "title": "Sablefish Systems initiative: reconcile 5 decisions",
+    "domain": "medical",
+    "goal": "Deliver the current medical initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed130-task2-s0v1-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-4363033177c61b8e": "the paging severity floor is nothing below a full outage \u2014 by Leila Kowalski (product-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task2-s0v2-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a51ed5f1ddbd8873": "the paging severity floor is manual escalation only \u2014 by Leila Kowalski (product-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-4363033177c61b8e"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task2-s0v3-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-35d2f2d631b19992": "the paging severity floor is any customer-visible regression \u2014 by Esther Larsen (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-a51ed5f1ddbd8873"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task2-s1-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-23f7c5a0cae1c3c3": "the on-call rotation cadence is fortnightly \u2014 by Esther Larsen (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed130-task2-goal",
+        "user_request": "Deliver the current medical initiative. State the current value of: the paging severity floor, the primary deployment region, the on-call rotation cadence, the data retention window, the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-35d2f2d631b19992",
+          "m-dc7ae18f8fd1a47d",
+          "m-23f7c5a0cae1c3c3",
+          "m-dd322ed8732c3dc3",
+          "m-107ad7da18162916"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed130-task2-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-35d2f2d631b19992",
+              "m-dc7ae18f8fd1a47d",
+              "m-23f7c5a0cae1c3c3",
+              "m-dd322ed8732c3dc3",
+              "m-107ad7da18162916"
+            ],
+            "forbidden_values": [
+              "nothing below a full outage",
+              "manual escalation only"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed130-task2-probe-paging-floor",
+            "expected_memory_id": "m-35d2f2d631b19992",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed130-task2-probe-shared-primary-region",
+            "expected_memory_id": "m-dc7ae18f8fd1a47d",
+            "description": "the primary deployment region (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed130-task2-probe-oncall-rotation",
+            "expected_memory_id": "m-23f7c5a0cae1c3c3",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed130-task2-probe-shared-retention-window",
+            "expected_memory_id": "m-dd322ed8732c3dc3",
+            "description": "the data retention window (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed130-task2-probe-shared-api-version",
+            "expected_memory_id": "m-107ad7da18162916",
+            "description": "the supported API version (decided in an earlier task) must be recalled"
+          }
+        ],
+        "distractor_memories": {
+          "m-b4826bed6fdd2b20": "the paging severity floor is sev-1 only \u2014 by Ada Jorgensen (site-reliability-engineer) in #email channel",
+          "m-19570b842ecd0aad": "the paging severity floor is sev-3 and above \u2014 by Esther Larsen (site-reliability-engineer) in #meeting channel",
+          "m-377fa2d243de8c5b": "the paging severity floor is any failed deploy \u2014 by Esther Larsen (site-reliability-engineer) in #chat channel",
+          "m-524e7a6416554f9b": "the on-call rotation cadence is follow-the-sun \u2014 by Esther Larsen (site-reliability-engineer) in #meeting channel",
+          "m-1afcd42e46c1733d": "the on-call rotation cadence is two-week shifts \u2014 by Ada Jorgensen (site-reliability-engineer) in #email channel",
+          "m-2df70568299beb2d": "the on-call rotation cadence is split by timezone \u2014 by Esther Larsen (site-reliability-engineer) in #chat channel",
+          "m-c60620a1721e8506": "the on-call rotation cadence is three-day shifts \u2014 by Esther Larsen (site-reliability-engineer) in #meeting channel",
+          "m-20ee880ff1aab1f8": "the primary deployment region is ap-northeast-1 \u2014 by Ada Jorgensen (site-reliability-engineer) in #meeting channel",
+          "m-ceccfcc33c992b7e": "the primary deployment region is af-south-1 \u2014 by Esther Larsen (site-reliability-engineer) in #chat channel",
+          "m-28618afad738c4c8": "the primary deployment region is me-south-1 \u2014 by Ada Jorgensen (site-reliability-engineer) in #chat channel",
+          "m-e68d0ff3148928ac": "the primary deployment region is eu-central-1 \u2014 by Esther Ibarra (product-manager) in #chat channel",
+          "m-efd44e445138c4c8": "the primary deployment region is us-east-1 \u2014 by Esther Larsen (site-reliability-engineer) in #chat channel",
+          "m-ba5198fac0b96ea2": "the data retention window is kept indefinitely \u2014 by Ada Jorgensen (site-reliability-engineer) in #chat channel",
+          "m-465ddd5d3b610192": "the data retention window is 5 years \u2014 by Ada Jorgensen (site-reliability-engineer) in #email channel",
+          "m-fc0a0e422ec077fc": "the data retention window is 30 days \u2014 by Leila Kowalski (product-manager) in #meeting channel",
+          "m-9396e505dd78f57e": "the data retention window is 2 years \u2014 by Esther Ibarra (product-manager) in #email channel",
+          "m-68d4c504907fa9a5": "the data retention window is 90 days \u2014 by Esther Larsen (site-reliability-engineer) in #email channel",
+          "m-f30fbd24922909dd": "the supported API version is v9 \u2014 by Ada Jorgensen (site-reliability-engineer) in #email channel",
+          "m-9f1077a441b22be8": "the supported API version is v5 \u2014 by Leila Kowalski (product-manager) in #email channel",
+          "m-796d651bc8983a54": "the supported API version is v1 \u2014 by Esther Larsen (site-reliability-engineer) in #chat channel",
+          "m-990641b74190051e": "the supported API version is v7 \u2014 by Esther Larsen (site-reliability-engineer) in #chat channel",
+          "m-79e195a181eabb9d": "the supported API version is v3 \u2014 by Esther Ibarra (product-manager) in #email channel"
+        },
+        "superseded_memory_ids": [
+          "m-4363033177c61b8e",
+          "m-a51ed5f1ddbd8873"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  }
+]

@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed6",
+  "domain": "data-infrastructure",
+  "org_name": "Meridian Labs",
+  "teams": [
+    {
+      "team_id": "world-seed6-team-data-infrastructure-foundations",
+      "name": "Data Infrastructure Foundations",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed6-team-data-infrastructure-enablement",
+      "name": "Data Infrastructure Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed6-team-data-infrastructure-platform",
+      "name": "Data Infrastructure Platform",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed6-persona-0-greta-almeida",
+      "name": "Greta Almeida",
+      "role": "engineering-manager",
+      "team_id": "world-seed6-team-data-infrastructure-foundations"
+    },
+    {
+      "persona_id": "world-seed6-persona-1-kenji-jorgensen",
+      "name": "Kenji Jorgensen",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed6-team-data-infrastructure-enablement"
+    },
+    {
+      "persona_id": "world-seed6-persona-2-imani-bergstrom",
+      "name": "Imani Bergstrom",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed6-team-data-infrastructure-platform"
+    },
+    {
+      "persona_id": "world-seed6-persona-3-imani-eriksen",
+      "name": "Imani Eriksen",
+      "role": "qa-engineer",
+      "team_id": "world-seed6-team-data-infrastructure-enablement"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed6-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed6-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed6-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed6-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed6-kb-data-infrastructure",
+      "name": "data-infrastructure knowledge base",
+      "topic": "data-infrastructure"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed6-repo-go",
+      "name": "data-infrastructure-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed6-repo-python",
+      "name": "data-infrastructure-python",
+      "language": "python"
+    }
+  ],
+  "seed": 6,
+  "generator_version": "world.v1"
+}

@@ -1,0 +1,86 @@
+{
+  "world_id": "world-seed137",
+  "domain": "cuda-engineering",
+  "org_name": "Westmark Industries",
+  "teams": [
+    {
+      "team_id": "world-seed137-team-cuda-engineering-reliability",
+      "name": "Cuda Engineering Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed137-team-cuda-engineering-enablement",
+      "name": "Cuda Engineering Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed137-team-cuda-engineering-foundations",
+      "name": "Cuda Engineering Foundations",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed137-persona-0-camila-almeida",
+      "name": "Camila Almeida",
+      "role": "researcher",
+      "team_id": "world-seed137-team-cuda-engineering-reliability"
+    },
+    {
+      "persona_id": "world-seed137-persona-1-oskar-eriksen",
+      "name": "Oskar Eriksen",
+      "role": "qa-engineer",
+      "team_id": "world-seed137-team-cuda-engineering-reliability"
+    },
+    {
+      "persona_id": "world-seed137-persona-2-hiroshi-jorgensen",
+      "name": "Hiroshi Jorgensen",
+      "role": "staff-engineer",
+      "team_id": "world-seed137-team-cuda-engineering-enablement"
+    },
+    {
+      "persona_id": "world-seed137-persona-3-dmitri-ibarra",
+      "name": "Dmitri Ibarra",
+      "role": "engineering-manager",
+      "team_id": "world-seed137-team-cuda-engineering-foundations"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed137-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed137-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed137-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed137-kb-cuda-engineering",
+      "name": "cuda-engineering knowledge base",
+      "topic": "cuda-engineering"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed137-repo-python",
+      "name": "cuda-engineering-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed137-repo-rust",
+      "name": "cuda-engineering-rust",
+      "language": "rust"
+    }
+  ],
+  "seed": 137,
+  "generator_version": "world.v1"
+}

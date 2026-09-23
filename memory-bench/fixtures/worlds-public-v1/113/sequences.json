@@ -1,0 +1,719 @@
+[
+  {
+    "sequence_id": "world-seed113-task0",
+    "title": "Meridian Industries initiative: reconcile 5 decisions",
+    "domain": "cuda-engineering",
+    "goal": "Deliver the current cuda-engineering initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed113-task0-shared0-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-18226d3c1187021b": "the checkout_v2 feature flag state is canary-25% \u2014 by Dmitri Doyle (product-manager) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task0-s0-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-6e4ec785cae9ead9": "the approved rollback command is nomad job revert \u2014 by Hiroshi Kowalski (staff-engineer) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task0-s1-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-1ee5fed2c8478c24": "the project charter decision is cut the integrations track and ship the core \u2014 by Dmitri Doyle (product-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task0-s2v1-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-d6c7159db549700e": "the data retention window is 30 days \u2014 by Farid Larsen (legal-counsel) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task0-s2v2-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-8542c6ce1a966e86": "the data retention window is 7 years \u2014 by Hiroshi Kowalski (staff-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-d6c7159db549700e"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task0-s2v3-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-eee91247f7adc0d2": "the data retention window is 5 years \u2014 by Hiroshi Kowalski (staff-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-8542c6ce1a966e86"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task0-s3-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-b4a4e4a1ee6b37ef": "the supported API version is v9 \u2014 by Dmitri Doyle (product-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task0-s4-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-455dd2c0ae94cb36": "the release artifact store is the legacy file server \u2014 by Hiroshi Kowalski (staff-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task0-goal",
+        "user_request": "Deliver the current cuda-engineering initiative. State the current value of: the supported API version, the approved rollback command, the release artifact store, the data retention window, the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-b4a4e4a1ee6b37ef",
+          "m-6e4ec785cae9ead9",
+          "m-455dd2c0ae94cb36",
+          "m-eee91247f7adc0d2",
+          "m-1ee5fed2c8478c24"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed113-task0-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-b4a4e4a1ee6b37ef",
+              "m-6e4ec785cae9ead9",
+              "m-455dd2c0ae94cb36",
+              "m-eee91247f7adc0d2",
+              "m-1ee5fed2c8478c24"
+            ],
+            "forbidden_values": [
+              "30 days",
+              "7 years"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed113-task0-probe-api-version",
+            "expected_memory_id": "m-b4a4e4a1ee6b37ef",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed113-task0-probe-rollback-command",
+            "expected_memory_id": "m-6e4ec785cae9ead9",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed113-task0-probe-artifact-store",
+            "expected_memory_id": "m-455dd2c0ae94cb36",
+            "description": "the release artifact store must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed113-task0-probe-retention-window",
+            "expected_memory_id": "m-eee91247f7adc0d2",
+            "description": "the data retention window must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed113-task0-probe-charter",
+            "expected_memory_id": "m-1ee5fed2c8478c24",
+            "description": "the project charter decision must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-4bf4f196cb5b65e5": "the approved rollback command is argocd app rollback \u2014 by Dmitri Doyle (product-manager) in #chat channel",
+          "m-699462cbc6f47106": "the approved rollback command is ansible-playbook restore.yml \u2014 by Farid Larsen (legal-counsel) in #meeting channel",
+          "m-c7ea2941277a07b6": "the approved rollback command is docker service update --rollback \u2014 by Camila Nakamura (engineering-manager) in #chat channel",
+          "m-90b764d3cc17c8cf": "the approved rollback command is helm rollback \u2014 by Camila Nakamura (engineering-manager) in #chat channel",
+          "m-e28d19c9e58dd4ca": "the approved rollback command is flux suspend then resume \u2014 by Hiroshi Kowalski (staff-engineer) in #email channel",
+          "m-c9076a47bbcccc13": "the project charter decision is staff the reliability track ahead of the roadmap \u2014 by Camila Nakamura (engineering-manager) in #email channel",
+          "m-b2d7c5a7ab1e64a5": "the project charter decision is hold the public interface steady through the migration \u2014 by Hiroshi Kowalski (staff-engineer) in #chat channel",
+          "m-2b4edcfbcdb9005b": "the project charter decision is move the launch behind the compliance review \u2014 by Dmitri Doyle (product-manager) in #chat channel",
+          "m-d25b4e2a9b926cad": "the project charter decision is adopt the vendor SDK instead of the in-house client \u2014 by Hiroshi Kowalski (staff-engineer) in #meeting channel",
+          "m-4c7c8ef15eea873c": "the project charter decision is freeze scope at the phase-3 milestone \u2014 by Farid Larsen (legal-counsel) in #chat channel",
+          "m-e2b2e1523fb30d73": "the data retention window is 2 years \u2014 by Farid Larsen (legal-counsel) in #email channel",
+          "m-514ee2b68d35929b": "the data retention window is 14 days \u2014 by Hiroshi Kowalski (staff-engineer) in #email channel",
+          "m-131c54687fdba689": "the supported API version is v1 \u2014 by Hiroshi Kowalski (staff-engineer) in #email channel",
+          "m-2a107c91af251ae7": "the supported API version is v6 \u2014 by Farid Larsen (legal-counsel) in #meeting channel",
+          "m-f5425261407243fa": "the supported API version is v5 \u2014 by Camila Nakamura (engineering-manager) in #meeting channel",
+          "m-a8f06eeb6acb3ae0": "the release artifact store is the internal registry \u2014 by Farid Larsen (legal-counsel) in #chat channel",
+          "m-ec9f8f0fe8bc86b3": "the release artifact store is one bucket per release \u2014 by Hiroshi Kowalski (staff-engineer) in #meeting channel",
+          "m-f2e9456d2d6c0c41": "the release artifact store is the mirrored CDN origin \u2014 by Camila Nakamura (engineering-manager) in #email channel",
+          "m-983dd3318f63a651": "the release artifact store is the compliance archive \u2014 by Hiroshi Kowalski (staff-engineer) in #email channel"
+        },
+        "superseded_memory_ids": [
+          "m-d6c7159db549700e",
+          "m-8542c6ce1a966e86"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed113-task1",
+    "title": "Meridian Industries initiative: reconcile 5 decisions",
+    "domain": "cuda-engineering",
+    "goal": "Deliver the current cuda-engineering initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed113-task1-shared0-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-8c4f5684a7e61bb4": "the paging severity floor is any customer-visible regression \u2014 by Farid Larsen (legal-counsel) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task1-shared1-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-2357de71f24a6622": "the primary deployment region is sa-east-1 \u2014 by Farid Larsen (legal-counsel) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task1-s0-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-4cfbc3e7fe28ecf9": "the data retention window is 5 years \u2014 by Dmitri Doyle (product-manager) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task1-s1-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-79e7240b2ec5ca70": "the production deploy timeout is 900s \u2014 by Farid Larsen (legal-counsel) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task1-s2-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-db0ba0ddd1d501ad": "the release artifact store is the legacy file server \u2014 by Camila Nakamura (engineering-manager) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task1-s3v1-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-02b6e76d74e46343": "the supported API version is v8 \u2014 by Hiroshi Kowalski (staff-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task1-s3v2-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-b1c642ced7a39eef": "the supported API version is v5 \u2014 by Hiroshi Kowalski (staff-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-02b6e76d74e46343"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task1-s3v3-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ca19d4d97a8cb8af": "the supported API version is v3 \u2014 by Dmitri Doyle (product-manager) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-b1c642ced7a39eef"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task1-goal",
+        "user_request": "Deliver the current cuda-engineering initiative. State the current value of: the release artifact store, the supported API version, the production deploy timeout, the checkout_v2 feature flag state, the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-db0ba0ddd1d501ad",
+          "m-ca19d4d97a8cb8af",
+          "m-79e7240b2ec5ca70",
+          "m-18226d3c1187021b",
+          "m-4cfbc3e7fe28ecf9"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed113-task1-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-db0ba0ddd1d501ad",
+              "m-ca19d4d97a8cb8af",
+              "m-79e7240b2ec5ca70",
+              "m-18226d3c1187021b",
+              "m-4cfbc3e7fe28ecf9"
+            ],
+            "forbidden_values": [
+              "v8",
+              "v5"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed113-task1-probe-artifact-store",
+            "expected_memory_id": "m-db0ba0ddd1d501ad",
+            "description": "the release artifact store must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed113-task1-probe-api-version",
+            "expected_memory_id": "m-ca19d4d97a8cb8af",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed113-task1-probe-deploy-timeout",
+            "expected_memory_id": "m-79e7240b2ec5ca70",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed113-task1-probe-shared-feature-flag",
+            "expected_memory_id": "m-18226d3c1187021b",
+            "description": "the checkout_v2 feature flag state (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed113-task1-probe-retention-window",
+            "expected_memory_id": "m-4cfbc3e7fe28ecf9",
+            "description": "the data retention window must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-2dce8f6154327871": "the data retention window is 2 years \u2014 by Hiroshi Kowalski (staff-engineer) in #email channel",
+          "m-35dc5db82127b090": "the data retention window is 10 years \u2014 by Hiroshi Kowalski (staff-engineer) in #email channel",
+          "m-b8e25860abf97302": "the data retention window is 1 year \u2014 by Farid Larsen (legal-counsel) in #chat channel",
+          "m-34b16760463dbc0f": "the data retention window is 30 days \u2014 by Hiroshi Kowalski (staff-engineer) in #meeting channel",
+          "m-3cdb173ebb8b8812": "the production deploy timeout is 60s \u2014 by Hiroshi Kowalski (staff-engineer) in #email channel",
+          "m-c0aec321f57218f2": "the production deploy timeout is 45s \u2014 by Hiroshi Kowalski (staff-engineer) in #meeting channel",
+          "m-21579e94c22a7e54": "the production deploy timeout is 300s \u2014 by Camila Nakamura (engineering-manager) in #meeting channel",
+          "m-d2346feff8a4c561": "the production deploy timeout is 15s \u2014 by Camila Nakamura (engineering-manager) in #chat channel",
+          "m-fe088b3163d29765": "the production deploy timeout is 30s \u2014 by Hiroshi Kowalski (staff-engineer) in #email channel",
+          "m-2f115f79c7aae780": "the release artifact store is the build cache \u2014 by Farid Larsen (legal-counsel) in #chat channel",
+          "m-0042176d90d13ce5": "the release artifact store is one bucket per release \u2014 by Camila Nakamura (engineering-manager) in #chat channel",
+          "m-f4c4c0c95e5bfbf4": "the release artifact store is the compliance archive \u2014 by Hiroshi Kowalski (staff-engineer) in #meeting channel",
+          "m-56b0e7e3e001043c": "the release artifact store is a per-team namespace \u2014 by Farid Larsen (legal-counsel) in #email channel",
+          "m-389c5e4d995c2491": "the supported API version is v4 \u2014 by Farid Larsen (legal-counsel) in #email channel",
+          "m-d37f98fbf4f6f7c9": "the supported API version is v1 \u2014 by Dmitri Doyle (product-manager) in #chat channel",
+          "m-310f9e7676bb810b": "the checkout_v2 feature flag state is shadow-only \u2014 by Dmitri Doyle (product-manager) in #meeting channel",
+          "m-448fce83443d293a": "the checkout_v2 feature flag state is canary-10% \u2014 by Hiroshi Kowalski (staff-engineer) in #meeting channel",
+          "m-22e6a509ea00b077": "the checkout_v2 feature flag state is kill-switched \u2014 by Camila Nakamura (engineering-manager) in #email channel",
+          "m-f98b5f3726e8c125": "the checkout_v2 feature flag state is enabled \u2014 by Farid Larsen (legal-counsel) in #email channel"
+        },
+        "superseded_memory_ids": [
+          "m-02b6e76d74e46343",
+          "m-b1c642ced7a39eef"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed113-task2",
+    "title": "Meridian Industries initiative: reconcile 5 decisions",
+    "domain": "cuda-engineering",
+    "goal": "Deliver the current cuda-engineering initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed113-task2-s0v1-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-da829ae660dc1efa": "the on-call rotation cadence is paired primary and secondary \u2014 by Farid Larsen (legal-counsel) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task2-s0v2-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a914965c055b8a52": "the on-call rotation cadence is split by timezone \u2014 by Farid Larsen (legal-counsel) in #email channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-da829ae660dc1efa"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task2-s0v3-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-67d22a28c1d65959": "the on-call rotation cadence is weekly on Mondays \u2014 by Camila Nakamura (engineering-manager) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-a914965c055b8a52"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task2-s1-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-73254636e498f29f": "the supported API version is v6 \u2014 by Farid Larsen (legal-counsel) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed113-task2-goal",
+        "user_request": "Deliver the current cuda-engineering initiative. State the current value of: the paging severity floor, the on-call rotation cadence, the primary deployment region, the checkout_v2 feature flag state, the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-8c4f5684a7e61bb4",
+          "m-67d22a28c1d65959",
+          "m-2357de71f24a6622",
+          "m-18226d3c1187021b",
+          "m-73254636e498f29f"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed113-task2-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-8c4f5684a7e61bb4",
+              "m-67d22a28c1d65959",
+              "m-2357de71f24a6622",
+              "m-18226d3c1187021b",
+              "m-73254636e498f29f"
+            ],
+            "forbidden_values": [
+              "paired primary and secondary",
+              "split by timezone"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed113-task2-probe-shared-paging-floor",
+            "expected_memory_id": "m-8c4f5684a7e61bb4",
+            "description": "the paging severity floor (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed113-task2-probe-oncall-rotation",
+            "expected_memory_id": "m-67d22a28c1d65959",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed113-task2-probe-shared-primary-region",
+            "expected_memory_id": "m-2357de71f24a6622",
+            "description": "the primary deployment region (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed113-task2-probe-shared-feature-flag",
+            "expected_memory_id": "m-18226d3c1187021b",
+            "description": "the checkout_v2 feature flag state (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed113-task2-probe-api-version",
+            "expected_memory_id": "m-73254636e498f29f",
+            "description": "the supported API version must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-5510e1c25a0af2f6": "the on-call rotation cadence is three-day shifts \u2014 by Camila Nakamura (engineering-manager) in #meeting channel",
+          "m-aa0e490ba663c81d": "the on-call rotation cadence is fortnightly \u2014 by Camila Nakamura (engineering-manager) in #meeting channel",
+          "m-7a3b79eaba75093c": "the supported API version is v2 \u2014 by Hiroshi Kowalski (staff-engineer) in #chat channel",
+          "m-124e84968778c146": "the supported API version is v3 \u2014 by Dmitri Doyle (product-manager) in #email channel",
+          "m-499139c5f003659b": "the supported API version is v1 \u2014 by Hiroshi Kowalski (staff-engineer) in #meeting channel",
+          "m-9a1bb51d24949a0d": "the supported API version is v5 \u2014 by Hiroshi Kowalski (staff-engineer) in #meeting channel",
+          "m-310f9e7676bb810b": "the checkout_v2 feature flag state is shadow-only \u2014 by Dmitri Doyle (product-manager) in #meeting channel",
+          "m-448fce83443d293a": "the checkout_v2 feature flag state is canary-10% \u2014 by Hiroshi Kowalski (staff-engineer) in #meeting channel",
+          "m-22e6a509ea00b077": "the checkout_v2 feature flag state is kill-switched \u2014 by Camila Nakamura (engineering-manager) in #email channel",
+          "m-f98b5f3726e8c125": "the checkout_v2 feature flag state is enabled \u2014 by Farid Larsen (legal-counsel) in #email channel",
+          "m-5066feb121dcb18a": "the paging severity floor is sev-3 and above \u2014 by Farid Larsen (legal-counsel) in #meeting channel",
+          "m-d9b26e6a00d9421e": "the paging severity floor is anything breaching the latency objective \u2014 by Hiroshi Kowalski (staff-engineer) in #email channel",
+          "m-62834cadbc75be33": "the paging severity floor is sev-4 and above \u2014 by Hiroshi Kowalski (staff-engineer) in #meeting channel",
+          "m-3f5ecb82d0fc1be7": "the paging severity floor is sev-2 and above \u2014 by Farid Larsen (legal-counsel) in #meeting channel",
+          "m-5e28c4d09ee99db3": "the primary deployment region is ca-central-1 \u2014 by Dmitri Doyle (product-manager) in #meeting channel",
+          "m-40bf7bf5147a56cd": "the primary deployment region is us-west-2 \u2014 by Farid Larsen (legal-counsel) in #meeting channel",
+          "m-a3458527ede8eeff": "the primary deployment region is ap-south-1 \u2014 by Hiroshi Kowalski (staff-engineer) in #email channel",
+          "m-1a3dd56c7b6dbd62": "the primary deployment region is me-south-1 \u2014 by Dmitri Doyle (product-manager) in #chat channel"
+        },
+        "superseded_memory_ids": [
+          "m-da829ae660dc1efa",
+          "m-a914965c055b8a52"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  }
+]

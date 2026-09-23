@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed2",
+  "domain": "data-infrastructure",
+  "org_name": "Cobalt Works",
+  "teams": [
+    {
+      "team_id": "world-seed2-team-data-infrastructure-core",
+      "name": "Data Infrastructure Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed2-team-data-infrastructure-platform",
+      "name": "Data Infrastructure Platform",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed2-persona-0-camila-larsen",
+      "name": "Camila Larsen",
+      "role": "researcher",
+      "team_id": "world-seed2-team-data-infrastructure-core"
+    },
+    {
+      "persona_id": "world-seed2-persona-1-camila-petrov",
+      "name": "Camila Petrov",
+      "role": "support-lead",
+      "team_id": "world-seed2-team-data-infrastructure-core"
+    },
+    {
+      "persona_id": "world-seed2-persona-2-priya-kowalski",
+      "name": "Priya Kowalski",
+      "role": "researcher",
+      "team_id": "world-seed2-team-data-infrastructure-platform"
+    },
+    {
+      "persona_id": "world-seed2-persona-3-hiroshi-doyle",
+      "name": "Hiroshi Doyle",
+      "role": "staff-engineer",
+      "team_id": "world-seed2-team-data-infrastructure-core"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed2-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed2-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed2-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed2-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed2-kb-data-infrastructure",
+      "name": "data-infrastructure knowledge base",
+      "topic": "data-infrastructure"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed2-repo-go",
+      "name": "data-infrastructure-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed2-repo-rust",
+      "name": "data-infrastructure-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed2-repo-typescript",
+      "name": "data-infrastructure-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 2,
+  "generator_version": "world.v1"
+}

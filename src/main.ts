@@ -13,6 +13,7 @@ import { importRecordsCommand } from './cli/commands/import-records.js';
 import { signatureCommand } from './cli/commands/signature.js';
 import { searchErrorsCommand } from './cli/commands/search-errors.js';
 import { extractErrorsCommand } from './cli/commands/extract-errors.js';
+import { mineReachesCommand } from './cli/commands/mine-reaches.js';
 import { distillLessonsCommand } from './cli/commands/distill-lessons.js';
 import { retrieveCommand } from './cli/commands/retrieve.js';
 import { linkOutcomesCommand } from './cli/commands/link-outcomes.js';
@@ -40,6 +41,7 @@ export function main(argv: string[]): Promise<void> {
   registerCommand('signature', signatureCommand);
   registerCommand('search-errors', searchErrorsCommand);
   registerCommand('extract-errors', extractErrorsCommand);
+  registerCommand('mine-reaches', mineReachesCommand);
   registerCommand('distill-lessons', distillLessonsCommand);
   registerCommand('retrieve', retrieveCommand);
   registerCommand('link-outcomes', linkOutcomesCommand);

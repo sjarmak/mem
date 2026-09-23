@@ -1,0 +1,96 @@
+{
+  "world_id": "world-seed132",
+  "domain": "legal",
+  "org_name": "Sablefish Industries",
+  "teams": [
+    {
+      "team_id": "world-seed132-team-legal-core",
+      "name": "Legal Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed132-team-legal-delivery",
+      "name": "Legal Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed132-team-legal-foundations",
+      "name": "Legal Foundations",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed132-team-legal-platform",
+      "name": "Legal Platform",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed132-persona-0-farid-kowalski",
+      "name": "Farid Kowalski",
+      "role": "legal-counsel",
+      "team_id": "world-seed132-team-legal-core"
+    },
+    {
+      "persona_id": "world-seed132-persona-1-priya-doyle",
+      "name": "Priya Doyle",
+      "role": "product-manager",
+      "team_id": "world-seed132-team-legal-delivery"
+    },
+    {
+      "persona_id": "world-seed132-persona-2-ada-ibarra",
+      "name": "Ada Ibarra",
+      "role": "engineering-manager",
+      "team_id": "world-seed132-team-legal-foundations"
+    },
+    {
+      "persona_id": "world-seed132-persona-3-hiroshi-ibarra",
+      "name": "Hiroshi Ibarra",
+      "role": "qa-engineer",
+      "team_id": "world-seed132-team-legal-platform"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed132-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed132-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed132-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed132-kb-legal",
+      "name": "legal knowledge base",
+      "topic": "legal"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed132-repo-typescript",
+      "name": "legal-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed132-repo-python",
+      "name": "legal-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed132-repo-go",
+      "name": "legal-go",
+      "language": "go"
+    }
+  ],
+  "seed": 132,
+  "generator_version": "world.v1"
+}

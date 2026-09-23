@@ -1,0 +1,101 @@
+{
+  "world_id": "world-seed113",
+  "domain": "cuda-engineering",
+  "org_name": "Meridian Industries",
+  "teams": [
+    {
+      "team_id": "world-seed113-team-cuda-engineering-reliability",
+      "name": "Cuda Engineering Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed113-team-cuda-engineering-platform",
+      "name": "Cuda Engineering Platform",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed113-team-cuda-engineering-delivery",
+      "name": "Cuda Engineering Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed113-team-cuda-engineering-core",
+      "name": "Cuda Engineering Core",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed113-persona-0-hiroshi-kowalski",
+      "name": "Hiroshi Kowalski",
+      "role": "staff-engineer",
+      "team_id": "world-seed113-team-cuda-engineering-reliability"
+    },
+    {
+      "persona_id": "world-seed113-persona-1-farid-larsen",
+      "name": "Farid Larsen",
+      "role": "legal-counsel",
+      "team_id": "world-seed113-team-cuda-engineering-platform"
+    },
+    {
+      "persona_id": "world-seed113-persona-2-camila-nakamura",
+      "name": "Camila Nakamura",
+      "role": "engineering-manager",
+      "team_id": "world-seed113-team-cuda-engineering-delivery"
+    },
+    {
+      "persona_id": "world-seed113-persona-3-dmitri-doyle",
+      "name": "Dmitri Doyle",
+      "role": "product-manager",
+      "team_id": "world-seed113-team-cuda-engineering-core"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed113-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed113-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed113-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed113-kb-cuda-engineering",
+      "name": "cuda-engineering knowledge base",
+      "topic": "cuda-engineering"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed113-repo-typescript",
+      "name": "cuda-engineering-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed113-repo-rust",
+      "name": "cuda-engineering-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed113-repo-go",
+      "name": "cuda-engineering-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed113-repo-cuda-cpp",
+      "name": "cuda-engineering-cuda-cpp",
+      "language": "cuda-cpp"
+    }
+  ],
+  "seed": 113,
+  "generator_version": "world.v1"
+}

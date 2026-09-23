@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed112",
+  "domain": "legal",
+  "org_name": "Verdigris Labs",
+  "teams": [
+    {
+      "team_id": "world-seed112-team-legal-platform",
+      "name": "Legal Platform",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed112-team-legal-delivery",
+      "name": "Legal Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed112-team-legal-enablement",
+      "name": "Legal Enablement",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed112-persona-0-leila-fontaine",
+      "name": "Leila Fontaine",
+      "role": "staff-engineer",
+      "team_id": "world-seed112-team-legal-platform"
+    },
+    {
+      "persona_id": "world-seed112-persona-1-priya-ibarra",
+      "name": "Priya Ibarra",
+      "role": "support-lead",
+      "team_id": "world-seed112-team-legal-delivery"
+    },
+    {
+      "persona_id": "world-seed112-persona-2-greta-haddad",
+      "name": "Greta Haddad",
+      "role": "engineering-manager",
+      "team_id": "world-seed112-team-legal-delivery"
+    },
+    {
+      "persona_id": "world-seed112-persona-3-camila-larsen",
+      "name": "Camila Larsen",
+      "role": "support-lead",
+      "team_id": "world-seed112-team-legal-enablement"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed112-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed112-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed112-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed112-kb-legal",
+      "name": "legal knowledge base",
+      "topic": "legal"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed112-repo-go",
+      "name": "legal-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed112-repo-python",
+      "name": "legal-python",
+      "language": "python"
+    },
+    {
+      "repo_id": "world-seed112-repo-rust",
+      "name": "legal-rust",
+      "language": "rust"
+    }
+  ],
+  "seed": 112,
+  "generator_version": "world.v1"
+}

@@ -2,31 +2,39 @@
 # Local hooks (not pinned-repo hooks) because the Python package lives in
 # memory-bench/ and the TS project at the root — each hook runs the project's own
 # gate command so the rules live in exactly one place (pyproject / package.json).
+#
+# The three Python hooks cover memory-bench/ AND public/. public/ ships the
+# standalone validator a downloader runs, and it sat outside every gate at BOTH
+# sites until it was brought in here: the `files:` pattern decides whether a hook
+# RUNS on a public/-only commit, and the argv decides what it then looks at, so
+# widening one without the other leaves the hole open. The argv is pinned by
+# tests/test_public_tree_is_gated.py, which also plants a violation under public/
+# and runs these commands against it.
 repos:
   - repo: local
     hooks:
       - id: py-black
-        name: black --check (memory-bench)
-        entry: bash -c 'cd memory-bench && black --check .'
+        name: black --check (memory-bench + public)
+        entry: bash -c 'cd memory-bench && black --check --config pyproject.toml . ../public'
         language: system
         types: [python]
-        files: ^memory-bench/
+        files: ^(memory-bench|public)/
         pass_filenames: false
 
       - id: py-ruff
-        name: ruff check (memory-bench)
-        entry: bash -c 'cd memory-bench && ruff check .'
+        name: ruff check (memory-bench + public)
+        entry: bash -c 'cd memory-bench && ruff check --config pyproject.toml . ../public'
         language: system
         types: [python]
-        files: ^memory-bench/
+        files: ^(memory-bench|public)/
         pass_filenames: false
 
       - id: py-mypy
-        name: mypy --strict (memory-bench)
+        name: mypy --strict (memory-bench + public)
         entry: bash -c 'cd memory-bench && mypy'
         language: system
         types: [python]
-        files: ^memory-bench/
+        files: ^(memory-bench|public)/
         pass_filenames: false
 
       - id: ts-check

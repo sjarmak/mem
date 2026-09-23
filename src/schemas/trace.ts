@@ -95,3 +95,34 @@ export const PrLinkSchema = z.object({
 });
 
 export type PrLink = z.infer<typeof PrLinkSchema>;
+
+/**
+ * One deterministic **context reach** extracted from a transcript — a point
+ * where the agent went looking for context it did not hold (a file read, a
+ * glob/grep, a `bd show`, a `git log`). Every field is a mechanical projection
+ * of the transcript: the tool name verbatim, the argument that carried the
+ * target, the pairing id, the turn ordinal, and the observed result's error
+ * flag and size. Deliberately absent: any statement of what the agent was
+ * *asking*, or how useful the answer was — that is a model-lane annotation
+ * layered on top, never a column this deterministic row fabricates.
+ *
+ * Produced by `parse/context-reach.ts`; see that module for the ZFC boundary.
+ */
+export const ContextReachSchema = z.object({
+  /** Transcript tool name, verbatim (`Read`, `Glob`, `Grep`, `Bash`, …). */
+  tool: z.string().min(1),
+  /** Which kind of argument carried the target. */
+  reach_kind: z.enum(['path', 'query', 'command']),
+  /** The argument's value; normalized (`normalizePath`) for `path` reaches. */
+  target: z.string().min(1),
+  /** The `tool_use` block id the reach was issued under — the pairing key. */
+  tool_use_id: z.string().min(1),
+  /** 0-based `user`+`assistant` turn index of the issuing turn. */
+  turn_index: z.number().int().nonnegative(),
+  /** The paired `tool_result`'s `is_error` flag. */
+  result_is_error: z.boolean(),
+  /** Character count of the observed result text — volume only. */
+  result_chars: z.number().int().nonnegative(),
+});
+
+export type ContextReach = z.infer<typeof ContextReachSchema>;

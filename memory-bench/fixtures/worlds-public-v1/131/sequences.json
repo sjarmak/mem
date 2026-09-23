@@ -1,0 +1,718 @@
+[
+  {
+    "sequence_id": "world-seed131-task0",
+    "title": "Northwind Works initiative: reconcile 5 decisions",
+    "domain": "customer-support",
+    "goal": "Deliver the current customer-support initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed131-task0-shared0-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-c47c96a40e3ad7ff": "the on-call rotation cadence is three-day shifts \u2014 by Farid Kowalski (staff-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task0-shared1-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-23bc04dabcd12db0": "the primary deployment region is us-east-1 \u2014 by Ada Okonkwo (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task0-s0-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-7743482eb8e92238": "the checkout_v2 feature flag state is disabled \u2014 by Farid Kowalski (staff-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task0-s1-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-84257cc75c76c63b": "the project charter decision is staff the reliability track ahead of the roadmap \u2014 by Hiroshi Haddad (support-lead) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task0-s2-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-b889ceaf040ad746": "the supported API version is v10 \u2014 by Kenji Bergstrom (site-reliability-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task0-s3-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-732cf9000dcec7f4": "the approved rollback command is spinnaker pipeline rewind \u2014 by Ada Okonkwo (researcher) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task0-s4v1-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ac93c8975e773035": "the production deploy timeout is 90s \u2014 by Hiroshi Haddad (support-lead) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task0-s4v2-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-0794b7567357c22b": "the production deploy timeout is 30s \u2014 by Ada Okonkwo (researcher) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-ac93c8975e773035"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task0-s4v3-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ef526064120d1b13": "the production deploy timeout is 45s \u2014 by Kenji Bergstrom (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-0794b7567357c22b"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task0-goal",
+        "user_request": "Deliver the current customer-support initiative. State the current value of: the project charter decision, the checkout_v2 feature flag state, the supported API version, the approved rollback command, the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-84257cc75c76c63b",
+          "m-7743482eb8e92238",
+          "m-b889ceaf040ad746",
+          "m-732cf9000dcec7f4",
+          "m-ef526064120d1b13"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed131-task0-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-84257cc75c76c63b",
+              "m-7743482eb8e92238",
+              "m-b889ceaf040ad746",
+              "m-732cf9000dcec7f4",
+              "m-ef526064120d1b13"
+            ],
+            "forbidden_values": [
+              "90s",
+              "30s"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed131-task0-probe-charter",
+            "expected_memory_id": "m-84257cc75c76c63b",
+            "description": "the project charter decision must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed131-task0-probe-feature-flag",
+            "expected_memory_id": "m-7743482eb8e92238",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed131-task0-probe-api-version",
+            "expected_memory_id": "m-b889ceaf040ad746",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed131-task0-probe-rollback-command",
+            "expected_memory_id": "m-732cf9000dcec7f4",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed131-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-ef526064120d1b13",
+            "description": "the production deploy timeout must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-28a62d145137f8cb": "the checkout_v2 feature flag state is enabled \u2014 by Farid Kowalski (staff-engineer) in #meeting channel",
+          "m-4ac8df52f66f740c": "the checkout_v2 feature flag state is canary-25% \u2014 by Hiroshi Haddad (support-lead) in #issue-tracker channel",
+          "m-133d25fe6d8856f6": "the checkout_v2 feature flag state is held at zero traffic \u2014 by Ada Okonkwo (researcher) in #chat channel",
+          "m-4ee38221b3f6d0af": "the checkout_v2 feature flag state is canary-50% \u2014 by Kenji Bergstrom (site-reliability-engineer) in #chat channel",
+          "m-1afed1efcc5a8678": "the project charter decision is cut the integrations track and ship the core \u2014 by Ada Okonkwo (researcher) in #chat channel",
+          "m-2c7a5b7450703fb8": "the project charter decision is freeze scope at the phase-3 milestone \u2014 by Hiroshi Haddad (support-lead) in #issue-tracker channel",
+          "m-d8d2139d9b8fec95": "the project charter decision is hold the public interface steady through the migration \u2014 by Hiroshi Haddad (support-lead) in #issue-tracker channel",
+          "m-7c3464de735860a8": "the project charter decision is retire the legacy pipeline before any new feature \u2014 by Hiroshi Haddad (support-lead) in #issue-tracker channel",
+          "m-cfc64fe55ec86da5": "the project charter decision is move the launch behind the compliance review \u2014 by Ada Okonkwo (researcher) in #meeting channel",
+          "m-cbb84bc9679c8bab": "the supported API version is v2 \u2014 by Ada Okonkwo (researcher) in #meeting channel",
+          "m-c366c0a70430efee": "the supported API version is v6 \u2014 by Ada Okonkwo (researcher) in #chat channel",
+          "m-7b84745f7c3a9aa2": "the supported API version is v5 \u2014 by Farid Kowalski (staff-engineer) in #chat channel",
+          "m-033ddb56628298db": "the supported API version is v8 \u2014 by Kenji Bergstrom (site-reliability-engineer) in #chat channel",
+          "m-61236c42c520edc9": "the approved rollback command is nomad job revert \u2014 by Farid Kowalski (staff-engineer) in #meeting channel",
+          "m-d66746d6c1abe683": "the approved rollback command is kubectl rollout undo \u2014 by Hiroshi Haddad (support-lead) in #issue-tracker channel",
+          "m-2a55738d9cf3a34a": "the approved rollback command is argocd app rollback \u2014 by Ada Okonkwo (researcher) in #chat channel",
+          "m-d27f59c4f56fb52c": "the approved rollback command is terraform apply -refresh \u2014 by Farid Kowalski (staff-engineer) in #chat channel",
+          "m-6e16a7b4ce096455": "the approved rollback command is helm rollback \u2014 by Kenji Bergstrom (site-reliability-engineer) in #chat channel",
+          "m-5f7ede486d078847": "the production deploy timeout is 180s \u2014 by Hiroshi Haddad (support-lead) in #chat channel",
+          "m-76188177d3d71517": "the production deploy timeout is 300s \u2014 by Kenji Bergstrom (site-reliability-engineer) in #meeting channel"
+        },
+        "superseded_memory_ids": [
+          "m-ac93c8975e773035",
+          "m-0794b7567357c22b"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed131-task1",
+    "title": "Northwind Works initiative: reconcile 5 decisions",
+    "domain": "customer-support",
+    "goal": "Deliver the current customer-support initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed131-task1-s0v1-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-15e11185cb9f9594": "the checkout_v2 feature flag state is enabled \u2014 by Farid Kowalski (staff-engineer) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task1-s0v2-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-8c24f3a05e758d78": "the checkout_v2 feature flag state is ramped to all traffic \u2014 by Kenji Bergstrom (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-15e11185cb9f9594"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task1-s0v3-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-81d6619dac017152": "the checkout_v2 feature flag state is canary-25% \u2014 by Ada Okonkwo (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-8c24f3a05e758d78"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task1-s1-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-88790489dd0c9942": "the release artifact store is the vendor registry \u2014 by Ada Okonkwo (researcher) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task1-s2-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-8d0ef2485b4b01fc": "the data retention window is 30 days \u2014 by Ada Okonkwo (researcher) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task1-goal",
+        "user_request": "Deliver the current customer-support initiative. State the current value of: the on-call rotation cadence, the release artifact store, the checkout_v2 feature flag state, the data retention window, the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-c47c96a40e3ad7ff",
+          "m-88790489dd0c9942",
+          "m-81d6619dac017152",
+          "m-8d0ef2485b4b01fc",
+          "m-23bc04dabcd12db0"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed131-task1-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-c47c96a40e3ad7ff",
+              "m-88790489dd0c9942",
+              "m-81d6619dac017152",
+              "m-8d0ef2485b4b01fc",
+              "m-23bc04dabcd12db0"
+            ],
+            "forbidden_values": [
+              "enabled",
+              "ramped to all traffic"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed131-task1-probe-shared-oncall-rotation",
+            "expected_memory_id": "m-c47c96a40e3ad7ff",
+            "description": "the on-call rotation cadence (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed131-task1-probe-artifact-store",
+            "expected_memory_id": "m-88790489dd0c9942",
+            "description": "the release artifact store must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed131-task1-probe-feature-flag",
+            "expected_memory_id": "m-81d6619dac017152",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed131-task1-probe-retention-window",
+            "expected_memory_id": "m-8d0ef2485b4b01fc",
+            "description": "the data retention window must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed131-task1-probe-shared-primary-region",
+            "expected_memory_id": "m-23bc04dabcd12db0",
+            "description": "the primary deployment region (decided in an earlier task) must be recalled"
+          }
+        ],
+        "distractor_memories": {
+          "m-02ee1a483e6ab3c5": "the checkout_v2 feature flag state is kill-switched \u2014 by Farid Kowalski (staff-engineer) in #chat channel",
+          "m-3e3f0b3801f0622e": "the checkout_v2 feature flag state is canary-50% \u2014 by Kenji Bergstrom (site-reliability-engineer) in #chat channel",
+          "m-8d2b46747e9f31c3": "the checkout_v2 feature flag state is shadow-only \u2014 by Farid Kowalski (staff-engineer) in #meeting channel",
+          "m-4255fabf33a4e128": "the release artifact store is the compliance archive \u2014 by Kenji Bergstrom (site-reliability-engineer) in #issue-tracker channel",
+          "m-b6036d50a79fa0ed": "the release artifact store is the internal registry \u2014 by Ada Okonkwo (researcher) in #issue-tracker channel",
+          "m-e3f61a54c64f1009": "the release artifact store is one bucket per release \u2014 by Farid Kowalski (staff-engineer) in #meeting channel",
+          "m-948b09f048bd7213": "the data retention window is 10 years \u2014 by Hiroshi Haddad (support-lead) in #chat channel",
+          "m-84abbe10c33a6999": "the data retention window is kept indefinitely \u2014 by Hiroshi Haddad (support-lead) in #meeting channel",
+          "m-4da06a2e679e896d": "the data retention window is 1 year \u2014 by Ada Okonkwo (researcher) in #issue-tracker channel",
+          "m-629d5f1b843c91c1": "the on-call rotation cadence is weekly on Thursdays \u2014 by Kenji Bergstrom (site-reliability-engineer) in #chat channel",
+          "m-cff43efb626ec1be": "the on-call rotation cadence is two-week shifts \u2014 by Farid Kowalski (staff-engineer) in #chat channel",
+          "m-77fa41e5bcedb691": "the on-call rotation cadence is follow-the-sun \u2014 by Farid Kowalski (staff-engineer) in #meeting channel",
+          "m-5a5c4dc2dcd9e67d": "the primary deployment region is eu-west-1 \u2014 by Ada Okonkwo (researcher) in #issue-tracker channel",
+          "m-832c5863a0ffc121": "the primary deployment region is sa-east-1 \u2014 by Kenji Bergstrom (site-reliability-engineer) in #issue-tracker channel",
+          "m-d8de44dd4f00fbfd": "the primary deployment region is ap-northeast-1 \u2014 by Farid Kowalski (staff-engineer) in #meeting channel",
+          "m-408a1bbb674e7f8b": "the primary deployment region is ap-south-1 \u2014 by Kenji Bergstrom (site-reliability-engineer) in #chat channel",
+          "m-2f089b5de8a23d78": "the primary deployment region is ca-central-1 \u2014 by Ada Okonkwo (researcher) in #chat channel"
+        },
+        "superseded_memory_ids": [
+          "m-15e11185cb9f9594",
+          "m-8c24f3a05e758d78"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed131-task2",
+    "title": "Northwind Works initiative: reconcile 5 decisions",
+    "domain": "customer-support",
+    "goal": "Deliver the current customer-support initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed131-task2-s0-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-e24c8e6b7700fe8c": "the production deploy timeout is 30s \u2014 by Ada Okonkwo (researcher) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task2-s1v1-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-fa8a99709cf47b73": "the project charter decision is staff the reliability track ahead of the roadmap \u2014 by Hiroshi Haddad (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task2-s1v2-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-373e467efa4276f8": "the project charter decision is retire the legacy pipeline before any new feature \u2014 by Hiroshi Haddad (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-fa8a99709cf47b73"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task2-s1v3-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-b1fb1bc86c4b8fe8": "the project charter decision is extend the beta by one quarter \u2014 by Farid Kowalski (staff-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-373e467efa4276f8"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task2-s2-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-0a6a0666e3155214": "the checkout_v2 feature flag state is ramped to all traffic \u2014 by Farid Kowalski (staff-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task2-s3-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-19fe75c8cb9168c5": "the approved rollback command is kubectl rollout undo \u2014 by Farid Kowalski (staff-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed131-task2-goal",
+        "user_request": "Deliver the current customer-support initiative. State the current value of: the primary deployment region, the approved rollback command, the checkout_v2 feature flag state, the production deploy timeout, the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-23bc04dabcd12db0",
+          "m-19fe75c8cb9168c5",
+          "m-0a6a0666e3155214",
+          "m-e24c8e6b7700fe8c",
+          "m-b1fb1bc86c4b8fe8"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed131-task2-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-23bc04dabcd12db0",
+              "m-19fe75c8cb9168c5",
+              "m-0a6a0666e3155214",
+              "m-e24c8e6b7700fe8c",
+              "m-b1fb1bc86c4b8fe8"
+            ],
+            "forbidden_values": [
+              "staff the reliability track ahead of the roadmap",
+              "retire the legacy pipeline before any new feature"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed131-task2-probe-shared-primary-region",
+            "expected_memory_id": "m-23bc04dabcd12db0",
+            "description": "the primary deployment region (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed131-task2-probe-rollback-command",
+            "expected_memory_id": "m-19fe75c8cb9168c5",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed131-task2-probe-feature-flag",
+            "expected_memory_id": "m-0a6a0666e3155214",
+            "description": "the checkout_v2 feature flag state must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed131-task2-probe-deploy-timeout",
+            "expected_memory_id": "m-e24c8e6b7700fe8c",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed131-task2-probe-charter",
+            "expected_memory_id": "m-b1fb1bc86c4b8fe8",
+            "description": "the project charter decision must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-6cd9d0ab88636af5": "the production deploy timeout is 90s \u2014 by Ada Okonkwo (researcher) in #chat channel",
+          "m-bc89defc60802939": "the production deploy timeout is 15s \u2014 by Ada Okonkwo (researcher) in #meeting channel",
+          "m-6270fc57af8e5e12": "the production deploy timeout is 45s \u2014 by Ada Okonkwo (researcher) in #issue-tracker channel",
+          "m-1861d9f4fa7c943e": "the project charter decision is cut the integrations track and ship the core \u2014 by Kenji Bergstrom (site-reliability-engineer) in #meeting channel",
+          "m-b571fd51de6eb3b9": "the checkout_v2 feature flag state is held at zero traffic \u2014 by Kenji Bergstrom (site-reliability-engineer) in #chat channel",
+          "m-bd052455516a81fe": "the checkout_v2 feature flag state is canary-10% \u2014 by Farid Kowalski (staff-engineer) in #chat channel",
+          "m-46e5a3a4d153f2c9": "the checkout_v2 feature flag state is canary-25% \u2014 by Ada Okonkwo (researcher) in #meeting channel",
+          "m-ad1616ddaa4d94b8": "the checkout_v2 feature flag state is shadow-only \u2014 by Kenji Bergstrom (site-reliability-engineer) in #chat channel",
+          "m-2713c02290391650": "the approved rollback command is ansible-playbook restore.yml \u2014 by Hiroshi Haddad (support-lead) in #chat channel",
+          "m-98712b770cd5a7a0": "the approved rollback command is flux suspend then resume \u2014 by Hiroshi Haddad (support-lead) in #meeting channel",
+          "m-a4a0dfde07953618": "the approved rollback command is helm rollback \u2014 by Farid Kowalski (staff-engineer) in #chat channel",
+          "m-e39ec9adc1dff961": "the approved rollback command is terraform apply -refresh \u2014 by Farid Kowalski (staff-engineer) in #issue-tracker channel",
+          "m-3ce2d1474772362d": "the approved rollback command is nomad job revert \u2014 by Farid Kowalski (staff-engineer) in #meeting channel",
+          "m-5a5c4dc2dcd9e67d": "the primary deployment region is eu-west-1 \u2014 by Ada Okonkwo (researcher) in #issue-tracker channel",
+          "m-832c5863a0ffc121": "the primary deployment region is sa-east-1 \u2014 by Kenji Bergstrom (site-reliability-engineer) in #issue-tracker channel",
+          "m-d8de44dd4f00fbfd": "the primary deployment region is ap-northeast-1 \u2014 by Farid Kowalski (staff-engineer) in #meeting channel",
+          "m-408a1bbb674e7f8b": "the primary deployment region is ap-south-1 \u2014 by Kenji Bergstrom (site-reliability-engineer) in #chat channel",
+          "m-2f089b5de8a23d78": "the primary deployment region is ca-central-1 \u2014 by Ada Okonkwo (researcher) in #chat channel"
+        },
+        "superseded_memory_ids": [
+          "m-fa8a99709cf47b73",
+          "m-373e467efa4276f8"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  }
+]

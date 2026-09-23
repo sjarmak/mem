@@ -1,0 +1,297 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sjarmak/mem/public/schema/bench-record.v3.schema.json",
+  "title": "membench public bench record v3",
+  "description": "One published benchmark record. The SAME shape carries a synthetic record (materialised from a frozen world) and a real record (projected from the work-audit graph); `origin` is the only field that distinguishes them, and the two are never written into one file. Every field is traceable to an object the generators or the store already carry. The identifying fields a published record must never carry (pr, commit_sha, base_commit, repo, jsonl_path, raw transcript text) are excluded structurally by `additionalProperties: false` at the top level and by the validator's field scan at every depth. CHANGES FROM v1, each removing a way to answer a record without retrieving anything: every memory id is now an opaque minted alias (`publicMemoryId`) rather than a hash of its internal id, so no id states its own role; `loo.candidates[].supersedes` is gone, because the ids a candidate superseded were exactly the stale ones and the gold could be read straight off that list; `evidence.superseded` publishes the stale TEXT, so a pool a consumer assembles from the record actually carries the trap the answer's `forbidden_values` grade; and `provenance` swaps the raw `step_id` (the one field that paired a published alias with its preimage) for `exporter_version` and a cross-session claim. CHANGES FROM v2, both closing the same defect: `provenance.cross_session_gold_ids` replaces the `cross_session_gold` COUNT, because v2's count was re-derivable as `len(evidence.gold_ids)` minus 3 on 160 of 160 released records - the generator added a goal's cross-session decisions on top of a fixed local budget, so the gold set size carried the count and two shipped paragraphs said it did not. The generator now takes them OUT of that budget, so `evidence.gold_ids` is a constant width on every record of the release and no arithmetic over it recovers anything; and the claim ships as the ids themselves, which a validator can check against the rest of the corpus rather than merely bound.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "record_id",
+    "origin",
+    "tier",
+    "question",
+    "evidence",
+    "candidate_pool",
+    "answer",
+    "necessity",
+    "loo",
+    "provenance",
+    "leak_guard"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "bench-record.v3"
+    },
+    "record_id": {
+      "description": "Stable id of this record. Bead-id shaped (dots allowed for hierarchy), never a path separator and never leading with a dot, because it flows into filenames.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+    },
+    "origin": {
+      "description": "\"synthetic\" for a record materialised from a frozen world, \"real\" for one projected from the work-audit graph. The two are never pooled in one file.",
+      "enum": ["synthetic", "real"]
+    },
+    "tier": {
+      "description": "The memory scope the question spans. \"prompt\": answerable inside one step's own request and environment. \"session\": the goal needs values established by earlier steps of the same sequence. \"project\": the goal additionally needs a memory written by a DIFFERENT sequence of the same world, which `provenance.cross_session_gold_ids` names and the producer refuses to publish without.",
+      "enum": ["prompt", "session", "project"]
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "asked_at", "scope_id"],
+      "properties": {
+        "text": {
+          "description": "The request put to the agent, verbatim. Agent-readable: the leak scan runs over it.",
+          "type": "string",
+          "minLength": 1
+        },
+        "asked_at": {
+          "description": "When the question is asked, as an instant in UTC. Equal to loo.boundary: the memory the agent may hold is the memory that existed at this instant.",
+          "$ref": "#/$defs/isoUtc"
+        },
+        "scope_id": {
+          "description": "The id of the scope the answer must span: the step for a prompt-tier record (published as its alias, because the step is also the LOO query), the sequence for a session-tier one, the world for a project-tier one.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "evidence": {
+      "description": "The text behind every id in the pool, split by the role that id plays. This is what makes a released record self-contained: a consumer assembles the candidate pool from these three buckets, and grades against `answer`, without holding anything the producer kept back.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gold", "gold_ids", "distractors", "superseded", "superseded_ids"],
+      "properties": {
+        "gold": {
+          "description": "Memory id -> its text, for every memory the answer requires. Raw text, never a graph.",
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/publicMemoryId" },
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "gold_ids": {
+          "description": "The gold ids in the order the record requires them. Keys of `gold`, as a list, so order is published rather than left to object iteration.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/publicMemoryId" }
+        },
+        "distractors": {
+          "description": "Memory id -> text for plausible-but-wrong entries present in the pool. May be empty: absence of distractors is a real property of a record, not missing data.",
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/publicMemoryId" },
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "superseded": {
+          "description": "Memory id -> the STALE text, for every entry whose value was later replaced. Published because the pool is only a trap if the trap has content: an arm that retrieves indiscriminately hands the agent a value `answer.forbidden_values` will fail it for, and a consumer that never received the text could not build that pool. Keys are exactly `superseded_ids`. May be empty when nothing in the record was superseded.",
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/publicMemoryId" },
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "superseded_ids": {
+          "description": "Ids of entries whose value was later replaced. They stay in the candidate pool on purpose: surfacing one is the staleness failure the answer's forbidden_values grade.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/publicMemoryId" }
+        }
+      }
+    },
+    "candidate_pool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ids"],
+      "properties": {
+        "ids": {
+          "description": "Every id an arm is allowed to see for this record, in the order it must be seeded in: the leave-one-out eligible set, exactly the union of the gold, distractor and superseded ids, and nothing excluded by `loo`. The ORDER is normative and is not a formatting choice. It is `sort ascending by HMAC-SHA256(key=record_id, message=id).hexdigest()`, ties broken by the id string, which JSON Schema cannot express and the standalone validator therefore recomputes and enforces. Merging the three evidence buckets in bucket order instead puts the gold set in the low slots of every record, which makes any policy favoring early entries a perfect retriever; sorting by id instead reuses one pseudorandom draw per memory across every record carrying it, which on the release where it was measured put gold first in 47 records of 160. Whether that sharing shows up is a property of the mint: on this release the same rule reads 35 records of 160 (0.2188) against a per-record chance of 0.2017, p = 0.3191 over 20,000 permutation draws, and the rule is still wrong because the next mint is another draw. Keying the draw by `record_id` gives each memory an independent position per record whatever the mint, and reads 41 in 160 (0.2562) at p = 0.0546.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/publicMemoryId" }
+        }
+      }
+    },
+    "answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_values", "forbidden_values", "check_kind"],
+      "properties": {
+        "expected_values": {
+          "description": "Values the answer must carry. Word-boundary matched against the agent's text for check_kind \"value-set\", against the tool call's argument values for \"tool-call\".",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "forbidden_values": {
+          "description": "Values the answer must NOT carry: the superseded values of the same subjects. Stating one fails the record.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "check_kind": {
+          "description": "\"value-set\": the text answer is graded. \"tool-call\": a tool invocation carrying the value is graded, and the text is not.",
+          "enum": ["value-set", "tool-call"]
+        }
+      }
+    },
+    "necessity": {
+      "description": "The memory-necessity gate's verdict for this record, copied from the corpus sweep artifact. `reference_agent` is required because the rewards are only interpretable against the agent that produced them. The block publishes its own working, so the validator redoes the arithmetic rather than taking the verdict: `delta` must equal `oracle_reward` minus `no_memory_reward`, and `accepted` must equal `delta > epsilon`, which is the rule `membench.generators.pilot_filter` decided by. A flipped verdict or a flipped delta sign contradicts the rewards shipped beside it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "oracle_reward",
+        "no_memory_reward",
+        "delta",
+        "epsilon",
+        "accepted",
+        "reason",
+        "reference_agent"
+      ],
+      "properties": {
+        "oracle_reward": { "type": "number" },
+        "no_memory_reward": { "type": "number" },
+        "delta": { "type": "number" },
+        "epsilon": { "type": "number", "minimum": 0 },
+        "accepted": { "type": "boolean" },
+        "reason": { "type": "string", "minLength": 1 },
+        "reference_agent": { "type": "string", "minLength": 1 }
+      }
+    },
+    "loo": {
+      "description": "The leave-one-out boundary, published so a consumer can RECOMPUTE it rather than trust it. `candidates` plus `query` carry exactly the projection the five-axis sibling rule and the strict temporal cut need, with every identifying value replaced by an opaque equality token.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["boundary", "excluded_ids", "exclusion_axes", "query", "candidates"],
+      "properties": {
+        "boundary": {
+          "description": "The instant the cut is taken at. A candidate is eligible only when it closed STRICTLY before this.",
+          "$ref": "#/$defs/isoUtc"
+        },
+        "excluded_ids": {
+          "description": "Every candidate id withheld from the pool. Never empty: the query's own record excludes itself unconditionally.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/publicMemoryId" }
+        },
+        "exclusion_axes": {
+          "description": "Which axes actually fired, as a set. \"temporal\" is the strict cut (including a candidate that never closed), \"self\" the query's own record, and the remaining five are the same-work axes. The v1 \"supersedes\" axis is gone with the field it read: a published candidate no longer carries supersession edges, so the query's closure is always empty, and the producer RAISES rather than emitting an axis this enum does not list.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["temporal", "self", "convoy", "pr", "external_ref", "epic_parent", "child"]
+          }
+        },
+        "query": {
+          "description": "The LOO projection of the work being asked about. The sibling axes fire only when the query names a value, so a null token never matches another null.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id"],
+          "properties": {
+            "id": { "$ref": "#/$defs/publicMemoryId" },
+            "convoy_key": { "$ref": "#/$defs/workKey" },
+            "pr_key": { "$ref": "#/$defs/opaqueKey" },
+            "external_ref_key": { "$ref": "#/$defs/opaqueKey" },
+            "parent_key": { "$ref": "#/$defs/workKey" }
+          }
+        },
+        "candidates": {
+          "description": "Every id considered for the pool, with the fields the cut needs. The union of `candidate_pool.ids` and `excluded_ids`, and nothing else. There is no `supersedes`: v1 published it, and because the ids a candidate superseded were exactly the stale ones, a consumer could subtract them and read the gold off a record with the evidence deleted. The synthetic `closed` grid does not preserve supersession order; its positions carry no evidence about which value is current.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "closed"],
+            "properties": {
+              "id": { "$ref": "#/$defs/publicMemoryId" },
+              "closed": {
+                "description": "When the candidate closed, or null when it never did. Null is never eligible. Distinct within a record for every non-null value: a shared instant would group the candidates that were laid down together, which is a label rather than a fact about the task.",
+                "oneOf": [{ "$ref": "#/$defs/isoUtc" }, { "type": "null" }]
+              },
+              "convoy_key": { "$ref": "#/$defs/workKey" },
+              "pr_key": { "$ref": "#/$defs/opaqueKey" },
+              "external_ref_key": { "$ref": "#/$defs/opaqueKey" },
+              "parent_key": { "$ref": "#/$defs/workKey" }
+            }
+          }
+        }
+      }
+    },
+    "provenance": {
+      "description": "How this record was produced. Nothing here names a repository, a commit or a transcript path, and nothing here pairs a published alias with the internal id it was minted from.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generator_version",
+        "exporter_version",
+        "seed",
+        "world_id",
+        "sequence_id",
+        "cross_session_gold_ids",
+        "source_sha256"
+      ],
+      "properties": {
+        "generator_version": { "type": "string", "minLength": 1 },
+        "exporter_version": {
+          "description": "The producer that wrote this record. Bumped with the schema, so a record states which exporter's guards cleared it.",
+          "type": "string",
+          "minLength": 1
+        },
+        "seed": { "type": "integer" },
+        "world_id": { "type": "string", "minLength": 1 },
+        "sequence_id": { "type": "string", "minLength": 1 },
+        "cross_session_gold_ids": {
+          "description": "WHICH of this record's gold memories were written by a DIFFERENT sequence of the same world - a subset of `evidence.gold_ids`, in the same alias order. Non-empty exactly on the project tier, which is what that tier claims; empty on every session-tier record. This is answer-key material and belongs behind the harness seam with the rest of `evidence`: an arm told which of its gold ids are cross-session has been told where to look. Nothing inside ONE record re-derives it. The gold set is a constant width on every record of the release, so the arithmetic that recovered v2's count returns nothing, and the pool order is a keyed permutation. ACROSS the records of one `question.scope_id` part of it is derivable, and that is deliberate: a memory two sequences of a world both need is minted once at world scope and publishes under one alias in both their records, while a memory a sequence wrote for itself appears in its own record and nowhere else. That repetition is the only published thing that attributes a memory to a sequence, and it is what makes this field checkable rather than a free claim - on the released corpus it names 40 of the 108 cross-session golds with nothing wrong, and no session-local gold repeats at all. The validator runs the same join; `public/data/SHA256SUMS` covers the golds it does not reach.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/publicMemoryId" }
+        },
+        "source_sha256": {
+          "description": "SHA-256 over the canonical JSON of the source object this record was projected from, so a republished record can be tied back to it.",
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "leak_guard": {
+      "description": "Which guard cleared this record before publication, and over which field names. `identifying_keys_checked` mirrors membench.grading.leak_guard.IDENTIFYING_KEYS; the standalone validator asserts the two are equal.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["validator_version", "identifying_keys_checked"],
+      "properties": {
+        "validator_version": { "type": "string", "minLength": 1 },
+        "identifying_keys_checked": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "publicMemoryId": {
+      "description": "A published memory id: `k-` and 16 lowercase hex, a keyed alias minted by the producer. It is deliberately uninformative - it is not derived from the id it replaces by any function a holder of this file can compute, and nothing about it says whether the entry is gold, a distractor or a stale value. Two records of one release that show the same id mean the same memory; that is the only thing an id tells you.",
+      "type": "string",
+      "pattern": "^k-[0-9a-f]{16}$"
+    },
+    "isoUtc": {
+      "description": "An instant in UTC: YYYY-MM-DDTHH:MM[:SS[.sss]] with a Z or numeric offset. A date alone is rejected, because a boundary is an instant and not a day to guess midnight for.",
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}[T ]\\d{2}:\\d{2}(:\\d{2}(\\.\\d{1,3})?)?(Z|[+-]\\d{2}:?\\d{2})?$"
+    },
+    "workKey": {
+      "description": "A work id in the SAME id space as the candidate ids, or null when the work names no value on that axis. The convoy and parent axes are published in the clear because the epic_parent and child axes compare a parent against a candidate id directly.",
+      "oneOf": [
+        { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$" },
+        { "type": "null" }
+      ]
+    },
+    "opaqueKey": {
+      "description": "An equality token, or null when the work names no value on that axis. The change and branch axes are only ever compared for equality, so the raw value is never published: a real record carries a salted SHA-256 prefix, a synthetic record carries null. This is what keeps a pull-request number or a branch name out of a published record while leaving the axis checkable.",
+      "oneOf": [{ "type": "string", "pattern": "^[0-9a-f]{16,64}$" }, { "type": "null" }]
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

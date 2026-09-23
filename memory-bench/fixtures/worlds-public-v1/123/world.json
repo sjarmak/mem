@@ -1,0 +1,91 @@
+{
+  "world_id": "world-seed123",
+  "domain": "cuda-engineering",
+  "org_name": "Ironwood Industries",
+  "teams": [
+    {
+      "team_id": "world-seed123-team-cuda-engineering-delivery",
+      "name": "Cuda Engineering Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed123-team-cuda-engineering-enablement",
+      "name": "Cuda Engineering Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed123-team-cuda-engineering-foundations",
+      "name": "Cuda Engineering Foundations",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed123-persona-0-nadia-doyle",
+      "name": "Nadia Doyle",
+      "role": "engineering-manager",
+      "team_id": "world-seed123-team-cuda-engineering-delivery"
+    },
+    {
+      "persona_id": "world-seed123-persona-1-oskar-nakamura",
+      "name": "Oskar Nakamura",
+      "role": "support-lead",
+      "team_id": "world-seed123-team-cuda-engineering-delivery"
+    },
+    {
+      "persona_id": "world-seed123-persona-2-kenji-nakamura",
+      "name": "Kenji Nakamura",
+      "role": "staff-engineer",
+      "team_id": "world-seed123-team-cuda-engineering-enablement"
+    },
+    {
+      "persona_id": "world-seed123-persona-3-esther-ibarra",
+      "name": "Esther Ibarra",
+      "role": "qa-engineer",
+      "team_id": "world-seed123-team-cuda-engineering-foundations"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed123-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed123-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed123-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed123-kb-cuda-engineering",
+      "name": "cuda-engineering knowledge base",
+      "topic": "cuda-engineering"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed123-repo-typescript",
+      "name": "cuda-engineering-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed123-repo-cuda-cpp",
+      "name": "cuda-engineering-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed123-repo-rust",
+      "name": "cuda-engineering-rust",
+      "language": "rust"
+    }
+  ],
+  "seed": 123,
+  "generator_version": "world.v1"
+}

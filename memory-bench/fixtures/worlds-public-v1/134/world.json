@@ -1,0 +1,96 @@
+{
+  "world_id": "world-seed134",
+  "domain": "legal",
+  "org_name": "Halcyon Systems",
+  "teams": [
+    {
+      "team_id": "world-seed134-team-legal-platform",
+      "name": "Legal Platform",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed134-team-legal-reliability",
+      "name": "Legal Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed134-team-legal-delivery",
+      "name": "Legal Delivery",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed134-persona-0-greta-castellanos",
+      "name": "Greta Castellanos",
+      "role": "product-manager",
+      "team_id": "world-seed134-team-legal-platform"
+    },
+    {
+      "persona_id": "world-seed134-persona-1-farid-nakamura",
+      "name": "Farid Nakamura",
+      "role": "product-manager",
+      "team_id": "world-seed134-team-legal-reliability"
+    },
+    {
+      "persona_id": "world-seed134-persona-2-imani-bergstrom",
+      "name": "Imani Bergstrom",
+      "role": "product-manager",
+      "team_id": "world-seed134-team-legal-delivery"
+    },
+    {
+      "persona_id": "world-seed134-persona-3-joaquin-moreau",
+      "name": "Joaquin Moreau",
+      "role": "engineering-manager",
+      "team_id": "world-seed134-team-legal-delivery"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed134-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    },
+    {
+      "channel_id": "world-seed134-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    },
+    {
+      "channel_id": "world-seed134-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed134-kb-legal",
+      "name": "legal knowledge base",
+      "topic": "legal"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed134-repo-rust",
+      "name": "legal-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed134-repo-typescript",
+      "name": "legal-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed134-repo-go",
+      "name": "legal-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed134-repo-python",
+      "name": "legal-python",
+      "language": "python"
+    }
+  ],
+  "seed": 134,
+  "generator_version": "world.v1"
+}

@@ -14,6 +14,8 @@ Two layers, both hermetic (no network, no model, no sentence-transformers):
 
 from __future__ import annotations
 
+import sys
+import types
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -21,11 +23,18 @@ import pytest
 
 from membench.memory_systems import build_memory_system
 from membench.memory_systems.base import MemorySystem, RetrievalRequest
+from membench.memory_systems.local_stack import (
+    DEFAULT_NEMO_EMBEDDING_MODEL,
+    DEFAULT_NEMO_EMBEDDING_REVISION,
+    ENV_NEMO_EMBEDDING_REVISION,
+    LocalModelStack,
+)
 from membench.memory_systems.nemo_embed_system import (
     NemoEmbedder,
     NemoEmbedMemory,
     SemanticMemoryClient,
     _NemoEmbedClient,
+    default_nemo_embedder,
 )
 from membench.runtime import IdClock, StepContext
 from membench.schemas.memory_event import MemoryBackend, MemoryOperation
@@ -227,3 +236,64 @@ def test_factory_wires_nemo_embed_arm():
     arm = build_memory_system("nemo-embed", client=FakeSemanticClient())
     assert isinstance(arm, NemoEmbedMemory)
     assert arm.name == "nemo-embed"
+
+
+# --- revision pinning (mem-r6yzk.15) ------------------------------------------------
+#
+# The published dense-arm row is only reproducible if the loader pins the Hub commit.
+# A bare model id resolves to whatever HEAD is at load time, and this model ships
+# custom modeling code that trust_remote_code=True EXECUTES, so an unpinned load
+# re-resolves both the weights and the code. These tests pin that the revision exists,
+# is env-overridable, travels in the recorded identity, and that an empty one fails
+# loud instead of silently loading HEAD.
+
+
+def test_stack_pins_a_nemo_revision_by_default():
+    stack = LocalModelStack.from_env(env={})
+    assert stack.nemo_embedding_revision == DEFAULT_NEMO_EMBEDDING_REVISION
+    # A 40-char hex Hub commit, not a branch name: "main" would defeat the pin.
+    assert len(stack.nemo_embedding_revision) == 40
+    assert all(character in "0123456789abcdef" for character in stack.nemo_embedding_revision)
+
+
+def test_nemo_revision_is_env_overridable():
+    stack = LocalModelStack.from_env(env={ENV_NEMO_EMBEDDING_REVISION: "0" * 40})
+    assert stack.nemo_embedding_revision == "0" * 40
+
+
+def test_recorded_identity_carries_the_revision_with_the_model():
+    # A telemetry row naming only the model cannot be re-run to the same number.
+    identity = LocalModelStack.from_env(env={}).telemetry_dict()
+    assert identity["nemo_embedding_model"] == DEFAULT_NEMO_EMBEDDING_MODEL
+    assert identity["nemo_embedding_revision"] == DEFAULT_NEMO_EMBEDDING_REVISION
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_empty_revision_refuses_to_load_rather_than_taking_head(blank: str):
+    stack = LocalModelStack.from_env(env={ENV_NEMO_EMBEDDING_REVISION: blank})
+    with pytest.raises(ValueError, match="nemo_embedding_revision is empty"):
+        default_nemo_embedder(stack)
+
+
+def test_loader_passes_the_pinned_revision_to_sentence_transformers(monkeypatch):
+    """The pin has to reach the constructor, not merely exist on the stack. Stubs the
+    sentence_transformers module so this stays hermetic: no network, no weights."""
+    captured: dict[str, object] = {}
+
+    class _StubSentenceTransformer:
+        def __init__(self, model_name_or_path: str, **kwargs: object) -> None:
+            captured["model"] = model_name_or_path
+            captured.update(kwargs)
+
+    module = types.ModuleType("sentence_transformers")
+    module.SentenceTransformer = _StubSentenceTransformer  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "sentence_transformers", module)
+
+    stack = LocalModelStack.from_env(env={ENV_NEMO_EMBEDDING_REVISION: "a" * 40})
+    default_nemo_embedder(stack)
+
+    assert captured["model"] == DEFAULT_NEMO_EMBEDDING_MODEL
+    assert captured["revision"] == "a" * 40
+    # trust_remote_code stays on (the model needs it) - which is exactly why the
+    # revision must be pinned alongside it.
+    assert captured["trust_remote_code"] is True

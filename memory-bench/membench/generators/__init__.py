@@ -7,14 +7,25 @@ fill only the NL surface text of episodes, run offline into a frozen,
 ``generator_version``-tagged fixture; CI never calls a model.
 """
 
-from membench.generators.enterprise_workflow import materialize_project, materialize_world
+from membench.generators.enterprise_workflow import (
+    materialize_project,
+    materialize_project_tier,
+    materialize_session_tier,
+    materialize_world,
+)
 from membench.generators.ftp_shapes import (
     FTP_SHAPES,
     FtpShape,
     assert_shapes_grounded,
     memory_dependent_shapes,
 )
-from membench.generators.memory_necessity_gate import NecessityResult, memory_necessity_gate
+from membench.generators.memory_necessity_gate import (
+    GateCandidate,
+    NecessityResult,
+    memory_necessity_gate,
+    necessity_gate,
+    project_necessity_gate,
+)
 from membench.generators.schema_induction import (
     GENERATOR_VERSION,
     generate_schema_induction_sequence,
@@ -33,14 +44,19 @@ __all__ = [
     "GENERATOR_VERSION",
     "SHAPE_BLUEPRINTS",
     "FtpShape",
+    "GateCandidate",
     "NecessityResult",
     "WellformednessResult",
     "assert_shapes_grounded",
     "generate_schema_induction_sequence",
     "generate_shape_sequences",
     "materialize_project",
+    "materialize_project_tier",
+    "materialize_session_tier",
     "materialize_world",
     "memory_dependent_shapes",
     "memory_necessity_gate",
+    "necessity_gate",
+    "project_necessity_gate",
     "shape_wellformedness_gate",
 ]

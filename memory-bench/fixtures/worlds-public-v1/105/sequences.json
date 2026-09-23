@@ -1,0 +1,712 @@
+[
+  {
+    "sequence_id": "world-seed105-task0",
+    "title": "Sablefish Industries initiative: reconcile 5 decisions",
+    "domain": "medical",
+    "goal": "Deliver the current medical initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed105-task0-shared0-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-a04cf21a86ae0a95": "the checkout_v2 feature flag state is canary-50% \u2014 by Priya Gruber (legal-counsel) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task0-shared1-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-95e197cd9b832350": "the paging severity floor is any customer-visible regression \u2014 by Mateo Petrov (legal-counsel) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task0-s0-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-37847b18df310267": "the release artifact store is the compliance archive \u2014 by Ada Nakamura (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task0-s1-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-f3a09cac1c5d8f30": "the on-call rotation cadence is weekly on Thursdays \u2014 by Mateo Petrov (legal-counsel) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task0-s2-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-d8bc1d96e48a101a": "the project charter decision is cut the integrations track and ship the core \u2014 by Ada Nakamura (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task0-s3v1-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ac1b3fad284fa5aa": "the production deploy timeout is 300s \u2014 by Mateo Petrov (legal-counsel) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task0-s3v2-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-f3c78fbfb30112d0": "the production deploy timeout is 15s \u2014 by Mateo Petrov (legal-counsel) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-ac1b3fad284fa5aa"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task0-s3v3-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-bfe2b8fc0f219556": "the production deploy timeout is 900s \u2014 by Ada Nakamura (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-f3c78fbfb30112d0"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task0-s4-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-5aad0e8a6f424a4d": "the approved rollback command is argocd app rollback \u2014 by Ada Nakamura (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task0-goal",
+        "user_request": "Deliver the current medical initiative. State the current value of: the on-call rotation cadence, the project charter decision, the production deploy timeout, the approved rollback command, the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-f3a09cac1c5d8f30",
+          "m-d8bc1d96e48a101a",
+          "m-bfe2b8fc0f219556",
+          "m-5aad0e8a6f424a4d",
+          "m-37847b18df310267"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed105-task0-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-f3a09cac1c5d8f30",
+              "m-d8bc1d96e48a101a",
+              "m-bfe2b8fc0f219556",
+              "m-5aad0e8a6f424a4d",
+              "m-37847b18df310267"
+            ],
+            "forbidden_values": [
+              "300s",
+              "15s"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed105-task0-probe-oncall-rotation",
+            "expected_memory_id": "m-f3a09cac1c5d8f30",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed105-task0-probe-charter",
+            "expected_memory_id": "m-d8bc1d96e48a101a",
+            "description": "the project charter decision must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed105-task0-probe-deploy-timeout",
+            "expected_memory_id": "m-bfe2b8fc0f219556",
+            "description": "the production deploy timeout must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed105-task0-probe-rollback-command",
+            "expected_memory_id": "m-5aad0e8a6f424a4d",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed105-task0-probe-artifact-store",
+            "expected_memory_id": "m-37847b18df310267",
+            "description": "the release artifact store must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-402caeaa902a7fba": "the release artifact store is the mirrored CDN origin \u2014 by Priya Gruber (legal-counsel) in #docs channel",
+          "m-3e4705adc13a6ea7": "the release artifact store is a per-team namespace \u2014 by Hiroshi Ibarra (qa-engineer) in #meeting channel",
+          "m-34d93ba65960383f": "the release artifact store is the internal registry \u2014 by Priya Gruber (legal-counsel) in #docs channel",
+          "m-e38e69ae94b5e442": "the on-call rotation cadence is monthly blocks \u2014 by Ada Nakamura (site-reliability-engineer) in #docs channel",
+          "m-af891d614fa21f6d": "the on-call rotation cadence is fortnightly \u2014 by Priya Gruber (legal-counsel) in #docs channel",
+          "m-697f0fde80e8cc39": "the on-call rotation cadence is weekly on Mondays \u2014 by Priya Gruber (legal-counsel) in #docs channel",
+          "m-ab96e28b28fe0974": "the project charter decision is run the rewrite and the old stack side by side \u2014 by Ada Nakamura (site-reliability-engineer) in #docs channel",
+          "m-dbe540936720f52e": "the project charter decision is retire the legacy pipeline before any new feature \u2014 by Hiroshi Ibarra (qa-engineer) in #meeting channel",
+          "m-9eb97e5ace62cbe8": "the project charter decision is split delivery into two independent releases \u2014 by Mateo Petrov (legal-counsel) in #docs channel",
+          "m-2b39cecde902287d": "the project charter decision is freeze scope at the phase-3 milestone \u2014 by Hiroshi Ibarra (qa-engineer) in #docs channel",
+          "m-0171aa1820333473": "the production deploy timeout is 120s \u2014 by Ada Nakamura (site-reliability-engineer) in #docs channel",
+          "m-e63d4468b193a4a9": "the production deploy timeout is 30s \u2014 by Priya Gruber (legal-counsel) in #meeting channel",
+          "m-98e2bafdcc1b1875": "the production deploy timeout is 45s \u2014 by Hiroshi Ibarra (qa-engineer) in #docs channel",
+          "m-247da31ed622407b": "the approved rollback command is spinnaker pipeline rewind \u2014 by Mateo Petrov (legal-counsel) in #meeting channel",
+          "m-e513bf192b5ce536": "the approved rollback command is flux suspend then resume \u2014 by Priya Gruber (legal-counsel) in #docs channel",
+          "m-2e05468921b2467d": "the approved rollback command is docker service update --rollback \u2014 by Ada Nakamura (site-reliability-engineer) in #meeting channel",
+          "m-adabea24bc73a63e": "the approved rollback command is git revert then redeploy \u2014 by Mateo Petrov (legal-counsel) in #meeting channel"
+        },
+        "superseded_memory_ids": [
+          "m-ac1b3fad284fa5aa",
+          "m-f3c78fbfb30112d0"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed105-task1",
+    "title": "Sablefish Industries initiative: reconcile 5 decisions",
+    "domain": "medical",
+    "goal": "Deliver the current medical initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed105-task1-s0-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-b8f5feac18c68f72": "the supported API version is v5 \u2014 by Priya Gruber (legal-counsel) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task1-s1-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-d6ea4be3ec780e3e": "the primary deployment region is sa-east-1 \u2014 by Hiroshi Ibarra (qa-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task1-s2-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-badc0472a9d1f1c1": "the approved rollback command is git revert then redeploy \u2014 by Hiroshi Ibarra (qa-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task1-s3v1-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-8bce8580eb3d5a2e": "the on-call rotation cadence is weekly on Thursdays \u2014 by Ada Nakamura (site-reliability-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task1-s3v2-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-3133b2fa2d89cb25": "the on-call rotation cadence is two-week shifts \u2014 by Mateo Petrov (legal-counsel) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-8bce8580eb3d5a2e"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task1-s3v3-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-18cfb0084e3847e6": "the on-call rotation cadence is weekly on Mondays \u2014 by Ada Nakamura (site-reliability-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-3133b2fa2d89cb25"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task1-goal",
+        "user_request": "Deliver the current medical initiative. State the current value of: the supported API version, the on-call rotation cadence, the checkout_v2 feature flag state, the approved rollback command, the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-b8f5feac18c68f72",
+          "m-18cfb0084e3847e6",
+          "m-a04cf21a86ae0a95",
+          "m-badc0472a9d1f1c1",
+          "m-d6ea4be3ec780e3e"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed105-task1-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-b8f5feac18c68f72",
+              "m-18cfb0084e3847e6",
+              "m-a04cf21a86ae0a95",
+              "m-badc0472a9d1f1c1",
+              "m-d6ea4be3ec780e3e"
+            ],
+            "forbidden_values": [
+              "weekly on Thursdays",
+              "two-week shifts"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed105-task1-probe-api-version",
+            "expected_memory_id": "m-b8f5feac18c68f72",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed105-task1-probe-oncall-rotation",
+            "expected_memory_id": "m-18cfb0084e3847e6",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed105-task1-probe-shared-feature-flag",
+            "expected_memory_id": "m-a04cf21a86ae0a95",
+            "description": "the checkout_v2 feature flag state (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed105-task1-probe-rollback-command",
+            "expected_memory_id": "m-badc0472a9d1f1c1",
+            "description": "the approved rollback command must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed105-task1-probe-primary-region",
+            "expected_memory_id": "m-d6ea4be3ec780e3e",
+            "description": "the primary deployment region must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-d5ed0f6ccbeeb4af": "the supported API version is v7 \u2014 by Hiroshi Ibarra (qa-engineer) in #docs channel",
+          "m-ce7affe1aeb41387": "the supported API version is v3 \u2014 by Priya Gruber (legal-counsel) in #docs channel",
+          "m-618ac16400b2eee8": "the supported API version is v10 \u2014 by Priya Gruber (legal-counsel) in #docs channel",
+          "m-e43275ed0f843d4d": "the primary deployment region is eu-central-1 \u2014 by Hiroshi Ibarra (qa-engineer) in #meeting channel",
+          "m-d3153391cc866ded": "the primary deployment region is ap-northeast-1 \u2014 by Priya Gruber (legal-counsel) in #meeting channel",
+          "m-4311308a1c127786": "the primary deployment region is ap-south-1 \u2014 by Hiroshi Ibarra (qa-engineer) in #meeting channel",
+          "m-cc46bd0037813de3": "the approved rollback command is helm rollback \u2014 by Mateo Petrov (legal-counsel) in #meeting channel",
+          "m-4e3843a09b716fd1": "the approved rollback command is argocd app rollback \u2014 by Hiroshi Ibarra (qa-engineer) in #meeting channel",
+          "m-e951b4bdcadff89f": "the approved rollback command is terraform apply -refresh \u2014 by Priya Gruber (legal-counsel) in #meeting channel",
+          "m-68e74ba64fec0a64": "the approved rollback command is ansible-playbook restore.yml \u2014 by Mateo Petrov (legal-counsel) in #meeting channel",
+          "m-5055e874d0b65416": "the on-call rotation cadence is follow-the-sun \u2014 by Ada Nakamura (site-reliability-engineer) in #meeting channel",
+          "m-1c2cc8a23fd73f32": "the checkout_v2 feature flag state is disabled \u2014 by Priya Gruber (legal-counsel) in #docs channel",
+          "m-85c5befd5993f19d": "the checkout_v2 feature flag state is kill-switched \u2014 by Hiroshi Ibarra (qa-engineer) in #docs channel",
+          "m-7b6f85cb59df0c9c": "the checkout_v2 feature flag state is enabled \u2014 by Ada Nakamura (site-reliability-engineer) in #docs channel",
+          "m-466656d335b98141": "the checkout_v2 feature flag state is canary-10% \u2014 by Mateo Petrov (legal-counsel) in #docs channel",
+          "m-ad8e3cb437a9afae": "the checkout_v2 feature flag state is held at zero traffic \u2014 by Priya Gruber (legal-counsel) in #docs channel"
+        },
+        "superseded_memory_ids": [
+          "m-8bce8580eb3d5a2e",
+          "m-3133b2fa2d89cb25"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed105-task2",
+    "title": "Sablefish Industries initiative: reconcile 5 decisions",
+    "domain": "medical",
+    "goal": "Deliver the current medical initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed105-task2-s0-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-6e060b3a45866393": "the release artifact store is the legacy file server \u2014 by Mateo Petrov (legal-counsel) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task2-s1v1-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-0530ff8b78e1b7c0": "the supported API version is v2 \u2014 by Priya Gruber (legal-counsel) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task2-s1v2-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-08cfd858f6eafad3": "the supported API version is v6 \u2014 by Hiroshi Ibarra (qa-engineer) in #meeting channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-0530ff8b78e1b7c0"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task2-s1v3-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-d45b99218d8cfc76": "the supported API version is v3 \u2014 by Priya Gruber (legal-counsel) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-08cfd858f6eafad3"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task2-s2-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-de0766abceeb676e": "the primary deployment region is us-west-2 \u2014 by Ada Nakamura (site-reliability-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed105-task2-goal",
+        "user_request": "Deliver the current medical initiative. State the current value of: the primary deployment region, the paging severity floor, the release artifact store, the checkout_v2 feature flag state, the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-de0766abceeb676e",
+          "m-95e197cd9b832350",
+          "m-6e060b3a45866393",
+          "m-a04cf21a86ae0a95",
+          "m-d45b99218d8cfc76"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed105-task2-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-de0766abceeb676e",
+              "m-95e197cd9b832350",
+              "m-6e060b3a45866393",
+              "m-a04cf21a86ae0a95",
+              "m-d45b99218d8cfc76"
+            ],
+            "forbidden_values": [
+              "v2",
+              "v6"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed105-task2-probe-primary-region",
+            "expected_memory_id": "m-de0766abceeb676e",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed105-task2-probe-shared-paging-floor",
+            "expected_memory_id": "m-95e197cd9b832350",
+            "description": "the paging severity floor (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed105-task2-probe-artifact-store",
+            "expected_memory_id": "m-6e060b3a45866393",
+            "description": "the release artifact store must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed105-task2-probe-shared-feature-flag",
+            "expected_memory_id": "m-a04cf21a86ae0a95",
+            "description": "the checkout_v2 feature flag state (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed105-task2-probe-api-version",
+            "expected_memory_id": "m-d45b99218d8cfc76",
+            "description": "the supported API version must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-93aef211a35a15b3": "the release artifact store is a per-team namespace \u2014 by Mateo Petrov (legal-counsel) in #meeting channel",
+          "m-daaa6df9e1a3bd80": "the release artifact store is a signed OCI repository \u2014 by Hiroshi Ibarra (qa-engineer) in #meeting channel",
+          "m-3a37487528c8049a": "the release artifact store is one bucket per release \u2014 by Mateo Petrov (legal-counsel) in #meeting channel",
+          "m-5c11ab2295a86c04": "the supported API version is v5 \u2014 by Ada Nakamura (site-reliability-engineer) in #docs channel",
+          "m-3734278feb3e117f": "the primary deployment region is ap-south-1 \u2014 by Priya Gruber (legal-counsel) in #docs channel",
+          "m-72165c581196e2db": "the primary deployment region is eu-west-1 \u2014 by Mateo Petrov (legal-counsel) in #docs channel",
+          "m-b2e0ea74b2ce6872": "the primary deployment region is af-south-1 \u2014 by Mateo Petrov (legal-counsel) in #meeting channel",
+          "m-0640c956cb046d7b": "the primary deployment region is ap-northeast-1 \u2014 by Hiroshi Ibarra (qa-engineer) in #meeting channel",
+          "m-1c2cc8a23fd73f32": "the checkout_v2 feature flag state is disabled \u2014 by Priya Gruber (legal-counsel) in #docs channel",
+          "m-85c5befd5993f19d": "the checkout_v2 feature flag state is kill-switched \u2014 by Hiroshi Ibarra (qa-engineer) in #docs channel",
+          "m-7b6f85cb59df0c9c": "the checkout_v2 feature flag state is enabled \u2014 by Ada Nakamura (site-reliability-engineer) in #docs channel",
+          "m-466656d335b98141": "the checkout_v2 feature flag state is canary-10% \u2014 by Mateo Petrov (legal-counsel) in #docs channel",
+          "m-ad8e3cb437a9afae": "the checkout_v2 feature flag state is held at zero traffic \u2014 by Priya Gruber (legal-counsel) in #docs channel",
+          "m-3b7291a798c3c162": "the paging severity floor is any error-budget burn alert \u2014 by Ada Nakamura (site-reliability-engineer) in #docs channel",
+          "m-238bb45049475d08": "the paging severity floor is sev-1 only \u2014 by Priya Gruber (legal-counsel) in #meeting channel",
+          "m-3d89f483ace29d67": "the paging severity floor is manual escalation only \u2014 by Ada Nakamura (site-reliability-engineer) in #docs channel"
+        },
+        "superseded_memory_ids": [
+          "m-0530ff8b78e1b7c0",
+          "m-08cfd858f6eafad3"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  }
+]

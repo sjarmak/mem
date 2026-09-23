@@ -1,0 +1,761 @@
+[
+  {
+    "sequence_id": "world-seed112-task0",
+    "title": "Verdigris Labs initiative: reconcile 5 decisions",
+    "domain": "legal",
+    "goal": "Deliver the current legal initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed112-task0-shared0-deploy-timeout",
+        "user_request": "Record the current value of the production deploy timeout.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-6742b2f7a2b167d0": "the production deploy timeout is 15s \u2014 by Priya Ibarra (support-lead) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task0-shared1-feature-flag",
+        "user_request": "Record the current value of the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-8007c66d0fb6f0e9": "the checkout_v2 feature flag state is canary-50% \u2014 by Leila Fontaine (staff-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task0-s0-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-3ea7d780c58c0c7c": "the on-call rotation cadence is fortnightly \u2014 by Priya Ibarra (support-lead) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task0-s1-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-4775ee9722d7bab8": "the project charter decision is hold the public interface steady through the migration \u2014 by Priya Ibarra (support-lead) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task0-s2-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-ddc682b40eb8b807": "the supported API version is v2 \u2014 by Greta Haddad (engineering-manager) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task0-s3-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-9cc5c255275e9b1b": "the primary deployment region is us-west-2 \u2014 by Camila Larsen (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task0-s4v1-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-2bf039411b77373a": "the paging severity floor is sev-4 and above \u2014 by Greta Haddad (engineering-manager) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task0-s4v2-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-c5090059df0c24a2": "the paging severity floor is nothing below a full outage \u2014 by Greta Haddad (engineering-manager) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-2bf039411b77373a"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task0-s4v3-paging-floor",
+        "user_request": "Record the current value of the paging severity floor.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-0c614166d8a39f8d": "the paging severity floor is any customer-visible regression \u2014 by Camila Larsen (support-lead) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-c5090059df0c24a2"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task0-goal",
+        "user_request": "Deliver the current legal initiative. State the current value of: the primary deployment region, the on-call rotation cadence, the project charter decision, the paging severity floor, the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-9cc5c255275e9b1b",
+          "m-3ea7d780c58c0c7c",
+          "m-4775ee9722d7bab8",
+          "m-0c614166d8a39f8d",
+          "m-ddc682b40eb8b807"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed112-task0-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-9cc5c255275e9b1b",
+              "m-3ea7d780c58c0c7c",
+              "m-4775ee9722d7bab8",
+              "m-0c614166d8a39f8d",
+              "m-ddc682b40eb8b807"
+            ],
+            "forbidden_values": [
+              "sev-4 and above",
+              "nothing below a full outage"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed112-task0-probe-primary-region",
+            "expected_memory_id": "m-9cc5c255275e9b1b",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed112-task0-probe-oncall-rotation",
+            "expected_memory_id": "m-3ea7d780c58c0c7c",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed112-task0-probe-charter",
+            "expected_memory_id": "m-4775ee9722d7bab8",
+            "description": "the project charter decision must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed112-task0-probe-paging-floor",
+            "expected_memory_id": "m-0c614166d8a39f8d",
+            "description": "the paging severity floor must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed112-task0-probe-api-version",
+            "expected_memory_id": "m-ddc682b40eb8b807",
+            "description": "the supported API version must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-571a365e597db63c": "the on-call rotation cadence is two-week shifts \u2014 by Greta Haddad (engineering-manager) in #chat channel",
+          "m-e71e15d2850197c2": "the on-call rotation cadence is three-day shifts \u2014 by Camila Larsen (support-lead) in #docs channel",
+          "m-3ed75c4cf459f6fc": "the on-call rotation cadence is daily handoff \u2014 by Priya Ibarra (support-lead) in #chat channel",
+          "m-6eb5cc289c6f5075": "the on-call rotation cadence is weekly on Mondays \u2014 by Priya Ibarra (support-lead) in #issue-tracker channel",
+          "m-b7522ac57a087eb2": "the on-call rotation cadence is follow-the-sun \u2014 by Greta Haddad (engineering-manager) in #issue-tracker channel",
+          "m-29f9c133f18fdeae": "the project charter decision is adopt the vendor SDK instead of the in-house client \u2014 by Priya Ibarra (support-lead) in #issue-tracker channel",
+          "m-d52698722d0add34": "the project charter decision is move the launch behind the compliance review \u2014 by Priya Ibarra (support-lead) in #docs channel",
+          "m-f43fbc434152f187": "the project charter decision is staff the reliability track ahead of the roadmap \u2014 by Priya Ibarra (support-lead) in #docs channel",
+          "m-abd6d5d49c860101": "the project charter decision is extend the beta by one quarter \u2014 by Leila Fontaine (staff-engineer) in #chat channel",
+          "m-feaa2fdc463d2f54": "the project charter decision is run the rewrite and the old stack side by side \u2014 by Greta Haddad (engineering-manager) in #docs channel",
+          "m-bc69f71d9642b078": "the supported API version is v4 \u2014 by Greta Haddad (engineering-manager) in #docs channel",
+          "m-1dc89b4462632bdc": "the supported API version is v8 \u2014 by Greta Haddad (engineering-manager) in #issue-tracker channel",
+          "m-7ad3a951eeb9c667": "the supported API version is v1 \u2014 by Priya Ibarra (support-lead) in #docs channel",
+          "m-082080fb937af955": "the supported API version is v10 \u2014 by Camila Larsen (support-lead) in #docs channel",
+          "m-09dd481850583b4c": "the supported API version is v5 \u2014 by Greta Haddad (engineering-manager) in #issue-tracker channel",
+          "m-bab17dc02820c49f": "the primary deployment region is me-south-1 \u2014 by Priya Ibarra (support-lead) in #issue-tracker channel",
+          "m-cbf01220b425c8eb": "the primary deployment region is ca-central-1 \u2014 by Camila Larsen (support-lead) in #docs channel",
+          "m-2763c9683f4b1352": "the primary deployment region is eu-west-1 \u2014 by Priya Ibarra (support-lead) in #issue-tracker channel",
+          "m-5687b1d961d32969": "the paging severity floor is manual escalation only \u2014 by Camila Larsen (support-lead) in #chat channel",
+          "m-8b1c172a8221eb8f": "the paging severity floor is any error-budget burn alert \u2014 by Greta Haddad (engineering-manager) in #issue-tracker channel",
+          "m-96b27853faa20d3f": "the paging severity floor is sev-3 and above \u2014 by Camila Larsen (support-lead) in #issue-tracker channel"
+        },
+        "superseded_memory_ids": [
+          "m-2bf039411b77373a",
+          "m-c5090059df0c24a2"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed112-task1",
+    "title": "Verdigris Labs initiative: reconcile 5 decisions",
+    "domain": "legal",
+    "goal": "Deliver the current legal initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed112-task1-shared0-rollback-command",
+        "user_request": "Record the current value of the approved rollback command.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-703b3f093b1098d5": "the approved rollback command is kubectl rollout undo \u2014 by Camila Larsen (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task1-s0-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-5556d01dc823297d": "the project charter decision is move the launch behind the compliance review \u2014 by Priya Ibarra (support-lead) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task1-s1v1-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-1adb733791012625": "the release artifact store is one bucket per release \u2014 by Camila Larsen (support-lead) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task1-s1v2-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-508d38e620ed2df7": "the release artifact store is the internal registry \u2014 by Leila Fontaine (staff-engineer) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-1adb733791012625"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task1-s1v3-artifact-store",
+        "user_request": "Record the current value of the release artifact store.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-bf42ee76679452fa": "the release artifact store is a signed OCI repository \u2014 by Leila Fontaine (staff-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-508d38e620ed2df7"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task1-s2-retention-window",
+        "user_request": "Record the current value of the data retention window.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-8dffad190e0e06c8": "the data retention window is 90 days \u2014 by Camila Larsen (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task1-s3-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-688c2aea5f5bd9ca": "the primary deployment region is me-south-1 \u2014 by Leila Fontaine (staff-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task1-goal",
+        "user_request": "Deliver the current legal initiative. State the current value of: the project charter decision, the release artifact store, the primary deployment region, the data retention window, the checkout_v2 feature flag state.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-5556d01dc823297d",
+          "m-bf42ee76679452fa",
+          "m-688c2aea5f5bd9ca",
+          "m-8dffad190e0e06c8",
+          "m-8007c66d0fb6f0e9"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed112-task1-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-5556d01dc823297d",
+              "m-bf42ee76679452fa",
+              "m-688c2aea5f5bd9ca",
+              "m-8dffad190e0e06c8",
+              "m-8007c66d0fb6f0e9"
+            ],
+            "forbidden_values": [
+              "one bucket per release",
+              "the internal registry"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed112-task1-probe-charter",
+            "expected_memory_id": "m-5556d01dc823297d",
+            "description": "the project charter decision must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed112-task1-probe-artifact-store",
+            "expected_memory_id": "m-bf42ee76679452fa",
+            "description": "the release artifact store must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed112-task1-probe-primary-region",
+            "expected_memory_id": "m-688c2aea5f5bd9ca",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed112-task1-probe-retention-window",
+            "expected_memory_id": "m-8dffad190e0e06c8",
+            "description": "the data retention window must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed112-task1-probe-shared-feature-flag",
+            "expected_memory_id": "m-8007c66d0fb6f0e9",
+            "description": "the checkout_v2 feature flag state (decided in an earlier task) must be recalled"
+          }
+        ],
+        "distractor_memories": {
+          "m-efef334a2441a816": "the project charter decision is hold the public interface steady through the migration \u2014 by Camila Larsen (support-lead) in #docs channel",
+          "m-9062b27041f96b7a": "the project charter decision is split delivery into two independent releases \u2014 by Camila Larsen (support-lead) in #docs channel",
+          "m-2643804ff868ba17": "the project charter decision is extend the beta by one quarter \u2014 by Greta Haddad (engineering-manager) in #docs channel",
+          "m-2ac9887c959d4bf9": "the release artifact store is the vendor registry \u2014 by Greta Haddad (engineering-manager) in #docs channel",
+          "m-1e08c5f7554ba3d3": "the data retention window is 10 years \u2014 by Leila Fontaine (staff-engineer) in #issue-tracker channel",
+          "m-04f50b6d39f6fb9d": "the data retention window is 14 days \u2014 by Greta Haddad (engineering-manager) in #chat channel",
+          "m-8a7d52ce2aa64e22": "the data retention window is 7 years \u2014 by Leila Fontaine (staff-engineer) in #chat channel",
+          "m-1f42e22a1b0eb749": "the data retention window is kept indefinitely \u2014 by Leila Fontaine (staff-engineer) in #chat channel",
+          "m-1330199e977572f1": "the data retention window is 30 days \u2014 by Camila Larsen (support-lead) in #issue-tracker channel",
+          "m-fad29132b47bc47d": "the primary deployment region is sa-east-1 \u2014 by Leila Fontaine (staff-engineer) in #docs channel",
+          "m-4d93cc5a869925b0": "the primary deployment region is eu-west-1 \u2014 by Greta Haddad (engineering-manager) in #issue-tracker channel",
+          "m-213ff4c58b9ed3a9": "the primary deployment region is us-west-2 \u2014 by Priya Ibarra (support-lead) in #issue-tracker channel",
+          "m-687c1dc3003b08e7": "the primary deployment region is ap-south-1 \u2014 by Camila Larsen (support-lead) in #chat channel",
+          "m-d49db576c2044d18": "the primary deployment region is ca-central-1 \u2014 by Camila Larsen (support-lead) in #docs channel",
+          "m-e5cff16417a75b23": "the checkout_v2 feature flag state is disabled \u2014 by Camila Larsen (support-lead) in #chat channel",
+          "m-d8417a0603b97bc0": "the checkout_v2 feature flag state is held at zero traffic \u2014 by Camila Larsen (support-lead) in #docs channel",
+          "m-9e9e5d4aaabba692": "the checkout_v2 feature flag state is canary-10% \u2014 by Priya Ibarra (support-lead) in #docs channel"
+        },
+        "superseded_memory_ids": [
+          "m-1adb733791012625",
+          "m-508d38e620ed2df7"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  },
+  {
+    "sequence_id": "world-seed112-task2",
+    "title": "Verdigris Labs initiative: reconcile 5 decisions",
+    "domain": "legal",
+    "goal": "Deliver the current legal initiative.",
+    "steps": [
+      {
+        "step_id": "world-seed112-task2-s0v1-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-1cc2e8bf2717c608": "the on-call rotation cadence is paired primary and secondary \u2014 by Camila Larsen (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task2-s0v2-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-d036ab24df0e9993": "the on-call rotation cadence is three-day shifts \u2014 by Camila Larsen (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-1cc2e8bf2717c608"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task2-s0v3-oncall-rotation",
+        "user_request": "Record the current value of the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-40531aa6ce8044c1": "the on-call rotation cadence is daily handoff \u2014 by Priya Ibarra (support-lead) in #chat channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [
+          "m-d036ab24df0e9993"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task2-s1-primary-region",
+        "user_request": "Record the current value of the primary deployment region.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-aba786e8e3d29001": "the primary deployment region is ap-northeast-1 \u2014 by Priya Ibarra (support-lead) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task2-s2-api-version",
+        "user_request": "Record the current value of the supported API version.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-05648c92366f464d": "the supported API version is v4 \u2014 by Camila Larsen (support-lead) in #docs channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task2-s3-charter",
+        "user_request": "Record the current value of the project charter decision.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {
+          "m-9abef23a8f2eabe3": "the project charter decision is hold the public interface steady through the migration \u2014 by Leila Fontaine (staff-engineer) in #issue-tracker channel"
+        },
+        "expected_memory_reads": [],
+        "outcome_checks": [],
+        "memory_probes": [],
+        "distractor_memories": {},
+        "superseded_memory_ids": [],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      },
+      {
+        "step_id": "world-seed112-task2-goal",
+        "user_request": "Deliver the current legal initiative. State the current value of: the production deploy timeout, the project charter decision, the primary deployment region, the supported API version, the on-call rotation cadence.",
+        "available_tools": [],
+        "environment_state": {},
+        "expected_memory_writes": {},
+        "expected_memory_reads": [
+          "m-6742b2f7a2b167d0",
+          "m-9abef23a8f2eabe3",
+          "m-aba786e8e3d29001",
+          "m-05648c92366f464d",
+          "m-40531aa6ce8044c1"
+        ],
+        "outcome_checks": [
+          {
+            "check_id": "world-seed112-task2-goal-check",
+            "description": "goal requires the current value of each established subject and must not state a superseded value",
+            "requires_memory": [
+              "m-6742b2f7a2b167d0",
+              "m-9abef23a8f2eabe3",
+              "m-aba786e8e3d29001",
+              "m-05648c92366f464d",
+              "m-40531aa6ce8044c1"
+            ],
+            "forbidden_values": [
+              "paired primary and secondary",
+              "three-day shifts"
+            ],
+            "requires_action": []
+          }
+        ],
+        "memory_probes": [
+          {
+            "probe_id": "world-seed112-task2-probe-shared-deploy-timeout",
+            "expected_memory_id": "m-6742b2f7a2b167d0",
+            "description": "the production deploy timeout (decided in an earlier task) must be recalled"
+          },
+          {
+            "probe_id": "world-seed112-task2-probe-charter",
+            "expected_memory_id": "m-9abef23a8f2eabe3",
+            "description": "the project charter decision must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed112-task2-probe-primary-region",
+            "expected_memory_id": "m-aba786e8e3d29001",
+            "description": "the primary deployment region must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed112-task2-probe-api-version",
+            "expected_memory_id": "m-05648c92366f464d",
+            "description": "the supported API version must be recalled at the goal"
+          },
+          {
+            "probe_id": "world-seed112-task2-probe-oncall-rotation",
+            "expected_memory_id": "m-40531aa6ce8044c1",
+            "description": "the on-call rotation cadence must be recalled at the goal"
+          }
+        ],
+        "distractor_memories": {
+          "m-1a7e0a682747c98f": "the on-call rotation cadence is weekly on Thursdays \u2014 by Camila Larsen (support-lead) in #chat channel",
+          "m-28f40b571f927e6b": "the on-call rotation cadence is weekly on Mondays \u2014 by Greta Haddad (engineering-manager) in #docs channel",
+          "m-0b8a27f11fc2e8af": "the primary deployment region is us-west-2 \u2014 by Greta Haddad (engineering-manager) in #chat channel",
+          "m-e8bec45ab303445d": "the primary deployment region is eu-west-1 \u2014 by Camila Larsen (support-lead) in #docs channel",
+          "m-e19feb097c3599d9": "the primary deployment region is sa-east-1 \u2014 by Greta Haddad (engineering-manager) in #chat channel",
+          "m-0fa916d9f0ea37b8": "the primary deployment region is us-east-1 \u2014 by Priya Ibarra (support-lead) in #chat channel",
+          "m-be21c702fecf7589": "the primary deployment region is me-south-1 \u2014 by Priya Ibarra (support-lead) in #docs channel",
+          "m-e70ffe0db8f740d7": "the supported API version is v5 \u2014 by Priya Ibarra (support-lead) in #chat channel",
+          "m-e46436d4bd482421": "the supported API version is v1 \u2014 by Camila Larsen (support-lead) in #issue-tracker channel",
+          "m-1f65e7f7a02b6ec3": "the supported API version is v2 \u2014 by Greta Haddad (engineering-manager) in #chat channel",
+          "m-a742c67b173f0955": "the supported API version is v8 \u2014 by Priya Ibarra (support-lead) in #chat channel",
+          "m-d65e1b9d887f1d2f": "the supported API version is v3 \u2014 by Priya Ibarra (support-lead) in #docs channel",
+          "m-ea836ec8dc80d3ee": "the project charter decision is retire the legacy pipeline before any new feature \u2014 by Leila Fontaine (staff-engineer) in #chat channel",
+          "m-7cb616531cc1ce4c": "the project charter decision is move the launch behind the compliance review \u2014 by Priya Ibarra (support-lead) in #chat channel",
+          "m-fa0bdceb48c0bdcd": "the project charter decision is cut the integrations track and ship the core \u2014 by Priya Ibarra (support-lead) in #issue-tracker channel",
+          "m-2c18633e1fd06f2b": "the project charter decision is extend the beta by one quarter \u2014 by Leila Fontaine (staff-engineer) in #chat channel",
+          "m-8335e535267438f3": "the production deploy timeout is 900s \u2014 by Camila Larsen (support-lead) in #issue-tracker channel",
+          "m-883954d2e9ff22d8": "the production deploy timeout is 90s \u2014 by Camila Larsen (support-lead) in #issue-tracker channel",
+          "m-429a10c2213ad828": "the production deploy timeout is 600s \u2014 by Camila Larsen (support-lead) in #docs channel",
+          "m-9b132b061fd752d6": "the production deploy timeout is 60s \u2014 by Camila Larsen (support-lead) in #chat channel"
+        },
+        "superseded_memory_ids": [
+          "m-1cc2e8bf2717c608",
+          "m-d036ab24df0e9993"
+        ],
+        "read_is_endogenous": false,
+        "write_is_endogenous": false,
+        "forbidden_memory_writes": [],
+        "record_class": null,
+        "disposition": null,
+        "memory_necessary": null
+      }
+    ],
+    "final_goal_check": {},
+    "latent_rule": null,
+    "tier": "project",
+    "question_type": "cross-session-decision-recall"
+  }
+]

@@ -1,0 +1,86 @@
+{
+  "world_id": "world-seed138",
+  "domain": "chip-design",
+  "org_name": "Cobalt Works",
+  "teams": [
+    {
+      "team_id": "world-seed138-team-chip-design-delivery",
+      "name": "Chip Design Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed138-team-chip-design-enablement",
+      "name": "Chip Design Enablement",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed138-team-chip-design-core",
+      "name": "Chip Design Core",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed138-persona-0-bruno-jorgensen",
+      "name": "Bruno Jorgensen",
+      "role": "researcher",
+      "team_id": "world-seed138-team-chip-design-delivery"
+    },
+    {
+      "persona_id": "world-seed138-persona-1-priya-castellanos",
+      "name": "Priya Castellanos",
+      "role": "staff-engineer",
+      "team_id": "world-seed138-team-chip-design-enablement"
+    },
+    {
+      "persona_id": "world-seed138-persona-2-ada-nakamura",
+      "name": "Ada Nakamura",
+      "role": "staff-engineer",
+      "team_id": "world-seed138-team-chip-design-delivery"
+    },
+    {
+      "persona_id": "world-seed138-persona-3-farid-castellanos",
+      "name": "Farid Castellanos",
+      "role": "qa-engineer",
+      "team_id": "world-seed138-team-chip-design-core"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed138-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed138-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed138-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed138-kb-chip-design",
+      "name": "chip-design knowledge base",
+      "topic": "chip-design"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed138-repo-cuda-cpp",
+      "name": "chip-design-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed138-repo-typescript",
+      "name": "chip-design-typescript",
+      "language": "typescript"
+    }
+  ],
+  "seed": 138,
+  "generator_version": "world.v1"
+}

@@ -29,7 +29,11 @@ harbor = ["harbor>=0.3"]
 # vendored bdp-v0 bundle. Same reasoning as pyyaml above - it arrives
 # transitively today (harbor, mcp), and a validation gate that SKIPS when its
 # validator is missing reports green for fixtures nobody checked.
-dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.11", "black>=24.0", "types-toml>=0.10", "pyyaml>=6.0", "matplotlib>=3.8", "jsonschema>=4.20"]
+# mypy floor is 1.14, not 1.11: [tool.mypy]'s jsonschema override uses the
+# per-module `follow_untyped_imports`, which mypy added in 1.14. An older mypy
+# cannot honour it, so the public validator's jsonschema import would red the
+# gate the override exists to resolve.
+dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.14", "black>=24.0", "types-toml>=0.10", "pyyaml>=6.0", "matplotlib>=3.8", "jsonschema>=4.20"]
 
 [project.scripts]
 membench = "membench.cli:main"
@@ -77,9 +81,19 @@ untyped_calls_exclude = ["opentelemetry"]
 # is exactly how conftest.py and examples/ went unchecked. Each exclusion below
 # must carry a reason; an unreasoned one is a bug, not a config entry.
 # `exclude` filters the recursive crawl only, not explicitly-named FILES —
-# sound here precisely because `files = ["."]` IS a crawl. (A named directory is
-# still crawled, so `mypy scripts` reports "no .py[i] files"; a named file is
-# not, so `mypy scripts/x.py` checks it. Spot-check an excluded tree by file.)
+# sound here precisely because both entries below are DIRECTORIES, hence crawls.
+# (A named directory is still crawled, so `mypy scripts` reports "no .py[i]
+# files"; a named file is not, so `mypy scripts/x.py` checks it. Spot-check an
+# excluded tree by file.)
+#
+# `../public` is a second crawl root, not an enumerated target: it is a SIBLING
+# of this package, so "." never reaches it, and the published release's
+# standalone validator (public/validator/membench_validate.py) sat outside this
+# gate — and outside ruff and black — until it was named here. Naming the
+# directory keeps the opt-out property inside it: a new .py file under public/ is
+# covered without another edit. ruff and black cannot be fixed this way, because
+# their targets are argv, not config; see the gate sites in .github/workflows/
+# ci.yml and .pre-commit-config.yaml, pinned by tests/test_public_tree_is_gated.py.
 #
 # The regexes are anchored relative to the INVOCATION cwd, not to this file, so
 # they hold only because both gate sites run from memory-bench/ (ci.yml's
@@ -92,7 +106,7 @@ untyped_calls_exclude = ["opentelemetry"]
 # run rather than checking anything. Adding a second example named like the
 # first is the trigger; the failure is loud and mypy names the fixes. Tracked in
 # mem-1ql4w — the durable fix is package-legal example directories.
-files = ["."]
+files = [".", "../public"]
 exclude = [
     # Immutable experiment evidence contains independent historical modules with
     # duplicate names. Each qualified grader has explicit strict checks; crawling
@@ -140,3 +154,16 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["harbor.*"]
 ignore_missing_imports = true
+
+# jsonschema is the one third-party import of the standalone public validator
+# (../public/validator/membench_validate.py), now inside the crawl. Typeshed KNOWS
+# the package, so an absent stub package is `import-untyped`, which
+# `ignore_missing_imports` does not silence (verified: it only covers
+# `import-not-found`). Declaring `types-jsonschema` was rejected because the local
+# gate site runs against the ambient interpreter (pre-commit `language: system`),
+# which on a PEP-668 machine cannot install it — the gate would be red for a
+# missing checker-only package. Following the installed package instead keeps one
+# mechanism and works whether or not stubs are present.
+[[tool.mypy.overrides]]
+module = ["jsonschema"]
+follow_untyped_imports = true

@@ -1,0 +1,96 @@
+{
+  "world_id": "world-seed109",
+  "domain": "customer-support",
+  "org_name": "Northwind Labs",
+  "teams": [
+    {
+      "team_id": "world-seed109-team-customer-support-core",
+      "name": "Customer Support Core",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed109-team-customer-support-platform",
+      "name": "Customer Support Platform",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed109-team-customer-support-delivery",
+      "name": "Customer Support Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed109-team-customer-support-reliability",
+      "name": "Customer Support Reliability",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed109-persona-0-kenji-fontaine",
+      "name": "Kenji Fontaine",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed109-team-customer-support-core"
+    },
+    {
+      "persona_id": "world-seed109-persona-1-camila-bergstrom",
+      "name": "Camila Bergstrom",
+      "role": "engineering-manager",
+      "team_id": "world-seed109-team-customer-support-platform"
+    },
+    {
+      "persona_id": "world-seed109-persona-2-hiroshi-ibarra",
+      "name": "Hiroshi Ibarra",
+      "role": "product-manager",
+      "team_id": "world-seed109-team-customer-support-delivery"
+    },
+    {
+      "persona_id": "world-seed109-persona-3-camila-castellanos",
+      "name": "Camila Castellanos",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed109-team-customer-support-reliability"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed109-channel-docs",
+      "name": "docs channel",
+      "kind": "docs"
+    },
+    {
+      "channel_id": "world-seed109-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed109-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed109-kb-customer-support",
+      "name": "customer-support knowledge base",
+      "topic": "customer-support"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed109-repo-cuda-cpp",
+      "name": "customer-support-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed109-repo-typescript",
+      "name": "customer-support-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed109-repo-rust",
+      "name": "customer-support-rust",
+      "language": "rust"
+    }
+  ],
+  "seed": 109,
+  "generator_version": "world.v1"
+}

@@ -1,0 +1,8 @@
+{
+  "project_id": "world-seed6-project",
+  "world_id": "world-seed6",
+  "name": "Meridian Labs initiative",
+  "goal": "Deliver the current data-infrastructure initiative.",
+  "prd_summary": "Meridian Labs is consolidating its data infrastructure tooling onto a single supported path this quarter. The initiative covers migration of the existing enterprise workloads, a documented rollback, and retirement of the superseded configuration.",
+  "task_briefs": []
+}

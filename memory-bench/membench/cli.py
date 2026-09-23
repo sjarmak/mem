@@ -91,6 +91,11 @@ from membench.beads_ordering.runner import (
 )
 from membench.corpus import load_corpus, load_query_work
 from membench.dataset import load_sequence
+from membench.generators.necessity_sweep import (
+    describe_rate,
+    gate_corpus,
+    write_necessity_artifact,
+)
 from membench.harbor.adapter import SequenceAdapter
 from membench.harbor.env_recon import DEFAULT_RIG_REPOS
 from membench.harbor.ftp_curate import (
@@ -102,6 +107,7 @@ from membench.harbor.ftp_curate import (
 from membench.mem_cli import run_mem_json
 from membench.memory_systems import build_memory_system
 from membench.memory_systems.base import MemorySystem
+from membench.public_export import export_corpus
 from membench.replay import run_replay
 from membench.report import arm_vector
 from membench.report.comparison import build_comparison
@@ -139,6 +145,60 @@ def _default_experiment(dataset_id: str) -> ExperimentConfig:
         ),
         dataset_id=dataset_id,
     )
+
+
+def _cmd_gate_corpus(args: argparse.Namespace) -> int:
+    """Sweep the memory-necessity gate over a frozen corpus and write necessity.json.
+
+    The reference agent is the deterministic ScriptedAgent, so the rejection rate is
+    a CONSTRUCTION-integrity signal (the oracle arm is handed the required memory ids
+    and the no-memory arm is not) and never a claim about a real agent. The artifact
+    records ``reference_agent`` so the two readings cannot be confused.
+
+    The rate alone reads as more than it is. "200 of 200 admitted, rejection_rate
+    0.0000" looks like a threshold that examined 200 candidates and passed them; on
+    the published corpus every one of those candidates scored delta exactly 1.000
+    against an epsilon of 0.05, so nothing came within 0.95 of the boundary and the
+    threshold decided nothing. That is a fact about the deltas, not about the rate,
+    and it is invisible unless the deltas are printed beside it — so they are, every
+    run, along with the sentence that says which of the two readings the rate
+    supports (mem-r6yzk R4).
+    """
+    report = gate_corpus(args.corpus)
+    path = write_necessity_artifact(report, path=args.out)
+    sweep = report.sweep
+    print(
+        f"{sweep.n_accepted}/{sweep.n_candidates} admitted "
+        f"(rejection_rate {sweep.rejection_rate:.4f}, agent {sweep.reference_agent}) -> {path}"
+    )
+    for line in describe_rate(sweep):
+        print(f"  {line}")
+    for result in sweep.rejected:
+        print(f"  REJECT {result.sequence_id}: {result.verdict.reason}")
+    if sweep.n_accepted < args.min_accepted:
+        print(f"FAIL: {sweep.n_accepted} admitted < required {args.min_accepted}")
+        return 1
+    return 0
+
+
+def _cmd_export_public(args: argparse.Namespace) -> int:
+    """Publish a gated corpus as bench-record.v3 JSONL, one file per tier.
+
+    Only sequences the necessity gate admitted are written, and the writer refuses
+    to put two origins (or two tiers) into one file, so "real and synthetic are
+    never pooled" is mechanical rather than a naming convention. Validate the
+    output with the standalone public/validator/membench_validate.py."""
+    report = export_corpus(args.corpus, out_dir=args.out, origin=args.origin)
+    print(f"published {report.n_published}/{report.n_candidates} record(s) to {report.out_dir}")
+    for tier, count in report.counts.items():
+        print(f"  {tier}: {count}")
+    print(f"  {report.sha256sums.name}: {len(report.files)} file(s)")
+    # Every candidate the export declined, with the reason. An unaccounted drop is
+    # how a corpus quietly loses a tier: the project-tier count falls and the run
+    # still reports a clean publish.
+    for sequence_id, reason in report.skipped:
+        print(f"  SKIP {sequence_id}: {reason}")
+    return 0
 
 
 def _cmd_run_sequence(args: argparse.Namespace) -> int:
@@ -1274,6 +1334,34 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--out", default="reports", help="output dir (default: reports/)")
     p_run.add_argument("--fs-dir", default=None, help="filesystem-memory store dir")
     p_run.set_defaults(func=_cmd_run_sequence)
+
+    p_gate_corpus = sub.add_parser(
+        "gate-corpus", help="run the memory-necessity gate over a frozen corpus"
+    )
+    p_gate_corpus.add_argument("corpus", help="corpus dir holding <seed>/sequences.json world dirs")
+    p_gate_corpus.add_argument(
+        "--out", default=None, help="artifact path (default: <corpus>/necessity.json)"
+    )
+    p_gate_corpus.add_argument(
+        "--min-accepted",
+        type=int,
+        default=100,
+        help="exit non-zero below this many admitted sequences",
+    )
+    p_gate_corpus.set_defaults(func=_cmd_gate_corpus)
+
+    p_export_public = sub.add_parser(
+        "export-public", help="export a gated corpus as public bench-record.v3 JSONL"
+    )
+    p_export_public.add_argument("corpus", help="gated corpus dir (must hold necessity.json)")
+    p_export_public.add_argument("--out", required=True, help="output dir for the published files")
+    p_export_public.add_argument(
+        "--origin",
+        choices=["synthetic", "real"],
+        default="synthetic",
+        help="origin stamped on every record; one export never mixes the two",
+    )
+    p_export_public.set_defaults(func=_cmd_export_public)
 
     p_replay = sub.add_parser(
         "replay", help="replay arms over a loaded P1.5 store under the LOO guard"

@@ -1,0 +1,86 @@
+{
+  "world_id": "world-seed120",
+  "domain": "medical",
+  "org_name": "Tessellate Collective",
+  "teams": [
+    {
+      "team_id": "world-seed120-team-medical-foundations",
+      "name": "Medical Foundations",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed120-team-medical-reliability",
+      "name": "Medical Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed120-team-medical-enablement",
+      "name": "Medical Enablement",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed120-persona-0-nadia-castellanos",
+      "name": "Nadia Castellanos",
+      "role": "engineering-manager",
+      "team_id": "world-seed120-team-medical-foundations"
+    },
+    {
+      "persona_id": "world-seed120-persona-1-leila-haddad",
+      "name": "Leila Haddad",
+      "role": "staff-engineer",
+      "team_id": "world-seed120-team-medical-reliability"
+    },
+    {
+      "persona_id": "world-seed120-persona-2-ada-haddad",
+      "name": "Ada Haddad",
+      "role": "qa-engineer",
+      "team_id": "world-seed120-team-medical-enablement"
+    },
+    {
+      "persona_id": "world-seed120-persona-3-ada-okonkwo",
+      "name": "Ada Okonkwo",
+      "role": "product-manager",
+      "team_id": "world-seed120-team-medical-reliability"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed120-channel-email",
+      "name": "email channel",
+      "kind": "email"
+    },
+    {
+      "channel_id": "world-seed120-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed120-kb-medical",
+      "name": "medical knowledge base",
+      "topic": "medical"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed120-repo-rust",
+      "name": "medical-rust",
+      "language": "rust"
+    },
+    {
+      "repo_id": "world-seed120-repo-go",
+      "name": "medical-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed120-repo-cuda-cpp",
+      "name": "medical-cuda-cpp",
+      "language": "cuda-cpp"
+    }
+  ],
+  "seed": 120,
+  "generator_version": "world.v1"
+}

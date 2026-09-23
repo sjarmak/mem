@@ -27,12 +27,18 @@ Design choices:
   in CI. The real embedder (sentence-transformers loading the pinned NeMo HF model) is
   built LAZILY in ``default_nemo_embedder`` and plugs in behind the same seam.
 
-License (PL default, mem-sikg, countermandable): the pinned default is the
-**permissively-licensed** ``nvidia/llama-nemotron-embed-1b-v2`` rather than the
-NVIDIA-Non-Commercial agentic-recipe backend (``llama-nv-embed-reasoning-3b``), to keep
-the published stack redistribution-clean — consistent with the qwen2.5:14b judge choice.
-Swapping to the NC backend for a stronger arm is a one-line ``LocalModelStack`` pin
-(``MEMBENCH_LOCAL_NEMO_EMBED_MODEL``).
+License (PL default, mem-sikg, countermandable): the pinned default is
+``nvidia/llama-nemotron-embed-1b-v2`` rather than the NVIDIA-Non-Commercial
+agentic-recipe backend (``llama-nv-embed-reasoning-3b``), to keep the published stack
+redistribution-clean — consistent with the qwen2.5:14b judge choice. Precisely: the
+weights are under the **NVIDIA Open Model License** with the **Llama 3.2 Community
+License** as additional terms, and the source files under Apache 2.0. That grants
+commercial use and the right to distribute derivative models, which is what
+redistribution-clean needs here; it is NOT an OSI-permissive license, and calling it
+permissive (as this docstring once did) overstates the grant to anyone who reuses the
+pin without reading it (mem-r6yzk.15). Swapping to the NC backend for a stronger arm is
+a one-line ``LocalModelStack`` pin (``MEMBENCH_LOCAL_NEMO_EMBED_MODEL``), and it changes
+the redistribution answer.
 """
 
 from __future__ import annotations
@@ -197,16 +203,36 @@ def default_nemo_embedder(
     query_prompt: str | None = None,
     doc_prompt: str | None = None,
 ) -> NemoEmbedder:
-    """Build the real NeMo embedder over the pinned model. ``sentence_transformers`` is
-    imported HERE, lazily, so this module (and the suite) loads without the package and
-    a missing one surfaces at run time, not import time — exactly like A-MEM's
-    sentence-transformers embedder, which is why ``preflight`` does not check it (it is a
-    pip package, not an Ollama-served model)."""
+    """Build the real NeMo embedder over the pinned model AND revision.
+    ``sentence_transformers`` is imported HERE, lazily, so this module (and the suite)
+    loads without the package and a missing one surfaces at run time, not import time —
+    exactly like A-MEM's sentence-transformers embedder, which is why ``preflight`` does
+    not check it (it is a pip package, not an Ollama-served model).
+
+    Raises ``ValueError`` on an empty revision rather than loading unpinned. The two
+    things an unpinned load costs are exactly the two this benchmark sells: a published
+    number nobody can reproduce once upstream moves, and ``trust_remote_code`` executing
+    whatever Python the Hub serves at that moment. Defaulting to HEAD would make both
+    failures silent, so the pin is required, not merely preferred."""
+    # The pin is validated BEFORE the lazy import: a missing pin is a configuration
+    # error that needs no SDK to detect, and checking it first means the misconfiguration
+    # surfaces the same way whether or not sentence-transformers happens to be installed.
+    resolved = stack or LocalModelStack.from_env()
+    revision = resolved.nemo_embedding_revision
+    if not revision.strip():
+        raise ValueError(
+            f"nemo_embedding_revision is empty for model {resolved.nemo_embedding_model!r}. "
+            "Pin the exact Hub commit the baseline was measured against; an unpinned load "
+            "silently re-resolves both the weights and the trust_remote_code modeling code."
+        )
+
     from sentence_transformers import SentenceTransformer
 
-    resolved = stack or LocalModelStack.from_env()
-    # trust_remote_code: the NeMo embedders ship custom modeling code on the Hub.
-    model = SentenceTransformer(resolved.nemo_embedding_model, trust_remote_code=True)
+    # trust_remote_code: the NeMo embedders ship custom modeling code on the Hub, so the
+    # revision pins the CODE that executes here, not just which weights are read.
+    model = SentenceTransformer(
+        resolved.nemo_embedding_model, revision=revision, trust_remote_code=True
+    )
     return _SentenceTransformerNemoEmbedder(model, query_prompt=query_prompt, doc_prompt=doc_prompt)
 
 

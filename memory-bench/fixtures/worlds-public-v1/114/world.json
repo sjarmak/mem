@@ -1,0 +1,96 @@
+{
+  "world_id": "world-seed114",
+  "domain": "chip-design",
+  "org_name": "Sablefish Systems",
+  "teams": [
+    {
+      "team_id": "world-seed114-team-chip-design-delivery",
+      "name": "Chip Design Delivery",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed114-team-chip-design-reliability",
+      "name": "Chip Design Reliability",
+      "charter": ""
+    },
+    {
+      "team_id": "world-seed114-team-chip-design-enablement",
+      "name": "Chip Design Enablement",
+      "charter": ""
+    }
+  ],
+  "personas": [
+    {
+      "persona_id": "world-seed114-persona-0-bruno-haddad",
+      "name": "Bruno Haddad",
+      "role": "site-reliability-engineer",
+      "team_id": "world-seed114-team-chip-design-delivery"
+    },
+    {
+      "persona_id": "world-seed114-persona-1-greta-moreau",
+      "name": "Greta Moreau",
+      "role": "qa-engineer",
+      "team_id": "world-seed114-team-chip-design-reliability"
+    },
+    {
+      "persona_id": "world-seed114-persona-2-kenji-doyle",
+      "name": "Kenji Doyle",
+      "role": "qa-engineer",
+      "team_id": "world-seed114-team-chip-design-enablement"
+    },
+    {
+      "persona_id": "world-seed114-persona-3-greta-almeida",
+      "name": "Greta Almeida",
+      "role": "support-lead",
+      "team_id": "world-seed114-team-chip-design-enablement"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "world-seed114-channel-meeting",
+      "name": "meeting channel",
+      "kind": "meeting"
+    },
+    {
+      "channel_id": "world-seed114-channel-issue-tracker",
+      "name": "issue-tracker channel",
+      "kind": "issue-tracker"
+    },
+    {
+      "channel_id": "world-seed114-channel-chat",
+      "name": "chat channel",
+      "kind": "chat"
+    }
+  ],
+  "knowledge_bases": [
+    {
+      "kb_id": "world-seed114-kb-chip-design",
+      "name": "chip-design knowledge base",
+      "topic": "chip-design"
+    }
+  ],
+  "repositories": [
+    {
+      "repo_id": "world-seed114-repo-go",
+      "name": "chip-design-go",
+      "language": "go"
+    },
+    {
+      "repo_id": "world-seed114-repo-cuda-cpp",
+      "name": "chip-design-cuda-cpp",
+      "language": "cuda-cpp"
+    },
+    {
+      "repo_id": "world-seed114-repo-typescript",
+      "name": "chip-design-typescript",
+      "language": "typescript"
+    },
+    {
+      "repo_id": "world-seed114-repo-python",
+      "name": "chip-design-python",
+      "language": "python"
+    }
+  ],
+  "seed": 114,
+  "generator_version": "world.v1"
+}
