@@ -1,6 +1,11 @@
 # Gas City
 .beads/*
 !.beads/identity.toml
+/.beads.gate.lock
+
+# Local filesystem metadata and generated code-graph output.
+.DS_Store
+/graphify-out/
 
 # Node
 node_modules/
@@ -46,6 +51,29 @@ memory-bench/fixtures/worlds-tool/
 # evidence, not repository content, and this repo is public.
 memory-bench/runs/
 
+# Older experiments wrote local execution payloads under results/. Keep plans,
+# grader source, manifests, summaries, and curated evidence packages visible;
+# do not ignore results/ wholesale. Ignoring is not a backup: retain paid-run
+# evidence locally or archive it separately before removing anything.
+/memory-bench/results/beads_ordering/**/runs/
+/memory-bench/results/beads_ordering/**/workspaces/
+# These small pilot traces are already part of the shared evidence set.
+!/memory-bench/results/beads_ordering/pilot-navigation/runs/
+!/memory-bench/results/beads_ordering/pilot-search-only/runs/
+/memory-bench/results/bd-*/**/sessions/
+/memory-bench/results/bd-*/**/pairs/
+/memory-bench/results/**/*.json.legs/
+/memory-bench/results/**/*.log
+/memory-bench/results/**/.coverage-*
+/memory-bench/results/**/core-coverage.data
+
+# Reconstructed execution environments: keep runtime identity/lock manifests,
+# but not installed packages, downloaded wheels, or extracted source checkouts.
+/memory-bench/results/bd-reliability-campaign-*/natural-execution/*/runtime/venv/
+/memory-bench/results/bd-reliability-campaign-*/natural-execution/*/runtime/source/
+/memory-bench/results/bd-reliability-campaign-*/natural-execution/*/runtime/build-wheels/
+/memory-bench/results/bd-reliability-campaign-*/natural-execution/*/runtime/dependency-wheels/
+
 # Python tool caches + coverage artifacts: regenerated locally / in CI, never
 # committed. (Covered by a global excludesfile on dev machines too; pinned here
 # so a fresh checkout / CI is junk-free without relying on global git config.)
@@ -66,3 +94,7 @@ htmlcov/
 
 # PL deep-audit / status reports (mem-pl): local operating artifacts, not committed.
 .gc-reports/
+
+# Generated architecture review snapshots and browser artifacts.
+/.architecture-review/
+/.architecture-review-tests/
