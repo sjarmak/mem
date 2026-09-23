@@ -1,0 +1,20 @@
+OBSERVED ENV: Python 3.12.6 (mise), pytest 8.4.2, project /workspace/projects/EnterpriseBench-t2dl4.
+
+EXACT SOURCE EVIDENCE (PRIOR_TASK.md + PRIOR_SOURCE_PACKET.md, event lines 83-94, 2026-07-17):
+- Bug EnterpriseBench-t2dl4 (P1, OPEN, needs-human): two parse boundaries catch only json.JSONDecodeError but not bare ValueError or RecursionError.
+- Confirmed sites: scripts/cost_tracker.py:201 and lib/eb_metrics/retrieval_extraction.py:380 (also :236 in retrieved_files_from_trace).
+- CPython 3.12.6 raises bare ValueError (not JSONDecodeError subclass) when integer string exceeds sys.int_info.default_max_str_digits=4300 (CVE-2020-10735 mitigation). Deep nesting raises RecursionError. Neither is caught by except json.JSONDecodeError alone.
+- Verified by execution: 4 regression tests FAILED (RED) before fix, 177 PASSED (GREEN) after catching (json.JSONDecodeError, ValueError, RecursionError) at both sites.
+
+OBSERVED FAILURE AND CALLER CONTRACT:
+- cost_tracker.py:517 loops parse_trace() over every agent_trace.jsonl with no per-trace guard; one corrupt line aborts the entire batch cost report.
+- Documented contract at this boundary: skip what cannot be read (third-party input). The narrow catch violated that contract.
+- NOT a security issue: internal harness reading its own traces, no attacker boundary. P1 robustness/availability bug.
+
+FIX DIRECTION (verified):
+- catch (json.JSONDecodeError, ValueError, RecursionError) at both sites; treat line as malformed (same as current invalid-JSON handling).
+- Routed to human (needs-human label) due to entanglement: lib/eb_metrics/retrieval_extraction.py is 0nru's module under active research decision (Stephanie's land-vs-sequence call on quarantined retrieval axis); cost_tracker.py output feeds paper arm-level cost figures. Fix direction unforked; routing was about entanglement, not fix uncertainty.
+
+LIMITS AND CONDITIONAL TRANSFER:
+- Scope confirmed: only the two named sites. Whether other json.loads call sites in the codebase have the same gap is UNKNOWN from this evidence.
+- Python version: observed on 3.12.6. The int-string guard was introduced in 3.11 (CVE-2020-10735). Behavior on earlier Pythons not established by this evidence.

@@ -1,0 +1,87 @@
+{
+ "packet_id": "redis-oom-noeviction",
+ "domain": "in-memory cache eviction policy",
+ "bead": "mem-747nj",
+ "capture_instruction": "../CAPTURE_INSTRUCTION.md",
+ "artifacts": {
+  "PRIOR_TASK.md": "cb2f253b397714a1426d7949dd8d4819f4366d5bf4c4ba187c4078a523b96ba3",
+  "PRIOR_SOURCE_PACKET.md": "e5eb15d19c01837e6188a3bae581b65c87bdb46d7ebe694f4d9a237d386c2b39"
+ },
+ "establishes": [
+  "the single write site, cache/session.go:141, quoted with its caller",
+  "the returned error text, OOM command not allowed when used memory > 'maxmemory', logged 3,884 times",
+  "used_memory below maxmemory by one page, with maxmemory_policy noeviction",
+  "evicted_keys at 0 in the dump and in all four daily samples",
+  "keyspace_misses climbing from 1104318 to 2210518 over those four days",
+  "that the failing line is logged at DEBUG and the dashboard's error panel reads WARN and above"
+ ],
+ "does_not_establish": [
+  "any server or client version, anywhere in either artifact",
+  "what any eviction policy does; only which one is set and that nothing was evicted",
+  "what raising maxmemory or changing the policy would do, since neither was tried",
+  "that the climbing misses are caused by the failing writes rather than concurrent with them"
+ ],
+ "supported_literals": [
+  "cache/session.go:141",
+  "maxmemory_policy:noeviction",
+  "evicted_keys",
+  "keyspace_misses",
+  "putBestEffort"
+ ],
+ "lures": [
+  {
+   "claim": "noeviction has been the default maxmemory-policy since Redis 3.0; earlier releases defaulted to volatile-lru",
+   "kind": "version_history",
+   "betraying_literals": [
+    "3.0",
+    "volatile-lru"
+   ],
+   "token_detectable": true
+  },
+  {
+   "claim": "allkeys-lru is the usual choice for a pure cache, since it lets the server reclaim from the whole keyspace",
+   "kind": "general_knowledge",
+   "betraying_literals": [
+    "allkeys-lru"
+   ],
+   "token_detectable": true,
+   "note": "a fix direction is not a factual assertion; score it only when the record states it as established behavior rather than as a proposal"
+  },
+  {
+   "claim": "the OOM refusal applies to commands that add data, so reads keep succeeding while writes fail",
+   "kind": "general_knowledge",
+   "betraying_literals": [],
+   "token_detectable": false
+  },
+  {
+   "claim": "with noeviction set, a write that would take used memory past maxmemory is refused rather than making room, so the cache stops accepting writes instead of shedding old ones",
+   "kind": "general_knowledge",
+   "betraying_literals": [],
+   "token_detectable": false,
+   "note": "true, general, and the most likely intrusion here; the packet records which policy is set and that nothing was evicted, never what the policy means, and the claim carries no token the packet lacks, so only the citation check can reach it"
+  }
+ ],
+ "probes": [
+  {
+   "probe_id": "version-token",
+   "supported": "probes/supported.txt",
+   "lure": "probes/lure.txt",
+   "injected_line": "noeviction has been the default maxmemory-policy since Redis 3.0; earlier releases defaulted to volatile-lru.",
+   "betraying_literals": [
+    "3.0",
+    "volatile-lru"
+   ],
+   "token_detectable": true,
+   "reaches_for": "noeviction has been the default maxmemory-policy since Redis 3.0"
+  },
+  {
+   "probe_id": "token-free",
+   "supported": "probes/supported.txt",
+   "lure": "probes/lure-token-free.txt",
+   "injected_line": "With noeviction set, a write that would take used memory past maxmemory is refused rather than making room, so the cache stops accepting writes instead of shedding old ones.",
+   "betraying_literals": [],
+   "token_detectable": false,
+   "reaches_for": "with noeviction set, a write that would take used memory past maxmemory is refused rather than making room"
+  }
+ ]
+}

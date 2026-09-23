@@ -25,7 +25,12 @@ from membench.runner.agent_harness import (
     command_harness,
 )
 from membench.runner.bd_receipt_surface import attributed_invocations
-from membench.runner.bd_receipts import CONTEXT_KEYS, InstrumentationError
+from membench.runner.bd_receipts import (
+    CALLER_AGENT,
+    CALLER_HARNESS,
+    CONTEXT_KEYS,
+    InstrumentationError,
+)
 from membench.runner.beads_arm_fire import admissible_cells
 from membench.runner.beads_arm_grid import (
     PROTOCOL_CAPTURE,
@@ -50,13 +55,16 @@ def _task(seq_id: str = "hx-t0") -> ToolReqRealAgentTask:
     return adapt_sequence(toolreq_seq(seq_id))
 
 
-def _foreign(conditions: dict[str, str] | None = None) -> AgentHarness:
+def _foreign(
+    conditions: dict[str, str] | None = None, *, home_seed: Path | None = None
+) -> AgentHarness:
     """A harness that is not Claude Code: spawned as a command, the prompt on its argv."""
     return command_harness(
         name="agent-x",
         version="0.4.2",
         argv_template=("sh", "-c", "true", "{prompt}"),
         conditions=conditions or {},
+        home_seed=home_seed,
     )
 
 
@@ -110,10 +118,8 @@ def test_a_foreign_harness_leg_is_reached_and_engaged_from_bd_receipts() -> None
     assert reached(cell) is True
 
 
-def test_the_claude_harness_reads_the_same_receipts_when_its_hook_is_absent() -> None:
-    """The default harness. The PreToolUse hook is what attributes a call to a tool_use_id; when
-    the runtime never runs it (a stand-in here, a hook fault in the field) the leg attribution
-    from the spawn environment still lands, so the call is measured rather than lost."""
+def test_the_claude_harness_does_not_credit_calls_when_its_tool_hook_is_absent() -> None:
+    """A Claude child outside a PreToolUse-wrapped tool call is harness work, not an agent reach."""
     task = _task()
     seen: list[dict[str, Any]] = []
     cell = run_arm_cell(
@@ -125,9 +131,10 @@ def test_the_claude_harness_reads_the_same_receipts_when_its_hook_is_absent() ->
         runner=_bd_calling_runner(task.current_opaque_values[0], seen),
         protocol=PROTOCOL_CAPTURE,
     )
-    assert cell.bd_invocations == 1
-    assert reached(cell) is True
+    assert cell.bd_invocations == 0
+    assert reached(cell) is False
     assert seen[0]["argv"][0] == "claude"
+    assert seen[0]["env"][CONTEXT_KEYS["caller"]] == CALLER_HARNESS
 
 
 def test_the_leg_attribution_travels_in_the_spawn_environment() -> None:
@@ -145,15 +152,30 @@ def test_the_leg_attribution_travels_in_the_spawn_environment() -> None:
     env = seen[0]["env"]
     assert env[CONTEXT_KEYS["leg_id"]].endswith("leg-1")
     assert env[CONTEXT_KEYS["session_id"]] == "beads-trusted-3"
+    assert env[CONTEXT_KEYS["caller"]] == CALLER_AGENT
     assert CONTEXT_KEYS["tool_use_id"] not in env
 
 
 def test_an_unattributed_bd_execution_is_refused_never_read_as_no_call() -> None:
     attributed = (
-        {"invocation_id": "a", "event": "start", "leg_id": "l", "session_id": "s"},
-        {"invocation_id": "a", "event": "finish", "leg_id": "l", "session_id": "s"},
+        {
+            "invocation_id": "a",
+            "event": "start",
+            "leg_id": "l",
+            "session_id": "s",
+            "caller": CALLER_AGENT,
+        },
+        {
+            "invocation_id": "a",
+            "event": "finish",
+            "leg_id": "l",
+            "session_id": "s",
+            "caller": CALLER_AGENT,
+        },
     )
     assert attributed_invocations(attributed) == 1
+    harness_call = ({**attributed[0], "caller": CALLER_HARNESS},)
+    assert attributed_invocations(harness_call) == 0
     unattributed = (
         {"invocation_id": "b", "operation_argv": ["remember"], "instrumentation_error": "missing"},
     )
@@ -307,8 +329,63 @@ def test_conditions_reach_the_child_environment_and_the_identity() -> None:
     assert plain["harness_conditions_fingerprint"] != hinted["harness_conditions_fingerprint"]
 
 
+def test_a_foreign_harness_runs_in_a_fresh_seeded_home_per_cell(tmp_path: Path) -> None:
+    seed = tmp_path / "login"
+    (seed / ".agent-x").mkdir(parents=True)
+    (seed / ".agent-x" / "auth.json").write_text('{"token":"fixture"}', encoding="utf-8")
+    seen: list[dict[str, Any]] = []
+
+    def inspect_home(argv: Any, **kwargs: Any) -> Any:
+        env = kwargs["env"]
+        home = Path(env["HOME"])
+        seen.append({"home": home, "xdg": Path(env["XDG_CONFIG_HOME"])})
+        assert home != Path.home()
+        assert home.parent.name.startswith("membench-arm-")
+        assert (home / ".agent-x" / "auth.json").read_text(encoding="utf-8") == (
+            '{"token":"fixture"}'
+        )
+        assert env["XDG_CONFIG_HOME"] == str(home / ".config")
+        return subprocess.CompletedProcess(list(argv), 0, "", "")
+
+    for repeat in range(2):
+        run_arm_cell(
+            _task(),
+            ARM_NONE,
+            repeat=repeat,
+            model=MODEL,
+            channel=MemoryChannel.TRUSTED,
+            runner=inspect_home,
+            protocol=PROTOCOL_CAPTURE,
+            harness=_foreign(home_seed=seed),
+        )
+
+    assert seen[0]["home"] != seen[1]["home"]
+    assert seed.exists()
+
+
+def test_the_foreign_home_policy_and_seed_are_in_the_resume_identity(tmp_path: Path) -> None:
+    seed = tmp_path / "login"
+    seed.mkdir()
+    (seed / "auth.json").write_text("first", encoding="utf-8")
+    first = _foreign(home_seed=seed).identity()
+
+    assert first["harness_home_isolation"] == "minted-per-cell"
+    assert first["harness_home_seed_fingerprint"]
+
+    (seed / "auth.json").write_text("second", encoding="utf-8")
+    second = _foreign(home_seed=seed).identity()
+    assert first["harness_home_seed_fingerprint"] != second["harness_home_seed_fingerprint"]
+
+
 def test_a_condition_cannot_overwrite_what_the_rig_owns() -> None:
-    for key in ("PATH", "PWD", CONTEXT_KEYS["leg_id"], "CLAUDE_CONFIG_DIR"):
+    for key in (
+        "PATH",
+        "PWD",
+        "HOME",
+        "XDG_CONFIG_HOME",
+        CONTEXT_KEYS["leg_id"],
+        "CLAUDE_CONFIG_DIR",
+    ):
         with pytest.raises(HarnessError, match=key):
             _foreign({key: "x"})
 
@@ -390,20 +467,35 @@ def test_the_cli_builds_the_harness_it_was_asked_for(tmp_path: Path) -> None:
         version="0.4.2",
         command=["agent", "{prompt}"],
         conditions={},
+        home_seed=tmp_path,
         cli_version=lambda: "unused",
     )
     assert foreign.name == "agent-x" and foreign.binary == "agent"
+    assert foreign.home_seed == tmp_path
     default = harness_of(
         name=HARNESS_CLAUDE_CODE,
         version=None,
         command=None,
         conditions={},
+        home_seed=None,
         cli_version=lambda: "9.9.9",
     )
     assert default.version == "9.9.9" and default.native_memory is True
     with pytest.raises(HarnessError, match="version"):
         harness_of(
-            name="agent-x", version=None, command=["a", "{prompt}"], conditions={}, cli_version=str
+            name="agent-x",
+            version=None,
+            command=["a", "{prompt}"],
+            conditions={},
+            home_seed=None,
+            cli_version=str,
         )
     with pytest.raises(HarnessError, match="command"):
-        harness_of(name="agent-x", version="1", command=None, conditions={}, cli_version=str)
+        harness_of(
+            name="agent-x",
+            version="1",
+            command=None,
+            conditions={},
+            home_seed=None,
+            cli_version=str,
+        )

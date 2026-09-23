@@ -9,7 +9,14 @@ from pathlib import Path
 
 import pytest
 
-from membench.runner.bd_receipts import InstrumentationError, hook_response, run_bd
+from membench.runner.bd_receipts import (
+    CALLER_AGENT,
+    CALLER_HOOK,
+    CONTEXT_KEYS,
+    InstrumentationError,
+    hook_response,
+    run_bd,
+)
 
 # Where `membench` lives, for the wrappers these tests spawn as standalone scripts.
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
@@ -44,6 +51,7 @@ def context() -> dict[str, str]:
         "MEMBENCH_BD_TOOL_USE_ID": "tool-1",
         "MEMBENCH_BD_SESSION_ID": "session-1",
         "MEMBENCH_BD_LEG_ID": "leg-1",
+        "MEMBENCH_BD_CALLER": CALLER_AGENT,
     }
 
 
@@ -65,6 +73,7 @@ def test_execution(tmp_path: Path, fake_bd: Path, capfdbinary, args, code) -> No
     assert receipt["tool_use_id"] == "tool-1"
     assert receipt["session_id"] == "session-1"
     assert receipt["leg_id"] == "leg-1"
+    assert receipt["caller"] == CALLER_AGENT
     assert rows[0]["invocation_id"] == receipt["invocation_id"]
     assert base64.b64decode(receipt["stdout_base64"]) == out
     assert base64.b64decode(receipt["stderr_base64"]) == err
@@ -76,8 +85,25 @@ def test_hook_preserves_input() -> None:
     specific = hook_response(original, leg_id="leg one")["hookSpecificOutput"]
     assert set(specific) == {"hookEventName", "updatedInput"}
     assert specific["updatedInput"]["timeout"] == 1000
+    assert f"{CONTEXT_KEYS['caller']}={CALLER_AGENT}" in specific["updatedInput"]["command"]
     assert original["tool_input"]["command"] == "echo hello"
     assert hook_response({"tool_name": "Read"}, leg_id="leg") == {}
+
+
+def test_hook_origin_is_recorded_but_not_counted_as_an_agent_call(
+    tmp_path: Path, fake_bd: Path, capfdbinary
+) -> None:
+    from membench.runner.bd_receipt_surface import attributed_invocations
+
+    log = tmp_path / "receipts.jsonl"
+    hook_context = {**context(), CONTEXT_KEYS["caller"]: CALLER_HOOK}
+    assert (
+        run_bd(["prime"], binary=fake_bd, store=tmp_path, receipt_path=log, environ=hook_context)
+        == 0
+    )
+    rows = tuple(json.loads(line) for line in log.read_text().splitlines())
+    assert rows[0]["caller"] == CALLER_HOOK
+    assert attributed_invocations(rows) == 0
 
 
 @pytest.mark.parametrize("missing", ["tool_use_id", "session_id", "tool_input"])
@@ -93,6 +119,20 @@ def test_missing_context(tmp_path: Path, fake_bd: Path, capfdbinary) -> None:
     receipt = json.loads(log.read_text())
     assert "instrumentation_error" in receipt
     assert "returncode" not in receipt
+    assert b"instrumentation" in capfdbinary.readouterr().err
+
+
+def test_unknown_caller_is_unattributed(tmp_path: Path, fake_bd: Path, capfdbinary) -> None:
+    log = tmp_path / "receipts.jsonl"
+    invalid_context = {**context(), CONTEXT_KEYS["caller"]: "typo"}
+
+    assert (
+        run_bd([], binary=fake_bd, store=tmp_path, receipt_path=log, environ=invalid_context) == 0
+    )
+
+    receipt = json.loads(log.read_text())
+    assert receipt["instrumentation_error"] == "unknown caller 'typo'"
+    assert "event" not in receipt
     assert b"instrumentation" in capfdbinary.readouterr().err
 
 

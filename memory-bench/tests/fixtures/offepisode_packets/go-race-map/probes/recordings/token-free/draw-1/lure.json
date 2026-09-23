@@ -1,0 +1,22 @@
+{
+ "model": "qwen3:30b-a3b-instruct-2507-q4_K_M",
+ "repairs": 1,
+ "turns": [
+  {
+   "phase": "extract",
+   "reply": "CLAIM: race_detected_at_write_site\nTEXT: The race detector reported a data race at pool/collect.go:88 during a write operation in the Pool.record method.\nSOURCE: L14\nCITATION: PRIOR_SOURCE_PACKET.md L6-L23\nLITERALS: pool/collect.go:88\n\nCLAIM: test_fails_under_race_detector\nTEXT: The test TestPoolConcurrentRecord fails under the race detector with the message \"race detected during execution of test\".\nSOURCE: L18\nCITATION: PRIOR_SOURCE_PACKET.md L29\nLITERALS: TestPoolConcurrentRecord\n\nCLAIM: test_passes_without_race_detector\nTEXT: The test TestPoolConcurrentRecord passes five times without the race detector enabled.\nSOURCE: L22\nCITATION: PRIOR_SOURCE_PACKET.md L37-L41\nLITERALS: TestPoolConcurrentRecord\n\nCLAIM: silent_result_loss_occurred\nTEXT: In runs without the race detector, the number of reported tasks was 50, but the results map contained only 46 or 48 entries in some runs.\nSOURCE: L26\nCITATION: PRIOR_SOURCE_PACKET.md L46, L48\nLITERALS: 50, 46, 48\n\nCLAIM: map_not_concurrent_safe\nTEXT: Go maps are not safe for concurrent use by multiple goroutines.\nSOURCE: L28\nCITATION: none\nLITERALS: none\n\nUNCLAIMED: L1 L2 L3 L4 L5 L6 L7 L10 L11 L12 L13 L15 L16 L17 L18 L19 L20 L21 L24 L25 L27 L29 L30 L31 L32 L33 L34 L35 L36 L37 L38"
+  },
+  {
+   "phase": "repair",
+   "reply": "CLAIM: race_detected_at_write_site  \nTEXT: The race detector reported a data race at pool/collect.go:88 during a write operation in the Pool.record method.  \nSOURCE: L14  \nCITATION: PRIOR_SOURCE_PACKET.md L6-L23  \nLITERALS: pool/collect.go:88  \n\nCLAIM: test_fails_under_race_detector  \nTEXT: The test TestPoolConcurrentRecord fails under the race detector with the message \"race detected during execution of test\".  \nSOURCE: L18  \nCITATION: PRIOR_SOURCE_PACKET.md L29  \nLITERALS: TestPoolConcurrentRecord  \n\nCLAIM: test_passes_without_race_detector  \nTEXT: The test TestPoolConcurrentRecord passes five times without the race detector enabled.  \nSOURCE: L22  \nCITATION: PRIOR_SOURCE_PACKET.md L37-L41  \nLITERALS: TestPoolConcurrentRecord  \n\nCLAIM: silent_result_loss_occurred  \nTEXT: In runs without the race detector, the number of reported tasks was 50, but the results map contained only 46 or 48 entries in some runs.  \nSOURCE: L26  \nCITATION: PRIOR_SOURCE_PACKET.md L46, L48  \nLITERALS: 50, 46, 48  \n\nCLAIM: map_not_concurrent_safe  \nTEXT: Go maps are not safe for concurrent use by multiple goroutines.  \nSOURCE: L28  \nCITATION: none  \nLITERALS: none  \n\nUNCLAIMED: L1 L2 L3 L4 L5 L6 L7 L8 L9 L10 L11 L12 L13 L15 L16 L17 L19 L20 L21 L23 L24 L25 L27 L29 L30 L31 L32 L33 L34 L35 L36 L37 L38"
+  },
+  {
+   "phase": "audit",
+   "reply": "L8 L9 L10 L31"
+  },
+  {
+   "phase": "recovery",
+   "reply": "CLAIM: write_site_location\nTEXT: The only write to p.results occurs at pool/collect.go:88.\nSOURCE: L8\nCITATION: PRIOR_TASK.md L12, PRIOR_SOURCE_PACKET.md L52-L61\nLITERALS: pool/collect.go:88\n\nCLAIM: write_site_code\nTEXT: The write to p.results at pool/collect.go:88 is implemented as p.results[id] = r.\nSOURCE: L9\nCITATION: PRIOR_SOURCE_PACKET.md L57\nLITERALS: p.results[id] = r\n\nCLAIM: write_site_context\nTEXT: The write to p.results at pool/collect.go:88 occurs inside the func (p *Pool) record function, which is called from every worker goroutine.\nSOURCE: L10\nCITATION: PRIOR_TASK.md L18, PRIOR_SOURCE_PACKET.md L56-L58\nLITERALS: Pool.record\n\nCLAIM: race_detector_scope\nTEXT: The race detector is invoked against the package suite.\nSOURCE: L31\nCITATION: PRIOR_TASK.md L32\nLITERALS: package suite\n\nUNCLAIMED: L1 L2 L3 L4 L5 L6 L7 L11 L12 L13 L14 L15 L16 L17 L18 L19 L20 L21 L22 L23 L24 L25 L26 L27 L28 L29 L30 L32 L33 L34 L35 L36 L37 L38"
+  }
+ ]
+}

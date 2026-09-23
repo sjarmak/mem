@@ -124,6 +124,30 @@ should vary matched-candidate density near 10/40/150 at a fixed 500-Memory
 corpus. A lexical-miss candidate-generation study remains separate so it cannot
 confound the ordering experiment.
 
+## Preregistration history
+
+An amendment-v2 proposal was registered at `2026-08-25T02:10:46Z` and committed
+as `8715068e404de7122f5bd9bdeb8a3a5f21f2e141`, but that commit remained on the
+unmerged `worktree-followup-amendment-v2` branch. It proposed 35 held-out tasks,
+four paid arms (including reverse PageRank), and page sizes 5, 20, and
+unbounded. Its fixture SHA-256 was
+`62cebd8f82ccc98d28e36274b4d1f8f117c64343fc3f954716913b604dfec684`.
+It was not the operative preregistration for the subsequently sealed R6
+evidence and is retained only as abandoned design history.
+
+The operative design was the narrower
+[`density-linkage-preregistration.json`](../memory-bench/fixtures/beads_ordering/density-linkage-preregistration.json),
+registered at `2026-08-25T12:21:48Z` and committed by
+`d3bbf53f2ff8d286194ee38edd30078f93926f97`. It reused the 21 frozen base tasks
+and preregistered candidate counts 10/40/150, sparse/native/enriched linkage,
+key/PageRank/BM25F policies, and page sizes 5 and unbounded. The R6 evidence
+sealed by `661b22ce5aea2fbddd7cc1529cd35200b5356ee4` and packaged by
+`04a6cf9f9fb031f47065d0fd2297e0430d931374` cites that fixture's SHA-256,
+`a78d9c8b5b68fb5396ce9d30ef935219c388564193384b0f6b751307c4bc28ac`,
+in both its frozen fixture manifest and primary-analysis provenance. The
+lifecycle/control addendum at
+`1a35b6ebcb63f80938004441bfa49e24b1fdeea1` did not change that provenance.
+
 ## Freeze the follow-up inputs
 
 Use the pinned local checkout that implements the registered structural priors;

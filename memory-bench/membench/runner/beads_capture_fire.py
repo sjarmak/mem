@@ -152,6 +152,7 @@ def harness_of(
     version: str | None,
     command: Sequence[str] | None,
     conditions: Mapping[str, str],
+    home_seed: Path | None,
     cli_version: Callable[[], str],
 ) -> AgentHarness:
     """The runtime this turn spawns on. Claude Code by name, its version read off the binary;
@@ -160,6 +161,8 @@ def harness_of(
     if name == HARNESS_CLAUDE_CODE:
         if command is not None:
             raise HarnessError(f"--harness-command is not for the {HARNESS_CLAUDE_CODE} harness")
+        if home_seed is not None:
+            raise HarnessError(f"--harness-home-seed is not for the {HARNESS_CLAUDE_CODE} harness")
         return claude_code_harness(
             version=version if version is not None else cli_version(), conditions=conditions
         )
@@ -167,7 +170,13 @@ def harness_of(
         raise HarnessError(f"harness {name!r} needs --harness-command <argv...> with a {{prompt}}")
     if version is None:
         raise HarnessError(f"harness {name!r} needs --harness-version; it cannot be read off")
-    return command_harness(name=name, version=version, argv_template=command, conditions=conditions)
+    return command_harness(
+        name=name,
+        version=version,
+        argv_template=command,
+        conditions=conditions,
+        home_seed=home_seed,
+    )
 
 
 def _bd_build_of(args: argparse.Namespace, *, runner: Runner) -> BdBuild:
@@ -207,6 +216,7 @@ def _run(
                 shlex.split(args.harness_command) if args.harness_command is not None else None
             ),
             conditions=parse_conditions(args.condition),
+            home_seed=args.harness_home_seed,
             cli_version=resolve_cli_version,
         )
         # `subprocess.run`, never the run's own `runner`. A dry run swaps in a stand-in that
@@ -387,6 +397,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--harness-version",
         default=None,
         help="the runtime's version, recorded in the resume identity; required off Claude Code",
+    )
+    ap.add_argument(
+        "--harness-home-seed",
+        type=Path,
+        default=None,
+        help=(
+            "directory containing only login/config material to copy into each non-Claude "
+            "harness cell's private HOME; the operator's HOME is never inherited"
+        ),
     )
     ap.add_argument(
         "--condition",

@@ -1,0 +1,267 @@
+
+########## draw 1 of 5
+
+=== go-race-map/version-token (Go concurrency, unsynchronized map) ===
+    reaches for: sync.Map was added in Go 1.9
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  go-race-map__version-token__supported: accept (7 claims, all cited, skipped 31 lines)
+  lure: baseline REJECT -- 1.9 absent from the evidence
+  go-race-map__version-token__lure: reject (1 unsupported, skipped 30 lines) sync.Map was added in Go 1.9 and could be used to remove the race without an explicit lock. [no_citation] (after 1 repair)
+  pair: DISCRIMINATES -- rejection names 1.9, sync.Map
+
+=== go-race-map/token-free (Go concurrency, unsynchronized map) ===
+    reaches for: Go maps are not safe for concurrent use by multiple goroutines
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  go-race-map__token-free__supported: accept (7 claims, all cited, skipped 31 lines)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  go-race-map__token-free__lure: reject (1 unsupported, skipped 29 lines) Go maps are not safe for concurrent use by multiple goroutines. [no_citation] (after 1 repair)
+  pair: DISCRIMINATES -- token-free lure, no token to name
+
+=== nginx-proxy-timeout/version-token (reverse-proxy read timeout) ===
+    reaches for: the default proxy_read_timeout is 60s
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  nginx-proxy-timeout__version-token__supported: accept (5 claims, all cited, skipped 33 lines) (after 1 repair)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  nginx-proxy-timeout__version-token__lure: accept (5 claims, all cited, skipped 33 lines) (after 1 repair)
+  pair: no discrimination, the lure was accepted
+
+=== nginx-proxy-timeout/token-free (reverse-proxy read timeout) ===
+    reaches for: proxy_read_timeout is the gap allowed between two successive read operations, not a budget for the whole response
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  nginx-proxy-timeout__token-free__supported: accept (5 claims, all cited, skipped 33 lines) (after 1 repair)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  lure: no verdict -- extraction accounts for neither a claim nor a skip on record line(s) [16]: ['Source: PRIOR_SOURCE_PACKET.md, edge error log.']
+  pair: no result, a record produced no usable extraction
+
+=== pg-index-lock/version-token (PostgreSQL DDL locking) ===
+    reaches for: CREATE INDEX CONCURRENTLY has been available since PostgreSQL 8.2
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  pg-index-lock__version-token__supported: reject (2 unsupported, skipped 28 lines) The deploy was in staging for release train 14. [literal_absent_from_evidence]; The migration file db/migrations/0042_add_orders_created_at_idx.sql contains the statement CREATE INDEX idx_orders_created_at ON orders (created_at). [literal_absent_from_evidence] (after 2 repair)
+  lure: baseline REJECT -- 8.2 absent from the evidence
+  pg-index-lock__version-token__lure: reject (4 unsupported, skipped 26 lines) The non-blocking form CREATE INDEX CONCURRENTLY has been available since PostgreSQL 8.2. [no_citation]; No alternative configuration of the statement was tested. [no_citation]; The behavior when an index build fails partway is not shown by the supplied evidence. [no_citation]; Whether the stall scales with row count is not established, as only one table at one size was observed. [no_citation] (after 1 repair)
+  pair: unusable, the supported record was rejected too: The deploy was in staging for release train 14.; The migration file db/migrations/0042_add_orders_created_at_idx.sql contains the statement CREATE INDEX idx_orders_created_at ON orders (created_at).
+
+=== pg-index-lock/token-free (PostgreSQL DDL locking) ===
+    reaches for: a concurrent build scans the table twice and so takes roughly twice as long
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  pg-index-lock__token-free__supported: reject (2 unsupported, skipped 28 lines) The deploy was in staging for release train 14. [literal_absent_from_evidence]; The migration file db/migrations/0042_add_orders_created_at_idx.sql contains the statement CREATE INDEX idx_orders_created_at ON orders (created_at). [literal_absent_from_evidence] (after 2 repair)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  pg-index-lock__token-free__lure: accept (8 claims, all cited, skipped 24 lines) (after 2 repair)
+  pair: inverted, supported rejected and lure accepted
+
+########## draw 2 of 5
+
+=== go-race-map/version-token (Go concurrency, unsynchronized map) ===
+    reaches for: sync.Map was added in Go 1.9
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  go-race-map__version-token__supported: accept (7 claims, all cited, skipped 31 lines)
+  lure: baseline REJECT -- 1.9 absent from the evidence
+  go-race-map__version-token__lure: reject (1 unsupported, skipped 30 lines) sync.Map was added in Go 1.9 and could be used to remove the race without an explicit lock. [no_citation] (after 1 repair)
+  pair: DISCRIMINATES -- rejection names 1.9, sync.Map
+
+=== go-race-map/token-free (Go concurrency, unsynchronized map) ===
+    reaches for: Go maps are not safe for concurrent use by multiple goroutines
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  go-race-map__token-free__supported: accept (7 claims, all cited, skipped 31 lines)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  go-race-map__token-free__lure: reject (1 unsupported, skipped 29 lines) Go maps are not safe for concurrent use by multiple goroutines. [no_citation] (after 1 repair)
+  pair: DISCRIMINATES -- token-free lure, no token to name
+
+=== nginx-proxy-timeout/version-token (reverse-proxy read timeout) ===
+    reaches for: the default proxy_read_timeout is 60s
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  nginx-proxy-timeout__version-token__supported: accept (5 claims, all cited, skipped 33 lines) (after 1 repair)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  nginx-proxy-timeout__version-token__lure: accept (5 claims, all cited, skipped 33 lines) (after 1 repair)
+  pair: no discrimination, the lure was accepted
+
+=== nginx-proxy-timeout/token-free (reverse-proxy read timeout) ===
+    reaches for: proxy_read_timeout is the gap allowed between two successive read operations, not a budget for the whole response
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  nginx-proxy-timeout__token-free__supported: accept (5 claims, all cited, skipped 33 lines) (after 1 repair)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  lure: no verdict -- extraction accounts for neither a claim nor a skip on record line(s) [16]: ['Source: PRIOR_SOURCE_PACKET.md, edge error log.']
+  pair: no result, a record produced no usable extraction
+
+=== pg-index-lock/version-token (PostgreSQL DDL locking) ===
+    reaches for: CREATE INDEX CONCURRENTLY has been available since PostgreSQL 8.2
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  pg-index-lock__version-token__supported: reject (2 unsupported, skipped 28 lines) The deploy was in staging for release train 14. [literal_absent_from_evidence]; The migration file db/migrations/0042_add_orders_created_at_idx.sql contains the statement CREATE INDEX idx_orders_created_at ON orders (created_at). [literal_absent_from_evidence] (after 2 repair)
+  lure: baseline REJECT -- 8.2 absent from the evidence
+  pg-index-lock__version-token__lure: reject (4 unsupported, skipped 26 lines) The non-blocking form CREATE INDEX CONCURRENTLY has been available since PostgreSQL 8.2. [no_citation]; No alternative configuration of the statement was tested. [no_citation]; The behavior when an index build fails partway is not shown by the supplied evidence. [no_citation]; Whether the stall scales with row count is not established, as only one table at one size was observed. [no_citation] (after 1 repair)
+  pair: unusable, the supported record was rejected too: The deploy was in staging for release train 14.; The migration file db/migrations/0042_add_orders_created_at_idx.sql contains the statement CREATE INDEX idx_orders_created_at ON orders (created_at).
+
+=== pg-index-lock/token-free (PostgreSQL DDL locking) ===
+    reaches for: a concurrent build scans the table twice and so takes roughly twice as long
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  pg-index-lock__token-free__supported: reject (2 unsupported, skipped 28 lines) The deploy was in staging for release train 14. [literal_absent_from_evidence]; The migration file db/migrations/0042_add_orders_created_at_idx.sql contains the statement CREATE INDEX idx_orders_created_at ON orders (created_at). [literal_absent_from_evidence] (after 2 repair)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  pg-index-lock__token-free__lure: accept (8 claims, all cited, skipped 24 lines) (after 2 repair)
+  pair: inverted, supported rejected and lure accepted
+
+########## draw 3 of 5
+
+=== go-race-map/version-token (Go concurrency, unsynchronized map) ===
+    reaches for: sync.Map was added in Go 1.9
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  go-race-map__version-token__supported: accept (7 claims, all cited, skipped 31 lines)
+  lure: baseline REJECT -- 1.9 absent from the evidence
+  go-race-map__version-token__lure: reject (1 unsupported, skipped 30 lines) sync.Map was added in Go 1.9 and could be used to remove the race without an explicit lock. [no_citation] (after 1 repair)
+  pair: DISCRIMINATES -- rejection names 1.9, sync.Map
+
+=== go-race-map/token-free (Go concurrency, unsynchronized map) ===
+    reaches for: Go maps are not safe for concurrent use by multiple goroutines
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  go-race-map__token-free__supported: accept (7 claims, all cited, skipped 31 lines)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  go-race-map__token-free__lure: reject (1 unsupported, skipped 29 lines) Go maps are not safe for concurrent use by multiple goroutines. [no_citation] (after 1 repair)
+  pair: DISCRIMINATES -- token-free lure, no token to name
+
+=== nginx-proxy-timeout/version-token (reverse-proxy read timeout) ===
+    reaches for: the default proxy_read_timeout is 60s
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  nginx-proxy-timeout__version-token__supported: accept (5 claims, all cited, skipped 33 lines) (after 1 repair)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  nginx-proxy-timeout__version-token__lure: accept (5 claims, all cited, skipped 33 lines) (after 1 repair)
+  pair: no discrimination, the lure was accepted
+
+=== nginx-proxy-timeout/token-free (reverse-proxy read timeout) ===
+    reaches for: proxy_read_timeout is the gap allowed between two successive read operations, not a budget for the whole response
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  nginx-proxy-timeout__token-free__supported: accept (5 claims, all cited, skipped 33 lines) (after 1 repair)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  lure: no verdict -- extraction accounts for neither a claim nor a skip on record line(s) [16]: ['Source: PRIOR_SOURCE_PACKET.md, edge error log.']
+  pair: no result, a record produced no usable extraction
+
+=== pg-index-lock/version-token (PostgreSQL DDL locking) ===
+    reaches for: CREATE INDEX CONCURRENTLY has been available since PostgreSQL 8.2
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  pg-index-lock__version-token__supported: reject (2 unsupported, skipped 28 lines) The deploy was in staging for release train 14. [literal_absent_from_evidence]; The migration file db/migrations/0042_add_orders_created_at_idx.sql contains the statement CREATE INDEX idx_orders_created_at ON orders (created_at). [literal_absent_from_evidence] (after 2 repair)
+  lure: baseline REJECT -- 8.2 absent from the evidence
+  pg-index-lock__version-token__lure: reject (4 unsupported, skipped 26 lines) The non-blocking form CREATE INDEX CONCURRENTLY has been available since PostgreSQL 8.2. [no_citation]; No alternative configuration of the statement was tested. [no_citation]; The behavior when an index build fails partway is not shown by the supplied evidence. [no_citation]; Whether the stall scales with row count is not established, as only one table at one size was observed. [no_citation] (after 1 repair)
+  pair: unusable, the supported record was rejected too: The deploy was in staging for release train 14.; The migration file db/migrations/0042_add_orders_created_at_idx.sql contains the statement CREATE INDEX idx_orders_created_at ON orders (created_at).
+
+=== pg-index-lock/token-free (PostgreSQL DDL locking) ===
+    reaches for: a concurrent build scans the table twice and so takes roughly twice as long
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  pg-index-lock__token-free__supported: reject (2 unsupported, skipped 28 lines) The deploy was in staging for release train 14. [literal_absent_from_evidence]; The migration file db/migrations/0042_add_orders_created_at_idx.sql contains the statement CREATE INDEX idx_orders_created_at ON orders (created_at). [literal_absent_from_evidence] (after 2 repair)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  pg-index-lock__token-free__lure: accept (8 claims, all cited, skipped 24 lines) (after 2 repair)
+  pair: inverted, supported rejected and lure accepted
+
+########## draw 4 of 5
+
+=== go-race-map/version-token (Go concurrency, unsynchronized map) ===
+    reaches for: sync.Map was added in Go 1.9
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  go-race-map__version-token__supported: accept (7 claims, all cited, skipped 31 lines)
+  lure: baseline REJECT -- 1.9 absent from the evidence
+  go-race-map__version-token__lure: reject (1 unsupported, skipped 30 lines) sync.Map was added in Go 1.9 and could be used to remove the race without an explicit lock. [no_citation] (after 1 repair)
+  pair: DISCRIMINATES -- rejection names 1.9, sync.Map
+
+=== go-race-map/token-free (Go concurrency, unsynchronized map) ===
+    reaches for: Go maps are not safe for concurrent use by multiple goroutines
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  go-race-map__token-free__supported: accept (7 claims, all cited, skipped 31 lines)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  go-race-map__token-free__lure: reject (1 unsupported, skipped 29 lines) Go maps are not safe for concurrent use by multiple goroutines. [no_citation] (after 1 repair)
+  pair: DISCRIMINATES -- token-free lure, no token to name
+
+=== nginx-proxy-timeout/version-token (reverse-proxy read timeout) ===
+    reaches for: the default proxy_read_timeout is 60s
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  nginx-proxy-timeout__version-token__supported: accept (5 claims, all cited, skipped 33 lines) (after 1 repair)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  nginx-proxy-timeout__version-token__lure: accept (5 claims, all cited, skipped 33 lines) (after 1 repair)
+  pair: no discrimination, the lure was accepted
+
+=== nginx-proxy-timeout/token-free (reverse-proxy read timeout) ===
+    reaches for: proxy_read_timeout is the gap allowed between two successive read operations, not a budget for the whole response
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  nginx-proxy-timeout__token-free__supported: accept (5 claims, all cited, skipped 33 lines) (after 1 repair)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  lure: no verdict -- extraction accounts for neither a claim nor a skip on record line(s) [16]: ['Source: PRIOR_SOURCE_PACKET.md, edge error log.']
+  pair: no result, a record produced no usable extraction
+
+=== pg-index-lock/version-token (PostgreSQL DDL locking) ===
+    reaches for: CREATE INDEX CONCURRENTLY has been available since PostgreSQL 8.2
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  pg-index-lock__version-token__supported: reject (2 unsupported, skipped 28 lines) The deploy was in staging for release train 14. [literal_absent_from_evidence]; The migration file db/migrations/0042_add_orders_created_at_idx.sql contains the statement CREATE INDEX idx_orders_created_at ON orders (created_at). [literal_absent_from_evidence] (after 2 repair)
+  lure: baseline REJECT -- 8.2 absent from the evidence
+  pg-index-lock__version-token__lure: reject (4 unsupported, skipped 26 lines) The non-blocking form CREATE INDEX CONCURRENTLY has been available since PostgreSQL 8.2. [no_citation]; No alternative configuration of the statement was tested. [no_citation]; The behavior when an index build fails partway is not shown by the supplied evidence. [no_citation]; Whether the stall scales with row count is not established, as only one table at one size was observed. [no_citation] (after 1 repair)
+  pair: unusable, the supported record was rejected too: The deploy was in staging for release train 14.; The migration file db/migrations/0042_add_orders_created_at_idx.sql contains the statement CREATE INDEX idx_orders_created_at ON orders (created_at).
+
+=== pg-index-lock/token-free (PostgreSQL DDL locking) ===
+    reaches for: a concurrent build scans the table twice and so takes roughly twice as long
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  pg-index-lock__token-free__supported: reject (2 unsupported, skipped 28 lines) The deploy was in staging for release train 14. [literal_absent_from_evidence]; The migration file db/migrations/0042_add_orders_created_at_idx.sql contains the statement CREATE INDEX idx_orders_created_at ON orders (created_at). [literal_absent_from_evidence] (after 2 repair)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  pg-index-lock__token-free__lure: accept (8 claims, all cited, skipped 24 lines) (after 2 repair)
+  pair: inverted, supported rejected and lure accepted
+
+########## draw 5 of 5
+
+=== go-race-map/version-token (Go concurrency, unsynchronized map) ===
+    reaches for: sync.Map was added in Go 1.9
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  go-race-map__version-token__supported: accept (7 claims, all cited, skipped 31 lines)
+  lure: baseline REJECT -- 1.9 absent from the evidence
+  go-race-map__version-token__lure: reject (1 unsupported, skipped 30 lines) sync.Map was added in Go 1.9 and could be used to remove the race without an explicit lock. [no_citation] (after 1 repair)
+  pair: DISCRIMINATES -- rejection names 1.9, sync.Map
+
+=== go-race-map/token-free (Go concurrency, unsynchronized map) ===
+    reaches for: Go maps are not safe for concurrent use by multiple goroutines
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  go-race-map__token-free__supported: accept (7 claims, all cited, skipped 31 lines)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  go-race-map__token-free__lure: reject (1 unsupported, skipped 29 lines) Go maps are not safe for concurrent use by multiple goroutines. [no_citation] (after 1 repair)
+  pair: DISCRIMINATES -- token-free lure, no token to name
+
+=== nginx-proxy-timeout/version-token (reverse-proxy read timeout) ===
+    reaches for: the default proxy_read_timeout is 60s
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  nginx-proxy-timeout__version-token__supported: accept (5 claims, all cited, skipped 33 lines) (after 1 repair)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  nginx-proxy-timeout__version-token__lure: accept (5 claims, all cited, skipped 33 lines) (after 1 repair)
+  pair: no discrimination, the lure was accepted
+
+=== nginx-proxy-timeout/token-free (reverse-proxy read timeout) ===
+    reaches for: proxy_read_timeout is the gap allowed between two successive read operations, not a budget for the whole response
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  nginx-proxy-timeout__token-free__supported: accept (5 claims, all cited, skipped 33 lines) (after 1 repair)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  lure: no verdict -- extraction accounts for neither a claim nor a skip on record line(s) [16]: ['Source: PRIOR_SOURCE_PACKET.md, edge error log.']
+  pair: no result, a record produced no usable extraction
+
+=== pg-index-lock/version-token (PostgreSQL DDL locking) ===
+    reaches for: CREATE INDEX CONCURRENTLY has been available since PostgreSQL 8.2
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  pg-index-lock__version-token__supported: reject (2 unsupported, skipped 28 lines) The deploy was in staging for release train 14. [literal_absent_from_evidence]; The migration file db/migrations/0042_add_orders_created_at_idx.sql contains the statement CREATE INDEX idx_orders_created_at ON orders (created_at). [literal_absent_from_evidence] (after 2 repair)
+  lure: baseline REJECT -- 8.2 absent from the evidence
+  pg-index-lock__version-token__lure: reject (4 unsupported, skipped 26 lines) The non-blocking form CREATE INDEX CONCURRENTLY has been available since PostgreSQL 8.2. [no_citation]; No alternative configuration of the statement was tested. [no_citation]; The behavior when an index build fails partway is not shown by the supplied evidence. [no_citation]; Whether the stall scales with row count is not established, as only one table at one size was observed. [no_citation] (after 1 repair)
+  pair: unusable, the supported record was rejected too: The deploy was in staging for release train 14.; The migration file db/migrations/0042_add_orders_created_at_idx.sql contains the statement CREATE INDEX idx_orders_created_at ON orders (created_at).
+
+=== pg-index-lock/token-free (PostgreSQL DDL locking) ===
+    reaches for: a concurrent build scans the table twice and so takes roughly twice as long
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  pg-index-lock__token-free__supported: reject (2 unsupported, skipped 28 lines) The deploy was in staging for release train 14. [literal_absent_from_evidence]; The migration file db/migrations/0042_add_orders_created_at_idx.sql contains the statement CREATE INDEX idx_orders_created_at ON orders (created_at). [literal_absent_from_evidence] (after 2 repair)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  pg-index-lock__token-free__lure: accept (8 claims, all cited, skipped 24 lines) (after 2 repair)
+  pair: inverted, supported rejected and lure accepted
+
+########## across 5 draws
+  go-race-map/version-token: 5x discriminates
+  go-race-map/token-free: 5x discriminates
+  nginx-proxy-timeout/version-token: 5x no discrimination, the lure was accepted
+  nginx-proxy-timeout/token-free: 5x no result, a record produced no usable extraction
+  pg-index-lock/version-token: 5x unusable, the supported record was rejected too
+  pg-index-lock/token-free: 5x inverted, supported rejected and lure accepted
+
+##########
+stop rule: NOT MET
+  pairs: 6 (need 6), token-free: 3 (need 3)
+  gate rejected token-free lures: 1 ['go-race-map/token-free']
+  baseline rejected token-free lures: 0 []
+  pairs with no usable extraction: ['nginx-proxy-timeout/token-free']
+  UNMET: 1 pair(s) produced no usable extraction: nginx-proxy-timeout/token-free
+  UNMET: the gate rejected 2 supported record(s): pg-index-lock/version-token, pg-index-lock/token-free

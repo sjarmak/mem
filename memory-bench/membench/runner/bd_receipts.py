@@ -33,13 +33,20 @@ CONTEXT_KEYS = {
     "tool_use_id": "MEMBENCH_BD_TOOL_USE_ID",
     "session_id": "MEMBENCH_BD_SESSION_ID",
     "leg_id": "MEMBENCH_BD_LEG_ID",
+    "caller": "MEMBENCH_BD_CALLER",
 }
 
+CALLER_AGENT = "agent"
+CALLER_HARNESS = "harness"
+CALLER_HOOK = "hook"
+_CALLERS = frozenset((CALLER_AGENT, CALLER_HARNESS, CALLER_HOOK))
+
 # What an execution must be attributed to before it is a measurement: the leg and the session,
-# which the cell exports into the agent's environment for every runtime. The tool_use_id is what
-# the Claude PreToolUse hook adds on top, per call; a runtime without that hook has no such id
-# and its executions are still booked under the leg they ran in.
-REQUIRED_CONTEXT = ("session_id", "leg_id")
+# which the cell exports into the agent's environment for every runtime. ``caller`` separates an
+# agent-selected tool execution from runtime startup and hook work. The tool_use_id is what the
+# Claude PreToolUse hook adds on top, per call; a runtime without that hook marks its whole child
+# as agent-origin because the harness command itself is the agent boundary.
+REQUIRED_CONTEXT = ("session_id", "leg_id", "caller")
 
 
 class InstrumentationError(ValueError):
@@ -65,6 +72,7 @@ def hook_response(event: Mapping[str, object], *, leg_id: str) -> dict[str, Any]
         "tool_use_id": _identifier(event.get("tool_use_id"), "tool_use_id"),
         "session_id": _identifier(event.get("session_id"), "session_id"),
         "leg_id": _identifier(leg_id, "leg_id"),
+        "caller": CALLER_AGENT,
     }
     prefix = "export " + " ".join(
         f"{CONTEXT_KEYS[key]}={shlex.quote(value)}" for key, value in identifiers.items()
@@ -116,6 +124,8 @@ def _context(environ: Mapping[str, str]) -> dict[str, str | None]:
             context[field] = None
             continue
         context[field] = _identifier(value, field)
+    if context["caller"] not in _CALLERS:
+        raise InstrumentationError(f"unknown caller {context['caller']!r}")
     return context
 
 

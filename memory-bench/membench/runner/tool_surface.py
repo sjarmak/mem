@@ -916,8 +916,9 @@ _POLICY_PREFIXES: tuple[str, ...] = (
 # the parameterisation exposed: the backtick is now a segment break, so a reader inside a
 # backticked command substitution is its own segment instead of being swallowed by a
 # non-accessing `echo`. That fix applies to EVERY mode, not only `deny`, so legs recorded
-# under 5 undercount this spelling.
-RECOGNIZER_IMPLEMENTATION_VERSION = 6
+# under 5 undercount this spelling; 7 = receipt scoring distinguishes agent-selected calls
+# from harness and hook work, so pre-7 cached reach verdicts are not reusable.
+RECOGNIZER_IMPLEMENTATION_VERSION = 7
 
 
 def _policy_value(name: str, value: object) -> object:

@@ -157,13 +157,67 @@ def assert_neutral_ancestry(sandbox: Path) -> None:
 
 
 @contextmanager
-def paid_sandbox(prefix: str) -> Iterator[Path]:
+def paid_sandbox(prefix: str, *, parent: Path | None = None) -> Iterator[Path]:
     """A neutral cwd for a paid ``claude -p`` cell, guaranteed clean or not handed out.
 
     Yields the RESOLVED path: the same chain the guard checked and the kernel reports, so
     nothing downstream re-opens the symlink gap. Why ``TMPDIR`` is still honored, and why
-    that costs the measurement nothing: see the module docstring."""
-    with tempfile.TemporaryDirectory(prefix=prefix) as raw:
+    that costs the measurement nothing: see the module docstring.
+
+    ``parent`` overrides where the sandbox is minted, for the caller that must escape the
+    ambient ``TMPDIR`` rather than trust it. ``TMPDIR`` is where every tool on the box
+    writes, so it is also where a stray ``.beads`` workspace accumulates, and a bead store
+    minted under one does not survive contact with it (see
+    ``assert_no_bead_store_above``). ``assert_neutral_ancestry`` does not cover that: its
+    business is auto-loaded agent CONTEXT, and a bead store is neither ``CLAUDE.md`` nor
+    ``AGENTS.md``. Callers that care mint their own root, check it with
+    ``assert_no_bead_store_above``, and pass it here. ``None`` keeps the ``TMPDIR`` default,
+    which is correct wherever the ambient temp root is known clean.
+
+    ``parent`` chooses WHERE, never WHETHER: the context guard below runs on the minted path
+    either way."""
+    with tempfile.TemporaryDirectory(prefix=prefix, dir=parent) as raw:
         sandbox = Path(raw).resolve()
         assert_neutral_ancestry(sandbox)
         yield sandbox
+
+
+def assert_no_bead_store_above(directory: Path, *, ceiling: Path | None = None) -> None:
+    """Refuse ``directory`` if it or an ancestor carries a ``.beads`` workspace.
+
+    The companion to ``assert_neutral_ancestry`` for the OTHER upward walk a paid session
+    depends on, and the pre-spend form of mem-pkglb. Both halves of the hazard were measured
+    against bd directly rather than inferred, because the bead recorded the symptom (57 red
+    package tests) and not the mechanism:
+
+    * ``bd init`` under an ancestor bead PROJECT aborts with exit 1 and creates no store.
+      ``provision_memory_tool`` runs it through ``run_checked``, so that much fails closed --
+      but it fails after the sandbox is minted and the session is set up, which is a wasted
+      setup rather than a wasted session only because the agent has not been spawned yet.
+    * The half that does not fail closed: ``bd -C <dir>`` on a directory with no store of its
+      own resolves UPWARD and answers from the ancestor's. So a store directory left empty by
+      that aborted init still reads and writes -- into the ancestor. The harness's
+      "the store is empty" precheck passes, the agent's writes land in a workspace shared with
+      whatever else is on the box, and the records read back afterwards are not this session's.
+
+    A bare ``.beads`` directory that is not an initialized project is not enough to abort an
+    init, but it is exactly what an initialized one looks like from the outside, and telling
+    them apart means running bd. Refusing on the name is the cheap, conservative call.
+
+    ``ceiling`` stops the walk at that directory inclusive, for a caller that vouches for
+    everything above it -- a test that built its own fixture chain. Production passes nothing
+    and the walk runs to the filesystem root, which is where ``bd`` stops too."""
+    resolved = directory.resolve()
+    stop = ceiling.resolve() if ceiling is not None else None
+    for ancestor in (resolved, *resolved.parents):
+        found = ancestor / ".beads"
+        if found.exists():
+            raise SandboxContaminationError(
+                f"{found} sits at or above {directory}. `bd init` refuses to mint a store "
+                f"under an existing workspace, and `bd -C` on the empty directory it leaves "
+                f"behind resolves UPWARD -- so the agent's memories would land in that "
+                f"workspace and the records read back would not be this session's. Refusing "
+                f"to spend. Mint the run root somewhere with no .beads in any parent."
+            )
+        if ancestor == stop:
+            return

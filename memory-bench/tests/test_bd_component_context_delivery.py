@@ -46,7 +46,7 @@ def _spec(root: Path, version: str) -> tuple[dict, dict]:
     }
     configuration = {
         "input_root": str(root),
-        "repo_absolute": "/home/ds/projects/EnterpriseBench",
+        "repo_absolute": "/workspace/projects/EnterpriseBench",
         "base_commit": PARENT,
         "agent_python": sys.executable,
         "python_paths": ["lib"],
@@ -63,8 +63,8 @@ def _tool_command() -> str:
     probe = """from pathlib import Path
 import eb_verify.task_parser as parser
 assert Path(parser.__file__).resolve().is_relative_to(Path.cwd() / 'lib')
-hidden = ['/home/ds/projects/EnterpriseBench/lib/eb_verify/task_parser.py',
-          '/home/ds/projects/mem/memory-bench/results/bd-source-curation-20260905']
+hidden = ['/workspace/projects/EnterpriseBench/lib/eb_verify/task_parser.py',
+          '/workspace/projects/mem/memory-bench/results/bd-source-curation-20260905']
 for name in hidden:
     assert not Path(name).exists(), name
     assert not Path('/proc/1/root' + name).exists(), name

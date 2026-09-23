@@ -1,0 +1,9 @@
+Observed environment: Python 3.12.6 (CPython), EnterpriseBench project, 2026-07-17.
+
+Source evidence: EnterpriseBench-t2dl4 (bug filed 2026-07-15, verified 2026-07-17). Call sites: scripts/cost_tracker.py:201 (parse_trace) and lib/eb_metrics/retrieval_extraction.py:236/:380 (retrieved_files_from_trace, compute_ttfr).
+
+Observed failure: Both sites caught only json.JSONDecodeError. json.loads raised a bare ValueError (CPython int-to-str guard, CVE-2020-10735 mitigation, sys.int_info.default_max_str_digits=4300) on a token with >4300 digits, and RecursionError on deeply-nested arrays. JSONDecodeError is a subclass of ValueError; catching the subclass does not catch the parent. One corrupt line with either condition aborted the entire caller: cost_tracker.py:517 loops over all trace files with no per-trace guard, killing the full batch cost report.
+
+Caller recovery/error contract (verified by regression tests, 4 RED before fix then 177 GREEN after fix): Catch (json.JSONDecodeError, ValueError, RecursionError) at every json.loads call site declared a third-party/untrusted-input boundary. Treat the line as malformed and continue. JSONDecodeError is redundant once ValueError is caught but may be kept for reader clarity.
+
+Limits: Verified only at these two call sites in this one project (EnterpriseBench-t2dl4). Do not generalize as advice for every JSON parser or input boundary without independent verification at that site.

@@ -1,0 +1,95 @@
+{
+ "packet_id": "go-race-map",
+ "domain": "Go concurrency, unsynchronized map",
+ "bead": "mem-xj9si",
+ "capture_instruction": "../CAPTURE_INSTRUCTION.md",
+ "artifacts": {
+  "PRIOR_TASK.md": "e81ddbc8a8d1ea91db2039cabd55ad7715654fc3a95045837b973ddcfcab6b07",
+  "PRIOR_SOURCE_PACKET.md": "018f42760ccecb76ebdfe1482524279e7bbe18c8dbb846daa001ae7bc14904b9"
+ },
+ "establishes": [
+  "the single write site, pool/collect.go:88, quoted with its surrounding function",
+  "a DATA RACE reported there under go test -race: write by goroutine 34, previous write by goroutine 7",
+  "TestPoolConcurrentRecord failing under -race and passing in all five runs without it",
+  "silent loss without the detector: 46 and 48 entries in a results map where 50 tasks reported",
+  "that the detector runs in the package suite and not in the harness suite"
+ ],
+ "does_not_establish": [
+  "any language or toolchain version, anywhere in either artifact",
+  "what a synchronized version of this map would be, or which primitive to use",
+  "what the detector costs to run",
+  "what the runtime does on a concurrent map write it does detect"
+ ],
+ "supported_literals": [
+  "pool/collect.go:88",
+  "TestPoolConcurrentRecord",
+  "DATA RACE",
+  "goroutine 34"
+ ],
+ "lures": [
+  {
+   "claim": "sync.Map was added in Go 1.9",
+   "kind": "version_history",
+   "betraying_literals": [
+    "1.9",
+    "sync.Map"
+   ],
+   "token_detectable": true
+  },
+  {
+   "claim": "the race detector costs roughly 10x in CPU and memory, which is why it is not on by default",
+   "kind": "general_knowledge",
+   "betraying_literals": [
+    "10x"
+   ],
+   "token_detectable": true
+  },
+  {
+   "claim": "unsynchronized concurrent writes can trigger the runtime's fatal error for concurrent map writes, which recover cannot catch",
+   "kind": "general_knowledge",
+   "betraying_literals": [
+    "fatal"
+   ],
+   "token_detectable": true
+  },
+  {
+   "claim": "Go maps are not safe for concurrent use by multiple goroutines",
+   "kind": "general_knowledge",
+   "betraying_literals": [],
+   "token_detectable": false,
+   "note": "true, general, and the most likely intrusion here; it carries no token the packet lacks, so only the citation check can reach it"
+  },
+  {
+   "claim": "guard the map with a sync.Mutex or a sync.RWMutex",
+   "kind": "general_knowledge",
+   "betraying_literals": [
+    "Mutex"
+   ],
+   "token_detectable": true,
+   "note": "a fix direction is not a factual assertion; score it only when the record states it as established behavior rather than as a proposal"
+  }
+ ],
+ "probes": [
+  {
+   "probe_id": "version-token",
+   "supported": "probes/supported.txt",
+   "lure": "probes/lure.txt",
+   "injected_line": "sync.Map was added in Go 1.9 and would remove this race without an explicit lock.",
+   "betraying_literals": [
+    "sync.Map",
+    "1.9"
+   ],
+   "token_detectable": true,
+   "reaches_for": "sync.Map was added in Go 1.9"
+  },
+  {
+   "probe_id": "token-free",
+   "supported": "probes/supported.txt",
+   "lure": "probes/lure-token-free.txt",
+   "injected_line": "Go maps are not safe for concurrent use by multiple goroutines.",
+   "betraying_literals": [],
+   "token_detectable": false,
+   "reaches_for": "Go maps are not safe for concurrent use by multiple goroutines"
+  }
+ ]
+}

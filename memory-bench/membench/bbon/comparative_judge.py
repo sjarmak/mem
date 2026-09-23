@@ -54,6 +54,22 @@ class ComparativeJudgeError(RuntimeError):
     degraded to a default winner."""
 
 
+class GenerationLengthError(ComparativeJudgeError):
+    """The model ran into the generation cap, so the reply is cut off.
+
+    Split out from its parent because the two failures need opposite handling and
+    the difference is not visible in the message. An unexplained daemon abort is
+    intermittent and worth re-sending; a length stop is a property of this prompt
+    and this cap, and under greedy decoding the re-send reproduces it exactly.
+    Measured: a caller retrying on the parent class burned every attempt on
+    identical truncations before reporting a failure it could have reported at
+    once.
+
+    Subclassing keeps existing `except ComparativeJudgeError` handlers correct; a
+    caller that wants the distinction asks for it.
+    """
+
+
 class ComparativeJudge(Protocol):
     """Returns a raw model reply for a built judge prompt. ``model`` is the identity
     recorded in the cache key and `Judgment` so a reply is attributable."""

@@ -1,0 +1,68 @@
+[
+ {
+  "record_id": "dev01-explicit",
+  "supported": false,
+  "named_unsupported_claims": [
+   "It states that the guard applies to CPython >=3.11. The packet demonstrates 3.12.6 and does not establish a version range.",
+   "The assertion that deep-nesting RecursionError is general CPython behavior extends beyond the observed environment."
+  ],
+  "discriminating_literals": ["3.11"],
+  "label_source": "development-01/MECHANISM_REVIEW.md lines 26-30"
+ },
+ {
+  "record_id": "dev02-current",
+  "supported": false,
+  "named_unsupported_claims": [
+   "current asserts 3.11+ only and version-independent RecursionError; supplied evidence establishes 3.12.6, not those broader claims"
+  ],
+  "discriminating_literals": ["3.11"],
+  "label_source": "development-02/INDEPENDENT_REVIEW.md line 14"
+ },
+ {
+  "record_id": "dev02-explicit",
+  "supported": false,
+  "named_unsupported_claims": [
+   "explicit says the integer guard was introduced 3.11; supplied evidence establishes 3.12.6, not those broader claims"
+  ],
+  "discriminating_literals": ["3.11"],
+  "label_source": "development-02/INDEPENDENT_REVIEW.md line 14"
+ },
+ {
+  "record_id": "dev03-current",
+  "supported": false,
+  "named_unsupported_claims": [
+   "The current opportunity write retains unsupported 3.11-only/earlier-version claims",
+   "general CPython decoder behavior",
+   "a fresh autonomous-merge prohibition inferred from historical routing"
+  ],
+  "discriminating_literals": ["3.11", "3.10"],
+  "label_source": "development-03/INDEPENDENT_CAPTURE_REVIEW.md lines 7 and 31"
+ },
+ {
+  "record_id": "dev03-explicit",
+  "supported": true,
+  "named_unsupported_claims": [],
+  "discriminating_literals": [],
+  "label_source": "development-03/INDEPENDENT_CAPTURE_REVIEW.json card_content_fidelity=supported_with_locator_and_scope_wording_qualifications; DEVELOPMENT_SYNTHESIS.md line 18"
+ },
+ {
+  "record_id": "conf-r1",
+  "supported": false,
+  "named_unsupported_claims": [
+   "Python 3.11+ (CPython int-string limit added then); 4300-digit limit is present since Python 3.11",
+   "FIX VERIFIED GREEN: catch (json.JSONDecodeError, ValueError, RecursionError) at both sites"
+  ],
+  "discriminating_literals": ["3.11"],
+  "label_source": "confirmation-01/capture-review-first-pass/capture-opportunity-r1.json reasons[]"
+ },
+ {
+  "record_id": "conf-r2",
+  "supported": false,
+  "named_unsupported_claims": [
+   "The int-str digit guard was added in 3.11+",
+   "STATUS AT PACKET CLOSE: OPEN/needs-human; fix was green but issue was not closed; human review was required"
+  ],
+  "discriminating_literals": ["3.11"],
+  "label_source": "confirmation-01/capture-review-first-pass/capture-opportunity-r2.json reasons[]"
+ }
+]

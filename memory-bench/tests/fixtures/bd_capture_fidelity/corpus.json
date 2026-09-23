@@ -1,0 +1,115 @@
+{
+ "packet": {
+  "PRIOR_SOURCE_PACKET.md": "7598ad040f31ad0ec34440955869285749aaadf4c6026b375e03ebb399f7f179",
+  "PRIOR_TASK.md": "618ce9bd4f34d315e1a35ec4916b31dd57e171e298c643ffff941918f34cead7"
+ },
+ "records": [
+  {
+   "record_id": "dev01-explicit",
+   "session": "development-01/capture-opportunity-explicit",
+   "memory_key": "python-json-loads-exception-contract",
+   "supported": false,
+   "named_unsupported_claims": [
+    "It states that the guard applies to CPython >=3.11. The packet demonstrates 3.12.6 and does not establish a version range.",
+    "The assertion that deep-nesting RecursionError is general CPython behavior extends beyond the observed environment."
+   ],
+   "discriminating_literals": [
+    "3.11"
+   ],
+   "label_source": "development-01/MECHANISM_REVIEW.md lines 26-30"
+  },
+  {
+   "record_id": "dev02-current",
+   "session": "development-02/capture-opportunity-current",
+   "memory_key": "json-loads-exception-surface-ValueError-RecursionError",
+   "supported": false,
+   "named_unsupported_claims": [
+    "current asserts 3.11+ only and version-independent RecursionError; supplied evidence establishes 3.12.6, not those broader claims"
+   ],
+   "discriminating_literals": [
+    "3.11"
+   ],
+   "label_source": "development-02/INDEPENDENT_REVIEW.md line 14"
+  },
+  {
+   "record_id": "dev02-explicit",
+   "session": "development-02/capture-opportunity-explicit",
+   "memory_key": "enterprisebench-json-valueerror-catch-gap",
+   "supported": false,
+   "named_unsupported_claims": [
+    "explicit says the integer guard was introduced 3.11; supplied evidence establishes 3.12.6, not those broader claims"
+   ],
+   "discriminating_literals": [
+    "3.11"
+   ],
+   "label_source": "development-02/INDEPENDENT_REVIEW.md line 14"
+  },
+  {
+   "record_id": "dev03-current",
+   "session": "development-03/capture-opportunity-current",
+   "memory_key": "json-parse-exception-gap-enterprisebench",
+   "supported": false,
+   "named_unsupported_claims": [
+    "The current opportunity write retains unsupported 3.11-only/earlier-version claims",
+    "general CPython decoder behavior",
+    "a fresh autonomous-merge prohibition inferred from historical routing"
+   ],
+   "discriminating_literals": [
+    "3.11",
+    "3.10"
+   ],
+   "label_source": "development-03/INDEPENDENT_CAPTURE_REVIEW.md lines 7 and 31"
+  },
+  {
+   "record_id": "dev03-explicit",
+   "session": "development-03/capture-opportunity-explicit",
+   "memory_key": "enterprisebench-t2dl4-json-bare-exception-evidence",
+   "supported": true,
+   "named_unsupported_claims": [],
+   "discriminating_literals": [],
+   "label_source": "development-03/INDEPENDENT_CAPTURE_REVIEW.json card_content_fidelity=supported_with_locator_and_scope_wording_qualifications; DEVELOPMENT_SYNTHESIS.md line 18"
+  },
+  {
+   "record_id": "conf-r1",
+   "session": "confirmation-01/capture-opportunity-r1",
+   "memory_key": "enterprisebench-t2dl4-json-loads-exception-gap",
+   "supported": false,
+   "named_unsupported_claims": [
+    "Python 3.11+ (CPython int-string limit added then); 4300-digit limit is present since Python 3.11",
+    "FIX VERIFIED GREEN: catch (json.JSONDecodeError, ValueError, RecursionError) at both sites"
+   ],
+   "discriminating_literals": [
+    "3.11"
+   ],
+   "label_source": "confirmation-01/capture-review-first-pass/capture-opportunity-r1.json reasons[]"
+  },
+  {
+   "record_id": "conf-r2",
+   "session": "confirmation-01/capture-opportunity-r2",
+   "memory_key": "enterprisebench-t2dl4-json-exception-gap",
+   "supported": false,
+   "named_unsupported_claims": [
+    "The int-str digit guard was added in 3.11+",
+    "STATUS AT PACKET CLOSE: OPEN/needs-human; fix was green but issue was not closed; human review was required"
+   ],
+   "discriminating_literals": [
+    "3.11"
+   ],
+   "label_source": "confirmation-01/capture-review-first-pass/capture-opportunity-r2.json reasons[]"
+  }
+ ],
+ "faults": [
+  {
+   "fault_id": "dev03-explicit__version-history-injected",
+   "base": "dev03-explicit",
+   "expected_accept": false,
+   "why": "The one accepted record, with a single version-history sentence added. A gate that still accepts it is not reading claims, only records."
+  },
+  {
+   "fault_id": "dev01-explicit__version-claims-stripped",
+   "base": "dev01-explicit",
+   "expected_accept": true,
+   "why": "A rejected record with exactly the two sentences the reviewers named removed, the rest untouched. A gate that still rejects it is rejecting for something other than the reviewers' reason."
+  }
+ ]
+}

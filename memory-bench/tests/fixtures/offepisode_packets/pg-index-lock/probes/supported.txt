@@ -1,0 +1,37 @@
+EVIDENCE CARD — Harbor-q7m2 index build blocked writes on orders
+
+## Observed environment
+Project: /workspace/projects/harbor
+Staging deploy, release train 14
+Source: PRIOR_SOURCE_PACKET.md, deploy log header.
+
+## The statement (task text, quoted in full)
+db/migrations/0042_add_orders_created_at_idx.sql contains one statement:
+  CREATE INDEX idx_orders_created_at ON orders (created_at);
+Source: PRIOR_TASK.md, description.
+
+## Lock observed while the build ran (EXECUTED, captured by the on-call)
+pg_locks showed the building backend holding a ShareLock on orders, granted, alongside RowExclusiveLock rows that were not granted.
+Source: PRIOR_SOURCE_PACKET.md, psql session capture.
+
+## Waiting writers (EXECUTED)
+pg_stat_activity counted 11 backends with wait_event_type Lock running INSERT INTO orders. One sampled waiter had been waiting 00:00:39.
+Source: PRIOR_SOURCE_PACKET.md, psql session capture.
+
+## Write stall (EXECUTED)
+The checkout service log records the queued write committing after 47 seconds and then draining 11 queued writes in one batch.
+Source: PRIOR_SOURCE_PACKET.md, application log.
+
+## Table size (EXECUTED)
+reltuples for orders in staging: 18042199.
+Source: PRIOR_SOURCE_PACKET.md, psql session capture.
+
+## Reads during the window (EXECUTED)
+The dashboard poller logged poll orders ok at 09:41:50, 09:42:10, 09:42:30 and 09:42:50.
+Source: PRIOR_SOURCE_PACKET.md, dashboard poller log.
+
+## Limits and unknowns
+- Production was not deployed to; only staging is observed here.
+- No alternative form of this statement was run, so nothing here establishes what lock any other form would take or how long it would run.
+- What happens when an index build fails partway is not shown by the supplied evidence.
+- Whether the stall scales with row count is not established: one table at one size was observed.

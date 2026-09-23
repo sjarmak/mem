@@ -17,6 +17,9 @@ SessionRunner = Callable[[Mapping[str, Any], Mapping[str, Any], Path], dict[str,
 SCHEMA = "bd-component-experiment.v1"
 GUIDANCE_SCHEMA = "bd-guidance-experiment.v1"
 CONFIRMATION_SCHEMA = "bd-confirmation-experiment.v1"
+LADDER_SCHEMA = "bd-ladder-experiment.v1"
+LADDER_RUNG_COUNT = 2
+LADDER_REPLICATES = (1, 2, 3, 4)
 STATES = {"completed", "terminal_timeout", "blocked_integrity_or_infrastructure"}
 EXPECTED = {
     ("capture", intervention, condition, "empty" if intervention == "opportunity" else "seeded")
@@ -49,6 +52,20 @@ CONFIRMATION_EXPECTED = {
     )
     for replicate in (1, 2)
 }
+
+
+def _ladder_expected(rows: list[Any]) -> set[tuple[Any, ...]]:
+    """A ladder is two rungs of four replicates; the experiment names them, not this module."""
+    rungs = {row.get("intervention") for row in rows if isinstance(row, dict)}
+    if len(rungs) != LADDER_RUNG_COUNT or not all(
+        isinstance(rung, str) and re.fullmatch("[a-z0-9][a-z0-9_]*", rung) for rung in rungs
+    ):
+        raise ValueError("A ladder contrasts exactly two named rungs")
+    return {
+        ("retrieval", rung, replicate, "seeded")
+        for rung in rungs
+        for replicate in LADDER_REPLICATES
+    }
 
 
 def _object(value: Any, label: str) -> dict[str, Any]:
@@ -98,7 +115,7 @@ def _artifact(root: Path, value: Any) -> None:
 def validate_manifest(manifest: Mapping[str, Any]) -> None:
     """Check the exact schedule and every frozen input before invocation."""
     if (
-        manifest.get("schema") not in {SCHEMA, GUIDANCE_SCHEMA, CONFIRMATION_SCHEMA}
+        manifest.get("schema") not in {SCHEMA, GUIDANCE_SCHEMA, CONFIRMATION_SCHEMA, LADDER_SCHEMA}
         or manifest.get("planned_sessions") != 8
         or manifest.get("failure_policy") != "stop_and_review"
     ):
@@ -143,13 +160,14 @@ def _schedule(manifest: Mapping[str, Any], root: Path) -> None:
     ids: set[str] = set()
     combinations = []
     seeds = []
+    rung_seeds: dict[str, list[dict[str, Any]]] = {}
     capture_sources = []
     capture_prompts: dict[str, list[dict[str, Any]]] = {}
     guidance_protocol = manifest["schema"] == GUIDANCE_SCHEMA
     confirmation_protocol = manifest["schema"] == CONFIRMATION_SCHEMA
-    label = (
-        "replicate" if confirmation_protocol else "guidance" if guidance_protocol else "condition"
-    )
+    ladder_protocol = manifest["schema"] == LADDER_SCHEMA
+    numbered = confirmation_protocol or ladder_protocol
+    label = "replicate" if numbered else "guidance" if guidance_protocol else "condition"
     for value in rows:
         row = _object(value, "row")
         row_id = row.get("row_id")
@@ -160,9 +178,9 @@ def _schedule(manifest: Mapping[str, Any], root: Path) -> None:
         ):
             raise ValueError("Unique safe row IDs are required")
         ids.add(row_id)
-        if (guidance_protocol or confirmation_protocol) and row.get("condition") != "current":
+        if (guidance_protocol or numbered) and row.get("condition") != "current":
             raise ValueError("Guidance/confirmation requires the current adapter condition")
-        if confirmation_protocol and type(row.get("replicate")) is not int:
+        if numbered and type(row.get("replicate")) is not int:
             raise ValueError("Confirmation replicate must be an integer")
         combinations.append(
             tuple(row.get(k) for k in ("component", "intervention", label, "initial_store"))
@@ -188,21 +206,28 @@ def _schedule(manifest: Mapping[str, Any], root: Path) -> None:
         if row.get("initial_store") == "seeded":
             _artifact(root, row.get("seed"))
             seeds.append(row["seed"])
+            rung_seeds.setdefault(str(row.get("intervention")), []).append(row["seed"])
         elif row.get("seed") is not None:
             raise ValueError("Empty rows cannot receive seeds")
     expected = (
-        CONFIRMATION_EXPECTED
-        if confirmation_protocol
-        else GUIDANCE_EXPECTED if guidance_protocol else EXPECTED
+        _ladder_expected(rows)
+        if ladder_protocol
+        else (
+            CONFIRMATION_EXPECTED
+            if confirmation_protocol
+            else GUIDANCE_EXPECTED if guidance_protocol else EXPECTED
+        )
     )
     if set(combinations) != expected:
         raise ValueError("Schedule intervention combinations differ from protocol")
     if any(prompt != prompts[0] for prompts in capture_prompts.values() for prompt in prompts):
         raise ValueError("Capture prompts must match within each guidance group")
-    if any(seed != seeds[0] for seed in seeds) or any(
-        sources != capture_sources[0] for sources in capture_sources
-    ):
-        raise ValueError("Seed and capture evidence must match across conditions")
+    if any(sources != capture_sources[0] for sources in capture_sources):
+        raise ValueError("Capture evidence must match across conditions")
+    if ladder_protocol:
+        _ladder_inputs(rows, rung_seeds)
+    elif any(seed != seeds[0] for seed in seeds):
+        raise ValueError("Seed must match across conditions")
     if confirmation_protocol:
         _confirmation_inputs(rows, seeds[0])
 
@@ -216,6 +241,25 @@ def _confirmation_inputs(rows: list[dict[str, Any]], seed: Mapping[str, Any]) ->
         for artifact in [row["prompt"], *row["sources"]]:
             if artifact["path"] == seed["path"] or artifact["sha256"] == seed["sha256"]:
                 raise ValueError("Seed artifact cannot be supplied as a prompt or source")
+
+
+def _ladder_inputs(
+    rows: list[dict[str, Any]], rung_seeds: Mapping[str, list[dict[str, Any]]]
+) -> None:
+    """Keep every visible input identical so only the seeded memory text separates the rungs."""
+    prompts = [row["prompt"] for row in rows]
+    if any(prompt != prompts[0] for prompt in prompts):
+        raise ValueError("Ladder prompts must match across every rung")
+    if len(rung_seeds) != LADDER_RUNG_COUNT:
+        raise ValueError("Every ladder rung requires its own seeded rows")
+    for seeds in rung_seeds.values():
+        if any(seed != seeds[0] for seed in seeds):
+            raise ValueError("A ladder rung must repeat one identical seed")
+    lower, upper = (seeds[0] for seeds in rung_seeds.values())
+    if lower["path"] == upper["path"] or lower["sha256"] == upper["sha256"]:
+        raise ValueError("Ladder rungs must carry different memory content")
+    if any(prompts[0][key] == seed[key] for seed in (lower, upper) for key in ("path", "sha256")):
+        raise ValueError("Seed artifact cannot be supplied as a prompt")
 
 
 def freeze(out: Path, manifest: Mapping[str, Any]) -> None:

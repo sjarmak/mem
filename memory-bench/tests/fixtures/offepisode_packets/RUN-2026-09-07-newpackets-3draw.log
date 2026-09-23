@@ -1,0 +1,119 @@
+
+########## draw 1 of 3
+
+=== inode-exhaustion/version-token (filesystem inode exhaustion) ===
+    reaches for: the inode count is fixed when the filesystem is created
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  inode-exhaustion__version-token__supported: reject (4 unsupported, skipped 39 lines) Nothing in the evidence is version-scoped or filesystem-scoped. [no_citation]; The evidence does not state what determines the inode count, or whether that count can be changed. [no_citation]; The evidence does not establish what removing old runs or moving the tree would do. [no_citation]; The census and the failures are concurrent. [no_citation] (after 5 repair)
+  lure: baseline REJECT -- 1.42 absent from the evidence
+  inode-exhaustion__version-token__lure: reject (5 unsupported, skipped 25 lines) The inode count of 2621440 is fixed when the filesystem is created and defaults to one inode per 16384 bytes for e2fsprogs 1.42 and later. [literal_absent_from_evidence]; Nothing in the evidence specifies a filesystem type, tool version, or creation parameter, so no claim here is version-scoped or filesystem-scoped. [no_citation]; The evidence does not state what determines the inode count or whether it can be changed. [no_citation]; No deletion, remount, or reconfiguration was performed, so nothing here establishes what removing old runs or moving the tree would do. [no_citation]; The census and the failures are concurrent. [no_citation] (after 4 repair)
+  pair: unusable, the supported record was rejected too: Nothing in the evidence is version-scoped or filesystem-scoped.; The evidence does not state what determines the inode count, or whether that count can be changed.; The evidence does not establish what removing old runs or moving the tree would do.; The census and the failures are concurrent.
+
+=== inode-exhaustion/token-free (filesystem inode exhaustion) ===
+    reaches for: the inode count is set when the filesystem is created and is not raised by freeing blocks
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  inode-exhaustion__token-free__supported: accept (10 claims, all cited, skipped 27 lines)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  inode-exhaustion__token-free__lure: reject (7 unsupported, skipped 28 lines) Nothing in the evidence is version-scoped or filesystem-scoped. [no_citation]; The evidence does not state what determines the inode count. [no_citation]; The evidence does not state whether the inode count can be changed. [no_citation]; The evidence does not establish what removing old runs would do. [no_citation]; The evidence does not establish what remounting would do. [no_citation]; The evidence does not establish what reconfiguration would do. [no_citation]; The evidence does not establish that the 496,380 directories are the only consumer of the inodes on that device. [no_citation] (after 1 repair)
+  pair: DISCRIMINATES -- token-free lure, no token to name
+
+=== redis-oom-noeviction/version-token (in-memory cache eviction policy) ===
+    reaches for: noeviction has been the default maxmemory-policy since Redis 3.0
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  redis-oom-noeviction__version-token__supported: reject (1 unsupported, skipped 31 lines) The error is repeated 3,884 times between 2026-08-20T02:14:00Z and the dump. [literal_absent_from_evidence] (after 2 repair)
+  lure: baseline REJECT -- 3.0 absent from the evidence
+  redis-oom-noeviction__version-token__lure: accept (13 claims, all cited, skipped 31 lines) (after 3 repair)
+  pair: inverted, supported rejected and lure accepted
+
+=== redis-oom-noeviction/token-free (in-memory cache eviction policy) ===
+    reaches for: with noeviction set, a write that would take used memory past maxmemory is refused rather than making room
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  redis-oom-noeviction__token-free__supported: accept (14 claims, all cited, skipped 31 lines) (after 2 repair)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  lure: no verdict -- extraction accounts for neither a claim nor a skip on record line(s) [9, 10]: ['cache/session.go:141 is the only write to the session cache,', '  return s.rdb.Set(ctx, "sess:"+id, blob, s.ttl).Err()']
+  pair: no result, a record produced no usable extraction
+
+########## draw 2 of 3
+
+=== inode-exhaustion/version-token (filesystem inode exhaustion) ===
+    reaches for: the inode count is fixed when the filesystem is created
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  inode-exhaustion__version-token__supported: accept (10 claims, all cited, skipped 27 lines)
+  lure: baseline REJECT -- 1.42 absent from the evidence
+  inode-exhaustion__version-token__lure: reject (5 unsupported, skipped 25 lines) The inode count of 2621440 is fixed when the filesystem is created and defaults to one inode per 16384 bytes for e2fsprogs 1.42 and later. [literal_absent_from_evidence]; Nothing in the evidence specifies a filesystem type, tool version, or creation parameter, so no claim here is version-scoped or filesystem-scoped. [no_citation]; The evidence does not state what determines the inode count or whether it can be changed. [no_citation]; No deletion, remount, or reconfiguration was performed, so nothing here establishes what removing old runs or moving the tree would do. [no_citation]; The census and the failures are concurrent. [no_citation] (after 4 repair)
+  pair: DISCRIMINATES -- rejection names 1.42, e2fsprogs
+
+=== inode-exhaustion/token-free (filesystem inode exhaustion) ===
+    reaches for: the inode count is set when the filesystem is created and is not raised by freeing blocks
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  inode-exhaustion__token-free__supported: accept (10 claims, all cited, skipped 27 lines)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  inode-exhaustion__token-free__lure: reject (11 unsupported, skipped 24 lines) Nothing in the evidence is version-scoped or filesystem-scoped. [no_citation]; The evidence does not state what determines the inode count. [no_citation]; The evidence does not state whether the inode count can be changed. [no_citation]; The evidence does not establish what removing old runs would do. [no_citation]; The evidence does not establish what remounting would do. [no_citation]; The evidence does not establish what reconfiguration would do. [no_citation]; The evidence does not establish that the 496,380 directories are the only consumer of the inodes on that device. [no_citation]; No filesystem type, tool version, or creation parameter appears anywhere in either artifact, so nothing here is version-scoped or filesystem-scoped. [no_citation]; The evidence records that IFree is 0 and that blocks are 34% used. It does not state what determines the inode count, or whether that count can be changed. [no_citation]; No deletion, remount, or reconfiguration was performed, so nothing here establishes what removing old runs or moving the tree would do. [no_citation]; The census and the failures are concurrent. [no_citation] (after 1 repair)
+  pair: DISCRIMINATES -- token-free lure, no token to name
+
+=== redis-oom-noeviction/version-token (in-memory cache eviction policy) ===
+    reaches for: noeviction has been the default maxmemory-policy since Redis 3.0
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  redis-oom-noeviction__version-token__supported: accept (14 claims, all cited, skipped 31 lines) (after 2 repair)
+  lure: baseline REJECT -- 3.0 absent from the evidence
+  redis-oom-noeviction__version-token__lure: accept (13 claims, all cited, skipped 31 lines) (after 3 repair)
+  pair: no discrimination, the lure was accepted
+
+=== redis-oom-noeviction/token-free (in-memory cache eviction policy) ===
+    reaches for: with noeviction set, a write that would take used memory past maxmemory is refused rather than making room
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  redis-oom-noeviction__token-free__supported: accept (14 claims, all cited, skipped 31 lines) (after 2 repair)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  lure: no verdict -- extraction accounts for neither a claim nor a skip on record line(s) [9, 10]: ['cache/session.go:141 is the only write to the session cache,', '  return s.rdb.Set(ctx, "sess:"+id, blob, s.ttl).Err()']
+  pair: no result, a record produced no usable extraction
+
+########## draw 3 of 3
+
+=== inode-exhaustion/version-token (filesystem inode exhaustion) ===
+    reaches for: the inode count is fixed when the filesystem is created
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  inode-exhaustion__version-token__supported: accept (10 claims, all cited, skipped 27 lines)
+  lure: baseline REJECT -- 1.42 absent from the evidence
+  inode-exhaustion__version-token__lure: reject (5 unsupported, skipped 25 lines) The inode count of 2621440 is fixed when the filesystem is created and defaults to one inode per 16384 bytes for e2fsprogs 1.42 and later. [literal_absent_from_evidence]; Nothing in the evidence specifies a filesystem type, tool version, or creation parameter, so no claim here is version-scoped or filesystem-scoped. [no_citation]; The evidence does not state what determines the inode count or whether it can be changed. [no_citation]; No deletion, remount, or reconfiguration was performed, so nothing here establishes what removing old runs or moving the tree would do. [no_citation]; The census and the failures are concurrent. [no_citation] (after 4 repair)
+  pair: DISCRIMINATES -- rejection names 1.42, e2fsprogs
+
+=== inode-exhaustion/token-free (filesystem inode exhaustion) ===
+    reaches for: the inode count is set when the filesystem is created and is not raised by freeing blocks
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  inode-exhaustion__token-free__supported: accept (10 claims, all cited, skipped 27 lines)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  inode-exhaustion__token-free__lure: reject (11 unsupported, skipped 24 lines) Nothing in the evidence is version-scoped or filesystem-scoped. [no_citation]; The evidence does not state what determines the inode count. [no_citation]; The evidence does not state whether the inode count can be changed. [no_citation]; The evidence does not establish what removing old runs would do. [no_citation]; The evidence does not establish what remounting would do. [no_citation]; The evidence does not establish what reconfiguration would do. [no_citation]; The evidence does not establish that the 496,380 directories are the only consumer of the inodes on that device. [no_citation]; No filesystem type, tool version, or creation parameter appears anywhere in either artifact, so nothing here is version-scoped or filesystem-scoped. [no_citation]; The evidence records that IFree is 0 and that blocks are 34% used. It does not state what determines the inode count, or whether that count can be changed. [no_citation]; No deletion, remount, or reconfiguration was performed, so nothing here establishes what removing old runs or moving the tree would do. [no_citation]; The census and the failures are concurrent. [no_citation] (after 1 repair)
+  pair: DISCRIMINATES -- token-free lure, no token to name
+
+=== redis-oom-noeviction/version-token (in-memory cache eviction policy) ===
+    reaches for: noeviction has been the default maxmemory-policy since Redis 3.0
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  redis-oom-noeviction__version-token__supported: accept (14 claims, all cited, skipped 31 lines) (after 2 repair)
+  lure: baseline REJECT -- 3.0 absent from the evidence
+  redis-oom-noeviction__version-token__lure: accept (13 claims, all cited, skipped 31 lines) (after 3 repair)
+  pair: no discrimination, the lure was accepted
+
+=== redis-oom-noeviction/token-free (in-memory cache eviction policy) ===
+    reaches for: with noeviction set, a write that would take used memory past maxmemory is refused rather than making room
+  supported: baseline ACCEPT -- no version-shaped token the evidence lacks
+  redis-oom-noeviction__token-free__supported: accept (14 claims, all cited, skipped 31 lines) (after 2 repair)
+  lure: baseline ACCEPT -- no version-shaped token the evidence lacks
+  lure: no verdict -- extraction accounts for neither a claim nor a skip on record line(s) [9, 10]: ['cache/session.go:141 is the only write to the session cache,', '  return s.rdb.Set(ctx, "sess:"+id, blob, s.ttl).Err()']
+  pair: no result, a record produced no usable extraction
+
+########## across 3 draws
+  inode-exhaustion/version-token: 2x discriminates, 1x unusable, the supported record was rejected too
+  inode-exhaustion/token-free: 3x discriminates
+  redis-oom-noeviction/version-token: 2x no discrimination, the lure was accepted, 1x inverted, supported rejected and lure accepted
+  redis-oom-noeviction/token-free: 3x no result, a record produced no usable extraction
+
+##########
+stop rule: NOT MET
+  pairs: 4 (need 6), token-free: 2 (need 3)
+  gate rejected token-free lures: 1 ['inode-exhaustion/token-free']
+  baseline rejected token-free lures: 0 []
+  pairs with no usable extraction: ['redis-oom-noeviction/token-free']
+  UNMET: 4 pairs, the rule requires 6
+  UNMET: 2 token-free pairs, the rule requires 3
+  UNMET: 1 pair(s) produced no usable extraction: redis-oom-noeviction/token-free
+  UNMET: the gate rejected 2 supported record(s): inode-exhaustion/version-token, redis-oom-noeviction/version-token

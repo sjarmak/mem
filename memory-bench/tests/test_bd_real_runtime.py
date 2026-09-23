@@ -77,9 +77,9 @@ def test_actual_namespace_masks_host_and_preserves_candidate(runtime, tmp_path):
         "import os,pathlib,sys,codeprobe; "
         'assert codeprobe.SENTINEL == "candidate"; '
         f"assert not pathlib.Path({str(secret)!r}).exists(); "
-        'assert not pathlib.Path("/home/ds/projects/codeprobe/src").exists(); '
-        'assert not pathlib.Path("/home/ds/projects/mem/.mem").exists(); '
-        'assert not pathlib.Path("/home/ds/projects/mem/memory-bench/data").exists(); '
+        'assert not pathlib.Path("/workspace/projects/codeprobe/src").exists(); '
+        'assert not pathlib.Path("/workspace/projects/mem/.mem").exists(); '
+        'assert not pathlib.Path("/workspace/projects/mem/memory-bench/data").exists(); '
         'assert len([p for p in pathlib.Path("/proc").iterdir() if p.name.isdigit()]) < 8; '
         'pathlib.Path("written").write_text("ok"); print(codeprobe.__file__)'
     )
@@ -200,7 +200,7 @@ print('bd-and-hooks-ok')
 
 
 def test_candidate_python_wins_over_ambient_editable_package(runtime):
-    python = Path("/home/ds/projects/codeprobe/.venv/bin/python")
+    python = Path("/workspace/projects/codeprobe/.venv/bin/python")
     if not python.is_file():
         pytest.skip("CodeProbe dependency venv unavailable")
     _, cwd, _, _, _ = runtime

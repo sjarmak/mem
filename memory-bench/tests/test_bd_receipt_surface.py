@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from membench.runner.bd_receipt_surface import prepare_receipt_leg, read_receipts
+from membench.runner.bd_receipt_surface import (
+    attributed_invocations,
+    prepare_receipt_leg,
+    read_receipts,
+)
+from membench.runner.bd_receipts import CALLER_AGENT, CALLER_HOOK, CONTEXT_KEYS
 from membench.runner.native_memory_hook import install_native_memory_hook
 from membench.runner.tool_surface import MemoryToolSurface
 
@@ -39,6 +44,7 @@ def test_hook_preserves_settings_and_executes_attributed_shim(
     assert settings["autoMemoryEnabled"] is False
     hooks = settings["hooks"]["PreToolUse"]
     assert len(hooks) == 2
+    assert f"{CONTEXT_KEYS['caller']}={CALLER_HOOK}" in hooks[-1]["hooks"][0]["command"]
     event = {
         "hook_event_name": "PreToolUse",
         "tool_name": "Bash",
@@ -56,6 +62,23 @@ def test_hook_preserves_settings_and_executes_attributed_shim(
     )
     updated = json.loads(hooked.stdout)["hookSpecificOutput"]["updatedInput"]
     assert updated["timeout"] == 1000
+    # A SessionStart-style hook inherits the leg but is explicitly hook-origin. Its bd call stays
+    # in the audit receipts without becoming an agent reach.
+    startup = subprocess.run(
+        f"{CONTEXT_KEYS['caller']}={CALLER_HOOK} bd prime",
+        shell=True,
+        env={
+            **surface.env(),
+            "PATH": str(bins),
+            CONTEXT_KEYS["leg_id"]: receipt.stem,
+            CONTEXT_KEYS["session_id"]: "session",
+        },
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert startup.stdout == "Remembered [example]\n"
     result = subprocess.run(
         updated["command"],
         shell=True,
@@ -67,7 +90,9 @@ def test_hook_preserves_settings_and_executes_attributed_shim(
     )
     assert result.stdout == "Remembered [example]\ndone\n"
     rows = read_receipts(receipt)
-    assert [row["event"] for row in rows] == ["start", "finish"]
+    assert [row["event"] for row in rows] == ["start", "finish", "start", "finish"]
+    assert [rows[0]["caller"], rows[2]["caller"]] == [CALLER_HOOK, CALLER_AGENT]
+    assert attributed_invocations(rows) == 1
     assert rows[-1]["argv"] == [
         str(binary),
         "-C",
@@ -83,7 +108,7 @@ def test_hook_preserves_settings_and_executes_attributed_shim(
     second = prepare_receipt_leg(surface, leg=1)
     assert read_receipts(second) == ()
     assert len(json.loads((config / "settings.json").read_text())["hooks"]["PreToolUse"]) == 2
-    assert len(read_receipts(receipt)) == 2
+    assert len(read_receipts(receipt)) == 4
 
 
 def test_partial_receipt_is_preserved_as_instrumentation_error(tmp_path: Path) -> None:

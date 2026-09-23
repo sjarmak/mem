@@ -1,0 +1,21 @@
+## json.loads exception gap at trace-parse boundaries — EnterpriseBench-t2dl4
+
+**Observed environment:** Python 3.12.6, EnterpriseBench-t2dl4 project; pytest 8.4.2; verified 2026-07-17.
+
+**Exact source evidence:**
+- Bug filed as EnterpriseBench-t2dl4 (P1, OPEN as of 2026-07-17); originally found in EnterpriseBench-4p5k Phase 4 security review.
+- Two call sites catch only json.JSONDecodeError: scripts/cost_tracker.py:201 (parse_trace) and lib/eb_metrics/retrieval_extraction.py:380 (compute_ttfr).
+- Regression tests confirmed RED (4 failures) before fix: test_big_int_literal_line_skipped and test_deeply_nested_line_skipped in both test modules (source event lines 83-84, PRIOR_SOURCE_PACKET.md).
+- Full suite confirmed GREEN after fix: 177 passed in 0.27s (source event lines 93-94, PRIOR_SOURCE_PACKET.md).
+
+**Observed failure and caller recovery contract:**
+- json.loads raises bare ValueError (not JSONDecodeError) for integers exceeding CPython's int-to-str digit limit (sys.int_info.default_max_str_digits = 4300; CVE-2020-10735 mitigation, applies to CPython 3.11+). Example: json.loads('{"input_tokens": ' + '9'*5000 + '}') raises ValueError: Exceeds the limit (4300 digits).
+- json.loads raises RecursionError (not JSONDecodeError) for deeply nested structures, confirmed at lib/eb_metrics/retrieval_extraction.py:236 (retrieved_files_from_trace). JSONDecodeError is a subclass of ValueError, so catching the subclass does NOT catch the parent.
+- Impact at these two sites: one malformed line in one agent_trace.jsonl aborts cost reporting for the entire batch (cost_tracker.py:517 loops parse_trace with no per-trace guard).
+- Correct guard at a third-party-input parse boundary: except (json.JSONDecodeError, ValueError, RecursionError) — treat the line as malformed and skip/warn, consistent with documented contract.
+
+**Limits and conditional transfer advice:**
+- Verified only at the two named call sites in this project on Python 3.12.6. Do not generalize to all parse boundaries without checking; the ValueError guard is relevant wherever json.loads receives unconstrained external input with potentially large integers (CPython 3.11+ only; limit absent in 3.10 and earlier).
+- RecursionError from deep nesting is general CPython json decoder behavior (not version-specific per evidence), but scope of project fix is these two sites.
+- Fix was routed to human (labeled needs-human) due to entanglement: retrieval_extraction.py belongs to another team (0nru's module) under a live quarantine call, and cost_tracker.py output feeds paper arm-level cost figures. Do not merge autonomously.
+- NOT a security issue in this project (internal harness reads its own traces; no attacker boundary); classified P1 for robustness/availability.

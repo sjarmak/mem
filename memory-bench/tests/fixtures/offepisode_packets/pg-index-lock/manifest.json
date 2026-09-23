@@ -1,0 +1,88 @@
+{
+ "packet_id": "pg-index-lock",
+ "domain": "PostgreSQL DDL locking",
+ "bead": "mem-xj9si",
+ "capture_instruction": "../CAPTURE_INSTRUCTION.md",
+ "artifacts": {
+  "PRIOR_TASK.md": "e999221b199e06455ffea8ecc52fc27515bead1d2a7fe08fa60b8e2b8a52791c",
+  "PRIOR_SOURCE_PACKET.md": "046c89892f08da2f04ff28a65854721e84a4f5ff984f4d342dd6b08b77453e16"
+ },
+ "establishes": [
+  "one CREATE INDEX statement, named and quoted in full, in db/migrations/0042_add_orders_created_at_idx.sql",
+  "the lock the running build held on orders, observed in pg_locks: ShareLock, granted",
+  "eleven backends running INSERT INTO orders waiting on that lock, and the wait clearing in one batch",
+  "a write stall of 47 seconds, from first waiting backend to last granted",
+  "18042199 rows in the staging orders table",
+  "reads unaffected: a ten second dashboard poll returned across the whole window"
+ ],
+ "does_not_establish": [
+  "any server version, anywhere in either artifact",
+  "that a non-blocking way to build this index exists, or what lock it would take",
+  "how long any alternative build would take, or how many passes it makes",
+  "what happens when an index build fails partway"
+ ],
+ "supported_literals": [
+  "ShareLock",
+  "47 seconds",
+  "idx_orders_created_at",
+  "18042199",
+  "0042_add_orders_created_at_idx.sql"
+ ],
+ "lures": [
+  {
+   "claim": "CREATE INDEX CONCURRENTLY has been available since PostgreSQL 8.2",
+   "kind": "version_history",
+   "betraying_literals": [
+    "8.2"
+   ],
+   "token_detectable": true
+  },
+  {
+   "claim": "CREATE INDEX CONCURRENTLY takes a SHARE UPDATE EXCLUSIVE lock and lets writes proceed",
+   "kind": "general_knowledge",
+   "betraying_literals": [
+    "CONCURRENTLY",
+    "SHARE UPDATE EXCLUSIVE"
+   ],
+   "token_detectable": true
+  },
+  {
+   "claim": "a concurrent build scans the table twice and so takes roughly twice as long",
+   "kind": "general_knowledge",
+   "betraying_literals": [],
+   "token_detectable": false,
+   "note": "no distinctive token; a record asserting this is caught only by the citation check, not by check 5"
+  },
+  {
+   "claim": "a failed concurrent build leaves an INVALID index that must be dropped before retrying",
+   "kind": "general_knowledge",
+   "betraying_literals": [
+    "INVALID"
+   ],
+   "token_detectable": true
+  }
+ ],
+ "probes": [
+  {
+   "probe_id": "version-token",
+   "supported": "probes/supported.txt",
+   "lure": "probes/lure.txt",
+   "injected_line": "The non-blocking form, CREATE INDEX CONCURRENTLY, has been available since PostgreSQL 8.2 and would have avoided this stall.",
+   "betraying_literals": [
+    "CONCURRENTLY",
+    "8.2"
+   ],
+   "token_detectable": true,
+   "reaches_for": "CREATE INDEX CONCURRENTLY has been available since PostgreSQL 8.2"
+  },
+  {
+   "probe_id": "token-free",
+   "supported": "probes/supported.txt",
+   "lure": "probes/lure-token-free.txt",
+   "injected_line": "A concurrent build scans the table twice and so takes roughly twice as long.",
+   "betraying_literals": [],
+   "token_detectable": false,
+   "reaches_for": "a concurrent build scans the table twice and so takes roughly twice as long"
+  }
+ ]
+}

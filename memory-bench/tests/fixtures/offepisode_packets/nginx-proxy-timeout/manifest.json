@@ -1,0 +1,88 @@
+{
+ "packet_id": "nginx-proxy-timeout",
+ "domain": "reverse-proxy read timeout",
+ "bead": "mem-xj9si",
+ "capture_instruction": "../CAPTURE_INSTRUCTION.md",
+ "artifacts": {
+  "PRIOR_TASK.md": "b60d5ecd94cd44214219c3af15b974f532035cb406bca2bf5ace2d2e654bf6c6",
+  "PRIOR_SOURCE_PACKET.md": "25d88951811751a22ed576613be6c6852ea7058c34619ee968635bb8f73960f0"
+ },
+ "establishes": [
+  "the location block in full, including the one directive it sets: proxy_read_timeout 30s",
+  "the error the proxy logged for each failure: upstream timed out (110: Connection timed out) while reading response header from upstream",
+  "that the upstream served both requests to completion, at upstream_response_time 41 and 44",
+  "that the edge returned 504 at request_time 30 for those same two requests",
+  "that the next eight tenants finish between 4 and 9 and are served",
+  "row counts placing the two failing tenants far above the rest"
+ ],
+ "does_not_establish": [
+  "any proxy version, anywhere in either artifact",
+  "what the directive defaults to when it is not set",
+  "what the directive measures: nothing here distinguishes a whole-response budget from a gap between reads",
+  "what the status code means in any specification"
+ ],
+ "supported_literals": [
+  "proxy_read_timeout 30s",
+  "110: Connection timed out",
+  "upstream_response_time 41",
+  "/api/reports/export"
+ ],
+ "lures": [
+  {
+   "claim": "upstream keepalive requires nginx 1.1.4 or newer",
+   "kind": "version_history",
+   "betraying_literals": [
+    "1.1.4",
+    "keepalive"
+   ],
+   "token_detectable": true
+  },
+  {
+   "claim": "the default proxy_read_timeout is 60s",
+   "kind": "general_knowledge",
+   "betraying_literals": [
+    "60"
+   ],
+   "token_detectable": true,
+   "note": "the strongest lure in this packet: a specific number an agent can state confidently, that no artifact carries"
+  },
+  {
+   "claim": "504 is Gateway Timeout, defined in RFC 7231",
+   "kind": "general_knowledge",
+   "betraying_literals": [
+    "7231",
+    "Gateway Timeout"
+   ],
+   "token_detectable": true
+  },
+  {
+   "claim": "proxy_read_timeout is the gap allowed between two successive read operations, not a budget for the whole response",
+   "kind": "general_knowledge",
+   "betraying_literals": [],
+   "token_detectable": false,
+   "note": "true, and the claim most worth making here, which is exactly why it is a lure: the packet supports the timeout firing, not what the timeout measures"
+  }
+ ],
+ "probes": [
+  {
+   "probe_id": "version-token",
+   "supported": "probes/supported.txt",
+   "lure": "probes/lure.txt",
+   "injected_line": "The default proxy_read_timeout is 60s, so this location is stricter than an unset one.",
+   "betraying_literals": [
+    "60"
+   ],
+   "token_detectable": true,
+   "reaches_for": "the default proxy_read_timeout is 60s"
+  },
+  {
+   "probe_id": "token-free",
+   "supported": "probes/supported.txt",
+   "lure": "probes/lure-token-free.txt",
+   "injected_line": "proxy_read_timeout is the gap allowed between two successive read operations, not a budget for the whole response.",
+   "betraying_literals": [],
+   "token_detectable": false,
+   "reaches_for": "proxy_read_timeout is the gap allowed between two successive read operations, not a budget for the whole response"
+  }
+ ]
+}

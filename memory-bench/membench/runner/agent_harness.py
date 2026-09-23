@@ -24,13 +24,15 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Protocol
 
 from membench.runner.agent import AgentStepResult
-from membench.runner.bd_receipts import CONTEXT_KEYS
+from membench.runner.bd_receipts import CALLER_AGENT, CALLER_HARNESS, CONTEXT_KEYS
 from membench.runner.headless_agent import (
     HeadlessAgentError,
     MemoryChannel,
@@ -50,7 +52,14 @@ MODEL_SLOT = "{model}"
 # What the cell itself sets on the spawned agent's environment. A condition may not name one of
 # these: it would be a treatment that changes what the agent can reach or which leg its bd calls
 # are booked under, and the fingerprint would record it as a condition.
-RIG_OWNED_ENV: tuple[str, ...] = ("PATH", "PWD", CONFIG_DIR_ENV, *CONTEXT_KEYS.values())
+RIG_OWNED_ENV: tuple[str, ...] = (
+    "PATH",
+    "PWD",
+    "HOME",
+    "XDG_CONFIG_HOME",
+    CONFIG_DIR_ENV,
+    *CONTEXT_KEYS.values(),
+)
 
 COMMAND_TIMEOUT_S = 900.0
 
@@ -80,7 +89,15 @@ class AgentHarness:
     binary: str
     # Whether the runtime has a native memory of its own that the `builtin` arm can measure.
     native_memory: bool
+    # Claude marks each actual tool command in PreToolUse, so its process starts as harness-origin.
+    # A generic command harness has no tool hook; its process is itself the agent boundary.
+    leg_caller: str
     conditions: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}))
+    # A command harness never inherits the operator's home. If login material is needed, the
+    # operator supplies a directory containing only that material; each cell gets a private copy.
+    isolated_home: bool = False
+    home_seed: Path | None = field(default=None, repr=False, compare=False)
+    home_seed_fingerprint: str = field(default="none", repr=False)
     build: AgentBuilder = field(default=cell_agent, repr=False, compare=False)
 
     def agent(
@@ -104,19 +121,74 @@ class AgentHarness:
             **self.conditions,
             CONTEXT_KEYS["leg_id"]: leg_id,
             CONTEXT_KEYS["session_id"]: session_id,
+            CONTEXT_KEYS["caller"]: self.leg_caller,
         }
 
     def identity(self) -> dict[str, Any]:
-        return {
+        identity = {
             "harness": self.name,
             "harness_binary": self.binary,
             "harness_conditions_fingerprint": conditions_fingerprint(self.conditions),
         }
+        if self.isolated_home:
+            identity.update(
+                {
+                    "harness_home_isolation": "minted-per-cell",
+                    "harness_home_seed_fingerprint": self.home_seed_fingerprint,
+                }
+            )
+        return identity
+
+    def mint_home(self, destination: Path) -> Path | None:
+        """Create this cell's private home, copying only explicitly supplied login material."""
+        if not self.isolated_home:
+            return None
+        if destination.exists():
+            raise HarnessError(f"refusing to reuse harness home {destination}")
+        if self.home_seed is None:
+            destination.mkdir(parents=True)
+        else:
+            if _home_seed_fingerprint(self.home_seed) != self.home_seed_fingerprint:
+                raise HarnessError(
+                    "harness home seed changed after the resume identity was constructed"
+                )
+            shutil.copytree(self.home_seed, destination)
+        (destination / ".config").mkdir(exist_ok=True)
+        return destination
 
 
 def conditions_fingerprint(conditions: Mapping[str, str]) -> str:
     payload = json.dumps(dict(sorted(conditions.items())), sort_keys=True)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def _home_seed_files(seed: Path) -> tuple[Path, ...]:
+    if not seed.is_dir():
+        raise HarnessError(f"harness home seed is not a directory: {seed}")
+    files: list[Path] = []
+    for path in sorted(seed.rglob("*")):
+        if path.is_symlink():
+            raise HarnessError(f"harness home seed may not contain symlinks: {path}")
+        if path.is_file():
+            files.append(path)
+        elif not path.is_dir():
+            raise HarnessError(f"harness home seed may contain only files and directories: {path}")
+    return tuple(files)
+
+
+def _home_seed_fingerprint(seed: Path | None) -> str:
+    """Content identity for login material, without publishing its path or contents."""
+    if seed is None:
+        return "none"
+    digest = hashlib.sha256()
+    for path in _home_seed_files(seed):
+        relative = path.relative_to(seed).as_posix().encode("utf-8")
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        content = path.read_bytes()
+        digest.update(len(content).to_bytes(8, "big"))
+        digest.update(content)
+    return digest.hexdigest()[:16]
 
 
 def _checked_conditions(conditions: Mapping[str, str]) -> Mapping[str, str]:
@@ -142,6 +214,7 @@ def claude_code_harness(
         version=version,
         binary="claude",
         native_memory=True,
+        leg_caller=CALLER_HARNESS,
         conditions=_checked_conditions(conditions or {}),
         build=cell_agent,
     )
@@ -153,12 +226,14 @@ def command_harness(
     version: str,
     argv_template: Sequence[str],
     conditions: Mapping[str, str] | None = None,
+    home_seed: Path | None = None,
     timeout_s: float = COMMAND_TIMEOUT_S,
 ) -> AgentHarness:
     """Any runtime that runs as a command. ``argv_template`` is its command line with the
     prompt as one whole element spelled ``{prompt}`` and, optionally, the model as ``{model}``.
     One whole element, not a substring: a prompt spliced into a shell string is a prompt the
-    shell parses."""
+    shell parses. ``home_seed`` is an explicit login-only directory copied into each cell's
+    private HOME; no path or credential content is published, only its content fingerprint."""
     template = tuple(argv_template)
     if not template:
         raise HarnessError("a command harness needs a command")
@@ -174,6 +249,7 @@ def command_harness(
     if not name.strip() or not version.strip():
         raise HarnessError("a command harness needs a name and a version")
     checked = _checked_conditions(conditions or {})
+    seed_fingerprint = _home_seed_fingerprint(home_seed)
 
     def build(
         *, model: str, channel: MemoryChannel, runner: Runner, cwd: str, env: Mapping[str, str]
@@ -194,7 +270,11 @@ def command_harness(
         version=version,
         binary=template[0],
         native_memory=False,
+        leg_caller=CALLER_AGENT,
         conditions=checked,
+        isolated_home=True,
+        home_seed=home_seed,
+        home_seed_fingerprint=seed_fingerprint,
         build=build,
     )
 

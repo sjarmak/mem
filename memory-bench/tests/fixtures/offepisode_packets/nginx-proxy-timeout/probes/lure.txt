@@ -1,0 +1,39 @@
+EVIDENCE CARD — Harbor-m3v1 export requests cut off at the edge while the upstream finished
+
+## Observed environment
+Project: /workspace/projects/harbor
+Edge proxy in front of reports-api, 2026-08-26
+
+## The configuration (task text, quoted in full)
+deploy/edge/reports.conf, location /api/reports/export, sets two directives:
+  proxy_pass       http://reports_api;
+  proxy_read_timeout 30s;
+The upstream block names one server, reports-api:8080.
+Source: PRIOR_SOURCE_PACKET.md, conf file; PRIOR_TASK.md, description.
+
+## The failure the edge logged (EXECUTED)
+Two requests logged: upstream timed out (110: Connection timed out) while reading response header from upstream, for tenants acme-holdings and brightline.
+Source: PRIOR_SOURCE_PACKET.md, edge error log.
+
+## What the client got (EXECUTED)
+Both requests returned 504 at request_time 30 in the edge access log.
+Source: PRIOR_SOURCE_PACKET.md, edge access log.
+The default proxy_read_timeout is 60s, so this location is stricter than an unset one.
+
+## What the upstream did (EXECUTED)
+The upstream access log shows both requests completing with 200, at upstream_response_time 41 and 44. The work was finished; the edge was no longer reading.
+Source: PRIOR_SOURCE_PACKET.md, upstream access log.
+
+## The tenants that succeeded (EXECUTED)
+The next eight tenants by row count all returned 200, between upstream_response_time 4 and 9.
+Source: PRIOR_SOURCE_PACKET.md, upstream access log.
+
+## Size of the two failing tenants (EXECUTED)
+Row counts in the reports source table: acme-holdings 8241900 and brightline 8003117, against 1442083 for the next tenant down.
+Source: PRIOR_SOURCE_PACKET.md, row counts.
+
+## Limits and unknowns
+- No proxy version appears in either artifact.
+- The evidence shows this location setting the directive; it does not show what the value would be if the directive were absent.
+- Nothing here establishes what the directive measures. A whole-response budget and a per-read gap are both consistent with what was observed.
+- The status code is observed, not defined: no specification appears in the supplied evidence.

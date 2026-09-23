@@ -1,0 +1,37 @@
+EVIDENCE CARD — Harbor-t3v9 sweep artifact writes failing on the staging box
+
+## Observed environment
+Project: /workspace/projects/harbor
+Mount under investigation: /var/lib/harbor, device /dev/sdb1, sampled 2026-08-26
+Source: PRIOR_SOURCE_PACKET.md, df and df -i dumps.
+
+## The write site (task text, quoted in full)
+run/artifacts.go:66 is the only place the sweep opens a file for writing, and it returns the error from the write:
+  return os.WriteFile(filepath.Join(dir, name), body, 0o644)
+Source: PRIOR_TASK.md, description; PRIOR_SOURCE_PACKET.md, artifacts.go excerpt.
+
+## The error the write returns (OBSERVED)
+The sweep log records open /var/lib/harbor/artifacts/run-88412/stdout.txt: no space left on device, repeated 11208 times between 2026-08-25T04:31:00Z and the capture, each occurrence carrying a different run id.
+Source: PRIOR_SOURCE_PACKET.md, sweep log excerpt.
+
+## Blocks and inodes disagree on the same mount (OBSERVED)
+df reports /dev/sdb1 at 34% of blocks used, and df -i, same shell and same second, reports its inodes at 2621440 used of 2621440, IFree 0, IUse% 100%.
+Source: PRIOR_SOURCE_PACKET.md, df and df -i dumps.
+
+## What is holding the inodes (OBSERVED)
+find counts 2481904 entries under /var/lib/harbor/artifacts, of which 496380 are per-run directories, dated from 2026-02-11 to 2026-08-26. The operator reports nothing under that tree was removed in that window, checked by comparing the directory count against the recorded sweep count.
+Source: PRIOR_SOURCE_PACKET.md, census.
+
+## What the caller does with the error
+run/sweep.go:203 logs the error at WARN, appends the result, and continues the loop, so a run whose artifact write failed is still recorded as a result. The sweep exit code for every affected run was 0.
+Source: PRIOR_TASK.md, description; PRIOR_SOURCE_PACKET.md, sweep.go excerpt and alert rules.
+
+## Why it went unseen
+The saved alert rules read blocks used per mount, host load, sweep task failures, and gateway error rate. No rule reads df -i, inode counts, or the sweep log's WARN lines, and the failure never reaches an exit code.
+Source: PRIOR_SOURCE_PACKET.md, alert rules.
+
+## Limits and unknowns
+- No filesystem type, tool version, or creation parameter appears anywhere in either artifact, so nothing here is version-scoped or filesystem-scoped.
+- The evidence records that IFree is 0 and that blocks are 34% used. It does not state what determines the inode count, or whether that count can be changed.
+- No deletion, remount, or reconfiguration was performed, so nothing here establishes what removing old runs or moving the tree would do.
+- The census and the failures are concurrent. Nothing supplied establishes that the 496380 directories are the only consumer of the inodes on that device.

@@ -1,0 +1,41 @@
+EVIDENCE CARD — Harbor-q7m2 session cache refusing writes on the staging box
+
+## Observed environment
+Project: /workspace/projects/harbor
+Server config file: /etc/redis/harbor-staging.conf, sampled 2026-08-24
+Source: PRIOR_SOURCE_PACKET.md, INFO server.
+
+## The write site (task text, quoted in full)
+cache/session.go:141 is the only write to the session cache, and it returns the error from Set:
+  return s.rdb.Set(ctx, "sess:"+id, blob, s.ttl).Err()
+Source: PRIOR_TASK.md, description; PRIOR_SOURCE_PACKET.md, session.go excerpt.
+
+## The error the write returns (OBSERVED)
+The application log records OOM command not allowed when used memory > 'maxmemory' against cache/session.go:147, repeated 3,884 times between 2026-08-20T02:14:00Z and the dump.
+Source: PRIOR_SOURCE_PACKET.md, application log excerpt.
+
+## Server state at the time of the dump (OBSERVED)
+INFO memory returns used_memory:4294901760 against maxmemory:4294967296, with maxmemory_policy:noeviction.
+Source: PRIOR_SOURCE_PACKET.md, INFO memory.
+
+## Nothing was evicted (OBSERVED)
+evicted_keys is 0 in the INFO stats dump and 0 in every one of the four daily samples, across an uptime_in_seconds of 401164.
+Source: PRIOR_SOURCE_PACKET.md, INFO stats and the four-day sample table.
+
+## Misses climb over the same window (OBSERVED)
+keyspace_misses rises from 1104318 to 2210518 across the four sampled days.
+Source: PRIOR_SOURCE_PACKET.md, four-day sample table.
+
+## What the caller does with the error
+cache/session.go:147 logs the error at DEBUG inside putBestEffort and returns nothing, so a failed Put and a successful Put are the same thing to the code above it.
+Source: PRIOR_TASK.md, description; PRIOR_SOURCE_PACKET.md, session.go excerpt.
+
+## Why it went unseen
+The saved dashboard reads cache client errors at level WARN and above, and the failing line is written at DEBUG. No panel on that board reads used_memory, maxmemory, evicted_keys, or maxmemory_policy from the server.
+Source: PRIOR_SOURCE_PACKET.md, dashboard panel list.
+
+## Limits and unknowns
+- No server version appears anywhere in either artifact, so nothing here is version-scoped.
+- The evidence does not state what any eviction policy does; it records which one is set and that evicted_keys stayed at 0.
+- No configuration change was made or run, so nothing here establishes what raising maxmemory or changing the policy would do.
+- The rise in keyspace_misses is concurrent with the failing writes. Nothing supplied links the two beyond that.

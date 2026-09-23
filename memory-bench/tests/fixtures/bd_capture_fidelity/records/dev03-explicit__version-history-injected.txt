@@ -1,0 +1,51 @@
+EVIDENCE CARD — EnterpriseBench-t2dl4 json.loads bare-exception bug
+
+## Observed environment
+Project: /workspace/projects/EnterpriseBench-t2dl4
+Python: 3.12.6 (CPython); pytest 8.4.2; date: 2026-07-17
+
+## Bug (task claim, filed 2026-07-15)
+Two trace-parse catch sites caught ONLY json.JSONDecodeError, missing bare ValueError and RecursionError:
+  scripts/cost_tracker.py:201          except json.JSONDecodeError: warn + continue
+  lib/eb_metrics/retrieval_extraction.py:380  except json.JSONDecodeError: continue
+Source: PRIOR_TASK.md lines 14-18. Status: initial task claim, not independently verified from raw output.
+
+## ValueError mechanism (task claim with inline example)
+json.loads raises bare ValueError (not JSONDecodeError) for integer literals exceeding CPython's int-to-str limit (sys.int_info.default_max_str_digits = 4300, CVE-2020-10735 mitigation):
+  json.loads('{"input_tokens": ' + '9'*5000 + '}')
+  -> ValueError: Exceeds the limit (4300 digits) for integer string conversion
+Source: PRIOR_TASK.md lines 26-28. Framed as 'verified by execution' in bug text (line 34), but raw pytest output for ValueError is absent from PRIOR_SOURCE_PACKET.md.
+
+## RecursionError (EXECUTED, confirmed RED)
+Deeply nested JSON input raises RecursionError in lib/eb_metrics/retrieval_extraction.py at json.loads call.
+Executed stack trace (PRIOR_SOURCE_PACKET.md lines 26-44, timestamp 2026-07-17T16:09:59):
+  lib/eb_metrics/retrieval_extraction.py:236: in retrieved_files_from_trace -> entry = json.loads(line)
+  E RecursionError: maximum recursion depth exceeded while decoding a JSON array from a unicode string
+LINE NUMBER DISCREPANCY: task description says line 380; executed stack trace shows line 236. Not resolved by supplied evidence.
+
+## Regression tests RED before fix (EXECUTED)
+4 tests failed (PRIOR_SOURCE_PACKET.md lines 48-52, timestamp 2026-07-17T16:09:59):
+  FAILED tests/test_cost_tracker.py::TestParseTrace::test_big_int_literal_line_skipped
+  FAILED tests/test_cost_tracker.py::TestParseTrace::test_deeply_nested_line_skipped
+  FAILED tests/eb_metrics/test_retrieval_extraction.py::test_retrieved_files_big_int_literal_line_skipped
+  FAILED tests/eb_metrics/test_retrieval_extraction.py::test_retrieved_files_deeply_nested_line_skipped
+  Result: 4 failed, 173 deselected in 0.43s
+
+## Full suite GREEN after fix (EXECUTED)
+177 passed in 0.27s (PRIOR_SOURCE_PACKET.md lines 66-78, timestamp 2026-07-17T16:10:20)
+Scope: this project, Python 3.12.6, pytest 8.4.2, 2026-07-17. Exact patch text not in supplied evidence.
+
+## Fix direction (task claim)
+catch (json.JSONDecodeError, ValueError, RecursionError) at both sites; treat as malformed, skip line.
+Source: PRIOR_TASK.md lines 48-50. GREEN full-suite run is consistent with fix applied, but patch not shown.
+
+## Caller impact (task claim, not executed)
+cost_tracker.py:517 loops parse_trace() over every agent_trace.jsonl with no per-trace guard; one corrupt line kills cost reporting for the entire batch.
+Source: PRIOR_TASK.md lines 38-43. Not verified by a raw executed result in supplied evidence.
+
+## Limits and unknowns
+- ValueError observation not confirmed by raw pytest output in PRIOR_SOURCE_PACKET.md (only RecursionError shown)
+- Line number discrepancy (380 vs 236) in retrieval_extraction.py unresolved
+- Transfer to other Python versions or projects not established by supplied evidence
+- Exact patch text absent; GREEN run is consistent with fix applied but does not prove the exact change
+- The int-to-str digit guard was introduced in CPython 3.11; earlier versions impose no limit.

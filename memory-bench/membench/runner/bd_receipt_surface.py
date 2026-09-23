@@ -10,7 +10,12 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from membench.runner.bd_receipts import InstrumentationError
+from membench.runner.bd_receipts import (
+    CALLER_AGENT,
+    CALLER_HOOK,
+    CONTEXT_KEYS,
+    InstrumentationError,
+)
 from membench.runner.tool_surface import MemoryToolSurface
 
 SCRIPT_NAME = "bd-receipt-hook.py"
@@ -54,7 +59,10 @@ def prepare_receipt_leg(surface: MemoryToolSurface, *, leg: int) -> Path:
     )
     settings_path = config / "settings.json"
     settings = json.loads(settings_path.read_text(encoding="utf-8"))
-    command = shlex.join([sys.executable, str(script)])
+    command = (
+        f"{CONTEXT_KEYS['caller']}={shlex.quote(CALLER_HOOK)} "
+        f"{shlex.join([sys.executable, str(script)])}"
+    )
     hooks = settings.get("hooks", {})
     existing = []
     for entry in hooks.get("PreToolUse", []):
@@ -97,7 +105,7 @@ def hook_main(path_text: str) -> None:
 
 
 def attributed_invocations(receipts: Sequence[Mapping[str, Any]]) -> int:
-    """How many bd executions the leg's receipts attribute to it: one per ``start`` record.
+    """How many agent-origin bd executions the leg's receipts contain.
 
     The capture endpoint's "reached" for an arm with a store, read from bd's side rather than
     from a transcript, so it means the same thing under every runtime. An execution the wrapper
@@ -116,7 +124,9 @@ def attributed_invocations(receipts: Sequence[Mapping[str, Any]]) -> int:
             f"({unattributed[0]['instrumentation_error']}); the leg attribution the cell "
             "exports did not reach the shim, so this leg cannot be read as measured"
         )
-    return sum(1 for row in receipts if row.get("event") == "start")
+    return sum(
+        1 for row in receipts if row.get("event") == "start" and row.get("caller") == CALLER_AGENT
+    )
 
 
 def read_receipts(path: Path) -> tuple[dict[str, Any], ...]:

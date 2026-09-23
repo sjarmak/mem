@@ -32,6 +32,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from membench.runner.bd_receipts import CALLER_HOOK, CONTEXT_KEYS
 from membench.schemas.trace import ToolCall
 
 from .tool_surface import (
@@ -79,7 +80,13 @@ def hook_settings(script: Path) -> dict[str, Any]:
             {
                 "matcher": "|".join(NATIVE_MEMORY_HOOK_TOOLS),
                 "hooks": [
-                    {"type": "command", "command": shlex.join([sys.executable, str(script)])}
+                    {
+                        "type": "command",
+                        "command": (
+                            f"{CONTEXT_KEYS['caller']}={shlex.quote(CALLER_HOOK)} "
+                            f"{shlex.join([sys.executable, str(script)])}"
+                        ),
+                    }
                 ],
             }
         ]

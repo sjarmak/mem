@@ -1,0 +1,89 @@
+{
+ "packet_id": "inode-exhaustion",
+ "domain": "filesystem inode exhaustion",
+ "bead": "mem-747nj",
+ "capture_instruction": "../CAPTURE_INSTRUCTION.md",
+ "artifacts": {
+  "PRIOR_TASK.md": "de27a2523fe83a1444af1421caf910c5f9d94f354593a2fecbb558785f79fb99",
+  "PRIOR_SOURCE_PACKET.md": "4e8bcca2889df581f15122fa70512c2a097b927a28bf4f261bb6e0528f16142b"
+ },
+ "establishes": [
+  "the single write site, run/artifacts.go:66, quoted with its caller",
+  "the returned error text, no space left on device, logged 11208 times against distinct run ids",
+  "df at 34% of blocks used and df -i at IUse% 100% on the same device in the same second",
+  "the census: 2481904 entries under the artifact tree, 496380 of them per-run directories, dated 2026-02-11 to 2026-08-26",
+  "that run/sweep.go:203 logs the failure at WARN and returns a result anyway, with the run's exit code still 0",
+  "that no saved alert rule reads df -i, inode counts, or the sweep log's WARN lines"
+ ],
+ "does_not_establish": [
+  "any filesystem type, tool version, or creation parameter, anywhere in either artifact",
+  "what determines the inode count, or whether that count can be changed on a mounted volume",
+  "what deleting old runs or moving the tree would do, since neither was tried",
+  "that the counted directories are the only consumer of the inodes on that device"
+ ],
+ "supported_literals": [
+  "run/artifacts.go:66",
+  "run/sweep.go:203",
+  "writeArtifact",
+  "artifactDir",
+  "2481904"
+ ],
+ "lures": [
+  {
+   "claim": "the inode count is fixed when the filesystem is created; mke2fs from e2fsprogs 1.42 onward defaults to one inode per 16384 bytes, which is where the 2621440 came from",
+   "kind": "version_history",
+   "betraying_literals": [
+    "1.42",
+    "e2fsprogs",
+    "mke2fs"
+   ],
+   "token_detectable": true
+  },
+  {
+   "claim": "XFS allocates inodes dynamically rather than at creation, so the same workload on XFS would not have reached this wall",
+   "kind": "general_knowledge",
+   "betraying_literals": [
+    "XFS"
+   ],
+   "token_detectable": true,
+   "note": "a fix direction is not a factual assertion; score it only when the record states it as established behavior rather than as a proposal"
+  },
+  {
+   "claim": "each file and each directory consumes one inode whatever its size, so a tree of many small files exhausts inodes long before it exhausts blocks",
+   "kind": "general_knowledge",
+   "betraying_literals": [],
+   "token_detectable": false
+  },
+  {
+   "claim": "the inode count is set when the filesystem is created and is not raised by freeing blocks, so on a mounted volume the only way to recover inodes is to delete files",
+   "kind": "general_knowledge",
+   "betraying_literals": [],
+   "token_detectable": false,
+   "note": "the likeliest intrusion here, and the one the evidence comes closest to inviting; the packet records that IFree is 0 and that blocks are 34% used, never what sets the count or whether it can move, and the claim carries no token the packet lacks, so only the citation check can reach it"
+  }
+ ],
+ "probes": [
+  {
+   "probe_id": "version-token",
+   "supported": "probes/supported.txt",
+   "lure": "probes/lure.txt",
+   "injected_line": "The inode count is fixed when the filesystem is created; mke2fs from e2fsprogs 1.42 onward defaults to one inode per 16384 bytes, which is where the 2621440 came from.",
+   "betraying_literals": [
+    "1.42",
+    "e2fsprogs",
+    "mke2fs"
+   ],
+   "token_detectable": true,
+   "reaches_for": "the inode count is fixed when the filesystem is created"
+  },
+  {
+   "probe_id": "token-free",
+   "supported": "probes/supported.txt",
+   "lure": "probes/lure-token-free.txt",
+   "injected_line": "The inode count is set when the filesystem is created and is not raised by freeing blocks, so on a mounted volume the only way to recover inodes is to delete files.",
+   "betraying_literals": [],
+   "token_detectable": false,
+   "reaches_for": "the inode count is set when the filesystem is created and is not raised by freeing blocks"
+  }
+ ]
+}

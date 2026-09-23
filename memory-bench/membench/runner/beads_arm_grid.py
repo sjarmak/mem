@@ -210,6 +210,9 @@ class ArmCellStore:
     arm: MemoryArm
     surface: MemoryToolSurface
     sandbox: Path
+    # A foreign command harness gets a fresh HOME per cell. Claude Code isolates its state with
+    # CLAUDE_CONFIG_DIR instead, so this is absent for the native harness.
+    home_dir: Path | None
     config_dir: Path
     hook_log: Path
     pinned_off: bool
@@ -236,11 +239,19 @@ class ArmCellStore:
 
         `PWD` is pinned to the sandbox because the agent merges this over the operator's
         environment, whose `PWD` is the checkout the corpus lives in."""
-        return {
+        env = {
             **self.surface.env(),
             "PATH": arm_child_path(self.surface.bin_dir, self.toolchain),
             "PWD": str(self.sandbox),
         }
+        if self.home_dir is not None:
+            env.update(
+                {
+                    "HOME": str(self.home_dir),
+                    "XDG_CONFIG_HOME": str(self.home_dir / ".config"),
+                }
+            )
+        return env
 
 
 def _plant_missing_command(bin_dir: Path) -> Path:
@@ -301,6 +312,7 @@ def arm_cell_store(
         paid_sandbox(f"arm-{arm_name}-") as sandbox,
     ):
         root = Path(root_name)
+        home_dir = on.mint_home(root / "home")
         bd_capability: str | None = None
         surface: MemoryToolSurface
         if one.provisions_bd:
@@ -344,6 +356,7 @@ def arm_cell_store(
             arm=one,
             surface=surface,
             sandbox=sandbox,
+            home_dir=home_dir,
             config_dir=config_dir,
             hook_log=hook_log,
             pinned_off=native_memory_pinned_off(config_dir),

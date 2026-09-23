@@ -67,7 +67,12 @@ A peer supplies:
    builds it with the beads Makefile, and records the commit and the binary's sha256.
 4. **Conditions**, if any, as environment variables exported to the spawned agent.
    They are fingerprinted into the identity. The names the rig sets itself (`PATH`,
-   `PWD`, the config-dir variable, the receipt attribution keys) cannot be conditions.
+   `PWD`, `HOME`, `XDG_CONFIG_HOME`, the config-dir variable, and the receipt attribution
+   keys) cannot be conditions.
+5. **Login material**, if the runtime needs file-backed authentication, as a directory passed
+   with `--harness-home-seed`. The harness copies only that directory into a fresh home for each
+   cell and points both `HOME` and `XDG_CONFIG_HOME` inside it. The resume identity records the
+   isolation policy and a content fingerprint, never the source path or credentials.
 
 What is different on a runtime without a native memory of its own: the `builtin`
 comparator is refused, so a turn there is the treatment against the floor. The floor is
@@ -81,7 +86,8 @@ Open a pull request against `main` adding one directory under `memory-bench/resu
 named for the turn. It holds:
 
 - the plan record and resume identity (runtime name and version, build commit and
-  binary sha256, conditions fingerprint, the eight task ids);
+  binary sha256, conditions fingerprint, per-cell home isolation and seed fingerprint, the
+  eight task ids);
 - per-arm `reached` and `engaged` counts with 95% intervals, and the count of
   UNMEASURED cells with the validity condition each tripped;
 - the `bd` receipt rows, which carry tokens and argv and nothing else.

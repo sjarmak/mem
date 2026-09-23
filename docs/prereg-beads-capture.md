@@ -123,7 +123,10 @@ counted; a run whose unmeasured cells form a consecutive streak is a broken rig 
 - **Any memory reach on the floor.** It is graded on not having one.
 - **Any native-memory reach on a non-comparator arm.** A treatment cell that satisfies the leg out
   of the agent's own memory has not exercised beads. This is a realized failure mode, not a
-  hypothetical: an earlier grid scored zero because the agent read the native path.
+  hypothetical: an earlier grid scored zero because the agent read the native path. A foreign
+  command harness additionally runs with a fresh `HOME` and `XDG_CONFIG_HOME` per cell, seeded
+  only with explicitly supplied login material, so its runtime-native files cannot leak across
+  cells or write into the operator's home.
 - **`bd` resolving to anything but the cell's own shim** on the assembled child PATH, for any arm.
   On the floor that is a store it should not have; on the treatment arm it is a different store
   and an unpinned build.

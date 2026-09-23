@@ -1,0 +1,47 @@
+EVIDENCE CARD — EnterpriseBench-t2dl4 json.loads exception-gap bug (2026-07-17)
+
+OBSERVED ENVIRONMENT
+Python 3.12.6 / linux / pytest-8.4.2 / project /workspace/projects/EnterpriseBench-t2dl4
+
+WHAT WAS ESTABLISHED
+1. CATCH-SITE GAP (initial task claim, corroborated by RED run):
+   Both trace-parse boundaries in EnterpriseBench-t2dl4 catch only json.JSONDecodeError,
+   missing bare ValueError and RecursionError from json.loads.
+   Source: PRIOR_TASK.md lines 14-18:
+     'scripts/cost_tracker.py:201 — except json.JSONDecodeError: warn + continue'
+     'lib/eb_metrics/retrieval_extraction.py:380 — except json.JSONDecodeError: continue'
+
+2. RecursionError CONFIRMED BY EXECUTION (PRIOR_SOURCE_PACKET.md lines 44-51, 2026-07-17T16:09:59):
+   'E  RecursionError: maximum recursion depth exceeded while decoding a JSON array'
+   at lib/eb_metrics/retrieval_extraction.py:236 (retrieved_files_from_trace, not :380).
+   Tests FAILED: test_deeply_nested_line_skipped in both test modules.
+
+3. ValueError / big-int path (CPython CVE-2020-10735 mitigation, sys.int_info.default_max_str_digits=4300):
+   Asserted in task description (PRIOR_TASK.md lines 29-32); test_big_int_literal_line_skipped
+   FAILED in both modules — no ValueError traceback shown in packet. Claim corroborated but
+   not traceback-verified.
+
+4. FIX VERIFIED GREEN (PRIOR_SOURCE_PACKET.md lines 66-78, 2026-07-17T16:10:20):
+   After fix: 177 passed, 0 failed. Recommended fix:
+   catch (json.JSONDecodeError, ValueError, RecursionError) at both sites.
+
+5. BLAST-RADIUS CLAIM (initial task claim, not executed at batch level):
+   PRIOR_TASK.md lines 38-43: 'cost_tracker.py:517 loops parse_trace() over every
+   agent_trace.jsonl with no per-trace guard, so ONE corrupt line kills cost reporting
+   for the entire batch.' Not demonstrated by a batch-level test; consistent with crash behavior.
+
+6. STATUS AT PACKET CLOSE: Issue EnterpriseBench-t2dl4 was OPEN / needs-human as of 2026-07-17.
+   Routed to human due to entanglement with 0nru's retrieval_extraction module and live
+   land-vs-sequence work (PRIOR_TASK.md lines 65-75). Do NOT treat as resolved.
+
+OPEN QUESTION
+Line number discrepancy: bug description cites retrieval_extraction.py:380; RED traceback
+shows crash at retrieval_extraction.py:236. Whether :380 is a second call site (compute_ttfr)
+or a stale line number is unknown from this evidence. Verify before patching.
+
+LIMITS AND TRANSFER ADVICE
+- Scope: exactly these two files in EnterpriseBench-t2dl4. Evidence does not establish the
+  pattern exists elsewhere.
+- Python version: 3.12.6. The int-str digit guard (CVE-2020-10735) was added in 3.11+;
+  behaviour on older Pythons is not covered by this evidence.
+- The fix was green on 177 tests but the issue was not closed; human review was required.

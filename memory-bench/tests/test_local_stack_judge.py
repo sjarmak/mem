@@ -16,8 +16,13 @@ import json
 
 import pytest
 
-from membench.bbon.comparative_judge import ComparativeJudgeError, compare_attempts
+from membench.bbon.comparative_judge import (
+    ComparativeJudgeError,
+    GenerationLengthError,
+    compare_attempts,
+)
 from membench.bbon.local_stack_judge import (
+    DEFAULT_CONTEXT_TOKENS,
     DEFAULT_TIMEOUT_S,
     LocalStackComparativeJudge,
 )
@@ -83,8 +88,151 @@ def test_complete_posts_pinned_model_to_generate_and_returns_response() -> None:
 
     url, payload = seen[0]
     assert url == "http://gpu-box:11434/api/generate"
-    assert payload == {"model": "llama3.1", "prompt": "the prompt", "stream": False}
+    assert payload == {
+        "model": "llama3.1",
+        "prompt": "the prompt",
+        "stream": False,
+        "options": {"num_ctx": DEFAULT_CONTEXT_TOKENS},
+    }
     assert json.loads(reply)["winner"] == "B"
+
+
+def test_generation_options_are_forwarded_when_set() -> None:
+    """A caller can pin sampling and bound generation. Both matter: sending no
+    options leaves the daemon applying the model's own defaults, which are
+    sampled, and leaves output unbounded, so a model in a repetition loop holds
+    the socket for the whole timeout. The window is not in that set -- it is sent
+    whether the caller asks or not, which the test below pins."""
+    seen: list[dict] = []
+
+    def post(url: str, body: bytes) -> bytes:
+        seen.append(json.loads(body))
+        return _ollama_reply("capped")
+
+    options = {"temperature": 0.0, "seed": 0, "num_predict": 4096}
+    judge = LocalStackComparativeJudge(post=post, options=options)
+    assert judge.complete("the prompt") == "capped"
+    assert seen[0]["options"] == {**options, "num_ctx": DEFAULT_CONTEXT_TOKENS}
+
+
+def test_the_context_window_is_stated_even_when_no_options_are_given() -> None:
+    """Measured against a live daemon: with no options at all, an 83K-character
+    prompt was read whole here (prompt_eval_count 28,596) because this box happens
+    to run OLLAMA_CONTEXT_LENGTH=32768. That is the daemon's configuration
+    answering a question the caller never asked, and on a box started with a
+    smaller window the identical request returns a confident answer about a
+    clipped prompt. So the window ships with every request."""
+    seen: list[dict] = []
+
+    def post(url: str, body: bytes) -> bytes:
+        seen.append(json.loads(body))
+        return _ollama_reply("answered")
+
+    assert LocalStackComparativeJudge(post=post).complete("the prompt") == "answered"
+    assert seen[0]["options"]["num_ctx"] == DEFAULT_CONTEXT_TOKENS
+
+
+def test_a_caller_can_override_the_window() -> None:
+    """Defaulting the window is not the same as owning it. A caller with a longer
+    prompt than the default covers must be able to raise it, and the merge has to
+    put the caller on top -- the other order would send the default and drop the
+    request the caller actually made."""
+    seen: list[dict] = []
+
+    def post(url: str, body: bytes) -> bytes:
+        seen.append(json.loads(body))
+        return _ollama_reply("answered")
+
+    judge = LocalStackComparativeJudge(post=post, options={"num_ctx": 65536})
+    judge.complete("a very long prompt")
+    assert seen[0]["options"]["num_ctx"] == 65536
+
+
+def test_a_prompt_read_to_the_edge_of_the_window_is_refused() -> None:
+    """The silent half of truncation. Measured on a live daemon: a prompt clipped
+    to fit reports prompt_eval_count one below the window -- 2047/2048, 4095/4096,
+    8191/8192 -- with done true, done_reason ``length`` or ``stop``, and a reply
+    that reads like an answer. The needle prompt that answered CORMORANT-47 under
+    a 32,768-token window answered ``The passphrase is 1366.`` under a 2,048-token
+    one. Nothing downstream can tell those apart, so the judge has to."""
+
+    def post(url: str, body: bytes) -> bytes:
+        return json.dumps(
+            {"response": "a confident answer", "done": True, "prompt_eval_count": 2047}
+        ).encode()
+
+    judge = LocalStackComparativeJudge(post=post, options={"num_ctx": 2048})
+    with pytest.raises(ComparativeJudgeError, match="clipped to fit"):
+        judge.complete("a prompt longer than the window")
+
+
+def test_a_clipped_prompt_is_named_ahead_of_the_generation_cap() -> None:
+    """The two faults overlap and their advice is opposite. A prompt clipped to
+    2,048 tokens came back done_reason=length when num_predict was set, and a
+    caller told to raise num_predict would be tuning the half that is not broken:
+    the prompt was cut before the model read it. So the window is diagnosed first,
+    and the error names the window even when the payload also says length."""
+
+    def post(url: str, body: bytes) -> bytes:
+        return json.dumps(
+            {
+                "response": "an answer about the part that fit",
+                "done": True,
+                "done_reason": "length",
+                "prompt_eval_count": 2047,
+            }
+        ).encode()
+
+    judge = LocalStackComparativeJudge(post=post, options={"num_ctx": 2048})
+    with pytest.raises(ComparativeJudgeError, match="clipped to fit"):
+        judge.complete("a prompt longer than the window")
+
+
+def test_a_capped_generation_on_a_prompt_that_fits_still_names_the_cap() -> None:
+    """The other half of that ordering: when the prompt is nowhere near the window,
+    done_reason=length means what it says and must keep its own error type. Putting
+    the clip check first is only allowed if it stays quiet here."""
+
+    def post(url: str, body: bytes) -> bytes:
+        return json.dumps(
+            {
+                "response": "a long answer, cut",
+                "done": True,
+                "done_reason": "length",
+                "prompt_eval_count": 26,
+            }
+        ).encode()
+
+    judge = LocalStackComparativeJudge(post=post, options={"num_ctx": 2048})
+    with pytest.raises(GenerationLengthError):
+        judge.complete("a short prompt")
+
+
+def test_a_prompt_that_fits_is_not_refused() -> None:
+    """The other side of the same boundary, and the reason it is a measured
+    threshold rather than a cautious margin: a prompt that fits stops thousands of
+    tokens short (26 against a 2,048 window in the live run), so nothing honest
+    sits near the edge. A guard that fired below it would reject good judgments."""
+
+    def post(url: str, body: bytes) -> bytes:
+        return json.dumps(
+            {"response": "a good answer", "done": True, "prompt_eval_count": 26}
+        ).encode()
+
+    judge = LocalStackComparativeJudge(post=post, options={"num_ctx": 2048})
+    assert judge.complete("a short prompt") == "a good answer"
+
+
+def test_a_reply_with_no_token_count_is_not_refused() -> None:
+    """A payload without prompt_eval_count supports no conclusion either way --
+    older daemons omit it, and every injected double here does. A guard built to
+    catch fabricated answers is the last place to fabricate a verdict from a
+    missing field."""
+
+    def post(url: str, body: bytes) -> bytes:
+        return _ollama_reply("no counts in this payload")
+
+    assert LocalStackComparativeJudge(post=post).complete("p") == "no counts in this payload"
 
 
 def test_default_timeout_is_set() -> None:
@@ -203,3 +351,53 @@ def test_preflight_raises_when_daemon_unreachable() -> None:
 
     with pytest.raises(LocalStackUnavailableError, match="ollama serve"):
         judge.preflight(fetch=fetch)
+
+
+def _payload(**fields: object) -> bytes:
+    base: dict[str, object] = {"model": DEFAULT_CHAT_MODEL, "response": "half an answer"}
+    base.update(fields)
+    return json.dumps(base).encode()
+
+
+def test_a_generation_the_daemon_abandoned_raises() -> None:
+    """The failure this endpoint reports without looking like one: HTTP 200,
+    done=false, no done_reason, no token counts, and text that stops mid-line.
+    Returning it would hand a judge a verdict computed over less than the caller
+    sent, with nothing downstream able to tell."""
+    judge = LocalStackComparativeJudge(post=lambda u, b: _payload(done=False))
+    with pytest.raises(ComparativeJudgeError, match="unfinished generation"):
+        judge.complete("a very long prompt")
+
+
+def test_a_generation_cut_off_by_the_token_limit_names_that_cause() -> None:
+    """Distinguished from the context case because the fix differs: raise
+    num_predict, or ask the prompt for less."""
+    judge = LocalStackComparativeJudge(post=lambda u, b: _payload(done=True, done_reason="length"))
+    with pytest.raises(GenerationLengthError, match="num_predict"):
+        judge.complete("a prompt whose answer runs long")
+
+
+def test_the_two_unfinished_generations_are_different_types() -> None:
+    """A caller re-sends one and must not re-send the other: an abandoned
+    generation succeeded on the next identical attempt, while a length stop under
+    greedy decoding reproduces itself token for token. The distinction is not in
+    the message, so a retry loop can only act on it if it is in the type. Both
+    stay `ComparativeJudgeError`, so existing handlers keep working."""
+    abandoned = LocalStackComparativeJudge(post=lambda u, b: _payload(done=False))
+    with pytest.raises(ComparativeJudgeError) as caught:
+        abandoned.complete("a very long prompt")
+    assert not isinstance(caught.value, GenerationLengthError)
+
+
+def test_a_reply_that_stopped_on_its_own_is_returned() -> None:
+    judge = LocalStackComparativeJudge(
+        post=lambda u, b: _payload(response="whole", done=True, done_reason="stop")
+    )
+    assert judge.complete("a prompt") == "whole"
+
+
+def test_a_payload_with_no_done_field_is_accepted() -> None:
+    """Some daemon versions omit it, and so does every injected double already in
+    this file. Refusing those would break callers over a field they never had."""
+    judge = LocalStackComparativeJudge(post=lambda u, b: _payload(response="whole"))
+    assert judge.complete("a prompt") == "whole"

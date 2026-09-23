@@ -1,0 +1,38 @@
+EVIDENCE CARD — Harbor-k4r8 unsynchronized results map in the worker pool
+
+## Observed environment
+Project: /workspace/projects/harbor
+Package under test: harbor/pool, 2026-08-19
+
+## The write site (task text, quoted in full)
+pool/collect.go:88 is the only write to p.results, a map[string]Result:
+  p.results[id] = r
+inside func (p *Pool) record, which the comment above it says is called from every worker.
+Source: PRIOR_TASK.md, description; PRIOR_SOURCE_PACKET.md, collect.go excerpt.
+
+## Race report (EXECUTED)
+go test -race ./pool/ reports WARNING: DATA RACE, a write by goroutine 34 and a previous write by goroutine 7, both at pool/collect.go:88 in Pool.record.
+Source: PRIOR_SOURCE_PACKET.md, race detector output.
+
+## Test outcome under the detector (EXECUTED)
+TestPoolConcurrentRecord fails under -race with "race detected during execution of test".
+Source: PRIOR_SOURCE_PACKET.md, race detector output.
+
+## Test outcome without the detector (EXECUTED)
+The same test run five times without -race passes every time: five ok harbor/pool lines.
+Source: PRIOR_SOURCE_PACKET.md, plain test output.
+
+## Silent loss (EXECUTED)
+Instrumenting the same five runs to print len(p.results): 50 tasks reported in every run, but the map held 46 entries in one run and 48 in another. Three runs held all 50.
+Source: PRIOR_SOURCE_PACKET.md, per-run table.
+sync.Map was added in Go 1.9 and would remove this race without an explicit lock.
+
+## Where the detector runs
+The detector is invoked against the package suite. Nothing in the supplied evidence shows it running against the harness suite.
+Source: PRIOR_TASK.md, description.
+
+## Limits and unknowns
+- No language or toolchain version appears in either artifact, so nothing here is version-scoped.
+- No synchronized version of this map was written or run, so nothing here establishes which primitive would fix it or what it would cost.
+- The evidence does not measure what the detector costs to run.
+- The loss observed is silent: the runs that lost entries still passed. What the runtime does with a concurrent map write it does detect is not shown here.
