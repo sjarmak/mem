@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sjarmak/mem/blob/main/docs/schemas/bd-passive-call.v1.schema.json",
+  "title": "bd-passive-call.v1",
+  "x-mem-cross-field-constraints": [
+    "flags are lexically sorted",
+    "positional_count equals positional_hashes length"
+  ],
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "ts",
+    "session",
+    "labels",
+    "origin",
+    "verb",
+    "flags",
+    "positional_count",
+    "argv_chars",
+    "key_hash",
+    "positional_hashes",
+    "exit",
+    "duration_ms"
+  ],
+  "properties": {
+    "schema": { "const": "bd-passive-call.v1" },
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+    },
+    "session": { "type": "string", "minLength": 1 },
+    "labels": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent", "template", "rig", "runtime", "runtime_version", "model"],
+      "properties": {
+        "agent": { "type": "string", "minLength": 1 },
+        "template": { "type": "string", "minLength": 1 },
+        "rig": { "type": "string", "minLength": 1 },
+        "runtime": { "type": "string", "minLength": 1 },
+        "runtime_version": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 }
+      }
+    },
+    "origin": { "enum": ["agent", "hook"] },
+    "verb": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*$" },
+    "flags": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^-{1,2}[A-Za-z0-9][A-Za-z0-9-]*$" }
+    },
+    "positional_count": { "type": "integer", "minimum": 0 },
+    "argv_chars": { "type": "integer", "minimum": 0 },
+    "key_hash": {
+      "oneOf": [{ "type": "string", "pattern": "^[0-9a-f]{16}$" }, { "type": "null" }]
+    },
+    "positional_hashes": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[0-9a-f]{16}$" }
+    },
+    "exit": { "type": "integer", "minimum": 0 },
+    "duration_ms": { "type": "integer", "minimum": 0 }
+  }
+}

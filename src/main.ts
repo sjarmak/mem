@@ -24,6 +24,7 @@ import { importMemoryEventsCommand } from './cli/commands/import-memory-events.j
 import { exportProvenanceEventsCommand } from './cli/commands/export-provenance-events.js';
 import { importProvenanceEventsCommand } from './cli/commands/import-provenance-events.js';
 import { rebuildCommand } from './cli/commands/rebuild.js';
+import { passiveRollupCommand } from './cli/commands/passive-rollup.js';
 
 /** Registers all commands and runs the CLI. The bin entrypoint calls this. */
 export function main(argv: string[]): Promise<void> {
@@ -52,6 +53,7 @@ export function main(argv: string[]): Promise<void> {
   registerCommand('export-provenance-events', exportProvenanceEventsCommand);
   registerCommand('import-provenance-events', importProvenanceEventsCommand);
   registerCommand('rebuild', rebuildCommand);
+  registerCommand('passive-rollup', passiveRollupCommand);
 
   return runCli(argv);
 }
