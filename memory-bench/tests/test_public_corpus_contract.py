@@ -50,6 +50,7 @@ from membench.public_alias import (
     AliasMap,
     build_alias_map,
     load_alias_map,
+    mint_path,
     published_internal_ids,
 )
 from membench.public_export import build_records
@@ -488,6 +489,10 @@ def test_every_released_project_record_is_answered_across_sessions() -> None:
     mint is read only to turn the frozen internal ids into the aliases the record
     states, never to decide which ids belong in the set.
     """
+    private_mint = mint_path(CORPUS.name)
+    if not os.path.lexists(private_mint):
+        reason = f"private mint absent at {private_mint}; aliases cannot be resolved"
+        pytest.skip(reason)
     frozen = _frozen_by_id()
     aliases = load_alias_map(CORPUS.name)
     project_records = [record for record in released() if record["tier"] == "project"]

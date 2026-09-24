@@ -291,17 +291,30 @@ def probe_mint(tmp_path: Path) -> tuple[Path, MintSecrets]:
 # The ignore rules.
 
 
-def test_the_live_mint_is_ignored() -> None:
-    present = _mint_files()
-    assert present, (
-        "no mint file in this worktree, so this assertion would pass over nothing. The "
-        "mint is untracked by decision, so a fresh clone has none — but a worktree that "
-        "has minted the public corpus must have one for the rest of this file to mean "
-        "anything about the live secret."
-    )
+def _assert_live_mints_unpublishable(present: list[Path], visible: set[str]) -> None:
     for path in present:
         rel = path.relative_to(REPO_ROOT).as_posix()
         assert _is_ignored(rel), f"{rel} is not git-ignored; one `git add -A` publishes it"
+        assert rel not in visible, f"{rel} is tracked or staged; the next push publishes it"
+
+
+def test_the_live_mint_is_ignored() -> None:
+    present = _mint_files()
+    if not present:
+        pytest.skip(
+            f"no private mint file exists under {MINT_DIR}; the live-mint ignore guard "
+            "has no secret input"
+        )
+    visible = set(_git_paths("ls-files")) | set(
+        _git_paths("ls-files", "--others", "--exclude-standard")
+    )
+    _assert_live_mints_unpublishable(present, visible)
+
+
+def test_the_live_mint_guard_rejects_a_present_tracked_mint() -> None:
+    rel = f"{_MINT_REL}/tracked{MINT_SUFFIX}"
+    with pytest.raises(AssertionError, match="tracked or staged"):
+        _assert_live_mints_unpublishable([MINT_DIR / f"tracked{MINT_SUFFIX}"], {rel})
 
 
 @pytest.mark.parametrize(
