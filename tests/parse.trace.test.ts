@@ -2,6 +2,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import * as hegel from '@hegeldev/hegel';
+import * as gs from '@hegeldev/hegel/generators';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { extractErrors, parseTranscript, parseRecordTrace } from '../src/parse/index.js';
@@ -52,6 +54,61 @@ describe('matchRunner', () => {
     // a bare-`lint` script still classifies as eslint
     expect(matchRunner('npm run lint')).toBe('eslint');
   });
+
+  it('recognizes make only at shell invocation boundaries', () => {
+    expect(matchRunner('make test')).toBe('make');
+    expect(matchRunner('sudo make test')).toBe('make');
+    expect(matchRunner('cd repo && make test')).toBe('make');
+    expect(matchRunner('false || sudo make test')).toBe('make');
+    expect(matchRunner('cd repo\nmake test')).toBe('make');
+    expect(matchRunner('  make test')).toBe('make');
+    expect(matchRunner('env CI=1 make test')).toBe('make');
+    expect(matchRunner('CI=1 make test')).toBe('make');
+    expect(matchRunner('cd repo && CI=1 make test')).toBe('make');
+    expect(matchRunner('time make test')).toBe('make');
+    expect(matchRunner('if true; then make test; fi')).toBe('make');
+    expect(matchRunner('(make test)')).toBe('make');
+    expect(matchRunner('! make test')).toBe('make');
+    expect(matchRunner('if make test; then echo yes; fi')).toBe('make');
+    expect(matchRunner('command make test')).toBe('make');
+    expect(matchRunner('git commit -m "make tests pass"')).toBeNull();
+    expect(matchRunner('python -c "print(\'make target\')"')).toBeNull();
+    expect(matchRunner("echo '; make target'")).toBeNull();
+    expect(matchRunner("cat <<'EOF'\nmake target\nEOF")).toBeNull();
+    expect(matchRunner("git commit -m 'subject\nmake target\nbody'")).toBeNull();
+    expect(matchRunner('cat <<END-MARK\nmake target\nEND-MARK')).toBeNull();
+    expect(matchRunner('cat <<\\EOF\nmake target\nEOF')).toBeNull();
+    expect(matchRunner('cat <<EOF\nmake target\nEOF\nmake test')).toBe('make');
+    expect(matchRunner("bash -lc 'npm test'")).toBe('npm');
+    expect(matchRunner('cat <<< foo\nmake test')).toBe('make');
+    expect(matchRunner("bash -lc 'make test'")).toBe('make');
+    expect(matchRunner("MODE='release build' make test")).toBe('make');
+    expect(matchRunner("bash -lc 'cat <<EOF\nmake target\nEOF'")).toBeNull();
+    expect(matchRunner("echo ok \x23 don't care\nmake test")).toBe('make');
+    expect(matchRunner('/usr/bin/make test')).toBe('make');
+  });
+
+  it('never classifies a bare make word embedded in generated argument text', () =>
+    hegel.test(
+      tc => {
+        const text = tc.draw(
+          gs.text({ alphabet: 'abcXYZ0123456789 _-"', minSize: 0, maxSize: 80 })
+        );
+        expect(matchRunner(`printf '${text} make target'`)).toBeNull();
+      },
+      { database: hegel.Database.disabled }
+    ));
+
+  it('classifies generated make invocations after shell separators', () =>
+    hegel.test(
+      tc => {
+        const separator = tc.draw(gs.sampledFrom([';', '&&', '||', '|', '\n']));
+        const spacing = tc.draw(gs.text({ alphabet: ' \t', minSize: 0, maxSize: 4 }));
+        const sudo = tc.draw(gs.booleans()) ? 'sudo ' : '';
+        expect(matchRunner(`printf done${separator}${spacing}${sudo}make target`)).toBe('make');
+      },
+      { database: hegel.Database.disabled }
+    ));
 
   it('returns null for non-build commands', () => {
     expect(matchRunner('ls -la')).toBeNull();
@@ -361,6 +418,12 @@ describe('parseTranscript', () => {
         message: { content: [{ type: 'tool_result', tool_use_id: 't2', is_error: false }] },
       })
     );
+    expect(parseTranscript(text).tool_outcomes).toHaveLength(0);
+  });
+
+  it('does not record make words from heredoc bodies as tool outcomes', () => {
+    const command = "git commit -F - <<'EOF'\nfix: make runner accurate\nEOF";
+    const text = transcript(bashCall('t1', command), bashResult('t1', { stdout: 'ok' }));
     expect(parseTranscript(text).tool_outcomes).toHaveLength(0);
   });
 

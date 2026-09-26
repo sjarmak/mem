@@ -27,7 +27,7 @@
     "review:serve": "node architecture/review/server.mjs"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20.11.0"
   },
   "dependencies": {
     "better-sqlite3": "^12.10.0",
