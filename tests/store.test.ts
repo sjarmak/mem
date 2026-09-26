@@ -947,6 +947,7 @@ describe('siblingColumnsByWorkIds (mem-0xz9b)', () => {
       pr: '#63',
       external_ref: 'polecat/demo-1a2b',
       parent: null,
+      session_uuids: [],
     });
     expect(columns.get('demo-2b3c')).toEqual({
       work_id: 'demo-2b3c',
@@ -954,6 +955,7 @@ describe('siblingColumnsByWorkIds (mem-0xz9b)', () => {
       pr: null,
       external_ref: null,
       parent: 'demo-1a2b-epic',
+      session_uuids: [],
     });
     db.close();
   });
@@ -965,6 +967,45 @@ describe('siblingColumnsByWorkIds (mem-0xz9b)', () => {
     const columns = siblingColumnsByWorkIds(db, ['demo-1a2b', 'demo-vanished']);
     expect(columns.has('demo-vanished')).toBe(false);
     expect(columns.get('demo-1a2b')?.work_id).toBe('demo-1a2b');
+    db.close();
+  });
+
+  it('preserves every session UUID when a work has multiple trace runs', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [
+      fullRecord({
+        trace: {
+          jsonl_path: '/traces/x.jsonl',
+          run: {
+            session_uuid: 'session-b',
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_creation_tokens: 0,
+            cache_read_tokens: 0,
+            n_tool_calls: 0,
+            tool_calls_by_type: {},
+            n_turns: 0,
+          },
+        },
+      }),
+    ]);
+    db.prepare(
+      `INSERT INTO trace_runs (
+         work_id, agent_id, session_uuid, model, harness_version,
+         input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
+         n_tool_calls, tool_calls_by_type, n_turns, started_at, ended_at, outcome
+       )
+       SELECT work_id, agent_id, 'session-a', model, harness_version,
+              input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
+              n_tool_calls, tool_calls_by_type, n_turns, started_at, ended_at, outcome
+         FROM trace_runs WHERE work_id = 'demo-1a2b'`
+    ).run();
+
+    const columns = siblingColumnsByWorkIds(db, ['demo-1a2b']);
+
+    expect(columns.get('demo-1a2b')).toMatchObject({
+      session_uuids: ['session-a', 'session-b'],
+    });
     db.close();
   });
 

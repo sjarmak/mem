@@ -8,11 +8,12 @@ import {
   lessonsFor,
   queryRecords,
   searchErrorMessages,
+  siblingColumnsByWorkIds,
   supersedesClosure,
   type StoredLesson,
 } from '../store/index.js';
 import type { StoreDatabase } from '../store/sqlite.js';
-import { isSibling, siblingColumnsFromRecord } from './exclusions.js';
+import { isSibling } from './exclusions.js';
 
 /**
  * Retrieval v1 (P2.1): structured/keyword retrieval over the work-audit graph,
@@ -21,9 +22,6 @@ import { isSibling, siblingColumnsFromRecord } from './exclusions.js';
  * fixed ORDER BY or explicit, documented tiebreaker arithmetic (the ZFC
  * deterministic-ranking exception). No embeddings, no semantic heuristics.
  *
- * - D6: the temporal boundary is the reader's strict `closedBefore`; the
- *   self / convoy / pr-or-branch / supersedes-chain exclusions live in
- *   `exclusions.ts`.
  * - D7: `scope` selects the track — `cross_rig` (strict/headline) or
  *   `same_rig_temporal` (realistic/secondary).
  * - D8: matching keys on the P1.6 failure-signature primitives. Tiers, strong
@@ -61,6 +59,7 @@ export const RetrievalQuerySchema = z.object({
   parent: z.string().optional(),
   pr: z.string().optional(),
   external_ref: z.string().optional(),
+  session_uuid: z.string().min(1).optional(),
 });
 
 export type RetrievalQuery = z.infer<typeof RetrievalQuerySchema>;
@@ -249,12 +248,17 @@ export function retrieve(
 
   // D6 non-temporal exclusions: self, supersedes chain, convoy/pr/branch.
   const chain = new Set(supersedesClosure(db, q.work_id));
-  const retrievable = eligible.filter(
-    record =>
-      record.work_id !== q.work_id &&
-      !chain.has(record.work_id) &&
-      !isSibling(siblingColumnsFromRecord(record), q)
+  const siblingColumns = siblingColumnsByWorkIds(
+    db,
+    eligible.map(record => record.work_id)
   );
+  const retrievable = eligible.filter(record => {
+    const columns = siblingColumns.get(record.work_id);
+    if (columns === undefined) {
+      throw new Error(`Missing sibling columns for eligible work_id ${record.work_id}`);
+    }
+    return record.work_id !== q.work_id && !chain.has(record.work_id) && !isSibling(columns, q);
+  });
 
   // FTS scan: defines the message tier and tiebreaks the structured tiers.
   // The `issue-text` trigger feeds the same mechanical tokenizer (mem-tnyo).
@@ -397,5 +401,8 @@ export function queryFromRecord(
     ...(record.links.parent !== undefined && { parent: record.links.parent }),
     ...(record.outcome?.pr !== undefined && { pr: record.outcome.pr }),
     ...(record.external_ref !== undefined && { external_ref: record.external_ref }),
+    ...(record.trace?.run?.session_uuid !== undefined && {
+      session_uuid: record.trace.run.session_uuid,
+    }),
   };
 }

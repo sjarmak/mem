@@ -24,6 +24,17 @@ const tsError = (overrides: Partial<TraceError> = {}): TraceError => ({
   ...overrides,
 });
 
+const traceRun = (sessionUuid: string) => ({
+  session_uuid: sessionUuid,
+  input_tokens: 0,
+  output_tokens: 0,
+  cache_creation_tokens: 0,
+  cache_read_tokens: 0,
+  n_tool_calls: 0,
+  tool_calls_by_type: {},
+  n_turns: 0,
+});
+
 /** A closed prior record carrying one parseable error — the retrievable shape. */
 const priorRecord = (
   workId: string,
@@ -188,6 +199,59 @@ describe('retrieve — D6 temporal leave-one-out', () => {
     const result = retrieve(db, baseQuery(), { scope: 'same_rig_temporal' });
 
     expect(result.items.map(i => i.work_id)).toEqual(['rigA-nopr']);
+  });
+
+  it('excludes records produced from the same session transcript', () => {
+    writeRecords(db, [
+      priorRecord('rigA-session', 'rigA', {
+        trace: {
+          jsonl_path: '/t/shared.jsonl',
+          errors: [tsError()],
+          run: traceRun('session-shared'),
+        },
+      }),
+      priorRecord('rigA-other', 'rigA', {
+        trace: {
+          jsonl_path: '/t/other.jsonl',
+          errors: [tsError()],
+          run: traceRun('session-other'),
+        },
+      }),
+    ]);
+    const result = retrieve(db, baseQuery({ session_uuid: 'session-shared' }), {
+      scope: 'same_rig_temporal',
+    });
+
+    expect(result.items.map(i => i.work_id)).toEqual(['rigA-other']);
+  });
+
+  it('excludes a session transcript present only in an additional trace run', () => {
+    writeRecords(db, [
+      priorRecord('rigA-session', 'rigA', {
+        trace: {
+          jsonl_path: '/t/other.jsonl',
+          errors: [tsError()],
+          run: traceRun('session-other'),
+        },
+      }),
+    ]);
+    db.prepare(
+      `INSERT INTO trace_runs (
+         work_id, agent_id, session_uuid, model, harness_version,
+         input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
+         n_tool_calls, tool_calls_by_type, n_turns, started_at, ended_at, outcome
+       )
+       SELECT work_id, agent_id, 'session-shared', model, harness_version,
+              input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
+              n_tool_calls, tool_calls_by_type, n_turns, started_at, ended_at, outcome
+         FROM trace_runs WHERE work_id = 'rigA-session'`
+    ).run();
+
+    const result = retrieve(db, baseQuery({ session_uuid: 'session-shared' }), {
+      scope: 'same_rig_temporal',
+    });
+
+    expect(result.items).toEqual([]);
   });
 
   it('excludes the full supersedes chain in both directions, multi-hop', () => {
@@ -465,6 +529,11 @@ describe('queryFromRecord', () => {
       priorRecord('rigA-b', 'rigA', {
         external_ref: 'feat/x',
         links: { deps: [], convoy_id: 'c1', supersedes: [], parent: 'rigA-epic' },
+        trace: {
+          jsonl_path: '/t/rigA-b.jsonl',
+          errors: [tsError()],
+          run: traceRun('session-query'),
+        },
       }),
     ]);
 
@@ -479,6 +548,7 @@ describe('queryFromRecord', () => {
       parent: 'rigA-epic',
       pr: '#rigA-b',
       external_ref: 'feat/x',
+      session_uuid: 'session-query',
     });
   });
 

@@ -300,16 +300,17 @@ export function workIdsBySignatureSince(
   return rows.map(row => row.work_id);
 }
 
-/** The scalar fields the Decision-6 sibling test ({@link isSibling} in
- * `retrieve/exclusions.ts`) needs per candidate: `convoy_id`/`pr`/
- * `external_ref` straight off their promoted `work_records` columns, `parent`
- * off the `record_links` `'parent'` edge (mem-qgdz). */
 export interface SiblingColumns {
   work_id: string;
   convoy_id: string | null;
   pr: string | null;
   external_ref: string | null;
   parent: string | null;
+  session_uuids: readonly string[];
+}
+
+interface SiblingRow extends Omit<SiblingColumns, 'session_uuids'> {
+  session_uuids: string;
 }
 
 /** Batched {@link SiblingColumns} for a set of work_ids — one query (`json_each`,
@@ -325,13 +326,26 @@ export function siblingColumnsByWorkIds(
   const rows = db
     .prepare(
       `SELECT wr.work_id AS work_id, wr.convoy_id AS convoy_id, wr.pr AS pr,
-              wr.external_ref AS external_ref, rl.target_id AS parent
+              wr.external_ref AS external_ref, rl.target_id AS parent,
+              COALESCE((
+                SELECT json_group_array(session_uuid)
+                  FROM (
+                    SELECT session_uuid FROM trace_runs
+                     WHERE work_id = wr.work_id
+                     ORDER BY session_uuid
+                  )
+              ), '[]') AS session_uuids
          FROM work_records wr
          LEFT JOIN record_links rl ON rl.work_id = wr.work_id AND rl.kind = 'parent'
         WHERE wr.work_id IN (SELECT value FROM json_each(?))`
     )
-    .all(JSON.stringify(workIds)) as SiblingColumns[];
-  return new Map(rows.map(row => [row.work_id, row]));
+    .all(JSON.stringify(workIds)) as SiblingRow[];
+  return new Map(
+    rows.map(row => [
+      row.work_id,
+      { ...row, session_uuids: JSON.parse(row.session_uuids) as string[] },
+    ])
+  );
 }
 
 /** One FTS hit on a trace error's message. */

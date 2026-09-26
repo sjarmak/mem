@@ -428,19 +428,6 @@ function workIdsBySignatures(
   );
 }
 
-/**
- * Builds each later-closed candidate's {@link RegressionCandidate} at most
- * once, keyed by work_id, for the K-past-fix check. A single later record can
- * carry 2+ of a lesson's failure signatures (e.g. two errors that both
- * recurred in the same later commit) — the sibling check depends only on the
- * candidate and the lesson, not on which signature matched it, so computing
- * it once here (rather than once per matching signature) avoids redundant
- * work. The sibling check itself only needs {@link SiblingColumns}
- * (convoy_id/pr/external_ref/parent) — one batched query for the whole
- * dedup'd work_id set, not a `getRecord`-and-Zod-parse per candidate
- * (mem-0xz9b): a candidate the SQL join already proved existed at query time
- * is never re-fetched just to run isSibling.
- */
 function buildCandidateCache(
   db: StoreDatabase,
   workIds: readonly string[],

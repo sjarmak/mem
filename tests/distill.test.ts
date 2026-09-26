@@ -33,6 +33,17 @@ const tsError = (file = 'src/a.ts') => ({
   line: 13,
 });
 
+const traceRun = (sessionUuid: string) => ({
+  session_uuid: sessionUuid,
+  input_tokens: 0,
+  output_tokens: 0,
+  cache_creation_tokens: 0,
+  cache_read_tokens: 0,
+  n_tool_calls: 0,
+  tool_calls_by_type: {},
+  n_turns: 0,
+});
+
 const closedRecord = (
   workId: string,
   rig: string,
@@ -663,6 +674,32 @@ describe('computeRegressions', () => {
     writeRecords(db, [
       closedRecord('w-src', 'rigA', { external_ref: 'polecat/w-src' }),
       laterClosedRecord('w-branch-sibling', 'rigA', { external_ref: 'polecat/w-src' }),
+    ]);
+    appendLesson(db, {
+      work_id: 'w-src',
+      extracted_at: '2026-06-05T12:00:00Z',
+      payload: { subtitle: 's' },
+    });
+
+    expect(computeRegressions(db).flags).toEqual([]);
+  });
+
+  it('does NOT flag a recurrence produced from the lesson source session transcript', () => {
+    writeRecords(db, [
+      closedRecord('w-src', 'rigA', {
+        trace: {
+          jsonl_path: '/t/shared.jsonl',
+          errors: [tsError()],
+          run: traceRun('session-shared'),
+        },
+      }),
+      laterClosedRecord('w-session-sibling', 'rigA', {
+        trace: {
+          jsonl_path: '/t/shared.jsonl',
+          errors: [tsError()],
+          run: traceRun('session-shared'),
+        },
+      }),
     ]);
     appendLesson(db, {
       work_id: 'w-src',

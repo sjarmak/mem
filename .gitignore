@@ -11,6 +11,7 @@
 # Node
 node_modules/
 dist/
+.hegel/
 
 # Secrets — local environment / API keys (e.g. NGC_API_KEY for the local NIM)
 .env
