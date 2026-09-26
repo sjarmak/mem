@@ -84,6 +84,8 @@ describe('matchRunner', () => {
     expect(matchRunner("bash -lc 'make test'")).toBe('make');
     expect(matchRunner("MODE='release build' make test")).toBe('make');
     expect(matchRunner("bash -lc 'cat <<EOF\nmake target\nEOF'")).toBeNull();
+    expect(matchRunner("cat <<'EOF'\n; bash -lc 'make target'\nEOF")).toBeNull();
+    expect(matchRunner("echo ok\nbash -lc 'make test'")).toBe('make');
     expect(matchRunner("echo ok \x23 don't care\nmake test")).toBe('make');
     expect(matchRunner('/usr/bin/make test')).toBe('make');
   });

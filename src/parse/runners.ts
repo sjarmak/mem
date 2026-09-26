@@ -72,6 +72,7 @@ function maskQuotedLine(
 
 function executableShellText(command: string): string {
   let heredocs: ReadonlyArray<{ readonly delimiter: string; readonly stripTabs: boolean }> = [];
+  let nestedScripts: ReadonlyArray<string> = [];
   let quote: ShellQuote = null;
   const maskedLines = command.split('\n').map(line => {
     const heredoc = heredocs[0];
@@ -94,11 +95,13 @@ function executableShellText(command: string): string {
         },
       ];
     }
+    const nestedPattern = /((?:^|[;&|]\s*)(?:\S*\/)?(?:ba|z|da)?sh\s+-\w*c\w*\s+)(['"])(.*?)\2/g;
+    for (const match of line.matchAll(nestedPattern)) {
+      if (!result.masked.startsWith(match[1], match.index)) continue;
+      nestedScripts = [...nestedScripts, executableShellText(match[3])];
+    }
     return result.masked;
   });
-  const nestedScripts = [
-    ...command.matchAll(/(?:^|[;&|]\s*)(?:\S*\/)?(?:ba|z|da)?sh\s+-\w*c\w*\s+(['"])([\s\S]*?)\1/g),
-  ].map(match => executableShellText(match[2]));
   return [...maskedLines, ...nestedScripts].join('\n');
 }
 
