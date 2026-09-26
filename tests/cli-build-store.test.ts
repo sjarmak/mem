@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -8,6 +8,7 @@ import {
   attachAndParse,
   buildStoreFromRecords,
   checkRecordLinks,
+  readRecordedBases,
   recordLinkCount,
 } from '../src/cli/commands/build-store.js';
 import { attachProvenance } from '../src/ingest/provenance.js';
@@ -127,6 +128,27 @@ describe('buildStoreFromRecords', () => {
     } finally {
       db.close();
     }
+  });
+});
+
+describe('readRecordedBases', () => {
+  it('does not warn when no prior store exists', () => {
+    const warnings: string[] = [];
+
+    expect(
+      readRecordedBases(join(dir, 'missing.db'), warning => warnings.push(warning))
+    ).toBeUndefined();
+    expect(warnings).toEqual([]);
+  });
+
+  it('reports an unreadable prior store before falling back', () => {
+    const path = join(dir, 'corrupt.db');
+    const warnings: string[] = [];
+    writeFileSync(path, 'not a sqlite database');
+
+    expect(readRecordedBases(path, warning => warnings.push(warning))).toBeUndefined();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/^prior store unreadable, skipping recorded bases:/);
   });
 });
 

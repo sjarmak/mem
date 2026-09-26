@@ -9,14 +9,16 @@ export interface Envelope {
   ok: boolean;
   data?: unknown;
   errors?: string[];
+  warnings?: string[];
 }
 
-export function successEnvelope(cmd: string, data?: unknown): Envelope {
+export function successEnvelope(cmd: string, data?: unknown, warnings: string[] = []): Envelope {
   return {
     apiVersion: 'v1',
     cmd,
     ok: true,
     data,
+    ...(warnings.length > 0 && { warnings }),
   };
 }
 

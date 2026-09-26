@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { parseArgs, registerCommand, listCommands } from '../src/cli/index.js';
+import { describe, it, expect, vi } from 'vitest';
+import { parseArgs, registerCommand, listCommands, runCli } from '../src/cli/index.js';
 import { successEnvelope, errorEnvelope } from '../src/schemas/envelope.js';
 
 describe('parseArgs', () => {
@@ -39,6 +39,35 @@ describe('command registry', () => {
     registerCommand('test-cmd', () => 'ok');
     expect(listCommands()).toContain('test-cmd');
   });
+
+  it('puts command warnings at the envelope root', async () => {
+    registerCommand('warning-cmd', ctx => {
+      ctx.reportWarning?.('careful');
+      return { value: 1 };
+    });
+    const output = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await runCli(['node', 'mem', 'warning-cmd', '--json']);
+
+    expect(JSON.parse(String(output.mock.calls[0][0]))).toEqual({
+      apiVersion: 'v1',
+      cmd: 'warning-cmd',
+      ok: true,
+      data: { value: 1 },
+      warnings: ['careful'],
+    });
+    output.mockRestore();
+  });
+
+  it('prints command warnings in text mode', async () => {
+    registerCommand('warning-text-cmd', ctx => ctx.reportWarning?.('careful'));
+    const output = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await runCli(['node', 'mem', 'warning-text-cmd']);
+
+    expect(output).toHaveBeenCalledWith('careful');
+    output.mockRestore();
+  });
 });
 
 describe('envelope', () => {
@@ -47,6 +76,13 @@ describe('envelope', () => {
     expect(env.ok).toBe(true);
     expect(env.cmd).toBe('version');
     expect(env.data).toEqual({ version: '0.1.0' });
+    expect(env.warnings).toBeUndefined();
+  });
+
+  it('includes warnings on a successful envelope', () => {
+    const env = successEnvelope('build-store', { count: 1 }, ['prior store unreadable']);
+    expect(env.ok).toBe(true);
+    expect(env.warnings).toEqual(['prior store unreadable']);
   });
 
   it('wraps errors', () => {

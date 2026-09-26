@@ -197,6 +197,23 @@ export function buildStoreFromRecords(
   }
 }
 
+export function readRecordedBases(
+  path: string,
+  warn: (warning: string) => void
+): RecordedBaseLookup | undefined {
+  if (!existsSync(path)) return undefined;
+  let prior: ReturnType<typeof openStore> | undefined;
+  try {
+    prior = openStore(path);
+    return loadRecordedBases(prior);
+  } catch (err) {
+    warn(`prior store unreadable, skipping recorded bases: ${String(err)}`);
+    return undefined;
+  } finally {
+    prior?.close();
+  }
+}
+
 /**
  * `mem build-store [--rig <name>] [--with-traces] [--store PATH]` — read the
  * WorkRecord spine from the dolt bead store (all rigs, or one `--rig`) and
@@ -258,22 +275,11 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
   // date-heuristic. Read once into memory (the lookup holds no handle), and only
   // when --with-provenance is on. A missing or schema-incompatible prior store
   // simply yields no recorded bases — the reconstruction fallback is unchanged.
-  let recordedBase: RecordedBaseLookup | undefined;
-  if (withProvenance && existsSync(path)) {
-    try {
-      const prior = openStore(path);
-      recordedBase = loadRecordedBases(prior);
-      prior.close();
-    } catch (err) {
-      // Stale schema version, unreadable file, etc. Degrade to full
-      // reconstruction, but say so — a silent "0 recorded bases" after an
-      // upgrade is otherwise a mystery.
-      recordedBase = undefined;
-      if (!ctx.options.json) {
-        console.error(`prior store unreadable, skipping recorded bases: ${String(err)}`);
-      }
-    }
-  }
+  const reportPriorStoreWarning =
+    ctx.reportWarning ?? ((warning: string) => console.error(warning));
+  const recordedBase = withProvenance
+    ? readRecordedBases(path, reportPriorStoreWarning)
+    : undefined;
 
   let count = 0;
   let provenanceEvents = 0;

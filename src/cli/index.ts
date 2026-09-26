@@ -13,6 +13,7 @@ export interface CliOptions {
 export interface CommandContext {
   args: string[];
   options: CliOptions;
+  reportWarning?: (warning: string) => void;
 }
 
 export type CommandHandler = (ctx: CommandContext) => unknown;
@@ -87,10 +88,22 @@ export async function runCli(argv: string[]): Promise<void> {
   }
 
   try {
-    const result = await Promise.resolve(handler(ctx));
+    let warnings: string[] = [];
+    const result = await Promise.resolve(
+      handler({
+        ...ctx,
+        reportWarning: warning => {
+          if (ctx.options.json) {
+            warnings = [...warnings, warning];
+          } else {
+            console.error(warning);
+          }
+        },
+      })
+    );
 
     if (ctx.options.json) {
-      console.log(JSON.stringify(successEnvelope(command, result)));
+      console.log(JSON.stringify(successEnvelope(command, result, warnings)));
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
