@@ -26,6 +26,15 @@ jobs:
           # steps, never to `uses` inputs. Pinned, not left to the action's
           # `**/pyproject.toml` backup glob (tests/test_ci_pip_cache.py).
           cache-dependency-path: memory-bench/pyproject.toml
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+        working-directory: .
+      - run: npm run build
+        working-directory: .
       - run: pip install -e ".[dev]"
       # Whole-tree by default (mem-sspvk) — a new directory is covered without
       # anyone remembering to add it here. mypy's target set and its reasoned
