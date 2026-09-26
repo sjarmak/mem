@@ -64,6 +64,8 @@ verb counts, calls whose exit is non-zero, and successful read invocations that
 share a hashed key with an earlier successful write in the same session. It
 also computes the same metrics independently for every value of every label.
 Nullable labels use the visible `"<null>"` key in the per-label breakdown.
+String values equal to `"<null>"` or beginning with `\` gain a leading `\` so
+they remain distinct from null and from each other.
 
 The read/write join is deliberately mechanical and correlational. It uses an
 allow-list of unambiguous top-level verbs; verbs whose subcommand can change

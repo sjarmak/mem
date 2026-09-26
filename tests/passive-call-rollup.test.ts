@@ -312,10 +312,14 @@ describe('passive call rollup', () => {
     const result = rollupPassiveCalls([
       call({ labels: { ...labels, rig: null, runtime_version: null, model: null } }),
       call({ labels: { ...labels, rig: 'null' } }),
+      call({ labels: { ...labels, rig: '<null>' } }),
+      call({ labels: { ...labels, rig: '\\<null>' } }),
     ]);
 
     expect(result.by_label.rig['<null>']?.calls).toBe(1);
     expect(result.by_label.rig.null?.calls).toBe(1);
+    expect(result.by_label.rig['\\<null>']?.calls).toBe(1);
+    expect(result.by_label.rig['\\\\<null>']?.calls).toBe(1);
     expect(result.by_label.runtime_version['<null>']?.calls).toBe(1);
     expect(result.by_label.model['<null>']?.calls).toBe(1);
   });
