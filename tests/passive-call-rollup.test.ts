@@ -2,6 +2,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import * as hegel from '@hegeldev/hegel';
+import * as gs from '@hegeldev/hegel/generators';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { passiveRollupCommand } from '../src/cli/commands/passive-rollup.js';
@@ -73,6 +75,70 @@ describe('bd-passive-call.v1 schema', () => {
       PassiveCallSchema.parse({ ...call(), positional_count: 1, positional_hashes: [] })
     ).toThrow();
   });
+
+  it.each(['rig', 'runtime_version', 'model'] as const)('accepts a null %s label', label => {
+    expect(call({ labels: { ...labels, [label]: null } }).labels[label]).toBeNull();
+  });
+
+  it.each(['agent', 'template', 'runtime'] as const)('keeps %s non-nullable', label => {
+    expect(() =>
+      PassiveCallSchema.parse({ ...call(), labels: { ...labels, [label]: null } })
+    ).toThrow();
+  });
+
+  it.each(['<unknown>', '<flag>'])('accepts the %s verb sentinel', verb => {
+    expect(call({ verb }).verb).toBe(verb);
+  });
+
+  it('rejects unrecognized angle-bracket verbs', () => {
+    expect(() => PassiveCallSchema.parse({ ...call(), verb: '<other>' })).toThrow();
+  });
+
+  it('keeps every generated old-schema line valid', () =>
+    hegel.test(tc => {
+      const nonEmpty = gs.text({
+        alphabet: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._/',
+        minSize: 1,
+        maxSize: 24,
+      });
+      const hash = gs.fromRegex('[0-9a-f]{16}');
+      const positional_hashes = tc.draw(gs.arrays(hash, { maxSize: 4 }));
+      const flags = [
+        ...tc.draw(
+          gs.arrays(gs.fromRegex('--[A-Za-z0-9][A-Za-z0-9-]{0,12}'), {
+            maxSize: 4,
+            unique: true,
+          })
+        ),
+      ].sort();
+      const verb = tc.draw(gs.fromRegex('[A-Za-z0-9][A-Za-z0-9-]{0,20}'));
+      const origin = tc.draw(gs.sampledFrom(['agent', 'hook'] as const));
+      const exit = tc.draw(gs.integers({ minValue: 0, maxValue: 255 }));
+      const duration_ms = tc.draw(gs.integers({ minValue: 0, maxValue: 60_000 }));
+      const oldValidLine = {
+        ...call(),
+        session: tc.draw(nonEmpty),
+        origin,
+        verb,
+        flags,
+        positional_count: positional_hashes.length,
+        argv_chars: tc.draw(gs.integers({ minValue: 0, maxValue: 10_000 })),
+        key_hash: tc.draw(gs.optional(hash)),
+        positional_hashes,
+        exit,
+        duration_ms,
+        labels: {
+          agent: tc.draw(nonEmpty),
+          template: tc.draw(nonEmpty),
+          rig: tc.draw(nonEmpty),
+          runtime: tc.draw(nonEmpty),
+          runtime_version: tc.draw(nonEmpty),
+          model: tc.draw(nonEmpty),
+        },
+      };
+
+      expect(PassiveCallSchema.safeParse(oldValidLine).success).toBe(true);
+    }));
 });
 
 describe('passive call rollup', () => {
@@ -241,6 +307,43 @@ describe('passive call rollup', () => {
         .write_read_joins
     ).toEqual({ matched_reads: 0, distinct_keys: 0 });
   });
+
+  it('buckets nullable labels under a visible null key', () => {
+    const result = rollupPassiveCalls([
+      call({ labels: { ...labels, rig: null, runtime_version: null, model: null } }),
+      call({ labels: { ...labels, rig: 'null' } }),
+    ]);
+
+    expect(result.by_label.rig['<null>']?.calls).toBe(1);
+    expect(result.by_label.rig.null?.calls).toBe(1);
+    expect(result.by_label.runtime_version['<null>']?.calls).toBe(1);
+    expect(result.by_label.model['<null>']?.calls).toBe(1);
+  });
+
+  it('counts verb sentinels without treating them as reads or writes', () => {
+    const result = rollupPassiveCalls([
+      call({
+        verb: 'update',
+        positional_count: 1,
+        positional_hashes: ['abababababababab'],
+      }),
+      call({
+        ts: '2026-09-23T12:01:00Z',
+        verb: '<unknown>',
+        positional_count: 1,
+        positional_hashes: ['abababababababab'],
+      }),
+      call({
+        ts: '2026-09-23T12:02:00Z',
+        verb: '<flag>',
+        positional_count: 1,
+        positional_hashes: ['abababababababab'],
+      }),
+    ]);
+
+    expect(result.overall.verb_mix).toEqual({ '<flag>': 1, '<unknown>': 1, update: 1 });
+    expect(result.overall.write_read_joins).toEqual({ matched_reads: 0, distinct_keys: 0 });
+  });
 });
 
 describe('passive rollup input and command', () => {
@@ -283,6 +386,26 @@ describe('passive rollup input and command', () => {
 
     expect(result.overall.calls).toBe(2);
     expect(result.overall.sessions).toBe(2);
+  });
+
+  it('parses and rolls up a mixed legacy and relaxed-format file', () => {
+    const input = [
+      call(),
+      call({
+        session: 'gc-2',
+        labels: { ...labels, rig: null, runtime_version: null, model: null },
+        verb: '<unknown>',
+      }),
+      call({ session: 'gc-3', verb: '<flag>' }),
+    ]
+      .map(line => JSON.stringify(line))
+      .join('\n');
+
+    const result = rollupPassiveCalls(parsePassiveCallLines(input));
+
+    expect(result.overall.calls).toBe(3);
+    expect(result.overall.verb_mix).toEqual({ '<flag>': 1, '<unknown>': 1, list: 1 });
+    expect(result.by_label.model['<null>']?.calls).toBe(1);
   });
 
   it('requires at least one input file', async () => {

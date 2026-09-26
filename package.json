@@ -34,6 +34,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@hegeldev/hegel": "0.4.7",
     "@playwright/test": "1.63.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.10.0",

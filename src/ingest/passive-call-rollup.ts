@@ -177,7 +177,10 @@ function breakdownFor(
 ): Record<string, PassiveCallMetrics> {
   const values = [...new Set(calls.map(call => call.labels[label]))].sort();
   return Object.fromEntries(
-    values.map(value => [value, metrics(calls.filter(call => call.labels[label] === value))])
+    values.map(value => [
+      value === null ? '<null>' : value,
+      metrics(calls.filter(call => call.labels[label] === value)),
+    ])
   );
 }
 

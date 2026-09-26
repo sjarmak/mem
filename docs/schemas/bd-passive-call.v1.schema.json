@@ -38,14 +38,17 @@
       "properties": {
         "agent": { "type": "string", "minLength": 1 },
         "template": { "type": "string", "minLength": 1 },
-        "rig": { "type": "string", "minLength": 1 },
+        "rig": { "type": ["string", "null"], "minLength": 1 },
         "runtime": { "type": "string", "minLength": 1 },
-        "runtime_version": { "type": "string", "minLength": 1 },
-        "model": { "type": "string", "minLength": 1 }
+        "runtime_version": { "type": ["string", "null"], "minLength": 1 },
+        "model": { "type": ["string", "null"], "minLength": 1 }
       }
     },
     "origin": { "enum": ["agent", "hook"] },
-    "verb": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*$" },
+    "verb": {
+      "type": "string",
+      "anyOf": [{ "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*$" }, { "enum": ["<unknown>", "<flag>"] }]
+    },
     "flags": {
       "type": "array",
       "uniqueItems": true,

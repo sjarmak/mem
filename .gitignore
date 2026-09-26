@@ -6,6 +6,7 @@
 # Local filesystem metadata and generated code-graph output.
 .DS_Store
 /graphify-out/
+/.hegel/
 
 # Node
 node_modules/

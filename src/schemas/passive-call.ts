@@ -19,10 +19,10 @@ export const PassiveCallLabelsSchema = z
   .object({
     agent: z.string().min(1),
     template: z.string().min(1),
-    rig: z.string().min(1),
+    rig: z.string().min(1).nullable(),
     runtime: z.string().min(1),
-    runtime_version: z.string().min(1),
-    model: z.string().min(1),
+    runtime_version: z.string().min(1).nullable(),
+    model: z.string().min(1).nullable(),
   })
   .strict();
 
@@ -33,7 +33,10 @@ export const PassiveCallSchema = z
     session: z.string().min(1),
     labels: PassiveCallLabelsSchema,
     origin: z.enum(['agent', 'hook']),
-    verb: z.string().regex(TOKEN, 'verb must be one token'),
+    verb: z.union([
+      z.string().regex(TOKEN, 'verb must be one token'),
+      z.enum(['<unknown>', '<flag>']),
+    ]),
     flags: z.array(z.string().regex(FLAG_NAME, 'flags must contain names without values')),
     positional_count: z.number().int().nonnegative(),
     argv_chars: z.number().int().nonnegative(),

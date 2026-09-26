@@ -7,7 +7,6 @@ import {
   type PassiveCallRollup,
 } from '../../ingest/passive-call-rollup.js';
 
-/** `mem passive-rollup FILE [FILE ...]` — validate and summarize passive bd call logs. */
 export async function passiveRollupCommand(ctx: CommandContext): Promise<PassiveCallRollup> {
   if (ctx.args.length === 0) {
     throw new Error('usage: mem passive-rollup FILE [FILE ...]');
