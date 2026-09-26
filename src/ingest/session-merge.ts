@@ -40,6 +40,23 @@ export interface SessionJoin {
   sessionPaths: Map<string, string>;
 }
 
+export function primaryPathRecordIds(join: SessionJoin): ReadonlyMap<string, ReadonlySet<string>> {
+  const ids = new Map<string, Set<string>>();
+  for (const [workId, entries] of join.beads) {
+    const paths = new Set(
+      entries.flatMap(entry =>
+        entry.suspect || entry.transcript_path === null ? [] : [entry.transcript_path]
+      )
+    );
+    for (const path of paths) {
+      const workIds = ids.get(path) ?? new Set<string>();
+      workIds.add(workId);
+      ids.set(path, workIds);
+    }
+  }
+  return ids;
+}
+
 /** Parse the merged-join artifact. Throws on a file that exists but has no
  * `beads` object — a malformed artifact must fail the build, not silently
  * produce a single-session store. `session_paths` is optional (older
@@ -88,15 +105,8 @@ function toAgentRef(entry: JoinSessionEntry, existing: AgentRef[]): AgentRef {
   };
 }
 
-/**
- * Attach the merged join to records: each record with join entries gets the
- * full ordered multi-row `agents` list, and its primary `trace` pointer becomes
- * the LAST non-suspect resolved session (the closing iteration — the same
- * convention as the final-assignee status quo, now explicit). Records without
- * join entries pass through unchanged, so the assignee fallback still covers
- * them. Records are copied, never mutated.
- */
 export function attachSessionJoin(records: WorkRecord[], join: SessionJoin): WorkRecord[] {
+  const pathRecordIds = primaryPathRecordIds(join);
   return records.map(record => {
     const entries = join.beads.get(record.work_id);
     if (entries === undefined || entries.length === 0) return record;
@@ -104,12 +114,16 @@ export function attachSessionJoin(records: WorkRecord[], join: SessionJoin): Wor
     const agents = entries.map(entry => toAgentRef(entry, record.agents));
     const primary = [...entries]
       .reverse()
-      .find(entry => !entry.suspect && entry.transcript_path !== null);
+      .find(
+        entry =>
+          !entry.suspect &&
+          entry.transcript_path !== null &&
+          pathRecordIds.get(entry.transcript_path)?.size === 1
+      );
 
     const next: WorkRecord = { ...record, agents };
-    if (primary?.transcript_path != null) {
-      next.trace = { ...record.trace, jsonl_path: primary.transcript_path };
-    }
-    return next;
+    return primary?.transcript_path == null
+      ? next
+      : { ...next, trace: { ...record.trace, jsonl_path: primary.transcript_path } };
   });
 }

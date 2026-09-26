@@ -167,4 +167,17 @@ describe('attachTraceRefs with archive fallback', () => {
     expect(rec.trace?.jsonl_path).toBe(restored);
     expect(rec.agents[0].trace_ref).toBe(restored);
   });
+
+  it('keeps corpus-wide shared-path suppression after archive recovery', () => {
+    seedArchive(root, 'iiiiiiiiiiii', 'uuid-r', reaped);
+    const archive = loadTranscriptArchive(root);
+    const [rec] = attachTraceRefs([baseRecord('gc-1')], {
+      resolve: () => reaped,
+      archive,
+      primaryPathRecordIds: new Map([[reaped, new Set(['mem-a', 'mem-b'])]]),
+    });
+
+    expect(rec.trace).toBeUndefined();
+    expect(rec.agents[0].trace_ref).toBe(join(root, 'restored', 'iiiiiiiiiiii', 'uuid-r.jsonl'));
+  });
 });

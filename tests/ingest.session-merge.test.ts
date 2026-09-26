@@ -8,6 +8,7 @@ import {
   type JoinSessionEntry,
   attachSessionJoin,
   loadSessionJoin,
+  primaryPathRecordIds,
 } from '../src/ingest/session-merge.js';
 import { attachTraceRefs } from '../src/ingest/trace-resolve.js';
 import { openStore } from '../src/store/index.js';
@@ -76,6 +77,41 @@ describe('loadSessionJoin', () => {
 });
 
 describe('attachSessionJoin', () => {
+  it('counts each transcript once per record across the full join', () => {
+    const shared = entry({ transcript_path: '/t/shared.jsonl' });
+    const join_ = {
+      beads: new Map([
+        ['demo-1', [shared, shared]],
+        ['demo-2', [shared]],
+        ['demo-3', [entry({ transcript_path: '/t/unique.jsonl' })]],
+      ]),
+      sessionPaths: new Map<string, string>(),
+    };
+
+    expect(primaryPathRecordIds(join_)).toEqual(
+      new Map([
+        ['/t/shared.jsonl', new Set(['demo-1', 'demo-2'])],
+        ['/t/unique.jsonl', new Set(['demo-3'])],
+      ])
+    );
+  });
+
+  it('does not attach a shared transcript as a primary trace', () => {
+    const shared = entry({ transcript_path: '/t/shared.jsonl' });
+    const join_ = {
+      beads: new Map([
+        ['demo-1', [shared]],
+        ['demo-2', [shared]],
+      ]),
+      sessionPaths: new Map<string, string>(),
+    };
+
+    const [next] = attachSessionJoin([record('demo-1')], join_);
+
+    expect(next.trace).toBeUndefined();
+    expect(next.agents[0].trace_ref).toBe('/t/shared.jsonl');
+  });
+
   it('replaces agents with the ordered multi-row session list', () => {
     const beads = new Map([
       [

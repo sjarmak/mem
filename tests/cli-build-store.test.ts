@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   attachAndParse,
+  attachAndParseBatches,
   buildStoreFromRecords,
   checkRecordLinks,
   readRecordedBases,
@@ -215,6 +216,31 @@ describe('attachAndParse (P1.3 resolve → P1.6 parse)', () => {
     });
     const parsed = attachAndParse([rec], { resolve: () => null, read: () => '' });
     expect(parsed[0].trace).toBeUndefined();
+  });
+
+  it('suppresses resolver-only transcripts shared across rig batches', () => {
+    const batches = [
+      [
+        WorkRecordSchema.parse({
+          ...record('mem-a', 'mem'),
+          agents: [{ agent_id: 'gc-1' }],
+        }),
+      ],
+      [
+        WorkRecordSchema.parse({
+          ...record('city-a', 'gascity'),
+          agents: [{ agent_id: 'gc-1' }],
+        }),
+      ],
+    ];
+
+    const output = attachAndParseBatches(batches, {
+      resolve: () => '/t/shared.jsonl',
+      read: () => '',
+    });
+
+    expect(output.flat().map(item => item.trace)).toEqual([undefined, undefined]);
+    expect(output.map(batch => batch[0].rig)).toEqual(['mem', 'gascity']);
   });
 });
 

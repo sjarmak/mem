@@ -1,6 +1,8 @@
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import * as hegel from '@hegeldev/hegel';
+import * as gs from '@hegeldev/hegel/generators';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { defaultProjectsRoot, indexTraces, traceIndexByPath } from '../src/ingest/trace-index.js';
@@ -180,4 +182,83 @@ describe('attachTraceRefs', () => {
     attachTraceRefs([baseRecord('gc-1'), baseRecord('gc-1')], { resolve: counting });
     expect(calls).toEqual(['gc-1']);
   });
+
+  it('does not use a transcript shared by multiple records as either primary trace', () => {
+    const records = ['mem-a', 'mem-b'].map(work_id =>
+      WorkRecordSchema.parse({
+        work_id,
+        rig: 'mem',
+        title: work_id,
+        lifecycle: { created: '2026-06-04T00:00:00Z', status: 'closed' },
+        agents: [{ agent_id: 'gc-1' }],
+      })
+    );
+
+    const output = attachTraceRefs(records, { resolve: () => '/t/shared.jsonl' });
+
+    expect(output.map(record => record.trace)).toEqual([undefined, undefined]);
+    expect(output.map(record => record.agents[0].trace_ref)).toEqual([
+      '/t/shared.jsonl',
+      '/t/shared.jsonl',
+    ]);
+  });
+
+  it('combines partial join counts with duplicates observed during resolution', () => {
+    const records = ['mem-a', 'mem-b'].map(work_id =>
+      WorkRecordSchema.parse({
+        work_id,
+        rig: 'mem',
+        title: work_id,
+        lifecycle: { created: '2026-06-04T00:00:00Z', status: 'closed' },
+        agents: [{ agent_id: 'gc-1' }],
+      })
+    );
+
+    const output = attachTraceRefs(records, {
+      resolve: () => '/t/shared.jsonl',
+      primaryPathRecordIds: new Map([['/t/shared.jsonl', new Set(['mem-a'])]]),
+    });
+
+    expect(output.map(record => record.trace)).toEqual([undefined, undefined]);
+  });
+
+  it('honors corpus-wide path counts when resolving a filtered record batch', () => {
+    const output = attachTraceRefs([baseRecord('gc-1')], {
+      resolve: () => '/t/shared.jsonl',
+      primaryPathRecordIds: new Map([['/t/shared.jsonl', new Set(['outside-a', 'outside-b'])]]),
+    });
+
+    expect(output[0].trace).toBeUndefined();
+    expect(output[0].agents[0].trace_ref).toBe('/t/shared.jsonl');
+  });
+
+  it('assigns primary traces exactly when their paths occur in one record', () =>
+    hegel.test(tc => {
+      const pathIds = tc.draw(
+        gs.arrays(gs.integers({ minValue: 0, maxValue: 3 }), {
+          minSize: 1,
+          maxSize: 8,
+        })
+      );
+      const records = pathIds.map((pathId, index) =>
+        WorkRecordSchema.parse({
+          work_id: `mem-${index}`,
+          rig: 'mem',
+          title: `work ${index}`,
+          lifecycle: { created: '2026-06-04T00:00:00Z', status: 'closed' },
+          agents: [{ agent_id: `gc-${index + 1}`, trace_ref: `/t/${pathId}.jsonl` }],
+          trace: { jsonl_path: `/t/${pathId}.jsonl` },
+        })
+      );
+      const counts = new Map<number, number>();
+      for (const pathId of pathIds) counts.set(pathId, (counts.get(pathId) ?? 0) + 1);
+
+      const output = attachTraceRefs(records);
+
+      output.forEach((record, index) => {
+        const expected =
+          counts.get(pathIds[index]) === 1 ? `/t/${pathIds[index]}.jsonl` : undefined;
+        expect(record.trace?.jsonl_path).toBe(expected);
+      });
+    }));
 });

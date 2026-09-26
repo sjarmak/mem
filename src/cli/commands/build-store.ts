@@ -29,6 +29,7 @@ import {
   type SessionJoin,
   attachSessionJoin,
   loadSessionJoin,
+  primaryPathRecordIds,
 } from '../../ingest/session-merge.js';
 import {
   type TaskTypeArtifact,
@@ -139,6 +140,7 @@ export interface AttachParseDeps {
   read?: TraceReader;
   /** Transcript archive for reaped-transcript recovery (mem-h3di.4). */
   archive?: TranscriptArchive;
+  primaryPathRecordIds?: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
 /**
@@ -153,8 +155,25 @@ export function attachAndParse(records: WorkRecord[], deps: AttachParseDeps = {}
   const resolved = attachTraceRefs(records, {
     ...(deps.resolve && { resolve: deps.resolve }),
     ...(deps.archive && { archive: deps.archive }),
+    ...(deps.primaryPathRecordIds && {
+      primaryPathRecordIds: deps.primaryPathRecordIds,
+    }),
   });
   return resolved.map(record => parseRecordTrace(record, deps.read));
+}
+
+export function attachAndParseBatches(
+  batches: WorkRecord[][],
+  deps: AttachParseDeps = {}
+): WorkRecord[][] {
+  const sizes = batches.map(batch => batch.length);
+  const traced = attachAndParse(batches.flat(), deps);
+  let offset = 0;
+  return sizes.map(size => {
+    const batch = traced.slice(offset, offset + size);
+    offset += size;
+    return batch;
+  });
 }
 
 /**
@@ -229,10 +248,6 @@ export function readRecordedBases(
  * corpus. Without either flag, the store is the bead spine only (fast, no
  * `gc`/transcript/git IO).
  *
- * Rigs stream through the writer one at a time (read → attach → write per
- * rig), so peak memory is one rig's records, not the whole corpus. Each rig is
- * its own transaction; a failure mid-build aborts loudly and leaves a partial
- * store — fine for a rebuildable projection (re-run to rebuild).
  */
 export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStoreResult> {
   const rig = typeof ctx.options.rig === 'string' ? ctx.options.rig : null;
@@ -242,6 +257,7 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
   const joinPath =
     typeof ctx.options['session-join'] === 'string' ? ctx.options['session-join'] : null;
   const join: SessionJoin | null = joinPath === null ? null : loadSessionJoin(joinPath);
+  const joinedPathRecordIds = join === null ? undefined : primaryPathRecordIds(join);
   const taskTypesPath =
     typeof ctx.options['task-types'] === 'string' ? ctx.options['task-types'] : null;
   // Mechanical typing (formula/structural) always runs; the artifact only
@@ -296,6 +312,7 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
   let recordsWithSessionCommits = 0;
   let recordLinks = 0;
 
+  const joinedByRig: WorkRecord[][] = [];
   for (const name of rigs) {
     const spine = await readRig(run, name);
     // Canonical repo identity (mem-bme): pure name→name resolution, always on —
@@ -306,12 +323,18 @@ export async function buildStoreCommand(ctx: CommandContext): Promise<BuildStore
     // transcript, so P1.3 only shells `gc` for the residue.
     const typed = attachTaskTypes(located, taskTypes);
     const joined = join === null ? typed : attachSessionJoin(typed, join);
-    const traced = withTraces
-      ? attachAndParse(joined, {
-          ...(resolve && { resolve }),
-          ...(archive && { archive }),
-        })
-      : joined;
+    joinedByRig.push(joined);
+  }
+
+  const tracedByRig = withTraces
+    ? attachAndParseBatches(joinedByRig, {
+        ...(resolve && { resolve }),
+        ...(archive && { archive }),
+        ...(joinedPathRecordIds && { primaryPathRecordIds: joinedPathRecordIds }),
+      })
+    : joinedByRig;
+
+  for (const traced of tracedByRig) {
     // Provenance reconstructs the session-start baseline (reading a producer-
     // recorded `cut` event when present, else reconstructing by date); commit
     // outcomes recover the work→landing-commit (populating commit_sha) from the
