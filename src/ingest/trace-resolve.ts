@@ -22,6 +22,12 @@ import type { TranscriptArchive } from './trace-archive.js';
 /** Matches a Gas City session id (`gc-` + digits) within an assignee string. */
 const SESSION_ID_RE = /\bgc-\d+/;
 
+export const MAX_PRIMARY_TRACE_RECORDS = 5;
+
+export function isPrimaryTraceShare(recordIds: ReadonlySet<string>): boolean {
+  return recordIds.size <= MAX_PRIMARY_TRACE_RECORDS;
+}
+
 /**
  * Extract the Gas City session id from a bead assignee or agent id. Accepts the
  * full session name (`polecat-gc-335825`, `mem-worker-gc-340053`) or the bare id
@@ -172,7 +178,7 @@ export function attachTraceRefs(
         ...(opts.primaryPathRecordIds?.get(path) ?? []),
         ...(recordsPerPath.get(path) ?? []),
       ]);
-      return workIds.size === 1;
+      return isPrimaryTraceShare(workIds);
     })?.[0];
     const nextAgents = agents.map(({ agent }) => agent);
 

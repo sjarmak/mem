@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 import type { AgentRef, WorkRecord } from '../schemas/workrecord.js';
+import { isPrimaryTraceShare } from './trace-resolve.js';
 
 /**
  * Merged session-join attach (mem-75t.4). The Python driver
@@ -112,14 +113,11 @@ export function attachSessionJoin(records: WorkRecord[], join: SessionJoin): Wor
     if (entries === undefined || entries.length === 0) return record;
 
     const agents = entries.map(entry => toAgentRef(entry, record.agents));
-    const primary = [...entries]
-      .reverse()
-      .find(
-        entry =>
-          !entry.suspect &&
-          entry.transcript_path !== null &&
-          pathRecordIds.get(entry.transcript_path)?.size === 1
-      );
+    const primary = [...entries].reverse().find(entry => {
+      if (entry.suspect || entry.transcript_path === null) return false;
+      const recordIds = pathRecordIds.get(entry.transcript_path);
+      return recordIds !== undefined && isPrimaryTraceShare(recordIds);
+    });
 
     const next: WorkRecord = { ...record, agents };
     return primary?.transcript_path == null

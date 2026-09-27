@@ -218,7 +218,7 @@ describe('attachAndParse (P1.3 resolve → P1.6 parse)', () => {
     expect(parsed[0].trace).toBeUndefined();
   });
 
-  it('suppresses resolver-only transcripts shared across rig batches', () => {
+  it('keeps resolver-only transcripts shared by a small cross-rig batch', () => {
     const batches = [
       [
         WorkRecordSchema.parse({
@@ -239,7 +239,10 @@ describe('attachAndParse (P1.3 resolve → P1.6 parse)', () => {
       read: () => '',
     });
 
-    expect(output.flat().map(item => item.trace)).toEqual([undefined, undefined]);
+    expect(output.flat().map(item => item.trace?.jsonl_path)).toEqual([
+      '/t/shared.jsonl',
+      '/t/shared.jsonl',
+    ]);
     expect(output.map(batch => batch[0].rig)).toEqual(['mem', 'gascity']);
   });
 });

@@ -96,13 +96,31 @@ describe('attachSessionJoin', () => {
     );
   });
 
-  it('does not attach a shared transcript as a primary trace', () => {
+  it('attaches a transcript shared by five records as a primary trace', () => {
     const shared = entry({ transcript_path: '/t/shared.jsonl' });
     const join_ = {
       beads: new Map([
         ['demo-1', [shared]],
         ['demo-2', [shared]],
+        ['demo-3', [shared]],
+        ['demo-4', [shared]],
+        ['demo-5', [shared]],
       ]),
+      sessionPaths: new Map<string, string>(),
+    };
+
+    const [next] = attachSessionJoin([record('demo-1')], join_);
+
+    expect(next.trace?.jsonl_path).toBe('/t/shared.jsonl');
+    expect(next.agents[0].trace_ref).toBe('/t/shared.jsonl');
+  });
+
+  it('does not attach a transcript shared by six records as a primary trace', () => {
+    const shared = entry({ transcript_path: '/t/shared.jsonl' });
+    const join_ = {
+      beads: new Map<string, JoinSessionEntry[]>(
+        Array.from({ length: 6 }, (_, index) => [`demo-${index + 1}`, [shared]])
+      ),
       sessionPaths: new Map<string, string>(),
     };
 

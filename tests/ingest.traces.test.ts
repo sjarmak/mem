@@ -183,8 +183,8 @@ describe('attachTraceRefs', () => {
     expect(calls).toEqual(['gc-1']);
   });
 
-  it('does not use a transcript shared by multiple records as either primary trace', () => {
-    const records = ['mem-a', 'mem-b'].map(work_id =>
+  it('keeps a transcript shared by five records as their primary trace', () => {
+    const records = ['mem-a', 'mem-b', 'mem-c', 'mem-d', 'mem-e'].map(work_id =>
       WorkRecordSchema.parse({
         work_id,
         rig: 'mem',
@@ -196,11 +196,12 @@ describe('attachTraceRefs', () => {
 
     const output = attachTraceRefs(records, { resolve: () => '/t/shared.jsonl' });
 
-    expect(output.map(record => record.trace)).toEqual([undefined, undefined]);
-    expect(output.map(record => record.agents[0].trace_ref)).toEqual([
-      '/t/shared.jsonl',
-      '/t/shared.jsonl',
-    ]);
+    expect(output.map(record => record.trace?.jsonl_path)).toEqual(
+      records.map(() => '/t/shared.jsonl')
+    );
+    expect(output.map(record => record.agents[0].trace_ref)).toEqual(
+      records.map(() => '/t/shared.jsonl')
+    );
   });
 
   it('combines partial join counts with duplicates observed during resolution', () => {
@@ -216,7 +217,9 @@ describe('attachTraceRefs', () => {
 
     const output = attachTraceRefs(records, {
       resolve: () => '/t/shared.jsonl',
-      primaryPathRecordIds: new Map([['/t/shared.jsonl', new Set(['mem-a'])]]),
+      primaryPathRecordIds: new Map([
+        ['/t/shared.jsonl', new Set(['outside-a', 'outside-b', 'outside-c', 'outside-d'])],
+      ]),
     });
 
     expect(output.map(record => record.trace)).toEqual([undefined, undefined]);
@@ -225,14 +228,19 @@ describe('attachTraceRefs', () => {
   it('honors corpus-wide path counts when resolving a filtered record batch', () => {
     const output = attachTraceRefs([baseRecord('gc-1')], {
       resolve: () => '/t/shared.jsonl',
-      primaryPathRecordIds: new Map([['/t/shared.jsonl', new Set(['outside-a', 'outside-b'])]]),
+      primaryPathRecordIds: new Map([
+        [
+          '/t/shared.jsonl',
+          new Set(['outside-a', 'outside-b', 'outside-c', 'outside-d', 'outside-e', 'outside-f']),
+        ],
+      ]),
     });
 
     expect(output[0].trace).toBeUndefined();
     expect(output[0].agents[0].trace_ref).toBe('/t/shared.jsonl');
   });
 
-  it('assigns primary traces exactly when their paths occur in one record', () =>
+  it('assigns primary traces exactly when their paths occur in at most five records', () =>
     hegel.test(tc => {
       const pathIds = tc.draw(
         gs.arrays(gs.integers({ minValue: 0, maxValue: 3 }), {
@@ -257,7 +265,7 @@ describe('attachTraceRefs', () => {
 
       output.forEach((record, index) => {
         const expected =
-          counts.get(pathIds[index]) === 1 ? `/t/${pathIds[index]}.jsonl` : undefined;
+          (counts.get(pathIds[index]) ?? 0) <= 5 ? `/t/${pathIds[index]}.jsonl` : undefined;
         expect(record.trace?.jsonl_path).toBe(expected);
       });
     }));

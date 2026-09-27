@@ -174,7 +174,9 @@ describe('attachTraceRefs with archive fallback', () => {
     const [rec] = attachTraceRefs([baseRecord('gc-1')], {
       resolve: () => reaped,
       archive,
-      primaryPathRecordIds: new Map([[reaped, new Set(['mem-a', 'mem-b'])]]),
+      primaryPathRecordIds: new Map([
+        [reaped, new Set(['mem-a', 'mem-b', 'mem-c', 'mem-d', 'mem-e', 'mem-f'])],
+      ]),
     });
 
     expect(rec.trace).toBeUndefined();
