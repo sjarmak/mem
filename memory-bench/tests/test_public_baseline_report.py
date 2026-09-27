@@ -24,6 +24,8 @@ import importlib.util
 import json
 import math
 import sys
+import threading
+import time
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -557,6 +559,180 @@ def test_run_cells_skips_the_cells_a_partial_already_bought(tmp_path: Path) -> N
     assert len(cells) == 2
 
 
+def test_run_cells_bounds_parallel_answers_and_persists_each_completion(tmp_path: Path) -> None:
+    records = driver.load_release(_release(tmp_path, "a", "b", "c", "d"))
+    lock = threading.Lock()
+    active = 0
+    max_active = 0
+    factory_active = 0
+    max_factory_active = 0
+    persisted: list[tuple[str, str, int]] = []
+
+    def arm_factory(arm: str) -> Any:
+        nonlocal factory_active, max_factory_active
+        with lock:
+            factory_active += 1
+            max_factory_active = max(max_factory_active, factory_active)
+        try:
+            time.sleep(0.01)
+            return driver.default_arm_factory()(arm)
+        finally:
+            with lock:
+                factory_active -= 1
+
+    def answer(prompt: str, *, record: Any, arm: str) -> driver.AgentAnswer:
+        nonlocal active, max_active
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+        try:
+            time.sleep(0.03)
+            return driver.AgentAnswer(
+                text="dana",
+                input_tokens=1,
+                output_tokens=1,
+                tool_calls=0,
+                wall_clock_latency_ms=1.0,
+            )
+        finally:
+            with lock:
+                active -= 1
+
+    keys = driver.grid_keys(records, ["none"], 1)
+    cells = driver.run_cells(
+        records,
+        keys,
+        arm_factory=arm_factory,
+        answer=answer,
+        paid=True,
+        on_cell=lambda item: persisted.append((item.arm, item.record_id, item.repeat)),
+        concurrency=2,
+    )
+    assert max_active == 2
+    assert max_factory_active == 1
+    assert len(cells) == len(keys)
+    assert set(persisted) == set(keys)
+
+
+def test_run_cells_refuses_nonpositive_concurrency(tmp_path: Path) -> None:
+    records = driver.load_release(_release(tmp_path, "a"))
+    keys = driver.grid_keys(records, ["none"], 1)
+    with pytest.raises(driver.PublicBaselineError, match="concurrency must be >= 1"):
+        driver.run_cells(
+            records,
+            keys,
+            arm_factory=driver.default_arm_factory(),
+            answer=lambda prompt, record, arm: driver.AgentAnswer("", 0, 0, 0, 0.0),
+            paid=False,
+            concurrency=0,
+        )
+
+
+def test_parallel_run_persists_completed_sibling_before_raising(tmp_path: Path) -> None:
+    records = driver.load_release(_release(tmp_path, "a", "b"))
+    started = threading.Event()
+    persisted: list[str] = []
+
+    def answer(prompt: str, *, record: Any, arm: str) -> driver.AgentAnswer:
+        if record.record_id == "b":
+            assert started.wait(timeout=1.0)
+            raise RuntimeError("cell crashed")
+        started.set()
+        time.sleep(0.03)
+        return driver.AgentAnswer("dana", 1, 1, 0, 1.0)
+
+    with pytest.raises(RuntimeError, match="cell crashed"):
+        driver.run_cells(
+            records,
+            driver.grid_keys(records, ["none"], 1),
+            arm_factory=driver.default_arm_factory(),
+            answer=answer,
+            paid=True,
+            on_cell=lambda item: persisted.append(item.record_id),
+            concurrency=2,
+        )
+    assert persisted == ["a"]
+
+
+def test_parallel_rig_streak_follows_grid_order(tmp_path: Path) -> None:
+    records = driver.load_release(_release(tmp_path, "a", "b", "c", "d"))
+    delays = {"a": 0.0, "b": 0.01, "c": 0.05, "d": 0.02}
+
+    def answer(prompt: str, *, record: Any, arm: str) -> driver.AgentAnswer:
+        time.sleep(delays[record.record_id])
+        if record.record_id != "c":
+            raise driver.HeadlessAgentError(f"{record.record_id} failed")
+        return driver.AgentAnswer("dana", 1, 1, 0, 1.0)
+
+    cells = driver.run_cells(
+        records,
+        driver.grid_keys(records, ["none"], 1),
+        arm_factory=driver.default_arm_factory(),
+        answer=answer,
+        paid=True,
+        concurrency=4,
+    )
+    assert [item.status for item in cells] == ["error", "error", "error", "ok"]
+
+
+def test_parallel_rig_halt_is_not_reset_by_a_later_fast_success(tmp_path: Path) -> None:
+    records = driver.load_release(_release(tmp_path, "a", "b", "c", "d"))
+    delays = {"a": 0.0, "b": 0.02, "c": 0.03, "d": 0.01}
+
+    def answer(prompt: str, *, record: Any, arm: str) -> driver.AgentAnswer:
+        time.sleep(delays[record.record_id])
+        if record.record_id != "d":
+            raise driver.HeadlessAgentError(f"{record.record_id} failed")
+        return driver.AgentAnswer("dana", 1, 1, 0, 1.0)
+
+    with pytest.raises(driver.RigHaltError, match="3 consecutive"):
+        driver.run_cells(
+            records,
+            driver.grid_keys(records, ["none"], 1),
+            arm_factory=driver.default_arm_factory(),
+            answer=answer,
+            paid=True,
+            concurrency=4,
+        )
+
+
+def test_concurrency_cli_defaults_to_one_and_accepts_a_bound() -> None:
+    parser = driver.build_parser()
+    assert parser.parse_args([]).concurrency == 1
+    assert parser.parse_args(["--concurrency", "4"]).concurrency == 4
+
+
+def test_fire_passes_the_cli_concurrency_to_run_cells(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    records = driver.load_release(_release(tmp_path, "a"))
+    args = driver.build_parser().parse_args(
+        [
+            "--fire",
+            "--arms",
+            "none",
+            "--repeats",
+            "1",
+            "--model",
+            "m",
+            "--out",
+            str(tmp_path / "run.json"),
+            "--concurrency",
+            "3",
+        ]
+    )
+    seen: list[int] = []
+
+    def run_cells(*call_args: Any, **call_kwargs: Any) -> list[BaselineCell]:
+        seen.append(call_kwargs["concurrency"])
+        return [cell("none", "a", 0, 1.0)]
+
+    monkeypatch.setattr(driver, "resolve_cli_version", lambda: "1.2.3")
+    monkeypatch.setattr(driver, "run_cells", run_cells)
+    assert driver._fire(args, records) == 0
+    assert seen == [3]
+
+
 def test_admissible_cells_refuses_a_partial_from_another_run(tmp_path: Path) -> None:
     records = driver.load_release(_release(tmp_path, "a"))
     grid = driver.grid_keys(records, ["none"], 1)
@@ -572,6 +748,10 @@ def test_admissible_cells_refuses_a_partial_from_another_run(tmp_path: Path) -> 
     assert len(driver.admissible_cells(summary, identity=identity, grid=grid)) == 1
 
     other = dict(identity) | {"release_fingerprint": "a-different-corpus"}
+    with pytest.raises(driver.ResumeMismatchError, match="different run"):
+        driver.admissible_cells(summary, identity=other, grid=grid)
+
+    other = dict(identity) | {"concurrency": 2}
     with pytest.raises(driver.ResumeMismatchError, match="different run"):
         driver.admissible_cells(summary, identity=other, grid=grid)
 

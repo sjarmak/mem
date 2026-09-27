@@ -67,8 +67,10 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from hashlib import sha256
 from importlib.util import find_spec
@@ -1014,6 +1016,24 @@ def run_cell(
 ) -> BaselineCell:
     """One (arm, record, repeat): retrieve, ask, grade. Retrieval failures raise —
     an arm that cannot retrieve is a broken cell, not a zero-reward measurement."""
+    payloads, prompt = _cell_prompt(
+        record,
+        arm_name,
+        repeat,
+        arm_factory=arm_factory,
+        scope=scope,
+    )
+    return _answer_cell(record, arm_name, repeat, payloads, prompt, answer=answer, paid=paid)
+
+
+def _cell_prompt(
+    record: BaselineRecord,
+    arm_name: str,
+    repeat: int,
+    *,
+    arm_factory: ArmFactory,
+    scope: str,
+) -> tuple[dict[str, str], str]:
     arm = arm_factory(arm_name)
     ctx = StepContext(
         trial_id=f"{arm_name}-{record.record_id}-{repeat}",
@@ -1022,7 +1042,19 @@ def run_cell(
         clock=IdClock(),
     )
     payloads = retrieve_for(arm, arm_name, record, ctx, scope=scope)
-    prompt = build_prompt(record, payloads)
+    return payloads, build_prompt(record, payloads)
+
+
+def _answer_cell(
+    record: BaselineRecord,
+    arm_name: str,
+    repeat: int,
+    payloads: Mapping[str, str],
+    prompt: str,
+    *,
+    answer: AnswerAgent,
+    paid: bool,
+) -> BaselineCell:
     result = answer(prompt, record=record, arm=arm_name)
     reward, passed = grade(result.text, record)
     efficiency = EfficiencyMetrics(
@@ -1083,18 +1115,27 @@ def run_cells(
     landed: Sequence[BaselineCell] = (),
     on_cell: Callable[[BaselineCell], None] | None = None,
     scope: str = DEFAULT_SCOPE,
+    concurrency: int = 1,
 ) -> list[BaselineCell]:
-    """Run every cell in ``keys`` that ``landed`` does not already hold, one at a
-    time, persisting through ``on_cell`` as each one completes.
-
-    Two halts, and they mean different things: a quota refusal is not a defect and
-    nothing further can be bought, so the run keeps what it has and stops; a run of
-    consecutive unmeasured cells is a broken rig, and spending the rest of the
-    authorization on it would buy a grid of holes."""
+    if concurrency < 1:
+        raise PublicBaselineError(f"concurrency must be >= 1, got {concurrency}")
     by_id = {record.record_id: record for record in records}
     done = {(cell.arm, cell.record_id, cell.repeat) for cell in landed}
     cells = list(landed)
     streak = UnmeasuredStreak()
+    if concurrency > 1:
+        return _run_cells_parallel(
+            by_id,
+            [key for key in keys if key not in done],
+            arm_factory=arm_factory,
+            answer=answer,
+            paid=paid,
+            cells=cells,
+            on_cell=on_cell,
+            scope=scope,
+            concurrency=concurrency,
+            streak=streak,
+        )
     for key in keys:
         if key in done:
             continue
@@ -1143,6 +1184,125 @@ def run_cells(
     return cells
 
 
+def _run_cells_parallel(
+    by_id: Mapping[str, BaselineRecord],
+    keys: Sequence[CellKey],
+    *,
+    arm_factory: ArmFactory,
+    answer: AnswerAgent,
+    paid: bool,
+    cells: list[BaselineCell],
+    on_cell: Callable[[BaselineCell], None] | None,
+    scope: str,
+    concurrency: int,
+    streak: UnmeasuredStreak,
+) -> list[BaselineCell]:
+    remaining = iter(keys)
+    active: dict[Any, tuple[int, CellKey]] = {}
+    outcomes: dict[int, tuple[str, CellKey, BaseException | None]] = {}
+    halt: tuple[str, CellKey, BaseException, int] | None = None
+    preparation_lock = threading.Lock()
+    next_submission = 0
+    next_outcome = 0
+    stop_submitting = False
+
+    def run_parallel_cell(record: BaselineRecord, key: CellKey) -> BaselineCell:
+        arm_name, _, repeat = key
+        with preparation_lock:
+            payloads, prompt = _cell_prompt(
+                record,
+                arm_name,
+                repeat,
+                arm_factory=arm_factory,
+                scope=scope,
+            )
+        return _answer_cell(record, arm_name, repeat, payloads, prompt, answer=answer, paid=paid)
+
+    def submit_next(pool: ThreadPoolExecutor) -> bool:
+        nonlocal next_submission
+        try:
+            key = next(remaining)
+        except StopIteration:
+            return False
+        _, record_id, _ = key
+        record = by_id.get(record_id)
+        if record is None:
+            raise PublicBaselineError(
+                f"the grid names cell {key} but the released set carries no record {record_id!r}"
+            )
+        future = pool.submit(run_parallel_cell, record, key)
+        active[future] = (next_submission, key)
+        next_submission += 1
+        return True
+
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        while len(active) < concurrency and submit_next(pool):
+            pass
+        while active:
+            completed, _ = wait(active, return_when=FIRST_COMPLETED)
+            for future in completed:
+                index, key = active.pop(future)
+                try:
+                    cell = future.result()
+                except HeadlessAgentError as exc:
+                    if is_quota_halt(exc):
+                        outcomes[index] = ("quota", key, exc)
+                        stop_submitting = True
+                        continue
+                    timed_out = spawn_timeout_of(exc) is not None
+                    cell = _unmeasured(
+                        key,
+                        status="timeout" if timed_out else "error",
+                        detail=str(exc),
+                        paid=paid,
+                    )
+                    cells.append(cell)
+                    if on_cell is not None:
+                        on_cell(cell)
+                    outcomes[index] = ("unmeasured", key, exc)
+                    continue
+                except Exception as exc:
+                    outcomes[index] = ("error", key, exc)
+                    stop_submitting = True
+                    continue
+                cells.append(cell)
+                if on_cell is not None:
+                    on_cell(cell)
+                outcomes[index] = ("measured", key, None)
+            while halt is None and next_outcome in outcomes:
+                kind, key, cause = outcomes.pop(next_outcome)
+                next_outcome += 1
+                if kind == "measured":
+                    streak.measured()
+                    continue
+                if cause is None:
+                    raise PublicBaselineError(f"parallel cell {key} lost its failure cause")
+                if kind == "unmeasured":
+                    if streak.unmeasured():
+                        halt = ("rig", key, cause, streak.count)
+                        stop_submitting = True
+                    continue
+                halt = (kind, key, cause, 0)
+                stop_submitting = True
+            while not stop_submitting and len(active) < concurrency and submit_next(pool):
+                pass
+
+    if halt is not None:
+        kind, key, cause, count = halt
+        if kind == "quota":
+            raise QuotaHaltError(
+                f"the account refused at cell {key}: {cause}. {len(cells)} cell(s) kept; "
+                "nothing further can be bought until it resets."
+            ) from cause
+        if kind == "rig":
+            raise RigHaltError(
+                f"{count} consecutive cell(s) measured nothing, through {key}: the rig is "
+                "broken, not flaky. Fix it before spending the rest of the grid."
+            ) from cause
+        raise cause
+    return cells
+
+
 # --------------------------------------------------------------------------------------
 # Resume identity + artifact
 # --------------------------------------------------------------------------------------
@@ -1156,6 +1316,7 @@ def resume_identity(
     arms: Sequence[str],
     repeats: int,
     scope: str,
+    concurrency: int = 1,
 ) -> dict[str, Any]:
     """Everything a partial ``--out`` must match before its cells may be pooled into
     this run. The arm set and the repeat count are in here because both change what
@@ -1169,6 +1330,7 @@ def resume_identity(
         "arms": list(arms),
         "repeats": repeats,
         "scope": scope,
+        "concurrency": concurrency,
     }
 
 
@@ -1311,6 +1473,7 @@ def _fire(args: argparse.Namespace, records: Sequence[BaselineRecord]) -> int:
         arms=arms,
         repeats=args.repeats,
         scope=args.scope,
+        concurrency=args.concurrency,
     )
     grid = grid_keys(records, arms, args.repeats)
     out: Path = args.out
@@ -1372,6 +1535,7 @@ def _fire(args: argparse.Namespace, records: Sequence[BaselineRecord]) -> int:
             landed=landed,
             on_cell=_record_cell,
             scope=args.scope,
+            concurrency=args.concurrency,
         )
     except (QuotaHaltError, RigHaltError) as exc:
         _persist()
@@ -1407,6 +1571,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mem-bin", type=Path, default=None, help="built mem CLI for `ours`")
     parser.add_argument("--model", default="", help="the model a PAID run executes under")
     parser.add_argument("--timeout-s", type=float, default=900.0)
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=1,
+        help="maximum number of in-flight cells on --fire (default: 1)",
+    )
     parser.add_argument(
         "--preflight",
         action="store_true",
