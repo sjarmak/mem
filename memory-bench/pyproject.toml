@@ -34,7 +34,7 @@ nemo-embed = ["sentence-transformers>=5.1", "torch>=2.7", "transformers>=4.44"]
 # per-module `follow_untyped_imports`, which mypy added in 1.14. An older mypy
 # cannot honour it, so the public validator's jsonschema import would red the
 # gate the override exists to resolve.
-dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.14", "black>=24.0", "types-toml>=0.10", "pyyaml>=6.0", "matplotlib>=3.8", "jsonschema>=4.20"]
+dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.14", "black>=24.0", "types-toml>=0.10", "pyyaml>=6.0", "matplotlib>=3.8", "jsonschema>=4.20", "hypothesis==6.168.2"]
 
 [tool.uv.sources]
 torch = [

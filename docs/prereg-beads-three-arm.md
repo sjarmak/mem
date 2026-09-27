@@ -10,6 +10,15 @@ Repo: `/home/ds/projects/mem/.claude/worktrees/jev-need-gate-prereg/memory-bench
 
 Where the attacks disagreed is surfaced in §4 (gate 6) and §9.
 
+> **Amendment, 2026-09-27 (registered before any new paid run).** Decision `dec-ag7n`
+> selected option b: repair the goal endpoint without buying the two-session smoke or the
+> 36-session pilot. The adapter now replaces reward-bearing values with deterministic values
+> shaped like the field they fill and assigns each surfaced fact a subject-plausible role. The
+> 32-world, 64-task necessary/unnecessary corpus fingerprint changes from
+> `dec436a8e0fb05ce` to `6bef42c04608b410`. All task ids, raw frozen worlds, arm definitions,
+> thresholds, sample sizes, and paid-run gates remain unchanged. No paid session was run while
+> making or validating this amendment.
+
 ---
 
 ## 1. The question, stated so it can come out negative

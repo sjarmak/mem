@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import re
 import subprocess
 import sys
 from collections import OrderedDict, defaultdict
@@ -26,8 +27,11 @@ from pathlib import Path
 from typing import Annotated, Any, ForwardRef, NoReturn, get_args, get_origin
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 from pydantic import BaseModel, Field, ValidationError
 
+from membench.generators.enterprise_workflow import fact_subject, fact_value
 from membench.generators.toolreq_bundle_adapter import _goal_step
 from membench.metrics.scorers import states_value
 from membench.runner import realagent_probe as probe
@@ -43,6 +47,8 @@ from membench.runner.headless_agent import (
 from membench.runner.resume_cache import digest, invocation_digest, load_cached
 from membench.runner.toolreq_realagent import (
     ToolReqRealAgentTask,
+    _field_shaped_value,
+    _plausible_role,
     _reset_store,
     adapt_sequence,
     load_corpus_with_sequences,
@@ -153,22 +159,83 @@ def _text_only_seq(seq_id: str = "w-text") -> BenchmarkSequence:
 # --- adapter ------------------------------------------------------------------------
 
 
-def test_adapt_bridges_goal_onto_write_with_opaque_values() -> None:
+def test_adapt_bridges_goal_onto_write_with_field_shaped_values() -> None:
     task = adapt_sequence(toolreq_seq())
     assert isinstance(task, ToolReqRealAgentTask)
     step = task.goal_step
     assert step.available_tools == ["Write"]
     (action,) = step.outcome_checks[0].requires_action
     assert action.tool == "Write"
-    # Reward values are opaquified — the realistic strings never survive into the action.
     assert CURRENT not in action.arg_values
     assert STALE not in action.forbidden_values
-    assert action.arg_values and all(v.startswith("toolreq-") for v in action.arg_values)
-    assert action.forbidden_values and all(
-        v.startswith("toolreq-") for v in action.forbidden_values
-    )
-    # The simulator keys on exactly the opaque current value(s).
+    assert action.arg_values and all(v.endswith(" days") for v in action.arg_values)
+    assert action.forbidden_values and all(v.endswith(" days") for v in action.forbidden_values)
+    assert all(not v.startswith("toolreq-") for v in action.arg_values)
     assert task.current_opaque_values == tuple(action.arg_values)
+
+
+FIELD_PATTERNS = {
+    "the approved rollback command": r"deployctl rollback service-[a-z0-9]{6} [1-9][0-9]?",
+    "the checkout_v2 feature flag state": r"canary-8[1-9]%",
+    "the data retention window": r"[1-9][0-9]{1,2} days",
+    "the primary deployment region": r"us-synthetic-[1-9]",
+    "the production deploy timeout": r"1[0-9]{3}s",
+    "the supported API version": r"v[1-9][0-9]{2}",
+}
+
+
+PLAUSIBLE_ROLES = {
+    "the approved rollback command": {"site-reliability-engineer", "staff-engineer"},
+    "the checkout_v2 feature flag state": {"engineering-manager", "product-manager"},
+    "the data retention window": {"legal-counsel"},
+    "the primary deployment region": {"site-reliability-engineer", "staff-engineer"},
+    "the production deploy timeout": {"site-reliability-engineer", "staff-engineer"},
+    "the supported API version": {"staff-engineer"},
+}
+
+
+@given(
+    st.sampled_from(sorted(FIELD_PATTERNS)),
+    st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789", min_size=1, max_size=32),
+)
+def test_field_shaped_values_are_deterministic(subject: str, source: str) -> None:
+    value = _field_shaped_value("world-task", subject, source)
+    assert re.fullmatch(FIELD_PATTERNS[subject], value)
+    assert value == _field_shaped_value("world-task", subject, source)
+
+
+@pytest.mark.parametrize("subject", sorted(PLAUSIBLE_ROLES))
+def test_subject_roles_are_plausible(subject: str) -> None:
+    assert _plausible_role("world-task", subject) in PLAUSIBLE_ROLES[subject]
+
+
+def test_jev32_loaded_tasks_use_field_shaped_values_and_plausible_roles() -> None:
+    corpus_dir = Path(__file__).resolve().parents[1] / "fixtures" / "worlds-tool-jev32"
+    sequences, tasks = load_corpus_with_sequences(corpus_dir)
+    assert len(tasks) == 32
+    for sequence, task in zip(sequences, tasks, strict=True):
+        (value,) = task.current_opaque_values
+        action = task.goal_step.outcome_checks[0].requires_action[0]
+        assert value in action.arg_values
+        assert set(action.arg_values).isdisjoint(action.forbidden_values)
+        authored = {
+            fact_value(content)
+            for step in sequence.steps
+            for content in step.expected_memory_writes.values()
+        }
+        planted = (*action.arg_values, *action.forbidden_values)
+        assert authored.isdisjoint(planted)
+        (scored_content,) = [
+            content for content in task.oracle_memory.values() if states_value(content, value)
+        ]
+        scored_subject = fact_subject(scored_content)
+        assert all(re.fullmatch(FIELD_PATTERNS[scored_subject], item) for item in planted)
+        assert all("toolreq-" not in item for item in planted)
+        for content in task.oracle_memory.values():
+            subject = fact_subject(content)
+            role = re.search(r"\(([^()]+)\) in #", content)
+            assert role is not None
+            assert role.group(1) in PLAUSIBLE_ROLES[subject]
 
 
 def test_oracle_memory_surfaces_current_opaque_never_stale() -> None:
