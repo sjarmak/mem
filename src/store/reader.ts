@@ -49,6 +49,7 @@ export interface RecordFilter {
     | 'ambiguous-window'
     | 'unresolved';
   closedBefore?: string;
+  hasTraceErrors?: boolean;
 }
 
 /** Query WorkRecords by filter, ordered by work_id. */
@@ -80,6 +81,9 @@ export function queryRecords(db: StoreDatabase, filter: RecordFilter = {}): Work
       'EXISTS (SELECT 1 FROM record_agents a WHERE a.work_id = work_records.work_id AND a.agent_id = ?)'
     );
     params.push(filter.agent);
+  }
+  if (filter.hasTraceErrors === true) {
+    where.push('EXISTS (SELECT 1 FROM trace_errors te WHERE te.work_id = work_records.work_id)');
   }
 
   const sql =

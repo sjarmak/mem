@@ -88,6 +88,20 @@ describe('retrieve — D6 temporal leave-one-out', () => {
     expect(result.items.map(i => i.work_id)).toEqual(['rigA-old']);
   });
 
+  it('does not hydrate eligible records without projected trace errors', () => {
+    writeRecords(db, [
+      priorRecord('rigA-match', 'rigA'),
+      priorRecord('rigA-clean', 'rigA', {
+        trace: { jsonl_path: '/t/rigA-clean.jsonl', errors: [] },
+      }),
+    ]);
+    db.prepare("UPDATE work_records SET record = 'invalid' WHERE work_id = ?").run('rigA-clean');
+
+    const result = retrieve(db, baseQuery(), { scope: 'same_rig_temporal' });
+
+    expect(result.items.map(i => i.work_id)).toEqual(['rigA-match']);
+  });
+
   it('excludes records closed at or after the boundary, and never-closed records', () => {
     writeRecords(db, [
       priorRecord('rigA-at', 'rigA', {

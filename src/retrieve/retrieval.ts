@@ -243,6 +243,7 @@ export function retrieve(
   // D6 temporal boundary via the store's strict closedBefore; D7 scope.
   const eligible = queryRecords(db, {
     closedBefore: q.started,
+    hasTraceErrors: true,
     ...(opts.scope === 'same_rig_temporal' && { rig: q.rig }),
   }).filter(record => opts.scope !== 'cross_rig' || record.rig !== q.rig);
 

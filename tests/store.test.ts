@@ -627,6 +627,19 @@ describe('queryRecords', () => {
     expect(queryRecords(db, { agent: 'gc-2002' }).map(r => r.work_id)).toEqual(['demo-2b3c']);
   });
 
+  it('filters to records with projected trace errors', () => {
+    const db = openStore(':memory:');
+    writeRecords(db, [
+      fullRecord({ work_id: 'with-errors' }),
+      fullRecord({
+        work_id: 'without-errors',
+        trace: { jsonl_path: '/traces/clean.jsonl', errors: [] },
+      }),
+    ]);
+
+    expect(queryRecords(db, { hasTraceErrors: true }).map(r => r.work_id)).toEqual(['with-errors']);
+  });
+
   it('filters by landed_state (the work→landed-commit verdict)', () => {
     const db = openStore(':memory:');
     const sha = '0'.repeat(40);
