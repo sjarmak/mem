@@ -239,9 +239,15 @@ it from the bead spine, then query / retrieve / replay against it:
 
 ```bash
 mem build-store [--rig <name>] [--with-traces] [--with-provenance] [--store .mem/store.db]
+mem import-public-baseline --file public/data/synthetic-session.jsonl --store .mem/public.db
+mem import-public-baseline --file public/data/synthetic-project.jsonl --store .mem/public.db
 mem query   --store .mem/store.db [--rig R] [--json]      # read the graph
 mem retrieve <work_id> --store .mem/store.db --scope cross-rig|same-rig --json
 ```
+
+`import-public-baseline` converts each released query and its candidate pool to
+record-scoped WorkRecords and lessons. Running it once per released JSONL file
+upserts both tiers into one store; repeated imports do not duplicate lessons.
 
 `mem retrieve` also speaks the engram progressive-disclosure layers via
 `--format`: `index` lists each ranked item with its citation URI

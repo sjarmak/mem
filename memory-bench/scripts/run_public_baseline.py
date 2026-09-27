@@ -230,6 +230,27 @@ class PublicBaselineError(RuntimeError):
     """A driver-level refusal: a malformed release, an unavailable arm, a bad plan."""
 
 
+def public_baseline_rig(record_id: str) -> str:
+    return f"public-baseline/{record_id}"
+
+
+def public_baseline_query_work_id(record_id: str) -> str:
+    return f"{public_baseline_rig(record_id)}/query"
+
+
+def public_baseline_candidate_work_id(record_id: str, alias: str) -> str:
+    return f"{public_baseline_rig(record_id)}/candidate/{alias}"
+
+
+def public_baseline_alias_from_work_id(record_id: str, work_id: str) -> str:
+    prefix = f"{public_baseline_rig(record_id)}/candidate/"
+    if not work_id.startswith(prefix) or work_id == prefix:
+        raise PublicBaselineError(
+            f"retrieved work id {work_id!r} is outside record namespace {record_id!r}"
+        )
+    return work_id.removeprefix(prefix)
+
+
 @dataclass(frozen=True)
 class ArmRequirement:
     """What one arm needs before it can run, and where that need is satisfied."""
@@ -353,8 +374,8 @@ class BaselineRecord:
         from the record's own ``question.asked_at`` — the moment the released record
         says the question was asked, never "now"."""
         return QueryWork(
-            work_id=str(self.query["id"]),
-            rig=self.world_id,
+            work_id=public_baseline_query_work_id(self.record_id),
+            rig=public_baseline_rig(self.record_id),
             started=self.asked_at,
             convoy_id=self.query.get("convoy_key"),
             pr=self.query.get("pr_key"),
@@ -840,7 +861,9 @@ def default_arm_factory(
                     "the `ours` arm needs --store (a mem store holding the released records) "
                     "and --mem-bin (the built mem CLI)"
                 )
-            return build_memory_system("ours", store_path=str(store_path), mem_bin=str(mem_bin))
+            return build_memory_system(
+                "ours", store_path=str(store_path), mem_bin=str(mem_bin), limit=PUBLIC_TOP_K
+            )
         if arm in ("lexical", "nemo-embed"):
             return build_memory_system(arm, top_k=PUBLIC_TOP_K)
         if arm == "grouped":
@@ -891,7 +914,17 @@ def retrieve_for(
         return dict(arm.retrieve(request, ctx).payloads)
     if retrieval == "mem-store":
         request = RetrievalRequest(query_work=record.query_work(), scope=scope)
-        return dict(arm.retrieve(request, ctx).payloads)
+        payloads = arm.retrieve(request, ctx).payloads
+        remapped: dict[str, str] = {}
+        for work_id, payload in payloads.items():
+            alias = public_baseline_alias_from_work_id(record.record_id, work_id)
+            if alias not in record.candidates:
+                raise PublicBaselineError(
+                    f"retrieved alias {alias!r} is outside record "
+                    f"{record.record_id!r} candidate_pool"
+                )
+            remapped[alias] = payload
+        return remapped
     # lexical / embedding: the candidate pool is the arm's whole world for this
     # record. Seeded (not written) so the seeding never counts as agent retention.
     arm.seed(dict(record.candidates), StepContext(ctx.trial_id, ctx.session_id, "seed", IdClock()))

@@ -719,6 +719,83 @@ def test_ours_is_refused_without_its_store_rather_than_built_broken() -> None:
         driver.default_arm_factory()("ours")
 
 
+def test_ours_uses_record_namespace_and_returns_public_aliases(tmp_path: Path) -> None:
+    from membench.memory_systems.ours_system import OursMemory, OursQuery, RetrieveEnvelope
+    from membench.runtime import IdClock, StepContext
+
+    record = driver.load_release(_release(tmp_path, "a"))[0]
+    seen: list[OursQuery] = []
+
+    def run(query: OursQuery) -> RetrieveEnvelope:
+        seen.append(query)
+        return {
+            "items": [
+                {
+                    "work_id": driver.public_baseline_candidate_work_id("a", "m1"),
+                    "citation": {},
+                    "lessons": [{"payload": {"narrative": "the owner is dana"}}],
+                }
+            ]
+        }
+
+    arm = OursMemory(store_path=tmp_path / "store.db", runner=run, limit=driver.PUBLIC_TOP_K)
+    ctx = StepContext(trial_id="t-ours", session_id="a", step_id="goal", clock=IdClock())
+
+    payloads = driver.retrieve_for(arm, "ours", record, ctx)
+
+    assert list(payloads) == ["m1"]
+    assert seen[0].work_id == driver.public_baseline_query_work_id("a")
+    assert seen[0].limit == driver.PUBLIC_TOP_K
+
+
+def test_ours_rejects_a_candidate_from_another_record_namespace(tmp_path: Path) -> None:
+    from membench.memory_systems.ours_system import OursMemory, OursQuery, RetrieveEnvelope
+    from membench.runtime import IdClock, StepContext
+
+    record = driver.load_release(_release(tmp_path, "a"))[0]
+
+    def run(query: OursQuery) -> RetrieveEnvelope:
+        return {
+            "items": [
+                {
+                    "work_id": driver.public_baseline_candidate_work_id("b", "m1"),
+                    "citation": {},
+                    "lessons": [],
+                }
+            ]
+        }
+
+    arm = OursMemory(store_path=tmp_path / "store.db", runner=run)
+    ctx = StepContext(trial_id="t-ours", session_id="a", step_id="goal", clock=IdClock())
+
+    with pytest.raises(driver.PublicBaselineError, match="record namespace"):
+        driver.retrieve_for(arm, "ours", record, ctx)
+
+
+def test_ours_rejects_an_alias_outside_the_candidate_pool(tmp_path: Path) -> None:
+    from membench.memory_systems.ours_system import OursMemory, OursQuery, RetrieveEnvelope
+    from membench.runtime import IdClock, StepContext
+
+    record = driver.load_release(_release(tmp_path, "a"))[0]
+
+    def run(query: OursQuery) -> RetrieveEnvelope:
+        return {
+            "items": [
+                {
+                    "work_id": driver.public_baseline_candidate_work_id("a", "m9"),
+                    "citation": {},
+                    "lessons": [],
+                }
+            ]
+        }
+
+    arm = OursMemory(store_path=tmp_path / "store.db", runner=run)
+    ctx = StepContext(trial_id="t-ours", session_id="a", step_id="goal", clock=IdClock())
+
+    with pytest.raises(driver.PublicBaselineError, match="candidate_pool"):
+        driver.retrieve_for(arm, "ours", record, ctx)
+
+
 # ---------------------------------------------------------------------------------
 # mem-r6yzk B4/B6 — the release shape the driver refuses, and the width it runs at
 # ---------------------------------------------------------------------------------
