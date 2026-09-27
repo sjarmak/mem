@@ -113,6 +113,19 @@ other; run the gates green before claiming done:
   ceiling). Before treating a credential ask as infra-only, check whether
   the request names a specific account and a ceiling; if it does not,
   raise it as a decision, not a provisioning mail.
+- **"Is X already declared" must be checked against the base a dispatched
+  worker actually builds from, not whichever checkout is open.** Local main
+  can sit ahead of public `origin/main` with commits that are legitimately
+  held back (entangled with restricted content, e.g. benchmark results gated
+  by `dec-aex7`); reading local main's file state and concluding a
+  dependency/config gap doesn't exist can be wrong for a worker whose
+  worktree bases off `origin/main` (mem-6cgea, 2026-09-27: the nemo-embed
+  `pyproject.toml` extra read as already present from local main, but
+  `origin/main` lacked it entirely — it had been added 3 days earlier in
+  `e302837f`, a commit held on local main because it also publishes a gated
+  benchmark result). Verify with `git show <base-ref>:<path>` or `merge-base
+  --is-ancestor <candidate> <base-ref>` before writing a bead description
+  that treats something as already shipped.
 
 ## Where to look (references)
 
