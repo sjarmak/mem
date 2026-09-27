@@ -143,3 +143,9 @@ def read_receipts(path: Path) -> tuple[dict[str, Any], ...]:
             row = {"instrumentation_error": "incomplete or malformed receipt", "raw": line}
         rows.append(row)
     return tuple(rows)
+
+
+def receipt_text(path: Path) -> str:
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8")

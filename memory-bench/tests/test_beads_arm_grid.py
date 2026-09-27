@@ -13,14 +13,18 @@ import subprocess
 from collections.abc import Collection, Sequence
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from membench.harbor.agent_memory import native_memory_path
-from membench.runner.arm_context import capability_of, scaffold_of
+from membench.runner.agent_harness import AgentHarness, command_harness
+from membench.runner.arm_context import ARM_BEADS, capability_of, scaffold_of
+from membench.runner.bd_receipts import CALLER_AGENT
 from membench.runner.beads_arm_grid import (
     ARM_ESTABLISH_INSTRUCTION,
     COMMAND_NOT_FOUND,
+    PROTOCOL_CAPTURE,
     RECORD_CLAUSE,
     SHARED_SYSTEM_PATH,
     SHARED_TOOLCHAIN_COMMANDS,
@@ -48,11 +52,17 @@ from membench.runner.headless_agent import (
 )
 from membench.runner.memory_arm import ARM_NAMES, SHARED_PROTOCOL
 from membench.runner.realagent_probe import CONFIG_FILE, REAL_TOOL
-from membench.runner.tool_surface import BD_CONTEXT_FILES, CONFIG_DIR_ENV, MEMORY_COMMAND
+from membench.runner.tool_surface import (
+    BD_CONTEXT_ADDENDUM,
+    BD_CONTEXT_FILES,
+    CONFIG_DIR_ENV,
+    MEMORY_COMMAND,
+)
 from membench.runner.toolreq_builtin import simulated_builtin_runner
 from membench.runner.toolreq_realagent import ToolReqRealAgentTask, adapt_sequence
 from membench.schemas.trace import ToolCall
 from membench.spawn import Runner
+from tests.receipt_helpers import accepted_write, receipt_rows
 from tests.toolreq_helpers import toolreq_seq
 
 pytestmark = pytest.mark.skipif(
@@ -276,15 +286,118 @@ def test_the_comparator_is_engaged_on_content_not_on_the_file_existing() -> None
         assert engagement_of(store, ("ZZZ-CUR",)) is True
 
 
-def test_the_beads_arm_is_engaged_from_its_receipts_and_not_from_a_bare_verb() -> None:
-    """A verb token is not an operation (mem-bd-remember-list-is-not-a-write): a receipt for a
-    call that carried no value is not engagement."""
+def test_the_beads_arm_is_engaged_from_the_acknowledged_write_and_not_from_argv() -> None:
+    token = "ZZZ-CUR"
+    value = f"the retention window is {token}"
     with arm_cell_store("beads", label="test") as store:
-        bare = ({"event": "exit", "argv": ["bd", "remember"], "exit_code": 0},)
-        assert engagement_of(store, ("ZZZ-CUR",), receipts=bare) is False
-        wrote = ({"event": "exit", "argv": ["bd", "remember", "window=ZZZ-CUR"], "exit_code": 0},)
-        assert engagement_of(store, ("ZZZ-CUR",), receipts=wrote) is True
+        refused = receipt_rows(
+            ["remember", token],
+            returncode=1,
+            stderr=f'Error: "{token}" looks like a command, not something to remember\n',
+        )
+        assert engagement_of(store, (token,), receipts=refused) is False
+        read = receipt_rows(["recall", token], stdout=f"{value}\n")
+        assert engagement_of(store, (token,), receipts=read) is False
+        argv_only = receipt_rows(["remember", value, "--key", "window"])
+        assert engagement_of(store, (token,), receipts=argv_only) is False
+        wrote = accepted_write(value)
+        assert engagement_of(store, (token,), receipts=wrote) is True
         assert engagement_of(store, (), receipts=wrote) is False
+
+
+def test_the_planted_bd_context_is_what_bd_shipped_with_no_addendum_from_this_rig() -> None:
+    with arm_cell_store("beads", label="test") as store:
+        assert store.bd_capability is not None
+        assert BD_CONTEXT_ADDENDUM.strip() not in store.bd_capability
+        assert BD_CONTEXT_ADDENDUM.strip() not in _context_text(store)
+
+
+def _bd_calling_runner(token: str) -> Runner:
+    def run(argv: Any, **kwargs: Any) -> Any:
+        env = kwargs["env"]
+        shim = shutil.which(MEMORY_COMMAND, path=env["PATH"])
+        assert shim is not None
+        subprocess.run(
+            [shim, "remember", f"the current value is {token}", "--key", "current-value"],
+            env=env,
+            cwd=kwargs["cwd"],
+            check=True,
+            capture_output=True,
+        )
+        return subprocess.CompletedProcess(list(argv), 0, "noted", "")
+
+    return run
+
+
+def _silent(argv: Any, **_kwargs: Any) -> Any:
+    return subprocess.CompletedProcess(list(argv), 0, "", "")
+
+
+def _foreign_harness() -> AgentHarness:
+    return command_harness(
+        name="agent-x",
+        version="0.4.2",
+        argv_template=("sh", "-c", "true", "{prompt}"),
+        conditions={},
+    )
+
+
+def test_the_establish_receipts_are_handed_out_verbatim_before_the_mint_is_torn_down() -> None:
+    task = _task()
+    token = task.current_opaque_values[0]
+    kept: list[tuple[str, str]] = []
+    cell = run_arm_cell(
+        task,
+        ARM_BEADS,
+        repeat=0,
+        model="sonnet",
+        channel=MemoryChannel.TRUSTED,
+        runner=_bd_calling_runner(token),
+        protocol=PROTOCOL_CAPTURE,
+        harness=_foreign_harness(),
+        keep_receipts=lambda leg, text: kept.append((leg, text)),
+    )
+    assert [leg for leg, _ in kept] == ["establish"]
+    rows = [json.loads(line) for line in kept[0][1].splitlines()]
+    assert [row["event"] for row in rows] == ["start", "finish"]
+    assert rows[1]["caller"] == CALLER_AGENT
+    assert rows[1]["returncode"] == 0
+    assert rows[1]["stdout"].startswith("Remembered [current-value]")
+    assert rows[1]["operation_argv"][1] == f"the current value is {token}"
+    assert cell.engaged is True
+    assert cell.bd_invocations == 1
+
+
+def test_a_beads_leg_that_never_called_bd_hands_out_an_empty_receipt_file() -> None:
+    kept: list[tuple[str, str]] = []
+    cell = run_arm_cell(
+        _task(),
+        ARM_BEADS,
+        repeat=0,
+        model="sonnet",
+        channel=MemoryChannel.TRUSTED,
+        runner=_silent,
+        protocol=PROTOCOL_CAPTURE,
+        harness=_foreign_harness(),
+        keep_receipts=lambda leg, text: kept.append((leg, text)),
+    )
+    assert kept == [("establish", "")]
+    assert cell.engaged is False
+
+
+def test_an_arm_without_bd_hands_out_no_receipts() -> None:
+    kept: list[tuple[str, str]] = []
+    run_arm_cell(
+        _task(),
+        "none",
+        repeat=0,
+        model="sonnet",
+        channel=MemoryChannel.TRUSTED,
+        runner=_silent,
+        protocol=PROTOCOL_CAPTURE,
+        keep_receipts=lambda leg, text: kept.append((leg, text)),
+    )
+    assert kept == []
 
 
 def test_the_floor_arm_cannot_carry_a_value_through_its_config_dir(tmp_path: Path) -> None:

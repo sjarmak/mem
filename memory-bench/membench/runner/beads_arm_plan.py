@@ -49,7 +49,7 @@ from membench.runner.toolreq_realagent import (
 # what a cell MEANS: the scored goal leg now runs the allowlist the shared protocol declares
 # instead of the one the corpus authored, and the establish leg now carries an identical recording
 # clause on every arm. The bump is what stops the protocol-1 cell being resumed into this grid.
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 
 # Repeats per variant (§6). Asymmetric on purpose: the necessary variant carries the endpoint and
 # buys four, the unnecessary twin only has to show the arms do NOT separate and buys two. A table
@@ -182,6 +182,11 @@ def priced_plan(
 
 def cell_key(cell: ArmCell) -> ArmGridKey:
     return (cell.arm, cell.variant, cell.work_id, cell.repeat)
+
+
+def cell_stem(key: ArmGridKey) -> str:
+    arm_name, variant, work_id, repeat = key
+    return f"{arm_name}-{variant}-{work_id}-{repeat}"
 
 
 def cell_row(cell: ArmCell) -> dict[str, Any]:
@@ -634,6 +639,7 @@ __all__ = [
     "cell_from_row",
     "cell_key",
     "cell_row",
+    "cell_stem",
     "discovery",
     "endpoint",
     "establish_mechanism",

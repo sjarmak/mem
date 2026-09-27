@@ -42,7 +42,6 @@ ZFC: filesystem plumbing and a PATH lookup. No model call, no judgment.
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import stat
@@ -62,6 +61,7 @@ from membench.runner.bd_receipt_surface import (
     attributed_invocations,
     prepare_receipt_leg,
     read_receipts,
+    receipt_text,
 )
 from membench.runner.e1_grid import (
     ESTABLISH_INSTRUCTION,
@@ -87,6 +87,7 @@ from membench.runner.memory_arm import (
 )
 from membench.runner.native_memory_hook import hook_reaches, install_native_memory_hook
 from membench.runner.realagent_probe import score_goal_action
+from membench.runner.receipt_engagement import engaged_by_receipts
 from membench.runner.sandbox import assert_neutral_ancestry, paid_sandbox
 from membench.runner.tool_surface import (
     CONFIG_DIR_ENV,
@@ -318,9 +319,6 @@ def arm_cell_store(
         if one.provisions_bd:
             surface = provision_memory_tool(root, sandbox=sandbox, bd_binary=bd_binary)
             captured = capture_bd_context(surface.store_dir)
-            # The bd arm's capability paragraph IS what bd shipped, plus the addendum that
-            # `plant_bd_context` appends; rendering it through `arm_context` keeps the shared
-            # scaffold on it, which is what makes the three arms comparable as presentations.
             bd_capability = "\n\n".join(text.strip() for text in sorted(captured.values()))
             if not bd_capability.strip():
                 bd_capability = _captured_from_surface(surface)
@@ -659,11 +657,7 @@ def engagement_of(
         return False
     one = store.arm
     if one.provisions_bd:
-        return any(
-            states_value(json.dumps(row, sort_keys=True), token)
-            for row in receipts
-            for token in tokens
-        )
+        return engaged_by_receipts(receipts, tokens).engaged
     if one.settings.get("autoMemoryEnabled") is True:
         for memory_file in store.config_dir.glob(NATIVE_MEMORY_GLOB):
             try:
@@ -723,6 +717,7 @@ def run_arm_cell(
     channel: MemoryChannel,
     runner: Runner,
     keep_stream: Callable[[str, str], None] | None = None,
+    keep_receipts: Callable[[str, str], None] | None = None,
     bd_binary: str | None = None,
     protocol: str = PROTOCOL_THREE_ARM,
     harness: AgentHarness | None = None,
@@ -791,6 +786,8 @@ def run_arm_cell(
         # tempdir that has already been removed compares a different string.
         establish_outside = out_of_sandbox_operands(establish.tool_calls, sandbox=store.sandbox)
         receipts = read_receipts(establish_receipts_path) if establish_receipts_path else ()
+        if keep_receipts is not None and establish_receipts_path is not None:
+            keep_receipts(establish_leg.name, receipt_text(establish_receipts_path))
         engaged = engagement_of(store, task.current_opaque_values, receipts=receipts)
         invocations = attributed_invocations(receipts)
 
@@ -842,6 +839,8 @@ def run_arm_cell(
         )
         if keep_stream is not None:
             keep_stream(goal_leg.name, goal.raw_stream)
+        if keep_receipts is not None and goal_receipts_path is not None:
+            keep_receipts(goal_leg.name, receipt_text(goal_receipts_path))
 
         # Both legs' logs, because a cell that re-mints has two and a reach on either is a reach
         # by this cell. Counting one would report the re-minting arms as reaching less often

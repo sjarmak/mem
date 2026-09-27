@@ -41,6 +41,7 @@ from membench.runner.beads_arm_plan import (
     ArmPlanError,
     cell_key,
     cell_row,
+    cell_stem,
 )
 from membench.runner.beads_capture import (
     CAPTURE_ARMS,
@@ -50,6 +51,7 @@ from membench.runner.beads_capture import (
     capture_summary,
     capture_work_ids,
 )
+from membench.runner.beads_capture_rescore import RescoreError, receipts_path, rescore_artifact
 from membench.runner.e1_grid import (
     EXIT_HALT,
     EXIT_NO_CORPUS,
@@ -85,6 +87,7 @@ from membench.runner.toolreq_realagent import ToolReqRealAgentTask
 from membench.spawn import Runner
 
 CHANNEL = MemoryChannel.TRUSTED
+RESCORE_COMMAND = "rescore"
 
 _PLAN_ONLY = (
     "No run requested. This printed the PLAN and spent nothing.\n"
@@ -292,19 +295,18 @@ def _run(
     def _persist() -> None:
         atomic_write_json(out, _artifact(kept, identity=identity, dry_run=dry_run, arms=arms))
 
-    def _stem(key: ArmGridKey) -> str:
-        arm_name, variant, work_id, repeat = key
-        return f"{arm_name}-{variant}-{work_id}-{repeat}"
-
     def _keep_stream(key: ArmGridKey, leg: str, raw_stream: str) -> None:
         if raw_stream:
-            write_text_new(cells_dir / f"{_stem(key)}.{leg}.jsonl", raw_stream)
+            write_text_new(cells_dir / f"{cell_stem(key)}.{leg}.jsonl", raw_stream)
+
+    def _keep_receipts(key: ArmGridKey, leg: str, text: str) -> None:
+        write_text_new(receipts_path(cells_dir, key, leg), text)
 
     def _record(cell: ArmCell) -> None:
         if cell not in kept:
             kept.append(cell)
         key = cell_key(cell)
-        write_json_new(cells_dir / f"{_stem(key)}.json", {"key": list(key)} | cell_row(cell))
+        write_json_new(cells_dir / f"{cell_stem(key)}.json", {"key": list(key)} | cell_row(cell))
         print(
             f"[{len(kept)}/{len(grid)}] {cell.arm}/{cell.work_id}#{cell.repeat} {cell.status} "
             f"engaged={cell.engaged} bd_invocations={cell.bd_invocations} "
@@ -324,6 +326,7 @@ def _run(
             landed=landed,
             on_cell=_record,
             on_stream=_keep_stream,
+            on_receipts=_keep_receipts,
             bd_binary=bd_build.binary,
             harness=harness,
         )
@@ -346,7 +349,51 @@ def _run(
     return EXIT_OK
 
 
+def rescore_main(argv: Sequence[str]) -> int:
+    ap = argparse.ArgumentParser(prog=f"beads_capture_fire {RESCORE_COMMAND}")
+    ap.add_argument("--corpus-dir", type=Path, default=DEFAULT_CORPUS)
+    ap.add_argument(
+        "--out",
+        type=Path,
+        nargs="+",
+        required=True,
+        help=(
+            "capture artifacts whose <out>.cells directories are re-read. A cell with a "
+            "persisted receipts file is scored on the acknowledged write; one without is "
+            "reported as recorded. Nothing is written"
+        ),
+    )
+    args = ap.parse_args(list(argv))
+    _, tasks = load_twin_corpus(args.corpus_dir)
+    if not tasks:
+        print(
+            f"no tool-requiring tasks under {args.corpus_dir}: the corpus is missing or empty, so "
+            "there is nothing to rescore against",
+            file=sys.stderr,
+        )
+        return EXIT_NO_CORPUS
+    try:
+        artifacts = [rescore_artifact(out, tasks) for out in args.out]
+    except RescoreError as exc:
+        print(f"REFUSING to rescore: {exc}", file=sys.stderr)
+        return EXIT_REFUSED
+    print(
+        json.dumps(
+            {
+                "cmd": RESCORE_COMMAND,
+                "corpus_fingerprint": corpus_fingerprint(tasks),
+                "artifacts": artifacts,
+            },
+            indent=2,
+        )
+    )
+    return EXIT_OK
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    arguments = list(argv) if argv is not None else sys.argv[1:]
+    if arguments[:1] == [RESCORE_COMMAND]:
+        return rescore_main(arguments[1:])
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--corpus-dir", type=Path, default=DEFAULT_CORPUS)
     ap.add_argument("--model", default="")
@@ -446,7 +493,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "here is RESUMED (its cells are kept, not re-bought) when it matches this turn"
         ),
     )
-    args = ap.parse_args(list(argv) if argv is not None else None)
+    args = ap.parse_args(arguments)
 
     arms = [one for one in CAPTURE_ARMS if one in set(args.arms)]
 
@@ -503,4 +550,12 @@ if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
 
 
-__all__ = ["CHANNEL", "capture_identity", "harness_of", "main", "parse_conditions"]
+__all__ = [
+    "CHANNEL",
+    "RESCORE_COMMAND",
+    "capture_identity",
+    "harness_of",
+    "main",
+    "parse_conditions",
+    "rescore_main",
+]

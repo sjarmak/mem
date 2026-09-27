@@ -10,6 +10,7 @@ import pytest
 
 from membench.runner.beads_arm_grid import ArmCell
 from membench.runner.beads_arm_plan import (
+    PROTOCOL_VERSION,
     ArmPlanError,
     cell_from_row,
     cell_key,
@@ -438,3 +439,9 @@ def test_a_row_without_the_goal_legs_tool_names_is_refused() -> None:
     del row["goal_tool_names"]
     with pytest.raises(ArmPlanError):
         cell_from_row(row)
+
+
+def test_the_protocol_version_is_three_since_engagement_is_scored_on_the_acknowledged_write() -> (
+    None
+):
+    assert PROTOCOL_VERSION == 3

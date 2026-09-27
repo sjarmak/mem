@@ -45,6 +45,7 @@ from membench.runner.beads_arm_plan import (
     ArmPlanError,
     cell_from_row,
     cell_key,
+    cell_stem,
     discovery,
     grid_keys,
     priced_plan,
@@ -207,17 +208,17 @@ def _unmeasured(
     )
 
 
-def _stream_keeper(
-    on_stream: Callable[[ArmGridKey, str, str], None] | None, key: ArmGridKey
+def _leg_sink(
+    on_leg: Callable[[ArmGridKey, str, str], None] | None, key: ArmGridKey
 ) -> Callable[[str, str], None] | None:
     """Bind one cell's key into the per-leg sink `run_arm_cell` calls. Bound here, outside the
     fire loop, so the closure cannot capture the loop variable of a later cell."""
-    if on_stream is None:
+    if on_leg is None:
         return None
-    sink = on_stream
+    sink = on_leg
 
-    def keep(leg: str, raw_stream: str) -> None:
-        sink(key, leg, raw_stream)
+    def keep(leg: str, text: str) -> None:
+        sink(key, leg, text)
 
     return keep
 
@@ -232,6 +233,7 @@ def run_grid(
     landed: Sequence[ArmCell] = (),
     on_cell: Callable[[ArmCell], None] | None = None,
     on_stream: Callable[[ArmGridKey, str, str], None] | None = None,
+    on_receipts: Callable[[ArmGridKey, str, str], None] | None = None,
     bd_binary: str | None = None,
     harness: AgentHarness | None = None,
 ) -> list[ArmCell]:
@@ -287,7 +289,8 @@ def run_grid(
                 model=model,
                 channel=CHANNEL,
                 runner=runner,
-                keep_stream=_stream_keeper(on_stream, key),
+                keep_stream=_leg_sink(on_stream, key),
+                keep_receipts=_leg_sink(on_receipts, key),
                 bd_binary=bd_binary,
                 protocol=protocol,
                 harness=harness,
@@ -331,6 +334,7 @@ def fire(
     landed: Sequence[ArmCell] = (),
     on_cell: Callable[[ArmCell], None] | None = None,
     on_stream: Callable[[ArmGridKey, str, str], None] | None = None,
+    on_receipts: Callable[[ArmGridKey, str, str], None] | None = None,
     bd_binary: str | None = None,
 ) -> list[ArmCell]:
     """The three-arm grid, run under its own registration. Its derivation is ``grid_keys`` and
@@ -345,6 +349,7 @@ def fire(
         landed=landed,
         on_cell=on_cell,
         on_stream=on_stream,
+        on_receipts=on_receipts,
         bd_binary=bd_binary,
     )
 
@@ -470,24 +475,20 @@ def _run(
     def _persist() -> None:
         atomic_write_json(out, _artifact(kept))
 
-    def _cell_stem(key: ArmGridKey) -> str:
-        arm_name, variant, work_id, repeat = key
-        return f"{arm_name}-{variant}-{work_id}-{repeat}"
-
     def _keep_stream(key: ArmGridKey, leg: str, raw_stream: str) -> None:
         # Beside the cell file, under the cell's own key: `<stem>.establish.jsonl` and
         # `<stem>.goal.jsonl`. Never over an existing one (`write_text_new`), for the reason the
         # cell files are never overwritten. An empty stream is a stand-in's absence and gets no
         # file: a zero-byte `.jsonl` would read as a paid agent that said nothing.
         if raw_stream:
-            write_text_new(cells_dir / f"{_cell_stem(key)}.{leg}.jsonl", raw_stream)
+            write_text_new(cells_dir / f"{cell_stem(key)}.{leg}.jsonl", raw_stream)
 
     def _record(cell: ArmCell) -> None:
         if cell not in kept:
             kept.append(cell)
         key = cell_key(cell)
         write_json_new(
-            cells_dir / f"{_cell_stem(key)}.json",
+            cells_dir / f"{cell_stem(key)}.json",
             {"key": list(key)} | _artifact([cell])["cells"][0],
         )
         print(

@@ -13,9 +13,7 @@ constants would pass while `render_arm_context` appended something for one arm o
 
 Each paragraph states the AFFORDANCE and says nothing about WHEN to use it. Disposition is the
 endpoint; a paragraph that said "check your memory before starting" would supply the behaviour
-the grid is buying an answer about. For the same reason the bd paragraph is CAPTURED from what
-`bd init` shipped (`tool_surface.capture_bd_context` plus `BD_CONTEXT_ADDENDUM`) rather than
-written here: a paraphrase of bd's own deployment text would measure prose this rig authored.
+the grid is buying an answer about.
 
 What this module does NOT defeat: LENGTH, and a command grammar being a stronger instruction
 than a file path. The measured capability paragraphs are 1,338 words (beads) against 35 (none)
@@ -87,20 +85,14 @@ class ArmContextError(RuntimeError):
 
 
 def render_arm_context(arm: str, *, bd_capability: str | None = None) -> str:
-    """The full agent-visible context for one arm.
-
-    `bd_capability` is the captured bd deployment block with the addendum appended, and is
-    REQUIRED for `beads` and REFUSED for the others -- a floor arm carrying bd's own text would
-    describe a store it does not have, and would do it in bd's vocabulary."""
     if arm not in ARM_CONTEXT_ARMS:
         raise ArmContextError(f"unknown arm {arm!r}; the grid's arms are {ARM_CONTEXT_ARMS}")
     if arm == ARM_BEADS:
         if not (bd_capability and bd_capability.strip()):
             raise ArmContextError(
                 "the beads arm's capability paragraph is captured from what `bd init` shipped "
-                "(`tool_surface.capture_bd_context` + `BD_CONTEXT_ADDENDUM`) and must be passed "
-                "in; there is no authored default, because a paraphrase would measure this "
-                "rig's own prose."
+                "(`tool_surface.capture_bd_context`) and must be passed in; there is no "
+                "authored default, because a paraphrase would measure this rig's own prose."
             )
         capability = bd_capability.strip()
     else:
