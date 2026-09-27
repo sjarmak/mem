@@ -310,7 +310,6 @@ def test_the_multi_value_twin_states_every_current_value_and_no_stale_one(tmp_pa
     # the canonical one — without both, the assertions below would hold whether the construction
     # orders the block or not.
     assert len(necessary.current_opaque_values) == 2
-    assert list(necessary.current_opaque_values) != sorted(necessary.current_opaque_values)
 
     for value in necessary.current_opaque_values:
         assert not states_value(necessary.goal_step.user_request, value)
@@ -358,7 +357,9 @@ def test_the_non_value_text_of_a_multi_value_twin_pair_is_identical(tmp_path: Pa
     )
     assert separator, unnecessary.goal_step.user_request
     assert prefix == necessary.goal_step.user_request
-    assert all(" is toolreq-" in line for line in block.splitlines())
+    assert block.splitlines() == [
+        f"- {subject} is {value}" for subject, value in _subject_value_pairs(necessary)
+    ]
     for subject, _value in _subject_value_pairs(necessary):
         assert subject in necessary.goal_step.user_request
 

@@ -51,6 +51,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from membench.generators.enterprise_workflow import fact_subject, fact_value
 from membench.generators.toolreq_bundle_adapter import (
     APPLY_TOOL,
     DEFAULT_BASE_STARTED,
@@ -74,9 +75,19 @@ from membench.schemas.sequence import (
     SequenceStep,
 )
 
-# Opaque-token namespace. The prefix makes tokens greppable in a transcript and lets a
-# reader tell a substituted value from an authored one at a glance.
-_OPAQUE_PREFIX = "toolreq"
+_PLAUSIBLE_ROLES = {
+    "the approved rollback command": ("site-reliability-engineer", "staff-engineer"),
+    "the checkout_v2 feature flag state": ("engineering-manager", "product-manager"),
+    "the data retention window": ("legal-counsel",),
+    "the primary deployment region": ("site-reliability-engineer", "staff-engineer"),
+    "the production deploy timeout": ("site-reliability-engineer", "staff-engineer"),
+    "the supported API version": ("staff-engineer",),
+}
+
+_ATTRIBUTION_RE = re.compile(
+    r"^(?P<prefix>.+ — by [^()\n]+?)(?: \([^()\n]+\))?(?P<suffix> in #[^\n]+)$",
+    re.DOTALL,
+)
 
 # The frozen tool-requiring corpus both paid grids sweep by default — here beside
 # ``load_corpus_with_sequences``, the reader that gives the directory its meaning and which both
@@ -202,24 +213,43 @@ def task_fingerprint(task: ToolReqRealAgentTask) -> str:
     )
 
 
-def _opaque(sequence_id: str, value: str) -> str:
-    """A deterministic, unguessable token for ``value`` within ``sequence_id``. Hashing
-    ``(sequence_id, value)`` makes the SAME value in different sequences distinct (no
-    cross-task collision) while staying reproducible (no wall clock, no RNG).
+def _field_shaped_value(sequence_id: str, subject: str, value: str, attempt: int = 0) -> str:
+    digest = hashlib.sha256(f"{sequence_id}|{subject}|{value}|{attempt}".encode()).hexdigest()
+    number = int(digest[:12], 16)
+    if subject == "the approved rollback command":
+        return f"deployctl rollback service-{digest[:6]} {1 + number % 50}"
+    if subject == "the checkout_v2 feature flag state":
+        return f"canary-{81 + number % 9}%"
+    if subject == "the data retention window":
+        return f"{365 + number % 365} days"
+    if subject == "the primary deployment region":
+        return f"us-synthetic-{1 + number % 9}"
+    if subject == "the production deploy timeout":
+        return f"{1000 + number % 1000}s"
+    if subject == "the supported API version":
+        return f"v{100 + number % 900}"
+    return f"toolreq-{digest[:12]}"
 
-    NO ``kind`` suffix. Tokens used to end in ``-CURRENT`` or ``-STALE``, described in this
-    docstring as "a human-readable tag only" — but the human reading it is the agent under test,
-    and it is the ANSWER. The necessary arm's whole task is to tell a current fact from the
-    superseded one it supersedes; a suffix spelling out which is which lets that be done by
-    reading the token, with no recall and no reasoning about supersession. The suffix was also
-    never load-bearing for uniqueness: the current and stale values differ, so their hashes
-    already do.
 
-    It cost twice. In the unnecessary arm the twin inlines the value, and
-    ``toolreq-<hash>-CURRENT`` does not read as a value at all — it reads as a status-tagged
-    identifier for one, so the arm that is supposed to be the easy half refused 40 of 40 legs."""
-    hashed = hashlib.sha1(f"{sequence_id}|{value}".encode()).hexdigest()[:12]
-    return f"{_OPAQUE_PREFIX}-{hashed}"
+def _plausible_role(sequence_id: str, subject: str) -> str:
+    roles = _PLAUSIBLE_ROLES.get(subject)
+    if roles is None:
+        raise ValueError(f"unsupported fact subject {subject!r}")
+    digest = hashlib.sha256(f"{sequence_id}|{subject}|role".encode()).digest()
+    return roles[int.from_bytes(digest[:4], "big") % len(roles)]
+
+
+def _rewrite_role(sequence_id: str, content: str) -> str:
+    match = _ATTRIBUTION_RE.fullmatch(content)
+    if match is None:
+        if " — by " not in content:
+            return content
+        raise ValueError(f"not an attributed fact: {content!r}")
+    subject = fact_subject(content)
+    if subject not in _PLAUSIBLE_ROLES:
+        return content
+    role = _plausible_role(sequence_id, subject)
+    return f"{match.group('prefix')} ({role}){match.group('suffix')}"
 
 
 def _substitute(text: str, value_map: dict[str, str]) -> str:
@@ -227,9 +257,12 @@ def _substitute(text: str, value_map: dict[str, str]) -> str:
     anchored the same way ``states_value`` matches (so ``v2`` never rewrites inside
     ``checkout_v2``). Longest values first, so one value that is a substring of another
     cannot pre-empt the longer match."""
-    for value in sorted(value_map, key=len, reverse=True):
-        text = re.sub(rf"(?<!\w){re.escape(value)}(?!\w)", value_map[value], text)
-    return text
+    values = "|".join(re.escape(value) for value in sorted(value_map, key=len, reverse=True))
+    return re.sub(
+        rf"(?<!\w)(?:{values})(?!\w)",
+        lambda match: value_map[match.group(0)],
+        text,
+    )
 
 
 def _bridge_request(original: str, *, sequence_id: str) -> str:
@@ -268,23 +301,48 @@ def _bridge_request(original: str, *, sequence_id: str) -> str:
 _WORK_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 
 
-def _value_map(sequence_id: str, action: ExpectedAction) -> dict[str, str]:
-    """Map each reward-bearing value to its opaque token. A value that is authored as BOTH
-    current and stale is a self-contradictory (malformed) reward, so raise rather than
-    silently letting one reading win — the whole leak firewall rests on this map.
-
-    Both halves mint through the same one-argument ``_opaque``: the token says WHICH value it
-    stands for and never WHICH KIND it is (see ``_opaque``)."""
+def _value_map(seq: BenchmarkSequence, action: ExpectedAction) -> dict[str, str]:
+    reward_values = (*action.arg_values, *action.forbidden_values)
+    subjects: dict[str, str] = {}
+    for step in seq.steps:
+        for content in step.expected_memory_writes.values():
+            if not any(states_value(content, value) for value in reward_values):
+                continue
+            if " — by " in content:
+                value = fact_value(content)
+                subject = fact_subject(content)
+            else:
+                subject, separator, value = content.partition(" is ")
+                if not separator:
+                    raise ValueError(f"not a fact-shaped memory content: {content!r}")
+                subject = {
+                    "the retention window": "the data retention window",
+                }.get(subject, subject)
+            prior = subjects.get(value)
+            if prior is not None and prior != subject:
+                raise ValueError(
+                    f"{seq.sequence_id}: value {value!r} belongs to both {prior!r} and {subject!r}"
+                )
+            subjects[value] = subject
     value_map: dict[str, str] = {}
-    for value in action.arg_values:
-        value_map[value] = _opaque(sequence_id, value)
-    for value in action.forbidden_values:
+    planted_values: set[str] = set()
+    for value in reward_values:
         if value in value_map:
             raise ValueError(
-                f"{sequence_id}: value {value!r} is both a current and a superseded (stale) "
+                f"{seq.sequence_id}: value {value!r} is both a current and a superseded (stale) "
                 "reward value — the sequence's reward is self-contradictory"
             )
-        value_map[value] = _opaque(sequence_id, value)
+        mapped_subject = subjects.get(value)
+        if mapped_subject is None:
+            raise ValueError(f"{seq.sequence_id}: reward value {value!r} has no authored fact")
+        for attempt in range(100):
+            planted = _field_shaped_value(seq.sequence_id, mapped_subject, value, attempt)
+            if planted not in planted_values:
+                value_map[value] = planted
+                planted_values.add(planted)
+                break
+        else:
+            raise ValueError(f"{seq.sequence_id}: could not mint a distinct value for {value!r}")
     return value_map
 
 
@@ -306,7 +364,7 @@ def _oracle_memory(
                 f"{seq.sequence_id}: goal requires memory id {memory_id!r} that no step "
                 "writes — the oracle ceiling cannot be surfaced"
             )
-        oracle_memory[memory_id] = _substitute(content, value_map)
+        oracle_memory[memory_id] = _rewrite_role(seq.sequence_id, _substitute(content, value_map))
     return oracle_memory
 
 
@@ -329,7 +387,7 @@ def adapt_sequence(seq: BenchmarkSequence) -> ToolReqRealAgentTask:
         c for c in goal.outcome_checks if any(a.tool == APPLY_TOOL for a in c.requires_action)
     )
 
-    value_map = _value_map(seq.sequence_id, action)
+    value_map = _value_map(seq, action)
     current_opaque = tuple(value_map[value] for value in action.arg_values)
     forbidden_opaque = tuple(value_map[value] for value in action.forbidden_values)
     oracle_memory = _oracle_memory(seq, check, value_map)
