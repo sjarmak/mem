@@ -20,6 +20,7 @@ dependencies = [
 # harbor.TaskConfig only when the package is present (see tests/test_harbor_adapter.py).
 [project.optional-dependencies]
 harbor = ["harbor>=0.3"]
+nemo-embed = ["sentence-transformers>=5.1", "torch>=2.7", "transformers>=4.44"]
 # pyyaml: test_python_gates_are_opt_out.py reads the gate commands out of
 # .github/workflows/ci.yml so it probes what CI actually runs. It is present
 # transitively today (harbor, pre-commit), but a guard that silently SKIPS when
@@ -34,6 +35,16 @@ harbor = ["harbor>=0.3"]
 # cannot honour it, so the public validator's jsonschema import would red the
 # gate the override exists to resolve.
 dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.14", "black>=24.0", "types-toml>=0.10", "pyyaml>=6.0", "matplotlib>=3.8", "jsonschema>=4.20"]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu128", extra = "nemo-embed", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
 
 [project.scripts]
 membench = "membench.cli:main"
