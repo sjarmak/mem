@@ -92,6 +92,15 @@ other; run the gates green before claiming done:
   `src/cli/commands/build-store.ts`, `src/store/`, or `src/retrieve/`, run
   `uv run pytest -q -p no:cacheprovider` in `memory-bench/` yourself — the
   dispatch gate alone is not sufficient for these paths.
+- **A decision bead in this project's own store never reaches Stephanie's
+  open-asks ledger.** Only a `dec-` bead in the sibling `decisions` rig
+  surfaces there; a NEEDS-YOU raised only as a local `bd create --type
+  decision` bead here sits
+  unseen until someone happens to read this store (mem-t7wc4 went unmirrored
+  until the mayor caught it, 2026-09-27). Raise the local bead for the
+  detail/context record as usual, then mirror it with a `dec-` bead
+  (`gc.scope: mem`, `gc.mirror_of: <local-id>`) so it lands on her ledger;
+  when she rules, record the outcome on both and close the local bead.
 
 ## Where to look (references)
 
