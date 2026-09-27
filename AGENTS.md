@@ -101,6 +101,18 @@ other; run the gates green before claiming done:
   detail/context record as usual, then mirror it with a `dec-` bead
   (`gc.scope: mem`, `gc.mirror_of: <local-id>`) so it lands on her ledger;
   when she rules, record the outcome on both and close the local bead.
+- **"This class of paid usage is in scope" is not "this volume is
+  authorized."** The standing no-paid-memory-stack convention says agent-
+  under-test inference (e.g. Harbor/OAuth runs) is allowed; it says nothing
+  about how much of a shared, finite subscription allowance one task may
+  draw. A credential/spend ask whose acceptance text names no account or
+  ceiling is a Stephanie decision regardless of whether the usage class is
+  in scope (mem-r6yzk.5, 2026-09-27: routed a 2,880-run credential ask to
+  the mayor as pure infra provisioning; the mayor correctly redirected it
+  to Stephanie as dec-tspz — a large draw on a shared account with no named
+  ceiling). Before treating a credential ask as infra-only, check whether
+  the request names a specific account and a ceiling; if it does not,
+  raise it as a decision, not a provisioning mail.
 
 ## Where to look (references)
 
