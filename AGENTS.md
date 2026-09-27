@@ -82,6 +82,16 @@ other; run the gates green before claiming done:
 - **Never leave real tools on PATH when testing a replacement executable.** A
   broken shebang can make shell lookup fall through to the real tool and mutate
   live data; restrict the child PATH to test binaries and use a temporary cwd.
+- **`mol-scoped-work` dispatch's `test_command` defaults to `npm run check`
+  only — it never runs the Python `memory-bench` suite.** A change confined to
+  TypeScript can still break Python-side behavior through the CLI it feeds
+  (mem-2sp2y: a trace-resolution change passed `npm run check` clean but
+  silently zeroed `records_with_errors` in `tests/test_pipeline_e2e.py`,
+  caught only because a human/lead ran the full Python suite before landing).
+  Before marking branch-ready any change touching `src/ingest/`,
+  `src/cli/commands/build-store.ts`, `src/store/`, or `src/retrieve/`, run
+  `uv run pytest -q -p no:cacheprovider` in `memory-bench/` yourself — the
+  dispatch gate alone is not sufficient for these paths.
 
 ## Where to look (references)
 
