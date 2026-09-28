@@ -126,6 +126,13 @@ other; run the gates green before claiming done:
   benchmark result). Verify with `git show <base-ref>:<path>` or `merge-base
   --is-ancestor <candidate> <base-ref>` before writing a bead description
   that treats something as already shipped.
+- **A paid-fire decision states its cost before it goes to Stephanie.** On
+  dec-tspz she asked what a run is for and how long it takes; the mayor bounced
+  dec-3dcq (2026-09-27) for omitting it. Put in the description: what the run is
+  for, expected wall time, expected share of the named account's weekly
+  allowance (read `~/gas-city/bin/fetch-claude-usage` at time of writing, and
+  say when the share is an estimate rather than a measurement), and when that
+  account resets. Take wall time from a prior run's own log where one exists.
 
 ## Where to look (references)
 
